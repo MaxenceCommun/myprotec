@@ -151,7 +151,15 @@ class ProtecGame {
       .then(res => res.json())
       .then(data => {
         if (data.alliances) this.alliances = data.alliances;
-        if (data.allianceStations) this.allianceStations = data.allianceStations;
+        if (data.allianceStations) {
+          // FILTRE STRICT : Ne JAMAIS inclure nos propres antennes dans les antennes alliées
+          this.allianceStations = (data.allianceStations || []).filter(st => {
+            if (st.playerId === this.player.id) return false;
+            if (this.stations.some(s => s.id === st.id)) return false;
+            if (this.stations.some(s => Math.abs(s.lat - st.lat) < 0.0003 && Math.abs(s.lng - st.lng) < 0.0003)) return false;
+            return true;
+          });
+        }
         if (data.renforts) this.renforts = data.renforts;
         if (data.formationsSpeciales) this.formationsSpeciales = data.formationsSpeciales;
         if (data.chatMessages) this.chatMessages = data.chatMessages;
@@ -241,16 +249,41 @@ class ProtecGame {
         // Mettre à jour les stations de cet allié sur la carte
         this.updateRemotePlayerStations(data.player);
       }
+    } else if (type === 'admin_broadcast') {
+      this.showToast(data.title || 'Message Flash de la Direction', data.message, data.type || 'orange');
+      if (window.ProtecIncidents) {
+        window.ProtecIncidents.sendSystemNotification(data.title || '🚨 Direction Nationale', data.message, 'admin-broadcast');
+      }
+    } else if (type === 'admin_user_updated') {
+      if (data.userId === this.player.id) {
+        if (data.updates.money !== undefined) {
+          this.resources.money = Number(data.updates.money);
+          this.updateStatsUI();
+          this.showToast('Actualisation Trésorerie BDD', `Solde ajusté à ${Number(data.updates.money).toLocaleString('fr-FR')} € par l’Administration.`, 'green');
+        }
+        if (data.updates.isBanned) {
+          alert('Votre compte a été suspendu par un administrateur.');
+          location.reload();
+        }
+      }
     }
   }
 
   updateRemotePlayerStations(remotePlayer) {
-    // Retirer anciennes stations de ce joueur
-    this.allianceStations = this.allianceStations.filter(s => s.playerId !== remotePlayer.id);
+    if (!remotePlayer || remotePlayer.id === this.player.id) return;
+
+    // Retirer anciennes stations de ce joueur et de nos propres stations
+    this.allianceStations = this.allianceStations.filter(s =>
+      s.playerId !== remotePlayer.id &&
+      !this.stations.some(my => my.id === s.id) &&
+      !this.stations.some(my => Math.abs(my.lat - s.lat) < 0.0003 && Math.abs(my.lng - s.lng) < 0.0003)
+    );
 
     // Ajouter les nouvelles
     if (remotePlayer.stations && remotePlayer.stations.length > 0) {
       remotePlayer.stations.forEach(st => {
+        if (this.stations.some(my => my.id === st.id)) return;
+        if (this.stations.some(my => Math.abs(my.lat - st.lat) < 0.0003 && Math.abs(my.lng - st.lng) < 0.0003)) return;
         this.allianceStations.push({
           id: st.id,
           playerId: remotePlayer.id,
@@ -276,6 +309,11 @@ class ProtecGame {
     this.markers.allianceStations = {};
 
     this.allianceStations.forEach(st => {
+      // Sécurité absolue : ignorer si c'est notre antenne
+      if (st.playerId === this.player.id) return;
+      if (this.stations.some(my => my.id === st.id)) return;
+      if (this.stations.some(my => Math.abs(my.lat - st.lat) < 0.0003 && Math.abs(my.lng - st.lng) < 0.0003)) return;
+
       const el = document.createElement('div');
       el.className = 'custom-leaflet-marker';
       el.innerHTML = `
@@ -398,6 +436,13 @@ class ProtecGame {
 
     if (window.lucide) {
       window.lucide.createIcons();
+    }
+
+    // Demande des notifications d'urgence pour incidents & SAMU (PC & Mobile)
+    if (window.ProtecIncidents && 'Notification' in window && Notification.permission === 'default') {
+      setTimeout(() => {
+        window.ProtecIncidents.requestNotificationPermission();
+      }, 4000);
     }
 
     if (this.stations.length === 0) {
@@ -761,18 +806,38 @@ class ProtecGame {
   generateRandomDevisOpportunity() {
     if (this.stations.length === 0) return;
     const base = this.stations[Math.floor(Math.random() * this.stations.length)];
+    const cap = this.calculatePlayerCapacity ? this.calculatePlayerCapacity() : { tier: 1 };
 
-    const events = [
-      { name: 'Tournoi Régional de Basketball', client: 'Ligue de Basket', cType: 'club_sportif', days: 4, h: 13, dur: 6, pub: '800 spectateurs', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE2', 'PSE1'], reqVeh: [] },
-      { name: 'Course Nocturne des 10 km', client: 'Athlétic Club', cType: 'association', days: 5, h: 19, dur: 5, pub: '2 500 coureurs', scale: 'DPS-PE (4 secouristes + VPSP)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
-      { name: 'Festival Musical de Plein Air', client: 'Collectif Événements', cType: 'professionnel', days: 6, h: 14, dur: 8, pub: '4 500 festivaliers', scale: 'DPS-ME (6 secouristes + VPSP)', reqV: 6, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
-      { name: 'Brocante des Berges', client: 'Comité de Quartier', cType: 'association', days: 7, h: 9, dur: 8, pub: '1 800 chineurs', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE2', 'PSE1'], reqVeh: [] }
-    ];
+    let eventsList = [];
+    if (cap.tier === 1) {
+      // Débutant : 2 à 3 secouristes, durées réalistes 2h à 4h
+      eventsList = [
+        { name: 'Cross du Collège Pasteur', client: 'Éducation Nationale', cType: 'association', dur: 3, pub: '450 élèves', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [] },
+        { name: 'Brocante de Quartier des Berges', client: 'Comité des Fêtes', cType: 'association', dur: 4, pub: '1 200 chineurs', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [] },
+        { name: 'Tournoi Minimes de Handball', client: 'Club Omnisports', cType: 'club_sportif', dur: 3, pub: '600 personnes', scale: 'PAPS (3 secouristes)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: cap.vpspCount > 0 ? ['VPSP'] : [] },
+        { name: 'Gala Étudiant des Beaux-Arts', client: 'BDE Université', cType: 'association', dur: 4, pub: '800 étudiants', scale: 'DPS-PE (3 secouristes)', reqV: Math.min(3, Math.max(2, cap.totalVolunteers || 2)), ranks: ['PSE1', 'PSE2'], reqVeh: cap.vpspCount > 0 ? ['VPSP'] : [] }
+      ];
+    } else if (cap.tier === 2) {
+      // Opérationnel : 4 à 6 secouristes, 1 VPSP, durées 4h à 6h
+      eventsList = [
+        { name: 'Course Nocturne des 10 km', client: 'Athlétic Club Régional', cType: 'association', dur: 5, pub: '2 500 coureurs', scale: 'DPS-PE (4 secouristes + VPSP)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
+        { name: 'Feu d’Artifice & Bal Républicain', client: 'Mairie', cType: 'collectivite', dur: 4, pub: '3 500 spectateurs', scale: 'DPS-PE (5 secouristes + VPSP)', reqV: 5, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
+        { name: 'Tournoi Régional de Judo', client: 'Ligue Régionale', cType: 'club_sportif', dur: 6, pub: '1 500 judokas & public', scale: 'DPS-PE (4 secouristes)', reqV: 4, ranks: ['PSE2', 'PSE1'], reqVeh: ['VPSP'] }
+      ];
+    } else {
+      // Confirmé / Grand Dispositif : 6 à 12 secouristes, 1 à 2 VPSP
+      eventsList = [
+        { name: 'Festival Musical de Plein Air', client: 'Collectif Festif', cType: 'professionnel', dur: 8, pub: '6 000 festivaliers', scale: 'DPS-ME (8 secouristes + 2 VPSP)', reqV: 8, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
+        { name: 'Triathlon Départemental', client: 'Fédération Triathlon', cType: 'association', dur: 7, pub: '4 000 participants', scale: 'DPS-ME (6 secouristes + VPSP + VTU)', reqV: 6, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
+        { name: 'Rencontre Nationale de Rugby', client: 'Stade Municipal', cType: 'professionnel', dur: 5, pub: '8 500 supporters', scale: 'DPS-ME (10 secouristes + 2 VPSP)', reqV: 10, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] }
+      ];
+    }
 
-    const pick = events[Math.floor(Math.random() * events.length)];
+    const pick = eventsList[Math.floor(Math.random() * eventsList.length)];
     const offsetLat = (Math.random() - 0.5) * 0.035;
     const offsetLng = (Math.random() - 0.5) * 0.035;
-    const eventDate = this.createDateOffset(pick.days, pick.h);
+    const daysAhead = 1 + Math.floor(Math.random() * 4);
+    const eventDate = this.createDateOffset(daysAhead, 14);
 
     const d = {
       id: `dev-${Date.now()}`,
@@ -797,7 +862,7 @@ class ProtecGame {
     this.devis.push(d);
     this.updateStatsUI();
     this.saveGame();
-    this.showToast('Nouvelle demande de devis', `L’organisateur de « ${pick.name} » demande une convention.`, 'blue');
+    this.showToast('Nouvelle Demande Organisateur', `« ${pick.name} » (${pick.scale}) vous a sollicité pour un devis.`, 'blue');
   }
 
   previewDevisPrice(devisId, enteredValue) {
@@ -1097,6 +1162,14 @@ class ProtecGame {
     }
 
     mission.status = 'ongoing';
+    mission.startedAt = Date.now();
+    if (!mission.durationSeconds) {
+      if (mission.type === 'samu') mission.durationSeconds = 25 * 60; // 25 min réelles
+      else if (mission.type === 'social') mission.durationSeconds = 2 * 3600; // 2h réelles
+      else if (mission.durationHours) mission.durationSeconds = Math.round(mission.durationHours * 3600);
+      else mission.durationSeconds = 1800;
+    }
+    mission.endsAt = mission.startedAt + (mission.durationSeconds * 1000);
     mission.progress = 0;
     mission.assignedCrew = {
       volunteers: crew,
@@ -1178,7 +1251,21 @@ class ProtecGame {
 
     const registeredVols = this.volunteers.filter(v => mission.registeredVolunteers?.includes(v.id));
     const isComplete = registeredVols.length >= mission.requiredVolunteers;
-    const progressPct = Math.round((mission.progress / mission.duration) * 100);
+
+    let progressPct = 0;
+    let remainingTimeText = '';
+    if (mission.status === 'ongoing') {
+      const now = Date.now();
+      const totalSec = mission.durationSeconds || (mission.duration * 60) || 1800;
+      const elapsedSec = Math.max(0, Math.floor((now - (mission.startedAt || now)) / 1000));
+      const remainingSec = Math.max(0, totalSec - elapsedSec);
+      progressPct = Math.min(100, Math.round((elapsedSec / totalSec) * 100));
+
+      const hrs = Math.floor(remainingSec / 3600);
+      const mins = Math.floor((remainingSec % 3600) / 60);
+      const secs = remainingSec % 60;
+      remainingTimeText = hrs > 0 ? `${hrs}h ${mins.toString().padStart(2, '0')}m restantes` : `${mins}m ${secs.toString().padStart(2, '0')}s restantes`;
+    }
 
     body.innerHTML = `
       <div class="space-y-4">
@@ -1216,13 +1303,28 @@ class ProtecGame {
         </div>
 
         ${mission.status === 'ongoing' ? `
+          ${mission.currentIncident ? `
+            <div class="p-3.5 rounded-2xl bg-orange-50 border-2 border-pc-orange text-xs shadow-sm flex items-center justify-between gap-2 animate-pulse">
+              <div class="flex items-center gap-2">
+                <span class="text-lg">🚨</span>
+                <div>
+                  <div class="font-black text-orange-950">${mission.currentIncident.title}</div>
+                  <div class="text-[10px] text-orange-800 font-semibold">Incident en cours ! Arbitrage requis</div>
+                </div>
+              </div>
+              <button onclick="window.ProtecIncidents.openIncidentModal(window.game, window.game.missions.find(m => m.id === '${mission.id}'))" class="px-3 py-1.5 rounded-xl bg-pc-orange text-white text-xs font-black hover:bg-pc-orange-hover transition shadow">
+                Décider
+              </button>
+            </div>
+          ` : ''}
+
           <div class="p-4 rounded-2xl glass-card-blue space-y-3">
             <div class="flex items-center justify-between text-xs">
               <span class="font-bold text-pc-blue flex items-center gap-1.5">
                 <i data-lucide="radio" class="w-3.5 h-3.5 text-pc-blue animate-pulse"></i>
                 Dispositif actif sur le terrain
               </span>
-              <span class="font-extrabold mono-num text-pc-blue">${progressPct}%</span>
+              <span class="font-extrabold mono-num text-pc-blue">${remainingTimeText} (${progressPct}%)</span>
             </div>
             <div class="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden shimmer-bar">
               <div class="bg-gradient-to-r from-pc-blue to-pc-orange h-full rounded-full transition-all duration-300" style="width: ${progressPct}%"></div>
@@ -2440,111 +2542,86 @@ class ProtecGame {
     this.renderMissions();
   }
 
-  setSpeed(speedVal) {
-    this.speed = speedVal;
-    ['pause', '1', '2', '5'].forEach(s => {
-      const btn = document.getElementById(`btn-speed-${s}`);
-      if (btn) btn.className = 'px-2 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition';
-    });
-
-    const activeBtnId = speedVal === 0 ? 'btn-speed-pause' : `btn-speed-${speedVal}`;
-    const activeBtn = document.getElementById(activeBtnId);
-    if (activeBtn) activeBtn.className = 'px-2 py-1 rounded-lg text-xs font-bold bg-pc-blue text-white shadow-sm transition';
-  }
-
+  // --- GESTIONNAIRE DE TEMPS RÉEL (1 SECONDE = 1 SECONDE RÉELLE) ---
   startSimulationClock() {
     setInterval(() => {
-      if (this.speed === 0) return;
+      const now = new Date();
+      this.clock.hour = now.getHours();
+      this.clock.minute = now.getMinutes();
+      this.clock.second = now.getSeconds();
+      this.clock.day = now.getDate();
+      this.clock.month = now.getMonth();
+      this.clock.year = now.getFullYear();
 
-      for (let i = 0; i < this.speed; i++) {
-        this.clock.minute += 1;
-        if (this.clock.minute >= 60) {
-          this.clock.minute = 0;
-          this.clock.hour += 1;
-          this.clock.totalHoursElapsed += 1;
+      const currentTime = Date.now();
 
-          this.missions.forEach(m => {
-            if (m.status === 'planifie') {
-              this.checkVolunteerRegistrations(m);
-            }
-          });
-
-          if (this.clock.hour % 6 === 0 && this.stations.length > 0) {
-            let candChance = 0.25;
-            if (this.resources.campaigns.social) candChance += 0.40;
-            if (this.resources.campaigns.posters) candChance += 0.35;
-
-            if (Math.random() < candChance) {
-              const names = [
-                { n: 'Clémentine Vasseur', a: 24, j: 'Secrétaire médicale', d: ['Samedi', 'Dimanche'], t: 'salarié', av: '👩' },
-                { n: 'Maxime Caron', a: 20, j: 'Étudiant en STAPS', d: ['Mercredi', 'Samedi'], t: 'étudiant', av: '🙋‍♂️' },
-                { n: 'Aurélie Giraud', a: 28, j: 'Enseignante', d: ['Mercredi', 'Samedi', 'Dimanche'], t: 'salarié', av: '👩‍🏫' }
-              ];
-              const p = names[Math.floor(Math.random() * names.length)];
-              this.candidatures.push({
-                id: `cand-${Date.now()}`,
-                name: p.n,
-                age: p.a,
-                job: p.j,
-                motivation: 'Très motivé(e) pour rejoindre les équipes de secours et donner de mon temps libre.',
-                dispoJours: p.d,
-                dispoType: p.t,
-                avatar: p.av
-              });
-              this.showToast('Nouvelle Candidature', `${p.n} souhaite rejoindre la Protection Civile.`, 'blue');
-              this.updateStatsUI();
-            }
-
-            if (Math.random() < 0.35) {
-              this.generateRandomDevisOpportunity();
-            }
+      // 1. Progression des missions en cours (Vraie durée)
+      this.missions.forEach(m => {
+        if (m.status === 'ongoing') {
+          if (!m.startedAt) m.startedAt = currentTime;
+          if (!m.durationSeconds) {
+            if (m.type === 'samu') m.durationSeconds = 25 * 60; // 25 min réelles
+            else if (m.type === 'social') m.durationSeconds = 2 * 3600; // 2 heures réelles
+            else if (m.durationHours) m.durationSeconds = Math.round(m.durationHours * 3600);
+            else m.durationSeconds = 1800; // 30 min
           }
+          if (!m.endsAt) m.endsAt = m.startedAt + (m.durationSeconds * 1000);
 
-          if (this.clock.hour >= 24) {
-            this.clock.hour = 0;
-            this.clock.day += 1;
-
-            const daysInMonth = new Date(this.clock.year, this.clock.month + 1, 0).getDate();
-            if (this.clock.day > daysInMonth) {
-              this.clock.day = 1;
-              this.clock.month += 1;
-              if (this.clock.month >= 12) {
-                this.clock.month = 0;
-                this.clock.year += 1;
-              }
-            }
+          m.progress = Math.min(m.durationSeconds, Math.floor((currentTime - m.startedAt) / 1000));
+          if (currentTime >= m.endsAt) {
+            this.completeMission(m);
           }
         }
+      });
 
-        this.missions.forEach(m => {
-          if (m.status === 'ongoing') {
-            m.progress += 1;
-            if (m.progress >= m.duration) {
-              this.completeMission(m);
-            }
-          }
-        });
+      // 2. Vérification des incidents rares et variés en mission (toutes les 4 secondes)
+      if (this.clock.second % 4 === 0 && window.ProtecIncidents) {
+        window.ProtecIncidents.checkOngoingMissions(this);
       }
 
-      // Mise à jour des transits routiers en temps réel et météo
+      // 3. Dispatch dynamique d'urgences SAMU 15 (aléatoire régulier)
+      if (this.clock.second === 15 || this.clock.second === 45) {
+        if (this.stations.length > 0 && Math.random() < 0.15) {
+          this.triggerRandomSamuEmergency();
+        }
+      }
+
+      // 4. Génération périodique de Devis adaptés aux moyens du joueur (toutes les 5 minutes)
+      if (this.clock.second === 0 && this.clock.minute % 5 === 0) {
+        if (this.stations.length > 0 && Math.random() < 0.50) {
+          this.generateRandomDevisOpportunity();
+        }
+      }
+
+      // 5. Arrivée de nouvelles candidatures spontanées
+      if (this.clock.second === 0 && this.clock.minute % 6 === 0) {
+        let candChance = 0.35;
+        if (this.resources.campaigns.social) candChance += 0.30;
+        if (this.resources.campaigns.posters) candChance += 0.25;
+        if (Math.random() < candChance) {
+          this.generateRandomCandidature();
+        }
+      }
+
+      // 6. Transits routiers animés et météo dynamique
       if (window.ProtecSystems) {
         window.ProtecSystems.updateTransits(this);
         window.ProtecSystems.updateWeatherAndDayNight(this);
       }
 
-      // Micro-dons citoyens si la campagne en ligne est active
-      if (this.grants && this.grants.publicDonationsActive && this.clock.minute === 0 && Math.random() < 0.35) {
-        const don = 30 + Math.floor(Math.random() * 60);
+      // 7. Micro-dons citoyens en ligne
+      if (this.grants && this.grants.publicDonationsActive && this.clock.second === 0 && Math.random() < 0.25) {
+        const don = 25 + Math.floor(Math.random() * 50);
         this.resources.money += don;
-        this.showToast('Don en Ligne Reçu !', `Un bienfaiteur a fait un don de ${don} € à l’association (-66% impôt).`, 'green');
+        this.showToast('Don en Ligne Reçu !', `Un citoyen reconnaissant a versé ${don} € à l’association.`, 'green');
         this.updateStatsUI();
       }
 
-      // Régénération progressive de l'énergie des secouristes au repos
-      if (this.clock.minute === 0 && this.clock.hour % 3 === 0) {
+      // 8. Régénération progressive de l'énergie des secouristes au repos
+      if (this.clock.second === 0 && this.clock.minute % 2 === 0) {
         this.volunteers.forEach(v => {
-          if (v.status === 'dispo') {
-            v.energy = Math.min(100, (v.energy || 80) + 8);
+          if (v.status === 'dispo' && v.energy < 100) {
+            v.energy = Math.min(100, (v.energy || 80) + 3);
           }
         });
       }
@@ -2564,8 +2641,10 @@ class ProtecGame {
   updateClockUI() {
     const hh = String(this.clock.hour).padStart(2, '0');
     const mm = String(this.clock.minute).padStart(2, '0');
+    const ss = String(this.clock.second || 0).padStart(2, '0');
+
     const timeEl = document.getElementById('clock-time');
-    if (timeEl) timeEl.textContent = `${hh}:${mm}`;
+    if (timeEl) timeEl.textContent = `${hh}:${mm}:${ss}`;
 
     const timeMobileEl = document.getElementById('clock-time-mobile');
     if (timeMobileEl) timeMobileEl.textContent = `${hh}:${mm}`;
@@ -2574,6 +2653,118 @@ class ProtecGame {
     if (dateEl) {
       dateEl.textContent = this.formatShortDate(this.clock) + ` ${this.clock.year}`;
     }
+  }
+
+  // Calcul des moyens réels du joueur pour dimensionner les interventions
+  calculatePlayerCapacity() {
+    const totalVolunteers = this.volunteers.length;
+    const availableVolunteers = this.volunteers.filter(v => v.status === 'dispo').length;
+    const vpspCount = this.vehicles.filter(v => v.type === 'VPSP').length;
+    const vtuCount = this.vehicles.filter(v => v.type === 'VTU').length;
+    const vlCount = this.vehicles.filter(v => v.type === 'VL').length;
+    const ceCount = this.volunteers.filter(v => v.rank === 'CE' || v.rank === 'CD' || v.rank === 'Cadre').length;
+
+    let tier = 1; // Débutant (PAPS 2-4 pers)
+    if (totalVolunteers >= 18 && vpspCount >= 2) tier = 3; // Confirmé (DPS-ME)
+    else if (totalVolunteers >= 7 && vpspCount >= 1) tier = 2; // Opérationnel (DPS-PE)
+    if (totalVolunteers >= 28 && this.stations.length >= 2) tier = 4; // Grande Antenne (DPS-GE)
+
+    return {
+      totalVolunteers,
+      availableVolunteers,
+      vpspCount,
+      vtuCount,
+      vlCount,
+      ceCount,
+      tier
+    };
+  }
+
+  // Alerte d'urgence SAMU 15 calibrée aux moyens de l'antenne
+  triggerRandomSamuEmergency() {
+    const pendingSamu = this.missions.filter(m => m.type === 'samu' && m.status === 'planifie');
+    if (pendingSamu.length >= 2) return;
+
+    const base = this.stations[Math.floor(Math.random() * this.stations.length)];
+    const capacity = this.calculatePlayerCapacity();
+
+    const emergencies = [
+      { title: 'Urgence 15 : Malaise Voie Publique', desc: 'Passant pris de vertiges et chute au sol. Bilan et surveillance requis.', durMin: 20, reward: 280 },
+      { title: 'Urgence 15 : Détresse Respiratoire à Domicile', desc: 'Patient dyspnéique en crise sévère. Oxygénothérapie et bilan régulateur.', durMin: 25, reward: 340 },
+      { title: 'Urgence 15 : Accident de Trottinette Électrique', desc: 'Choc contre trottoir, dermabrasions multiples et suspicion entorse cheville.', durMin: 22, reward: 310 },
+      { title: 'Urgence 15 : Arrêt Cardio-Respiratoire (Départ Réflexe)', desc: 'Témoin signale une victime inconsciente sans respiration au centre commercial.', durMin: 30, reward: 480 }
+    ];
+
+    const pick = emergencies[Math.floor(Math.random() * emergencies.length)];
+    const offsetLat = (Math.random() - 0.5) * 0.03;
+    const offsetLng = (Math.random() - 0.5) * 0.03;
+
+    const reqVol = Math.min(Math.max(2, capacity.availableVolunteers || 3), 4);
+    const ranks = ['PSE1', 'PSE2'];
+    if (reqVol >= 3 && capacity.ceCount > 0) ranks.unshift('CE');
+
+    const newSamu = {
+      id: `m-samu-${Date.now()}`,
+      type: 'samu',
+      categoryLabel: 'SAMU 15 - Réquisition Urgence Préfectorale',
+      title: pick.title,
+      desc: pick.desc,
+      lat: base.lat + offsetLat,
+      lng: base.lng + offsetLng,
+      scale: `Départ Réflexe (${reqVol} secouristes)`,
+      eventDate: { ...this.clock, hour: this.clock.hour },
+      durationSeconds: pick.durMin * 60,
+      durationHours: (pick.durMin / 60).toFixed(1),
+      requiredVolunteers: reqVol,
+      requiredRanks: ranks,
+      requiredVehicles: ['VPSP'],
+      rewardMoney: pick.reward,
+      rewardReputation: 35,
+      progress: 0,
+      status: 'planifie',
+      registeredVolunteers: [],
+      assignedCrew: { volunteers: [], vehicles: [] }
+    };
+
+    this.missions.push(newSamu);
+    this.renderMissions();
+    this.updateStatsUI();
+    this.saveGame();
+
+    if (window.ProtecIncidents) {
+      window.ProtecIncidents.sendSystemNotification(
+        `🚑 DÉPART RÉFLEXE SAMU 15`,
+        `${pick.title} à proximité de ${base.name}. VPSP demandé !`,
+        `samu-${newSamu.id}`
+      );
+    }
+
+    this.showToast('Appel Régulation SAMU 15', `Départ réflexe : ${pick.title} !`, 'orange');
+  }
+
+  // Candidature spontanée de bénévole
+  generateRandomCandidature() {
+    const pool = [
+      { n: 'Clémentine Vasseur', a: 24, j: 'Secrétaire médicale', d: ['Samedi', 'Dimanche'], t: 'salarié', av: '👩' },
+      { n: 'Maxime Caron', a: 20, j: 'Étudiant en STAPS', d: ['Mercredi', 'Samedi'], t: 'étudiant', av: '🙋‍♂️' },
+      { n: 'Aurélie Giraud', a: 28, j: 'Enseignante', d: ['Mercredi', 'Samedi', 'Dimanche'], t: 'salarié', av: '👩‍🏫' },
+      { n: 'Julien Mercier', a: 31, j: 'Infirmier DE', d: ['Lundi', 'Jeudi', 'Vendredi'], t: 'salarié', av: '👨‍⚕️' },
+      { n: 'Inès Bouzid', a: 22, j: 'Étudiante Droit', d: ['Vendredi', 'Samedi', 'Dimanche'], t: 'étudiant', av: '👩‍🎓' },
+      { n: 'Thomas Delattre', a: 35, j: 'Technicien Réseaux', d: ['Samedi', 'Dimanche'], t: 'salarié', av: '👨‍💼' }
+    ];
+    const p = pool[Math.floor(Math.random() * pool.length)];
+    this.candidatures.push({
+      id: `cand-${Date.now()}`,
+      name: p.n,
+      age: p.a,
+      job: p.j,
+      motivation: 'Très motivé(e) pour donner de mon temps libre, porter la tenue orange et bleue et secourir nos concitoyens.',
+      dispoJours: p.d,
+      dispoType: p.t,
+      avatar: p.av
+    });
+    this.showToast('Nouvelle Candidature', `${p.n} (${p.j}) souhaite intégrer votre antenne.`, 'blue');
+    this.updateStatsUI();
   }
 
   updateStatsUI() {

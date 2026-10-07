@@ -149,6 +149,7 @@ const server = http.createServer((req, res) => {
         user: {
           id: user.id,
           username: user.username,
+          role: user.role || 'user',
           stationName: user.stationName,
           city: user.city
         }
@@ -240,6 +241,122 @@ const server = http.createServer((req, res) => {
   // 3. État global
   if (url === '/api/state') {
     sendJson(res, 200, gameState);
+    return;
+  }
+
+  // --- API PANEL ADMIN (Gestion globale des joueurs) ---
+
+  // Liste de tous les joueurs
+  if (url === '/api/admin/users' && req.method === 'GET') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    const users = db.getAllUsersForAdmin();
+    sendJson(res, 200, { success: true, users });
+    return;
+  }
+
+  // Statistiques globales du serveur
+  if (url === '/api/admin/stats' && req.method === 'GET') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    const allUsers = Object.values(db.data.users);
+    sendJson(res, 200, {
+      success: true,
+      stats: {
+        totalUsers: allUsers.length,
+        activeOnline: Object.keys(gameState.players).length,
+        alliancesCount: db.data.alliances.length,
+        totalSavedGames: Object.keys(db.data.savedGames).length
+      }
+    });
+    return;
+  }
+
+  // Modification d'un joueur par l'admin (argent, mot de passe, ban, rôle)
+  if (url === '/api/admin/user/update' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { userId, ...updates } = JSON.parse(body);
+        const result = db.updateUserByAdmin(userId, updates);
+        if (result.error) {
+          sendJson(res, 400, { success: false, error: result.error });
+        } else {
+          broadcastSSE('admin_user_updated', { userId, updates });
+          sendJson(res, 200, { success: true, user: result.user });
+        }
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: 'Données invalides' });
+      }
+    });
+    return;
+  }
+
+  // Suppression d'un joueur par l'admin
+  if (url === '/api/admin/user/delete' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { userId } = JSON.parse(body);
+        const result = db.deleteUserByAdmin(userId);
+        if (result.error) {
+          sendJson(res, 400, { success: false, error: result.error });
+        } else {
+          sendJson(res, 200, { success: true });
+        }
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: 'Données invalides' });
+      }
+    });
+    return;
+  }
+
+  // Alerte / Annonce globale diffusée à tous les joueurs
+  if (url === '/api/admin/broadcast' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { message, title, type } = JSON.parse(body);
+        broadcastSSE('admin_broadcast', {
+          title: title || 'Message de la Direction Nationale',
+          message: message,
+          type: type || 'blue',
+          timestamp: new Date().toLocaleTimeString('fr-FR')
+        });
+        sendJson(res, 200, { success: true });
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: 'Données invalides' });
+      }
+    });
     return;
   }
 

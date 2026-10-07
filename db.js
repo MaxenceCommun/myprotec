@@ -111,6 +111,7 @@ class Database {
   constructor() {
     this.data = this.load();
     this.saveTimeout = null;
+    this.ensureAdminUser();
   }
 
   load() {
@@ -184,11 +185,16 @@ class Database {
     const passwordHash = this.hashPassword(password, salt);
     const userId = 'usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 
+    const isFirstUser = Object.keys(this.data.users).length === 0;
+    const role = (isFirstUser || key === 'admin') ? 'admin' : 'user';
+
     const userRecord = {
       id: userId,
       username: cleanUsername,
       passwordHash,
       salt,
+      role,
+      isBanned: false,
       stationName: (stationName && stationName.trim()) || `Antenne ${cleanUsername}`,
       city: city || 'paris',
       createdAt: new Date().toISOString(),
@@ -202,6 +208,7 @@ class Database {
     this.data.sessions[token] = {
       userId,
       username: cleanUsername,
+      role,
       createdAt: Date.now(),
       expiresAt: Date.now() + 30 * 24 * 3600 * 1000 // 30 jours
     };
@@ -214,6 +221,7 @@ class Database {
       user: {
         id: userId,
         username: cleanUsername,
+        role,
         stationName: userRecord.stationName,
         city: userRecord.city
       }
@@ -233,17 +241,24 @@ class Database {
       return { error: 'Utilisateur introuvable.' };
     }
 
+    if (userRecord.isBanned) {
+      return { error: 'Ce compte joueur a été suspendu par un administrateur.' };
+    }
+
     const hashCheck = this.hashPassword(password, userRecord.salt);
     if (hashCheck !== userRecord.passwordHash) {
       return { error: 'Mot de passe incorrect.' };
     }
 
     userRecord.lastLogin = new Date().toISOString();
+    const role = userRecord.role || (key === 'admin' ? 'admin' : 'user');
+    userRecord.role = role;
 
     const token = this.generateToken();
     this.data.sessions[token] = {
       userId: userRecord.id,
       username: userRecord.username,
+      role,
       createdAt: Date.now(),
       expiresAt: Date.now() + 30 * 24 * 3600 * 1000
     };
@@ -256,6 +271,7 @@ class Database {
       user: {
         id: userRecord.id,
         username: userRecord.username,
+        role,
         stationName: userRecord.stationName,
         city: userRecord.city
       }
@@ -276,7 +292,9 @@ class Database {
     // Trouver l'utilisateur
     for (const key of Object.keys(this.data.users)) {
       if (this.data.users[key].id === session.userId) {
-        return this.data.users[key];
+        const u = this.data.users[key];
+        if (u.isBanned) return null;
+        return u;
       }
     }
     return null;
@@ -306,6 +324,129 @@ class Database {
   loadGame(userId) {
     if (!userId) return null;
     return this.data.savedGames[userId] || null;
+  }
+
+  // --- MÉTHODES DU PANEL ADMIN ---
+
+  ensureAdminUser() {
+    const adminKey = 'admin';
+    if (!this.data.users[adminKey]) {
+      const salt = this.generateSalt();
+      const passwordHash = this.hashPassword('admin123', salt);
+      this.data.users[adminKey] = {
+        id: 'usr_admin_master',
+        username: 'Admin',
+        passwordHash,
+        salt,
+        role: 'admin',
+        isBanned: false,
+        stationName: 'Direction Générale Nationale',
+        city: 'paris',
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString()
+      };
+      this.save();
+    } else {
+      this.data.users[adminKey].role = 'admin';
+      this.save();
+    }
+  }
+
+  getAllUsersForAdmin() {
+    return Object.values(this.data.users).map(u => {
+      const save = this.data.savedGames[u.id];
+      const gData = save ? save.data : null;
+      return {
+        id: u.id,
+        username: u.username,
+        role: u.role || 'user',
+        isBanned: !!u.isBanned,
+        stationName: u.stationName || 'Antenne',
+        city: u.city || 'paris',
+        createdAt: u.createdAt,
+        lastLogin: u.lastLogin,
+        money: gData?.resources?.money ?? 15000,
+        volunteersCount: gData?.volunteers?.length ?? 4,
+        vehiclesCount: gData?.vehicles?.length ?? 1,
+        stationsCount: gData?.stations?.length ?? 1,
+        missionsCount: gData?.missions?.length ?? 0,
+        lastSaved: save?.savedAt || null
+      };
+    });
+  }
+
+  updateUserByAdmin(userId, updates) {
+    let targetKey = null;
+    let targetUser = null;
+
+    for (const [key, u] of Object.entries(this.data.users)) {
+      if (u.id === userId) {
+        targetKey = key;
+        targetUser = u;
+        break;
+      }
+    }
+
+    if (!targetUser) return { error: 'Joueur introuvable.' };
+
+    if (updates.role !== undefined) {
+      targetUser.role = updates.role;
+    }
+    if (updates.isBanned !== undefined) {
+      targetUser.isBanned = !!updates.isBanned;
+      if (targetUser.isBanned) {
+        // Déconnecter immédiatement
+        for (const [token, sess] of Object.entries(this.data.sessions)) {
+          if (sess.userId === userId) delete this.data.sessions[token];
+        }
+      }
+    }
+    if (updates.stationName) {
+      targetUser.stationName = updates.stationName;
+    }
+    if (updates.newPassword && updates.newPassword.length >= 4) {
+      const newSalt = this.generateSalt();
+      targetUser.salt = newSalt;
+      targetUser.passwordHash = this.hashPassword(updates.newPassword, newSalt);
+    }
+
+    // Mise à jour de la trésorerie dans la sauvegarde
+    if (updates.money !== undefined && !isNaN(updates.money)) {
+      if (!this.data.savedGames[userId]) {
+        this.data.savedGames[userId] = {
+          savedAt: new Date().toISOString(),
+          data: { resources: { money: Number(updates.money) } }
+        };
+      } else {
+        if (!this.data.savedGames[userId].data.resources) {
+          this.data.savedGames[userId].data.resources = {};
+        }
+        this.data.savedGames[userId].data.resources.money = Number(updates.money);
+        this.data.savedGames[userId].savedAt = new Date().toISOString();
+      }
+    }
+
+    this.save();
+    return { success: true, user: targetUser };
+  }
+
+  deleteUserByAdmin(userId) {
+    let targetKey = null;
+    for (const [key, u] of Object.entries(this.data.users)) {
+      if (u.id === userId) {
+        targetKey = key;
+        break;
+      }
+    }
+    if (!targetKey) return { error: 'Joueur introuvable.' };
+
+    delete this.data.users[targetKey];
+    delete this.data.savedGames[userId];
+    for (const [token, sess] of Object.entries(this.data.sessions)) {
+      if (sess.userId === userId) delete this.data.sessions[token];
+    }
+    this.save();
+    return { success: true };
   }
 }
 

@@ -40,6 +40,7 @@ window.ProtecAuth = {
         // Met à jour l'identité du joueur dans le jeu
         game.player.id = data.user.id;
         game.player.name = data.user.username;
+        game.player.role = data.user.role || 'user';
 
         this.updateHeaderUI();
         this.closeAuthModal();
@@ -346,6 +347,7 @@ window.ProtecAuth = {
 
       game.player.id = data.user.id;
       game.player.name = data.user.username;
+      game.player.role = data.user.role || 'user';
 
       game.showToast('Connexion Réussie !', `Bienvenue Commandant ${data.user.username} ! Connexion au serveur multijoueur active.`, 'green');
       this.updateHeaderUI();
@@ -404,6 +406,7 @@ window.ProtecAuth = {
 
       game.player.id = data.user.id;
       game.player.name = data.user.username;
+      game.player.role = data.user.role || 'user';
 
       if (stationName && game.stations.length > 0) {
         game.stations[0].name = stationName;

@@ -9,6 +9,18 @@
       "city": "paris",
       "createdAt": "2026-10-07T17:53:40.390Z",
       "lastLogin": "2026-10-07T17:53:47.895Z"
+    },
+    "admin": {
+      "id": "usr_admin_master",
+      "username": "Admin",
+      "passwordHash": "97774d2046720d46ab1e54664b5b36c593402de6fbfa8e86a992057c8f1eeb40245f13d2e48394e4c520e8f950bc4ab03b1cb6d43218b0bd32f0f5d50599151a",
+      "salt": "bbe1067ba02d39fcf8b2eb1c17e7436c",
+      "role": "admin",
+      "isBanned": false,
+      "stationName": "Direction Générale Nationale",
+      "city": "paris",
+      "createdAt": "2026-10-07T18:52:41.364Z",
+      "lastLogin": "2026-10-07T18:52:41.365Z"
     }
   },
   "sessions": {
