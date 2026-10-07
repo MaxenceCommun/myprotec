@@ -1,0 +1,2635 @@
+/**
+ * PROTEC LIVE - SIMULATEUR OPÉRATIONNEL DE LA PROTECTION CIVILE
+ * Mode Multijoueur en temps réel avec Alliances, Demandes de Renforts,
+ * Formations Spéciales Mutualisées et Canal Radio Fédéral.
+ */
+
+window.game = null;
+
+class ProtecGame {
+  constructor() {
+    this.speed = 1;
+    this.currentFilter = 'all';
+    this.selectedStationId = null;
+    this.selectedMissionId = null;
+    this.isPlacingAntenna = false;
+
+    // Profil Joueur Réseau
+    let savedPlayerId = localStorage.getItem('protec_player_id');
+    if (!savedPlayerId) {
+      savedPlayerId = `p-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`;
+      localStorage.setItem('protec_player_id', savedPlayerId);
+    }
+    this.player = {
+      id: savedPlayerId,
+      name: localStorage.getItem('protec_player_name') || 'Directeur d’Antenne',
+      allianceId: localStorage.getItem('protec_alliance_id') || 'alliance-fnpc'
+    };
+
+    // Calendrier et Horloge Opérationnelle (Lundi 5 Octobre 2026 à 08:00)
+    this.clock = {
+      year: 2026,
+      month: 9, // Octobre
+      day: 5,
+      hour: 8,
+      minute: 0,
+      totalHoursElapsed: 0,
+      monthsNames: [
+        'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+      ],
+      monthsShort: [
+        'Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin',
+        'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'
+      ],
+      daysNames: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
+    };
+
+    // Ressources et Notoriété
+    this.resources = {
+      money: 15000,
+      reputationScore: 0,
+      reputationLevel: 1,
+      followers: 140,
+      alliancePoints: 50,
+      campaigns: {
+        social: false,
+        posters: false
+      }
+    };
+
+    // Villes supportées
+    this.cities = {
+      paris: { name: 'Paris & Île-de-France', lat: 48.8566, lng: 2.3522, zoom: 12 },
+      lyon: { name: 'Lyon & Rhône', lat: 45.7640, lng: 4.8357, zoom: 12 },
+      marseille: { name: 'Marseille & Bouches-du-Rhône', lat: 43.2965, lng: 5.3698, zoom: 12 },
+      bordeaux: { name: 'Bordeaux & Gironde', lat: 44.8378, lng: -0.5792, zoom: 12 },
+      lille: { name: 'Lille & Hauts-de-France', lat: 50.6292, lng: 3.0573, zoom: 12 }
+    };
+    this.currentCityKey = 'paris';
+
+    // Données opérationnelles
+    this.stations = [];
+    this.vehicles = [];
+    this.volunteers = [];
+    this.devis = [];
+    this.missions = [];
+    this.candidatures = [];
+    this.formations = [];
+
+    // Données Multijoueur & Alliances
+    this.alliances = [];
+    this.allianceStations = [];
+    this.renforts = [];
+    this.formationsSpeciales = [];
+    this.chatMessages = [];
+    this.activeAllianceTab = 'membres';
+
+    // Marqueurs Leaflet
+    this.markers = {
+      stations: {},
+      allianceStations: {},
+      missions: {}
+    };
+
+    this.loadGame();
+    if (window.ProtecSystems) {
+      window.ProtecSystems.injectState(this);
+    }
+    if (window.ProtecAdvanced) {
+      window.ProtecAdvanced.injectAdvancedState(this);
+    }
+    this.init();
+    this.initMultiplayer();
+  }
+
+  // --- DATES & CALENDRIER ---
+  getDayOfWeek(year, month, day) {
+    const d = new Date(year, month, day);
+    return this.clock.daysNames[d.getDay()];
+  }
+
+  formatFullDate(dateObj) {
+    const dayName = this.getDayOfWeek(dateObj.year, dateObj.month, dateObj.day);
+    const monthName = this.clock.monthsNames[dateObj.month];
+    return `${dayName} ${dateObj.day} ${monthName} ${dateObj.year}`;
+  }
+
+  formatShortDate(dateObj) {
+    const dayName = this.getDayOfWeek(dateObj.year, dateObj.month, dateObj.day);
+    const monthShort = this.clock.monthsShort[dateObj.month];
+    return `${dayName} ${dateObj.day} ${monthShort}`;
+  }
+
+  createDateOffset(daysAhead, hour = 14) {
+    const d = new Date(this.clock.year, this.clock.month, this.clock.day + daysAhead);
+    return {
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      day: d.getDate(),
+      hour: hour,
+      dayName: this.clock.daysNames[d.getDay()]
+    };
+  }
+
+  // --- INITIALISATION DU MULTIJOUEUR ---
+  initMultiplayer() {
+    // 1. Récupération de l'état initial du serveur
+    fetch('/api/state')
+      .then(res => res.json())
+      .then(data => {
+        if (data.alliances) this.alliances = data.alliances;
+        if (data.allianceStations) this.allianceStations = data.allianceStations;
+        if (data.renforts) this.renforts = data.renforts;
+        if (data.formationsSpeciales) this.formationsSpeciales = data.formationsSpeciales;
+        if (data.chatMessages) this.chatMessages = data.chatMessages;
+
+        this.renderAllianceStations();
+        this.updateStatsUI();
+      })
+      .catch(err => console.log('Mode hors ligne serveur:', err));
+
+    // 2. Connexion SSE (Server-Sent Events) en temps réel
+    if (window.EventSource) {
+      const evtSource = new EventSource('/api/events');
+      evtSource.onmessage = (e) => {
+        try {
+          const { type, data } = JSON.parse(e.data);
+          this.handleMultiplayerEvent(type, data);
+        } catch (err) {
+          console.warn('Erreur message SSE:', err);
+        }
+      };
+      evtSource.onerror = () => {
+        // En cas de coupure temporaire, EventSource reconnecte tout seul
+      };
+    }
+
+    // 3. Battement de coeur périodique pour diffuser nos antennes aux autres joueurs
+    setInterval(() => {
+      this.syncPlayerToServer();
+    }, 15000);
+  }
+
+  syncPlayerToServer() {
+    const payload = {
+      id: this.player.id,
+      name: this.player.name,
+      allianceId: this.player.allianceId,
+      stations: this.stations.map(s => ({
+        id: s.id,
+        name: s.name,
+        city: s.city,
+        lat: s.lat,
+        lng: s.lng,
+        level: s.level,
+        vehiclesCount: s.vehicles.length,
+        volunteersCount: this.volunteers.filter(v => v.stationId === s.id).length
+      })),
+      volunteersCount: this.volunteers.length,
+      vehiclesCount: this.vehicles.length
+    };
+
+    fetch('/api/player/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+  }
+
+  handleMultiplayerEvent(type, data) {
+    if (type === 'renfort_requested') {
+      if (data.requesterPlayerId !== this.player.id) {
+        this.renforts.unshift(data);
+        this.showToast('Appel à Renfort d’Alliance', `[${data.allianceTag || 'Allié'}] ${data.title} a besoin de renforts !`, 'orange');
+        this.updateStatsUI();
+      }
+    } else if (type === 'renfort_fulfilled') {
+      const r = this.renforts.find(renf => renf.id === data.id);
+      if (r) r.status = 'fulfilled';
+      if (data.requesterPlayerId === this.player.id) {
+        this.showToast('Renfort Reçu !', `${data.fulfilledBy.providerName} vous a dépêché : ${data.fulfilledBy.unitDetails} !`, 'green');
+      }
+      this.updateStatsUI();
+    } else if (type === 'formation_created') {
+      this.formationsSpeciales.unshift(data);
+      if (data.organizerPlayerId !== this.player.id) {
+        this.showToast('Nouveau Stage Fédéral', `Stage spécial « ${data.title} » proposé par ${data.organizerName}.`, 'blue');
+      }
+      this.updateStatsUI();
+    } else if (type === 'chat_message') {
+      this.chatMessages.push(data);
+      if (data.senderId !== this.player.id) {
+        this.showToast('Radio Alliance', `${data.senderName} : « ${data.text.substr(0, 45)}... »`, 'blue');
+      }
+      const chatBox = document.getElementById('alliance-chat-messages');
+      if (chatBox) this.renderChatMessages();
+    } else if (type === 'player_sync') {
+      if (data.player && data.player.id !== this.player.id) {
+        // Mettre à jour les stations de cet allié sur la carte
+        this.updateRemotePlayerStations(data.player);
+      }
+    }
+  }
+
+  updateRemotePlayerStations(remotePlayer) {
+    // Retirer anciennes stations de ce joueur
+    this.allianceStations = this.allianceStations.filter(s => s.playerId !== remotePlayer.id);
+
+    // Ajouter les nouvelles
+    if (remotePlayer.stations && remotePlayer.stations.length > 0) {
+      remotePlayer.stations.forEach(st => {
+        this.allianceStations.push({
+          id: st.id,
+          playerId: remotePlayer.id,
+          playerName: remotePlayer.name,
+          name: st.name,
+          city: st.city,
+          lat: st.lat,
+          lng: st.lng,
+          level: st.level,
+          vehicles: st.vehiclesCount,
+          volunteers: st.volunteersCount,
+          allianceId: remotePlayer.allianceId
+        });
+      });
+    }
+
+    this.renderAllianceStations();
+  }
+
+  // --- RENDU CARTE ALLIANCE ---
+  renderAllianceStations() {
+    Object.values(this.markers.allianceStations).forEach(m => this.map.removeLayer(m));
+    this.markers.allianceStations = {};
+
+    this.allianceStations.forEach(st => {
+      const el = document.createElement('div');
+      el.className = 'custom-leaflet-marker';
+      el.innerHTML = `
+        <div class="marker-inner bg-indigo-700 border-indigo-200">
+          <i data-lucide="shield-check" class="w-4 h-4 text-white"></i>
+          <span class="badge-counter bg-indigo-500">${st.vehicles}</span>
+        </div>
+      `;
+
+      const icon = L.divIcon({
+        className: 'clean-marker',
+        html: el,
+        iconSize: [42, 42],
+        iconAnchor: [21, 21]
+      });
+
+      const marker = L.marker([st.lat, st.lng], { icon }).addTo(this.map);
+      marker.on('click', () => {
+        this.openAllianceStationDetails(st);
+      });
+
+      this.markers.allianceStations[st.id] = marker;
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  openAllianceStationDetails(st) {
+    const drawer = document.getElementById('context-drawer');
+    const title = document.getElementById('drawer-title');
+    const catBadge = document.getElementById('drawer-category-badge');
+    const headerIcon = document.getElementById('drawer-header-icon');
+    const body = document.getElementById('drawer-body');
+    const footer = document.getElementById('drawer-footer');
+
+    catBadge.textContent = 'ANTENNE PARTENAIRE ALLIÉE';
+    catBadge.className = 'text-[10px] uppercase font-bold tracking-wider text-indigo-700';
+    title.textContent = st.name;
+    headerIcon.setAttribute('data-lucide', 'shield-check');
+
+    body.innerHTML = `
+      <div class="space-y-4">
+        <div class="p-4 rounded-2xl bg-indigo-50/80 border border-indigo-100 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-extrabold text-indigo-900">Directeur : ${st.playerName}</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white">Allié UFSC</span>
+          </div>
+          <p class="text-xs text-indigo-800">Antenne conventionnée avec l’Union Fédérale. Prête à déployer des renforts sur demande.</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div class="p-3 rounded-2xl bg-white/80 border border-slate-200">
+            <span class="text-slate-400 block text-[10px] font-bold uppercase">Véhicules</span>
+            <span class="text-sm font-extrabold text-slate-800">${st.vehicles} unités</span>
+          </div>
+          <div class="p-3 rounded-2xl bg-white/80 border border-slate-200">
+            <span class="text-slate-400 block text-[10px] font-bold uppercase">Secouristes</span>
+            <span class="text-sm font-extrabold text-slate-800">${st.volunteers} membres</span>
+          </div>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-white/80 border border-slate-200 space-y-2">
+          <h4 class="text-xs font-extrabold text-slate-700 uppercase">Entraide Opérationnelle</h4>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Vous pouvez solliciter un départ de renfort VPSP ou d'équipiers auprès de cette antenne si l'un de vos dispositifs planifiés manque d'effectif.
+          </p>
+        </div>
+      </div>
+    `;
+
+    footer.innerHTML = `
+      <button onclick="window.game.closeDrawer()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">Fermer</button>
+      <button onclick="window.game.requestDirectRenfort('${st.id}', '${st.name}')" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center justify-center gap-1.5">
+        <i data-lucide="send" class="w-4 h-4"></i>
+        Demander un Renfort VPSP
+      </button>
+    `;
+
+    drawer.classList.remove('hidden');
+    drawer.classList.add('flex', 'drawer-slide-in');
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  requestDirectRenfort(targetStationId, targetStationName) {
+    this.closeDrawer();
+    const renfortData = {
+      requesterPlayerId: this.player.id,
+      requesterName: this.player.name,
+      allianceId: this.player.allianceId,
+      allianceTag: 'UFSC',
+      title: `Renfort d’urgence pour DPS urbain`,
+      desc: `Demande de 1 VPSP ou 2 secouristes qualifiés transmise à ${targetStationName}.`,
+      targetStationName: targetStationName,
+      unitRequested: '1 VPSP ou binôme PSE',
+      indemnite: 180
+    };
+
+    fetch('/api/alliances/renfort/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(renfortData)
+    }).then(res => res.json()).then(data => {
+      this.renforts.unshift(data.renfort);
+      this.showToast('Appel à Renfort Transmis', `Demande envoyée à ${targetStationName}. En attente de détachement...`, 'green');
+      this.updateStatsUI();
+    }).catch(() => {
+      // Simulation locale si serveur hors-ligne
+      renfortData.id = `renf-${Date.now()}`;
+      this.renforts.unshift(renfortData);
+      this.showToast('Appel à Renfort Transmis', `Demande transmise sur la fréquence fédérale.`, 'green');
+    });
+  }
+
+  init() {
+    this.initMap();
+    this.renderStations();
+    this.renderMissions();
+    this.updateStatsUI();
+    this.startSimulationClock();
+
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+
+    if (this.stations.length === 0) {
+      this.showOnboardingModal();
+    } else {
+      this.showToast('Partie chargée', `Bienvenue ! Votre antenne compte ${this.volunteers.length} secouristes.`, 'blue');
+    }
+  }
+
+  saveGame() {
+    try {
+      const state = {
+        player: this.player,
+        clock: this.clock,
+        resources: this.resources,
+        currentCityKey: this.currentCityKey,
+        stations: this.stations,
+        vehicles: this.vehicles,
+        volunteers: this.volunteers,
+        devis: this.devis,
+        missions: this.missions,
+        candidatures: this.candidatures,
+        formations: this.formations,
+        logistics: this.logistics,
+        weather: this.weather,
+        grants: this.grants,
+        radioLogs: this.radioLogs,
+        rewards: this.rewards,
+        bureau: this.bureau,
+        manoeuvres: this.manoeuvres
+      };
+      localStorage.setItem('protec_live_save_v4', JSON.stringify(state));
+    } catch (e) {
+      console.warn('Erreur sauvegarde:', e);
+    }
+  }
+
+  loadGame() {
+    try {
+      const saved = localStorage.getItem('protec_live_save_v4');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.stations && parsed.stations.length > 0) {
+          this.clock = parsed.clock || this.clock;
+          this.resources = parsed.resources || this.resources;
+          this.currentCityKey = parsed.currentCityKey || this.currentCityKey;
+          this.stations = parsed.stations || [];
+          this.vehicles = parsed.vehicles || [];
+          this.volunteers = parsed.volunteers || [];
+          this.devis = parsed.devis || [];
+          this.missions = parsed.missions || [];
+          this.candidatures = parsed.candidatures || [];
+          this.formations = parsed.formations || [];
+          this.logistics = parsed.logistics || this.logistics;
+          this.weather = parsed.weather || this.weather;
+          this.grants = parsed.grants || this.grants;
+          this.radioLogs = parsed.radioLogs || this.radioLogs;
+          this.rewards = parsed.rewards || this.rewards;
+          this.bureau = parsed.bureau || this.bureau;
+          this.manoeuvres = parsed.manoeuvres || this.manoeuvres;
+          if (parsed.player) this.player = parsed.player;
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur chargement:', e);
+    }
+  }
+
+  confirmResetGame() {
+    if (confirm('Voulez-vous réinitialiser entièrement la partie et repartir à zéro ?')) {
+      localStorage.removeItem('protec_live_save_v4');
+      location.reload();
+    }
+  }
+
+  showOnboardingModal() {
+    const modal = document.getElementById('onboarding-modal');
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  startFirstStationOnboarding() {
+    const modal = document.getElementById('onboarding-modal');
+    if (modal) modal.classList.add('hidden');
+    this.startAntennaPlacement();
+  }
+
+  initMap() {
+    const defaultCity = this.cities[this.currentCityKey];
+
+    this.map = L.map('map', {
+      center: [defaultCity.lat, defaultCity.lng],
+      zoom: defaultCity.zoom,
+      zoomControl: false
+    });
+
+    L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+
+    this.baseLayers = {
+      light: L.layerGroup([
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+          attribution: 'Tiles &copy; Esri',
+          maxZoom: 16
+        }),
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+          attribution: '',
+          maxZoom: 16
+        })
+      ]),
+      osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19
+      })
+    };
+
+    this.baseLayers.light.addTo(this.map);
+
+    L.control.layers({
+      'Épuré (Gris clair)': this.baseLayers.light,
+      'Rues (OpenStreetMap)': this.baseLayers.osm
+    }, null, { position: 'bottomright' }).addTo(this.map);
+
+    this.map.on('click', (e) => {
+      if (this.isPlacingAntenna) {
+        this.confirmAntennaPlacement(e.latlng);
+      }
+    });
+  }
+
+  changeCity(cityKey) {
+    if (!this.cities[cityKey]) return;
+    this.currentCityKey = cityKey;
+    const city = this.cities[cityKey];
+    this.map.flyTo([city.lat, city.lng], city.zoom, { duration: 1.5 });
+    document.getElementById('top-current-station-name').textContent = city.name;
+    this.showToast('Secteur modifié', `Vue centrée sur ${city.name}`, 'blue');
+  }
+
+  renderStations() {
+    Object.values(this.markers.stations).forEach(m => this.map.removeLayer(m));
+    this.markers.stations = {};
+
+    this.stations.forEach(station => {
+      const el = document.createElement('div');
+      el.className = 'custom-leaflet-marker';
+      el.innerHTML = `
+        <div class="marker-inner bg-white border-2 border-pc-blue p-0.5 shadow-lg">
+          <img src="logo_protection_civile.png" alt="PC" class="w-full h-full object-contain rounded-full" />
+          <span class="badge-counter bg-pc-orange">${station.vehicles.length}</span>
+        </div>
+      `;
+
+      const icon = L.divIcon({
+        className: 'clean-marker',
+        html: el,
+        iconSize: [42, 42],
+        iconAnchor: [21, 21]
+      });
+
+      const marker = L.marker([station.lat, station.lng], { icon }).addTo(this.map);
+      marker.on('click', () => this.openStationDetails(station.id));
+      this.markers.stations[station.id] = marker;
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  renderMissions() {
+    Object.values(this.markers.missions).forEach(m => this.map.removeLayer(m));
+    this.markers.missions = {};
+
+    this.missions.forEach(mission => {
+      if (this.currentFilter !== 'all' && mission.type !== this.currentFilter) return;
+
+      const el = document.createElement('div');
+      el.className = 'custom-leaflet-marker';
+
+      let colorClass = 'bg-pc-blue';
+      let pingClass = 'radar-ping-blue';
+      let iconName = 'shield-alert';
+
+      if (mission.type === 'samu') { colorClass = 'bg-pc-orange'; pingClass = 'radar-ping-orange'; iconName = 'activity'; }
+      else if (mission.type === 'social') { colorClass = 'bg-purple-600'; pingClass = 'radar-ping-purple'; iconName = 'heart-handshake'; }
+      else if (mission.type === 'crise') { colorClass = 'bg-red-600'; pingClass = 'radar-ping-red'; iconName = 'siren'; }
+
+      let badgeHtml = '';
+      if (mission.status === 'ongoing') {
+        badgeHtml = `<span class="badge-counter bg-emerald-500 animate-pulse">✓</span>`;
+      } else if (mission.status === 'planifie') {
+        const isComplete = (mission.registeredVolunteers?.length || 0) >= mission.requiredVolunteers;
+        badgeHtml = `<span class="badge-counter ${isComplete ? 'bg-emerald-500' : 'bg-amber-500'}">${mission.registeredVolunteers?.length || 0}/${mission.requiredVolunteers}</span>`;
+      }
+
+      el.innerHTML = `
+        <div class="${pingClass}"></div>
+        <div class="marker-inner ${colorClass}">
+          <i data-lucide="${iconName}" class="w-4 h-4 text-white"></i>
+          ${badgeHtml}
+        </div>
+      `;
+
+      const icon = L.divIcon({
+        className: 'clean-marker',
+        html: el,
+        iconSize: [42, 42],
+        iconAnchor: [21, 21]
+      });
+
+      const marker = L.marker([mission.lat, mission.lng], { icon }).addTo(this.map);
+      marker.on('click', () => this.openMissionDetails(mission.id));
+      this.markers.missions[mission.id] = marker;
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+    this.updateMissionCounts();
+  }
+
+  startAntennaPlacement() {
+    this.isPlacingAntenna = true;
+    document.getElementById('antenna-placement-banner').classList.remove('hidden');
+    document.getElementById('map').style.cursor = 'crosshair';
+    this.showToast('Implantation', 'Cliquez sur la carte pour choisir l’adresse de votre antenne.', 'blue');
+  }
+
+  cancelAntennaPlacement() {
+    this.isPlacingAntenna = false;
+    document.getElementById('antenna-placement-banner').classList.add('hidden');
+    document.getElementById('map').style.cursor = '';
+  }
+
+  confirmAntennaPlacement(latlng) {
+    const isFirst = this.stations.length === 0;
+    const cost = isFirst ? 2500 : 4500;
+
+    if (this.resources.money < cost) {
+      this.showToast('Trésorerie insuffisante', `Il vous faut ${cost} € de trésorerie.`, 'orange');
+      this.cancelAntennaPlacement();
+      return;
+    }
+
+    this.resources.money -= cost;
+    const stationId = `station-${Date.now()}`;
+    const stationName = isFirst ? 'Antenne Principale - Centre Opérationnel' : `Antenne Territoriale ${this.stations.length + 1}`;
+
+    const newStation = {
+      id: stationId,
+      name: stationName,
+      city: this.currentCityKey,
+      lat: latlng.lat,
+      lng: latlng.lng,
+      level: 1,
+      rooms: { formation: false, standard: true },
+      vehicles: []
+    };
+
+    if (isFirst) {
+      const vehId = `vpsp-${Date.now()}`;
+      this.vehicles.push({
+        id: vehId,
+        name: 'VPSP 01',
+        type: 'VPSP',
+        label: 'Ambulance de Premiers Secours',
+        capacity: 4,
+        status: 'dispo',
+        stationId: stationId
+      });
+      newStation.vehicles.push(vehId);
+
+      const starters = [
+        { name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', exp: 60, isTrainer: true, avatar: '👨‍💼', dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'], motivation: 85 },
+        { name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', exp: 40, isTrainer: false, avatar: '👩‍🚒', dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'], motivation: 80 },
+        { name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', exp: 20, isTrainer: false, avatar: '🙋‍♂️', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 75 },
+        { name: 'Élodie Leroy', role: 'Bénévole Stagiaire', rank: 'Stagiaire', exp: 5, isTrainer: false, avatar: '🧑', dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'], motivation: 90 }
+      ];
+
+      starters.forEach(s => {
+        this.volunteers.push({
+          id: `vol-${Date.now()}-${Math.random()}`,
+          name: s.name,
+          role: s.role,
+          rank: s.rank,
+          exp: s.exp,
+          status: 'dispo',
+          stationId: stationId,
+          isTrainer: s.isTrainer,
+          avatar: s.avatar,
+          dispoType: s.dispoType,
+          dispoJours: s.dispoJours,
+          motivation: s.motivation
+        });
+      });
+
+      this.generateStarterDevis(latlng);
+      this.generateStarterCandidatures();
+    }
+
+    this.stations.push(newStation);
+    this.cancelAntennaPlacement();
+    this.renderStations();
+    this.renderMissions();
+    this.updateStatsUI();
+    this.saveGame();
+    this.syncPlayerToServer();
+
+    this.showToast('Antenne Inaugurée !', `${stationName} est ouverte. Un premier devis de la mairie vous attend !`, 'green');
+    this.openStationDetails(stationId);
+  }
+
+  // --- BARÈME ET DEVIS ---
+  calculateBareme(devis) {
+    const ratePerHour = 18;
+    const personnelCost = devis.requiredVolunteers * devis.durationHours * ratePerHour;
+    let vehicleCost = 0;
+    devis.requiredVehicles.forEach(v => {
+      if (v === 'VPSP') vehicleCost += 110;
+      else if (v === 'VTU') vehicleCost += 55;
+      else if (v === 'VL') vehicleCost += 35;
+    });
+
+    let matCost = 35;
+    if (devis.scale.includes('DPS-PE')) matCost = 65;
+    if (devis.scale.includes('DPS-ME') || devis.scale.includes('DPS-GE')) matCost = 120;
+    const adminCost = 40;
+    const totalBareme = personnelCost + vehicleCost + matCost + adminCost;
+
+    return {
+      ratePerHour,
+      personnelCost,
+      vehicleCost,
+      matCost,
+      adminCost,
+      totalBareme
+    };
+  }
+
+  generateStarterDevis(centerLatLng) {
+    const eventDate = this.createDateOffset(5, 10);
+    const d = {
+      id: `dev-${Date.now()}`,
+      clientName: 'Comité des Fêtes & Mairie',
+      clientType: 'municipalite',
+      eventName: 'Fête de Printemps & Brocante Municipale',
+      eventDate: eventDate,
+      durationHours: 7,
+      lat: centerLatLng.lat + 0.007,
+      lng: centerLatLng.lng + 0.009,
+      publicCount: '1 200 personnes',
+      scale: 'PAPS (Point d’Alerte - 2 secouristes)',
+      requiredVolunteers: 2,
+      requiredRanks: ['PSE2', 'PSE1'],
+      requiredVehicles: [],
+      status: 'pending'
+    };
+
+    d.bareme = this.calculateBareme(d);
+    d.proposedPrice = d.bareme.totalBareme;
+    this.devis.push(d);
+  }
+
+  generateRandomDevisOpportunity() {
+    if (this.stations.length === 0) return;
+    const base = this.stations[Math.floor(Math.random() * this.stations.length)];
+
+    const events = [
+      { name: 'Tournoi Régional de Basketball', client: 'Ligue de Basket', cType: 'club_sportif', days: 4, h: 13, dur: 6, pub: '800 spectateurs', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE2', 'PSE1'], reqVeh: [] },
+      { name: 'Course Nocturne des 10 km', client: 'Athlétic Club', cType: 'association', days: 5, h: 19, dur: 5, pub: '2 500 coureurs', scale: 'DPS-PE (4 secouristes + VPSP)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
+      { name: 'Festival Musical de Plein Air', client: 'Collectif Événements', cType: 'professionnel', days: 6, h: 14, dur: 8, pub: '4 500 festivaliers', scale: 'DPS-ME (6 secouristes + VPSP)', reqV: 6, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
+      { name: 'Brocante des Berges', client: 'Comité de Quartier', cType: 'association', days: 7, h: 9, dur: 8, pub: '1 800 chineurs', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE2', 'PSE1'], reqVeh: [] }
+    ];
+
+    const pick = events[Math.floor(Math.random() * events.length)];
+    const offsetLat = (Math.random() - 0.5) * 0.035;
+    const offsetLng = (Math.random() - 0.5) * 0.035;
+    const eventDate = this.createDateOffset(pick.days, pick.h);
+
+    const d = {
+      id: `dev-${Date.now()}`,
+      clientName: pick.client,
+      clientType: pick.cType,
+      eventName: pick.name,
+      eventDate: eventDate,
+      durationHours: pick.dur,
+      lat: base.lat + offsetLat,
+      lng: base.lng + offsetLng,
+      publicCount: pick.pub,
+      scale: pick.scale,
+      requiredVolunteers: pick.reqV,
+      requiredRanks: pick.ranks,
+      requiredVehicles: pick.reqVeh,
+      status: 'pending'
+    };
+
+    d.bareme = this.calculateBareme(d);
+    d.proposedPrice = d.bareme.totalBareme;
+
+    this.devis.push(d);
+    this.updateStatsUI();
+    this.saveGame();
+    this.showToast('Nouvelle demande de devis', `L’organisateur de « ${pick.name} » demande une convention.`, 'blue');
+  }
+
+  previewDevisPrice(devisId, enteredValue) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+
+    const price = Math.max(0, parseFloat(enteredValue) || 0);
+    devis.proposedPrice = price;
+
+    const bareme = devis.bareme.totalBareme;
+    const ratio = bareme > 0 ? (price / bareme) : 1;
+
+    const previewEl = document.getElementById(`devis-feedback-${devisId}`);
+    if (!previewEl) return;
+
+    let badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    let text = '';
+    let acceptRate = '';
+
+    if (ratio <= 0.85) {
+      badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+      text = 'Tarif solidaire / réduit';
+      acceptRate = 'Acceptation quasi-certaine (~98%)';
+    } else if (ratio <= 1.05) {
+      badgeClass = 'bg-blue-100 text-pc-blue border-blue-200';
+      text = 'Tarif conforme au barème national';
+      acceptRate = 'Acceptation très probable (~90%)';
+    } else if (ratio <= 1.25) {
+      badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
+      text = 'Tarif majoré modéré';
+      acceptRate = 'Acceptation modérée (~65%)';
+    } else if (ratio <= 1.45) {
+      badgeClass = 'bg-orange-100 text-orange-800 border-orange-200';
+      text = 'Tarif élevé pour le budget';
+      acceptRate = 'Risque fort de refus (~30%)';
+    } else {
+      badgeClass = 'bg-rose-100 text-rose-800 border-rose-300';
+      text = 'Tarif prohibitif';
+      acceptRate = 'Refus quasi-certain (>90%)';
+    }
+
+    const pctDiff = Math.round((ratio - 1) * 100);
+    const sign = pctDiff > 0 ? `+${pctDiff}%` : `${pctDiff}%`;
+
+    previewEl.innerHTML = `
+      <div class="p-2.5 rounded-xl border text-xs flex items-center justify-between ${badgeClass}">
+        <div>
+          <span class="font-extrabold block">${text} (${sign} par rapport au barème)</span>
+          <span class="text-[11px] opacity-90">${acceptRate}</span>
+        </div>
+        <span class="font-mono font-bold text-xs">${price} €</span>
+      </div>
+    `;
+  }
+
+  submitCustomDevis(devisId) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+
+    const input = document.getElementById(`devis-price-input-${devisId}`);
+    const price = input ? parseFloat(input.value) : devis.proposedPrice;
+
+    if (isNaN(price) || price <= 0) {
+      this.showToast('Montant invalide', 'Veuillez saisir un tarif valide en euros.', 'orange');
+      return;
+    }
+
+    devis.proposedPrice = price;
+    devis.status = 'sent';
+
+    this.showToast('Devis transmis', `Devis de ${price} € envoyé à l’organisateur. Examen de conformité...`, 'blue');
+    this.openModule('devis');
+
+    setTimeout(() => {
+      const bareme = devis.bareme.totalBareme;
+      const ratio = price / bareme;
+
+      let clientTolerance = 1.0;
+      if (devis.clientType === 'municipalite') clientTolerance = 1.15;
+      if (devis.clientType === 'professionnel') clientTolerance = 1.25;
+      if (devis.clientType === 'association') clientTolerance = 0.95;
+
+      const repBonus = (this.resources.reputationScore / 500) * 0.15;
+
+      let acceptProbability = 1.0;
+      if (ratio <= 0.85) acceptProbability = 0.98;
+      else if (ratio <= 1.05) acceptProbability = 0.90 + repBonus;
+      else if (ratio <= 1.25) acceptProbability = (0.65 * clientTolerance) + repBonus;
+      else if (ratio <= 1.45) acceptProbability = (0.30 * clientTolerance) + repBonus;
+      else acceptProbability = Math.max(0.05, 0.10 * clientTolerance);
+
+      const isAccepted = Math.random() <= acceptProbability;
+
+      if (isAccepted) {
+        devis.status = 'signed';
+        this.convertDevisToScheduledMission(devis);
+        this.showToast('Convention Signée !', `L’organisateur de « ${devis.eventName} » a validé le devis de ${price} € !`, 'green');
+      } else {
+        devis.status = 'rejected';
+        this.showToast('Devis Décliné', `Montant de ${price} € jugé trop onéreux pour l'événement (Barème : ${bareme} €).`, 'orange');
+      }
+
+      this.updateStatsUI();
+      this.saveGame();
+    }, 3500);
+  }
+
+  convertDevisToScheduledMission(devis) {
+    const newMission = {
+      id: `m-plan-${Date.now()}`,
+      type: 'dps',
+      categoryLabel: 'DPS - Dispositif Prévu au Calendrier',
+      title: devis.eventName,
+      desc: `Couverture sanitaire pour ${devis.publicCount}. ${devis.scale}.`,
+      lat: devis.lat,
+      lng: devis.lng,
+      scale: devis.scale,
+      eventDate: devis.eventDate,
+      duration: devis.durationHours * 10,
+      requiredVolunteers: devis.requiredVolunteers,
+      requiredRanks: devis.requiredRanks,
+      requiredVehicles: devis.requiredVehicles,
+      rewardMoney: devis.proposedPrice,
+      rewardReputation: 25,
+      progress: 0,
+      status: 'planifie',
+      registeredVolunteers: [],
+      assignedCrew: { volunteers: [], vehicles: [] }
+    };
+
+    this.missions.push(newMission);
+    this.renderMissions();
+    this.updateStatsUI();
+    this.saveGame();
+    this.checkVolunteerRegistrations(newMission);
+  }
+
+  checkVolunteerRegistrations(mission) {
+    if (mission.status !== 'planifie') return;
+
+    this.volunteers.forEach(vol => {
+      if (mission.registeredVolunteers.includes(vol.id)) return;
+      if (mission.registeredVolunteers.length >= mission.requiredVolunteers) return;
+
+      const isAvailableThisDay = vol.dispoJours.includes(mission.eventDate.dayName);
+      if (!isAvailableThisDay) return;
+
+      const chance = vol.motivation / 100;
+      if (Math.random() < chance) {
+        mission.registeredVolunteers.push(vol.id);
+      }
+    });
+
+    this.renderMissions();
+    this.updateStatsUI();
+  }
+
+  relanceVolunteers(missionId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+
+    let newlyRegistered = 0;
+    this.volunteers.forEach(vol => {
+      if (mission.registeredVolunteers.includes(vol.id)) return;
+      if (mission.registeredVolunteers.length >= mission.requiredVolunteers) return;
+
+      const boostChance = (vol.motivation + 35) / 100;
+      if (Math.random() < boostChance) {
+        mission.registeredVolunteers.push(vol.id);
+        newlyRegistered++;
+      }
+    });
+
+    mission.relancesCount = (mission.relancesCount || 0) + 1;
+    this.saveGame();
+    this.renderMissions();
+    this.updateStatsUI();
+
+    if (newlyRegistered > 0) {
+      this.showToast('Relance réussie', `+${newlyRegistered} secouriste(s) se sont positionnés !`, 'green');
+    } else {
+      this.showToast('Aucun retour favorable', 'Tous les secouristes disponibles ont des contraintes personnelles.', 'orange');
+    }
+
+    this.openMissionDetails(mission.id);
+  }
+
+  generateStarterCandidatures() {
+    this.candidatures = [
+      {
+        id: `cand-${Date.now()}-1`,
+        name: 'Mathieu Garnier',
+        age: 22,
+        job: 'Étudiant en Droit',
+        motivation: 'Je souhaite m’engager pour me former aux gestes d’urgence et aider ma ville.',
+        dispoJours: ['Samedi', 'Dimanche'],
+        dispoType: 'étudiant',
+        avatar: '🙋‍♂️'
+      },
+      {
+        id: `cand-${Date.now()}-2`,
+        name: 'Julie Rousseau',
+        age: 31,
+        job: 'Infirmière libérale',
+        motivation: 'Titulaire AFGSU, je veux rejoindre les équipes de secours pour apporter mon soutien sur le terrain.',
+        dispoJours: ['Vendredi', 'Samedi', 'Dimanche'],
+        dispoType: 'salarié',
+        avatar: '👩‍⚕️'
+      }
+    ];
+  }
+
+  toggleCampaign(campaignType) {
+    const costWeekly = campaignType === 'social' ? 150 : 200;
+
+    if (!this.resources.campaigns[campaignType]) {
+      if (this.resources.money < costWeekly) {
+        this.showToast('Fonds insuffisants', `La campagne requiert ${costWeekly} €.`, 'orange');
+        return;
+      }
+      this.resources.money -= costWeekly;
+      this.resources.campaigns[campaignType] = true;
+      this.showToast('Campagne lancée', `Campagne de communication activée.`, 'green');
+    } else {
+      this.resources.campaigns[campaignType] = false;
+      this.showToast('Campagne suspendue', 'Campagne arrêtée.', 'blue');
+    }
+
+    this.updateStatsUI();
+    this.saveGame();
+    this.openModule('recrutement');
+  }
+
+  acceptCandidature(candId, stationId) {
+    const cand = this.candidatures.find(c => c.id === candId);
+    if (!cand) return;
+
+    this.candidatures = this.candidatures.filter(c => c.id !== candId);
+
+    const newVol = {
+      id: `vol-${Date.now()}`,
+      name: cand.name,
+      role: 'Bénévole Stagiaire',
+      rank: 'Stagiaire',
+      exp: 0,
+      status: 'dispo',
+      stationId: stationId || this.stations[0]?.id,
+      isTrainer: false,
+      avatar: cand.avatar,
+      dispoType: cand.dispoType,
+      dispoJours: cand.dispoJours,
+      motivation: 85
+    };
+
+    this.volunteers.push(newVol);
+    this.updateStatsUI();
+    this.saveGame();
+    this.showToast('Bénévole intégré !', `${cand.name} a signé sa charte d'engagement !`, 'green');
+    this.openModule('recrutement');
+  }
+
+  rejectCandidature(candId) {
+    this.candidatures = this.candidatures.filter(c => c.id !== candId);
+    this.updateStatsUI();
+    this.saveGame();
+    this.openModule('recrutement');
+  }
+
+  launchScheduledMission(missionId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+
+    if (mission.registeredVolunteers.length < mission.requiredVolunteers) {
+      this.showToast('Effectif incomplet', `Il manque encore ${mission.requiredVolunteers - mission.registeredVolunteers.length} secouriste(s). Pensez à demander un renfort d'alliance !`, 'orange');
+      return;
+    }
+
+    const crew = [];
+    mission.registeredVolunteers.forEach(vid => {
+      const v = this.volunteers.find(vol => vol.id === vid);
+      if (v) {
+        v.status = 'mission';
+        // Impact fatigue & moral
+        v.energy = Math.max(10, (v.energy || 90) - 20);
+        crew.push(v);
+      }
+    });
+
+    const assignedVehicles = [];
+    if (mission.requiredVehicles.length > 0) {
+      const dispoVeh = this.vehicles.find(veh => veh.status === 'dispo' && mission.requiredVehicles.includes(veh.type));
+      if (dispoVeh) {
+        dispoVeh.status = 'mission';
+        dispoVeh.fuel = Math.max(10, (dispoVeh.fuel || 90) - 12);
+        assignedVehicles.push(dispoVeh);
+      }
+    }
+
+    mission.status = 'ongoing';
+    mission.progress = 0;
+    mission.assignedCrew = {
+      volunteers: crew,
+      vehicles: assignedVehicles
+    };
+
+    // Trajet routier animé avec gyrophare si véhicule présent
+    if (assignedVehicles.length > 0 && window.ProtecSystems) {
+      const veh = assignedVehicles[0];
+      const station = this.stations.find(s => s.id === veh.stationId) || this.stations[0];
+      const origin = { lat: station.lat, lng: station.lng };
+      const dest = { lat: mission.lat, lng: mission.lng };
+      window.ProtecSystems.startTransit(this, veh, origin, dest, mission, 2, () => {
+        // Arrivé sur place
+      });
+    }
+
+    this.renderStations();
+    this.renderMissions();
+    this.updateStatsUI();
+    this.saveGame();
+
+    this.showToast('Départ en Mission', `Le dispositif « ${mission.title} » est déployé sur les lieux !`, 'blue');
+    this.openMissionDetails(mission.id);
+  }
+
+  completeMission(mission) {
+    mission.status = 'completed';
+
+    const hoursDone = Math.max(2, Math.round(mission.duration / 10));
+    if (this.grants) {
+      this.grants.totalVolunteerHours = (this.grants.totalVolunteerHours || 0) + (hoursDone * (mission.assignedCrew?.volunteers?.length || 2));
+    }
+
+    mission.assignedCrew.volunteers.forEach(v => {
+      v.status = 'dispo';
+      v.exp += 15;
+    });
+    mission.assignedCrew.vehicles.forEach(veh => {
+      veh.status = 'dispo';
+    });
+
+    // Consommation de matériel de secours
+    if (window.ProtecSystems) {
+      if (mission.type === 'samu') window.ProtecSystems.consumeSupply(this, 'oxygenBottles', 1);
+      else window.ProtecSystems.consumeSupply(this, 'woundKits', 1);
+    }
+
+    this.resources.money += mission.rewardMoney;
+    this.resources.reputationScore += mission.rewardReputation;
+
+    this.renderStations();
+    this.renderMissions();
+    this.updateStatsUI();
+    this.saveGame();
+
+    this.showToast('Dispositif terminé', `« ${mission.title} » clôturé (+${mission.rewardMoney} €) !`, 'green');
+
+    if (this.selectedMissionId === mission.id) {
+      this.openMissionDetails(mission.id);
+    }
+  }
+
+  openMissionDetails(missionId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+
+    this.selectedMissionId = missionId;
+    const drawer = document.getElementById('context-drawer');
+    const title = document.getElementById('drawer-title');
+    const catBadge = document.getElementById('drawer-category-badge');
+    const headerIcon = document.getElementById('drawer-header-icon');
+    const body = document.getElementById('drawer-body');
+    const footer = document.getElementById('drawer-footer');
+
+    catBadge.textContent = mission.categoryLabel;
+    title.textContent = mission.title;
+    headerIcon.setAttribute('data-lucide', 'calendar');
+
+    const registeredVols = this.volunteers.filter(v => mission.registeredVolunteers?.includes(v.id));
+    const isComplete = registeredVols.length >= mission.requiredVolunteers;
+    const progressPct = Math.round((mission.progress / mission.duration) * 100);
+
+    body.innerHTML = `
+      <div class="space-y-4">
+        <div class="p-3.5 rounded-2xl glass-card text-xs text-slate-700 leading-relaxed">
+          ${mission.desc}
+        </div>
+
+        <div class="p-3.5 rounded-2xl glass-card-blue flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2 text-pc-blue font-bold">
+            <i data-lucide="clock" class="w-4 h-4"></i>
+            <span>Date : <strong>${mission.eventDate ? this.formatFullDate(mission.eventDate) + ' à ' + mission.eventDate.hour + 'h00' : 'Aujourd’hui'}</strong></span>
+          </div>
+          <span class="px-2.5 py-0.5 rounded-full font-extrabold ${isComplete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+            ${isComplete ? 'Complet' : `Manque ${mission.requiredVolunteers - registeredVols.length}`}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="p-3 rounded-2xl glass-card-emerald flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">€</div>
+            <div>
+              <div class="text-[10px] text-emerald-700 font-bold uppercase">Facturation Convention</div>
+              <div class="text-sm font-extrabold text-emerald-800 mono-num">+${mission.rewardMoney} €</div>
+            </div>
+          </div>
+          <div class="p-3 rounded-2xl glass-card-amber flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+              <i data-lucide="award" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <div class="text-[10px] text-amber-700 font-bold uppercase">Réputation</div>
+              <div class="text-sm font-extrabold text-amber-800 mono-num">+${mission.rewardReputation} pts</div>
+            </div>
+          </div>
+        </div>
+
+        ${mission.status === 'ongoing' ? `
+          <div class="p-4 rounded-2xl glass-card-blue space-y-3">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-bold text-pc-blue flex items-center gap-1.5">
+                <i data-lucide="radio" class="w-3.5 h-3.5 text-pc-blue animate-pulse"></i>
+                Dispositif actif sur le terrain
+              </span>
+              <span class="font-extrabold mono-num text-pc-blue">${progressPct}%</span>
+            </div>
+            <div class="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden shimmer-bar">
+              <div class="bg-gradient-to-r from-pc-blue to-pc-orange h-full rounded-full transition-all duration-300" style="width: ${progressPct}%"></div>
+            </div>
+            
+            <button onclick="window.ProtecModals.openFicheBilan(window.game, '${mission.id}', '${mission.assignedCrew?.vehicles[0]?.id}')" class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
+              <i data-lucide="file-text" class="w-4 h-4"></i>
+              Fiche Bilan Secouriste (Régulation SAMU 15)
+            </button>
+          </div>
+        ` : `
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">
+                Bénévoles Inscrits (${registeredVols.length} / ${mission.requiredVolunteers})
+              </h4>
+              <div class="flex gap-2">
+                <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="text-xs font-extrabold text-indigo-600 hover:underline flex items-center gap-1" title="Faire appel aux autres joueurs et antennes alliées">
+                  <i data-lucide="users" class="w-3.5 h-3.5"></i>
+                  Renfort Alliance
+                </button>
+                <button onclick="window.game.relanceVolunteers('${mission.id}')" class="text-xs font-extrabold text-pc-orange hover:underline flex items-center gap-1">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                  Relancer
+                </button>
+              </div>
+            </div>
+
+            <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              ${registeredVols.length === 0 ? '<p class="text-xs text-amber-600 p-2.5 glass-card-amber rounded-xl">Aucun bénévole positionné pour l’instant. Lancez une relance ou demandez du renfort à vos alliés.</p>' : ''}
+              ${registeredVols.map(v => `
+                <div class="p-2.5 rounded-xl glass-card flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-2">
+                    <span class="text-base">${v.avatar}</span>
+                    <div>
+                      <div class="font-bold text-slate-800">${v.name}</div>
+                      <div class="text-[10px] text-slate-500">${v.dispoType} • Dispo : ${v.dispoJours.join(', ')}</div>
+                    </div>
+                  </div>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue/10 text-pc-blue">${v.rank}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `}
+      </div>
+    `;
+
+    if (mission.status === 'planifie') {
+      footer.innerHTML = `
+        <button onclick="window.game.closeDrawer()" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
+        <button onclick="window.game.relanceVolunteers('${mission.id}')" class="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition">
+          Alerte SMS
+        </button>
+        <button onclick="window.game.launchScheduledMission('${mission.id}')" class="flex-1 px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-lg shadow-pc-blue/20 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
+          <i data-lucide="play" class="w-4 h-4"></i>
+          Faire Partir
+        </button>
+      `;
+    } else {
+      footer.innerHTML = `
+        <button onclick="window.game.closeDrawer()" class="w-full px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">Fermer</button>
+      `;
+    }
+
+    drawer.classList.remove('hidden');
+    drawer.classList.add('flex', 'drawer-slide-in');
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  requestAllianceRenfortForMission(missionId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+
+    const needed = mission.requiredVolunteers - (mission.registeredVolunteers?.length || 0);
+    const renfortData = {
+      requesterPlayerId: this.player.id,
+      requesterName: this.player.name,
+      allianceId: this.player.allianceId,
+      allianceTag: 'UFSC',
+      missionId: mission.id,
+      title: `Renfort pour ${mission.title}`,
+      desc: `Dispositif prévu le ${this.formatShortDate(mission.eventDate)}. Besoin urgent de ${needed} secouriste(s) ou VPSP.`,
+      unitRequested: `${needed} secouristes ou VPSP`,
+      indemnite: 200
+    };
+
+    fetch('/api/alliances/renfort/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(renfortData)
+    }).then(res => res.json()).then(data => {
+      this.renforts.unshift(data.renfort);
+      this.showToast('Appel à Renfort Diffusé', `Tous les directeurs d’antennes alliés ont reçu votre appel de détresse !`, 'green');
+      this.updateStatsUI();
+    }).catch(() => {
+      renfortData.id = `renf-${Date.now()}`;
+      this.renforts.unshift(renfortData);
+      this.showToast('Appel à Renfort Diffusé', `Alerte transmise sur la fréquence fédérale !`, 'green');
+    });
+  }
+
+  openStationDetails(stationId) {
+    const station = this.stations.find(s => s.id === stationId);
+    if (!station) return;
+
+    this.selectedStationId = stationId;
+    const drawer = document.getElementById('context-drawer');
+    const title = document.getElementById('drawer-title');
+    const catBadge = document.getElementById('drawer-category-badge');
+    const headerIcon = document.getElementById('drawer-header-icon');
+    const body = document.getElementById('drawer-body');
+    const footer = document.getElementById('drawer-footer');
+
+    catBadge.textContent = 'ANTENNE OPÉRATIONNELLE';
+    title.textContent = station.name;
+    headerIcon.setAttribute('data-lucide', 'building-2');
+
+    const stationVehicles = this.vehicles.filter(v => station.vehicles.includes(v.id));
+    const stationVolunteers = this.volunteers.filter(v => v.stationId === station.id);
+
+    body.innerHTML = `
+      <div class="space-y-4">
+        <div class="p-3.5 rounded-2xl glass-card space-y-1">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-pc-blue">Niveau du Local</span>
+            <span class="px-2 py-0.5 rounded font-extrabold bg-pc-blue text-white">Niveau ${station.level}</span>
+          </div>
+          <p class="text-xs text-slate-500">Standard radio et armoire de secours opérationnels.</p>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Flotte (${stationVehicles.length})</h4>
+            <button onclick="window.game.openBuyVehicleModal('${station.id}')" class="text-xs font-bold text-pc-orange hover:underline">+ Acheter Véhicule</button>
+          </div>
+          <div class="space-y-1.5">
+            ${stationVehicles.map(v => `
+              <div class="p-2.5 rounded-xl glass-card flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="truck" class="w-4 h-4 text-pc-orange"></i>
+                  <span class="font-bold text-slate-800">${v.name}</span>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.status === 'dispo' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+                  ${v.status === 'dispo' ? 'DISPO' : 'ENGAGÉ'}
+                </span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Effectif Rattaché (${stationVolunteers.length})</h4>
+            <button onclick="window.game.openModule('recrutement')" class="text-xs font-bold text-pc-blue hover:underline">Recruter (Candidatures)</button>
+          </div>
+          <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+            ${stationVolunteers.map(v => `
+              <div class="p-2.5 rounded-xl glass-card flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">${v.avatar}</span>
+                  <div>
+                    <div class="font-bold text-slate-800">${v.name}</div>
+                    <div class="text-[10px] text-slate-500">${v.dispoType} • Dispo : ${v.dispoJours.join(', ')}</div>
+                  </div>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue/10 text-pc-blue">${v.rank}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+
+    footer.innerHTML = `
+      <button onclick="window.game.closeDrawer()" class="w-full px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">Fermer</button>
+    `;
+
+    drawer.classList.remove('hidden');
+    drawer.classList.add('flex', 'drawer-slide-in');
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  closeDrawer() {
+    const drawer = document.getElementById('context-drawer');
+    drawer.classList.add('hidden');
+    drawer.classList.remove('flex', 'drawer-slide-in');
+    this.selectedMissionId = null;
+  }
+
+  // --- MODULE ALLIANCES & MULTIJOUEUR ---
+  setAllianceTab(tabKey) {
+    this.activeAllianceTab = tabKey;
+    this.openModule('alliance');
+  }
+
+  fulfillRenfort(renfortId) {
+    const renfort = this.renforts.find(r => r.id === renfortId);
+    if (!renfort) return;
+
+    // Trouver un VPSP ou secouriste disponible
+    const dispoVeh = this.vehicles.find(v => v.status === 'dispo');
+    if (!dispoVeh) {
+      this.showToast('Moyens indisponibles', 'Vous devez avoir au moins 1 véhicule disponible au garage pour détacher un renfort.', 'orange');
+      return;
+    }
+
+    const payload = {
+      renfortId: renfort.id,
+      providerPlayerId: this.player.id,
+      providerName: this.player.name,
+      unitDetails: `${dispoVeh.name} (${this.player.name})`
+    };
+
+    fetch('/api/alliances/renfort/fulfill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(res => res.json()).then(() => {
+      renfort.status = 'fulfilled';
+      this.resources.money += renfort.indemnite || 200;
+      this.resources.alliancePoints += 35;
+      this.showToast('Renfort Dépêché !', `Votre ${dispoVeh.name} part épauler ${renfort.requesterName} ! (+${renfort.indemnite} € d’indemnité et +35 pts d’alliance)`, 'green');
+      this.updateStatsUI();
+      this.openModule('alliance');
+    }).catch(() => {
+      renfort.status = 'fulfilled';
+      this.resources.money += renfort.indemnite || 200;
+      this.resources.alliancePoints += 35;
+      this.showToast('Renfort Dépêché !', `Unité partie en renfort inter-antennes !`, 'green');
+      this.updateStatsUI();
+      this.openModule('alliance');
+    });
+  }
+
+  registerVolunteerToSpecialFormation(formationId) {
+    const form = this.formationsSpeciales.find(f => f.id === formationId);
+    if (!form) return;
+
+    // Bénévoles disponibles éligibles
+    const eligibleVolunteers = this.volunteers.filter(v => v.status === 'dispo');
+    if (eligibleVolunteers.length === 0) {
+      this.showToast('Aucun bénévole disponible', 'Tous vos secouristes sont en mission ou indisponibles.', 'orange');
+      return;
+    }
+
+    if (this.resources.money < form.costPerCandidate) {
+      this.showToast('Trésorerie insuffisante', `Le stage requiert ${form.costPerCandidate} € d'inscription.`, 'orange');
+      return;
+    }
+
+    const candidate = eligibleVolunteers[0];
+    this.resources.money -= form.costPerCandidate;
+    candidate.status = 'formation';
+
+    fetch('/api/alliances/formation/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        formationId: form.id,
+        volunteerName: candidate.name,
+        playerName: this.player.name,
+        candidateRank: candidate.rank
+      })
+    }).then(res => res.json()).then(() => {
+      form.registeredCandidates.push({ volunteerName: candidate.name, playerName: this.player.name });
+      this.showToast('Inscription Validée !', `${candidate.name} a été inscrit au « ${form.title} » organisé par ${form.organizerName} !`, 'green');
+      this.updateStatsUI();
+      this.openModule('alliance');
+    }).catch(() => {
+      form.registeredCandidates.push({ volunteerName: candidate.name, playerName: this.player.name });
+      this.showToast('Inscription Validée', `${candidate.name} est inscrit au stage fédéral.`, 'green');
+      this.updateStatsUI();
+      this.openModule('alliance');
+    });
+  }
+
+  sendAllianceChatMessage() {
+    const input = document.getElementById('alliance-chat-input');
+    if (!input || !input.value.trim()) return;
+
+    const text = input.value.trim();
+    input.value = '';
+
+    const payload = {
+      senderId: this.player.id,
+      senderName: this.player.name,
+      allianceId: this.player.allianceId,
+      text: text
+    };
+
+    fetch('/api/alliances/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(res => res.json()).then(data => {
+      this.chatMessages.push(data.message);
+      this.renderChatMessages();
+    }).catch(() => {
+      this.chatMessages.push({
+        id: `msg-${Date.now()}`,
+        senderName: this.player.name,
+        text: text,
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      });
+      this.renderChatMessages();
+    });
+  }
+
+  renderChatMessages() {
+    const container = document.getElementById('alliance-chat-messages');
+    if (!container) return;
+
+    container.innerHTML = this.chatMessages.map(m => `
+      <div class="p-2.5 rounded-xl bg-white/70 border border-slate-200/80 text-xs space-y-0.5">
+        <div class="flex items-center justify-between text-[10px] text-slate-400">
+          <strong class="text-indigo-700">${m.senderName}</strong>
+          <span>${m.time || ''}</span>
+        </div>
+        <p class="text-slate-800">${m.text}</p>
+      </div>
+    `).join('');
+
+    container.scrollTop = container.scrollHeight;
+  }
+
+  // --- POPUP MODULES DOCK ---
+  openModule(moduleKey) {
+    const modal = document.getElementById('main-modal');
+    const title = document.getElementById('modal-title');
+    const subtitle = document.getElementById('modal-subtitle');
+    const icon = document.getElementById('modal-icon');
+    const body = document.getElementById('modal-body');
+
+    modal.classList.remove('hidden');
+
+    if (moduleKey === 'alliance') {
+      title.textContent = 'Fédération & Alliances Multijoueur';
+      subtitle.textContent = 'Entraide inter-antennes, détachements de renforts, stages mutualisés et radio';
+      icon.setAttribute('data-lucide', 'handshake');
+
+      const alliance = this.alliances[0] || { name: 'Union Fédérale de Sécurité Civile', tag: 'UFSC', treasury: 8500 };
+      const currentTab = this.activeAllianceTab || 'membres';
+
+      body.innerHTML = `
+        <div class="space-y-5">
+          
+          <!-- En-tête de l'Alliance -->
+          <div class="p-4 rounded-2xl bg-gradient-to-r from-indigo-700 to-pc-blue text-white flex items-center justify-between shadow-lg">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white font-black text-lg">
+                ${alliance.tag || 'PC'}
+              </div>
+              <div>
+                <h4 class="text-base font-extrabold leading-tight">${alliance.name}</h4>
+                <p class="text-xs text-white/80">Caisse de solidarité fédérale : <strong>${(alliance.treasury || 8500).toLocaleString('fr-FR')} €</strong> • Vos points d’alliance : <strong>${this.resources.alliancePoints} pts</strong></p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                Réseau Connecté
+              </span>
+            </div>
+          </div>
+
+          <!-- Onglets du module Alliance -->
+          <div class="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold">
+            <button onclick="window.game.setAllianceTab('membres')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'membres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
+              Antennes & Membres (${this.allianceStations.length + this.stations.length})
+            </button>
+            <button onclick="window.game.setAllianceTab('renforts')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'renforts' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1.5">
+              Appels à Renforts
+              <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-white">${this.renforts.filter(r => r.status === 'open').length}</span>
+            </button>
+            <button onclick="window.game.setAllianceTab('formations')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'formations' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
+              Stages Mutualisés (${this.formationsSpeciales.length})
+            </button>
+            <button onclick="window.game.setAllianceTab('manoeuvres')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'manoeuvres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+              <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+              Manœuvres Fédérales
+            </button>
+            <button onclick="window.game.setAllianceTab('radio')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'radio' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+              <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+              Radio Alliance
+            </button>
+          </div>
+
+          <!-- Contenu selon onglet actif -->
+          <div id="alliance-tab-content">
+            ${currentTab === 'membres' ? `
+              <div class="space-y-4">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-slate-500">Toutes les antennes connectées partagent leurs ressources en cas de crise majeure.</span>
+                  <button onclick="window.game.openPlayerProfileModal()" class="font-bold text-indigo-600 hover:underline">Modifier mon profil joueur</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  
+                  <!-- Notre antenne -->
+                  <div class="p-4 rounded-2xl glass-card-blue border-2 border-pc-blue/40 space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue text-white">VOTRE ANTENNE</span>
+                      <span class="text-xs font-bold text-slate-800">${this.player.name}</span>
+                    </div>
+                    <h5 class="text-sm font-extrabold text-slate-900">${this.stations[0]?.name || 'Antenne en création'}</h5>
+                    <div class="text-xs text-slate-600 flex justify-between pt-2 border-t border-slate-100/70">
+                      <span>Véhicules : <strong>${this.vehicles.length}</strong></span>
+                      <span>Bénévoles : <strong>${this.volunteers.length}</strong></span>
+                    </div>
+                  </div>
+
+                  <!-- Antennes alliées -->
+                  ${this.allianceStations.map(st => `
+                    <div class="p-4 rounded-2xl glass-card space-y-2">
+                      <div class="flex items-center justify-between">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white">ALLIÉ EN LIGNE</span>
+                        <span class="text-xs font-bold text-slate-700">${st.playerName}</span>
+                      </div>
+                      <h5 class="text-sm font-extrabold text-slate-900">${st.name}</h5>
+                      <div class="text-xs text-slate-600 flex justify-between pt-2 border-t border-slate-100/70">
+                        <span>Flotte : <strong>${st.vehicles} véhicules</strong></span>
+                        <span>Secouristes : <strong>${st.volunteers} membres</strong></span>
+                      </div>
+                      <div class="pt-1 flex justify-end">
+                        <button onclick="window.game.openAllianceStationDetails({ id: '${st.id}', name: '${st.name}', playerName: '${st.playerName}', vehicles: ${st.vehicles}, volunteers: ${st.volunteers} })" class="text-xs font-bold text-indigo-600 hover:underline">
+                          Voir sur la carte ➜
+                        </button>
+                      </div>
+                    </div>
+                  `).join('')}
+
+                </div>
+              </div>
+            ` : ''}
+
+            ${currentTab === 'renforts' ? `
+              <div class="space-y-4">
+                <div class="p-3.5 rounded-2xl glass-card-amber text-xs text-amber-900 flex items-center justify-between">
+                  <span>Dépêchez vos véhicules en renfort auprès d’antennes alliées pour toucher des indemnités et de la réputation !</span>
+                  <button onclick="window.game.openModule('planning')" class="px-3 py-1.5 rounded-xl font-bold bg-amber-600 text-white hover:bg-amber-700 transition">
+                    + Émettre un Appel depuis mon Planning
+                  </button>
+                </div>
+
+                <div class="space-y-3">
+                  ${this.renforts.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center">Aucune demande de renfort active actuellement.</p>' : ''}
+                  ${this.renforts.map(r => `
+                    <div class="p-4 rounded-2xl glass-card flex items-center justify-between">
+                      <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                          <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${r.status === 'fulfilled' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                            ${r.status === 'fulfilled' ? 'RENFORT ASSURÉ' : 'URGENT'}
+                          </span>
+                          <span class="text-xs font-bold text-slate-700">Demandé par <strong>${r.requesterName}</strong></span>
+                        </div>
+                        <h5 class="text-sm font-extrabold text-slate-900">${r.title}</h5>
+                        <p class="text-xs text-slate-500">${r.desc} • Moyens attendus : <strong class="text-slate-800">${r.unitRequested}</strong></p>
+                      </div>
+
+                      <div class="text-right space-y-2">
+                        <div class="text-xs font-bold text-emerald-700 mono-num">+${r.indemnite || 180} €</div>
+                        ${r.status === 'open' && r.requesterPlayerId !== this.player.id ? `
+                          <button onclick="window.game.fulfillRenfort('${r.id}')" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5">
+                            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                            Dépêcher Renfort
+                          </button>
+                        ` : `
+                          <span class="text-xs text-slate-400 font-bold">${r.status === 'fulfilled' ? 'Renfort en route' : 'Votre appel'}</span>
+                        `}
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            ${currentTab === 'formations' ? `
+              <div class="space-y-4">
+                <div class="p-3.5 rounded-2xl glass-card-blue text-xs text-indigo-900 flex items-center justify-between">
+                  <span>Les antennes disposant d’instructeurs qualifiés ouvrent des stages de perfectionnement aux alliés.</span>
+                  <button onclick="window.game.proposeSpecialFormationModal()" class="px-3.5 py-1.5 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition">
+                    + Proposer un Stage Spécial
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  ${this.formationsSpeciales.map(f => `
+                    <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
+                      <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                          <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white">${f.type}</span>
+                          <span class="text-xs font-extrabold mono-num text-slate-800">${f.costPerCandidate} € / candidat</span>
+                        </div>
+                        <h5 class="text-sm font-extrabold text-slate-900">${f.title}</h5>
+                        <p class="text-xs text-slate-500">${f.desc}</p>
+                        <div class="text-[11px] text-slate-400">Organisé par : <strong>${f.organizerName}</strong> (${f.stationName})</div>
+                      </div>
+
+                      <div class="pt-2 border-t border-slate-100/70 flex items-center justify-between text-xs">
+                        <span class="text-slate-500">Inscrits : <strong>${f.registeredCandidates?.length || 0} / ${f.maxCandidates}</strong></span>
+                        <button onclick="window.game.registerVolunteerToSpecialFormation('${f.id}')" class="px-3.5 py-1.5 rounded-xl font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
+                          Inscrire un Bénévole
+                        </button>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            ${currentTab === 'manoeuvres' && window.ProtecAdvancedModals ? window.ProtecAdvancedModals.renderManoeuvres(this) : ''}
+
+            ${currentTab === 'radio' ? `
+              <div class="space-y-3">
+                <div class="p-3 rounded-2xl glass-card text-xs text-slate-600 flex items-center gap-2">
+                  <i data-lucide="radio" class="w-4 h-4 text-indigo-600"></i>
+                  <span>Canal tactique inter-antennes de l’alliance. Tous les directeurs connectés reçoivent les messages.</span>
+                </div>
+
+                <div id="alliance-chat-messages" class="h-64 overflow-y-auto space-y-2 p-2 glass-card rounded-2xl border border-white/60">
+                  <!-- Rempli dynamiquement -->
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                  <input 
+                    type="text" 
+                    id="alliance-chat-input" 
+                    placeholder="Message radio à l’alliance (ex: VPSP disponible en renfort secteur Sud)..." 
+                    onkeydown="if(event.key === 'Enter') window.game.sendAllianceChatMessage()"
+                    class="flex-1 px-4 py-2.5 rounded-xl glass-input text-xs text-slate-900 focus:ring-2 focus:ring-indigo-600"
+                  />
+                  <button onclick="window.game.sendAllianceChatMessage()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition flex items-center gap-1.5 shadow-sm">
+                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                    Émettre
+                  </button>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+        </div>
+      `;
+
+      if (currentTab === 'radio') {
+        setTimeout(() => this.renderChatMessages(), 50);
+      }
+    } else if (moduleKey === 'planning') {
+      title.textContent = 'Planning des Dispositifs de Secours (DPS)';
+      subtitle.textContent = 'Événements programmés au calendrier officiel, suivi des effectifs et relances';
+      icon.setAttribute('data-lucide', 'calendar');
+
+      const dpsMissions = this.missions.filter(m => m.type === 'dps');
+
+      body.innerHTML = `
+        <div class="space-y-5">
+          <div class="p-4 rounded-2xl glass-card-blue flex items-center justify-between text-xs text-pc-blue">
+            <div>
+              <span class="font-bold block">Fonctionnement du calendrier :</span>
+              Chaque DPS a une date et heure fixées à l’avance. Les secouristes disponibles s’inscrivent d’eux-mêmes.
+            </div>
+            <button onclick="window.game.generateRandomDevisOpportunity()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-pc-blue text-white hover:bg-pc-blue-light transition whitespace-nowrap ml-3 shadow-sm">
+              + Demande Organisateur
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            ${dpsMissions.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour l’instant. Établissez des devis dans le module Devis pour remplir votre planning.</p>' : ''}
+            ${dpsMissions.map(m => {
+              const regCount = m.registeredVolunteers?.length || 0;
+              const isFull = regCount >= m.requiredVolunteers;
+              const dateStr = m.eventDate ? this.formatFullDate(m.eventDate) + ' à ' + m.eventDate.hour + 'h00' : 'Date à confirmer';
+
+              return `
+                <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
+                  <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                      <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-pc-blue text-white">${dateStr}</span>
+                      <span class="text-xs font-bold mono-num text-emerald-600">+${m.rewardMoney} €</span>
+                    </div>
+                    <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
+                    <p class="text-xs text-slate-500">${m.scale} • Durée : ${Math.round(m.duration / 10)}h d’intervention</p>
+                  </div>
+
+                  <div class="space-y-1.5 pt-2 border-t border-slate-100/70">
+                    <div class="flex items-center justify-between text-xs font-bold">
+                      <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
+                        ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
+                      </span>
+                      <div class="flex gap-2">
+                        <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold">
+                          Renfort Alliance
+                        </button>
+                        <button onclick="window.game.relanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold">
+                          Relancer
+                        </button>
+                      </div>
+                    </div>
+                    <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden">
+                      <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
+                    </div>
+                  </div>
+
+                  <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-2 rounded-xl text-xs font-bold glass-button text-slate-800 transition">
+                    Détail du dispositif
+                  </button>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    } else if (moduleKey === 'devis') {
+      title.textContent = 'Gestion des Devis & Barème National';
+      subtitle.textContent = 'Saisie libre du montant avec barème de référence officiel et acceptation selon budget';
+      icon.setAttribute('data-lucide', 'file-check');
+
+      const pendingDevis = this.devis.filter(d => d.status === 'pending');
+      const treatedDevis = this.devis.filter(d => d.status !== 'pending');
+
+      body.innerHTML = `
+        <div class="space-y-6">
+          <div class="p-4 rounded-2xl glass-card-amber text-xs text-amber-950 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-extrabold flex items-center gap-1.5 text-amber-900">
+                <i data-lucide="scale" class="w-4 h-4 text-amber-600"></i>
+                Barème Réglementaire de Référence (Protection Civile)
+              </span>
+              <button onclick="window.game.generateRandomDevisOpportunity(); window.game.openModule('devis');" class="text-xs font-bold text-pc-blue hover:underline">+ Nouvelle Demande Organisateur</button>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-amber-800">
+              <div class="p-2 glass-card rounded-xl">Vacation secouriste : <strong>18,00 €/h</strong></div>
+              <div class="p-2 glass-card rounded-xl">Ambulance VPSP : <strong>110,00 €</strong></div>
+              <div class="p-2 glass-card rounded-xl">Matériel & DSA : <strong>35 à 120 €</strong></div>
+              <div class="p-2 glass-card rounded-xl">Frais convention : <strong>40,00 €</strong></div>
+            </div>
+            <p class="text-[11px] text-amber-700 italic">
+              Vous êtes libre de fixer le montant du devis. Attention : un tarif excessif par rapport au barème sera rejeté par l’organisateur pour dépassement budgétaire !
+            </p>
+          </div>
+
+          <!-- Section Subventions & Mécénat Participatif -->
+          <div class="p-4 rounded-2xl glass-card-emerald shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">🏛️</div>
+                <div>
+                  <h4 class="text-xs font-extrabold text-slate-900">Dossier de Subvention Municipale & Mécénat</h4>
+                  <p class="text-[11px] text-slate-500">Heures de bénévolat d’intérêt général cumulées : <strong class="text-emerald-700 font-mono">${this.grants?.totalVolunteerHours || 42} h</strong> (valeur : ~${((this.grants?.totalVolunteerHours || 42) * 18).toLocaleString('fr-FR')} €)</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="window.ProtecSystems.togglePublicDonations(window.game)" class="px-3 py-1.5 rounded-xl text-xs font-bold ${this.grants?.publicDonationsActive ? 'bg-emerald-600 text-white' : 'glass-button text-slate-700'} transition">
+                  ${this.grants?.publicDonationsActive ? 'Dons en ligne : ACTIFS' : 'Activer l’Appel aux Dons (-66% impôt)'}
+                </button>
+                <button onclick="window.ProtecSystems.submitMunicipalGrantDossier(window.game)" class="px-3.5 py-1.5 rounded-xl text-xs font-black bg-emerald-600 text-white hover:bg-emerald-700 shadow transition flex items-center gap-1.5">
+                  <i data-lucide="file-check-2" class="w-3.5 h-3.5"></i>
+                  ${this.grants?.municipalDossierSubmitted ? 'Dossier Déposé ✓' : 'Déposer Dossier Mairie'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Demandes Reçues à Chiffrer (${pendingDevis.length})</h4>
+
+            ${pendingDevis.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucun devis en attente. Cliquez sur « + Nouvelle Demande » pour en simuler une.</p>' : ''}
+            
+            ${pendingDevis.map(d => {
+              const b = d.bareme;
+              const dateStr = this.formatFullDate(d.eventDate);
+              const defaultVal = d.proposedPrice || b.totalBareme;
+
+              return `
+                <div class="p-5 rounded-2xl glass-card space-y-4">
+                  <div class="flex items-start justify-between">
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${d.scale}</span>
+                        <span class="text-xs font-bold text-slate-500">${d.clientName}</span>
+                      </div>
+                      <h4 class="text-base font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
+                      <p class="text-xs text-slate-500">Prévu le <strong>${dateStr}</strong> • Durée : <strong>${d.durationHours}h</strong> • Affluence : ${d.publicCount}</p>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-[10px] text-slate-400 font-bold uppercase block">Barème Conseillé</span>
+                      <span class="text-base font-extrabold mono-num text-slate-800">${b.totalBareme} €</span>
+                    </div>
+                  </div>
+
+                  <div class="p-3 rounded-xl glass-card-blue text-xs space-y-1 text-slate-600">
+                    <div class="flex justify-between">
+                      <span>${d.requiredVolunteers} secouristes × ${d.durationHours}h × 18 €/h :</span>
+                      <strong class="font-mono text-slate-800">${b.personnelCost} €</strong>
+                    </div>
+                    ${b.vehicleCost > 0 ? `
+                      <div class="flex justify-between">
+                        <span>Forfait véhicule (${d.requiredVehicles.join(', ')}) :</span>
+                        <strong class="font-mono text-slate-800">${b.vehicleCost} €</strong>
+                      </div>
+                    ` : ''}
+                    <div class="flex justify-between">
+                      <span>Lots de premiers secours & DSA :</span>
+                      <strong class="font-mono text-slate-800">${b.matCost} €</strong>
+                    </div>
+                    <div class="flex justify-between">
+                      <span>Frais de dossier et convention :</span>
+                      <strong class="font-mono text-slate-800">${b.adminCost} €</strong>
+                    </div>
+                  </div>
+
+                  <div class="p-4 rounded-xl glass-card space-y-3">
+                    <div class="flex items-center justify-between gap-4">
+                      <div class="flex-1">
+                        <label class="block text-xs font-extrabold text-slate-800 mb-1">Votre Tarif Proposé (€) :</label>
+                        <div class="relative rounded-xl shadow-sm">
+                          <input 
+                            type="number" 
+                            id="devis-price-input-${d.id}" 
+                            value="${defaultVal}" 
+                            min="50" 
+                            max="10000"
+                            step="10"
+                            oninput="window.game.previewDevisPrice('${d.id}', this.value)"
+                            class="w-full px-3.5 py-2.5 rounded-xl glass-input font-mono font-extrabold text-base text-slate-900 focus:ring-2 focus:ring-pc-blue"
+                          />
+                          <span class="absolute right-3.5 top-2.5 text-slate-400 font-bold">€</span>
+                        </div>
+                      </div>
+                      <div class="flex items-end">
+                        <button onclick="window.game.submitCustomDevis('${d.id}')" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center gap-2">
+                          <i data-lucide="send" class="w-4 h-4"></i>
+                          Soumettre le Devis
+                        </button>
+                      </div>
+                    </div>
+
+                    <div id="devis-feedback-${d.id}">
+                      <div class="p-2.5 rounded-xl border text-xs flex items-center justify-between glass-card-blue">
+                        <div>
+                          <span class="font-extrabold block text-pc-blue">Tarif conforme au barème national</span>
+                          <span class="text-[11px] text-slate-500">Acceptation très probable (~90%)</span>
+                        </div>
+                        <span class="font-mono font-bold text-pc-blue">${defaultVal} €</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    } else if (moduleKey === 'recrutement') {
+      title.textContent = 'Pôle Recrutement, Notoriété & Réseaux Sociaux';
+      subtitle.textContent = 'Développez la visibilité de l’antenne et intégrez de nouveaux bénévoles';
+      icon.setAttribute('data-lucide', 'user-plus');
+
+      body.innerHTML = `
+        <div class="space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-extrabold text-sky-900">Réseaux Sociaux (Instagram / TikTok)</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${this.resources.campaigns.social ? 'bg-emerald-600 text-white' : 'glass-button text-slate-600'}">
+                    ${this.resources.campaigns.social ? 'ACTIF' : 'INACTIF'}
+                  </span>
+                </div>
+                <p class="text-xs text-sky-700 mt-1">Génère des candidatures régulières de jeunes et étudiants (150 € / sem).</p>
+              </div>
+              <button onclick="window.game.toggleCampaign('social')" class="w-full py-2 rounded-xl text-xs font-bold ${this.resources.campaigns.social ? 'glass-button text-slate-700' : 'bg-sky-600 text-white'} shadow-sm transition">
+                ${this.resources.campaigns.social ? 'Arrêter la campagne' : 'Activer la campagne (150 €)'}
+              </button>
+            </div>
+
+            <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-extrabold text-amber-900">Affichage Municipal & Panneaux Mairie</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${this.resources.campaigns.posters ? 'bg-emerald-600 text-white' : 'glass-button text-slate-600'}">
+                    ${this.resources.campaigns.posters ? 'ACTIF' : 'INACTIF'}
+                  </span>
+                </div>
+                <p class="text-xs text-amber-700 mt-1">Attire des profils d'actifs et de professionnels de santé (200 € / sem).</p>
+              </div>
+              <button onclick="window.game.toggleCampaign('posters')" class="w-full py-2 rounded-xl text-xs font-bold ${this.resources.campaigns.posters ? 'glass-button text-slate-700' : 'bg-amber-600 text-white'} shadow-sm transition">
+                ${this.resources.campaigns.posters ? 'Arrêter la campagne' : 'Activer la campagne (200 €)'}
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Candidatures Reçues (${this.candidatures.length})</h4>
+            ${this.candidatures.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune candidature pour l’instant. Activez une campagne pour attirer des candidats.</p>' : ''}
+            <div class="space-y-3">
+              ${this.candidatures.map(cand => `
+                <div class="p-4 rounded-2xl glass-card space-y-3">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-2xl">${cand.avatar}</span>
+                    <div>
+                      <h5 class="text-sm font-extrabold text-slate-900">${cand.name} (${cand.age} ans)</h5>
+                      <p class="text-xs text-slate-500">${cand.job} • Dispo : <strong>${cand.dispoJours.join(', ')}</strong></p>
+                    </div>
+                  </div>
+                  <div class="p-3 rounded-xl glass-card text-xs text-slate-700 italic">
+                    « ${cand.motivation} »
+                  </div>
+                  <div class="flex items-center justify-end gap-2">
+                    <button onclick="window.game.rejectCandidature('${cand.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold glass-button text-slate-500">Décliner</button>
+                    <button onclick="window.game.acceptCandidature('${cand.id}')" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-emerald-600 text-white shadow-md hover:bg-emerald-700 transition">Valider l'Intégration</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Section Vie Associative & Cohésion d'Antenne -->
+          <div class="p-4 rounded-2xl glass-card space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="text-xs font-extrabold text-indigo-900">Vie Associative & Fidélisation</h4>
+                <p class="text-[11px] text-indigo-700">Préservez l'énergie de vos secouristes et organisez des moments conviviaux.</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button onclick="window.game.openModule('competences')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-purple-600 text-white hover:bg-purple-700 shadow transition flex items-center gap-1">
+                  <i data-lucide="award" class="w-3.5 h-3.5"></i>
+                  Habilitations & Bureau
+                </button>
+                <button onclick="window.ProtecSystems.organizeTeamEvent(window.game, 'bbq')" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-indigo-600 text-white hover:bg-indigo-700 shadow transition">
+                  🍖 Barbecue (150 €)
+                </button>
+                <button onclick="window.ProtecSystems.organizeTeamEvent(window.game, 'recyclage')" class="px-3 py-1.5 rounded-xl text-xs font-bold glass-button text-indigo-700 transition">
+                  🎓 Recyclage FC PSE
+                </button>
+              </div>
+            </div>
+
+            <!-- Liste des secouristes en activité -->
+            <div class="space-y-2 pt-2 border-t border-indigo-100/70">
+              <span class="text-[10px] font-black uppercase text-indigo-900 tracking-wider">Effectif de l'Antenne (${this.volunteers.length})</span>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                ${this.volunteers.map(v => {
+                  const energy = v.energy !== undefined ? v.energy : 85;
+                  const moral = v.moral !== undefined ? v.moral : 90;
+                  const isRecycled = v.recycledYear >= this.clock.year;
+
+                  return `
+                    <div class="p-2.5 rounded-xl glass-card text-xs space-y-1.5">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                          <span>${v.avatar || '⛑️'}</span>
+                          <span class="font-bold text-slate-900 truncate max-w-[110px]">${v.name}</span>
+                        </div>
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-extrabold ${isRecycled ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                          ${isRecycled ? 'FC ' + this.clock.year + ' ✓' : 'À Recycler'}
+                        </span>
+                      </div>
+                      <div class="grid grid-cols-2 gap-2 text-[10px]">
+                        <div>
+                          <span class="text-slate-400">Énergie : ${energy}%</span>
+                          <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full ${energy < 30 ? 'bg-red-500' : 'bg-emerald-500'}" style="width: ${energy}%"></div>
+                          </div>
+                        </div>
+                        <div>
+                          <span class="text-slate-400">Moral : ${moral}%</span>
+                          <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full bg-pc-blue" style="width: ${moral}%"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (moduleKey === 'samu') {
+      title.textContent = 'Pôle Urgence SAMU 15';
+      subtitle.textContent = 'Départs réflexes ambulance VPSP sur demande de la régulation';
+      icon.setAttribute('data-lucide', 'activity');
+
+      const samuMissions = this.missions.filter(m => m.type === 'samu');
+      body.innerHTML = `
+        <div class="space-y-4">
+          <div class="p-4 rounded-2xl glass-card-orange text-xs text-orange-950">
+            <strong>Garde Urgence 15 :</strong> Les alertes SAMU surviennent inopinément et exigent le départ immédiat d’un VPSP avec secouristes qualifiés.
+          </div>
+          ${samuMissions.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucun départ réflexe en cours.</p>' : ''}
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            ${samuMissions.map(m => `
+              <div class="p-4 rounded-2xl glass-card space-y-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-orange text-white">APPEL 15</span>
+                <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
+                <p class="text-xs text-slate-600">${m.desc}</p>
+                <div class="pt-2 border-t border-slate-100/70 flex justify-end">
+                  <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-pc-orange text-white hover:brightness-110 shadow-sm transition">Gérer</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else if (moduleKey === 'social') {
+      title.textContent = 'Pôle Action Sociale & Solidarité';
+      subtitle.textContent = 'Maraudes de nuit et écoute pour les personnes vulnérables';
+      icon.setAttribute('data-lucide', 'heart-handshake');
+
+      const socialMissions = this.missions.filter(m => m.type === 'social');
+      body.innerHTML = `
+        <div class="space-y-4">
+          <div class="p-4 rounded-2xl glass-card-purple text-xs text-purple-950">
+            Distribution de kits d'hygiène et couvertures isothermes. Fort impact sur la notoriété municipale.
+          </div>
+          ${socialMissions.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune maraude planifiée.</p>' : ''}
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            ${socialMissions.map(m => `
+              <div class="p-4 rounded-2xl glass-card space-y-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-600 text-white">MARAUDE</span>
+                <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
+                <p class="text-xs text-slate-600">${m.desc}</p>
+                <div class="pt-2 border-t border-slate-100/70 flex justify-end">
+                  <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white hover:brightness-110 shadow-sm transition">Déployer</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else if (moduleKey === 'formation') {
+      title.textContent = 'Pôle Pédagogique & Évolution Interne';
+      subtitle.textContent = 'Parcours de formation et stages de qualification';
+      icon.setAttribute('data-lucide', 'graduation-cap');
+
+      const volunteersToPromote = this.volunteers.filter(v => v.status === 'dispo');
+
+      body.innerHTML = `
+        <div class="space-y-4">
+          <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Arbre de qualification interne</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+            ${volunteersToPromote.map(v => {
+              let nextRank = null;
+              let cost = 0;
+              if (v.rank === 'Stagiaire') { nextRank = 'PSE1'; cost = 80; }
+              else if (v.rank === 'PSE1') { nextRank = 'PSE2'; cost = 150; }
+              else if (v.rank === 'PSE2') { nextRank = 'CE'; cost = 250; }
+              else if (v.rank === 'CE') { nextRank = 'CD'; cost = 400; }
+
+              return `
+                <div class="p-3 rounded-2xl glass-card flex items-center justify-between">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-xl">${v.avatar}</span>
+                    <div>
+                      <div class="text-xs font-bold text-slate-900">${v.name}</div>
+                      <div class="text-[10px] text-slate-500">${v.rank} (${v.exp} XP)</div>
+                    </div>
+                  </div>
+                  ${nextRank ? `
+                    <button onclick="window.game.upgradeVolunteer('${v.id}', '${nextRank}')" class="px-3 py-1.5 rounded-xl text-[11px] font-bold glass-button hover:bg-pc-blue hover:text-white transition text-slate-700">
+                      ${nextRank} (${cost}€)
+                    </button>
+                  ` : `
+                    <span class="px-2 py-1 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Cadre</span>
+                  `}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    } else if (moduleKey === 'base') {
+      title.textContent = 'Antennes & Flotte';
+      subtitle.textContent = 'Gestion des locaux et des véhicules';
+      icon.setAttribute('data-lucide', 'building-2');
+
+      body.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Antennes Opérationnelles (${this.stations.length})</h4>
+            <button onclick="window.game.closeModal(); window.game.startAntennaPlacement()" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-pc-orange text-white hover:bg-pc-orange-hover shadow-sm transition">
+              + Implanter Antenne (4 500 €)
+            </button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            ${this.stations.map(st => `
+              <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
+                <div class="flex items-center justify-between">
+                  <h5 class="text-sm font-extrabold text-slate-900">${st.name}</h5>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue text-white">Niveau ${st.level}</span>
+                </div>
+                <div class="text-xs text-slate-600">Véhicules : <strong>${st.vehicles.length}</strong></div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button onclick="window.game.closeModal(); window.game.openStationDetails('${st.id}')" class="py-2 rounded-xl text-xs font-bold glass-button text-slate-700 transition">
+                    Gérer l’antenne
+                  </button>
+                  <button onclick="window.game.openModule('amenagement')" class="py-2 rounded-xl text-xs font-black bg-pc-blue/10 hover:bg-pc-blue/20 text-pc-blue transition flex items-center justify-center gap-1">
+                    <i data-lucide="hammer" class="w-3.5 h-3.5"></i>
+                    Aménager
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else if (moduleKey === 'radio') {
+      title.textContent = 'Canal Radio & Main Courante Opérationnelle';
+      subtitle.textContent = 'Fréquence inter-services, transmissions officielles et codes statuts S1 à S6';
+      icon.setAttribute('data-lucide', 'radio');
+      if (window.ProtecModals) {
+        body.innerHTML = window.ProtecModals.renderRadio(this);
+      }
+    } else if (moduleKey === 'logistique') {
+      title.textContent = 'Pôle Logistique, Pharmacie & Garage';
+      subtitle.textContent = 'Gestion des stocks médicaux d’urgence et maintenance de la flotte';
+      icon.setAttribute('data-lucide', 'package-check');
+      if (window.ProtecModals) {
+        body.innerHTML = window.ProtecModals.renderLogistique(this);
+      }
+    } else if (moduleKey === 'meteo') {
+      title.textContent = 'Bulletin Météo-France & Vigilance Préfectorale';
+      subtitle.textContent = 'Surveillance des risques départementaux et consignes de sécurité civile';
+      icon.setAttribute('data-lucide', 'cloud-sun');
+      if (window.ProtecModals) {
+        body.innerHTML = window.ProtecModals.renderMeteo(this);
+      }
+    } else if (moduleKey === 'recompenses') {
+      title.textContent = 'Récompenses Quotidiennes & Défis';
+      subtitle.textContent = 'Série de connexions, dotations fédérales et objectifs de l’antenne';
+      icon.setAttribute('data-lucide', 'gift');
+      if (window.ProtecAdvancedModals) {
+        body.innerHTML = window.ProtecAdvancedModals.renderRewards(this);
+      }
+    } else if (moduleKey === 'amenagement') {
+      title.textContent = 'Aménagement & Évolution du Local';
+      subtitle.textContent = 'Améliorez vos pièces pour débloquer des bonus passifs permanents';
+      icon.setAttribute('data-lucide', 'hammer');
+      if (window.ProtecAdvancedModals) {
+        body.innerHTML = window.ProtecAdvancedModals.renderStationRooms(this, this.selectedStationId || this.stations[0]?.id);
+      }
+    } else if (moduleKey === 'competences') {
+      title.textContent = 'Arbre de Compétences & Bureau d’Antenne';
+      subtitle.textContent = 'Habilitations individuelles des secouristes et gouvernance associative';
+      icon.setAttribute('data-lucide', 'award');
+      if (window.ProtecAdvancedModals) {
+        body.innerHTML = window.ProtecAdvancedModals.renderVolunteerSkills(this);
+      }
+    }
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  openPlayerProfileModal() {
+    const newName = prompt('Nom de votre Directeur / Directrice d’antenne :', this.player.name);
+    if (newName && newName.trim()) {
+      this.player.name = newName.trim();
+      localStorage.setItem('protec_player_name', this.player.name);
+      this.syncPlayerToServer();
+      this.showToast('Profil mis à jour', `Votre indicatif est désormais : ${this.player.name}`, 'blue');
+      this.openModule('alliance');
+    }
+  }
+
+  proposeSpecialFormationModal() {
+    const titles = [
+      { t: 'Stage Chef de Dispositif (CD) & Commandement', type: 'CD', cost: 250, desc: 'Coordination de grands rassemblements et cellule de crise.' },
+      { t: 'Stage Pilotage & Conduite d’Urgence VPSP', type: 'PILOTAGE', cost: 130, desc: 'Techniques de franchissement et sécurité convoi.' },
+      { t: 'Stage Sauvetage Spécialisé & Milieu Périlleux', type: 'SECOURS_SPEC', cost: 200, desc: 'Évacuation en milieu difficile et assistance pompiers.' }
+    ];
+    const pick = titles[Math.floor(Math.random() * titles.length)];
+
+    const payload = {
+      organizerPlayerId: this.player.id,
+      organizerName: this.player.name,
+      allianceId: this.player.allianceId,
+      title: pick.t,
+      type: pick.type,
+      desc: pick.desc,
+      stationName: this.stations[0]?.name || 'Antenne Locale',
+      costPerCandidate: pick.cost,
+      maxCandidates: 6
+    };
+
+    fetch('/api/alliances/formation/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(res => res.json()).then(data => {
+      this.formationsSpeciales.unshift(data.formation);
+      this.showToast('Stage Fédéral Ouvert', `Le stage « ${pick.t} » est ouvert aux inscriptions de l'alliance !`, 'green');
+      this.openModule('alliance');
+    }).catch(() => {
+      payload.id = `form-spec-${Date.now()}`;
+      this.formationsSpeciales.unshift(payload);
+      this.showToast('Stage Fédéral Ouvert', `Stage ouvert sur le réseau de l'alliance.`, 'green');
+      this.openModule('alliance');
+    });
+  }
+
+  upgradeVolunteer(volunteerId, nextRank) {
+    const v = this.volunteers.find(vol => vol.id === volunteerId);
+    if (!v) return;
+
+    const costs = { 'PSE1': 80, 'PSE2': 150, 'CE': 250, 'CD': 400 };
+    const cost = costs[nextRank] || 100;
+
+    if (this.resources.money < cost) {
+      this.showToast('Fonds insuffisants', `La formation coûte ${cost} €.`, 'orange');
+      return;
+    }
+
+    this.resources.money -= cost;
+    v.rank = nextRank;
+    if (nextRank === 'CE') v.role = 'Chef d’Équipe';
+    if (nextRank === 'CD') v.role = 'Chef de Dispositif';
+    if (nextRank === 'PSE2') v.role = 'Équipier Secouriste';
+    if (nextRank === 'PSE1') v.role = 'Secouriste';
+
+    this.updateStatsUI();
+    this.saveGame();
+    this.showToast('Promotion validée', `${v.name} est désormais certifié ${nextRank} !`, 'green');
+    this.openModule('formation');
+  }
+
+  openBuyVehicleModal(stationId) {
+    const modal = document.getElementById('main-modal');
+    modal.classList.remove('hidden');
+    document.getElementById('modal-title').textContent = 'Commander un Véhicule Opérationnel';
+    document.getElementById('modal-subtitle').textContent = 'Flotte d’urgence, de logistique, fluviale et commandement';
+    document.getElementById('modal-icon').setAttribute('data-lucide', 'truck');
+
+    if (window.ProtecAdvancedModals) {
+      document.getElementById('modal-body').innerHTML = window.ProtecAdvancedModals.renderVehicleShop(this, stationId);
+    }
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  buyVehicle(stationId, type) {
+    const cost = type === 'VPSP' ? 3200 : 1800;
+    if (this.resources.money < cost) {
+      this.showToast('Trésorerie insuffisante', `L’achat requiert ${cost} €.`, 'orange');
+      return;
+    }
+
+    const station = this.stations.find(s => s.id === stationId);
+    if (!station) return;
+
+    this.resources.money -= cost;
+    const vehId = `${type.toLowerCase()}-${Date.now()}`;
+    const newVeh = {
+      id: vehId,
+      name: `${type} 0${station.vehicles.length + 1}`,
+      type: type,
+      label: type === 'VPSP' ? 'Ambulance de Premiers Secours' : 'Véhicule Social & Logistique',
+      capacity: 4,
+      status: 'dispo',
+      stationId: stationId
+    };
+
+    this.vehicles.push(newVeh);
+    station.vehicles.push(vehId);
+
+    this.closeModal();
+    this.updateStatsUI();
+    this.renderStations();
+    this.saveGame();
+    this.syncPlayerToServer();
+    this.showToast('Véhicule livré', `${newVeh.name} est prêt au départ !`, 'green');
+    this.openStationDetails(stationId);
+  }
+
+  closeModal() {
+    document.getElementById('main-modal').classList.add('hidden');
+  }
+
+  openOverviewModal() { this.openModule('planning'); }
+  openFinancesModal() { this.openModule('devis'); }
+  openTeamModal() { this.openModule('recrutement'); }
+  openReputationModal() { this.openModule('recrutement'); }
+
+  setFilter(filterKey) {
+    this.currentFilter = filterKey;
+    ['all', 'dps', 'samu', 'social', 'crise'].forEach(f => {
+      const btn = document.getElementById(`filter-btn-${f}`);
+      if (!btn) return;
+      if (f === filterKey) {
+        btn.classList.add('border-pc-blue/40', 'text-pc-blue', 'font-bold');
+        btn.classList.remove('text-slate-600', 'font-semibold');
+      } else {
+        btn.classList.remove('border-pc-blue/40', 'text-pc-blue', 'font-bold');
+        btn.classList.add('text-slate-600', 'font-semibold');
+      }
+    });
+
+    this.renderMissions();
+  }
+
+  setSpeed(speedVal) {
+    this.speed = speedVal;
+    ['pause', '1', '2', '5'].forEach(s => {
+      const btn = document.getElementById(`btn-speed-${s}`);
+      if (btn) btn.className = 'px-2 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition';
+    });
+
+    const activeBtnId = speedVal === 0 ? 'btn-speed-pause' : `btn-speed-${speedVal}`;
+    const activeBtn = document.getElementById(activeBtnId);
+    if (activeBtn) activeBtn.className = 'px-2 py-1 rounded-lg text-xs font-bold bg-pc-blue text-white shadow-sm transition';
+  }
+
+  startSimulationClock() {
+    setInterval(() => {
+      if (this.speed === 0) return;
+
+      for (let i = 0; i < this.speed; i++) {
+        this.clock.minute += 1;
+        if (this.clock.minute >= 60) {
+          this.clock.minute = 0;
+          this.clock.hour += 1;
+          this.clock.totalHoursElapsed += 1;
+
+          this.missions.forEach(m => {
+            if (m.status === 'planifie') {
+              this.checkVolunteerRegistrations(m);
+            }
+          });
+
+          if (this.clock.hour % 6 === 0 && this.stations.length > 0) {
+            let candChance = 0.25;
+            if (this.resources.campaigns.social) candChance += 0.40;
+            if (this.resources.campaigns.posters) candChance += 0.35;
+
+            if (Math.random() < candChance) {
+              const names = [
+                { n: 'Clémentine Vasseur', a: 24, j: 'Secrétaire médicale', d: ['Samedi', 'Dimanche'], t: 'salarié', av: '👩' },
+                { n: 'Maxime Caron', a: 20, j: 'Étudiant en STAPS', d: ['Mercredi', 'Samedi'], t: 'étudiant', av: '🙋‍♂️' },
+                { n: 'Aurélie Giraud', a: 28, j: 'Enseignante', d: ['Mercredi', 'Samedi', 'Dimanche'], t: 'salarié', av: '👩‍🏫' }
+              ];
+              const p = names[Math.floor(Math.random() * names.length)];
+              this.candidatures.push({
+                id: `cand-${Date.now()}`,
+                name: p.n,
+                age: p.a,
+                job: p.j,
+                motivation: 'Très motivé(e) pour rejoindre les équipes de secours et donner de mon temps libre.',
+                dispoJours: p.d,
+                dispoType: p.t,
+                avatar: p.av
+              });
+              this.showToast('Nouvelle Candidature', `${p.n} souhaite rejoindre la Protection Civile.`, 'blue');
+              this.updateStatsUI();
+            }
+
+            if (Math.random() < 0.35) {
+              this.generateRandomDevisOpportunity();
+            }
+          }
+
+          if (this.clock.hour >= 24) {
+            this.clock.hour = 0;
+            this.clock.day += 1;
+
+            const daysInMonth = new Date(this.clock.year, this.clock.month + 1, 0).getDate();
+            if (this.clock.day > daysInMonth) {
+              this.clock.day = 1;
+              this.clock.month += 1;
+              if (this.clock.month >= 12) {
+                this.clock.month = 0;
+                this.clock.year += 1;
+              }
+            }
+          }
+        }
+
+        this.missions.forEach(m => {
+          if (m.status === 'ongoing') {
+            m.progress += 1;
+            if (m.progress >= m.duration) {
+              this.completeMission(m);
+            }
+          }
+        });
+      }
+
+      // Mise à jour des transits routiers en temps réel et météo
+      if (window.ProtecSystems) {
+        window.ProtecSystems.updateTransits(this);
+        window.ProtecSystems.updateWeatherAndDayNight(this);
+      }
+
+      // Micro-dons citoyens si la campagne en ligne est active
+      if (this.grants && this.grants.publicDonationsActive && this.clock.minute === 0 && Math.random() < 0.35) {
+        const don = 30 + Math.floor(Math.random() * 60);
+        this.resources.money += don;
+        this.showToast('Don en Ligne Reçu !', `Un bienfaiteur a fait un don de ${don} € à l’association (-66% impôt).`, 'green');
+        this.updateStatsUI();
+      }
+
+      // Régénération progressive de l'énergie des secouristes au repos
+      if (this.clock.minute === 0 && this.clock.hour % 3 === 0) {
+        this.volunteers.forEach(v => {
+          if (v.status === 'dispo') {
+            v.energy = Math.min(100, (v.energy || 80) + 8);
+          }
+        });
+      }
+
+      this.updateClockUI();
+
+      if (this.selectedMissionId) {
+        const cur = this.missions.find(m => m.id === this.selectedMissionId);
+        if (cur && cur.status === 'ongoing') {
+          this.openMissionDetails(cur.id);
+        }
+      }
+
+    }, 1000);
+  }
+
+  updateClockUI() {
+    const hh = String(this.clock.hour).padStart(2, '0');
+    const mm = String(this.clock.minute).padStart(2, '0');
+    const timeEl = document.getElementById('clock-time');
+    if (timeEl) timeEl.textContent = `${hh}:${mm}`;
+
+    const dateEl = document.getElementById('clock-date');
+    if (dateEl) {
+      dateEl.textContent = this.formatShortDate(this.clock) + ` ${this.clock.year}`;
+    }
+  }
+
+  updateStatsUI() {
+    document.getElementById('stat-money').textContent = this.resources.money.toLocaleString('fr-FR');
+
+    const availableCount = this.volunteers.filter(v => v.status === 'dispo').length;
+    document.getElementById('stat-volunteers-avail').textContent = availableCount;
+    document.getElementById('stat-volunteers-total').textContent = this.volunteers.length;
+
+    const planCount = this.missions.filter(m => m.status === 'planifie' || m.status === 'ongoing').length;
+    const devisCount = this.devis.filter(d => d.status === 'pending').length;
+    const candCount = this.candidatures.length;
+    const renfCount = this.renforts.filter(r => r.status === 'open').length;
+
+    const bPlan = document.getElementById('badge-planning-dock');
+    if (bPlan) bPlan.textContent = planCount;
+
+    const bDev = document.getElementById('badge-devis-dock');
+    if (bDev) bDev.textContent = devisCount;
+
+    const bCand = document.getElementById('badge-recrutement-dock');
+    if (bCand) bCand.textContent = candCount;
+
+    const bAll = document.getElementById('badge-alliance-dock');
+    if (bAll) bAll.textContent = renfCount || this.allianceStations.length;
+
+    const notEl = document.getElementById('stat-notoriety');
+    if (notEl) notEl.textContent = `${this.resources.followers} abonnés`;
+
+    const dotEl = document.getElementById('stat-campaign-dot');
+    if (dotEl) {
+      if (this.resources.campaigns.social || this.resources.campaigns.posters) {
+        dotEl.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5';
+      } else {
+        dotEl.className = 'w-2 h-2 rounded-full bg-slate-300 ml-0.5';
+      }
+    }
+  }
+
+  updateMissionCounts() {
+    const counts = {
+      all: this.missions.length,
+      dps: this.missions.filter(m => m.type === 'dps').length,
+      samu: this.missions.filter(m => m.type === 'samu').length,
+      social: this.missions.filter(m => m.type === 'social').length,
+      crise: this.missions.filter(m => m.type === 'crise').length
+    };
+
+    ['all', 'dps', 'samu', 'social', 'crise'].forEach(c => {
+      const el = document.getElementById(`count-${c}`);
+      if (el) el.textContent = counts[c];
+    });
+  }
+
+  showToast(title, message, color = 'blue') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'glass-panel-heavy p-3.5 rounded-2xl border border-white/80 shadow-xl flex items-start gap-3 pointer-events-auto transition-all duration-300 transform translate-y-2 opacity-0';
+
+    let iconBg = 'bg-pc-blue/10 text-pc-blue';
+    let iconName = 'bell';
+    if (color === 'orange') { iconBg = 'bg-pc-orange/15 text-pc-orange'; iconName = 'alert-triangle'; }
+    if (color === 'green') { iconBg = 'bg-emerald-100 text-emerald-600'; iconName = 'check-circle-2'; }
+
+    toast.innerHTML = `
+      <div class="w-7 h-7 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 mt-0.5">
+        <i data-lucide="${iconName}" class="w-4 h-4"></i>
+      </div>
+      <div class="flex-1 pr-2">
+        <h5 class="text-xs font-extrabold text-slate-900 leading-tight">${title}</h5>
+        <p class="text-[11px] text-slate-600 mt-0.5 leading-normal">${message}</p>
+      </div>
+      <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600">
+        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+      </button>
+    `;
+
+    container.appendChild(toast);
+    if (window.lucide) window.lucide.createIcons();
+
+    setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 20);
+    setTimeout(() => {
+      toast.classList.add('opacity-0', 'translate-x-4');
+      setTimeout(() => toast.remove(), 300);
+    }, 4500);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  window.game = new ProtecGame();
+});

@@ -1,0 +1,551 @@
+/* Styles Glassmorphism haut de gamme et animations pour Protec Live - Gestion de la Protection Civile */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --pc-blue: #002E6D;
+  --pc-blue-light: #0B4EA2;
+  --pc-blue-dark: #001A3D;
+  --pc-orange: #FF6600;
+  --pc-orange-light: #FF8533;
+  --pc-orange-soft: #FFF3EB;
+  --pc-cyan: #0284C7;
+  --glass-bg: rgba(255, 255, 255, 0.68);
+  --glass-bg-hover: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 46, 109, 0.08), 0 2px 8px rgba(0, 0, 0, 0.02), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+  --glass-shadow-lg: 0 16px 48px 0 rgba(0, 46, 109, 0.12), 0 4px 16px rgba(0, 0, 0, 0.04), inset 0 1px 1.5px rgba(255, 255, 255, 0.95);
+}
+
+* {
+  box-sizing: border-box;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #f1f5f9;
+  color: #1e293b;
+  user-select: none;
+}
+
+/* Glassmorphism Classes Haut de Gamme */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.68) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.75) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 46, 109, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+}
+
+.glass-panel-heavy {
+  background: rgba(255, 255, 255, 0.78) !important;
+  backdrop-filter: blur(26px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.82) !important;
+  box-shadow: 0 16px 48px 0 rgba(0, 46, 109, 0.14), inset 0 1px 1.5px rgba(255, 255, 255, 0.95) !important;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.62) !important;
+  backdrop-filter: blur(14px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.75) !important;
+  box-shadow: 0 4px 16px 0 rgba(0, 46, 109, 0.05), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.85) !important;
+  box-shadow: 0 8px 24px 0 rgba(0, 46, 109, 0.09), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+}
+
+.glass-pill {
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 4px 14px 0 rgba(0, 46, 109, 0.06), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+}
+
+.glass-button {
+  background: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(12px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(160%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 2px 10px rgba(0, 46, 109, 0.05), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-button:hover {
+  background: rgba(255, 255, 255, 0.92) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 46, 109, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+}
+
+.glass-button:active {
+  transform: translateY(0);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 46, 109, 0.04) !important;
+  transition: all 0.2s ease;
+}
+
+.glass-input:focus {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: #002E6D !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(0, 46, 109, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+}
+
+.glass-card-blue {
+  background: rgba(0, 46, 109, 0.05) !important;
+  backdrop-filter: blur(14px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+  border: 1px solid rgba(0, 46, 109, 0.15) !important;
+  box-shadow: 0 4px 16px 0 rgba(0, 46, 109, 0.04), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+}
+
+.glass-card-orange {
+  background: rgba(255, 102, 0, 0.06) !important;
+  backdrop-filter: blur(14px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+  border: 1px solid rgba(255, 102, 0, 0.22) !important;
+  box-shadow: 0 4px 16px 0 rgba(255, 102, 0, 0.05), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+}
+
+.glass-card-emerald {
+  background: rgba(16, 185, 129, 0.06) !important;
+  backdrop-filter: blur(14px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  box-shadow: 0 4px 16px 0 rgba(16, 185, 129, 0.04), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+}
+
+.glass-card-amber {
+  background: rgba(245, 158, 11, 0.06) !important;
+  backdrop-filter: blur(14px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+  border: 1px solid rgba(245, 158, 11, 0.22) !important;
+  box-shadow: 0 4px 16px 0 rgba(245, 158, 11, 0.04), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+}
+
+.glass-card-purple {
+  background: rgba(147, 51, 234, 0.06) !important;
+  backdrop-filter: blur(14px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+  border: 1px solid rgba(147, 51, 234, 0.2) !important;
+  box-shadow: 0 4px 16px 0 rgba(147, 51, 234, 0.04), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 46, 109, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 46, 109, 0.3);
+}
+
+/* Radar Pulse Animations for Mission Markers */
+.radar-ping-orange {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background-color: rgba(255, 102, 0, 0.35);
+  animation: radar-pulse 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+  pointer-events: none;
+}
+
+.radar-ping-blue {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background-color: rgba(0, 46, 109, 0.3);
+  animation: radar-pulse 2.2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+  pointer-events: none;
+}
+
+.radar-ping-red {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background-color: rgba(239, 68, 68, 0.45);
+  animation: radar-pulse 1.4s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+  pointer-events: none;
+}
+
+.radar-ping-purple {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background-color: rgba(147, 51, 234, 0.35);
+  animation: radar-pulse 2.4s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes radar-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.8);
+    opacity: 0;
+  }
+}
+
+/* Marker Base Styling */
+.custom-leaflet-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.custom-leaflet-marker:hover {
+  transform: scale(1.15) translateY(-3px);
+  z-index: 9999 !important;
+}
+
+.marker-inner {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px rgba(0, 30, 80, 0.22);
+  border: 2.5px solid #ffffff;
+  color: white;
+  position: relative;
+  z-index: 2;
+}
+
+.badge-counter {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ff6600;
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 9999px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  z-index: 3;
+}
+
+/* Slide Drawer animation */
+.drawer-slide-in {
+  animation: slideDrawer 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.drawer-slide-out {
+  animation: slideDrawerOut 0.25s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+
+@keyframes slideDrawer {
+  from {
+    transform: translateX(105%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDrawerOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(105%);
+    opacity: 0;
+  }
+}
+
+/* Modal scale animation */
+.modal-fade-in {
+  animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Subtle Shimmer for progress bars */
+.shimmer-bar {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.45) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: shimmer 1.8s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Leaflet map custom override for clean minimalist view */
+.leaflet-container {
+  font-family: inherit;
+  background-color: #e9eef2 !important;
+}
+
+.leaflet-control-zoom {
+  border: none !important;
+  box-shadow: var(--glass-shadow) !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.8) !important;
+}
+
+.leaflet-control-zoom a {
+  background: transparent !important;
+  color: #002e6d !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  transition: background 0.15s ease;
+}
+
+.leaflet-control-zoom a:hover {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #ff6600 !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(4px);
+  font-size: 10px !important;
+  color: #64748b !important;
+  border-top-left-radius: 8px;
+  padding: 2px 8px !important;
+}
+
+/* Leaflet Layers Control Styling */
+.leaflet-control-layers {
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  border-radius: 14px !important;
+  backdrop-filter: blur(14px) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #002e6d !important;
+  padding: 8px 12px !important;
+}
+
+.leaflet-control-layers-toggle {
+  background-size: 18px 18px !important;
+}
+
+.leaflet-control-layers-expanded {
+  padding: 10px 14px !important;
+}
+
+/* Number ticker animation helper */
+.mono-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-feature-settings: 'tnum';
+}
+
+/* --- GYROPHARE & VÉHICULES EN ROUTE --- */
+.vehicle-marker-container {
+  position: relative;
+  transition: transform 0.25s linear;
+}
+
+.beacon-flash {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #0284c7;
+  box-shadow: 0 0 12px 4px #0284c7;
+  animation: beacon-pulse 0.4s infinite alternate ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes beacon-pulse {
+  0% {
+    opacity: 0.2;
+    transform: scale(0.7);
+    background-color: #0284c7;
+    box-shadow: 0 0 4px 1px #0284c7;
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.4);
+    background-color: #38bdf8;
+    box-shadow: 0 0 16px 6px #38bdf8;
+  }
+  100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+    background-color: #ffffff;
+    box-shadow: 0 0 8px 3px #ffffff;
+  }
+}
+
+/* Trajet routier animé */
+.route-line-animated {
+  stroke-dasharray: 8, 12;
+  animation: dash-animation 1.4s linear infinite;
+}
+
+@keyframes dash-animation {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+/* Overlay Jour / Nuit progressif et naturel sur la carte */
+#map-night-filter {
+  pointer-events: none;
+  transition: background-color 2.5s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: background-color;
+}
+
+/* Statuts Opérationnels Radio Protection Civile */
+.status-badge-1 { background-color: #10b981; color: #ffffff; } /* Dispo Antenne */
+.status-badge-2 { background-color: #0284c7; color: #ffffff; } /* Départ / En route */
+.status-badge-3 { background-color: #f59e0b; color: #ffffff; } /* Sur les lieux */
+.status-badge-4 { background-color: #ef4444; color: #ffffff; } /* Transport CHU */
+.status-badge-5 { background-color: #8b5cf6; color: #ffffff; } /* Arrivée CHU / Bilan */
+.status-badge-6 { background-color: #64748b; color: #ffffff; } /* Retour Antenne */
+
+/* Main Courante Radio Feed Item */
+.radio-log-item {
+  position: relative;
+  border-left: 3px solid #002e6d;
+  transition: all 0.2s ease;
+}
+.radio-log-item:hover {
+  background-color: rgba(0, 46, 109, 0.04);
+}
+
+/* --- UTILITAIRES RESPONSIVES & DOCK GLASSMORPHISM --- */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+/* Dock tactile et fluide */
+.dock-container {
+  max-width: calc(100vw - 1.5rem);
+  box-shadow: 0 20px 50px -10px rgba(0, 46, 109, 0.18), inset 0 1px 1.5px rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Modales glassmorphism aérées */
+#main-modal .modal-fade-in {
+  max-width: min(920px, calc(100vw - 1.5rem));
+  max-height: min(88vh, 850px);
+}
+
+@media (max-width: 768px) {
+  #context-drawer {
+    width: 100% !important;
+    max-width: 100vw !important;
+    top: auto !important;
+    bottom: 0 !important;
+    height: 85vh !important;
+    left: 0 !important;
+    right: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 1.5rem !important;
+    border-top-right-radius: 1.5rem !important;
+  }
+
+  #main-modal {
+    padding: 0.5rem !important;
+    align-items: flex-end !important;
+  }
+
+  #main-modal .modal-fade-in {
+    max-width: 100vw !important;
+    max-height: 90vh !important;
+    width: 100% !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 1.5rem !important;
+    border-top-right-radius: 1.5rem !important;
+  }
+
+  .dock-container {
+    max-width: calc(100vw - 1rem) !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    gap: 0.35rem !important;
+  }
+
+  .dock-btn {
+    width: 3.5rem !important;
+    height: 3.5rem !important;
+  }
+}
+

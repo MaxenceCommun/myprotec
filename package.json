@@ -1,0 +1,20 @@
+{
+  "name": "protec-live",
+  "version": "1.0.0",
+  "description": "Simulateur Opérationnel et Multijoueur de la Protection Civile",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "protection-civile",
+    "simulation",
+    "multijoueur",
+    "secourisme"
+  ],
+  "author": "Protec Live",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
