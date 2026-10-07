@@ -1,0 +1,126 @@
+/**
+ * PROTEC LIVE - RÉFÉRENTIEL DES DÉPARTEMENTS FRANÇAIS
+ * Contient les codes, noms, chefs-lieux, coordonnées centrales et boîtes englobantes (bounding box)
+ * pour valider précisément le clic d'implantation de l'antenne sur la carte.
+ */
+
+window.ProtecDepartements = {
+  // Liste exhaustive des 101 départements métropolitains et d'outre-mer avec centroïdes et bounds [latMin, lngMin, latMax, lngMax]
+  list: [
+    { code: '01', name: 'Ain', chefLieu: 'Bourg-en-Bresse', lat: 46.10, lng: 5.35, zoom: 10, bbox: [45.65, 4.70, 46.55, 6.10] },
+    { code: '02', name: 'Aisne', chefLieu: 'Laon', lat: 49.56, lng: 3.62, zoom: 10, bbox: [48.85, 2.95, 50.10, 4.30] },
+    { code: '03', name: 'Allier', chefLieu: 'Moulins', lat: 46.39, lng: 3.16, zoom: 10, bbox: [45.90, 2.30, 46.80, 3.90] },
+    { code: '04', name: 'Alpes-de-Haute-Provence', chefLieu: 'Digne-les-Bains', lat: 44.09, lng: 6.24, zoom: 10, bbox: [43.60, 5.50, 44.60, 6.95] },
+    { code: '05', name: 'Hautes-Alpes', chefLieu: 'Gap', lat: 44.66, lng: 6.30, zoom: 10, bbox: [44.20, 5.50, 45.10, 7.15] },
+    { code: '06', name: 'Alpes-Maritimes', chefLieu: 'Nice', lat: 43.93, lng: 7.17, zoom: 10, bbox: [43.45, 6.70, 44.35, 7.75] },
+    { code: '07', name: 'Ardèche', chefLieu: 'Privas', lat: 44.75, lng: 4.45, zoom: 10, bbox: [44.25, 3.85, 45.35, 4.90] },
+    { code: '08', name: 'Ardennes', chefLieu: 'Charleville-Mézières', lat: 49.60, lng: 4.65, zoom: 10, bbox: [49.15, 4.10, 50.25, 5.35] },
+    { code: '09', name: 'Ariège', chefLieu: 'Foix', lat: 42.95, lng: 1.50, zoom: 10, bbox: [42.55, 0.80, 43.35, 2.20] },
+    { code: '10', name: 'Aube', chefLieu: 'Troyes', lat: 48.30, lng: 4.10, zoom: 10, bbox: [47.90, 3.40, 48.70, 4.85] },
+    { code: '11', name: 'Aude', chefLieu: 'Carcassonne', lat: 43.15, lng: 2.40, zoom: 10, bbox: [42.60, 1.70, 43.45, 3.25] },
+    { code: '12', name: 'Aveyron', chefLieu: 'Rodez', lat: 44.35, lng: 2.60, zoom: 10, bbox: [43.70, 1.85, 44.95, 3.45] },
+    { code: '13', name: 'Bouches-du-Rhône', chefLieu: 'Marseille', lat: 43.53, lng: 5.08, zoom: 10, bbox: [43.15, 4.25, 43.90, 5.80] },
+    { code: '14', name: 'Calvados', chefLieu: 'Caen', lat: 49.10, lng: -0.35, zoom: 10, bbox: [48.75, -1.15, 49.45, 0.45] },
+    { code: '15', name: 'Cantal', chefLieu: 'Aurillac', lat: 45.05, lng: 2.70, zoom: 10, bbox: [44.60, 2.05, 45.45, 3.35] },
+    { code: '16', name: 'Charente', chefLieu: 'Angoulême', lat: 45.72, lng: 0.17, zoom: 10, bbox: [45.15, -0.55, 46.15, 0.95] },
+    { code: '17', name: 'Charente-Maritime', chefLieu: 'La Rochelle', lat: 45.85, lng: -0.80, zoom: 10, bbox: [45.10, -1.60, 46.40, -0.10] },
+    { code: '18', name: 'Cher', chefLieu: 'Bourges', lat: 47.08, lng: 2.40, zoom: 10, bbox: [46.40, 1.85, 47.70, 3.10] },
+    { code: '19', name: 'Corrèze', chefLieu: 'Tulle', lat: 45.35, lng: 1.90, zoom: 10, bbox: [44.90, 1.15, 45.80, 2.50] },
+    { code: '21', name: 'Côte-d’Or', chefLieu: 'Dijon', lat: 47.32, lng: 4.85, zoom: 10, bbox: [46.85, 4.10, 47.95, 5.55] },
+    { code: '22', name: 'Côtes-d’Armor', chefLieu: 'Saint-Brieuc', lat: 48.45, lng: -2.85, zoom: 10, bbox: [48.05, -3.70, 48.90, -1.90] },
+    { code: '23', name: 'Creuse', chefLieu: 'Guéret', lat: 46.05, lng: 2.05, zoom: 10, bbox: [45.60, 1.35, 46.45, 2.65] },
+    { code: '24', name: 'Dordogne', chefLieu: 'Périgueux', lat: 45.15, lng: 0.70, zoom: 10, bbox: [44.55, -0.10, 45.75, 1.50] },
+    { code: '25', name: 'Doubs', chefLieu: 'Besançon', lat: 47.15, lng: 6.35, zoom: 10, bbox: [46.70, 5.65, 47.60, 7.00] },
+    { code: '26', name: 'Drôme', chefLieu: 'Valence', lat: 44.70, lng: 5.15, zoom: 10, bbox: [44.10, 4.60, 45.30, 5.80] },
+    { code: '27', name: 'Eure', chefLieu: 'Évreux', lat: 49.05, lng: 1.05, zoom: 10, bbox: [48.65, 0.35, 49.50, 1.80] },
+    { code: '28', name: 'Eure-et-Loir', chefLieu: 'Chartres', lat: 48.40, lng: 1.45, zoom: 10, bbox: [47.95, 0.75, 48.95, 2.05] },
+    { code: '29', name: 'Finistère', chefLieu: 'Quimper', lat: 48.25, lng: -4.10, zoom: 10, bbox: [47.70, -4.90, 48.75, -3.40] },
+    { code: '2A', name: 'Corse-du-Sud', chefLieu: 'Ajaccio', lat: 41.90, lng: 8.95, zoom: 10, bbox: [41.35, 8.50, 42.40, 9.45] },
+    { code: '2B', name: 'Haute-Corse', chefLieu: 'Bastia', lat: 42.45, lng: 9.30, zoom: 10, bbox: [41.80, 8.70, 43.05, 9.60] },
+    { code: '30', name: 'Gard', chefLieu: 'Nîmes', lat: 44.05, lng: 4.20, zoom: 10, bbox: [43.45, 3.25, 44.45, 4.90] },
+    { code: '31', name: 'Haute-Garonne', chefLieu: 'Toulouse', lat: 43.40, lng: 1.25, zoom: 10, bbox: [42.65, 0.45, 43.95, 2.10] },
+    { code: '32', name: 'Gers', chefLieu: 'Auch', lat: 43.65, lng: 0.55, zoom: 10, bbox: [43.30, -0.30, 44.10, 1.20] },
+    { code: '33', name: 'Gironde', chefLieu: 'Bordeaux', lat: 44.85, lng: -0.55, zoom: 10, bbox: [44.15, -1.30, 45.60, 0.35] },
+    { code: '34', name: 'Hérault', chefLieu: 'Montpellier', lat: 43.60, lng: 3.40, zoom: 10, bbox: [43.15, 2.50, 44.00, 4.25] },
+    { code: '35', name: 'Ille-et-Vilaine', chefLieu: 'Rennes', lat: 48.15, lng: -1.70, zoom: 10, bbox: [47.60, -2.35, 48.70, -1.00] },
+    { code: '36', name: 'Indre', chefLieu: 'Châteauroux', lat: 46.80, lng: 1.65, zoom: 10, bbox: [46.30, 0.85, 47.30, 2.30] },
+    { code: '37', name: 'Indre-et-Loire', chefLieu: 'Tours', lat: 47.30, lng: 0.70, zoom: 10, bbox: [46.75, 0.05, 47.70, 1.40] },
+    { code: '38', name: 'Isère', chefLieu: 'Grenoble', lat: 45.25, lng: 5.65, zoom: 10, bbox: [44.75, 4.80, 45.85, 6.40] },
+    { code: '39', name: 'Jura', chefLieu: 'Lons-le-Saunier', lat: 46.75, lng: 5.75, zoom: 10, bbox: [46.30, 5.25, 47.30, 6.25] },
+    { code: '40', name: 'Landes', chefLieu: 'Mont-de-Marsan', lat: 43.90, lng: -0.85, zoom: 10, bbox: [43.45, -1.60, 44.60, 0.20] },
+    { code: '41', name: 'Loir-et-Cher', chefLieu: 'Blois', lat: 47.60, lng: 1.35, zoom: 10, bbox: [47.15, 0.55, 48.15, 2.25] },
+    { code: '42', name: 'Loire', chefLieu: 'Saint-Étienne', lat: 45.65, lng: 4.15, zoom: 10, bbox: [45.20, 3.65, 46.30, 4.80] },
+    { code: '43', name: 'Haute-Loire', chefLieu: 'Le Puy-en-Velay', lat: 45.10, lng: 3.85, zoom: 10, bbox: [44.70, 3.10, 45.45, 4.55] },
+    { code: '44', name: 'Loire-Atlantique', chefLieu: 'Nantes', lat: 47.35, lng: -1.70, zoom: 10, bbox: [46.85, -2.60, 47.85, -1.00] },
+    { code: '45', name: 'Loiret', chefLieu: 'Orléans', lat: 47.95, lng: 2.25, zoom: 10, bbox: [47.50, 1.50, 48.35, 3.10] },
+    { code: '46', name: 'Lot', chefLieu: 'Cahors', lat: 44.65, lng: 1.60, zoom: 10, bbox: [44.20, 1.00, 45.05, 2.15] },
+    { code: '47', name: 'Lot-et-Garonne', chefLieu: 'Agen', lat: 44.35, lng: 0.40, zoom: 10, bbox: [43.95, -0.20, 44.80, 1.10] },
+    { code: '48', name: 'Lozère', chefLieu: 'Mende', lat: 44.55, lng: 3.50, zoom: 10, bbox: [44.10, 3.00, 44.95, 4.00] },
+    { code: '49', name: 'Maine-et-Loire', chefLieu: 'Angers', lat: 47.45, lng: -0.55, zoom: 10, bbox: [46.95, -1.35, 47.85, 0.25] },
+    { code: '50', name: 'Manche', chefLieu: 'Saint-Lô', lat: 49.10, lng: -1.35, zoom: 10, bbox: [48.45, -2.00, 49.75, -0.75] },
+    { code: '51', name: 'Marne', chefLieu: 'Châlons-en-Champagne', lat: 49.00, lng: 4.25, zoom: 10, bbox: [48.50, 3.40, 49.45, 5.05] },
+    { code: '52', name: 'Haute-Marne', chefLieu: 'Chaumont', lat: 48.15, lng: 5.25, zoom: 10, bbox: [47.55, 4.60, 48.70, 5.90] },
+    { code: '53', name: 'Mayenne', chefLieu: 'Laval', lat: 48.15, lng: -0.65, zoom: 10, bbox: [47.75, -1.30, 48.60, -0.10] },
+    { code: '54', name: 'Meurthe-et-Moselle', chefLieu: 'Nancy', lat: 48.75, lng: 6.15, zoom: 10, bbox: [48.35, 5.40, 49.60, 7.05] },
+    { code: '55', name: 'Meuse', chefLieu: 'Bar-le-Duc', lat: 49.05, lng: 5.35, zoom: 10, bbox: [48.40, 4.85, 49.65, 5.85] },
+    { code: '56', name: 'Morbihan', chefLieu: 'Vannes', lat: 47.85, lng: -2.85, zoom: 10, bbox: [47.25, -3.75, 48.20, -2.05] },
+    { code: '57', name: 'Moselle', chefLieu: 'Metz', lat: 49.10, lng: 6.65, zoom: 10, bbox: [48.55, 5.85, 49.50, 7.65] },
+    { code: '58', name: 'Nièvre', chefLieu: 'Nevers', lat: 47.10, lng: 3.55, zoom: 10, bbox: [46.65, 2.80, 47.60, 4.30] },
+    { code: '59', name: 'Nord', chefLieu: 'Lille', lat: 50.45, lng: 3.25, zoom: 10, bbox: [49.95, 2.05, 51.10, 4.30] },
+    { code: '60', name: 'Oise', chefLieu: 'Beauvais', lat: 49.40, lng: 2.40, zoom: 10, bbox: [49.05, 1.70, 49.80, 3.15] },
+    { code: '61', name: 'Orne', chefLieu: 'Alençon', lat: 48.60, lng: 0.15, zoom: 10, bbox: [48.15, -0.85, 48.95, 1.05] },
+    { code: '62', name: 'Pas-de-Calais', chefLieu: 'Arras', lat: 50.50, lng: 2.30, zoom: 10, bbox: [50.00, 1.50, 51.05, 3.25] },
+    { code: '63', name: 'Puy-de-Dôme', chefLieu: 'Clermont-Ferrand', lat: 45.75, lng: 3.15, zoom: 10, bbox: [45.25, 2.40, 46.20, 3.90] },
+    { code: '64', name: 'Pyrénées-Atlantiques', chefLieu: 'Pau', lat: 43.30, lng: -0.75, zoom: 10, bbox: [42.75, -1.80, 43.60, 0.05] },
+    { code: '65', name: 'Hautes-Pyrénées', chefLieu: 'Tarbes', lat: 43.10, lng: 0.15, zoom: 10, bbox: [42.65, -0.35, 43.60, 0.65] },
+    { code: '66', name: 'Pyrénées-Orientales', chefLieu: 'Perpignan', lat: 42.60, lng: 2.50, zoom: 10, bbox: [42.30, 1.70, 42.95, 3.20] },
+    { code: '67', name: 'Bas-Rhin', chefLieu: 'Strasbourg', lat: 48.70, lng: 7.55, zoom: 10, bbox: [48.20, 6.90, 49.10, 8.25] },
+    { code: '68', name: 'Haut-Rhin', chefLieu: 'Colmar', lat: 47.90, lng: 7.30, zoom: 10, bbox: [47.40, 6.80, 48.30, 7.75] },
+    { code: '69', name: 'Rhône & Métropole de Lyon', chefLieu: 'Lyon', lat: 45.85, lng: 4.70, zoom: 10, bbox: [45.45, 4.30, 46.30, 5.15] },
+    { code: '70', name: 'Haute-Saône', chefLieu: 'Vesoul', lat: 47.65, lng: 6.10, zoom: 10, bbox: [47.20, 5.35, 48.05, 6.85] },
+    { code: '71', name: 'Saône-et-Loire', chefLieu: 'Mâcon', lat: 46.65, lng: 4.55, zoom: 10, bbox: [46.10, 3.65, 47.15, 5.50] },
+    { code: '72', name: 'Sarthe', chefLieu: 'Le Mans', lat: 48.00, lng: 0.20, zoom: 10, bbox: [47.55, -0.45, 48.45, 0.90] },
+    { code: '73', name: 'Savoie', chefLieu: 'Chambéry', lat: 45.50, lng: 6.50, zoom: 10, bbox: [45.05, 5.65, 45.95, 7.20] },
+    { code: '74', name: 'Haute-Savoie', chefLieu: 'Annecy', lat: 46.05, lng: 6.45, zoom: 10, bbox: [45.65, 5.80, 46.45, 7.10] },
+    { code: '75', name: 'Paris', chefLieu: 'Paris', lat: 48.8566, lng: 2.3522, zoom: 12, bbox: [48.815, 2.225, 48.902, 2.470] },
+    { code: '76', name: 'Seine-Maritime', chefLieu: 'Rouen', lat: 49.65, lng: 1.05, zoom: 10, bbox: [49.30, 0.05, 50.10, 1.85] },
+    { code: '77', name: 'Seine-et-Marne', chefLieu: 'Melun', lat: 48.60, lng: 2.95, zoom: 10, bbox: [48.10, 2.35, 49.15, 3.60] },
+    { code: '78', name: 'Yvelines', chefLieu: 'Versailles', lat: 48.80, lng: 1.90, zoom: 10, bbox: [48.45, 1.45, 49.10, 2.25] },
+    { code: '79', name: 'Deux-Sèvres', chefLieu: 'Niort', lat: 46.55, lng: -0.35, zoom: 10, bbox: [46.05, -0.90, 47.10, 0.15] },
+    { code: '80', name: 'Somme', chefLieu: 'Amiens', lat: 49.95, lng: 2.30, zoom: 10, bbox: [49.55, 1.35, 50.40, 3.25] },
+    { code: '81', name: 'Tarn', chefLieu: 'Albi', lat: 43.80, lng: 2.20, zoom: 10, bbox: [43.35, 1.50, 44.25, 2.95] },
+    { code: '82', name: 'Tarn-et-Garonne', chefLieu: 'Montauban', lat: 44.10, lng: 1.25, zoom: 10, bbox: [43.75, 0.70, 44.40, 1.95] },
+    { code: '83', name: 'Var', chefLieu: 'Toulon', lat: 43.45, lng: 6.25, zoom: 10, bbox: [42.95, 5.60, 43.85, 6.95] },
+    { code: '84', name: 'Vaucluse', chefLieu: 'Avignon', lat: 44.00, lng: 5.15, zoom: 10, bbox: [43.65, 4.60, 44.45, 5.80] },
+    { code: '85', name: 'Vendée', chefLieu: 'La Roche-sur-Yon', lat: 46.65, lng: -1.35, zoom: 10, bbox: [46.25, -2.45, 47.10, -0.55] },
+    { code: '86', name: 'Vienne', chefLieu: 'Poitiers', lat: 46.60, lng: 0.45, zoom: 10, bbox: [46.10, -0.15, 47.15, 1.15] },
+    { code: '87', name: 'Haute-Vienne', chefLieu: 'Limoges', lat: 45.85, lng: 1.25, zoom: 10, bbox: [45.40, 0.60, 46.40, 1.85] },
+    { code: '88', name: 'Vosges', chefLieu: 'Épinal', lat: 48.20, lng: 6.35, zoom: 10, bbox: [47.80, 5.35, 48.55, 7.20] },
+    { code: '89', name: 'Yonne', chefLieu: 'Auxerre', lat: 47.85, lng: 3.55, zoom: 10, bbox: [47.30, 2.80, 48.45, 4.45] },
+    { code: '90', name: 'Territoire de Belfort', chefLieu: 'Belfort', lat: 47.64, lng: 6.90, zoom: 11, bbox: [47.45, 6.75, 47.80, 7.15] },
+    { code: '91', name: 'Essonne', chefLieu: 'Évry-Courcouronnes', lat: 48.55, lng: 2.25, zoom: 11, bbox: [48.25, 1.90, 48.75, 2.60] },
+    { code: '92', name: 'Hauts-de-Seine', chefLieu: 'Nanterre', lat: 48.85, lng: 2.23, zoom: 11, bbox: [48.72, 2.15, 48.95, 2.33] },
+    { code: '93', name: 'Seine-Saint-Denis', chefLieu: 'Bobigny', lat: 48.91, lng: 2.45, zoom: 11, bbox: [48.85, 2.30, 49.02, 2.60] },
+    { code: '94', name: 'Val-de-Marne', chefLieu: 'Créteil', lat: 48.77, lng: 2.46, zoom: 11, bbox: [48.68, 2.30, 48.86, 2.60] },
+    { code: '95', name: 'Val-d’Oise', chefLieu: 'Cergy-Pontoise', lat: 49.05, lng: 2.10, zoom: 10, bbox: [48.98, 1.60, 49.25, 2.60] },
+    { code: '971', name: 'Guadeloupe', chefLieu: 'Basse-Terre', lat: 16.25, lng: -61.55, zoom: 10, bbox: [15.80, -61.85, 16.55, -61.00] },
+    { code: '972', name: 'Martinique', chefLieu: 'Fort-de-France', lat: 14.65, lng: -61.00, zoom: 10, bbox: [14.35, -61.25, 14.90, -60.80] },
+    { code: '973', name: 'Guyane', chefLieu: 'Cayenne', lat: 4.00, lng: -53.00, zoom: 7, bbox: [2.10, -54.60, 5.80, -51.60] },
+    { code: '974', name: 'La Réunion', chefLieu: 'Saint-Denis', lat: -21.15, lng: 55.50, zoom: 10, bbox: [-21.40, 55.20, -20.85, 55.85] },
+    { code: '976', name: 'Mayotte', chefLieu: 'Mamoudzou', lat: -12.80, lng: 45.15, zoom: 10, bbox: [-13.00, 45.00, -12.60, 45.30] }
+  ],
+
+  getByCode(code) {
+    if (!code) return null;
+    const clean = String(code).trim().toUpperCase();
+    return this.list.find(d => d.code === clean || d.code === clean.padStart(2, '0'));
+  },
+
+  // Vérifie si des coordonnées [lat, lng] se trouvent dans la boîte englobante du département
+  isCoordinateInside(deptCode, lat, lng) {
+    const d = this.getByCode(deptCode);
+    if (!d || !d.bbox) return true; // tolérance si manquant
+    const [minLat, minLng, maxLat, maxLng] = d.bbox;
+    return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+  }
+};

@@ -104,15 +104,52 @@ const server = http.createServer((req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       try {
-        const { username, password, stationName, city } = JSON.parse(body);
-        const result = db.registerUser(username, password, stationName, city);
+        const { username, password, stationName, city, departmentCode } = JSON.parse(body);
+        const dept = departmentCode || city || '75';
+        const result = db.registerUser(username, password, stationName, dept, dept);
         if (result.error) {
           sendJson(res, 400, { success: false, error: result.error });
         } else {
+          broadcastSSE('player_registered', { user: result.user });
           sendJson(res, 201, result);
         }
       } catch (err) {
         sendJson(res, 400, { success: false, error: 'Données invalides' });
+      }
+    });
+    return;
+  }
+
+  // Informations sur le département
+  if (url.startsWith('/api/department/info') && req.method === 'GET') {
+    const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+    const deptCode = parsedUrl.searchParams.get('code') || '75';
+    const deptInfo = db.getDepartmentInfo(deptCode);
+    sendJson(res, 200, { success: true, department: deptInfo });
+    return;
+  }
+
+  // Léguer l'antenne principale à un autre joueur du département
+  if (url === '/api/department/transfer' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    if (!user) {
+      sendJson(res, 401, { success: false, error: 'Connexion requise' });
+      return;
+    }
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { departmentCode, newLeaderId } = JSON.parse(body);
+        const result = db.transferMainAntenna(departmentCode, user.id, newLeaderId);
+        if (result.error) {
+          sendJson(res, 400, { success: false, error: result.error });
+        } else {
+          broadcastSSE('department_leader_changed', { department: result.department });
+          sendJson(res, 200, { success: true, department: result.department });
+        }
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: err.message });
       }
     });
     return;
@@ -197,6 +234,68 @@ const server = http.createServer((req, res) => {
     }
     const saved = db.loadGame(user.id);
     sendJson(res, 200, { success: true, save: saved ? saved.data : null, savedAt: saved ? saved.savedAt : null });
+    return;
+  }
+
+  // Archivage sécurisé avant remise à zéro (Anti fausse manipulation)
+  if (url === '/api/game/archive-reset' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const user = getAuthUser(req);
+        const userId = user ? user.id : payload.playerId;
+        const username = user ? user.username : payload.playerName;
+        const snapshot = payload.snapshotData || null;
+        const reason = payload.reason || 'Remise à zéro sécurisée';
+
+        const archive = db.archiveAndResetGame(userId, username, reason, snapshot);
+        sendJson(res, 200, { success: true, archiveId: archive.id, timestamp: archive.timestamp });
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: err.message });
+      }
+    });
+    return;
+  }
+
+  // Consulter les archives de remise à zéro (Panel Admin)
+  if (url === '/api/admin/reset-archives' && req.method === 'GET') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    const archives = db.getResetArchives();
+    sendJson(res, 200, { success: true, archives });
+    return;
+  }
+
+  // Restaurer une archive de remise à zéro vers un joueur (Panel Admin)
+  if (url === '/api/admin/restore-archive' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { archiveId, targetUserId } = JSON.parse(body);
+        const result = db.restoreResetArchive(archiveId, targetUserId);
+        if (result.error) {
+          sendJson(res, 400, { success: false, error: result.error });
+        } else {
+          broadcastSSE('player_restored', { userId: result.restoredTo });
+          sendJson(res, 200, { success: true, ...result });
+        }
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: err.message });
+      }
+    });
     return;
   }
 
@@ -534,7 +633,11 @@ const server = http.createServer((req, res) => {
   }
 
   // --- SERVEUR DE FICHIERS STATIQUES ---
-  let filePath = path.join(__dirname, url === '/' ? 'index.html' : url);
+  let targetFile = url === '/' ? 'index.html' : url;
+  if (url === '/privacy' || url === '/politique-confidentialite' || url === '/mentions-legales') {
+    targetFile = 'privacy.html';
+  }
+  let filePath = path.join(__dirname, targetFile);
   if (!filePath.startsWith(__dirname)) {
     res.writeHead(403);
     res.end('Accès interdit');

@@ -19,6 +19,8 @@ const defaultDb = {
   users: {},         // usernameLower -> { id, username, passwordHash, salt, stationName, city, createdAt, lastLogin }
   sessions: {},      // token -> { userId, username, createdAt, expiresAt }
   savedGames: {},    // userId -> { savedAt, data }
+  resetArchives: [], // [{ id, userId, username, timestamp, reason, snapshotData }]
+  departments: {},   // deptCode -> { code, name, chefLieu, leaderPlayerId, leaderPlayerName, mainStationId, mainStationName, antennas: [{ playerId, playerName, stationId, stationName, role, joinedAt }] }
   alliances: [
     {
       id: 'alliance-fnpc',
@@ -126,6 +128,8 @@ class Database {
           users: parsed.users || {},
           sessions: parsed.sessions || {},
           savedGames: parsed.savedGames || {},
+          resetArchives: parsed.resetArchives || [],
+          departments: parsed.departments || {},
           alliances: parsed.alliances && parsed.alliances.length ? parsed.alliances : defaultDb.alliances,
           allianceStations: parsed.allianceStations && parsed.allianceStations.length ? parsed.allianceStations : defaultDb.allianceStations,
           formationsSpeciales: parsed.formationsSpeciales && parsed.formationsSpeciales.length ? parsed.formationsSpeciales : defaultDb.formationsSpeciales,
@@ -188,20 +192,51 @@ class Database {
     const isFirstUser = Object.keys(this.data.users).length === 0;
     const role = (isFirstUser || key === 'admin') ? 'admin' : 'user';
 
+    const cleanDept = (departmentCode || city || '75').toString().trim().toUpperCase();
+
+    // Gestion du rôle départemental : le premier joueur dans le département devient l'antenne principale
+    let deptRole = 'antenne_departementale';
+    if (!this.data.departments[cleanDept]) {
+      this.data.departments[cleanDept] = {
+        code: cleanDept,
+        name: `Département ${cleanDept}`,
+        leaderPlayerId: userId,
+        leaderPlayerName: cleanUsername,
+        mainStationId: null,
+        mainStationName: (stationName && stationName.trim()) || `Antenne Principale (${cleanDept})`,
+        createdAt: new Date().toISOString(),
+        antennas: []
+      };
+      deptRole = 'antenne_principale';
+    }
+
+    const assignedStationName = (stationName && stationName.trim()) || (deptRole === 'antenne_principale' ? `Antenne Principale (${cleanDept})` : `Antenne Territoriale ${cleanUsername} (${cleanDept})`);
+
     const userRecord = {
       id: userId,
       username: cleanUsername,
       passwordHash,
       salt,
       role,
+      deptRole,
+      departmentCode: cleanDept,
       isBanned: false,
-      stationName: (stationName && stationName.trim()) || `Antenne ${cleanUsername}`,
-      city: city || 'paris',
+      stationName: assignedStationName,
+      city: cleanDept,
       createdAt: new Date().toISOString(),
       lastLogin: new Date().toISOString()
     };
 
     this.data.users[key] = userRecord;
+
+    // Enregistrement de l'antenne dans le département
+    this.data.departments[cleanDept].antennas.push({
+      playerId: userId,
+      playerName: cleanUsername,
+      stationName: assignedStationName,
+      role: deptRole,
+      joinedAt: new Date().toISOString()
+    });
 
     // Création session token
     const token = this.generateToken();
@@ -209,6 +244,8 @@ class Database {
       userId,
       username: cleanUsername,
       role,
+      deptRole,
+      departmentCode: cleanDept,
       createdAt: Date.now(),
       expiresAt: Date.now() + 30 * 24 * 3600 * 1000 // 30 jours
     };
@@ -222,6 +259,8 @@ class Database {
         id: userId,
         username: cleanUsername,
         role,
+        deptRole,
+        departmentCode: cleanDept,
         stationName: userRecord.stationName,
         city: userRecord.city
       }
@@ -324,6 +363,82 @@ class Database {
   loadGame(userId) {
     if (!userId) return null;
     return this.data.savedGames[userId] || null;
+  }
+
+  // Archivage sécurisé lors d'une remise à zéro (Anti fausse-manip)
+  archiveAndResetGame(userId, username, reason = 'Demande joueur', localSnapshot = null) {
+    if (!this.data.resetArchives) this.data.resetArchives = [];
+    
+    // Récupérer la dernière sauvegarde BDD ou le snapshot transmis
+    const currentSave = this.data.savedGames[userId];
+    const dataToArchive = (currentSave && currentSave.data) ? currentSave.data : localSnapshot;
+
+    const archiveEntry = {
+      id: `arc-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      userId: userId || 'anonymous',
+      username: username || 'Directeur Anonyme',
+      timestamp: new Date().toISOString(),
+      reason: reason,
+      hasData: !!dataToArchive,
+      snapshotData: dataToArchive || null
+    };
+
+    // Garder jusqu'à 100 archives horodatées
+    this.data.resetArchives.unshift(archiveEntry);
+    if (this.data.resetArchives.length > 100) {
+      this.data.resetArchives.pop();
+    }
+
+    // Effacer la sauvegarde active si l'utilisateur est identifié
+    if (userId && this.data.savedGames[userId]) {
+      delete this.data.savedGames[userId];
+    }
+
+    this.save();
+    return archiveEntry;
+  }
+
+  // Obtenir la liste des archives de remise à zéro
+  getResetArchives() {
+    return (this.data.resetArchives || []).map(a => ({
+      id: a.id,
+      userId: a.userId,
+      username: a.username,
+      timestamp: a.timestamp,
+      reason: a.reason,
+      hasData: !!a.snapshotData,
+      money: a.snapshotData?.resources?.money ?? null,
+      stationsCount: a.snapshotData?.stations?.length ?? 0,
+      volunteersCount: a.snapshotData?.volunteers?.length ?? 0
+    }));
+  }
+
+  // Restaurer une archive de partie vers le joueur ciblé
+  restoreResetArchive(archiveId, targetUserId) {
+    if (!this.data.resetArchives) return { error: 'Aucune archive disponible.' };
+    const archive = this.data.resetArchives.find(a => a.id === archiveId);
+    if (!archive || !archive.snapshotData) {
+      return { error: 'Archive introuvable ou ne contenant pas de données exploitables.' };
+    }
+
+    const userId = targetUserId || archive.userId;
+    if (!userId || userId === 'anonymous') {
+      return { error: 'Identifiant joueur cible invalide.' };
+    }
+
+    // Réaffectation de la sauvegarde en BDD
+    this.data.savedGames[userId] = {
+      savedAt: new Date().toISOString(),
+      data: archive.snapshotData
+    };
+    this.save();
+
+    return {
+      success: true,
+      restoredTo: userId,
+      savedAt: new Date().toISOString(),
+      data: archive.snapshotData
+    };
   }
 
   // --- MÉTHODES DU PANEL ADMIN ---
@@ -447,6 +562,49 @@ class Database {
     }
     this.save();
     return { success: true };
+  }
+
+  // Informations sur le département et ses antennes
+  getDepartmentInfo(deptCode) {
+    const clean = String(deptCode || '').trim().toUpperCase();
+    return this.data.departments[clean] || null;
+  }
+
+  // Léguer / Transférer le rôle d'Antenne Principale à un autre joueur du département
+  transferMainAntenna(deptCode, currentLeaderId, newLeaderId) {
+    const clean = String(deptCode || '').trim().toUpperCase();
+    const dept = this.data.departments[clean];
+    if (!dept) return { error: 'Département introuvable.' };
+
+    if (dept.leaderPlayerId !== currentLeaderId) {
+      return { error: 'Seul le titulaire de l’antenne principale peut la léguer.' };
+    }
+
+    let targetUser = null;
+    let currentUser = null;
+    for (const u of Object.values(this.data.users)) {
+      if (u.id === newLeaderId) targetUser = u;
+      if (u.id === currentLeaderId) currentUser = u;
+    }
+
+    if (!targetUser) return { error: 'Nouveau titulaire introuvable.' };
+
+    // Mise à jour département
+    dept.leaderPlayerId = targetUser.id;
+    dept.leaderPlayerName = targetUser.username;
+
+    // Mise à jour des rôles utilisateurs
+    if (currentUser) currentUser.deptRole = 'antenne_departementale';
+    targetUser.deptRole = 'antenne_principale';
+
+    // Mise à jour dans la liste des antennes
+    dept.antennas.forEach(a => {
+      if (a.playerId === currentLeaderId) a.role = 'antenne_departementale';
+      if (a.playerId === newLeaderId) a.role = 'antenne_principale';
+    });
+
+    this.save();
+    return { success: true, department: dept };
   }
 }
 

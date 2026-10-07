@@ -23,7 +23,9 @@ class ProtecGame {
     this.player = {
       id: savedPlayerId,
       name: localStorage.getItem('protec_player_name') || 'Directeur d’Antenne',
-      allianceId: localStorage.getItem('protec_alliance_id') || 'alliance-fnpc'
+      allianceId: localStorage.getItem('protec_alliance_id') || 'alliance-fnpc',
+      departmentCode: localStorage.getItem('protec_department_code') || '75',
+      deptRole: localStorage.getItem('protec_dept_role') || 'antenne_principale'
     };
 
     // Calendrier et Horloge Opérationnelle (Lundi 5 Octobre 2026 à 08:00)
@@ -58,15 +60,8 @@ class ProtecGame {
       }
     };
 
-    // Villes supportées
-    this.cities = {
-      paris: { name: 'Paris & Île-de-France', lat: 48.8566, lng: 2.3522, zoom: 12 },
-      lyon: { name: 'Lyon & Rhône', lat: 45.7640, lng: 4.8357, zoom: 12 },
-      marseille: { name: 'Marseille & Bouches-du-Rhône', lat: 43.2965, lng: 5.3698, zoom: 12 },
-      bordeaux: { name: 'Bordeaux & Gironde', lat: 44.8378, lng: -0.5792, zoom: 12 },
-      lille: { name: 'Lille & Hauts-de-France', lat: 50.6292, lng: 3.0573, zoom: 12 }
-    };
-    this.currentCityKey = 'paris';
+    // Département d'affectation du joueur (101 départements français)
+    this.currentDepartmentCode = this.player.departmentCode || '75';
 
     // Données opérationnelles
     this.stations = [];
@@ -517,10 +512,93 @@ class ProtecGame {
   }
 
   confirmResetGame() {
-    if (confirm('Voulez-vous réinitialiser entièrement la partie et repartir à zéro ?')) {
-      localStorage.removeItem('protec_live_save_v4');
-      location.reload();
+    this.openResetModal();
+  }
+
+  openResetModal() {
+    const modal = document.getElementById('reset-confirm-modal');
+    const input = document.getElementById('reset-confirm-input');
+    if (input) input.value = '';
+    if (modal) {
+      modal.classList.remove('hidden');
+      if (window.lucide) window.lucide.createIcons();
     }
+  }
+
+  closeResetModal() {
+    const modal = document.getElementById('reset-confirm-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  async executeSecureReset() {
+    const input = document.getElementById('reset-confirm-input');
+    if (!input || input.value.trim().toUpperCase() !== 'CONFIRMER') {
+      this.showToast('Validation requise', 'Veuillez saisir exactement le mot CONFIRMER pour valider.', 'orange');
+      return;
+    }
+
+    // 1. Sauvegarde / Snapshot d'archive avant effacement (Protection intégrale)
+    let currentSnapshot = null;
+    try {
+      currentSnapshot = {
+        clock: this.clock,
+        resources: this.resources,
+        currentCityKey: this.currentCityKey,
+        stations: this.stations,
+        vehicles: this.vehicles,
+        volunteers: this.volunteers,
+        devis: this.devis,
+        missions: this.missions,
+        candidatures: this.candidatures,
+        formations: this.formations,
+        logistics: this.logistics,
+        weather: this.weather,
+        grants: this.grants,
+        radioLogs: this.radioLogs,
+        rewards: this.rewards,
+        bureau: this.bureau,
+        manoeuvres: this.manoeuvres,
+        adRewards: this.adRewards,
+        player: this.player
+      };
+      // Archive d'urgence locale dans le localStorage
+      localStorage.setItem('protec_backup_before_reset', JSON.stringify({
+        date: new Date().toISOString(),
+        playerId: this.player.id,
+        playerName: this.player.name,
+        snapshot: currentSnapshot
+      }));
+    } catch (err) {
+      console.warn('Erreur snapshot local:', err);
+    }
+
+    // 2. Envoi de l'archive au serveur / BDD pour conservation sécurisée
+    try {
+      const token = localStorage.getItem('protec_auth_token');
+      await fetch('/api/game/archive-reset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          playerId: this.player.id,
+          playerName: this.player.name,
+          reason: 'Réinitialisation manuelle demandée par le joueur',
+          snapshotData: currentSnapshot
+        })
+      });
+    } catch (err) {
+      console.warn('Erreur envoi archive serveur:', err);
+    }
+
+    // 3. Effacement de la sauvegarde active
+    localStorage.removeItem('protec_live_save_v4');
+    this.closeResetModal();
+    this.showToast('Antenne réinitialisée', 'Votre ancienne partie a été archivée avec succès. Rechargement...', 'green');
+    setTimeout(() => {
+      location.reload();
+    }, 1200);
   }
 
   showOnboardingModal() {
@@ -535,11 +613,14 @@ class ProtecGame {
   }
 
   initMap() {
-    const defaultCity = this.cities[this.currentCityKey];
+    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.currentDepartmentCode) : null;
+    const centerLat = deptInfo ? deptInfo.lat : 48.8566;
+    const centerLng = deptInfo ? deptInfo.lng : 2.3522;
+    const initialZoom = deptInfo ? deptInfo.zoom : 11;
 
     this.map = L.map('map', {
-      center: [defaultCity.lat, defaultCity.lng],
-      zoom: defaultCity.zoom,
+      center: [centerLat, centerLng],
+      zoom: initialZoom,
       zoomControl: false
     });
 
@@ -569,6 +650,9 @@ class ProtecGame {
       'Rues (OpenStreetMap)': this.baseLayers.osm
     }, null, { position: 'bottomright' }).addTo(this.map);
 
+    // Initialisation du sélecteur départemental desktop
+    this.populateDepartmentSelector();
+
     this.map.on('click', (e) => {
       if (this.isPlacingAntenna) {
         this.confirmAntennaPlacement(e.latlng);
@@ -576,13 +660,33 @@ class ProtecGame {
     });
   }
 
-  changeCity(cityKey) {
-    if (!this.cities[cityKey]) return;
-    this.currentCityKey = cityKey;
-    const city = this.cities[cityKey];
-    this.map.flyTo([city.lat, city.lng], city.zoom, { duration: 1.5 });
-    document.getElementById('top-current-station-name').textContent = city.name;
-    this.showToast('Secteur modifié', `Vue centrée sur ${city.name}`, 'blue');
+  populateDepartmentSelector() {
+    const sel = document.getElementById('department-selector');
+    if (!sel || !window.ProtecDepartements) return;
+
+    sel.innerHTML = window.ProtecDepartements.list.map(d => `
+      <option value="${d.code}" ${d.code === this.currentDepartmentCode ? 'selected' : ''}>
+        ${d.code} - ${d.name}
+      </option>
+    `).join('');
+  }
+
+  changeDepartment(deptCode) {
+    if (!window.ProtecDepartements) return;
+    const dept = window.ProtecDepartements.getByCode(deptCode);
+    if (!dept) return;
+
+    this.currentDepartmentCode = dept.code;
+    this.player.departmentCode = dept.code;
+    localStorage.setItem('protec_department_code', dept.code);
+
+    this.map.flyTo([dept.lat, dept.lng], dept.zoom, { duration: 1.5 });
+    
+    const topName = document.getElementById('top-current-station-name');
+    if (topName) topName.textContent = `${dept.name} (${dept.code})`;
+
+    this.showToast('Département Sélectionné', `Vue centrée sur le département ${dept.name} (${dept.code}).`, 'blue');
+    this.saveGame();
   }
 
   renderStations() {
@@ -678,6 +782,21 @@ class ProtecGame {
   }
 
   confirmAntennaPlacement(latlng) {
+    // 1. Contrôle strict de géolocalisation dans le bon département d'affectation
+    const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
+    if (window.ProtecDepartements) {
+      const isInside = window.ProtecDepartements.isCoordinateInside(deptCode, latlng.lat, latlng.lng);
+      if (!isInside) {
+        const dept = window.ProtecDepartements.getByCode(deptCode);
+        this.showToast(
+          'Hors du Département !',
+          `Vous êtes affecté au département ${dept?.name || deptCode} (${deptCode}). Veuillez obligatoirement cliquer à l'intérieur de ce département.`,
+          'orange'
+        );
+        return;
+      }
+    }
+
     const isFirst = this.stations.length === 0;
     const cost = isFirst ? 2500 : 4500;
 
@@ -689,14 +808,26 @@ class ProtecGame {
 
     this.resources.money -= cost;
     const stationId = `station-${Date.now()}`;
-    const stationName = isFirst ? 'Antenne Principale - Centre Opérationnel' : `Antenne Territoriale ${this.stations.length + 1}`;
+    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
+    const isMainAntenna = this.player.deptRole === 'antenne_principale';
+    
+    let stationName = '';
+    if (isFirst) {
+      stationName = isMainAntenna 
+        ? `Antenne Principale (${deptCode})` 
+        : `Antenne Territoriale ${this.player.name} (${deptCode})`;
+    } else {
+      stationName = `Antenne Rattachée ${this.stations.length + 1} (${deptCode})`;
+    }
 
     const newStation = {
       id: stationId,
       name: stationName,
-      city: this.currentCityKey,
+      departmentCode: deptCode,
+      city: deptCode,
       lat: latlng.lat,
       lng: latlng.lng,
+      isMain: isFirst && isMainAntenna,
       level: 1,
       rooms: { formation: false, standard: true },
       vehicles: []
@@ -711,7 +842,8 @@ class ProtecGame {
         label: 'Ambulance de Premiers Secours',
         capacity: 4,
         status: 'dispo',
-        stationId: stationId
+        stationId: stationId,
+        image: 'images/vehicles/VPSP.png'
       });
       newStation.vehicles.push(vehId);
 
@@ -1503,9 +1635,14 @@ class ProtecGame {
           <div class="space-y-1.5">
             ${stationVehicles.map(v => `
               <div class="p-2.5 rounded-xl glass-card flex items-center justify-between text-xs">
-                <div class="flex items-center gap-2">
-                  <i data-lucide="truck" class="w-4 h-4 text-pc-orange"></i>
-                  <span class="font-bold text-slate-800">${v.name}</span>
+                <div class="flex items-center gap-2.5">
+                  <div class="w-10 h-7 bg-slate-100/90 rounded-lg p-0.5 flex items-center justify-center flex-shrink-0 border border-slate-200/60 shadow-inner">
+                    <img src="${v.image || window.game.getVehicleImage(v.type)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='🚑'" />
+                  </div>
+                  <div>
+                    <span class="font-black text-slate-800 leading-tight block">${v.name}</span>
+                    <span class="text-[9px] text-slate-400 font-semibold">${v.label || v.type}</span>
+                  </div>
                 </div>
                 <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.status === 'dispo' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
                   ${v.status === 'dispo' ? 'DISPO' : 'ENGAGÉ'}
@@ -2470,10 +2607,47 @@ class ProtecGame {
       subtitle.textContent = 'Gestion des locaux et des véhicules';
       icon.setAttribute('data-lucide', 'building-2');
 
+      const isLeader = this.player.deptRole === 'antenne_principale';
+      const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
+      const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
+
       body.innerHTML = `
         <div class="space-y-4">
+          <!-- Carte d'affiliation départementale -->
+          <div class="p-4 rounded-2xl ${isLeader ? 'bg-gradient-to-r from-pc-blue/15 to-indigo-100/60 border border-pc-blue/30' : 'bg-slate-50 border border-slate-200'} space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">${isLeader ? '🏛️' : '🏢'}</span>
+                <div>
+                  <h4 class="text-xs font-black uppercase text-slate-900 tracking-wider">
+                    Département ${deptInfo?.name || deptCode} (${deptCode})
+                  </h4>
+                  <p class="text-[11px] text-slate-500 font-semibold">
+                    Statut : <strong class="${isLeader ? 'text-pc-blue' : 'text-slate-700'}">${isLeader ? 'Antenne Principale du Département (Fondateur)' : 'Antenne Départementale Rattachée'}</strong>
+                  </p>
+                </div>
+              </div>
+              <span class="px-2.5 py-1 rounded-xl text-[10px] font-black ${isLeader ? 'bg-pc-blue text-white shadow-sm' : 'bg-slate-200 text-slate-700'}">
+                ${isLeader ? 'PRINCIPALE' : 'TERRITORIALE'}
+              </span>
+            </div>
+
+            ${isLeader ? `
+              <div class="pt-2 border-t border-pc-blue/20 flex items-center justify-between text-xs">
+                <span class="text-[11px] text-slate-600">Vous détenez l'antenne principale. Vous pouvez la léguer à un collègue du département.</span>
+                <button onclick="window.game.openTransferAntennaModal()" class="px-3 py-1.5 rounded-xl text-xs font-black bg-white hover:bg-slate-100 text-pc-blue border border-pc-blue/30 shadow-sm transition">
+                  Léguer l'Antenne ➜
+                </button>
+              </div>
+            ` : `
+              <p class="text-[11px] text-slate-500">
+                Vous intervenez en coordination avec l'Antenne Principale de votre département.
+              </p>
+            `}
+          </div>
+
           <div class="flex items-center justify-between">
-            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Antennes Opérationnelles (${this.stations.length})</h4>
+            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Vos Antennes Opérationnelles (${this.stations.length})</h4>
             <button onclick="window.game.closeModal(); window.game.startAntennaPlacement()" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-pc-orange text-white hover:bg-pc-orange-hover shadow-sm transition">
               + Implanter Antenne (4 500 €)
             </button>
@@ -2482,7 +2656,10 @@ class ProtecGame {
             ${this.stations.map(st => `
               <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
                 <div class="flex items-center justify-between">
-                  <h5 class="text-sm font-extrabold text-slate-900">${st.name}</h5>
+                  <div>
+                    <h5 class="text-sm font-extrabold text-slate-900">${st.name}</h5>
+                    <span class="text-[10px] font-bold text-slate-400">Dépt ${st.departmentCode || deptCode}</span>
+                  </div>
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue text-white">Niveau ${st.level}</span>
                 </div>
                 <div class="text-xs text-slate-600">Véhicules : <strong>${st.vehicles.length}</strong></div>
@@ -2547,14 +2724,90 @@ class ProtecGame {
     if (window.lucide) window.lucide.createIcons();
   }
 
-  openPlayerProfileModal() {
-    const newName = prompt('Nom de votre Directeur / Directrice d’antenne :', this.player.name);
-    if (newName && newName.trim()) {
-      this.player.name = newName.trim();
-      localStorage.setItem('protec_player_name', this.player.name);
-      this.syncPlayerToServer();
-      this.showToast('Profil mis à jour', `Votre indicatif est désormais : ${this.player.name}`, 'blue');
-      this.openModule('alliance');
+  async openTransferAntennaModal() {
+    const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
+    let deptInfo = null;
+    try {
+      const res = await fetch(`/api/department/info?code=${deptCode}`);
+      const data = await res.json();
+      deptInfo = data.department;
+    } catch (e) {}
+
+    const otherAntennas = (deptInfo?.antennas || []).filter(a => a.playerId !== this.player.id);
+
+    const modal = document.getElementById('main-modal');
+    modal.classList.remove('hidden');
+    document.getElementById('modal-title').textContent = 'Léguer l’Antenne Principale';
+    document.getElementById('modal-subtitle').textContent = `Passation du commandement départemental (${deptCode})`;
+    document.getElementById('modal-icon').setAttribute('data-lucide', 'crown');
+
+    const body = document.getElementById('modal-body');
+    if (otherAntennas.length === 0) {
+      body.innerHTML = `
+        <div class="space-y-4 text-center py-4">
+          <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto text-xl">🏛️</div>
+          <h4 class="text-sm font-black text-slate-800">Aucun autre joueur dans ce département</h4>
+          <p class="text-xs text-slate-500 max-w-sm mx-auto">
+            Vous êtes le seul directeur installé dans le département ${deptCode}. Dès qu'un autre joueur créera une antenne départementale ici, vous pourrez lui léguer la direction principale.
+          </p>
+        </div>
+      `;
+    } else {
+      body.innerHTML = `
+        <div class="space-y-4">
+          <div class="p-3.5 rounded-2xl bg-amber-50 text-amber-900 border border-amber-200 text-xs">
+            ⚠️ <strong>Transmission de commandement :</strong> En léguant l'Antenne Principale, le joueur choisi deviendra le nouveau titulaire départemental. Votre antenne deviendra une antenne départementale rattachée.
+          </div>
+
+          <h5 class="text-xs font-black uppercase text-slate-600">Directeurs du département éligibles :</h5>
+          <div class="space-y-2">
+            ${otherAntennas.map(a => `
+              <div class="p-3.5 rounded-2xl glass-card flex items-center justify-between text-xs">
+                <div>
+                  <div class="font-black text-slate-900">${a.playerName}</div>
+                  <div class="text-[11px] text-slate-500">${a.stationName}</div>
+                </div>
+                <button onclick="window.game.executeTransferAntenna('${deptCode}', '${a.playerId}', '${a.playerName}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light text-white shadow-sm transition">
+                  Transmettre le Titre
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  async executeTransferAntenna(deptCode, newLeaderId, newLeaderName) {
+    if (!confirm(`Confirmez-vous la passation de l’Antenne Principale du département ${deptCode} à ${newLeaderName} ?`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('protec_auth_token');
+      const res = await fetch('/api/department/transfer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ departmentCode: deptCode, newLeaderId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.player.deptRole = 'antenne_departementale';
+        localStorage.setItem('protec_dept_role', 'antenne_departementale');
+        this.closeModal();
+        this.showToast('Passation Effectuée', `L'Antenne Principale a été léguée à ${newLeaderName} avec succès.`, 'green');
+        this.openModule('base');
+        this.saveGame();
+      } else {
+        alert(data.error || 'Erreur lors de la passation.');
+      }
+    } catch (e) {
+      alert('Erreur réseau lors de la passation.');
     }
   }
 
@@ -2652,7 +2905,8 @@ class ProtecGame {
       label: type === 'VPSP' ? 'Ambulance de Premiers Secours' : 'Véhicule Social & Logistique',
       capacity: 4,
       status: 'dispo',
-      stationId: stationId
+      stationId: stationId,
+      image: this.getVehicleImage(type)
     };
 
     this.vehicles.push(newVeh);
@@ -2665,6 +2919,32 @@ class ProtecGame {
     this.syncPlayerToServer();
     this.showToast('Véhicule livré', `${newVeh.name} est prêt au départ !`, 'green');
     this.openStationDetails(stationId);
+  }
+
+  getVehicleImage(type) {
+    const clean = (type || 'VPSP').toUpperCase();
+    const map = {
+      'VPSP': 'images/vehicles/VPSP.png',
+      'VTU': 'images/vehicles/VTU.png',
+      'VL': 'images/vehicles/VL.png',
+      'VLM': 'images/vehicles/VL.png',
+      'VLHR': 'images/vehicles/VLHR.png',
+      'PCM': 'images/vehicles/PCM.png',
+      'VPC': 'images/vehicles/PCM.png',
+      'VTP': 'images/vehicles/VTP.png',
+      'VAHU': 'images/vehicles/VAHU.png',
+      'VCYN': 'images/vehicles/VCYN.png',
+      'FLIT': 'images/vehicles/FLIT.png',
+      'VST': 'images/vehicles/VST.png',
+      'VTD': 'images/vehicles/VTD.png',
+      'ERS': 'images/vehicles/ERS.png',
+      'BLS': 'images/vehicles/ERS.png',
+      'MOTO': 'images/vehicles/Moto.png',
+      'QUAD': 'images/vehicles/QUAD.png',
+      'VELO': 'images/vehicles/VELO.png',
+      'REM': 'images/vehicles/REM.png'
+    };
+    return map[clean] || `images/vehicles/${type}.png`;
   }
 
   closeModal() {

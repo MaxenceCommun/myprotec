@@ -1,3 +1,4 @@
-# Google AdSense ads.txt
-# Remplacez pub-0000000000000000 par votre identifiant éditeur Google AdSense (ex: pub-1234567890123456)
-google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
+# Google AdSense ads.txt - Protection Civile Simulator
+# INSTRUCTION : Remplacez "pub-0000000000000000" par votre véritable identifiant éditeur AdSense (ex: pub-1234567890123456)
+# Attention : Ce fichier doit être hébergé à la racine absolue de votre domaine (ex: https://votre-domaine.fr/ads.txt).
+google.com, pub-5561333212712163, DIRECT, f08c47fec0942fa0
