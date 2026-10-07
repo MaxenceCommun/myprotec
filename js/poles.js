@@ -181,6 +181,12 @@ window.ProtecPoles = {
           <p class="text-xs text-slate-600 leading-relaxed">
             Organisez votre antenne selon 4 spécialités. Chaque pôle confère des bonus d’efficacité. Les salariés permanents progressent plus vite en compétences professionnelles (+40% XP), tandis que les bénévoles s’épanouissent par les missions terrain.
           </p>
+          <div class="pt-2 border-t border-indigo-100 flex justify-end">
+            <button onclick="if(window.ProtecPersonnel) window.ProtecPersonnel.openSalarieManagementModal(window.game);" class="px-3.5 py-1.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition flex items-center gap-1.5">
+              <i data-lucide="briefcase" class="w-3.5 h-3.5"></i>
+              Gérer les Salariés & Code du Travail (Heures & Repos)
+            </button>
+          </div>
         </div>
 
         <!-- Grille des 4 Pôles -->

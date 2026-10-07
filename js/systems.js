@@ -628,33 +628,80 @@ window.ProtecSystems = {
     if (ongoingWeatherMissions.length >= 2) return;
 
     const base = game.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne' };
-    const offsetLat = (Math.random() - 0.5) * 0.04;
-    const offsetLng = (Math.random() - 0.5) * 0.04;
+    const meteoCoords = game.calculateRealisticMissionLocation ? game.calculateRealisticMissionLocation(base, 'meteo') : { lat: base.lat + 0.05, lng: base.lng + 0.05 };
     const pheno = game.weather.alertPhenomenon || 'inondation';
 
     let missionDef = null;
 
-    if (pheno === 'inondation') {
+    if (pheno === 'inondation' || pheno === 'pluie') {
+      const inondationVariants = [
+        {
+          title: 'Alerte Inondation : Évacuation Pavillonnaire & CAI',
+          desc: `Crue subite suite aux fortes pluies (${game.weather.precipitation || 12} mm/h). Le maire active le PCS. La Protection Civile est réquisitionnée pour ouvrir un Centre d'Accueil des Impliqués (CAI) dans un gymnase et évacuer 15 sinistrés.`,
+          urgency: 'haute',
+          durMin: 35,
+          reqVol: 4,
+          ranks: ['CE', 'PSE2', 'PSE1'],
+          vehs: ['VPSP', 'VL'],
+          reward: 450
+        },
+        {
+          title: 'Crue Majeure : Reconnaissance Points Bas & Ravitaillement Hameaux Isolés',
+          desc: `La rivière est sortie de son lit. Trois lotissements sont coupés du réseau routier. Déploiement d’un équipage pour reconnaissance, distribution de vivres et d’eau en bouteilles aux riverains piégés.`,
+          urgency: 'haute',
+          durMin: 40,
+          reqVol: 4,
+          ranks: ['CE', 'PSE2', 'PSE1'],
+          vehs: ['VTU', 'VPSP'],
+          reward: 480
+        }
+      ];
+      missionDef = inondationVariants[Math.floor(Math.random() * inondationVariants.length)];
+    } else if (pheno === 'vent' || pheno === 'tempete') {
+      const ventVariants = [
+        {
+          title: 'Tempête / Vent : Chute d’Arbre sur Véhicule & Sécurisation',
+          desc: `Rafales de vent à ${Math.round(game.weather.windGusts || 75)} km/h. Un arbre s’est abattu sur une voiture en circulation. 1 blessé léger coincé et axe départemental bloqué. Équipage VPSP et lot de balisage requis.`,
+          urgency: 'critique',
+          durMin: 30,
+          reqVol: 3,
+          ranks: ['CE', 'PSE2', 'PSE1'],
+          vehs: ['VPSP'],
+          reward: 420
+        },
+        {
+          title: 'Vents Violents : Toitures Arrachées & Mise en Sécurité Riverains',
+          desc: `Bourrasques destructrices. Éléments de charpente et tuiles projetés sur la voie publique. Évacuation d’urgence de 8 habitants vers la salle polyvalente communale.`,
+          urgency: 'critique',
+          durMin: 35,
+          reqVol: 4,
+          ranks: ['CE', 'PSE2', 'PSE1'],
+          vehs: ['VTU', 'VL'],
+          reward: 460
+        }
+      ];
+      missionDef = ventVariants[Math.floor(Math.random() * ventVariants.length)];
+    } else if (pheno === 'orage' || pheno === 'foudre') {
       missionDef = {
-        title: 'Alerte Inondation : Évacuation Pavillonnaire & CAI',
-        desc: `Crue subite suite aux fortes pluies (${game.weather.precipitation || 12} mm/h). Le maire active le PCS. La Protection Civile est réquisitionnée pour ouvrir un Centre d'Accueil des Impliqués (CAI) dans un gymnase et évacuer 15 sinistrés.`,
-        urgency: 'haute',
-        durMin: 35,
-        reqVol: 4,
-        ranks: ['CE', 'PSE2', 'PSE1'],
-        vehs: ['VPSP', 'VL'],
-        reward: 450
-      };
-    } else if (pheno === 'vent') {
-      missionDef = {
-        title: 'Tempête / Vent : Chute d’Arbre sur Véhicule & Sécurisation',
-        desc: `Rafales de vent à ${Math.round(game.weather.windGusts || 75)} km/h. Un arbre s’est abattu sur une voiture en circulation. 1 blessé léger coincé et axe départemental bloqué. Équipage VPSP et lot de balisage requis.`,
+        title: 'Orages Violents & Foudre : Impact sur Habitation & Évacuation',
+        desc: `Activité électrique intense. La foudre a touché un pavillon avec début d’incendie et coupure électrique générale. Prise en charge de la famille choquée et mise à l’abri sous tente d’urgence.`,
         urgency: 'critique',
-        durMin: 30,
+        durMin: 32,
         reqVol: 3,
         ranks: ['CE', 'PSE2', 'PSE1'],
         vehs: ['VPSP'],
-        reward: 420
+        reward: 440
+      };
+    } else if (pheno === 'neige' || pheno === 'verglas') {
+      missionDef = {
+        title: 'Épisode Hivernal : Naufragés de la Route & Carambolage Verglas',
+        desc: `Chaussées verglacées et congères. Des dizaines d’automobilistes sont bloqués sur la voie express. Distribution de couvertures, boissons chaudes et assistance aux personnes vulnérables.`,
+        urgency: 'haute',
+        durMin: 45,
+        reqVol: 4,
+        ranks: ['CE', 'PSE2', 'PSE1'],
+        vehs: ['VTU', 'VPSP'],
+        reward: 490
       };
     } else if (pheno === 'canicule' || pheno === 'chaleur') {
       missionDef = {
@@ -697,8 +744,8 @@ window.ProtecSystems = {
       categoryLabel: `Préalerte Préfectorale - ${game.weather.alertTitle}`,
       title: `[Préalerte] ${missionDef.title}`,
       desc: `🟡 PRÉALERTE PRÉFECTURALE : Vigilance en cours (${game.weather.alertTitle}). ${missionDef.desc} La Préfecture demande la pré-mobilisation d'une équipe opérationnelle pour recensement des effectifs. Aucun personnel n'est affecté d'avance : lancez la mobilisation par SMS pour recenser vos disponibles.`,
-      lat: base.lat + offsetLat,
-      lng: base.lng + offsetLng,
+      lat: meteoCoords.lat,
+      lng: meteoCoords.lng,
       scale: `Dispositif Intempéries (${missionDef.reqVol} secouristes)`,
       eventDate: { ...game.clock, hour: game.clock.hour },
       durationSeconds: missionDef.durMin * 60,
@@ -717,6 +764,10 @@ window.ProtecSystems = {
       registeredVolunteers: [],
       assignedCrew: { volunteers: [], vehicles: [] }
     };
+
+    if (game.enrichMissionLocationWithCity) {
+      game.enrichMissionLocationWithCity(newWeatherMission);
+    }
 
     game.missions.push(newWeatherMission);
     game.renderMissions();

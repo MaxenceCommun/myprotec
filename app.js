@@ -106,6 +106,7 @@ class ProtecGame {
     this.devis = [];
     this.missions = [];
     this.candidatures = [];
+    this.jobOffers = [];
     this.formations = [];
 
     // Données Multijoueur & Alliances
@@ -468,6 +469,7 @@ class ProtecGame {
   init() {
     this.initMap();
     this.renderStations();
+    this.disperseOverlappingMissions();
     this.renderMissions();
     this.updateStatsUI();
     this.startSimulationClock();
@@ -514,6 +516,7 @@ class ProtecGame {
         sdisGarde: this.sdisGarde,
         prefectureState: this.prefectureState,
         sncfConvention: this.sncfConvention,
+        jobOffers: this.jobOffers,
         adRewards: this.adRewards
       };
       localStorage.setItem('protec_live_save_v4', JSON.stringify(state));
@@ -537,6 +540,7 @@ class ProtecGame {
           this.devis = parsed.devis || [];
           this.missions = parsed.missions || [];
           this.candidatures = parsed.candidatures || [];
+          this.jobOffers = parsed.jobOffers || [];
           this.formations = parsed.formations || [];
           this.logistics = parsed.logistics || this.logistics;
           this.weather = parsed.weather || this.weather;
@@ -1145,8 +1149,187 @@ class ProtecGame {
     };
   }
 
+  // --- GÉOLOCALISATION RÉALISTE DES MISSIONS & ÉVÉNEMENTS ---
+  // Règle : Les missions doivent être réparties dans le département. Si plusieurs antennes sont implantées dans le département,
+  // la mission est générée à proximité de l'antenne concernée (son bassin de vie).
+  calculateRealisticMissionLocation(baseStation = null, missionType = 'dps') {
+    const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
+    const dept = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
+    const stationsInDept = (this.stations || []).filter(s => s.departmentCode === deptCode || !s.departmentCode);
+    const hasMultipleStations = stationsInDept.length > 1;
+
+    // Point d'ancrage principal
+    const base = baseStation || stationsInDept[0] || (dept ? { lat: dept.lat, lng: dept.lng } : { lat: 48.8566, lng: 2.3522 });
+
+    let minDistanceKm = 1.8;
+    let maxDistanceKm = 10.0;
+
+    if (hasMultipleStations) {
+      // Plusieurs antennes dans le même département : la mission reste dans le secteur de proximité de cette antenne
+      if (missionType === 'samu' || missionType === 'pompiers') {
+        minDistanceKm = 1.2;
+        maxDistanceKm = 6.5; // Urgence réflexe de secteur
+      } else if (missionType === 'dps') {
+        minDistanceKm = 1.8;
+        maxDistanceKm = 13.0; // Postes de secours du bassin
+      } else {
+        minDistanceKm = 2.5;
+        maxDistanceKm = 18.0; // SNCF, météo, grandes crises
+      }
+    } else {
+      // Antenne UNIQUE dans le département : l'antenne couvre TOUT le territoire départemental
+      // Ventilation réaliste : une partie en agglomération, le reste dans les villes et cantons du département
+      if (missionType === 'samu') {
+        minDistanceKm = 1.8;
+        maxDistanceKm = Math.random() < 0.6 ? 7.5 : 16.0;
+      } else if (missionType === 'pompiers') {
+        minDistanceKm = 1.8;
+        maxDistanceKm = Math.random() < 0.65 ? 8.5 : 18.0;
+      } else if (missionType === 'dps') {
+        const roll = Math.random();
+        if (roll < 0.30) {
+          minDistanceKm = 2.5; maxDistanceKm = 8.5; // Urbain / agglomération
+        } else if (roll < 0.70) {
+          minDistanceKm = 8.5; maxDistanceKm = 22.0; // Villes moyennes & bassin du département
+        } else {
+          minDistanceKm = 20.0; maxDistanceKm = 40.0; // Rassemblements majeurs départementaux
+        }
+      } else if (missionType === 'sncf') {
+        minDistanceKm = 4.0;
+        maxDistanceKm = 30.0;
+      } else {
+        // Météo / Crise Préfecture
+        minDistanceKm = 4.0;
+        maxDistanceKm = 38.0;
+      }
+    }
+
+    // Points existants pour anti-collision / anti-agglutinement
+    const existingPoints = [
+      ...this.stations.map(s => ({ lat: s.lat, lng: s.lng, minDist: 1.0 })),
+      ...this.missions.map(m => ({ lat: m.lat, lng: m.lng, minDist: 1.4 })),
+      ...this.devis.map(d => ({ lat: d.lat, lng: d.lng, minDist: 1.4 }))
+    ];
+
+    let bestCoord = null;
+    const maxTries = 40;
+
+    for (let tryIdx = 0; tryIdx < maxTries; tryIdx++) {
+      const angle = Math.random() * 2 * Math.PI;
+      const distKm = minDistanceKm + Math.random() * (maxDistanceKm - minDistanceKm);
+
+      // 1 degré lat ~ 110.574 km
+      const deltaLat = (distKm / 110.574) * Math.cos(angle);
+      const latRad = (base.lat * Math.PI) / 180;
+      const kmPerLngDeg = 111.320 * Math.cos(latRad);
+      const deltaLng = (distKm / (kmPerLngDeg || 75)) * Math.sin(angle);
+
+      const candLat = base.lat + deltaLat;
+      const candLng = base.lng + deltaLng;
+
+      // 1. Contrôle impératif : rester DANS les limites du département (bbox)
+      if (dept && dept.bbox) {
+        const [minLat, minLng, maxLat, maxLng] = dept.bbox;
+        const latMargin = (maxLat - minLat) * 0.03;
+        const lngMargin = (maxLng - minLng) * 0.03;
+        if (candLat < minLat + latMargin || candLat > maxLat - latMargin ||
+            candLng < minLng + lngMargin || candLng > maxLng - lngMargin) {
+          continue;
+        }
+      }
+
+      // 2. Contrôle anti-agglutinement avec les autres points
+      let collision = false;
+      for (const p of existingPoints) {
+        const dLat = (candLat - p.lat) * 110.574;
+        const dLng = (candLng - p.lng) * (kmPerLngDeg || 75);
+        const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+        if (dist < (p.minDist || 1.2)) {
+          collision = true;
+          break;
+        }
+      }
+
+      if (!collision) {
+        bestCoord = { lat: candLat, lng: candLng };
+        break;
+      }
+
+      if (!bestCoord) {
+        bestCoord = { lat: candLat, lng: candLng };
+      }
+    }
+
+    if (!bestCoord) {
+      bestCoord = { lat: base.lat + 0.03, lng: base.lng + 0.03 };
+    }
+
+    return bestCoord;
+  }
+
+  // Enrichissement automatique du nom de la commune hôte par reverse-géocodage
+  enrichMissionLocationWithCity(item) {
+    if (!item || !item.lat || !item.lng) return;
+    try {
+      fetch(`https://api-adresse.data.gouv.fr/reverse/?lon=${item.lng}&lat=${item.lat}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.features && data.features.length > 0) {
+            const props = data.features[0].properties;
+            const city = props.city || props.district || props.name;
+            if (city) {
+              item.commune = city;
+              if (item.eventName && !item.eventName.includes(city)) {
+                item.eventLocationDetail = `Lieu : ${city} (${item.commune})`;
+              }
+            }
+          }
+        })
+        .catch(() => {});
+    } catch (e) {}
+  }
+
+  // Dispersion des missions existantes si elles sont trop agglutinées dans un rayon étroit
+  disperseOverlappingMissions() {
+    if (this.stations.length === 0) return;
+    const base = this.stations[0];
+    let changed = false;
+
+    const allItems = [...this.missions, ...this.devis];
+    for (let i = 0; i < allItems.length; i++) {
+      const item = allItems[i];
+      if (!item.lat || !item.lng) continue;
+
+      const distToStation = Math.sqrt(Math.pow((item.lat - base.lat) * 110.574, 2) + Math.pow((item.lng - base.lng) * 75, 2));
+
+      let tooClose = distToStation < 0.9;
+      for (let j = 0; j < i; j++) {
+        const other = allItems[j];
+        const dist = Math.sqrt(Math.pow((item.lat - other.lat) * 110.574, 2) + Math.pow((item.lng - other.lng) * 75, 2));
+        if (dist < 1.3) {
+          tooClose = true;
+          break;
+        }
+      }
+
+      if (tooClose) {
+        const mType = item.type || (item.scale ? 'dps' : 'dps');
+        const newCoord = this.calculateRealisticMissionLocation(base, mType);
+        item.lat = newCoord.lat;
+        item.lng = newCoord.lng;
+        this.enrichMissionLocationWithCity(item);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.saveGame();
+    }
+  }
+
   generateStarterDevis(centerLatLng) {
     const eventDate = this.createDateOffset(5, 10);
+    const coords = this.calculateRealisticMissionLocation({ lat: centerLatLng.lat, lng: centerLatLng.lng }, 'dps');
     const d = {
       id: `dev-${Date.now()}`,
       clientName: 'Comité des Fêtes & Mairie',
@@ -1154,8 +1337,8 @@ class ProtecGame {
       eventName: 'Fête de Printemps & Brocante Municipale',
       eventDate: eventDate,
       durationHours: 7,
-      lat: centerLatLng.lat + 0.007,
-      lng: centerLatLng.lng + 0.009,
+      lat: coords.lat,
+      lng: coords.lng,
       publicCount: '1 200 personnes',
       scale: 'PAPS (Point d’Alerte - 2 secouristes)',
       requiredVolunteers: 2,
@@ -1166,6 +1349,7 @@ class ProtecGame {
 
     d.bareme = this.calculateBareme(d);
     d.proposedPrice = d.bareme.totalBareme;
+    this.enrichMissionLocationWithCity(d);
     this.devis.push(d);
   }
 
@@ -1189,53 +1373,71 @@ class ProtecGame {
         { name: 'Cross du Collège Pasteur', client: 'Éducation Nationale', cType: 'association', dur: 3, pub: '450 élèves', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 },
         { name: 'Brocante de Quartier des Berges', client: 'Comité des Fêtes', cType: 'association', dur: 4, pub: '1 200 chineurs', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 },
         { name: 'Tournoi Minimes de Handball', client: 'Club Omnisports', cType: 'club_sportif', dur: 3, pub: '600 personnes', scale: 'PAPS (3 secouristes)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: cap.vpspCount > 0 ? ['VPSP'] : [], hiddenMin: 3, hiddenSkills: ['PSE2'], matCost: 20 },
-        { name: 'Fête de Quartier & Olympiades', client: 'Maison de Quartier', cType: 'association', dur: 4, pub: '800 habitants', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 }
+        { name: 'Fête de Quartier & Olympiades', client: 'Maison de Quartier', cType: 'association', dur: 4, pub: '800 habitants', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 },
+        { name: 'Kermesse des Écoles & Fête Laïque', client: 'Association Parents Élèves', cType: 'association', dur: 3, pub: '550 familles', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 12 },
+        { name: 'Course d’Orientation & Marche Nordique', client: 'Ligue Randonnée Pédestre', cType: 'club_sportif', dur: 4, pub: '400 marcheurs', scale: 'PAPS (3 secouristes)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 3, hiddenSkills: ['PSE2'], matCost: 18 },
+        { name: 'Tournoi Départemental de Gymnastique', client: 'Comité de Gymnastique', cType: 'club_sportif', dur: 4, pub: '750 spectateurs', scale: 'PAPS (3 secouristes)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: cap.vpspCount > 0 ? ['VPSP'] : [], hiddenMin: 3, hiddenSkills: ['PSE2'], matCost: 20 },
+        { name: 'Rencontre Régionale d’Échecs Géants', client: 'Ligue Échiquéenne', cType: 'association', dur: 3, pub: '350 participants', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 10 }
       ];
     } else if (allowedTier === 2) {
       // Opérationnel (DPS-PE : 4 à 6 secouristes, 1 VPSP, durées 4h à 6h)
       eventsList = [
         { name: 'Course Nocturne des 10 km', client: 'Athlétic Club Régional', cType: 'association', dur: 5, pub: '2 500 coureurs', scale: 'DPS-PE (4 secouristes + VPSP)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 4, hiddenSkills: ['CE'], matCost: 35 },
         { name: 'Feu d’Artifice & Bal Républicain', client: 'Mairie', cType: 'collectivite', dur: 4, pub: '3 500 spectateurs', scale: 'DPS-PE (5 secouristes + VPSP)', reqV: 5, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 5, hiddenSkills: ['CE', 'PSE2'], matCost: 40 },
-        { name: 'Tournoi Régional de Judo', client: 'Ligue Régionale', cType: 'club_sportif', dur: 6, pub: '1 500 judokas & public', scale: 'DPS-PE (4 secouristes)', reqV: 4, ranks: ['PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 4, hiddenSkills: ['PSE2'], matCost: 30 }
+        { name: 'Tournoi Régional de Judo', client: 'Ligue Régionale', cType: 'club_sportif', dur: 6, pub: '1 500 judokas & public', scale: 'DPS-PE (4 secouristes)', reqV: 4, ranks: ['PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 4, hiddenSkills: ['PSE2'], matCost: 30 },
+        { name: 'Carnaval Municipal & Défilé des Chars', client: 'Direction de la Culture', cType: 'collectivite', dur: 5, pub: '4 200 spectateurs', scale: 'DPS-PE (5 secouristes + VPSP)', reqV: 5, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 5, hiddenSkills: ['CE', 'PSE2'], matCost: 42 },
+        { name: 'Salon Pop-Culture & Convention Geek', client: 'Agence Événementielle', cType: 'professionnel', dur: 6, pub: '3 800 visiteurs', scale: 'DPS-PE (4 secouristes + VPSP)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 4, hiddenSkills: ['CE'], matCost: 35 },
+        { name: 'Trail des Crêtes & Sentiers Boisés', client: 'Fédération Trail', cType: 'club_sportif', dur: 6, pub: '1 800 coureurs', scale: 'DPS-PE (5 secouristes + VPSP + VTU)', reqV: 5, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 5, hiddenSkills: ['CE', 'PSE2'], matCost: 45 },
+        { name: 'Gala Régional de Boxe & Muay Thaï', client: 'Ligue Sports de Combat', cType: 'club_sportif', dur: 5, pub: '2 200 spectateurs', scale: 'DPS-PE (5 secouristes + VPSP)', reqV: 5, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 5, hiddenSkills: ['CE', 'PSE2'], matCost: 48 },
+        { name: 'Fête Médiévale & Reconstitution Historique', client: 'Office de Tourisme', cType: 'collectivite', dur: 6, pub: '3 000 visiteurs', scale: 'DPS-PE (4 secouristes + VPSP)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 4, hiddenSkills: ['CE'], matCost: 38 },
+        { name: 'Fête de la Musique - Scène Centrale', client: 'Direction Événements Mairie', cType: 'collectivite', dur: 6, pub: '5 000 festivaliers', scale: 'DPS-PE (6 secouristes + VPSP)', reqV: 6, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 6, hiddenSkills: ['CE', 'PSE2'], matCost: 50 },
+        { name: 'Traversée à la Nage en Eau Libre', client: 'Comité Régional Natation', cType: 'club_sportif', dur: 5, pub: '1 200 participants & public', scale: 'DPS-PE (4 secouristes + VPSP)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 4, hiddenSkills: ['CE', 'PSE2'], matCost: 35 }
       ];
 
       // Prise en compte de l'environnement territorial réel
       // 1. Départements du Sud / Boisés (Feux de forêts, patrouilles préventives)
       if (['13', '83', '06', '30', '34', '84', '20', '2A', '2B', '40', '33', '11', '66'].includes(deptCode)) {
         eventsList.push({ name: 'Patrouille Préventive Massif Boisé', client: 'Préfecture & DFCI', cType: 'collectivite', dur: 5, pub: 'Secteur Boisé', scale: 'DPS-PE (4 secouristes + VTU)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VTU', 'VPSP'], hiddenMin: 4, hiddenSkills: ['CE'], matCost: 30 });
+        eventsList.push({ name: 'Féria Municipale & Course Camarguaise/Landaise', client: 'Club Taurin', cType: 'association', dur: 6, pub: '4 500 aficionados', scale: 'DPS-PE (6 secouristes + VPSP)', reqV: 6, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 6, hiddenSkills: ['CE', 'PSE2'], matCost: 55 });
       }
 
       // 2. Villes universitaires (Soirées étudiantes et galas récurrents le jeudi/vendredi soir)
-      if (['75', '69', '13', '31', '59', '33', '35', '34', '67', '38', '44', '49', '86', '76', '14'].includes(deptCode)) {
+      if (['75', '69', '13', '31', '59', '33', '35', '34', '67', '38', '44', '49', '86', '76', '14', '54'].includes(deptCode)) {
         eventsList.push({ name: 'Gala Annuel & Nuit des Étudiants', client: 'BDE Fédéral Universitaire', cType: 'association', dur: 6, pub: '3 200 étudiants', scale: 'DPS-PE (5 secouristes + VPSP)', reqV: 5, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 6, hiddenSkills: ['CE', 'PSE2'], matCost: 45 });
+        eventsList.push({ name: 'Festival Universitaire Rock & Campus', client: 'Fédération Étudiante', cType: 'association', dur: 5, pub: '2 800 étudiants', scale: 'DPS-PE (5 secouristes + VPSP)', reqV: 5, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 5, hiddenSkills: ['CE', 'PSE2'], matCost: 40 });
       }
 
       // 3. Zéniths et grandes salles de spectacles
-      if (['75', '93', '92', '69', '13', '31', '59', '67', '44', '33', '83', '76', '21', '63', '45'].includes(deptCode)) {
+      if (['75', '93', '92', '69', '13', '31', '59', '67', '44', '33', '83', '76', '21', '63', '45', '54'].includes(deptCode)) {
         eventsList.push({ name: 'Concert Populaire au Zénith', client: 'Production Spectacles', cType: 'professionnel', dur: 5, pub: '5 500 spectateurs', scale: 'DPS-PE (6 secouristes + VPSP)', reqV: 6, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 6, hiddenSkills: ['CE'], matCost: 45 });
+        eventsList.push({ name: 'Spectacle Musical & Tournée des Artistes', client: 'Live Nation France', cType: 'professionnel', dur: 5, pub: '6 000 spectateurs', scale: 'DPS-PE (6 secouristes + VPSP)', reqV: 6, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 6, hiddenSkills: ['CE', 'PSE2'], matCost: 48 });
       }
     } else {
       // Confirmé / Grand Dispositif (DPS-ME / GE : 6 à 12 secouristes, 1 à 2 VPSP)
       eventsList = [
         { name: 'Festival Musical de Plein Air', client: 'Collectif Festif', cType: 'professionnel', dur: 8, pub: '6 000 festivaliers', scale: 'DPS-ME (8 secouristes + 2 VPSP)', reqV: 8, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 8, hiddenSkills: ['CD', 'CE'], matCost: 65 },
         { name: 'Triathlon Départemental', client: 'Fédération Triathlon', cType: 'association', dur: 7, pub: '4 000 participants', scale: 'DPS-ME (6 secouristes + VPSP + VTU)', reqV: 6, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 6, hiddenSkills: ['CE', 'PSE2'], matCost: 55 },
-        { name: 'Rencontre Nationale de Rugby', client: 'Stade Municipal', cType: 'professionnel', dur: 5, pub: '8 500 supporters', scale: 'DPS-ME (10 secouristes + 2 VPSP)', reqV: 10, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 10, hiddenSkills: ['CE', 'PSE2'], matCost: 70 }
+        { name: 'Rencontre Nationale de Rugby', client: 'Stade Municipal', cType: 'professionnel', dur: 5, pub: '8 500 supporters', scale: 'DPS-ME (10 secouristes + 2 VPSP)', reqV: 10, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 10, hiddenSkills: ['CE', 'PSE2'], matCost: 70 },
+        { name: 'Marathon International Métropolitain', client: 'Fédération d’Athlétisme', cType: 'professionnel', dur: 8, pub: '14 000 coureurs & public', scale: 'DPS-GE (12 secouristes + 2 VPSP + VTU)', reqV: 12, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP', 'VTU'], hiddenMin: 12, hiddenSkills: ['CD', 'CE'], matCost: 95 },
+        { name: 'Foire Exposition & Salon de l’Artisanat', client: 'Parc des Expositions Régional', cType: 'professionnel', dur: 8, pub: '10 500 visiteurs', scale: 'DPS-ME (8 secouristes + 2 VPSP)', reqV: 8, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 8, hiddenSkills: ['CD', 'CE'], matCost: 75 },
+        { name: 'Arène Esport & Championnat International', client: 'Gaming Federation', cType: 'professionnel', dur: 7, pub: '7 500 fans', scale: 'DPS-ME (8 secouristes + 2 VPSP)', reqV: 8, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 8, hiddenSkills: ['CE', 'PSE2'], matCost: 65 },
+        { name: 'Festival Pyrotechnique & Son et Lumière', client: 'Comité Métropolitain', cType: 'collectivite', dur: 6, pub: '11 000 spectateurs', scale: 'DPS-GE (10 secouristes + 2 VPSP + VTU)', reqV: 10, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP', 'VTU'], hiddenMin: 10, hiddenSkills: ['CD', 'CE'], matCost: 80 }
       ];
 
       // Matchs de championnat tous les 15 jours dans les stades majeurs
-      if (['75', '93', '92', '13', '69', '59', '31', '33', '44', '06', '67', '35', '42', '51', '29', '34', '57', '76'].includes(deptCode)) {
+      if (['75', '93', '92', '13', '69', '59', '31', '33', '44', '06', '67', '35', '42', '51', '29', '34', '57', '76', '54'].includes(deptCode)) {
         eventsList.push({ name: 'Match de Championnat au Grand Stade', client: 'Club Professionnel de Football', cType: 'professionnel', dur: 5, pub: '18 000 supporters', scale: 'DPS-ME (8 secouristes + 2 VPSP)', reqV: 8, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 8, hiddenSkills: ['CE', 'PSE2'], matCost: 75 });
+        eventsList.push({ name: 'Derby Régional à Guichets Fermés', client: 'Ligue Professionnelle', cType: 'professionnel', dur: 5, pub: '21 000 supporters', scale: 'DPS-GE (12 secouristes + 2 VPSP + VTU)', reqV: 12, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP', 'VTU'], hiddenMin: 12, hiddenSkills: ['CD', 'CE'], matCost: 95 });
       }
 
       // Secteur aéroportuaire majeur
-      if (['75', '93', '95', '94', '91', '31', '06', '33', '69', '44', '59'].includes(deptCode)) {
+      if (['75', '93', '95', '94', '91', '31', '06', '33', '69', '44', '59', '57', '54'].includes(deptCode)) {
         eventsList.push({ name: 'Meeting Aérien & Aéro-Show', client: 'Aéroport & Direction Sécurité', cType: 'professionnel', dur: 8, pub: '12 000 spectateurs', scale: 'DPS-GE (10 secouristes + 2 VPSP + VTU)', reqV: 10, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP', 'VTU'], hiddenMin: 10, hiddenSkills: ['CD', 'CE'], matCost: 85 });
       }
     }
 
     const pick = eventsList[Math.floor(Math.random() * eventsList.length)];
-    const offsetLat = (Math.random() - 0.5) * 0.035;
-    const offsetLng = (Math.random() - 0.5) * 0.035;
+    const missionCoords = this.calculateRealisticMissionLocation(base, 'dps');
     const daysAhead = 1 + Math.floor(Math.random() * 4);
     const startHour = (pick.name.includes('Nocturne') || pick.name.includes('Concert') || pick.name.includes('Gala') || pick.name.includes('Étudiants')) ? 19 : 14;
     const endHour = (startHour + pick.dur) % 24;
@@ -1250,8 +1452,8 @@ class ProtecGame {
       eventName: pick.name,
       eventDate: eventDate,
       durationHours: pick.dur,
-      lat: base.lat + offsetLat,
-      lng: base.lng + offsetLng,
+      lat: missionCoords.lat,
+      lng: missionCoords.lng,
       publicCount: pick.pub,
       scale: pick.scale,
       requiredVolunteers: pick.reqV,
@@ -1706,8 +1908,7 @@ class ProtecGame {
     if (activeSncf) return;
 
     const base = this.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne' };
-    const offsetLat = (Math.random() - 0.5) * 0.035;
-    const offsetLng = (Math.random() - 0.5) * 0.035;
+    const sncfCoords = this.calculateRealisticMissionLocation(base, 'sncf');
 
     const sncfScenarios = [
       {
@@ -1723,6 +1924,27 @@ class ProtecGame {
         reqVol: 3,
         vehs: ['VTU'],
         reward: 420
+      },
+      {
+        title: 'Alerte Bagage Abandonné : Évacuation Hall de Gare & Prise en Charge',
+        desc: 'Colis suspect découvert en gare centrale. Périmètre de sécurité de 100m déployé par les démineurs. La SNCF demande l’assistance de la Protection Civile pour l’accueil et le réconfort des voyageurs déroutés.',
+        reqVol: 3,
+        vehs: ['VTU'],
+        reward: 390
+      },
+      {
+        title: 'Canicule Réseau TER : Distribution Massive d’Eau & Malaises Quai',
+        desc: 'Climatisation en panne sur 3 rames consécutives avec 38°C en gare. Déploiement d’un poste de secours avancé sur quai et distribution de 500 bouteilles d’eau fraîches.',
+        reqVol: 4,
+        vehs: ['VPSP', 'VTU'],
+        reward: 450
+      },
+      {
+        title: 'Accident Grave de Voyageur : Soutien Psychologique & Tri d’Urgence',
+        desc: 'Choc émotionnel violent chez plusieurs dizaines de témoins suite à un accident de personne sur la voie 2. La SNCF active la convention d’aide aux victimes et soutien psychologique d’urgence.',
+        reqVol: 4,
+        vehs: ['VPSP'],
+        reward: 510
       }
     ];
 
@@ -1734,8 +1956,8 @@ class ProtecGame {
       categoryLabel: 'Convention SNCF - Assistance Voyageurs & CHU',
       title: `[Préalerte] ${pick.title}`,
       desc: `🟡 PRÉALERTE SNCF (Convention Partenaire) : ${pick.desc} Aucun effectif n'est pré-engagé d'avance. Lancez immédiatement la mobilisation par SMS pour recenser les secouristes disponibles.`,
-      lat: base.lat + offsetLat,
-      lng: base.lng + offsetLng,
+      lat: sncfCoords.lat,
+      lng: sncfCoords.lng,
       scale: `Dispositif CHU SNCF (${pick.reqVol} secouristes)`,
       eventDate: { ...this.clock, hour: this.clock.hour },
       durationSeconds: 40 * 60,
@@ -1755,6 +1977,7 @@ class ProtecGame {
       assignedCrew: { volunteers: [], vehicles: [] }
     };
 
+    this.enrichMissionLocationWithCity(newSncfMission);
     this.missions.push(newSncfMission);
     this.renderMissions();
     this.updateStatsUI();
@@ -1888,6 +2111,11 @@ class ProtecGame {
     const cand = this.candidatures.find(c => c.id === candId);
     if (!cand) return;
 
+    if (cand.type === 'salarie' && window.ProtecPersonnel) {
+      window.ProtecPersonnel.hireCandidateFromInterview(this, candId);
+      return;
+    }
+
     this.candidatures = this.candidatures.filter(c => c.id !== candId);
 
     const initialRank = cand.rank || (cand.skills?.includes('PSE2') ? 'PSE2' : (cand.skills?.includes('PSE1') ? 'PSE1' : 'Stagiaire'));
@@ -1900,27 +2128,30 @@ class ProtecGame {
       role: initialRole,
       rank: initialRank,
       exp: initialExp,
+      contractType: 'benevole',
       status: 'dispo',
       stationId: stationId || this.stations[0]?.id,
       isTrainer: !!cand.isTrainer,
-      avatar: cand.avatar,
-      dispoType: cand.dispoType,
-      dispoJours: cand.dispoJours,
-      motivation: cand.motivationScore || 85,
+      avatar: cand.avatar || '🙋',
+      dispoType: cand.dispoType || 'bénévole',
+      dispoJours: cand.dispoJours || ['Samedi', 'Dimanche'],
+      motivation: cand.motivationGrade ? Math.min(100, parseInt(cand.motivationGrade) * 5) : (cand.motivationScore || 85),
       skills: cand.skills || [initialRank],
       energy: 90,
       humeur: 85
     };
 
     this.volunteers.push(newVol);
+    this.closeModal();
     this.updateStatsUI();
     this.saveGame();
-    this.showToast('Bénévole intégré !', `${cand.name} (${initialRank}${cand.isTrainer ? ' • Formateur' : ''}) a signé sa charte d'engagement !`, 'green');
+    this.showToast('Bénévole Intégré !', `${cand.name} (${initialRank}${cand.isTrainer ? ' • Formateur' : ''}) a signé sa charte d'engagement bénévole !`, 'green');
     this.openModule('recrutement');
   }
 
   rejectCandidature(candId) {
     this.candidatures = this.candidatures.filter(c => c.id !== candId);
+    this.closeModal();
     this.updateStatsUI();
     this.saveGame();
     this.openModule('recrutement');
@@ -2119,6 +2350,9 @@ class ProtecGame {
     crew.forEach(v => {
       if (mission.type === 'pompiers' && this.sdisGarde && this.sdisGarde.active && this.sdisGarde.caserneCrew.includes(v.id)) {
         v.status = 'sdis_caserne';
+      } else if (v.contractType === 'salarie' && window.ProtecPersonnel) {
+        // Enregistrement des heures au forfait mensuel et application du repos légal de 11h (Code du Travail)
+        window.ProtecPersonnel.recordMissionForSalarie(v, mission, this);
       } else {
         v.status = 'dispo';
       }
@@ -2427,11 +2661,38 @@ class ProtecGame {
   registerSalarieToMission(missionId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
-    const availableSalaries = this.volunteers.filter(v => (v.contractType === 'salarie' || v.dispoType === 'salarié' || v.dispoType === 'salarie_permanent') && !mission.registeredVolunteers.includes(v.id) && v.status === 'dispo');
-    if (availableSalaries.length === 0) {
-      this.showToast('Aucun Salarié Libre', 'Tous vos salariés sont déjà mobilisés ou vous n’avez pas encore embauché de salarié dans le Pôle Recrutement.', 'orange');
+
+    const allSalaries = this.volunteers.filter(v => (v.contractType === 'salarie' || v.dispoType === 'salarié' || v.dispoType === 'salarie_permanent'));
+    if (allSalaries.length === 0) {
+      this.showToast('Aucun Salarié Embauché', 'Votre antenne n’a pas encore embauché de salarié permanent (recrutement disponible dans Pôle RH).', 'orange');
       return;
     }
+
+    const now = Date.now();
+    // 1. Contrôle du repos quotidien obligatoire de 11h consécutives (Code du Travail Art. L3131-1)
+    const restingSalaries = allSalaries.filter(v => v.status === 'repos_legal' && v.mandatoryRestUntil && now < v.mandatoryRestUntil);
+    const availableSalaries = allSalaries.filter(v => 
+      !mission.registeredVolunteers.includes(v.id) && 
+      v.status === 'dispo' &&
+      (!v.mandatoryRestUntil || now >= v.mandatoryRestUntil) &&
+      !v.currentVacation
+    );
+
+    if (availableSalaries.length === 0) {
+      if (restingSalaries.length > 0) {
+        const first = restingSalaries[0];
+        const secLeft = Math.ceil((first.mandatoryRestUntil - now) / 1000);
+        this.showToast(
+          '🛑 Repos Légal (Code du Travail Art. L3131-1)',
+          `${first.name} est en repos quotidien obligatoire de 11h consécutives (encore ${secLeft}s). Cette obligation légale s’applique uniquement aux salariés, pas aux bénévoles.`,
+          'red'
+        );
+      } else {
+        this.showToast('Salariés Indisponibles', 'Tous vos salariés sont actuellement en mission ou en vacation interne.', 'orange');
+      }
+      return;
+    }
+
     const sal = availableSalaries[0];
     mission.registeredVolunteers.push(sal.id);
     this.showToast('Salarié Affecté d’Office', `${sal.name} (${sal.rank}) a été positionné sur le dispositif par la direction de l'antenne.`, 'green');
@@ -3484,39 +3745,132 @@ class ProtecGame {
             </div>
           </div>
 
-          <div class="space-y-3">
-            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Candidatures Reçues (${this.candidatures.length})</h4>
-            ${this.candidatures.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune candidature pour l’instant. Activez une campagne pour attirer des candidats.</p>' : ''}
-            <div class="space-y-3">
-              ${this.candidatures.map(cand => `
-                <div class="p-4 rounded-2xl glass-card space-y-3">
-                  <div class="flex items-center gap-3">
-                    <span class="text-3xl">${cand.avatar}</span>
-                    <div class="flex-1">
-                      <div class="flex items-center justify-between">
-                        <h5 class="text-sm font-extrabold text-slate-900">${cand.name} (${cand.age} ans)</h5>
-                        <div class="flex items-center gap-1.5">
-                          <span class="px-2 py-0.5 rounded text-[10px] font-black ${cand.rank && cand.rank !== 'Stagiaire' ? 'bg-pc-blue text-white' : 'bg-slate-200 text-slate-700'}">${cand.rank || 'Stagiaire'}</span>
-                          ${cand.isTrainer ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">🎓 Formateur</span>' : ''}
-                        </div>
-                      </div>
-                      <p class="text-xs text-slate-500">${cand.job} • Dispo : <strong>${cand.dispoJours.join(', ')}</strong></p>
-                      ${cand.skills && cand.skills.length > 0 ? `
-                        <div class="flex flex-wrap gap-1 mt-1.5">
-                          ${cand.skills.map(s => `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">✓ ${s}</span>`).join('')}
-                        </div>
-                      ` : ''}
+          <!-- Section Postes Salariés Ouverts (CDD / CDI) -->
+          <div class="p-4 rounded-2xl glass-card border border-indigo-200/90 bg-gradient-to-r from-indigo-50/50 via-white to-blue-50/50 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="text-xs font-black uppercase text-indigo-950 tracking-wider">Postes Salariés Ouverts & Offres d’Emploi (${(this.jobOffers || []).length})</h4>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">Forfait 151h • Code du Travail</span>
+                </div>
+                <p class="text-[11px] text-slate-500">Ouvrez des postes en CDD ou CDI avec missions définies. Les candidatures tombent dans les heures suivantes.</p>
+              </div>
+              <button onclick="window.ProtecPersonnel.openJobOfferModal(window.game)" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-indigo-600 to-blue-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 flex-shrink-0">
+                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                + Ouvrir un Poste (CDD / CDI)
+              </button>
+            </div>
+
+            <!-- Liste des offres ouvertes -->
+            ${(!this.jobOffers || this.jobOffers.length === 0) ? `
+              <p class="text-[11px] text-slate-500 italic p-3 bg-white/70 rounded-xl border border-dashed border-indigo-200 text-center">
+                Aucun poste salarié ouvert actuellement. Cliquez sur « + Ouvrir un Poste » pour lancer une offre de recrutement (CDD ou CDI).
+              </p>
+            ` : `
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                ${this.jobOffers.map(job => `
+                  <div class="p-3.5 rounded-xl glass-card space-y-2 border border-indigo-100">
+                    <div class="flex items-center justify-between">
+                      <h5 class="text-xs font-black text-slate-900">${job.title}</h5>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-black ${job.contractType === 'CDI' ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'}">
+                        ${job.contractType} ${job.durationMonths ? `(${job.durationMonths} mois)` : ''}
+                      </span>
+                    </div>
+                    <div class="text-[11px] text-slate-600 flex justify-between">
+                      <span>Rémunération : <strong class="text-emerald-700 font-mono">${job.salary} € / mois</strong></span>
+                      <span class="text-slate-400">• Forfait 151h</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1 text-[9px] font-bold text-slate-600">
+                      ${(job.missions || []).map(m => `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">✓ ${m}</span>`).join('')}
+                    </div>
+                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
+                      <span class="text-indigo-700 font-bold">${job.applicantsCount || 0} candidature(s) reçue(s)</span>
+                      <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-black">${job.status === 'ouvert' ? 'Diffusion Active' : 'Poste Pourvu'}</span>
                     </div>
                   </div>
-                  <div class="p-3 rounded-xl glass-card text-xs text-slate-700 italic">
-                    « ${cand.motivation} »
+                `).join('')}
+              </div>
+            `}
+          </div>
+
+          <!-- Section Candidatures Reçues (Bénévoles & Salariés) -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Candidatures Reçues (${this.candidatures.length})</h4>
+              <span class="text-[11px] text-slate-500 font-semibold">Entretien d’embauche / d’intégration requis avant signature</span>
+            </div>
+
+            ${this.candidatures.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune candidature pour l’instant. Activez une campagne bénévole ou publiez une offre de poste salarié.</p>' : ''}
+            
+            <div class="space-y-3">
+              ${this.candidatures.map(cand => {
+                const isSalarie = cand.type === 'salarie';
+                return `
+                  <div class="p-4 rounded-2xl glass-card space-y-3 border ${isSalarie ? 'border-indigo-200 bg-indigo-50/20' : 'border-slate-200'}">
+                    <div class="flex items-start gap-3">
+                      <span class="text-3xl">${cand.avatar || '🙋'}</span>
+                      <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                          <div class="flex items-center gap-2">
+                            <h5 class="text-sm font-extrabold text-slate-900">${cand.name} (${cand.age} ans)</h5>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-black ${isSalarie ? 'bg-indigo-600 text-white' : (cand.rank && cand.rank !== 'Stagiaire' ? 'bg-pc-blue text-white' : 'bg-slate-200 text-slate-700')}">
+                              ${isSalarie ? `SALARIÉ • ${cand.contractType}` : (cand.rank || 'Bénévole')}
+                            </span>
+                            ${cand.isTrainer ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">🎓 Formateur</span>' : ''}
+                          </div>
+
+                          ${cand.interviewPassed ? `
+                            <span class="px-2.5 py-1 rounded-xl text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              Note : ${cand.motivationGrade} ✓
+                            </span>
+                          ` : `
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                              Entretien requis
+                            </span>
+                          `}
+                        </div>
+
+                        ${isSalarie ? `
+                          <!-- POUR LE SALARIÉ : PAS DE DISPONIBILITÉS PERSONNELLES (C'EST LE POSTE QUI JOUE) -->
+                          <div class="mt-1 text-xs">
+                            <p class="text-indigo-900 font-bold">Poste visé : « ${cand.jobOfferTitle} » (${cand.monthlySalary} €/mois)</p>
+                            <p class="text-[11px] text-slate-500 italic mt-0.5">Disponibilités : Fixées par le contrat de travail (forfait 151h mensuelles, 35h/semaine).</p>
+                          </div>
+                        ` : `
+                          <!-- POUR LE BÉNÉVOLE : DISPONIBILITÉS DÉTAILLÉES -->
+                          <p class="text-xs text-slate-500 mt-1">${cand.job || 'Bénévole'} • Dispo : <strong class="text-pc-blue">${(cand.dispoJours || ['Samedi', 'Dimanche']).join(', ')}</strong></p>
+                        `}
+
+                        ${cand.skills && cand.skills.length > 0 ? `
+                          <div class="flex flex-wrap gap-1 mt-1.5">
+                            ${cand.skills.map(s => `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200">✓ ${s}</span>`).join('')}
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
+
+                    <div class="p-3 rounded-xl bg-white/70 text-xs text-slate-700 italic border border-slate-100">
+                      « ${cand.motivation} »
+                    </div>
+
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <div class="text-[11px] text-slate-400 font-semibold">
+                        ${cand.interviewPassed ? 'Entretien réalisé • Bilan RH disponible' : 'Faites passer l’entretien pour évaluer la motivation'}
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button onclick="window.game.rejectCandidature('${cand.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold glass-button text-slate-500 hover:text-rose-600 transition">
+                          Décliner
+                        </button>
+                        
+                        <button onclick="window.ProtecPersonnel.openInterviewModal(window.game, '${cand.id}')" class="px-4 py-2 rounded-xl text-xs font-black ${isSalarie ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-pc-blue hover:bg-pc-blue-light'} text-white shadow-md transition flex items-center gap-1.5">
+                          <i data-lucide="mic" class="w-3.5 h-3.5"></i>
+                          ${cand.interviewPassed ? 'Voir Compte-Rendu & Décider' : 'Faire Passer l’Entretien'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div class="flex items-center justify-end gap-2">
-                    <button onclick="window.game.rejectCandidature('${cand.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold glass-button text-slate-500">Décliner</button>
-                    <button onclick="window.game.acceptCandidature('${cand.id}')" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-emerald-600 text-white shadow-md hover:bg-emerald-700 transition">Valider l'Intégration</button>
-                  </div>
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
           </div>
 
@@ -3559,14 +3913,20 @@ class ProtecGame {
                   <span class="text-xs font-black text-indigo-900">Salariés Permanents</span>
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">2 200 € / mois</span>
                 </div>
-                <p class="text-[11px] text-indigo-700 mt-1">Cadres 35h formateurs et coordinateurs. Disponibilité quasi-permanente (95%).</p>
+                <p class="text-[11px] text-indigo-700 mt-1">Cadres 35h formateurs et coordinateurs. Forfait 151h mensuelles, repos légal de 11h consécutives.</p>
               </div>
-              <div class="flex items-center justify-between pt-1">
-                <span class="text-[11px] font-extrabold text-indigo-900">
-                  Actifs : ${this.volunteers.filter(v => v.contractType === 'salarie').length}
-                </span>
-                <button onclick="window.ProtecPersonnel.hireSalarie(window.game)" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
-                  + Embaucher (1 200 €)
+              <div class="space-y-2 pt-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-extrabold text-indigo-900">
+                    Actifs : ${this.volunteers.filter(v => v.contractType === 'salarie').length}
+                  </span>
+                  <button onclick="window.ProtecPersonnel.hireSalarie(window.game)" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
+                    + Embaucher (1 200 €)
+                  </button>
+                </div>
+                <button onclick="window.ProtecPersonnel.openSalarieManagementModal(window.game)" class="w-full py-1.5 rounded-xl text-xs font-black bg-indigo-100/80 hover:bg-indigo-200 text-indigo-900 border border-indigo-300/70 transition flex items-center justify-center gap-1.5 shadow-sm">
+                  <i data-lucide="clock" class="w-3.5 h-3.5 text-indigo-700"></i>
+                  Gérer Heures & Repos (Code du Travail)
                 </button>
               </div>
             </div>
@@ -3628,6 +3988,10 @@ class ProtecGame {
                 <p class="text-[11px] text-indigo-700">Préservez l'énergie, remontez le moral et évitez les surmenages / burnouts.</p>
               </div>
               <div class="flex flex-wrap gap-2">
+                <button onclick="window.ProtecPersonnel.openSalarieManagementModal(window.game)" class="px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:brightness-110 shadow transition flex items-center gap-1">
+                  <i data-lucide="briefcase" class="w-3.5 h-3.5"></i>
+                  Salariés & Code du Travail
+                </button>
                 <button onclick="window.game.openModule('competences')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-purple-600 text-white hover:bg-purple-700 shadow transition flex items-center gap-1">
                   <i data-lucide="award" class="w-3.5 h-3.5"></i>
                   Habilitations & Bureau
@@ -4539,6 +4903,20 @@ class ProtecGame {
         }
       });
 
+      // 1d. GESTION DES SALARIÉS, CODE DU TRAVAIL ET VACATIONS INTERNES
+      if (window.ProtecPersonnel) {
+        window.ProtecPersonnel.updateSalariesClock(this);
+        const salarieModalOpen = document.getElementById('main-modal');
+        const modalTitle = document.getElementById('modal-title');
+        if (salarieModalOpen && !salarieModalOpen.classList.contains('hidden') && modalTitle && modalTitle.textContent.includes('Direction RH : Salariés')) {
+          const body = document.getElementById('modal-body');
+          if (body) {
+            body.innerHTML = window.ProtecPersonnel.renderSalarieManagementHTML(this);
+            if (window.lucide) window.lucide.createIcons();
+          }
+        }
+      }
+
       // 1b. DÉPART AUTOMATIQUE DES DPS À L'HEURE DU POSTE
       if (this.clock.second === 0) {
         this.missions.forEach(m => {
@@ -4748,12 +5126,18 @@ class ProtecGame {
       { title: 'Urgence 15 : Malaise Voie Publique', desc: 'Passant pris de vertiges et chute au sol. Bilan et surveillance requis.', durMin: 20, reward: 280 },
       { title: 'Urgence 15 : Détresse Respiratoire à Domicile', desc: 'Patient dyspnéique en crise sévère. Oxygénothérapie et bilan régulateur.', durMin: 25, reward: 340 },
       { title: 'Urgence 15 : Accident de Trottinette Électrique', desc: 'Choc contre trottoir, dermabrasions multiples et suspicion entorse cheville.', durMin: 22, reward: 310 },
-      { title: 'Urgence 15 : Arrêt Cardio-Respiratoire (Départ Réflexe)', desc: 'Témoin signale une victime inconsciente sans respiration au centre commercial.', durMin: 30, reward: 480 }
+      { title: 'Urgence 15 : Arrêt Cardio-Respiratoire (Départ Réflexe)', desc: 'Témoin signale une victime inconsciente sans respiration au centre commercial.', durMin: 30, reward: 480 },
+      { title: 'Urgence 15 : Douleur Thoracique Constrictive', desc: 'Homme de 56 ans avec douleur rétro-sternale irradiant dans le bras gauche. Oxygénothérapie et bilan régulateur.', durMin: 25, reward: 360 },
+      { title: 'Urgence 15 : Suspicion AVC / Déficit Moteur Brutal', desc: 'Femme de 68 ans présentant une asymétrie faciale et une perte de force au bras droit. Départ réflexe prioritaire.', durMin: 24, reward: 370 },
+      { title: 'Urgence 15 : Malaise Hypoglycémique en Gare', desc: 'Voyageur diabétique confus et sueurs profuses. Prise de dextro et resucrage oral sous avis médical.', durMin: 20, reward: 290 },
+      { title: 'Urgence 15 : Chute de Personne Âgée avec Suspicion Fracture', desc: 'Octogénaire au sol depuis 2 heures. Douleur aiguë à l’aine et raccourcissement du membre inférieur.', durMin: 28, reward: 330 },
+      { title: 'Urgence 15 : Choc Anaphylactique / Piqûre d’Hyménoptère', desc: 'Gonflement des lèvres, urticaire géante et dyspnée sifflante suite à une piqûre de guêpe.', durMin: 22, reward: 390 },
+      { title: 'Urgence 15 : AVP Deux-Roues contre Véhicule Léger', desc: 'Collision urbaine. Motard projeté sur la chaussée. Maintien tête dans l’axe, retrait du casque et pose du collier.', durMin: 30, reward: 420 },
+      { title: 'Urgence 15 : Brûlure Domestique Étendue du 2nd Degré', desc: 'Ébouillantement lors de la préparation d’un repas. Arrosage immédiat à l’eau tempérée et pansements stériles.', durMin: 22, reward: 320 }
     ];
 
     const pick = emergencies[Math.floor(Math.random() * emergencies.length)];
-    const offsetLat = (Math.random() - 0.5) * 0.03;
-    const offsetLng = (Math.random() - 0.5) * 0.03;
+    const samuCoords = this.calculateRealisticMissionLocation(base, 'samu');
 
     const reqVol = Math.min(Math.max(2, capacity.availableVolunteers || 3), 4);
     const ranks = ['PSE1', 'PSE2'];
@@ -4765,8 +5149,8 @@ class ProtecGame {
       categoryLabel: 'SAMU 15 - Réquisition Urgence Préfectorale',
       title: pick.title,
       desc: pick.desc,
-      lat: base.lat + offsetLat,
-      lng: base.lng + offsetLng,
+      lat: samuCoords.lat,
+      lng: samuCoords.lng,
       scale: `Départ Réflexe (${reqVol} secouristes)`,
       eventDate: { ...this.clock, hour: this.clock.hour },
       durationSeconds: pick.durMin * 60,
@@ -4782,6 +5166,7 @@ class ProtecGame {
       assignedCrew: { volunteers: [], vehicles: [] }
     };
 
+    this.enrichMissionLocationWithCity(newSamu);
     this.missions.push(newSamu);
     this.renderMissions();
     this.updateStatsUI();
@@ -5037,8 +5422,7 @@ class ProtecGame {
     if (pending.length >= 2) return;
 
     const base = this.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Caserne Pompiers' };
-    const offsetLat = (Math.random() - 0.5) * 0.035;
-    const offsetLng = (Math.random() - 0.5) * 0.035;
+    const sdisCoords = this.calculateRealisticMissionLocation(base, 'pompiers');
 
     const scenarios = [
       {
@@ -5064,6 +5448,38 @@ class ProtecGame {
         durMin: 20,
         maxResponseMinutes: 5,
         requiresLeader: false
+      },
+      {
+        title: 'Soutien Sanitaire Opérationnel (SSO) : Feu de Pavillon',
+        desc: 'Incendie violent en combles. Les pompiers engagent les binômes sous ARI. Le VPSP Protection Civile est requis pour le suivi des constantes des pompiers et le bilan des occupants sinistrés.',
+        urgency: 'critique',
+        durMin: 35,
+        maxResponseMinutes: 4,
+        requiresLeader: true
+      },
+      {
+        title: 'Secours Routier : Collision Frontale Hors Agglomération',
+        desc: 'Deux véhicules légers impliqués sur la départementale. Le VPSP intervient en appui du FPTSR pour le calage, la pose de colliers cervicaux et le conditionnement coquille.',
+        urgency: 'haute',
+        durMin: 30,
+        maxResponseMinutes: 3,
+        requiresLeader: true
+      },
+      {
+        title: 'Évacuation Sanitaire : Relevage Complexe en Étage Étroit',
+        desc: 'Victime immobilisée dans un escalier hélicoïdal étroit. Brancardage en plan dur et portage coordonné avec l’équipe de garde.',
+        urgency: 'normale',
+        durMin: 25,
+        maxResponseMinutes: 5,
+        requiresLeader: false
+      },
+      {
+        title: 'Secours Aquatique : Hypothermie Sévère sur Berges',
+        desc: 'Passant repêché par l’équipe nautique des pompiers. Prise en charge thermique d’urgence, déshabillage d’urgence et séchage sous couverture isotherme.',
+        urgency: 'haute',
+        durMin: 28,
+        maxResponseMinutes: 4,
+        requiresLeader: true
       }
     ];
 
@@ -5076,8 +5492,8 @@ class ProtecGame {
       categoryLabel: 'SDIS Pompiers - Garde Postée & Renfort VSAV',
       title: pick.title,
       desc: pick.desc,
-      lat: base.lat + offsetLat,
-      lng: base.lng + offsetLng,
+      lat: sdisCoords.lat,
+      lng: sdisCoords.lng,
       scale: 'VPSP Caserne Pompiers (3 secouristes)',
       eventDate: { ...this.clock, hour: this.clock.hour },
       durationSeconds: pick.durMin * 60,
@@ -5095,6 +5511,7 @@ class ProtecGame {
       assignedCrew: { volunteers: [], vehicles: [] }
     };
 
+    this.enrichMissionLocationWithCity(newSdis);
     this.missions.push(newSdis);
     this.renderMissions();
     this.updateStatsUI();

@@ -141,6 +141,254 @@ window.ProtecIncidents = {
           outcome: 'Lot d’électrodes de rechange commandé en urgence.'
         }
       ]
+    },
+    {
+      id: 'hemorragie_arterielle',
+      title: 'Urgence Vitale : Hémorragie Artérielle Massive',
+      type: 'medical',
+      severity: 'critique',
+      icon: 'droplet',
+      color: 'red',
+      desc: 'Un participant s’est lourdement blessé sur une grille métallique. Saignement rouge vif en jet pulsatile à la cuisse.',
+      choices: [
+        {
+          text: 'Pose immédiate du garrot tourniquet tactique & heure de pose notée',
+          costSupply: 'woundKits',
+          costQty: 1,
+          rewardXp: 110,
+          rewardReputation: 25,
+          outcome: 'Hémorragie tarie en moins de 30 secondes ! Éloge du médecin SMUR pour la rigueur du garrot.'
+        },
+        {
+          text: 'Compression manuelle directe continue avec relais pansement compressif',
+          costSupply: null,
+          rewardXp: 75,
+          outcome: 'Le saignement a été maîtrisé avec ténacité jusqu’à l’arrivée des renforts médicaux.'
+        }
+      ]
+    },
+    {
+      id: 'detresse_psychologique',
+      title: 'Soutien Humain : Proche en État de Choc Aigu',
+      type: 'social',
+      severity: 'modere',
+      icon: 'heart-handshake',
+      color: 'purple',
+      desc: 'Suite à l’accident, la compagne de la victime fait une crise d’angoisse sévère avec tremblements et hyperventilation incontrôlée.',
+      choices: [
+        {
+          text: 'Détacher un secouriste pour écoute active, mise à l’abri et respiration guidée',
+          rewardMoral: 15,
+          rewardReputation: 20,
+          outcome: 'La prise en charge humaine et bienveillante a permis d’apaiser la proche en toute dignité.'
+        },
+        {
+          text: 'Faire appel au médecin régulateur du Samu pour prescription anxiolytique',
+          rewardXp: 45,
+          outcome: 'Le régulateur a validé la prise en charge médicale adaptée.'
+        }
+      ]
+    },
+    {
+      id: 'panne_transmissions',
+      title: 'Transmissions : Perte du Réseau Radio (Zone d’Ombre)',
+      type: 'logistique',
+      severity: 'modere',
+      icon: 'radio',
+      color: 'amber',
+      desc: 'Dans le sous-sol de la salle de concert, les talkies-walkies ne captent plus le relais du poste de commandement.',
+      choices: [
+        {
+          text: 'Établir une liaison relais à vue avec un binôme intermédiaire au rez-de-chaussée',
+          rewardXp: 80,
+          outcome: 'Dispositif de relais visuel parfait. Le contact radio opérationnel est rétabli sans délai.'
+        },
+        {
+          text: 'Basculer en secours sur la messagerie réseau mobile cellulaire 4G',
+          rewardReputation: 10,
+          outcome: 'Liaison de secours efficace, les bilans ont pu être transmis au PC sans interruption.'
+        }
+      ]
+    },
+    {
+      id: 'convulsion_pediatrique',
+      title: 'Pédiatrie : Convulsion Hyperthermique d’un Enfant',
+      type: 'medical',
+      severity: 'eleve',
+      icon: 'baby',
+      color: 'rose',
+      desc: 'Un enfant de 3 ans présente une fièvre à 39,8°C et une crise convulsive brève devant ses parents affolés.',
+      choices: [
+        {
+          text: 'Libération des voies aériennes, PLS, découverte de l’enfant et rassurance des parents',
+          rewardXp: 95,
+          rewardReputation: 20,
+          outcome: 'Gestes pédiatriques parfaits : la crise a cessé, l’enfant a repris conscience dans les bras de ses parents.'
+        },
+        {
+          text: 'Demande réflexe d’un SMUR Pédiatrique au 15',
+          rewardReputation: 15,
+          outcome: 'L’équipe hospitalière a pris le relais en toute sécurité.'
+        }
+      ]
+    },
+    {
+      id: 'panne_electrique_site',
+      title: 'Logistique : Black-out Électrique sur le Festival',
+      type: 'logistique',
+      severity: 'eleve',
+      icon: 'zap-off',
+      color: 'slate',
+      desc: 'Coupure générale de courant sur le site de la manifestation. Le poste de secours est plongé dans l’obscurité totale.',
+      choices: [
+        {
+          text: 'Déployer le lot éclairage autonome et le groupe électrogène de l’antenne',
+          costSupply: 'oxygenBottles', // Lot technique
+          costQty: 0,
+          rewardXp: 85,
+          rewardReputation: 25,
+          outcome: 'Mât d’éclairage allumé en 3 minutes ! Les soins et l’accueil des victimes se poursuivent sans accroc.'
+        },
+        {
+          text: 'Rapatrier immédiatement les blessés sous les projecteurs LED de cellule du VPSP',
+          rewardXp: 60,
+          outcome: 'Repli tactique intelligent à l’intérieur du véhicule d’intervention.'
+        }
+      ]
+    },
+    {
+      id: 'refus_soins_ebriete',
+      title: 'Déontologie : Refus de Soins d’une Personne Traumatisée',
+      type: 'securite',
+      severity: 'modere',
+      icon: 'alert-circle',
+      color: 'orange',
+      desc: 'Une victime avec une plaie saignante au front et sous l’emprise de l’alcool refuse catégoriquement d’être soignée ou transportée.',
+      choices: [
+        {
+          text: 'Dialogue posé, explication des risques vitaux et recueil d’une décharge signée',
+          rewardXp: 70,
+          outcome: 'La victime s’est calmée, a accepté la pose d’un pansement de protection avant de signer la décharge.'
+        },
+        {
+          text: 'Aviser la Police Municipale et la régulation 15 pour décision de garde médicale',
+          rewardReputation: 15,
+          outcome: 'Procédure légale strictement respectée pour protéger la responsabilité de l’association.'
+        }
+      ]
+    },
+    {
+      id: 'brancardage_escarpe',
+      title: 'Topographie : Évacuation en Terrain Accidenté ou Boueux',
+      type: 'operation',
+      severity: 'eleve',
+      icon: 'mountain',
+      color: 'emerald',
+      desc: 'Un coureur blessé à la cheville se trouve sur un sentier forestier escarpé, impraticable pour les brancards roulants classiques.',
+      choices: [
+        {
+          text: 'Utilisation du brancard cuillère et portage au pas à 4 secouristes équipés',
+          rewardXp: 90,
+          rewardMoral: 10,
+          outcome: 'Brancardage physique exemplaire sur 600 mètres. La victime est arrivée au VPSP sans douleur.'
+        },
+        {
+          text: 'Solliciter l’aide du véhicule 4x4 des organisateurs ou de la DFCI',
+          rewardReputation: 15,
+          outcome: 'Coordination efficace avec les organisateurs de l’événement.'
+        }
+      ]
+    },
+    {
+      id: 'accouchement_inopine',
+      title: 'Situation Exceptionnelle : Accouchement Inopiné sur le Dispositif',
+      type: 'medical',
+      severity: 'critique',
+      icon: 'sparkles',
+      color: 'purple',
+      desc: 'Une spectatrice enceinte est prise de contractions très rapprochées. La perte des eaux survient sous la tente de secours !',
+      choices: [
+        {
+          text: 'Installation en cellule VPSP, kit accouchement d’urgence & régulation 15 en direct',
+          rewardXp: 150,
+          rewardReputation: 40,
+          rewardMoral: 25,
+          outcome: 'Événement magique ! Le nouveau-né a poussé son premier cri dans le VPSP avant l’arrivée du SMUR !'
+        },
+        {
+          text: 'Évacuation réflexe d’urgence sous avertisseurs vers la maternité la plus proche',
+          rewardXp: 100,
+          rewardReputation: 25,
+          outcome: 'Arrivée aux urgences gynécologiques juste à temps. Maman et bébé se portent à merveille !'
+        }
+      ]
+    },
+    {
+      id: 'vehicule_bloque_stationnement',
+      title: 'Circulation : Ambulance Bloquée par un Stationnement Gênant',
+      type: 'logistique',
+      severity: 'modere',
+      icon: 'truck',
+      color: 'amber',
+      desc: 'Au moment de partir en évacuation, une voiture garée en double file bloque l’accès du VPSP vers la voie publique.',
+      choices: [
+        {
+          text: 'Manoeuvre millimétrée avec deux équipiers au guidage et avertisseur deux-tons bref',
+          costDelayMin: 3,
+          rewardXp: 65,
+          outcome: 'Manoeuvre réussie au centimètre près sans le moindre froissement de tôle !'
+        },
+        {
+          text: 'Faire appel immédiatement aux agents de sécurité de l’événement pour dégager la voie',
+          rewardReputation: 15,
+          outcome: 'L’axe a été libéré rapidement et sécurisé.'
+        }
+      ]
+    },
+    {
+      id: 'intoxication_collective',
+      title: 'Alerte Sanitaire : Suspicion d’Intoxication Alimentaire Massive',
+      type: 'operation',
+      severity: 'eleve',
+      icon: 'utensils',
+      color: 'orange',
+      desc: 'Six convives du même banquet présentent simultanément vomissements, vertiges et douleurs abdominales aiguës.',
+      choices: [
+        {
+          text: 'Création d’un poste de triage avancé, mise au repos, prise de constantes et alerte ARS/15',
+          costSupply: 'woundKits',
+          costQty: 1,
+          rewardXp: 120,
+          rewardReputation: 30,
+          outcome: 'Triage de crise méthodique. Le SAMU félicite la clarté du recensement des constantes.'
+        },
+        {
+          text: 'Distribution de solutés d’hydratation et surveillance rapprochée sous la tente',
+          rewardXp: 80,
+          outcome: 'Les symptômes se sont stabilisés sans transfert lourd nécessaire.'
+        }
+      ]
+    },
+    {
+      id: 'danger_animal',
+      title: 'Sécurité : Animal Agressif sur Lieu d’Intervention à Domicile',
+      type: 'securite',
+      severity: 'modere',
+      icon: 'shield',
+      color: 'rose',
+      desc: 'En intervenant pour un malaise à domicile, un grand chien de garde aboie férocement et barre l’entrée de la pièce.',
+      choices: [
+        {
+          text: 'Demander calmement à un occupant de la maison d’isoler le chien dans une pièce fermée',
+          rewardXp: 50,
+          outcome: 'L’animal a été enfermé sans précipitation, permettant une prise en charge sécurisée.'
+        },
+        {
+          text: 'Garder l’équipage groupé derrière le brancard en attendant le retour au calme',
+          rewardXp: 60,
+          outcome: 'Prudence exemplaire face au risque animalier.'
+        }
+      ]
     }
   ],
 
