@@ -694,9 +694,9 @@ window.ProtecSystems = {
     const newWeatherMission = {
       id: `m-meteo-${Date.now()}`,
       type: 'meteo',
-      categoryLabel: `Météo-France - ${game.weather.alertTitle}`,
-      title: missionDef.title,
-      desc: missionDef.desc,
+      categoryLabel: `Préalerte Préfectorale - ${game.weather.alertTitle}`,
+      title: `[Préalerte] ${missionDef.title}`,
+      desc: `🟡 PRÉALERTE PRÉFECTURALE : Vigilance en cours (${game.weather.alertTitle}). ${missionDef.desc} La Préfecture demande la pré-mobilisation d'une équipe opérationnelle pour recensement des effectifs. Aucun personnel n'est affecté d'avance : lancez la mobilisation par SMS pour recenser vos disponibles.`,
       lat: base.lat + offsetLat,
       lng: base.lng + offsetLng,
       scale: `Dispositif Intempéries (${missionDef.reqVol} secouristes)`,
@@ -709,7 +709,11 @@ window.ProtecSystems = {
       rewardMoney: missionDef.reward,
       rewardReputation: 45,
       progress: 0,
-      status: 'planifie',
+      status: 'prealerte',
+      alertOrigin: 'meteo',
+      prealertSecondsLeft: 65,
+      prealertTotalSec: 65,
+      evolutionResolved: false,
       registeredVolunteers: [],
       assignedCrew: { volunteers: [], vehicles: [] }
     };
@@ -721,12 +725,12 @@ window.ProtecSystems = {
 
     if (window.ProtecIncidents) {
       window.ProtecIncidents.sendSystemNotification(
-        `⛈️ ALERTE MÉTÉO-FRANCE EN COURS`,
-        `${missionDef.title} déclenchée par la Préfecture !`,
+        `🟡 PRÉALERTE PRÉFECTURALE (${game.weather.vigilance.toUpperCase()})`,
+        `Vigilance Intempéries active. La Préfecture demande la pré-mobilisation d'une équipe pour : ${missionDef.title}. Lancez vos SMS !`,
         `meteo-${newWeatherMission.id}`
       );
     }
-    game.showToast('Réquisition Météo-France', `${missionDef.title} !`, 'orange');
+    game.showToast('Préalerte Préfecture', `Mise en veille : ${missionDef.title} ! Recensez vos secouristes.`, 'orange');
   },
 
   updateWeatherAndDayNight(game) {

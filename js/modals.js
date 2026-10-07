@@ -337,19 +337,31 @@ window.ProtecModals = {
           </div>
         </div>
 
-        <!-- Déclenchement d'une reconnaissance si vigilance supérieure -->
+        <!-- Statut officiel de la vigilance Météo-France & Préfecture -->
         ${w.vigilance !== 'green' ? `
           <div class="p-4 rounded-2xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-3">
-            <div>
-              <div class="text-xs font-black text-amber-900">Alerte Météo Préfectorale Active</div>
-              <div class="text-[11px] text-amber-800">Des missions de réquisition préfectorale (CAI, inondation, chute d’arbre, maraude) se déclenchent automatiquement.</div>
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-amber-200/80 text-amber-900 flex items-center justify-center font-black text-lg">
+                ⚠️
+              </div>
+              <div>
+                <div class="text-xs font-black text-amber-950">Veille Préfectorale Active (${w.vigilance.toUpperCase()})</div>
+                <div class="text-[11px] text-amber-800">Surveillance continue des données réelles. En cas d'événement majeur (tempête, rafales, crue), la Préfecture place automatiquement les AASC en préalerte opérationnelle.</div>
+              </div>
             </div>
-            <button onclick="window.ProtecSystems.triggerWeatherEmergencyMission(window.game); window.game.closeModal();" class="px-3.5 py-2 rounded-xl bg-pc-orange hover:bg-pc-orange-hover text-white text-xs font-black shadow transition flex items-center gap-1.5 flex-shrink-0">
-              <i data-lucide="siren" class="w-4 h-4"></i>
-              Reconnaissance Immédiate
-            </button>
+            <span class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-amber-200 text-amber-900 uppercase tracking-wider whitespace-nowrap">
+              Veille COGC
+            </span>
           </div>
-        ` : ''}
+        ` : `
+          <div class="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center justify-between">
+            <span class="font-bold flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Conditions météorologiques calmes sur le secteur. Aucune préalerte préfectorale en cours.
+            </span>
+            <span class="text-[10px] font-extrabold uppercase bg-emerald-100 px-2 py-0.5 rounded-lg text-emerald-900">Normal</span>
+          </div>
+        `}
       </div>
     `;
   },

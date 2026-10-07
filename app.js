@@ -118,6 +118,7 @@ class ProtecGame {
     this.activePlanningTab = 'calendar';
     this.modalHistory = [];
     this.currentModalKey = null;
+    this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
 
     // Marqueurs Leaflet
     this.markers = {
@@ -512,6 +513,7 @@ class ProtecGame {
         samuGarde: this.samuGarde,
         sdisGarde: this.sdisGarde,
         prefectureState: this.prefectureState,
+        sncfConvention: this.sncfConvention,
         adRewards: this.adRewards
       };
       localStorage.setItem('protec_live_save_v4', JSON.stringify(state));
@@ -546,6 +548,7 @@ class ProtecGame {
           this.samuGarde = parsed.samuGarde || this.samuGarde;
           this.sdisGarde = parsed.sdisGarde || this.sdisGarde;
           this.prefectureState = parsed.prefectureState || this.prefectureState;
+          this.sncfConvention = parsed.sncfConvention || this.sncfConvention;
           this.adRewards = parsed.adRewards || null;
           if (parsed.player) this.player = parsed.player;
         }
@@ -835,6 +838,12 @@ class ProtecGame {
       let badgeHtml = '';
       if (mission.status === 'ongoing') {
         badgeHtml = `<span class="badge-counter bg-emerald-500 animate-pulse">✓</span>`;
+      } else if (mission.status === 'prealerte') {
+        badgeHtml = `<span class="badge-counter bg-amber-500 animate-ping">⏳</span>`;
+        pingClass = 'radar-ping-orange';
+      } else if (mission.status === 'declenche') {
+        badgeHtml = `<span class="badge-counter bg-red-600 animate-pulse">!</span>`;
+        pingClass = 'radar-ping-red';
       } else if (mission.status === 'planifie') {
         const isComplete = (mission.registeredVolunteers?.length || 0) >= mission.requiredVolunteers;
         badgeHtml = `<span class="badge-counter ${isComplete ? 'bg-emerald-500' : 'bg-amber-500'}">${mission.registeredVolunteers?.length || 0}/${mission.requiredVolunteers}</span>`;
@@ -1561,36 +1570,262 @@ class ProtecGame {
   }
 
   relanceVolunteers(missionId) {
+    this.launchSmsMobilization(missionId);
+  }
+
+  launchSmsMobilization(missionId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
 
-    let newlyRegistered = 0;
-    this.volunteers.forEach(vol => {
-      if (mission.registeredVolunteers.includes(vol.id)) return;
-      if (mission.registeredVolunteers.length >= mission.requiredVolunteers) return;
+    if (mission.smsCampaignActive) {
+      this.showToast('Diffusion SMS en cours', 'Une mobilisation SMS est déjà active. Les réponses des secouristes arrivent...', 'blue');
+      return;
+    }
 
-      if (vol.isBurnout) return; // Ne peut pas être relancé si en arrêt
-      if (vol.energy < 25 && vol.trait !== 'devoue') return;
+    const unassignedVols = this.volunteers.filter(v => 
+      !mission.registeredVolunteers.includes(v.id) &&
+      v.status !== 'mission' &&
+      !v.isBurnout
+    );
 
-      const boostChance = ((vol.motivation || 70) + 35) / 100;
-      if (Math.random() < boostChance) {
-        mission.registeredVolunteers.push(vol.id);
-        newlyRegistered++;
-      }
+    if (unassignedVols.length === 0) {
+      this.showToast('Aucun bénévole disponible', 'Tous vos personnels sont déjà engagés ou en repos.', 'orange');
+      return;
+    }
+
+    mission.smsCampaignActive = true;
+    mission.relancesCount = (mission.relancesCount || 0) + 1;
+
+    const urgencyTag = (mission.status === 'prealerte' || mission.status === 'declenche') ? 'Alerte Urgence' : 'Poste DPS';
+    this.showToast('Diffusion SMS Lancée', `📱 Message d'alerte [${urgencyTag}] envoyé à ${unassignedVols.length} secouriste(s). Réponses en attente...`, 'blue');
+
+    let pendingResponses = unassignedVols.length;
+
+    unassignedVols.forEach((vol) => {
+      // 1. CALCUL DU TAUX DE CHANCE DE RÉPONSE FAVORABLE (Motivation, Énergie/Fatigue, Humeur, Statut)
+      const motivation = vol.motivation !== undefined ? vol.motivation : 70;
+      const energy = vol.energy !== undefined ? vol.energy : 80;
+      const humeur = vol.humeur !== undefined ? vol.humeur : 70;
+
+      let proba = 0.20 + (motivation * 0.35 / 100) + (humeur * 0.25 / 100);
+
+      // Pénalité importante si fatigue / manque d'énergie
+      if (energy < 35) proba -= 0.40;
+      else if (energy < 60) proba -= 0.15;
+
+      // Traits de caractère
+      if (vol.trait === 'devoue') proba += 0.20;
+      if (vol.trait === 'casanier') proba -= 0.20;
+      if (vol.trait === 'ambitieux') proba += 0.10;
+
+      // Les salariés permanents ont une disponibilité contractuelle plus forte
+      if (vol.contractType === 'salarie') proba += 0.30;
+
+      // Borne de probabilité réaliste (entre 8% et 94%)
+      proba = Math.max(0.08, Math.min(0.94, proba));
+
+      // 2. CALCUL DU DÉLAI DE RÉPONSE INDIVIDUEL (Temps réaliste entre 4 et 26 secondes)
+      const baseSec = 4 + Math.random() * 14;
+      const delaySec = Math.max(3, Math.min(30, baseSec + ((100 - motivation) * 0.12) + ((100 - energy) * 0.08)));
+      const delayMs = Math.round(delaySec * 1000 / Math.max(1, this.speed || 1));
+
+      // 3. PROGRAMMATION EN ARRIÈRE-PLAN DU RETOUR SMS
+      setTimeout(() => {
+        pendingResponses--;
+        if (pendingResponses <= 0) {
+          mission.smsCampaignActive = false;
+        }
+
+        const currentMission = this.missions.find(m => m.id === missionId);
+        if (!currentMission) return;
+        if (['completed', 'canceled_favorable'].includes(currentMission.status)) return;
+
+        const isFull = currentMission.registeredVolunteers.length >= currentMission.requiredVolunteers;
+        const willAccept = !isFull && (Math.random() <= proba);
+
+        if (willAccept) {
+          currentMission.registeredVolunteers.push(vol.id);
+          this.showToast('📱 SMS Reçu : DISPO !', `${vol.name} (${vol.rank}) : « Présent ! Je me rends disponible. »`, 'green');
+        } else if (!isFull) {
+          if (Math.random() < 0.45) {
+            const reasons = ['Obligation pro', 'Contrainte familiale', 'Pas dispo ce soir', 'Besoin de repos'];
+            const r = reasons[Math.floor(Math.random() * reasons.length)];
+            this.showToast('📱 SMS Reçu : Non dispo', `${vol.name} : « Désolé, impossible (${r}) »`, 'slate');
+          }
+        }
+
+        this.saveGame();
+        this.renderMissions();
+        this.updateStatsUI();
+
+        if (this.selectedMissionId === currentMission.id) {
+          this.openMissionDetails(currentMission.id);
+        }
+      }, delayMs);
     });
 
-    mission.relancesCount = (mission.relancesCount || 0) + 1;
+    this.saveGame();
+    this.renderMissions();
+    this.updateStatsUI();
+    this.openMissionDetails(mission.id);
+  }
+
+  // --- CONVENTION PARTENAIRE RÉSEAU FERRÉ SNCF (ASSISTANCE & CHU) ---
+  signSncfConvention() {
+    if (this.volunteers.length < 3 || this.vehicles.length < 1) {
+      this.showToast('Critères Non Atteints', 'Pour signer la Convention SNCF, votre antenne doit disposer d’au moins 3 secouristes et 1 véhicule (VPSP ou VTU/VL).', 'orange');
+      return;
+    }
+
+    this.sncfConvention = {
+      signed: true,
+      signedAt: Date.now(),
+      totalInterventions: 0
+    };
+
+    this.resources.money += 400; // Dotation initiale de conventionnement
+    this.resources.reputationScore += 25;
+    this.showToast('Convention SNCF Signée !', 'Partenariat d’assistance voyageurs et CHU en gare activé (+400 € de dotation de conventionnement).', 'green');
+    this.saveGame();
+    this.updateStatsUI();
+    this.openModule('devis', true);
+  }
+
+  terminateSncfConvention() {
+    this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
+    this.showToast('Convention SNCF Résiliée', 'La convention avec la SNCF a été suspendue.', 'slate');
+    this.saveGame();
+    this.updateStatsUI();
+    this.openModule('devis', true);
+  }
+
+  triggerSncfPrealert() {
+    if (!this.sncfConvention || !this.sncfConvention.signed) return;
+
+    const activeSncf = this.missions.find(m => m.alertOrigin === 'sncf' && ['prealerte', 'declenche', 'ongoing'].includes(m.status));
+    if (activeSncf) return;
+
+    const base = this.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne' };
+    const offsetLat = (Math.random() - 0.5) * 0.035;
+    const offsetLng = (Math.random() - 0.5) * 0.035;
+
+    const sncfScenarios = [
+      {
+        title: 'Incident Réseau SNCF : TGV Bloqué en Pleine Voie & Montage CHU en Gare',
+        desc: 'Rupture de caténaire suite à de violents coups de vent. Le TGV 6742 est immobilisé en pleine voie avec 640 passagers sans électricité. La direction de crise SNCF sollicite la Protection Civile pour pré-alerte et montage possible d’un Centre d’Hébergement d’Urgence (CHU 40 lits) et distribution d’eau en gare.',
+        reqVol: 4,
+        vehs: ['VTU', 'VPSP'],
+        reward: 480
+      },
+      {
+        title: 'Panne Motrice SNCF : Prise en Charge Voyageurs & Ravitaillement CHU',
+        desc: 'Panne de motrice sur axe principal. 450 voyageurs bloqués sur le quai en soirée hivernale. Réquisition SNCF pour ravitaillement alimentaire d’urgence, couvertures isothermes et mise en place de lits de camp CHU.',
+        reqVol: 3,
+        vehs: ['VTU'],
+        reward: 420
+      }
+    ];
+
+    const pick = sncfScenarios[Math.floor(Math.random() * sncfScenarios.length)];
+
+    const newSncfMission = {
+      id: `m-sncf-${Date.now()}`,
+      type: 'crise',
+      categoryLabel: 'Convention SNCF - Assistance Voyageurs & CHU',
+      title: `[Préalerte] ${pick.title}`,
+      desc: `🟡 PRÉALERTE SNCF (Convention Partenaire) : ${pick.desc} Aucun effectif n'est pré-engagé d'avance. Lancez immédiatement la mobilisation par SMS pour recenser les secouristes disponibles.`,
+      lat: base.lat + offsetLat,
+      lng: base.lng + offsetLng,
+      scale: `Dispositif CHU SNCF (${pick.reqVol} secouristes)`,
+      eventDate: { ...this.clock, hour: this.clock.hour },
+      durationSeconds: 40 * 60,
+      durationHours: 0.7,
+      requiredVolunteers: pick.reqVol,
+      requiredRanks: ['CE', 'PSE2', 'PSE1'],
+      requiredVehicles: pick.vehs,
+      rewardMoney: pick.reward,
+      rewardReputation: 35,
+      progress: 0,
+      status: 'prealerte',
+      alertOrigin: 'sncf',
+      prealertSecondsLeft: 60,
+      prealertTotalSec: 60,
+      evolutionResolved: false,
+      registeredVolunteers: [],
+      assignedCrew: { volunteers: [], vehicles: [] }
+    };
+
+    this.missions.push(newSncfMission);
+    this.renderMissions();
+    this.updateStatsUI();
+    this.saveGame();
+
+    if (window.ProtecIncidents) {
+      window.ProtecIncidents.sendSystemNotification(
+        `🟡 PRÉALERTE SNCF RÉSEAU FERRÉ`,
+        `Incident ferroviaire en cours. Mise en veille et recensement effectifs CHU demandés par la SNCF.`,
+        `sncf-${newSncfMission.id}`
+      );
+    }
+    game.showToast('Préalerte SNCF', `Incident ferroviaire : ${pick.title} ! Mobilisez votre personnel par SMS.`, 'orange');
+  }
+
+  // --- GESTION DES ÉVOLUTIONS DES PRÉALERTES (FAVORABLE VS AGGRAVATION) ---
+  resolvePrealertFavorable(mission) {
+    mission.status = 'canceled_favorable';
+    this.resources.money += 120; // Indemnité de veille républicaine
+    this.resources.reputationScore += 10;
+
+    // Libérer les personnels qui s'étaient mobilisés
+    (mission.registeredVolunteers || []).forEach(id => {
+      const v = this.volunteers.find(vol => vol.id === id);
+      if (v) v.status = 'dispo';
+    });
+
+    const originName = mission.alertOrigin === 'sncf' ? 'la SNCF' : 'la Préfecture';
+    this.showToast('🟢 Préalerte Levée !', `Amélioration confirmée ! ${originName} lève le dispositif de veille. Merci pour votre réactivité (+120 € d’indemnité de veille, +10 réputation).`, 'green');
+
+    // Retrait de la mission après un bref délai pour laisser lire
+    setTimeout(() => {
+      const idx = this.missions.findIndex(m => m.id === mission.id);
+      if (idx !== -1) {
+        this.missions.splice(idx, 1);
+        this.renderMissions();
+        this.updateStatsUI();
+        this.saveGame();
+      }
+    }, 4500);
+
+    this.saveGame();
+    this.renderMissions();
+    this.updateStatsUI();
+    if (this.selectedMissionId === mission.id) {
+      this.closeDrawer();
+    }
+  }
+
+  resolvePrealertAggravation(mission) {
+    mission.status = 'declenche';
+    mission.title = mission.title.replace('[Préalerte] ', '[ALERTE ACTIVE] ');
+    const originName = mission.alertOrigin === 'sncf' ? 'la SNCF' : 'la Préfecture';
+
+    if (window.ProtecIncidents) {
+      window.ProtecIncidents.sendSystemNotification(
+        `🚨 PASSAGE EN ALERTE ACTIVE !`,
+        `Aggravation confirmée ! ${originName} ordonne le déploiement immédiat pour : ${mission.title}.`,
+        `alert-${mission.id}`
+      );
+    }
+
+    this.showToast('🔴 ALERTE DÉCLENCHÉE !', `Aggravation confirmée ! ${originName} ordonne le déploiement immédiat sur zone !`, 'red');
+
     this.saveGame();
     this.renderMissions();
     this.updateStatsUI();
 
-    if (newlyRegistered > 0) {
-      this.showToast('Relance réussie', `+${newlyRegistered} secouriste(s) se sont positionnés !`, 'green');
-    } else {
-      this.showToast('Aucun retour favorable', 'Tous les secouristes disponibles ont des contraintes personnelles.', 'orange');
+    if (this.selectedMissionId === mission.id) {
+      this.openMissionDetails(mission.id);
     }
-
-    this.openMissionDetails(mission.id);
   }
 
   generateStarterCandidatures() {
@@ -2012,6 +2247,43 @@ class ProtecGame {
           </div>
         </div>
 
+        ${mission.status === 'prealerte' ? `
+          <div class="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-3 shadow-sm">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-xs flex items-center gap-1.5 text-amber-900">
+                <i data-lucide="hourglass" class="w-4 h-4 text-amber-600 animate-spin"></i>
+                VEILLE PRÉFECTORALE & PRÉALERTE ÉVOLUTIVE
+              </span>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 mono-num animate-pulse">
+                ⏳ ${mission.prealertSecondsLeft || 0}s restantes
+              </span>
+            </div>
+            <p class="text-[11px] text-amber-800 leading-relaxed">
+              <strong>Zéro secouriste pré-engagé d’avance.</strong> Diffusez immédiatement la mobilisation par SMS. Les réponses arriveront au fil des secondes selon l’humeur, la fatigue et les disponibilités réelles de chacun.
+            </p>
+            <div class="w-full bg-amber-200/60 h-2 rounded-full overflow-hidden">
+              <div class="bg-amber-500 h-full rounded-full transition-all duration-300" style="width: ${Math.round(((mission.prealertTotalSec - (mission.prealertSecondsLeft || 0)) / (mission.prealertTotalSec || 60)) * 100)}%"></div>
+            </div>
+          </div>
+        ` : ''}
+
+        ${mission.status === 'declenche' ? `
+          <div class="p-4 rounded-2xl bg-red-50 border-2 border-red-400 text-red-950 space-y-2 shadow-sm animate-pulse">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-xs flex items-center gap-1.5 text-red-900">
+                <i data-lucide="siren" class="w-4 h-4 text-red-600"></i>
+                ALERTE DÉCLENCHÉE - DÉPLOIEMENT IMMÉDIAT
+              </span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-200 text-red-900">
+                URGENT
+              </span>
+            </div>
+            <p class="text-[11px] text-red-800 leading-relaxed">
+              Aggravation confirmée ! La situation exige l’engagement de vos moyens sur le terrain. Complétez l’équipage et déclenchez le départ sans retard pour préserver la réputation de l’antenne.
+            </p>
+          </div>
+        ` : ''}
+
         ${mission.status === 'ongoing' ? `
           ${mission.currentIncident ? `
             <div class="p-3.5 rounded-2xl bg-orange-50 border-2 border-pc-orange text-xs shadow-sm flex items-center justify-between gap-2 animate-pulse">
@@ -2049,22 +2321,22 @@ class ProtecGame {
           <div class="space-y-2">
             <div class="flex items-center justify-between">
               <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">
-                Bénévoles Inscrits (${registeredVols.length} / ${mission.requiredVolunteers})
+                Effectifs Répondants (${registeredVols.length} / ${mission.requiredVolunteers})
               </h4>
               <div class="flex gap-2">
                 <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="text-xs font-extrabold text-indigo-600 hover:underline flex items-center gap-1" title="Faire appel aux autres joueurs et antennes alliées">
                   <i data-lucide="users" class="w-3.5 h-3.5"></i>
                   Renfort Alliance
                 </button>
-                <button onclick="window.game.relanceVolunteers('${mission.id}')" class="text-xs font-extrabold text-pc-orange hover:underline flex items-center gap-1">
+                <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="text-xs font-extrabold text-pc-orange hover:underline flex items-center gap-1">
                   <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                  Relancer
+                  ${mission.smsCampaignActive ? 'Mobilisation en cours...' : 'Mobilisation SMS'}
                 </button>
               </div>
             </div>
 
             <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-              ${registeredVols.length === 0 ? '<p class="text-xs text-amber-600 p-2.5 glass-card-amber rounded-xl">Aucun bénévole positionné pour l’instant. Lancez une relance ou demandez du renfort à vos alliés.</p>' : ''}
+              ${registeredVols.length === 0 ? '<p class="text-xs text-amber-600 p-2.5 glass-card-amber rounded-xl">Aucun secouriste n’a encore validé sa disponibilité. Cliquez sur « Mobilisation SMS » pour sonder les effectifs disponibles.</p>' : ''}
               ${registeredVols.map(v => `
                 <div class="p-2.5 rounded-xl glass-card flex items-center justify-between text-xs">
                   <div class="flex items-center gap-2">
@@ -2083,7 +2355,41 @@ class ProtecGame {
       </div>
     `;
 
-    if (mission.status === 'planifie') {
+    if (mission.status === 'prealerte') {
+      footer.innerHTML = `
+        <button onclick="window.game.closeDrawer()" class="px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
+        <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-pc-orange text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5" ${mission.smsCampaignActive ? 'disabled' : ''}>
+          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          ${mission.smsCampaignActive ? 'Diffusion SMS en cours...' : '📱 Mobilisation SMS'}
+        </button>
+        <button onclick="window.game.registerSalarieToMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1" title="Inscrire d'office un salarié permanent">
+          <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> + Salarié
+        </button>
+        <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-blue-50 text-pc-blue hover:bg-blue-100 transition flex items-center gap-1" title="Demander renforts aux antennes alliées">
+          <i data-lucide="handshake" class="w-3.5 h-3.5"></i> Alliances
+        </button>
+      `;
+    } else if (mission.status === 'declenche') {
+      footer.innerHTML = `
+        <button onclick="window.game.closeDrawer()" class="px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
+        <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition flex items-center gap-1">
+          <i data-lucide="bell" class="w-3.5 h-3.5"></i> SMS
+        </button>
+        <button onclick="window.game.registerSalarieToMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1">
+          <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> + Salarié
+        </button>
+        ${isComplete ? `
+          <button onclick="window.game.launchScheduledMission('${mission.id}')" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-lg shadow-red-600/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 animate-pulse">
+            <i data-lucide="siren" class="w-4 h-4"></i>
+            🚨 Engager & Partir
+          </button>
+        ` : `
+          <div class="flex-1 px-3 py-2 rounded-xl text-center text-[10px] font-black bg-red-100 text-red-900 border border-red-300">
+            Manque ${mission.requiredVolunteers - registeredVols.length} secouriste(s)
+          </div>
+        `}
+      `;
+    } else if (mission.status === 'planifie') {
       const isComplete = registeredVols.length >= mission.requiredVolunteers;
       footer.innerHTML = `
         <button onclick="window.game.closeDrawer()" class="px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
@@ -2948,6 +3254,47 @@ class ProtecGame {
                   <i data-lucide="file-check-2" class="w-3.5 h-3.5"></i>
                   ${this.grants?.municipalDossierSubmitted ? 'Dossier Déposé ✓' : 'Déposer Dossier Mairie'}
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section Convention Partenaire SNCF (Assistance Voyageurs & CHU) -->
+          <div class="p-4 rounded-2xl ${this.sncfConvention?.signed ? 'glass-card-blue border-blue-300' : 'glass-card border-slate-200'} shadow-sm space-y-3 border">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl ${this.sncfConvention?.signed ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'} flex items-center justify-center font-black text-lg shadow-sm">
+                  🚆
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h4 class="text-xs font-black text-slate-900 uppercase">Convention Partenaire SNCF (Assistance Voyageurs & CHU)</h4>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${this.sncfConvention?.signed ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">
+                      ${this.sncfConvention?.signed ? 'Convention Signée ✓' : 'Non Signée'}
+                    </span>
+                  </div>
+                  <p class="text-[11px] text-slate-600 mt-0.5">
+                    Partenariat de crise avec le groupe SNCF Réseau pour l'assistance aux voyageurs en cas de trains bloqués, rupture caténaire et déploiement de Centres d’Hébergement d’Urgence (CHU) en gare.
+                  </p>
+                  <div class="flex flex-wrap gap-3 mt-1.5 text-[10px] text-slate-500 font-bold">
+                    <span>Dotation initiale : <strong class="text-emerald-700 font-mono">+400 €</strong></span>
+                    <span>•</span>
+                    <span>Indemnité de veille : <strong class="text-emerald-700 font-mono">+120 € / levée</strong></span>
+                    <span>•</span>
+                    <span>Prestation CHU : <strong class="text-emerald-700 font-mono">+420 à +480 €</strong></span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                ${this.sncfConvention?.signed ? `
+                  <button onclick="window.game.terminateSncfConvention(); window.game.openModule('devis', true);" class="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 transition border border-rose-200">
+                    Résilier
+                  </button>
+                ` : `
+                  <button onclick="window.game.signSncfConvention(); window.game.openModule('devis', true);" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5">
+                    <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i>
+                    Signer la Convention SNCF (+400 €)
+                  </button>
+                `}
               </div>
             </div>
           </div>
@@ -4215,6 +4562,24 @@ class ProtecGame {
         });
       }
 
+      // 1c. GESTION DES PRÉALERTES ÉVOLUTIVES (Météo / SNCF / Préfecture)
+      this.missions.forEach(m => {
+        if (m.status === 'prealerte') {
+          if (typeof m.prealertSecondsLeft === 'number') {
+            m.prealertSecondsLeft--;
+            if (m.prealertSecondsLeft <= 0) {
+              // Fin du compte à rebours de veille préfectorale : arbitrage évolutif
+              // 35% d'évolution favorable (levée d'alerte, indemnité) vs 65% d'aggravation (déclenchement opérationnel immédiat)
+              if (Math.random() < 0.35) {
+                this.resolvePrealertFavorable(m);
+              } else {
+                this.resolvePrealertAggravation(m);
+              }
+            }
+          }
+        }
+      });
+
       // 2. Vérification des incidents rares et variés en mission (toutes les 4 secondes)
       if (this.clock.second % 4 === 0 && window.ProtecIncidents) {
         window.ProtecIncidents.checkOngoingMissions(this);
@@ -4252,6 +4617,15 @@ class ProtecGame {
             }
           }
         });
+      }
+
+      // 3d. Déclenchement périodique d'incident réseau ferré SNCF (si Convention signée)
+      if (this.clock.second === 20 && this.clock.minute % 10 === 0) {
+        if (this.stations.length > 0 && this.sncfConvention && this.sncfConvention.signed) {
+          if (Math.random() < 0.35) {
+            this.triggerSncfPrealert();
+          }
+        }
       }
 
       // 4. Sollicitations spontanées des organisateurs locaux (toutes les 2 à 3 minutes selon popularité & pub)
@@ -4312,7 +4686,7 @@ class ProtecGame {
 
       if (this.selectedMissionId) {
         const cur = this.missions.find(m => m.id === this.selectedMissionId);
-        if (cur && cur.status === 'ongoing') {
+        if (cur && (cur.status === 'ongoing' || cur.status === 'prealerte')) {
           this.openMissionDetails(cur.id);
         }
       }
