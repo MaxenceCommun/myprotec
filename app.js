@@ -146,6 +146,9 @@ class ProtecGame {
     if (window.ProtecAds) {
       window.ProtecAds.init(this);
     }
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.init(this);
+    }
   }
 
   openAuthModal() {
@@ -1472,6 +1475,16 @@ class ProtecGame {
     this.devis.push(d);
     this.updateStatsUI();
     this.saveGame();
+
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.notifyCategory(
+        'dps',
+        `📬 Nouvelle Demande de DPS`,
+        `${pick.client} vous sollicite pour « ${pick.name} » (${pick.scale}). Consultez et validez le devis !`,
+        `dps-${d.id}`
+      );
+    }
+
     this.showToast('Nouvelle Demande Organisateur', `« ${pick.name} » (${pick.scale}) vous a sollicité pour un devis.`, 'blue');
   }
 
@@ -1983,7 +1996,14 @@ class ProtecGame {
     this.updateStatsUI();
     this.saveGame();
 
-    if (window.ProtecIncidents) {
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.notifyCategory(
+        'weather',
+        `🟡 PRÉALERTE CONVENTION SNCF`,
+        `Incident ferroviaire : ${pick.title}. Mobilisation des effectifs et montage CHU demandés par la SNCF !`,
+        `sncf-${newSncfMission.id}`
+      );
+    } else if (window.ProtecIncidents) {
       window.ProtecIncidents.sendSystemNotification(
         `🟡 PRÉALERTE SNCF RÉSEAU FERRÉ`,
         `Incident ferroviaire en cours. Mise en veille et recensement effectifs CHU demandés par la SNCF.`,
@@ -5172,7 +5192,14 @@ class ProtecGame {
     this.updateStatsUI();
     this.saveGame();
 
-    if (window.ProtecIncidents) {
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.notifyCategory(
+        'samu',
+        `🚑 DÉPART RÉFLEXE SAMU 15`,
+        `${pick.title} à proximité de ${base.name}. VPSP demandé en urgence !`,
+        `samu-${newSamu.id}`
+      );
+    } else if (window.ProtecIncidents) {
       window.ProtecIncidents.sendSystemNotification(
         `🚑 DÉPART RÉFLEXE SAMU 15`,
         `${pick.title} à proximité de ${base.name}. VPSP demandé !`,
@@ -5517,7 +5544,14 @@ class ProtecGame {
     this.updateStatsUI();
     this.saveGame();
 
-    if (window.ProtecIncidents) {
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.notifyCategory(
+        'sdis',
+        `🚒 DÉPART POMPIERS IMMÉDIAT (CODIS)`,
+        `${pick.title} : Équipage VPSP en caserne sonné pour départ réflexe !`,
+        `sdis-${newSdis.id}`
+      );
+    } else if (window.ProtecIncidents) {
       window.ProtecIncidents.sendSystemNotification(
         `🚨 DÉPART POMPIERS IMMÉDIAT`,
         `${pick.title} ! Équipage VPSP en caserne sonné par le CODIS !`,
@@ -5587,8 +5621,17 @@ class ProtecGame {
       role: p.role,
       skills: p.skills,
       isTrainer: p.isTrainer,
-      exp: p.exp
     });
+
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.notifyCategory(
+        'rh',
+        '👥 Nouvelle Candidature Bénévole !',
+        `${p.n} (${p.rank} • ${p.j}) souhaite intégrer votre antenne. Planifiez son entretien d'intégration !`,
+        `cand-${Date.now()}`
+      );
+    }
+
     this.showToast('Nouvelle Candidature', `${p.n} (${p.j} • ${p.rank}) souhaite intégrer votre antenne.`, 'blue');
     this.updateStatsUI();
   }

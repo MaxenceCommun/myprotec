@@ -1,0 +1,25 @@
+{
+  "name": "MyProtec - Simulateur Protection Civile",
+  "short_name": "MyProtec",
+  "description": "Simulateur opérationnel de la Protection Civile : DPS, urgences SAMU 15, gardes pompiers et gestion d'antenne.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e3a8a",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "logo_myprotec_icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo_myprotec.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "simulation"]
+}

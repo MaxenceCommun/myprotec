@@ -1399,6 +1399,15 @@ window.ProtecPersonnel = {
     offer.applicantsCount = (offer.applicantsCount || 0) + 1;
     game.candidatures.unshift(newCand);
 
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.notifyCategory(
+        'rh',
+        '📄 Nouvelle Candidature Salariée Reçue !',
+        `${newCand.name} (${newCand.rank}) a postulé à l’offre « ${offer.title} ». Planifiez son entretien d'embauche !`,
+        `rh-${newCand.id}`
+      );
+    }
+
     game.showToast(
       '📄 Candidature Salariée Reçue !',
       `${newCand.name} (${newCand.rank}) a postulé à l’offre « ${offer.title} » (${offer.contractType}). Faites-lui passer un entretien !`,

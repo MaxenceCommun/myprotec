@@ -774,7 +774,14 @@ window.ProtecSystems = {
     game.updateStatsUI();
     game.saveGame();
 
-    if (window.ProtecIncidents) {
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.notifyCategory(
+        'weather',
+        `⚠️ PRÉALERTE PRÉFECTURE (${game.weather.vigilance.toUpperCase()})`,
+        `Vigilance Météo active. La Préfecture demande la pré-mobilisation d'une équipe : ${missionDef.title}. Lancez la mobilisation par SMS !`,
+        `meteo-${newWeatherMission.id}`
+      );
+    } else if (window.ProtecIncidents) {
       window.ProtecIncidents.sendSystemNotification(
         `🟡 PRÉALERTE PRÉFECTURALE (${game.weather.vigilance.toUpperCase()})`,
         `Vigilance Intempéries active. La Préfecture demande la pré-mobilisation d'une équipe pour : ${missionDef.title}. Lancez vos SMS !`,

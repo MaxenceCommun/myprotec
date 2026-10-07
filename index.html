@@ -38,9 +38,11 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-  <!-- Custom Styles -->
+  <!-- Custom Styles & PWA Manifest -->
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" type="image/png" href="logo_myprotec_icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1e3a8a">
 </head>
 <body class="h-full w-full overflow-hidden bg-slate-100 font-sans text-slate-800 antialiased select-none">
 
@@ -228,6 +230,12 @@
           </div>
         </div>
 
+        <!-- Push Notifications Widget (Desktop) -->
+        <button id="push-notif-btn" onclick="window.ProtecNotifications.openSettingsModal()" class="glass-panel p-2 rounded-2xl text-slate-500 hover:text-pc-orange hover:bg-white/90 transition shadow-sm relative group" title="Centre de Notifications Push & Alertes">
+          <i data-lucide="bell" id="push-notif-icon" class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+          <span id="push-notif-badge" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-300 border-2 border-white"></span>
+        </button>
+
         <!-- Mentions Légales & Confidentialité RGPD / AdSense -->
         <button onclick="window.ProtecPrivacy.openModal()" class="glass-panel p-2 rounded-2xl text-slate-500 hover:text-pc-blue hover:bg-white/90 transition shadow-sm group" title="Mentions Légales, Cookies & Politique de Confidentialité AdSense">
           <i data-lucide="shield-check" class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
@@ -251,6 +259,12 @@
         <button onclick="window.ProtecAds.openAdModal(window.game)" class="glass-panel px-2 py-1.5 rounded-xl flex items-center gap-1 text-amber-600 font-extrabold text-xs shadow-sm active:scale-95 transition" title="Publicité (+500 € virtuels)">
           <span class="text-xs">📺</span>
           <span id="ad-count-badge-mobile" class="text-[9px] font-black bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded">5/5</span>
+        </button>
+
+        <!-- Notifications Mobile -->
+        <button onclick="window.ProtecNotifications.openSettingsModal()" class="glass-panel p-2 rounded-xl text-slate-500 active:scale-95 transition shadow-sm relative" title="Notifications Push">
+          <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+          <span id="push-notif-badge-mobile" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-300 border-2 border-white"></span>
         </button>
 
         <!-- Horloge Mobile -->
@@ -858,6 +872,7 @@
   <script src="js/auth.js"></script>
   <script src="js/privacy.js"></script>
   <script src="js/ads.js"></script>
+  <script src="js/notifications.js"></script>
   <script src="js/incidents.js"></script>
   <script src="js/personnel.js"></script>
   <script src="js/poles.js"></script>
