@@ -484,19 +484,19 @@
     </div>
   </div>
 
-  <!-- MODAL AUTHENTIFICATION & COMPTE BDD -->
-  <div id="auth-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in">
+  <!-- MODAL AUTHENTIFICATION OBLIGATOIRE MULTIJOUEUR -->
+  <div id="auth-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/85 backdrop-blur-xl p-4 animate-in fade-in">
     <div class="w-full max-w-md rounded-3xl glass-panel-heavy border border-white/80 p-6 shadow-2xl relative">
       <!-- Header -->
       <div class="flex items-center justify-between pb-4 border-b border-slate-200/60 mb-4">
         <div class="flex items-center gap-3">
           <img src="logo_protection_civile.png" alt="Protection Civile" class="w-10 h-10 object-contain drop-shadow-md rounded-full bg-white p-0.5" />
           <div>
-            <h3 class="text-base font-black text-slate-900">Espace Directeur d'Antenne</h3>
-            <p class="text-[11px] text-slate-500 font-semibold">Sauvegarde Cloud & Base de Données</p>
+            <h3 class="text-base font-black text-slate-900" id="auth-modal-title">Connexion Multijoueur</h3>
+            <p class="text-[11px] text-slate-500 font-semibold" id="auth-modal-subtitle">Protection Civile • Réseau National</p>
           </div>
         </div>
-        <button onclick="window.ProtecAuth.closeAuthModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
+        <button id="auth-modal-close-btn" onclick="window.ProtecAuth.closeAuthModal()" class="hidden w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 items-center justify-center transition">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>

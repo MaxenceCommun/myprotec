@@ -19,7 +19,30 @@ const MIME_TYPES = {
 const gameState = {
   players: {}, // En mémoire vive pour le statut connecté / lastSeen
   get alliances() { return db.data.alliances; },
-  get allianceStations() { return db.data.allianceStations; },
+  get allianceStations() {
+    const list = [...db.data.allianceStations];
+    // Fusionner les antennes de tous les joueurs en ligne
+    Object.values(this.players).forEach(p => {
+      if (p && p.stations && Array.isArray(p.stations)) {
+        p.stations.forEach(st => {
+          list.push({
+            id: st.id,
+            playerId: p.id,
+            playerName: p.name || 'Directeur d’Antenne',
+            name: st.name,
+            city: st.city,
+            lat: st.lat,
+            lng: st.lng,
+            level: st.level || 1,
+            vehicles: st.vehiclesCount || 1,
+            volunteers: st.volunteersCount || 4,
+            allianceId: p.allianceId || 'alliance-fnpc'
+          });
+        });
+      }
+    });
+    return list;
+  },
   get renforts() { return db.data.renforts; },
   get formationsSpeciales() { return db.data.formationsSpeciales; },
   get chatMessages() { return db.data.chatMessages; }
