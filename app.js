@@ -99,6 +99,9 @@ class ProtecGame {
     if (window.ProtecAdvanced) {
       window.ProtecAdvanced.injectAdvancedState(this);
     }
+    if (window.ProtecPersonnel) {
+      window.ProtecPersonnel.injectPersonnelState(this);
+    }
     this.init();
     this.initMultiplayer();
     if (window.ProtecAuth) {
@@ -1007,10 +1010,15 @@ class ProtecGame {
       if (mission.registeredVolunteers.includes(vol.id)) return;
       if (mission.registeredVolunteers.length >= mission.requiredVolunteers) return;
 
-      const isAvailableThisDay = vol.dispoJours.includes(mission.eventDate.dayName);
-      if (!isAvailableThisDay) return;
+      if (window.ProtecPersonnel) {
+        const dispoCheck = window.ProtecPersonnel.calculateAvailability(vol, this);
+        if (!dispoCheck.available) return;
+      } else {
+        const isAvailableThisDay = vol.dispoJours?.includes(mission.eventDate?.dayName);
+        if (!isAvailableThisDay) return;
+      }
 
-      const chance = vol.motivation / 100;
+      const chance = (vol.motivation || 70) / 100;
       if (Math.random() < chance) {
         mission.registeredVolunteers.push(vol.id);
       }
@@ -1029,7 +1037,10 @@ class ProtecGame {
       if (mission.registeredVolunteers.includes(vol.id)) return;
       if (mission.registeredVolunteers.length >= mission.requiredVolunteers) return;
 
-      const boostChance = (vol.motivation + 35) / 100;
+      if (vol.isBurnout) return; // Ne peut pas être relancé si en arrêt
+      if (vol.energy < 25 && vol.trait !== 'devoue') return;
+
+      const boostChance = ((vol.motivation || 70) + 35) / 100;
       if (Math.random() < boostChance) {
         mission.registeredVolunteers.push(vol.id);
         newlyRegistered++;
@@ -1135,6 +1146,26 @@ class ProtecGame {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
 
+    // Vérification stricte des Agréments de Sécurité Civile officiels
+    if (this.resources.agrements) {
+      if (mission.type === 'samu' && !this.resources.agrements.A) {
+        this.showToast('Agrément Manquant', 'L’Agrément A (SAMU 15) est obligatoire pour les départs réflexes ! Obtenez-le dans le pôle Recrutement.', 'orange');
+        return;
+      }
+      if (mission.type === 'social' && !this.resources.agrements.B) {
+        this.showToast('Agrément Manquant', 'L’Agrément B (Action Sociale) est obligatoire pour les maraudes ! Obtenez-le dans le pôle Recrutement.', 'orange');
+        return;
+      }
+      if (mission.type === 'crise' && !this.resources.agrements.C) {
+        this.showToast('Agrément Manquant', 'L’Agrément C (Soutien Sinistrés / NOVI) est requis pour les catastrophes ! Obtenez-le dans le pôle Recrutement.', 'orange');
+        return;
+      }
+      if (mission.type === 'dps' && !this.resources.agrements.D) {
+        this.showToast('Agrément Manquant', 'L’Agrément D (Dispositifs de Secours) est requis pour les DPS ! Obtenez-le dans le pôle Recrutement.', 'orange');
+        return;
+      }
+    }
+
     if (mission.registeredVolunteers.length < mission.requiredVolunteers) {
       this.showToast('Effectif incomplet', `Il manque encore ${mission.requiredVolunteers - mission.registeredVolunteers.length} secouriste(s). Pensez à demander un renfort d'alliance !`, 'orange');
       return;
@@ -1207,6 +1238,14 @@ class ProtecGame {
     mission.assignedCrew.volunteers.forEach(v => {
       v.status = 'dispo';
       v.exp += 15;
+      if (window.ProtecPersonnel) {
+        const result = window.ProtecPersonnel.applyMissionExertion(v, mission);
+        if (result && result.burnout) {
+          this.showToast('Alerte Surmenage / Burnout', `${v.name} est épuisé(e) et placé(e) en repos obligatoire (30 min).`, 'red');
+        }
+      } else {
+        v.energy = Math.max(10, (v.energy || 80) - 15);
+      }
     });
     mission.assignedCrew.vehicles.forEach(veh => {
       veh.status = 'dispo';
@@ -2141,12 +2180,112 @@ class ProtecGame {
             </div>
           </div>
 
+          <!-- Section Statuts & Recrutement RH (Bénévoles, Services Civiques, Salariés) -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200/80 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-black text-slate-800">Bénévoles</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">0 € / mois</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Cœur associatif. Disponibilités variables selon le profil (parents, étudiants, actifs).</p>
+              </div>
+              <div class="text-[11px] font-extrabold text-pc-blue">
+                Effectif : ${this.volunteers.filter(v => (v.contractType || 'benevole') === 'benevole').length} membres
+              </div>
+            </div>
+
+            <div class="p-3.5 rounded-2xl glass-card border border-amber-200/80 bg-amber-50/30 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-black text-amber-900">Services Civiques</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">115 € / mois</span>
+                </div>
+                <p class="text-[11px] text-amber-700 mt-1">Engagement jeune 24-35h/semaine. Très grande disponibilité opérationnelle.</p>
+              </div>
+              <div class="flex items-center justify-between pt-1">
+                <span class="text-[11px] font-extrabold text-amber-900">
+                  Actifs : ${this.volunteers.filter(v => v.contractType === 'service_civique').length}
+                </span>
+                <button onclick="window.ProtecPersonnel.hireServiceCivique(window.game)" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition">
+                  + Recruter (250 €)
+                </button>
+              </div>
+            </div>
+
+            <div class="p-3.5 rounded-2xl glass-card border border-indigo-200/80 bg-indigo-50/30 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-black text-indigo-900">Salariés Permanents</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">2 200 € / mois</span>
+                </div>
+                <p class="text-[11px] text-indigo-700 mt-1">Cadres 35h formateurs et coordinateurs. Disponibilité quasi-permanente (95%).</p>
+              </div>
+              <div class="flex items-center justify-between pt-1">
+                <span class="text-[11px] font-extrabold text-indigo-900">
+                  Actifs : ${this.volunteers.filter(v => v.contractType === 'salarie').length}
+                </span>
+                <button onclick="window.ProtecPersonnel.hireSalarie(window.game)" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
+                  + Embaucher (1 200 €)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section Agréments de Sécurité Civile Officiels (A, B, C, D) -->
+          <div class="p-4 rounded-2xl glass-card border border-slate-200/80 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="text-xs font-black uppercase text-slate-800 tracking-wider">Agréments de Sécurité Civile (Ministère & Préfecture)</h4>
+                <p class="text-[11px] text-slate-500">Habilitations officielles obligatoires pour déverrouiller les types de missions.</p>
+              </div>
+              <span class="text-xs font-extrabold text-pc-blue">
+                ${Object.values(this.resources.agrements || {}).filter(Boolean).length} / 4 Actifs
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              ${(window.ProtecPersonnel?.agrementsCatalog || []).map(agr => {
+                const isOwned = this.resources.agrements && this.resources.agrements[agr.code];
+                return `
+                  <div class="p-3.5 rounded-2xl border ${isOwned ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white/80 border-slate-200'} flex flex-col justify-between space-y-2">
+                    <div class="space-y-1">
+                      <div class="flex items-center justify-between">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${isOwned ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}">
+                          ${agr.category}
+                        </span>
+                        <span class="text-xs font-extrabold ${isOwned ? 'text-emerald-700' : 'mono-num text-slate-700'}">
+                          ${isOwned ? 'VALIDÉ ✓' : agr.cost + ' €'}
+                        </span>
+                      </div>
+                      <h5 class="text-xs font-black text-slate-900">${agr.title}</h5>
+                      <p class="text-[11px] text-slate-500">${agr.desc}</p>
+                      <div class="text-[10px] font-extrabold ${isOwned ? 'text-emerald-800' : 'text-pc-blue'}">
+                        Débloque : ${agr.unlocks}
+                      </div>
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-100 flex justify-end">
+                      ${isOwned ? `
+                        <span class="text-[11px] font-black text-emerald-600">Audit Conforme</span>
+                      ` : `
+                        <button onclick="window.ProtecPersonnel.purchaseAgrement(window.game, '${agr.code}')" class="px-3.5 py-1.5 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light text-white shadow-sm transition">
+                          Déposer Dossier Préfecture (${agr.cost} €)
+                        </button>
+                      `}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
           <!-- Section Vie Associative & Cohésion d'Antenne -->
           <div class="p-4 rounded-2xl glass-card space-y-3">
             <div class="flex items-center justify-between">
               <div>
-                <h4 class="text-xs font-extrabold text-indigo-900">Vie Associative & Fidélisation</h4>
-                <p class="text-[11px] text-indigo-700">Préservez l'énergie de vos secouristes et organisez des moments conviviaux.</p>
+                <h4 class="text-xs font-extrabold text-indigo-900">Vie Associative & Cohésion d’Équipe</h4>
+                <p class="text-[11px] text-indigo-700">Préservez l'énergie, remontez le moral et évitez les surmenages / burnouts.</p>
               </div>
               <div class="flex flex-wrap gap-2">
                 <button onclick="window.game.openModule('competences')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-purple-600 text-white hover:bg-purple-700 shadow transition flex items-center gap-1">
@@ -2154,7 +2293,7 @@ class ProtecGame {
                   Habilitations & Bureau
                 </button>
                 <button onclick="window.ProtecSystems.organizeTeamEvent(window.game, 'bbq')" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-indigo-600 text-white hover:bg-indigo-700 shadow transition">
-                  🍖 Barbecue (150 €)
+                  🍖 Barbecue Convivial (150 €)
                 </button>
                 <button onclick="window.ProtecSystems.organizeTeamEvent(window.game, 'recyclage')" class="px-3 py-1.5 rounded-xl text-xs font-bold glass-button text-indigo-700 transition">
                   🎓 Recyclage FC PSE
@@ -2162,37 +2301,66 @@ class ProtecGame {
               </div>
             </div>
 
-            <!-- Liste des secouristes en activité -->
+            <!-- Liste détaillée des secouristes en activité -->
             <div class="space-y-2 pt-2 border-t border-indigo-100/70">
-              <span class="text-[10px] font-black uppercase text-indigo-900 tracking-wider">Effectif de l'Antenne (${this.volunteers.length})</span>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+              <span class="text-[10px] font-black uppercase text-indigo-900 tracking-wider">Effectif Détaillé de l'Antenne (${this.volunteers.length})</span>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
                 ${this.volunteers.map(v => {
                   const energy = v.energy !== undefined ? v.energy : 85;
-                  const moral = v.moral !== undefined ? v.moral : 90;
-                  const isRecycled = v.recycledYear >= this.clock.year;
+                  const motivation = v.motivation !== undefined ? v.motivation : 80;
+                  const humeurScore = v.humeur !== undefined ? v.humeur : 80;
+                  const humeur = window.ProtecPersonnel ? window.ProtecPersonnel.getHumeurLabel(humeurScore) : { label: 'Neutre', icon: '🙂' };
+                  const contractLabel = v.contractType === 'salarie' ? 'Salarié Permanent' : (v.contractType === 'service_civique' ? 'Service Civique' : 'Bénévole');
+                  const trait = window.ProtecPersonnel?.traits[v.trait] || { name: 'Secouriste standard' };
 
                   return `
-                    <div class="p-2.5 rounded-xl glass-card text-xs space-y-1.5">
+                    <div class="p-3 rounded-2xl glass-card text-xs space-y-2 ${v.isBurnout ? 'border-2 border-red-400 bg-red-50/40' : ''}">
                       <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-1.5">
-                          <span>${v.avatar || '⛑️'}</span>
-                          <span class="font-bold text-slate-900 truncate max-w-[110px]">${v.name}</span>
+                        <div class="flex items-center gap-2">
+                          <span class="text-xl">${v.avatar || '⛑️'}</span>
+                          <div>
+                            <div class="font-black text-slate-900 leading-tight">${v.name}</div>
+                            <div class="text-[10px] text-slate-500 font-semibold">${v.rank} • ${contractLabel}</div>
+                          </div>
                         </div>
-                        <span class="px-1.5 py-0.2 rounded text-[9px] font-extrabold ${isRecycled ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
-                          ${isRecycled ? 'FC ' + this.clock.year + ' ✓' : 'À Recycler'}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${v.isBurnout ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-100 text-slate-700'}">
+                          ${v.isBurnout ? 'BURNOUT / REPOS' : v.status.toUpperCase()}
                         </span>
                       </div>
-                      <div class="grid grid-cols-2 gap-2 text-[10px]">
+
+                      <div class="text-[10px] text-slate-500 flex items-center justify-between">
+                        <span>Profil : <strong>${v.dispoType || 'Disponible'}</strong></span>
+                        <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-bold">${trait.name}</span>
+                      </div>
+
+                      <div class="grid grid-cols-3 gap-2 text-[10px] pt-1 border-t border-slate-100">
                         <div>
-                          <span class="text-slate-400">Énergie : ${energy}%</span>
+                          <div class="flex justify-between text-slate-500 mb-0.5">
+                            <span>Énergie</span>
+                            <strong class="${energy < 30 ? 'text-red-600' : 'text-slate-700'}">${energy}%</strong>
+                          </div>
                           <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
                             <div class="h-full rounded-full ${energy < 30 ? 'bg-red-500' : 'bg-emerald-500'}" style="width: ${energy}%"></div>
                           </div>
                         </div>
+
                         <div>
-                          <span class="text-slate-400">Moral : ${moral}%</span>
+                          <div class="flex justify-between text-slate-500 mb-0.5">
+                            <span>Motivation</span>
+                            <strong class="text-slate-700">${motivation}%</strong>
+                          </div>
                           <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
-                            <div class="h-full rounded-full bg-pc-blue" style="width: ${moral}%"></div>
+                            <div class="h-full rounded-full bg-pc-blue" style="width: ${motivation}%"></div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div class="flex justify-between text-slate-500 mb-0.5">
+                            <span>Humeur</span>
+                            <span class="text-slate-700">${humeur.icon}</span>
+                          </div>
+                          <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full bg-amber-500" style="width: ${humeurScore}%"></div>
                           </div>
                         </div>
                       </div>
@@ -2617,13 +2785,18 @@ class ProtecGame {
         this.updateStatsUI();
       }
 
-      // 8. Régénération progressive de l'énergie des secouristes au repos
+      // 8. Régénération avancée de l'énergie, moral et gestion du burnout au repos
       if (this.clock.second === 0 && this.clock.minute % 2 === 0) {
-        this.volunteers.forEach(v => {
-          if (v.status === 'dispo' && v.energy < 100) {
-            v.energy = Math.min(100, (v.energy || 80) + 3);
-          }
-        });
+        if (window.ProtecPersonnel) {
+          window.ProtecPersonnel.applyRestCycle(this);
+          window.ProtecPersonnel.processSalariesAndStipends(this);
+        } else {
+          this.volunteers.forEach(v => {
+            if (v.status === 'dispo' && v.energy < 100) {
+              v.energy = Math.min(100, (v.energy || 80) + 3);
+            }
+          });
+        }
       }
 
       this.updateClockUI();
