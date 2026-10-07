@@ -72,6 +72,33 @@ class ProtecGame {
       totalInterventions: 0
     };
 
+    // Garde Caserne Pompiers (SDIS / BSPP) & Astreinte Domicile (Violences urbaines / Débordements)
+    this.sdisGarde = {
+      active: false,
+      eventName: null,
+      eventReason: null,
+      eventSeverity: 'normal',
+      caserneCrewCountRequested: 0,
+      astreinteCrewCountRequested: 0,
+      caserneCrew: [],     // Volontaires postés en caserne prêts au départ réflexe VPSP
+      astreinteCrew: [],   // Volontaires en astreinte domicile prêts à être rappelés
+      vehicleId: null,
+      startedAt: null,
+      durationHours: 6,
+      endsAt: null,
+      stateSatisfaction: 100, // 0 - 100 % (Notoriété auprès des services de l'État / Préfecture)
+      sanctionWarnings: 0,
+      agrementSuspended: false,
+      logInterventions: []
+    };
+
+    // Confiance Préfectorale & Notoriété Services de l'État
+    this.prefectureState = {
+      trustScore: 85, // 0 à 100
+      agrementSuspended: false,
+      warningsCount: 0
+    };
+
     // Données opérationnelles
     this.stations = [];
     this.vehicles = [];
@@ -479,8 +506,9 @@ class ProtecGame {
         radioLogs: this.radioLogs,
         rewards: this.rewards,
         bureau: this.bureau,
-        manoeuvres: this.manoeuvres,
         samuGarde: this.samuGarde,
+        sdisGarde: this.sdisGarde,
+        prefectureState: this.prefectureState,
         adRewards: this.adRewards
       };
       localStorage.setItem('protec_live_save_v4', JSON.stringify(state));
@@ -513,6 +541,8 @@ class ProtecGame {
           this.bureau = parsed.bureau || this.bureau;
           this.manoeuvres = parsed.manoeuvres || this.manoeuvres;
           this.samuGarde = parsed.samuGarde || this.samuGarde;
+          this.sdisGarde = parsed.sdisGarde || this.sdisGarde;
+          this.prefectureState = parsed.prefectureState || this.prefectureState;
           this.adRewards = parsed.adRewards || null;
           if (parsed.player) this.player = parsed.player;
         }
@@ -677,27 +707,69 @@ class ProtecGame {
 
     sel.innerHTML = window.ProtecDepartements.list.map(d => `
       <option value="${d.code}" ${d.code === this.currentDepartmentCode ? 'selected' : ''}>
-        ${d.code} - ${d.name}
+        ${d.code} - ${d.name} ${d.code === this.currentDepartmentCode ? '⭐ (Mon Antenne)' : ''}
       </option>
     `).join('');
   }
 
-  changeDepartment(deptCode) {
+  // Permet d'explorer / observer un autre département sur la carte SANS changer l'affectation de l'antenne
+  inspectDepartment(deptCode) {
     if (!window.ProtecDepartements) return;
     const dept = window.ProtecDepartements.getByCode(deptCode);
     if (!dept) return;
 
-    this.currentDepartmentCode = dept.code;
-    this.player.departmentCode = dept.code;
-    localStorage.setItem('protec_department_code', dept.code);
-
+    // Déplacement de la caméra Leaflet pour visualiser le département
     this.map.flyTo([dept.lat, dept.lng], dept.zoom, { duration: 1.5 });
-    
-    const topName = document.getElementById('top-current-station-name');
-    if (topName) topName.textContent = `${dept.name} (${dept.code})`;
 
-    this.showToast('Département Sélectionné', `Vue centrée sur le département ${dept.name} (${dept.code}).`, 'blue');
-    this.saveGame();
+    const myDeptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
+    const isOtherDept = (dept.code !== myDeptCode);
+
+    // Mise à jour de la bannière visuelle d'observation
+    const banner = document.getElementById('inspect-dept-banner');
+    const returnBtn = document.getElementById('btn-return-my-antenna');
+    const nameEl = document.getElementById('inspect-dept-name');
+    const myCodeEl = document.getElementById('inspect-my-dept-code');
+
+    if (banner && nameEl && myCodeEl) {
+      if (isOtherDept) {
+        nameEl.textContent = `${dept.name} (${dept.code})`;
+        myCodeEl.textContent = myDeptCode;
+        banner.classList.remove('hidden');
+        if (returnBtn) returnBtn.classList.remove('hidden');
+        this.showToast('Mode Observation', `Consultation du département ${dept.name} (${dept.code}). Votre antenne reste affectée en ${myDeptCode}.`, 'blue');
+      } else {
+        banner.classList.add('hidden');
+        if (returnBtn) returnBtn.classList.add('hidden');
+      }
+    }
+  }
+
+  // Recentre la carte immédiatement sur l'antenne ou le département officiel du joueur
+  returnToMyAntenna() {
+    const myDeptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
+    const dept = window.ProtecDepartements ? window.ProtecDepartements.getByCode(myDeptCode) : null;
+
+    if (this.stations.length > 0) {
+      this.map.flyTo([this.stations[0].lat, this.stations[0].lng], 13, { duration: 1.2 });
+    } else if (dept) {
+      this.map.flyTo([dept.lat, dept.lng], dept.zoom, { duration: 1.2 });
+    }
+
+    // Réinitialise le sélecteur d'exploration sur notre propre département
+    const sel = document.getElementById('department-selector');
+    if (sel) sel.value = myDeptCode;
+
+    const banner = document.getElementById('inspect-dept-banner');
+    const returnBtn = document.getElementById('btn-return-my-antenna');
+    if (banner) banner.classList.add('hidden');
+    if (returnBtn) returnBtn.classList.add('hidden');
+
+    this.showToast('Mon Antenne', `Retour à votre antenne d'affectation (${myDeptCode}).`, 'blue');
+  }
+
+  // Alias rétro-compatible si appelé ailleurs
+  changeDepartment(deptCode) {
+    this.inspectDepartment(deptCode);
   }
 
   renderStations() {
@@ -744,6 +816,8 @@ class ProtecGame {
       let iconName = 'shield-alert';
 
       if (mission.type === 'samu') { colorClass = 'bg-pc-orange'; pingClass = 'radar-ping-orange'; iconName = 'activity'; }
+      else if (mission.type === 'pompiers') { colorClass = 'bg-red-700'; pingClass = 'radar-ping-red'; iconName = 'flame'; }
+      else if (mission.type === 'meteo') { colorClass = 'bg-sky-600'; pingClass = 'radar-ping-blue'; iconName = 'cloud-lightning'; }
       else if (mission.type === 'social') { colorClass = 'bg-purple-600'; pingClass = 'radar-ping-purple'; iconName = 'heart-handshake'; }
       else if (mission.type === 'crise') { colorClass = 'bg-red-600'; pingClass = 'radar-ping-red'; iconName = 'siren'; }
 
@@ -804,7 +878,7 @@ class ProtecGame {
     document.getElementById('map').style.cursor = '';
   }
 
-  confirmAntennaPlacement(latlng) {
+  async confirmAntennaPlacement(latlng) {
     if (this.stations.length >= 1) {
       this.showToast('Action impossible', 'Vous possédez déjà votre antenne départementale.', 'orange');
       this.cancelAntennaPlacement();
@@ -826,6 +900,48 @@ class ProtecGame {
       }
     }
 
+    // 2. Détermination de la commune ou de l'arrondissement via l'API Adresse officielle
+    let detectedCity = `Secteur ${deptCode}`;
+    let detectedCityCode = deptCode;
+    try {
+      const res = await fetch(`https://api-adresse.data.gouv.fr/reverse/?lon=${latlng.lng}&lat=${latlng.lat}`);
+      const data = await res.json();
+      if (data.features && data.features.length > 0) {
+        const props = data.features[0].properties;
+        // Pour Paris, Lyon, Marseille : privilégier l'arrondissement (district ou nom spécifique)
+        detectedCity = props.district || props.city || `Secteur ${deptCode}`;
+        detectedCityCode = props.citycode || deptCode;
+      }
+    } catch (e) {
+      // Fallback
+    }
+
+    // 3. Contrôle de la règle : UNE SEULE ANTENNE PAR VILLE / ARRONDISSEMENT
+    const allKnownStations = [...(this.stations || []), ...(this.allianceStations || [])];
+    const isOccupied = allKnownStations.some(st => {
+      if (st.city && st.city.toLowerCase() === detectedCity.toLowerCase()) return true;
+      if (st.citycode && st.citycode === detectedCityCode) return true;
+      // Contrôle de proximité physique (< 2.2 km) pour couvrir les centres urbains et arrondissements
+      if (st.lat && st.lng) {
+        const distKm = Math.sqrt(Math.pow(st.lat - latlng.lat, 2) + Math.pow((st.lng - latlng.lng) * Math.cos(latlng.lat * Math.PI / 180), 2)) * 111;
+        if (distKm < 2.2) return true;
+      }
+      return false;
+    });
+
+    if (isOccupied) {
+      this.showToast(
+        'Secteur Déjà Couvert !',
+        `Une antenne de la Protection Civile est déjà implantée à « ${detectedCity} ». La réglementation n’autorise qu’une seule antenne par ville ou arrondissement !`,
+        'orange'
+      );
+      if (this.tempPlacementMarker) {
+        this.map.removeLayer(this.tempPlacementMarker);
+        this.tempPlacementMarker = null;
+      }
+      return;
+    }
+
     const cost = 2500;
     if (this.resources.money < cost) {
       this.showToast('Trésorerie insuffisante', `Il vous faut ${cost} € de trésorerie pour implanter l'antenne.`, 'orange');
@@ -833,8 +949,10 @@ class ProtecGame {
       return;
     }
 
-    // Sauvegarde temporaire des coordonnées
+    // Sauvegarde temporaire des coordonnées et informations de localisation
     this.pendingPlacementLatLng = latlng;
+    this.pendingPlacementCity = detectedCity;
+    this.pendingPlacementCityCode = detectedCityCode;
 
     // Création ou déplacement du repère temporaire visuel
     if (this.tempPlacementMarker) {
@@ -861,11 +979,13 @@ class ProtecGame {
     const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
     const isMainAntenna = this.player.deptRole === 'antenne_principale';
     const stationName = isMainAntenna 
-      ? `Antenne Principale (${deptCode})` 
-      : `Antenne Territoriale ${this.player.name} (${deptCode})`;
+      ? `Antenne de ${detectedCity} (Principale ${deptCode})` 
+      : `Antenne de ${detectedCity} (${deptCode})`;
+
+    this.pendingPlacementName = stationName;
 
     const deptEl = document.getElementById('placement-val-dept');
-    if (deptEl) deptEl.textContent = `${deptInfo?.name || deptCode} (${deptCode})`;
+    if (deptEl) deptEl.textContent = `${deptInfo?.name || deptCode} (${deptCode}) • ${detectedCity}`;
     const nameEl = document.getElementById('placement-val-name');
     if (nameEl) nameEl.textContent = stationName;
     const coordsEl = document.getElementById('placement-val-coords');
@@ -901,15 +1021,16 @@ class ProtecGame {
     this.resources.money -= cost;
     const stationId = `station-${Date.now()}`;
     const isMainAntenna = this.player.deptRole === 'antenne_principale';
-    const stationName = isMainAntenna 
+    const stationName = this.pendingPlacementName || (isMainAntenna 
       ? `Antenne Principale (${deptCode})` 
-      : `Antenne Territoriale ${this.player.name} (${deptCode})`;
+      : `Antenne Territoriale ${this.player.name} (${deptCode})`);
 
     const newStation = {
       id: stationId,
       name: stationName,
       departmentCode: deptCode,
-      city: deptCode,
+      city: this.pendingPlacementCity || deptCode,
+      citycode: this.pendingPlacementCityCode || deptCode,
       lat: latlng.lat,
       lng: latlng.lng,
       isMain: isMainAntenna,
@@ -967,6 +1088,11 @@ class ProtecGame {
     this.updateStatsUI();
     this.saveGame();
     this.syncPlayerToServer();
+
+    // Actualisation météo réelle immédiate au point exact de l'antenne nouvellement créée
+    if (window.ProtecSystems) {
+      window.ProtecSystems.fetchRealWeather(this, true);
+    }
 
     this.showToast('Antenne Inaugurée !', `${stationName} est ouverte. Un premier devis de la mairie vous attend !`, 'green');
     this.openStationDetails(stationId);
@@ -1027,6 +1153,7 @@ class ProtecGame {
     if (this.stations.length === 0) return;
     const base = this.stations[Math.floor(Math.random() * this.stations.length)];
     const cap = this.calculatePlayerCapacity ? this.calculatePlayerCapacity() : { tier: 1 };
+    const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
 
     // L'accès aux tailles de dispositifs et aux sollicitations dépend de la réputation de l'antenne
     const rep = this.resources.reputationScore || 0;
@@ -1039,32 +1166,62 @@ class ProtecGame {
     if (allowedTier === 1) {
       // Débutant (PAPS : 2 à 3 secouristes, durées 2h à 4h)
       eventsList = [
-        { name: 'Cross du Collège Pasteur', client: 'Éducation Nationale', cType: 'association', dur: 3, pub: '450 élèves', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [] },
-        { name: 'Brocante de Quartier des Berges', client: 'Comité des Fêtes', cType: 'association', dur: 4, pub: '1 200 chineurs', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [] },
-        { name: 'Tournoi Minimes de Handball', client: 'Club Omnisports', cType: 'club_sportif', dur: 3, pub: '600 personnes', scale: 'PAPS (3 secouristes)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: cap.vpspCount > 0 ? ['VPSP'] : [] },
-        { name: 'Fête de Quartier & Olympiades', client: 'Maison de Quartier', cType: 'association', dur: 4, pub: '800 habitants', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [] }
+        { name: 'Cross du Collège Pasteur', client: 'Éducation Nationale', cType: 'association', dur: 3, pub: '450 élèves', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 },
+        { name: 'Brocante de Quartier des Berges', client: 'Comité des Fêtes', cType: 'association', dur: 4, pub: '1 200 chineurs', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 },
+        { name: 'Tournoi Minimes de Handball', client: 'Club Omnisports', cType: 'club_sportif', dur: 3, pub: '600 personnes', scale: 'PAPS (3 secouristes)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: cap.vpspCount > 0 ? ['VPSP'] : [], hiddenMin: 3, hiddenSkills: ['PSE2'], matCost: 20 },
+        { name: 'Fête de Quartier & Olympiades', client: 'Maison de Quartier', cType: 'association', dur: 4, pub: '800 habitants', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 }
       ];
     } else if (allowedTier === 2) {
       // Opérationnel (DPS-PE : 4 à 6 secouristes, 1 VPSP, durées 4h à 6h)
       eventsList = [
-        { name: 'Course Nocturne des 10 km', client: 'Athlétic Club Régional', cType: 'association', dur: 5, pub: '2 500 coureurs', scale: 'DPS-PE (4 secouristes + VPSP)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
-        { name: 'Feu d’Artifice & Bal Républicain', client: 'Mairie', cType: 'collectivite', dur: 4, pub: '3 500 spectateurs', scale: 'DPS-PE (5 secouristes + VPSP)', reqV: 5, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
-        { name: 'Tournoi Régional de Judo', client: 'Ligue Régionale', cType: 'club_sportif', dur: 6, pub: '1 500 judokas & public', scale: 'DPS-PE (4 secouristes)', reqV: 4, ranks: ['PSE2', 'PSE1'], reqVeh: ['VPSP'] }
+        { name: 'Course Nocturne des 10 km', client: 'Athlétic Club Régional', cType: 'association', dur: 5, pub: '2 500 coureurs', scale: 'DPS-PE (4 secouristes + VPSP)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 4, hiddenSkills: ['CE'], matCost: 35 },
+        { name: 'Feu d’Artifice & Bal Républicain', client: 'Mairie', cType: 'collectivite', dur: 4, pub: '3 500 spectateurs', scale: 'DPS-PE (5 secouristes + VPSP)', reqV: 5, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 5, hiddenSkills: ['CE', 'PSE2'], matCost: 40 },
+        { name: 'Tournoi Régional de Judo', client: 'Ligue Régionale', cType: 'club_sportif', dur: 6, pub: '1 500 judokas & public', scale: 'DPS-PE (4 secouristes)', reqV: 4, ranks: ['PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 4, hiddenSkills: ['PSE2'], matCost: 30 }
       ];
+
+      // Prise en compte de l'environnement territorial réel
+      // 1. Départements du Sud / Boisés (Feux de forêts, patrouilles préventives)
+      if (['13', '83', '06', '30', '34', '84', '20', '2A', '2B', '40', '33', '11', '66'].includes(deptCode)) {
+        eventsList.push({ name: 'Patrouille Préventive Massif Boisé', client: 'Préfecture & DFCI', cType: 'collectivite', dur: 5, pub: 'Secteur Boisé', scale: 'DPS-PE (4 secouristes + VTU)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VTU', 'VPSP'], hiddenMin: 4, hiddenSkills: ['CE'], matCost: 30 });
+      }
+
+      // 2. Villes universitaires (Soirées étudiantes et galas récurrents le jeudi/vendredi soir)
+      if (['75', '69', '13', '31', '59', '33', '35', '34', '67', '38', '44', '49', '86', '76', '14'].includes(deptCode)) {
+        eventsList.push({ name: 'Gala Annuel & Nuit des Étudiants', client: 'BDE Fédéral Universitaire', cType: 'association', dur: 6, pub: '3 200 étudiants', scale: 'DPS-PE (5 secouristes + VPSP)', reqV: 5, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 6, hiddenSkills: ['CE', 'PSE2'], matCost: 45 });
+      }
+
+      // 3. Zéniths et grandes salles de spectacles
+      if (['75', '93', '92', '69', '13', '31', '59', '67', '44', '33', '83', '76', '21', '63', '45'].includes(deptCode)) {
+        eventsList.push({ name: 'Concert Populaire au Zénith', client: 'Production Spectacles', cType: 'professionnel', dur: 5, pub: '5 500 spectateurs', scale: 'DPS-PE (6 secouristes + VPSP)', reqV: 6, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 6, hiddenSkills: ['CE'], matCost: 45 });
+      }
     } else {
       // Confirmé / Grand Dispositif (DPS-ME / GE : 6 à 12 secouristes, 1 à 2 VPSP)
       eventsList = [
-        { name: 'Festival Musical de Plein Air', client: 'Collectif Festif', cType: 'professionnel', dur: 8, pub: '6 000 festivaliers', scale: 'DPS-ME (8 secouristes + 2 VPSP)', reqV: 8, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
-        { name: 'Triathlon Départemental', client: 'Fédération Triathlon', cType: 'association', dur: 7, pub: '4 000 participants', scale: 'DPS-ME (6 secouristes + VPSP + VTU)', reqV: 6, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
-        { name: 'Rencontre Nationale de Rugby', client: 'Stade Municipal', cType: 'professionnel', dur: 5, pub: '8 500 supporters', scale: 'DPS-ME (10 secouristes + 2 VPSP)', reqV: 10, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] }
+        { name: 'Festival Musical de Plein Air', client: 'Collectif Festif', cType: 'professionnel', dur: 8, pub: '6 000 festivaliers', scale: 'DPS-ME (8 secouristes + 2 VPSP)', reqV: 8, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 8, hiddenSkills: ['CD', 'CE'], matCost: 65 },
+        { name: 'Triathlon Départemental', client: 'Fédération Triathlon', cType: 'association', dur: 7, pub: '4 000 participants', scale: 'DPS-ME (6 secouristes + VPSP + VTU)', reqV: 6, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 6, hiddenSkills: ['CE', 'PSE2'], matCost: 55 },
+        { name: 'Rencontre Nationale de Rugby', client: 'Stade Municipal', cType: 'professionnel', dur: 5, pub: '8 500 supporters', scale: 'DPS-ME (10 secouristes + 2 VPSP)', reqV: 10, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 10, hiddenSkills: ['CE', 'PSE2'], matCost: 70 }
       ];
+
+      // Matchs de championnat tous les 15 jours dans les stades majeurs
+      if (['75', '93', '92', '13', '69', '59', '31', '33', '44', '06', '67', '35', '42', '51', '29', '34', '57', '76'].includes(deptCode)) {
+        eventsList.push({ name: 'Match de Championnat au Grand Stade', client: 'Club Professionnel de Football', cType: 'professionnel', dur: 5, pub: '18 000 supporters', scale: 'DPS-ME (8 secouristes + 2 VPSP)', reqV: 8, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'], hiddenMin: 8, hiddenSkills: ['CE', 'PSE2'], matCost: 75 });
+      }
+
+      // Secteur aéroportuaire majeur
+      if (['75', '93', '95', '94', '91', '31', '06', '33', '69', '44', '59'].includes(deptCode)) {
+        eventsList.push({ name: 'Meeting Aérien & Aéro-Show', client: 'Aéroport & Direction Sécurité', cType: 'professionnel', dur: 8, pub: '12 000 spectateurs', scale: 'DPS-GE (10 secouristes + 2 VPSP + VTU)', reqV: 10, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP', 'VTU'], hiddenMin: 10, hiddenSkills: ['CD', 'CE'], matCost: 85 });
+      }
     }
 
     const pick = eventsList[Math.floor(Math.random() * eventsList.length)];
     const offsetLat = (Math.random() - 0.5) * 0.035;
     const offsetLng = (Math.random() - 0.5) * 0.035;
     const daysAhead = 1 + Math.floor(Math.random() * 4);
-    const eventDate = this.createDateOffset(daysAhead, 14);
+    const startHour = (pick.name.includes('Nocturne') || pick.name.includes('Concert') || pick.name.includes('Gala') || pick.name.includes('Étudiants')) ? 19 : 14;
+    const endHour = (startHour + pick.dur) % 24;
+    const eventDate = this.createDateOffset(daysAhead, startHour);
+    eventDate.startHour = startHour;
+    eventDate.endHour = endHour;
 
     const d = {
       id: `dev-${Date.now()}`,
@@ -1080,6 +1237,10 @@ class ProtecGame {
       requiredVolunteers: pick.reqV,
       requiredRanks: pick.ranks,
       requiredVehicles: pick.reqVeh,
+      // Informations cachées au joueur
+      hiddenMinVolunteers: pick.hiddenMin || pick.reqV,
+      hiddenRequiredSkills: pick.hiddenSkills || pick.ranks || [],
+      consumableCost: pick.matCost || 30,
       status: 'pending'
     };
 
@@ -1208,12 +1369,22 @@ class ProtecGame {
       lng: devis.lng,
       scale: devis.scale,
       eventDate: devis.eventDate,
+      durationHours: devis.durationHours,
+      startHour: devis.eventDate.startHour || devis.eventDate.hour,
+      endHour: devis.eventDate.endHour || ((devis.eventDate.hour + devis.durationHours) % 24),
       duration: devis.durationHours * 10,
+      durationSeconds: Math.round(devis.durationHours * 3600),
       requiredVolunteers: devis.requiredVolunteers,
       requiredRanks: devis.requiredRanks,
       requiredVehicles: devis.requiredVehicles,
       rewardMoney: devis.proposedPrice,
       rewardReputation: 25,
+      // Critères cachés de conformité
+      hiddenMinVolunteers: devis.hiddenMinVolunteers || devis.requiredVolunteers,
+      hiddenRequiredSkills: devis.hiddenRequiredSkills || devis.requiredRanks || [],
+      consumableCost: devis.consumableCost || 30,
+      clientName: devis.clientName,
+      clientType: devis.clientType,
       progress: 0,
       status: 'planifie',
       registeredVolunteers: [],
@@ -1235,11 +1406,11 @@ class ProtecGame {
       if (mission.registeredVolunteers.length >= mission.requiredVolunteers) return;
 
       if (window.ProtecPersonnel) {
-        const dispoCheck = window.ProtecPersonnel.calculateAvailability(vol, this);
+        const dispoCheck = window.ProtecPersonnel.calculateAvailability(vol, this, mission);
         if (!dispoCheck.available) return;
       } else {
         const isAvailableThisDay = vol.dispoJours?.includes(mission.eventDate?.dayName);
-        if (!isAvailableThisDay) return;
+        if (!isAvailableThisDay && Math.random() > 0.15) return;
       }
 
       const chance = (vol.motivation || 70) / 100;
@@ -1295,17 +1466,27 @@ class ProtecGame {
         motivation: 'Je souhaite m’engager pour me former aux gestes d’urgence et aider ma ville.',
         dispoJours: ['Samedi', 'Dimanche'],
         dispoType: 'étudiant',
-        avatar: '🙋‍♂️'
+        avatar: '🙋‍♂️',
+        rank: 'Stagiaire',
+        role: 'Bénévole Stagiaire',
+        skills: ['PSC1'],
+        exp: 5,
+        isTrainer: false
       },
       {
         id: `cand-${Date.now()}-2`,
         name: 'Julie Rousseau',
         age: 31,
         job: 'Infirmière libérale',
-        motivation: 'Titulaire AFGSU, je veux rejoindre les équipes de secours pour apporter mon soutien sur le terrain.',
+        motivation: 'Titulaire AFGSU et PSE2, je veux rejoindre les équipes de secours pour apporter mon soutien sur le terrain.',
         dispoJours: ['Vendredi', 'Samedi', 'Dimanche'],
         dispoType: 'salarié',
-        avatar: '👩‍⚕️'
+        avatar: '👩‍⚕️',
+        rank: 'PSE2',
+        role: 'Équipier Secouriste',
+        skills: ['PSE2', 'AFGSU', 'formateur'],
+        exp: 50,
+        isTrainer: true
       }
     ];
   }
@@ -1337,25 +1518,32 @@ class ProtecGame {
 
     this.candidatures = this.candidatures.filter(c => c.id !== candId);
 
+    const initialRank = cand.rank || (cand.skills?.includes('PSE2') ? 'PSE2' : (cand.skills?.includes('PSE1') ? 'PSE1' : 'Stagiaire'));
+    const initialRole = cand.role || (initialRank === 'CE' ? 'Chef d’Équipe' : (initialRank === 'PSE2' ? 'Équipier Secouriste' : (initialRank === 'PSE1' ? 'Secouriste' : 'Bénévole Stagiaire')));
+    const initialExp = cand.exp !== undefined ? cand.exp : (initialRank === 'CE' ? 80 : (initialRank === 'PSE2' ? 45 : (initialRank === 'PSE1' ? 20 : 0)));
+
     const newVol = {
       id: `vol-${Date.now()}`,
       name: cand.name,
-      role: 'Bénévole Stagiaire',
-      rank: 'Stagiaire',
-      exp: 0,
+      role: initialRole,
+      rank: initialRank,
+      exp: initialExp,
       status: 'dispo',
       stationId: stationId || this.stations[0]?.id,
-      isTrainer: false,
+      isTrainer: !!cand.isTrainer,
       avatar: cand.avatar,
       dispoType: cand.dispoType,
       dispoJours: cand.dispoJours,
-      motivation: 85
+      motivation: cand.motivationScore || 85,
+      skills: cand.skills || [initialRank],
+      energy: 90,
+      humeur: 85
     };
 
     this.volunteers.push(newVol);
     this.updateStatsUI();
     this.saveGame();
-    this.showToast('Bénévole intégré !', `${cand.name} a signé sa charte d'engagement !`, 'green');
+    this.showToast('Bénévole intégré !', `${cand.name} (${initialRank}${cand.isTrainer ? ' • Formateur' : ''}) a signé sa charte d'engagement !`, 'green');
     this.openModule('recrutement');
   }
 
@@ -1390,9 +1578,29 @@ class ProtecGame {
       }
     }
 
+    // Cas spécifique des interventions pompiers (Garde SDIS)
+    if (mission.type === 'pompiers') {
+      if (this.sdisGarde && this.sdisGarde.active) {
+        // Remplir l'équipage avec la garde caserne postée
+        const caserneIds = this.sdisGarde.caserneCrew || [];
+        if (caserneIds.length > 0 && mission.registeredVolunteers.length === 0) {
+          mission.registeredVolunteers = [...caserneIds];
+        }
+      }
+    }
+
     if (mission.registeredVolunteers.length < mission.requiredVolunteers) {
-      this.showToast('Effectif incomplet', `Il manque encore ${mission.requiredVolunteers - mission.registeredVolunteers.length} secouriste(s). Pensez à demander un renfort d'alliance !`, 'orange');
+      this.showToast('Effectif incomplet', `Il manque encore ${mission.requiredVolunteers - mission.registeredVolunteers.length} secouriste(s). Pensez à demander un renfort d'alliance ou rappeler votre astreinte !`, 'orange');
       return;
+    }
+
+    // Contrôle des compétences exigées (CE / PSE2)
+    const requiredRanks = mission.requiredRanks || [];
+    const crewVols = mission.registeredVolunteers.map(vid => this.volunteers.find(v => v.id === vid)).filter(Boolean);
+    const hasRequiredSkills = requiredRanks.every(rankReq => crewVols.some(v => v.rank === rankReq || (rankReq === 'PSE1' && ['PSE2', 'CE', 'CD', 'Cadre'].includes(v.rank))));
+    
+    if (!hasRequiredSkills && mission.type === 'pompiers') {
+      this.applyPrefectureSanction('Équipage déployé sans les qualifications obligatoires (Absence de Chef d’Équipe ou PSE)', 12);
     }
 
     const crew = [];
@@ -1408,7 +1616,15 @@ class ProtecGame {
 
     const assignedVehicles = [];
     if (mission.requiredVehicles.length > 0) {
-      const dispoVeh = this.vehicles.find(veh => veh.status === 'dispo' && mission.requiredVehicles.includes(veh.type));
+      // Pour les pompiers, privilégier le VPSP armé en caserne
+      let dispoVeh = null;
+      if (mission.type === 'pompiers' && this.sdisGarde && this.sdisGarde.vehicleId) {
+        dispoVeh = this.vehicles.find(v => v.id === this.sdisGarde.vehicleId);
+      }
+      if (!dispoVeh) {
+        dispoVeh = this.vehicles.find(veh => (veh.status === 'dispo' || veh.status === 'sdis_caserne') && mission.requiredVehicles.includes(veh.type));
+      }
+
       if (dispoVeh) {
         dispoVeh.status = 'mission';
         dispoVeh.fuel = Math.max(10, (dispoVeh.fuel || 90) - 12);
@@ -1459,8 +1675,78 @@ class ProtecGame {
       this.grants.totalVolunteerHours = (this.grants.totalVolunteerHours || 0) + (hoursDone * (mission.assignedCrew?.volunteers?.length || 2));
     }
 
-    mission.assignedCrew.volunteers.forEach(v => {
-      v.status = 'dispo';
+    const crew = mission.assignedCrew?.volunteers || [];
+    const vehicles = mission.assignedCrew?.vehicles || [];
+
+    // 1. ÉVALUATION CACHÉE SPÉCIFIQUE DES DPS ÉVÉNEMENTIELS
+    if (mission.type === 'dps') {
+      const minReq = mission.hiddenMinVolunteers || mission.requiredVolunteers || 2;
+      const hasLeader = crew.some(v => ['CE', 'CD', 'Cadre'].includes(v.rank));
+      const isUnderstaffed = crew.length < minReq;
+      const isUnderqualified = (mission.scale?.includes('ME') || mission.scale?.includes('GE') || minReq >= 5) && !hasLeader;
+
+      // Déduction du coût des consommables pour l'antenne (pansements, compresses, O2)
+      const consumableCost = mission.consumableCost || (mission.scale?.includes('ME') ? 60 : 25);
+      this.resources.money = Math.max(0, this.resources.money - consumableCost);
+
+      if (isUnderstaffed || isUnderqualified) {
+        // Catastrophe opérationnelle !
+        const repLoss = 18;
+        this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 50) - repLoss);
+
+        // Baisse sévère de motivation des secouristes présents
+        crew.forEach(v => {
+          v.motivation = Math.max(10, (v.motivation || 70) - 30);
+          v.humeur = Math.max(10, (v.humeur || 70) - 32);
+        });
+
+        // Risque de démission d'un bénévole dégoûté par le sous-effectif
+        const disgusted = crew.find(v => v.motivation < 35 && v.contractType === 'benevole');
+        if (disgusted) {
+          this.volunteers = this.volunteers.filter(v => v.id !== disgusted.id);
+          this.showToast('Démission d’un Bénévole', `${disgusted.name} a démissionné de la Protection Civile, épuisé(e) et dégoûté(e) du sous-dimensionnement sur « ${mission.title} ».`, 'red');
+        }
+
+        this.showToast(
+          'Catastrophe sur le DPS !',
+          `Dispositif sous-dimensionné (${crew.length}/${minReq} requis) ou sans encadrement sur « ${mission.title} » ! Secouristes débordés, organisateur furieux et réputation en baisse (-${repLoss} pts).`,
+          'red'
+        );
+      } else {
+        // Succès éclatant : Gain de réputation progressif et dégressif (plus la réputation est haute, moins elle monte vite)
+        const currentRep = this.resources.reputationScore || 0;
+        const repGain = Math.max(2, Math.round(18 * (1 - (currentRep / 2200))));
+        this.resources.reputationScore = currentRep + repGain;
+
+        // Bénévoles fiers et motivés
+        crew.forEach(v => {
+          v.motivation = Math.min(100, (v.motivation || 75) + 6);
+          v.humeur = Math.min(100, (v.humeur || 75) + 6);
+        });
+
+        this.showToast(
+          'Bilan Organisateur : Parfait !',
+          `L’organisateur de « ${mission.title} » est comblé par le professionnalisme de vos secouristes (+${repGain} popularité, -${consumableCost} € consommables).`,
+          'green'
+        );
+      }
+    } else {
+      this.resources.reputationScore += mission.rewardReputation || 15;
+      this.showToast('Dispositif terminé', `« ${mission.title} » clôturé (+${mission.rewardMoney} €) !`, 'green');
+    }
+
+    // 2. PRISE EN CHARGE DU PÔLE SOCIAL LORS D'UNE MARAUDE
+    if (mission.type === 'social' && window.ProtecSocial) {
+      window.ProtecSocial.onMaraudeCompleted(this, 4);
+    }
+
+    // 3. RETOUR DES PERSONNELS ET FATIGUE
+    crew.forEach(v => {
+      if (mission.type === 'pompiers' && this.sdisGarde && this.sdisGarde.active && this.sdisGarde.caserneCrew.includes(v.id)) {
+        v.status = 'sdis_caserne';
+      } else {
+        v.status = 'dispo';
+      }
       v.exp += 15;
       if (window.ProtecPersonnel) {
         const result = window.ProtecPersonnel.applyMissionExertion(v, mission);
@@ -1471,25 +1757,46 @@ class ProtecGame {
         v.energy = Math.max(10, (v.energy || 80) - 15);
       }
     });
-    mission.assignedCrew.vehicles.forEach(veh => {
-      veh.status = 'dispo';
+
+    // 4. RETOUR DES VÉHICULES, RÉARMEMENT ET USURE SELON LE MORAL
+    const avgMoral = crew.length > 0 ? (crew.reduce((sum, v) => sum + (v.motivation || 70), 0) / crew.length) : 70;
+    vehicles.forEach(veh => {
+      if (mission.type === 'pompiers' && this.sdisGarde && this.sdisGarde.active && veh.id === this.sdisGarde.vehicleId) {
+        veh.status = 'sdis_caserne';
+      } else {
+        veh.status = 'dispo';
+      }
+
+      // Nécessite un réarmement de matériel avant de repartir
+      veh.needsRearming = true;
+      veh.fuel = Math.max(10, (veh.fuel || 90) - 15);
+
+      // Usure mécanique : Des bénévoles en forme et motivés prennent plus soin du matériel
+      const wearRate = avgMoral >= 80 ? 2 : (avgMoral < 50 ? 8 : 4);
+      veh.mechanical = Math.max(10, (veh.mechanical || 95) - wearRate);
+
+      if (avgMoral < 45 && Math.random() < 0.22) {
+        veh.isBrokenDown = true;
+        this.showToast('Panne Véhicule', `${veh.name} est tombé en panne mécanique suite à une mauvaise manipulation en mission ! Révision garage requise.`, 'red');
+      }
     });
 
     // Consommation de matériel de secours
     if (window.ProtecSystems) {
-      if (mission.type === 'samu') window.ProtecSystems.consumeSupply(this, 'oxygenBottles', 1);
+      if (mission.type === 'samu' || mission.type === 'pompiers') window.ProtecSystems.consumeSupply(this, 'oxygenBottles', 1);
       else window.ProtecSystems.consumeSupply(this, 'woundKits', 1);
     }
 
-    this.resources.money += mission.rewardMoney;
-    this.resources.reputationScore += mission.rewardReputation;
+    if (mission.type === 'pompiers' && this.prefectureState) {
+      this.prefectureState.trustScore = Math.min(100, (this.prefectureState.trustScore || 85) + 3);
+    }
+
+    this.resources.money += mission.rewardMoney || 0;
 
     this.renderStations();
     this.renderMissions();
     this.updateStatsUI();
     this.saveGame();
-
-    this.showToast('Dispositif terminé', `« ${mission.title} » clôturé (+${mission.rewardMoney} €) !`, 'green');
 
     if (this.selectedMissionId === mission.id) {
       this.openMissionDetails(mission.id);
@@ -1637,15 +1944,28 @@ class ProtecGame {
     `;
 
     if (mission.status === 'planifie') {
+      const isComplete = registeredVols.length >= mission.requiredVolunteers;
       footer.innerHTML = `
-        <button onclick="window.game.closeDrawer()" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
-        <button onclick="window.game.relanceVolunteers('${mission.id}')" class="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition">
-          Alerte SMS
+        <button onclick="window.game.closeDrawer()" class="px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
+        <button onclick="window.game.relanceVolunteers('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition flex items-center gap-1" title="Relancer les bénévoles par message">
+          <i data-lucide="bell" class="w-3.5 h-3.5"></i> SMS
         </button>
-        <button onclick="window.game.launchScheduledMission('${mission.id}')" class="flex-1 px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-lg shadow-pc-blue/20 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
-          <i data-lucide="play" class="w-4 h-4"></i>
-          Faire Partir
+        <button onclick="window.game.registerSalarieToMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1" title="Inscrire d'office un salarié permanent">
+          <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> + Salarié
         </button>
+        <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-blue-50 text-pc-blue hover:bg-blue-100 transition flex items-center gap-1" title="Demander renforts aux antennes alliées">
+          <i data-lucide="handshake" class="w-3.5 h-3.5"></i> Alliances
+        </button>
+        ${isComplete ? `
+          <button onclick="window.game.launchScheduledMission('${mission.id}')" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-lg shadow-pc-blue/20 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5">
+            <i data-lucide="play" class="w-3.5 h-3.5"></i>
+            Départ Anticipé
+          </button>
+        ` : `
+          <div class="flex-1 px-3 py-2 rounded-xl text-center text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200">
+            Manque ${mission.requiredVolunteers - registeredVols.length} secouriste(s)
+          </div>
+        `}
       `;
     } else {
       footer.innerHTML = `
@@ -1656,6 +1976,23 @@ class ProtecGame {
     drawer.classList.remove('hidden');
     drawer.classList.add('flex', 'drawer-slide-in');
     if (window.lucide) window.lucide.createIcons();
+  }
+
+  registerSalarieToMission(missionId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const availableSalaries = this.volunteers.filter(v => (v.contractType === 'salarie' || v.dispoType === 'salarié' || v.dispoType === 'salarie_permanent') && !mission.registeredVolunteers.includes(v.id) && v.status === 'dispo');
+    if (availableSalaries.length === 0) {
+      this.showToast('Aucun Salarié Libre', 'Tous vos salariés sont déjà mobilisés ou vous n’avez pas encore embauché de salarié dans le Pôle Recrutement.', 'orange');
+      return;
+    }
+    const sal = availableSalaries[0];
+    mission.registeredVolunteers.push(sal.id);
+    this.showToast('Salarié Affecté d’Office', `${sal.name} (${sal.rank}) a été positionné sur le dispositif par la direction de l'antenne.`, 'green');
+    this.saveGame();
+    this.renderMissions();
+    this.updateStatsUI();
+    this.openMissionDetails(missionId);
   }
 
   requestAllianceRenfortForMission(missionId) {
@@ -2426,11 +2763,22 @@ class ProtecGame {
             <div class="space-y-3">
               ${this.candidatures.map(cand => `
                 <div class="p-4 rounded-2xl glass-card space-y-3">
-                  <div class="flex items-center gap-2.5">
-                    <span class="text-2xl">${cand.avatar}</span>
-                    <div>
-                      <h5 class="text-sm font-extrabold text-slate-900">${cand.name} (${cand.age} ans)</h5>
+                  <div class="flex items-center gap-3">
+                    <span class="text-3xl">${cand.avatar}</span>
+                    <div class="flex-1">
+                      <div class="flex items-center justify-between">
+                        <h5 class="text-sm font-extrabold text-slate-900">${cand.name} (${cand.age} ans)</h5>
+                        <div class="flex items-center gap-1.5">
+                          <span class="px-2 py-0.5 rounded text-[10px] font-black ${cand.rank && cand.rank !== 'Stagiaire' ? 'bg-pc-blue text-white' : 'bg-slate-200 text-slate-700'}">${cand.rank || 'Stagiaire'}</span>
+                          ${cand.isTrainer ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">🎓 Formateur</span>' : ''}
+                        </div>
+                      </div>
                       <p class="text-xs text-slate-500">${cand.job} • Dispo : <strong>${cand.dispoJours.join(', ')}</strong></p>
+                      ${cand.skills && cand.skills.length > 0 ? `
+                        <div class="flex flex-wrap gap-1 mt-1.5">
+                          ${cand.skills.map(s => `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">✓ ${s}</span>`).join('')}
+                        </div>
+                      ` : ''}
                     </div>
                   </div>
                   <div class="p-3 rounded-xl glass-card text-xs text-slate-700 italic">
@@ -2741,73 +3089,283 @@ class ProtecGame {
           </div>
         </div>
       `;
-    } else if (moduleKey === 'social') {
-      title.textContent = 'Pôle Action Sociale & Solidarité';
-      subtitle.textContent = 'Maraudes de nuit et écoute pour les personnes vulnérables';
-      icon.setAttribute('data-lucide', 'heart-handshake');
+    } else if (moduleKey === 'pompiers') {
+      title.textContent = 'Garde Caserne Pompiers & Astreinte Domicile (SDIS)';
+      subtitle.textContent = 'Mise à disposition opérationnelle VPSP en caserne pompiers et équipes d’astreinte rappelables';
+      icon.setAttribute('data-lucide', 'flame');
 
-      const socialMissions = this.missions.filter(m => m.type === 'social');
+      const sdis = this.sdisGarde || {};
+      const isGuardActive = sdis.active;
+      const vpsps = this.vehicles.filter(v => v.type === 'VPSP');
+      const dispoVpsps = vpsps.filter(v => v.status === 'dispo' || (isGuardActive && v.id === sdis.vehicleId));
+      const currentVpsp = isGuardActive ? this.vehicles.find(v => v.id === sdis.vehicleId) : null;
+      
+      const caserneCrewVols = (sdis.caserneCrew || []).map(id => this.volunteers.find(v => v.id === id)).filter(Boolean);
+      const astreinteCrewVols = (sdis.astreinteCrew || []).map(id => this.volunteers.find(v => v.id === id)).filter(Boolean);
+      const dispoVolunteers = this.volunteers.filter(v => v.status === 'dispo');
+
+      const trustScore = this.prefectureState?.trustScore !== undefined ? this.prefectureState.trustScore : 85;
+      const warningsCount = this.prefectureState?.warningsCount || 0;
+      const isSuspended = this.prefectureState?.agrementSuspended || false;
+
+      let trustColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+      if (trustScore < 50) trustColor = 'text-red-700 bg-red-50 border-red-200';
+      else if (trustScore < 75) trustColor = 'text-amber-700 bg-amber-50 border-amber-200';
+
+      const sdisMissions = this.missions.filter(m => m.type === 'pompiers');
+
       body.innerHTML = `
-        <div class="space-y-4">
-          <div class="p-4 rounded-2xl glass-card-purple text-xs text-purple-950">
-            Distribution de kits d'hygiène et couvertures isothermes. Fort impact sur la notoriété municipale.
+        <div class="space-y-5">
+          
+          <!-- Statut Notoriété Préfecture & Services de l'État -->
+          <div class="p-4 rounded-2xl border ${trustColor} flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">${isSuspended ? '🚫' : (trustScore < 50 ? '⚠️' : '🏛️')}</span>
+              <div>
+                <h4 class="text-xs font-black uppercase tracking-wider">
+                  Notoriété Services de l'État & Préfecture (SIDPC)
+                </h4>
+                <p class="text-[11px] opacity-90">
+                  ${isSuspended ? '🚨 <strong>AGRÉMENT SUSPENDU :</strong> Défaut répété de gestion ou retards intolérables. Déposez un recours.' : 'Évaluation continue de la ponctualité, compétences des équipages et respect des consignes.'}
+                </p>
+              </div>
+            </div>
+            <div class="text-right">
+              <span class="text-xs font-black mono-num block">${trustScore} / 100</span>
+              <span class="text-[10px] font-bold ${warningsCount > 0 ? 'text-red-600' : 'text-slate-500'}">
+                ${warningsCount > 0 ? `⚠️ ${warningsCount} avertissement(s)` : 'Situation Conforme ✓'}
+              </span>
+            </div>
           </div>
-          ${socialMissions.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune maraude planifiée.</p>' : ''}
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            ${socialMissions.map(m => `
-              <div class="p-4 rounded-2xl glass-card space-y-2">
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-600 text-white">MARAUDE</span>
-                <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
-                <p class="text-xs text-slate-600">${m.desc}</p>
-                <div class="pt-2 border-t border-slate-100/70 flex justify-end">
-                  <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white hover:brightness-110 shadow-sm transition">Déployer</button>
+
+          <!-- Configuration du Dispositif Garde Postée & Astreinte -->
+          <div class="p-5 rounded-2xl glass-card space-y-4 border ${isGuardActive ? 'border-red-400 bg-red-50/20' : 'border-slate-200'}">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-2xl ${isGuardActive ? 'bg-red-600 text-white animate-pulse' : 'bg-red-100 text-red-700'} flex items-center justify-center text-lg font-black shadow-sm">
+                  🚒
+                </div>
+                <div>
+                  <h4 class="text-sm font-black text-slate-900">
+                    ${isGuardActive ? `Garde SDIS en cours : ${sdis.eventName || 'Dispositif Sécuritaire'}` : 'Organiser une Garde Caserne & Astreinte Domicile'}
+                  </h4>
+                  <p class="text-[11px] text-slate-500">
+                    ${isGuardActive ? sdis.eventReason : 'En cas de violences urbaines, mouvements sociaux ou festivités sensibles, positionnez un VPSP en caserne pompiers et une équipe d’astreinte à domicile.'}
+                  </p>
                 </div>
               </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    } else if (moduleKey === 'formation') {
-      title.textContent = 'Pôle Pédagogique & Évolution Interne';
-      subtitle.textContent = 'Parcours de formation et stages de qualification';
-      icon.setAttribute('data-lucide', 'graduation-cap');
 
-      const volunteersToPromote = this.volunteers.filter(v => v.status === 'dispo');
+              <span class="px-3 py-1 rounded-full text-xs font-black ${isGuardActive ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-100 text-slate-600'}">
+                ${isGuardActive ? 'DISPOSITIF ARMÉ' : 'HORS SERVICE'}
+              </span>
+            </div>
 
-      body.innerHTML = `
-        <div class="space-y-4">
-          <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Arbre de qualification interne</h4>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
-            ${volunteersToPromote.map(v => {
-              let nextRank = null;
-              let cost = 0;
-              if (v.rank === 'Stagiaire') { nextRank = 'PSE1'; cost = 80; }
-              else if (v.rank === 'PSE1') { nextRank = 'PSE2'; cost = 150; }
-              else if (v.rank === 'PSE2') { nextRank = 'CE'; cost = 250; }
-              else if (v.rank === 'CE') { nextRank = 'CD'; cost = 400; }
+            ${!isGuardActive ? `
+              <!-- Paramétrage par le joueur -->
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 text-xs">
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                  <label class="font-extrabold text-slate-800 block">Contexte opérationnel :</label>
+                  <select id="sdis-event-select" class="w-full p-2 rounded-lg bg-white border border-slate-300 font-bold text-xs">
+                    <option value="violences_urbaines">Violences urbaines & Mouvements lycéens (Tension élevée)</option>
+                    <option value="fete_nationale">Dispositif renforcé Nuit du 14 Juillet</option>
+                    <option value="greve_transports">Astreinte Débordements & Grands Rassemblements</option>
+                    <option value="garde_sdis_renfort">Garde Caserne Pompier Classique (Renfort VSAV)</option>
+                  </select>
+                </div>
 
-              return `
-                <div class="p-3 rounded-2xl glass-card flex items-center justify-between">
-                  <div class="flex items-center gap-2.5">
-                    <span class="text-xl">${v.avatar}</span>
-                    <div>
-                      <div class="text-xs font-bold text-slate-900">${v.name}</div>
-                      <div class="text-[10px] text-slate-500">${v.rank} (${v.exp} XP)</div>
+                <div class="p-3 rounded-xl bg-red-50/70 border border-red-200 space-y-1.5">
+                  <div class="flex justify-between items-center">
+                    <label class="font-extrabold text-red-900 block">Équipe Garde Caserne (VPSP) :</label>
+                    <span id="sdis-caserne-count-badge" class="font-bold text-red-700">3 pers</span>
+                  </div>
+                  <input type="range" id="sdis-caserne-slider" min="2" max="4" value="3" oninput="document.getElementById('sdis-caserne-count-badge').textContent = this.value + ' pers'" class="w-full accent-red-600">
+                  <p class="text-[10px] text-red-700">Présents physiquement à la caserne, départ sous 2 min.</p>
+                </div>
+
+                <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1.5">
+                  <div class="flex justify-between items-center">
+                    <label class="font-extrabold text-amber-900 block">Équipe Astreinte Domicile :</label>
+                    <span id="sdis-astreinte-count-badge" class="font-bold text-amber-700">2 pers</span>
+                  </div>
+                  <input type="range" id="sdis-astreinte-slider" min="0" max="4" value="2" oninput="document.getElementById('sdis-astreinte-count-badge').textContent = this.value + ' pers'" class="w-full accent-amber-600">
+                  <p class="text-[10px] text-amber-700">Chez eux, rappelables sous 15 min en cas de débordement.</p>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between pt-2 border-t border-slate-200 text-xs">
+                <span class="text-slate-500">
+                  ${dispoVpsps.length === 0 ? '⚠️ Aucun VPSP disponible.' : `${dispoVpsps.length} VPSP et ${dispoVolunteers.length} secouristes disponibles.`}
+                </span>
+                <button onclick="window.game.armSdisDispositif()" ${dispoVpsps.length === 0 || dispoVolunteers.length < 3 || isSuspended ? 'disabled class="px-5 py-2.5 rounded-xl font-black bg-slate-200 text-slate-400 cursor-not-allowed"' : 'class="px-5 py-2.5 rounded-xl font-black bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/25 transition flex items-center gap-1.5"'}>
+                  <i data-lucide="shield-alert" class="w-4 h-4"></i>
+                  Armer la Garde Pompiers & Astreinte
+                </button>
+              </div>
+            ` : `
+              <!-- Dispositif Actif : Suivi direct et interaction continue -->
+              <div class="space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div class="p-3.5 rounded-xl bg-red-100/60 border border-red-300 space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="font-black text-red-950 flex items-center gap-1.5">
+                        <i data-lucide="radio" class="w-4 h-4 text-red-600"></i>
+                        Postés à la Caserne (${caserneCrewVols.length} secouristes)
+                      </span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white">Prêt au départ</span>
+                    </div>
+                    <div class="space-y-1 text-[11px] text-red-900">
+                      <div>Ambulance : <strong>${currentVpsp?.name || 'VPSP'}</strong></div>
+                      <div>Équipage : <strong>${caserneCrewVols.map(v => `${v.name} (${v.rank})`).join(', ')}</strong></div>
                     </div>
                   </div>
-                  ${nextRank ? `
-                    <button onclick="window.game.upgradeVolunteer('${v.id}', '${nextRank}')" class="px-3 py-1.5 rounded-xl text-[11px] font-bold glass-button hover:bg-pc-blue hover:text-white transition text-slate-700">
-                      ${nextRank} (${cost}€)
-                    </button>
-                  ` : `
-                    <span class="px-2 py-1 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Cadre</span>
-                  `}
+
+                  <div class="p-3.5 rounded-xl bg-amber-100/60 border border-amber-300 space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="font-black text-amber-950 flex items-center gap-1.5">
+                        <i data-lucide="home" class="w-4 h-4 text-amber-600"></i>
+                        Astreinte Domicile (${astreinteCrewVols.length} secouristes)
+                      </span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-600 text-white">Dispo appel</span>
+                    </div>
+                    <div class="space-y-1 text-[11px] text-amber-900">
+                      <div>Délai de rappel estimé : <strong>10 à 15 min</strong></div>
+                      <div>Secouristes : <strong>${astreinteCrewVols.length > 0 ? astreinteCrewVols.map(v => `${v.name} (${v.rank})`).join(', ') : 'Aucun'}</strong></div>
+                    </div>
+                    ${astreinteCrewVols.length > 0 ? `
+                      <button onclick="window.game.recallAstreinteCrewToCaserne()" class="w-full py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition">
+                        Biper & Rappeler l'astreinte en caserne
+                      </button>
+                    ` : ''}
+                  </div>
                 </div>
-              `;
-            }).join('')}
+
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                  <div class="text-slate-600">
+                    Dispositif armé pour <strong>${sdis.durationHours || 6} heures</strong> • Satisfaction Préfecture : <strong class="text-red-700">${sdis.stateSatisfaction || 100}%</strong>
+                  </div>
+                  <button onclick="window.game.disarmSdisDispositif()" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-800 transition">
+                    Mettre fin au dispositif
+                  </button>
+                </div>
+              </div>
+            `}
           </div>
+
+          <!-- Alertes & Missions de renfort pompiers -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">
+                Interventions & Renforts Pompiers en cours (${sdisMissions.length})
+              </h4>
+              ${isGuardActive ? '<span class="text-[11px] font-bold text-red-600 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span> Veille opérationnelle CODIS active</span>' : ''}
+            </div>
+
+            ${sdisMissions.length === 0 ? `
+              <div class="p-6 rounded-2xl glass-card text-center space-y-1">
+                <p class="text-xs font-bold text-slate-700">Aucun départ pompiers en attente.</p>
+                <p class="text-[11px] text-slate-500">
+                  ${isGuardActive ? 'Le CTA-CODIS ou le centre 15 sonnera votre équipe dès qu’un départ réflexe ou un débordement survient.' : 'Armez le dispositif ci-dessus pour engager votre équipage en garde caserne.'}
+                </p>
+              </div>
+            ` : ''}
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              ${sdisMissions.map(m => `
+                <div class="p-4 rounded-2xl glass-card space-y-2 border-l-4 border-red-600">
+                  <div class="flex items-center justify-between">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white">DÉPART POMPIERS</span>
+                    <span class="text-xs font-bold mono-num text-emerald-700">+${m.rewardMoney} €</span>
+                  </div>
+                  <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
+                  <p class="text-xs text-slate-600">${m.desc}</p>
+                  <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <span class="text-[11px] text-slate-500 font-semibold">${m.scale}</span>
+                    <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-black bg-red-600 hover:bg-red-700 text-white shadow-sm transition">
+                      ${m.status === 'ongoing' ? 'Suivre Intervention' : 'Départ Immédiat'}
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
         </div>
       `;
+    } else if (moduleKey === 'social') {
+      if (window.ProtecSocial) {
+        window.ProtecSocial.renderModal(this);
+      } else {
+        title.textContent = 'Pôle Action Sociale & Solidarité';
+        subtitle.textContent = 'Maraudes de nuit et écoute pour les personnes vulnérables';
+        icon.setAttribute('data-lucide', 'heart-handshake');
+
+        const socialMissions = this.missions.filter(m => m.type === 'social');
+        body.innerHTML = `
+          <div class="space-y-4">
+            <div class="p-4 rounded-2xl glass-card-purple text-xs text-purple-950">
+              Distribution de kits d'hygiène et couvertures isothermes. Fort impact sur la notoriété municipale.
+            </div>
+            ${socialMissions.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune maraude planifiée.</p>' : ''}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              ${socialMissions.map(m => `
+                <div class="p-4 rounded-2xl glass-card space-y-2">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-600 text-white">MARAUDE</span>
+                  <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
+                  <p class="text-xs text-slate-600">${m.desc}</p>
+                  <div class="pt-2 border-t border-slate-100/70 flex justify-end">
+                    <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white hover:brightness-110 shadow-sm transition">Déployer</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+    } else if (moduleKey === 'formation') {
+      if (window.ProtecFormations) {
+        window.ProtecFormations.renderModal(this);
+      } else {
+        title.textContent = 'Pôle Pédagogique & Évolution Interne';
+        subtitle.textContent = 'Parcours de formation et stages de qualification';
+        icon.setAttribute('data-lucide', 'graduation-cap');
+
+        const volunteersToPromote = this.volunteers.filter(v => v.status === 'dispo');
+
+        body.innerHTML = `
+          <div class="space-y-4">
+            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Arbre de qualification interne</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+              ${volunteersToPromote.map(v => {
+                let nextRank = null;
+                let cost = 0;
+                if (v.rank === 'Stagiaire') { nextRank = 'PSE1'; cost = 80; }
+                else if (v.rank === 'PSE1') { nextRank = 'PSE2'; cost = 150; }
+                else if (v.rank === 'PSE2') { nextRank = 'CE'; cost = 250; }
+                else if (v.rank === 'CE') { nextRank = 'CD'; cost = 400; }
+
+                return `
+                  <div class="p-3 rounded-2xl glass-card flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                      <span class="text-xl">${v.avatar}</span>
+                      <div>
+                        <div class="text-xs font-bold text-slate-900">${v.name}</div>
+                        <div class="text-[10px] text-slate-500">${v.rank} (${v.exp} XP)</div>
+                      </div>
+                    </div>
+                    ${nextRank ? `
+                      <button onclick="window.game.upgradeVolunteer('${v.id}', '${nextRank}')" class="px-3 py-1.5 rounded-xl text-[11px] font-bold glass-button hover:bg-pc-blue hover:text-white transition text-slate-700">
+                        ${nextRank} (${cost}€)
+                      </button>
+                    ` : `
+                      <span class="px-2 py-1 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Cadre</span>
+                    `}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
     } else if (moduleKey === 'base') {
       title.textContent = 'Antennes & Flotte';
       subtitle.textContent = 'Gestion des locaux et des véhicules';
@@ -2916,11 +3474,17 @@ class ProtecGame {
       if (window.ProtecAdvancedModals) {
         body.innerHTML = window.ProtecAdvancedModals.renderStationRooms(this, this.selectedStationId || this.stations[0]?.id);
       }
+    } else if (moduleKey === 'poles') {
+      if (window.ProtecPoles) {
+        window.ProtecPoles.renderModal(this);
+      }
     } else if (moduleKey === 'competences') {
-      title.textContent = 'Arbre de Compétences & Bureau d’Antenne';
-      subtitle.textContent = 'Habilitations individuelles des secouristes et gouvernance associative';
-      icon.setAttribute('data-lucide', 'award');
-      if (window.ProtecAdvancedModals) {
+      if (window.ProtecPoles) {
+        window.ProtecPoles.renderModal(this);
+      } else if (window.ProtecAdvancedModals) {
+        title.textContent = 'Arbre de Compétences & Bureau d’Antenne';
+        subtitle.textContent = 'Habilitations individuelles des secouristes et gouvernance associative';
+        icon.setAttribute('data-lucide', 'award');
         body.innerHTML = window.ProtecAdvancedModals.renderVolunteerSkills(this);
       }
     }
@@ -3179,7 +3743,7 @@ class ProtecGame {
 
   setFilter(filterKey) {
     this.currentFilter = filterKey;
-    ['all', 'dps', 'samu', 'social', 'crise'].forEach(f => {
+    ['all', 'dps', 'samu', 'meteo', 'pompiers', 'social', 'crise'].forEach(f => {
       const btn = document.getElementById(`filter-btn-${f}`);
       if (!btn) return;
       if (f === filterKey) {
@@ -3226,6 +3790,29 @@ class ProtecGame {
         }
       });
 
+      // 1b. DÉPART AUTOMATIQUE DES DPS À L'HEURE DU POSTE
+      if (this.clock.second === 0) {
+        this.missions.forEach(m => {
+          if (m.type === 'dps' && m.status === 'planifie') {
+            const isToday = this.clock.day === m.eventDate?.day;
+            const targetHour = m.startHour || m.eventDate?.hour || 14;
+            const isHourReached = isToday && this.clock.hour >= targetHour;
+
+            if (isHourReached) {
+              const registered = m.registeredVolunteers?.length || 0;
+              if (registered >= m.requiredVolunteers && !m.autoLaunched) {
+                m.autoLaunched = true;
+                this.launchScheduledMission(m.id);
+                this.showToast('Début du Poste !', `C’est l’heure ! « ${m.title} » débute sur les lieux (${registered} secouristes en mission).`, 'blue');
+              } else if (registered < m.requiredVolunteers && !m.alertLateShown) {
+                m.alertLateShown = true;
+                this.showToast('Retard Prise de Poste !', `L’heure du poste « ${m.title} » est arrivée mais l’effectif est incomplet (${registered}/${m.requiredVolunteers}) ! L’organisateur attend son dispositif.`, 'orange');
+              }
+            }
+          }
+        });
+      }
+
       // 2. Vérification des incidents rares et variés en mission (toutes les 4 secondes)
       if (this.clock.second % 4 === 0 && window.ProtecIncidents) {
         window.ProtecIncidents.checkOngoingMissions(this);
@@ -3238,6 +3825,31 @@ class ProtecGame {
             this.triggerRandomSamuEmergency();
           }
         }
+      }
+
+      // 3b. Dispatch d'interventions SDIS Pompiers (uniquement si une Garde Caserne Pompiers est armée)
+      if (this.clock.second === 5 || this.clock.second === 35) {
+        if (this.stations.length > 0 && this.sdisGarde && this.sdisGarde.active) {
+          // Si violences urbaines ou 14 juillet, intensité plus soutenue
+          const chance = (this.sdisGarde.eventSeverity === 'critique' || this.sdisGarde.eventSeverity === 'eleve') ? 0.35 : 0.20;
+          if (Math.random() < chance) {
+            this.triggerRandomSdisEmergency();
+          }
+        }
+      }
+
+      // 3c. Contrôle des retards de départ SDIS Pompiers (Temps imparti dépassé = sanction Préfecture)
+      if (this.clock.second % 5 === 0) {
+        const pendingSdis = this.missions.filter(m => m.type === 'pompiers' && m.status === 'planifie');
+        pendingSdis.forEach(m => {
+          if (m.spawnedAt && m.maxResponseMinutes) {
+            const elapsedMins = (currentTime - m.spawnedAt) / 60000;
+            if (elapsedMins > m.maxResponseMinutes && !m.sanctionApplied) {
+              m.sanctionApplied = true;
+              this.applyPrefectureSanction(`Retard inacceptable de départ sur réquisition pompiers (${Math.round(elapsedMins)} min d'attente)`, 18);
+            }
+          }
+        });
       }
 
       // 4. Sollicitations spontanées des organisateurs locaux (toutes les 2 à 3 minutes selon popularité & pub)
@@ -3474,15 +4086,299 @@ class ProtecGame {
     this.openModule('samu');
   }
 
+  // --- GARDE CASERNE POMPIERS & ASTREINTE DOMICILE (SDIS / PRÉFECTURE) ---
+  armSdisDispositif() {
+    if (this.prefectureState && this.prefectureState.agrementSuspended) {
+      this.showToast('Agrément Suspendu', 'L’agrément préfectoral de votre antenne est suspendu pour manquements graves.', 'red');
+      return;
+    }
+
+    const eventSelect = document.getElementById('sdis-event-select');
+    const caserneSlider = document.getElementById('sdis-caserne-slider');
+    const astreinteSlider = document.getElementById('sdis-astreinte-slider');
+
+    const eventKey = eventSelect ? eventSelect.value : 'violences_urbaines';
+    const caserneTarget = caserneSlider ? parseInt(caserneSlider.value) : 3;
+    const astreinteTarget = astreinteSlider ? parseInt(astreinteSlider.value) : 2;
+
+    const eventDetails = {
+      violences_urbaines: {
+        title: 'Violences Urbaines & Mouvements Lycéens',
+        reason: 'Tensions urbaines vives, barricades et feux de poubelles. Le SDIS sollicite un VPSP posté en caserne prêt au départ immédiat et une astreinte à domicile en renfort.',
+        durationHours: 6,
+        severity: 'critique',
+        rewardIntervention: 420
+      },
+      fete_nationale: {
+        title: 'Dispositif Renforcé 14 Juillet',
+        reason: 'Forte affluence festive, tirs de mortiers et malaises. Pré-positionnement caserne indispensable.',
+        durationHours: 8,
+        severity: 'eleve',
+        rewardIntervention: 380
+      },
+      greve_transports: {
+        title: 'Astreinte Débordements & Rassemblements',
+        reason: 'Blocages routiers et cortèges sauvages. Astreinte renforcée rappelable sous 15 min.',
+        durationHours: 5,
+        severity: 'modere',
+        rewardIntervention: 340
+      },
+      garde_sdis_renfort: {
+        title: 'Garde Caserne Classique (Renfort VSAV Pompiers)',
+        reason: 'Surcharge des ambulances pompiers. Prise en charge des départs secours d’urgence aux personnes.',
+        durationHours: 12,
+        severity: 'normal',
+        rewardIntervention: 300
+      }
+    };
+
+    const selEvent = eventDetails[eventKey] || eventDetails.violences_urbaines;
+
+    // 1. Contrôle véhicule VPSP
+    const vpsp = this.vehicles.find(v => v.type === 'VPSP' && v.status === 'dispo');
+    if (!vpsp) {
+      this.showToast('VPSP manquant', 'Une ambulance VPSP libre est exigée pour armer la garde caserne pompiers.', 'orange');
+      return;
+    }
+
+    // 2. Sélection équipage Caserne (Posté, prêt à partir)
+    const dispoQualif = this.volunteers.filter(v => v.status === 'dispo');
+    if (dispoQualif.length < (caserneTarget + astreinteTarget)) {
+      this.showToast('Effectif insuffisant', `Vous avez demandé ${caserneTarget} en caserne et ${astreinteTarget} en astreinte (${caserneTarget + astreinteTarget} au total), mais seuls ${dispoQualif.length} sont disponibles.`, 'orange');
+      return;
+    }
+
+    // Équipe Caserne (priorité CE et PSE2 pour la conformité)
+    const caserneCrew = [];
+    const astreinteCrew = [];
+
+    // Trier pour placer un gradé (CE ou PSE2) en caserne
+    dispoQualif.sort((a, b) => {
+      const rankVal = { 'Cadre': 4, 'CD': 4, 'CE': 3, 'PSE2': 2, 'PSE1': 1, 'Stagiaire': 0 };
+      return (rankVal[b.rank] || 0) - (rankVal[a.rank] || 0);
+    });
+
+    for (let i = 0; i < dispoQualif.length; i++) {
+      const v = dispoQualif[i];
+      if (caserneCrew.length < caserneTarget) {
+        caserneCrew.push(v);
+      } else if (astreinteCrew.length < astreinteTarget) {
+        astreinteCrew.push(v);
+      }
+    }
+
+    // Vérifier les compétences requises en caserne
+    const hasLeader = caserneCrew.some(v => v.rank === 'CE' || v.rank === 'PSE2');
+    if (!hasLeader) {
+      this.showToast('Compétence Manquante', 'L’équipe de garde postée en caserne doit comporter au moins 1 Chef d’Équipe (CE) ou PSE2 certifié !', 'orange');
+      return;
+    }
+
+    // Passer les statuts
+    vpsp.status = 'sdis_caserne';
+    caserneCrew.forEach(v => { v.status = 'sdis_caserne'; });
+    astreinteCrew.forEach(v => { v.status = 'sdis_astreinte'; });
+
+    this.sdisGarde = {
+      active: true,
+      eventKey: eventKey,
+      eventName: selEvent.title,
+      eventReason: selEvent.reason,
+      eventSeverity: selEvent.severity,
+      rewardIntervention: selEvent.rewardIntervention,
+      caserneCrewCountRequested: caserneTarget,
+      astreinteCrewCountRequested: astreinteTarget,
+      caserneCrew: caserneCrew.map(v => v.id),
+      astreinteCrew: astreinteCrew.map(v => v.id),
+      vehicleId: vpsp.id,
+      startedAt: Date.now(),
+      durationHours: selEvent.durationHours,
+      endsAt: Date.now() + (selEvent.durationHours * 3600 * 1000),
+      stateSatisfaction: 100,
+      logInterventions: []
+    };
+
+    this.showToast('Dispositif SDIS Armé !', `VPSP en caserne pompiers (${caserneCrew.length} secouristes) + Astreinte domicile (${astreinteCrew.length} secouristes) activées.`, 'green');
+    this.saveGame();
+    this.updateStatsUI();
+    this.openModule('pompiers');
+  }
+
+  recallAstreinteCrewToCaserne() {
+    if (!this.sdisGarde || !this.sdisGarde.active) return;
+    const astreinteIds = this.sdisGarde.astreinteCrew || [];
+    if (astreinteIds.length === 0) {
+      this.showToast('Aucune astreinte', 'Tous vos effectifs sont déjà en caserne.', 'orange');
+      return;
+    }
+
+    astreinteIds.forEach(vid => {
+      const v = this.volunteers.find(vol => vol.id === vid);
+      if (v) {
+        v.status = 'sdis_caserne';
+        if (!this.sdisGarde.caserneCrew.includes(v.id)) {
+          this.sdisGarde.caserneCrew.push(v.id);
+        }
+      }
+    });
+
+    this.sdisGarde.astreinteCrew = [];
+    this.showToast('Bipeurs Activés !', `Rappel d'urgence : les ${astreinteIds.length} secouristes d’astreinte convergent vers la caserne pompiers (arrivée 10 min).`, 'green');
+    this.saveGame();
+    this.updateStatsUI();
+    this.openModule('pompiers');
+  }
+
+  disarmSdisDispositif() {
+    if (!this.sdisGarde || !this.sdisGarde.active) return;
+
+    if (this.sdisGarde.vehicleId) {
+      const v = this.vehicles.find(veh => veh.id === this.sdisGarde.vehicleId);
+      if (v && (v.status === 'sdis_caserne' || v.status === 'sdis_astreinte')) v.status = 'dispo';
+    }
+
+    const allCrew = [...(this.sdisGarde.caserneCrew || []), ...(this.sdisGarde.astreinteCrew || [])];
+    allCrew.forEach(vid => {
+      const vol = this.volunteers.find(v => v.id === vid);
+      if (vol && (vol.status === 'sdis_caserne' || vol.status === 'sdis_astreinte')) vol.status = 'dispo';
+    });
+
+    this.sdisGarde.active = false;
+    this.sdisGarde.vehicleId = null;
+    this.sdisGarde.caserneCrew = [];
+    this.sdisGarde.astreinteCrew = [];
+
+    this.showToast('Dispositif Clôturé', 'Fin de garde en caserne pompiers. Équipages et VPSP de retour à l’antenne.', 'blue');
+    this.saveGame();
+    this.updateStatsUI();
+    this.openModule('pompiers');
+  }
+
+  triggerRandomSdisEmergency() {
+    if (!this.sdisGarde || !this.sdisGarde.active) return;
+
+    const pending = this.missions.filter(m => m.type === 'pompiers' && m.status === 'planifie');
+    if (pending.length >= 2) return;
+
+    const base = this.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Caserne Pompiers' };
+    const offsetLat = (Math.random() - 0.5) * 0.035;
+    const offsetLng = (Math.random() - 0.5) * 0.035;
+
+    const scenarios = [
+      {
+        title: 'Départ Réflexe SDIS : Blessé Barricade / Mouvement Lycéen',
+        desc: 'Tension urbaine vive. Victime présentant un traumatisme crânien léger suite à jet de projectile. Départ réflexe VPSP caserne demandé par le CODIS.',
+        urgency: 'haute',
+        durMin: 25,
+        maxResponseMinutes: 3,
+        requiresLeader: true
+      },
+      {
+        title: 'Renfort Pompiers : Intoxication Fumées Feux de Poubelles',
+        desc: 'Propagations de fumées épaisses au pied d’un immeuble d’habitation. Deux victimes incommodées à bilanter et oxygéner.',
+        urgency: 'critique',
+        durMin: 30,
+        maxResponseMinutes: 4,
+        requiresLeader: true
+      },
+      {
+        title: 'Débordement Secteur : Chute et Traumatisme Voie Publique',
+        desc: 'Foule dispersée par les forces de l’ordre, passant bousculé au sol avec suspicion fracture du poignet. Bilan pompiers requis.',
+        urgency: 'normale',
+        durMin: 20,
+        maxResponseMinutes: 5,
+        requiresLeader: false
+      }
+    ];
+
+    const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
+    const reward = this.sdisGarde.rewardIntervention || 380;
+
+    const newSdis = {
+      id: `m-sdis-${Date.now()}`,
+      type: 'pompiers',
+      categoryLabel: 'SDIS Pompiers - Garde Postée & Renfort VSAV',
+      title: pick.title,
+      desc: pick.desc,
+      lat: base.lat + offsetLat,
+      lng: base.lng + offsetLng,
+      scale: 'VPSP Caserne Pompiers (3 secouristes)',
+      eventDate: { ...this.clock, hour: this.clock.hour },
+      durationSeconds: pick.durMin * 60,
+      durationHours: (pick.durMin / 60).toFixed(1),
+      requiredVolunteers: 3,
+      requiredRanks: pick.requiresLeader ? ['CE', 'PSE2', 'PSE1'] : ['PSE2', 'PSE1'],
+      requiredVehicles: ['VPSP'],
+      rewardMoney: reward,
+      rewardReputation: 40,
+      maxResponseMinutes: pick.maxResponseMinutes,
+      spawnedAt: Date.now(),
+      progress: 0,
+      status: 'planifie',
+      registeredVolunteers: [],
+      assignedCrew: { volunteers: [], vehicles: [] }
+    };
+
+    this.missions.push(newSdis);
+    this.renderMissions();
+    this.updateStatsUI();
+    this.saveGame();
+
+    if (window.ProtecIncidents) {
+      window.ProtecIncidents.sendSystemNotification(
+        `🚨 DÉPART POMPIERS IMMÉDIAT`,
+        `${pick.title} ! Équipage VPSP en caserne sonné par le CODIS !`,
+        `sdis-${newSdis.id}`
+      );
+    }
+
+    this.showToast('Départ Pompiers (CODIS)', `${pick.title} ! Départ réflexe immédiat requis.`, 'orange');
+  }
+
+  applyPrefectureSanction(reason, scorePenalty = 15) {
+    if (!this.prefectureState) {
+      this.prefectureState = { trustScore: 85, agrementSuspended: false, warningsCount: 0 };
+    }
+
+    this.prefectureState.trustScore = Math.max(0, this.prefectureState.trustScore - scorePenalty);
+    this.prefectureState.warningsCount = (this.prefectureState.warningsCount || 0) + 1;
+
+    // Dégradation de réputation globale
+    this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 0) - 40);
+
+    // Si confiance trop basse ou 3 avertissements : suspension d'agrément
+    if (this.prefectureState.trustScore <= 20 || this.prefectureState.warningsCount >= 3) {
+      this.prefectureState.agrementSuspended = true;
+      if (this.resources.agrements) {
+        this.resources.agrements.A = false; // Suspension secours à personnes
+      }
+      this.showToast(
+        '🚨 SUSPENSION D’AGRÉMENT PRÉFECTORAL !',
+        `Décision préfectorale d'urgence : votre agrément opérationnel est suspendu suite à des fautes répétées (${reason}). Déposez un recours auprès de la Préfecture.`,
+        'red'
+      );
+    } else {
+      this.showToast(
+        '⚠️ AVERTISSEMENT PRÉFECTORAL',
+        `Rappel à l'ordre des services de l'État : ${reason} (-${scorePenalty} pts de confiance, Avertissement ${this.prefectureState.warningsCount}/3).`,
+        'orange'
+      );
+    }
+
+    this.saveGame();
+    this.updateStatsUI();
+  }
+
   // Candidature spontanée de bénévole
   generateRandomCandidature() {
     const pool = [
-      { n: 'Clémentine Vasseur', a: 24, j: 'Secrétaire médicale', d: ['Samedi', 'Dimanche'], t: 'salarié', av: '👩' },
-      { n: 'Maxime Caron', a: 20, j: 'Étudiant en STAPS', d: ['Mercredi', 'Samedi'], t: 'étudiant', av: '🙋‍♂️' },
-      { n: 'Aurélie Giraud', a: 28, j: 'Enseignante', d: ['Mercredi', 'Samedi', 'Dimanche'], t: 'salarié', av: '👩‍🏫' },
-      { n: 'Julien Mercier', a: 31, j: 'Infirmier DE', d: ['Lundi', 'Jeudi', 'Vendredi'], t: 'salarié', av: '👨‍⚕️' },
-      { n: 'Inès Bouzid', a: 22, j: 'Étudiante Droit', d: ['Vendredi', 'Samedi', 'Dimanche'], t: 'étudiant', av: '👩‍🎓' },
-      { n: 'Thomas Delattre', a: 35, j: 'Technicien Réseaux', d: ['Samedi', 'Dimanche'], t: 'salarié', av: '👨‍💼' }
+      { n: 'Clémentine Vasseur', a: 24, j: 'Secrétaire médicale', d: ['Samedi', 'Dimanche'], t: 'salarié', av: '👩', rank: 'PSE1', role: 'Secouriste', skills: ['PSE1', 'secrétariat'], isTrainer: false, exp: 25 },
+      { n: 'Maxime Caron', a: 20, j: 'Étudiant en STAPS', d: ['Mercredi', 'Samedi'], t: 'étudiant', av: '🙋‍♂️', rank: 'Stagiaire', role: 'Bénévole Stagiaire', skills: ['PSC1', 'sportif'], isTrainer: false, exp: 5 },
+      { n: 'Aurélie Giraud', a: 28, j: 'Enseignante', d: ['Mercredi', 'Samedi', 'Dimanche'], t: 'salarié', av: '👩‍🏫', rank: 'PSE1', role: 'Secouriste Formateur', skills: ['PSE1', 'formateur'], isTrainer: true, exp: 40 },
+      { n: 'Julien Mercier', a: 31, j: 'Infirmier DE', d: ['Lundi', 'Jeudi', 'Vendredi'], t: 'salarié', av: '👨‍⚕️', rank: 'PSE2', role: 'Équipier Secouriste', skills: ['PSE2', 'formateur', 'AFGSU', 'soins_urgence'], isTrainer: true, exp: 65 },
+      { n: 'Inès Bouzid', a: 22, j: 'Étudiante Droit', d: ['Vendredi', 'Samedi', 'Dimanche'], t: 'étudiant', av: '👩‍🎓', rank: 'Stagiaire', role: 'Bénévole Stagiaire', skills: ['GQS'], isTrainer: false, exp: 0 },
+      { n: 'Thomas Delattre', a: 35, j: 'Technicien Réseaux', d: ['Samedi', 'Dimanche'], t: 'salarié', av: '👨‍💼', rank: 'PSE1', role: 'Secouriste Chauffeur', skills: ['PSE1', 'permis_vpsp'], isTrainer: false, exp: 30 },
+      { n: 'Kévin Bouchard', a: 29, j: 'Ancien Pompier Volontaire', d: ['Vendredi', 'Samedi', 'Dimanche'], t: 'salarié', av: '👨‍🚒', rank: 'CE', role: 'Chef d’Équipe Opérationnel', skills: ['CE', 'PSE2', 'permis_vpsp', 'commandement'], isTrainer: false, exp: 80 }
     ];
     const p = pool[Math.floor(Math.random() * pool.length)];
     this.candidatures.push({
@@ -3493,9 +4389,14 @@ class ProtecGame {
       motivation: 'Très motivé(e) pour donner de mon temps libre, porter la tenue orange et bleue et secourir nos concitoyens.',
       dispoJours: p.d,
       dispoType: p.t,
-      avatar: p.av
+      avatar: p.av,
+      rank: p.rank,
+      role: p.role,
+      skills: p.skills,
+      isTrainer: p.isTrainer,
+      exp: p.exp
     });
-    this.showToast('Nouvelle Candidature', `${p.n} (${p.j}) souhaite intégrer votre antenne.`, 'blue');
+    this.showToast('Nouvelle Candidature', `${p.n} (${p.j} • ${p.rank}) souhaite intégrer votre antenne.`, 'blue');
     this.updateStatsUI();
   }
 
@@ -3539,6 +4440,10 @@ class ProtecGame {
     const bRadioMobile = document.getElementById('badge-radio-dock-mobile');
     if (bRadioMobile) bRadioMobile.textContent = this.missions.filter(m => m.status === 'ongoing').length;
 
+    const sdisCount = this.missions.filter(m => m.type === 'pompiers' && (m.status === 'planifie' || m.status === 'ongoing')).length;
+    const bPompiers = document.getElementById('badge-pompiers-dock');
+    if (bPompiers) bPompiers.textContent = sdisCount;
+
     const bDev = document.getElementById('badge-devis-dock');
     if (bDev) bDev.textContent = devisCount;
 
@@ -3546,7 +4451,50 @@ class ProtecGame {
     if (bCand) bCand.textContent = candCount;
 
     const bAll = document.getElementById('badge-alliance-dock');
-    if (bAll) bAll.textContent = renfCount || this.allianceStations.length;
+    if (bAll) {
+      if (renfCount > 0) {
+        bAll.textContent = renfCount;
+        bAll.classList.remove('hidden');
+      } else {
+        bAll.classList.add('hidden');
+      }
+    }
+
+    // Gestion de la notification cadeau : UNIQUEMENT s'il y a quelque chose de prêt à être réclamé
+    const r = this.rewards;
+    const today = this.clock ? this.clock.day : new Date().getDate();
+    let hasSomethingToClaim = false;
+    if (r) {
+      // 1. Récompense quotidienne non encore réclamée aujourd'hui
+      if (r.lastDailyClaimDay !== today) {
+        hasSomethingToClaim = true;
+      }
+      // 2. Défi journalier complété prêt à être encaissé
+      if (r.dailyTasks && r.dailyTasks.some(t => !t.done && (t.current >= t.goal))) {
+        hasSomethingToClaim = true;
+      }
+      // 3. Défi hebdomadaire prêt à être encaissé
+      if (r.weeklyTasks && r.weeklyTasks.some(t => !t.done && (t.current >= t.goal))) {
+        hasSomethingToClaim = true;
+      }
+    }
+    const rewardDot = document.getElementById('badge-rewards-dot');
+    const rewardReadyText = document.getElementById('stat-rewards-ready');
+    if (rewardDot) {
+      if (hasSomethingToClaim) {
+        rewardDot.classList.remove('hidden');
+        if (rewardReadyText) {
+          rewardReadyText.textContent = 'Cadeau prêt !';
+          rewardReadyText.className = 'text-xs font-black text-rose-600 flex items-center gap-1';
+        }
+      } else {
+        rewardDot.classList.add('hidden');
+        if (rewardReadyText) {
+          rewardReadyText.textContent = 'Quotidien';
+          rewardReadyText.className = 'text-xs font-bold text-slate-600 flex items-center gap-1';
+        }
+      }
+    }
 
     const notEl = document.getElementById('stat-notoriety');
     if (notEl) notEl.textContent = `${this.resources.followers} abonnés`;
@@ -3566,11 +4514,13 @@ class ProtecGame {
       all: this.missions.length,
       dps: this.missions.filter(m => m.type === 'dps').length,
       samu: this.missions.filter(m => m.type === 'samu').length,
+      pompiers: this.missions.filter(m => m.type === 'pompiers').length,
+      meteo: this.missions.filter(m => m.type === 'meteo').length,
       social: this.missions.filter(m => m.type === 'social').length,
       crise: this.missions.filter(m => m.type === 'crise').length
     };
 
-    ['all', 'dps', 'samu', 'social', 'crise'].forEach(c => {
+    ['all', 'dps', 'samu', 'pompiers', 'meteo', 'social', 'crise'].forEach(c => {
       const el = document.getElementById(`count-${c}`);
       if (el) el.textContent = counts[c];
     });

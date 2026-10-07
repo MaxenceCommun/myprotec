@@ -49,11 +49,20 @@ window.ProtecSystems = {
     if (!game.weather) {
       game.weather = {
         condition: 'sun',
-        temp: 21,
+        temp: 18,
+        realTemp: 18,
+        windSpeed: 10,
+        windGusts: 20,
+        precipitation: 0,
+        humidity: 65,
+        weatherCode: 0,
         vigilance: 'green', // 'green', 'yellow', 'orange', 'red'
-        alertTitle: 'Vigilance Verte - Conditions Claires',
+        alertTitle: 'Vigilance Verte - Conditions Nominales',
         alertDesc: 'Aucune vigilance météorologique particulière sur le département. Opérations régulières.',
-        lastUpdateDay: 5
+        alertPhenomenon: 'nominal',
+        lastUpdateDay: 5,
+        lastFetchTimestamp: 0,
+        locationName: 'France'
       };
     }
     if (!game.grants) {
@@ -288,7 +297,16 @@ window.ProtecSystems = {
     const v = game.vehicles.find(veh => veh.id === vehicleId);
     if (!v) return;
 
-    if (actionType === 'fuel') {
+    if (actionType === 'rearm') {
+      const cost = 30;
+      if (game.resources.money < cost) {
+        game.showToast('Fonds insuffisants', `Le réarmement du matériel requiert ${cost} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      v.needsRearming = false;
+      game.showToast('Matériel Réarmé', `${v.name} a reçu ses sacs de secours reconditionnés et son matériel médical complet.`, 'green');
+    } else if (actionType === 'fuel') {
       const cost = 75;
       if (game.resources.money < cost) {
         game.showToast('Fonds insuffisants', `Plein carburant : ${cost} €.`, 'orange');
@@ -306,15 +324,26 @@ window.ProtecSystems = {
       game.resources.money -= cost;
       v.disinfectionNeeded = false;
       game.showToast('Bionettoyage terminé', `${v.name} est désinfecté et stérile pour repartir.`, 'green');
+    } else if (actionType === 'disinfection_trimestrielle') {
+      const cost = 60;
+      if (game.resources.money < cost) {
+        game.showToast('Fonds insuffisants', `Désinfection trimestrielle agréée ARS : ${cost} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      v.quarterlyDisinfectionDone = true;
+      v.missionsSinceDisinfection = 0;
+      game.showToast('Désinfection Trimestrielle Validée', `${v.name} a été intégralement nébulisé et certifié conforme ARS / SAMU.`, 'green');
     } else if (actionType === 'mechanical') {
       const cost = 280;
       if (game.resources.money < cost) {
-        game.showToast('Fonds insuffisants', `Révision garage : ${cost} €.`, 'orange');
+        game.showToast('Fonds insuffisants', `Révision garage & pièces : ${cost} €.`, 'orange');
         return;
       }
       game.resources.money -= cost;
       v.mechanical = 100;
-      game.showToast('Révision effectuée', `Contrôle technique et révision validés pour ${v.name}.`, 'green');
+      v.isBrokenDown = false;
+      game.showToast('Révision effectuée', `Contrôle technique et réparations mécaniques validés pour ${v.name}.`, 'green');
     }
 
     game.updateStatsUI();
@@ -350,7 +379,7 @@ window.ProtecSystems = {
       period = 'aube';
       periodLabel = p < 0.6 ? 'Aube naissante' : 'Lever du soleil';
       periodIcon = '🌅';
-      tempOffset = -3 + p * 2;
+      tempOffset = Math.round(-3 + p * 2);
 
       // Première phase (05h30 - 06h45) : La nuit bleu marine s'estompe et accueille une douce teinte rosée
       if (p < 0.5) {
@@ -388,7 +417,7 @@ window.ProtecSystems = {
       period = 'crepuscule';
       periodLabel = 'Coucher de soleil';
       periodIcon = '🌇';
-      tempOffset = 1 - p * 2;
+      tempOffset = Math.round(1 - p * 2);
       const a = (0.12 * p).toFixed(3);
       color = `rgba(217, 119, 6, ${a})`;
     }
@@ -399,7 +428,7 @@ window.ProtecSystems = {
       period = 'crepuscule';
       periodLabel = 'Crépuscule';
       periodIcon = '🌆';
-      tempOffset = -1 - p * 3;
+      tempOffset = Math.round(-1 - p * 3);
       const r = Math.round(217 + (15 - 217) * p);
       const g = Math.round(119 + (23 - 119) * p);
       const b = Math.round(6 + (42 - 6) * p);
@@ -408,6 +437,281 @@ window.ProtecSystems = {
     }
 
     return { color, period, periodLabel, periodIcon, tempOffset };
+  },
+
+  // Récupération de la géolocalisation de l'antenne du joueur (ou chef-lieu de département)
+  getPlayerAntennaCoords(game) {
+    if (game.stations && game.stations.length > 0) {
+      return { lat: game.stations[0].lat, lng: game.stations[0].lng, name: game.stations[0].name };
+    }
+    const deptCode = game.currentDepartmentCode || game.player?.departmentCode || '75';
+    if (window.ProtecDepartements) {
+      const dept = window.ProtecDepartements.getByCode(deptCode);
+      if (dept) return { lat: dept.lat, lng: dept.lng, name: `${dept.name} (${dept.code})` };
+    }
+    return { lat: 48.8566, lng: 2.3522, name: 'Paris (75)' };
+  },
+
+  // Interrogation de l'API météo en temps réel (Open-Meteo pour les coordonnées exactes de l'antenne)
+  async fetchRealWeather(game, force = false) {
+    const coords = this.getPlayerAntennaCoords(game);
+    const now = Date.now();
+
+    // Cache de 10 minutes pour éviter de surcharger le réseau
+    if (!force && game.weather && game.weather.lastFetchTimestamp && (now - game.weather.lastFetchTimestamp < 10 * 60 * 1000)) {
+      return;
+    }
+
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat.toFixed(4)}&longitude=${coords.lng.toFixed(4)}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_gusts_10m,precipitation`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const current = data.current;
+
+      if (current) {
+        game.weather.realTemp = current.temperature_2m;
+        game.weather.temp = current.temperature_2m;
+        game.weather.windSpeed = current.wind_speed_10m || 0;
+        game.weather.windGusts = current.wind_gusts_10m || current.wind_speed_10m || 0;
+        game.weather.precipitation = current.precipitation || 0;
+        game.weather.humidity = current.relative_humidity_2m || 60;
+        game.weather.weatherCode = current.weather_code;
+        game.weather.locationName = coords.name;
+        game.weather.lastFetchTimestamp = now;
+
+        // Détection du phénomène et de la vigilance Météo-France correspondante
+        this.interpretMeteoFranceVigilance(game);
+        console.log(`[Météo Réelle] Synchronisée pour ${coords.name}: ${game.weather.temp}°C, vent ${game.weather.windGusts} km/h, code ${game.weather.weatherCode}, vigilance: ${game.weather.vigilance}`);
+      }
+    } catch (err) {
+      console.warn('Erreur synchronisation météo réelle:', err);
+    }
+  },
+
+  // Interprétation des alertes Météo-France (Canicule, Crues/Inondations, Vents violents/Chutes d'arbres, Feux de forêt, Orages, Grand Froid)
+  interpretMeteoFranceVigilance(game) {
+    const w = game.weather;
+    const code = w.weatherCode || 0;
+    const temp = w.temp;
+    const wind = w.windGusts || w.windSpeed || 0;
+    const precip = w.precipitation || 0;
+
+    let vigilance = 'green';
+    let condition = 'sun';
+    let alertTitle = 'Vigilance Verte - Conditions Nominales';
+    let alertDesc = 'Aucune vigilance météorologique particulière sur le secteur. Les dispositifs de secours se déroulent normalement.';
+    let phenomenon = 'nominal';
+
+    // 1. Alertes Canicule / Très fortes chaleurs
+    if (temp >= 35) {
+      vigilance = 'red';
+      condition = 'heat';
+      phenomenon = 'canicule';
+      alertTitle = 'Vigilance Rouge Canicule Extrême (Météo-France)';
+      alertDesc = `Température extrême mesurée à ${temp}°C. Risque critique de malaises, déshydratations et insolations. Maraudes fraîcheur renforcées et points d'eau d'urgence requis.`;
+    } else if (temp >= 30) {
+      vigilance = 'orange';
+      condition = 'heat';
+      phenomenon = 'canicule';
+      alertTitle = 'Vigilance Orange Canicule Préfectorale';
+      alertDesc = `Fortes chaleurs mesurées à ${temp}°C. Surveillance accrue des personnes vulnérables, mise en place de tentes de déchoquage climatisées sur les DPS.`;
+    } else if (temp >= 28) {
+      vigilance = 'yellow';
+      condition = 'heat';
+      phenomenon = 'chaleur';
+      alertTitle = 'Vigilance Jaune Chaleur & Coup de Chaud';
+      alertDesc = `Température de ${temp}°C. Prévoyez des stocks d'eau supplémentaires pour les secouristes et le public.`;
+    }
+    // 2. Alertes Vents Violents / Tempête / Chutes d'arbres
+    else if (wind >= 90) {
+      vigilance = 'red';
+      condition = 'wind';
+      phenomenon = 'vent';
+      alertTitle = 'Vigilance Rouge Vent Violent & Tempête';
+      alertDesc = `Rafales enregistrées à plus de ${Math.round(wind)} km/h ! Chutes d'arbres sur chaussée, toitures arrachées et effondrements. Sécurisation immédiate des postes de secours.`;
+    } else if (wind >= 65) {
+      vigilance = 'orange';
+      condition = 'wind';
+      phenomenon = 'vent';
+      alertTitle = 'Vigilance Orange Vents Forts & Chutes d’Arbres';
+      alertDesc = `Rafales de vent à ${Math.round(wind)} km/h. Risque de chutes de branches, coupures de câbles électriques et accidents de la circulation.`;
+    } else if (wind >= 50) {
+      vigilance = 'yellow';
+      condition = 'wind';
+      phenomenon = 'vent';
+      alertTitle = 'Vigilance Jaune Coups de Vent';
+      alertDesc = `Rafales à ${Math.round(wind)} km/h. Attention aux barnums et structures légères sur les dispositifs extérieurs.`;
+    }
+    // 3. Alertes Pluie-Inondation / Crues / Orages violents
+    else if ([95, 96, 99].includes(code) || (precip >= 15)) {
+      vigilance = 'orange';
+      condition = 'storm';
+      phenomenon = 'inondation';
+      alertTitle = 'Vigilance Orange Orages Violents & Inondations Rapides';
+      alertDesc = 'Activité électrique intense, pluies diluviennes et risques de ruissellements urbains. Équipes en alerte pour pompage et évacuations.';
+    } else if ([65, 82].includes(code) || (precip >= 8)) {
+      vigilance = 'orange';
+      condition = 'flood';
+      phenomenon = 'inondation';
+      alertTitle = 'Vigilance Orange Crues & Inondations (PCS)';
+      alertDesc = 'Fortes précipitations continues. Déclenchement préventif du Plan Communal de Sauvegarde et préparation de Centres d’Accueil des Impliqués (CAI).';
+    } else if ([51, 53, 55, 61, 63, 80, 81].includes(code)) {
+      vigilance = 'yellow';
+      condition = 'rain';
+      phenomenon = 'pluie';
+      alertTitle = 'Vigilance Jaune Pluie & Chaussée Glissante';
+      alertDesc = 'Averses soutenues en cours. Risque d’aquaplaning et d’accidents de circulation accrus.';
+    }
+    // 4. Alertes Neige / Verglas / Grand Froid
+    else if ([71, 73, 75, 77, 85, 86].includes(code) || (temp <= -3)) {
+      vigilance = 'orange';
+      condition = 'snow';
+      phenomenon = 'grand_froid';
+      alertTitle = 'Vigilance Orange Neige-Verglas & Grand Froid (Plan Hivernal)';
+      alertDesc = `Chutes de neige et températures négatives (${temp}°C). Déclenchement du Plan Grand Froid : maraudes sociales nocturnes d'urgence et chaînes à neige obligatoires.`;
+    } else if (temp <= 1) {
+      vigilance = 'yellow';
+      condition = 'snow';
+      phenomenon = 'grand_froid';
+      alertTitle = 'Vigilance Jaune Grand Froid';
+      alertDesc = `Gelées matinales (${temp}°C). Maraudes renforcées pour distribuer duvets et boissons chaudes aux personnes sans abri.`;
+    }
+    // 5. Conditions Claires / Nuageuses / Brouillard
+    else if ([45, 48].includes(code)) {
+      condition = 'fog';
+      alertTitle = 'Vigilance Jaune Brouillard Givrant';
+      alertDesc = 'Visibilité très réduite sur les axes routiers. Vigilance maximale pour les conducteurs de VPSP.';
+    } else if ([1, 2, 3].includes(code)) {
+      condition = 'cloud';
+    } else {
+      condition = 'sun';
+    }
+
+    const previousVigilance = w.vigilance;
+    w.vigilance = vigilance;
+    w.condition = condition;
+    w.alertTitle = alertTitle;
+    w.alertDesc = alertDesc;
+    w.alertPhenomenon = phenomenon;
+
+    // Toast de notification si passage à une vigilance supérieure
+    if (previousVigilance !== vigilance && ['yellow', 'orange', 'red'].includes(vigilance)) {
+      const color = vigilance === 'red' ? 'red' : (vigilance === 'orange' ? 'orange' : 'amber');
+      game.showToast(`Bulletin Météo-France (${vigilance.toUpperCase()})`, alertTitle, color);
+    }
+  },
+
+  // Génération automatique d'urgences réactives liées aux alertes Météo-France
+  triggerWeatherEmergencyMission(game) {
+    if (!game.weather) return;
+    const v = game.weather.vigilance;
+    if (v === 'green') return; // Pas de mission de crise météo si tout est calme
+
+    // Maximum 2 missions météo actives à la fois
+    const ongoingWeatherMissions = game.missions.filter(m => m.type === 'meteo' && ['planifie', 'ongoing'].includes(m.status));
+    if (ongoingWeatherMissions.length >= 2) return;
+
+    const base = game.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne' };
+    const offsetLat = (Math.random() - 0.5) * 0.04;
+    const offsetLng = (Math.random() - 0.5) * 0.04;
+    const pheno = game.weather.alertPhenomenon || 'inondation';
+
+    let missionDef = null;
+
+    if (pheno === 'inondation') {
+      missionDef = {
+        title: 'Alerte Inondation : Évacuation Pavillonnaire & CAI',
+        desc: `Crue subite suite aux fortes pluies (${game.weather.precipitation || 12} mm/h). Le maire active le PCS. La Protection Civile est réquisitionnée pour ouvrir un Centre d'Accueil des Impliqués (CAI) dans un gymnase et évacuer 15 sinistrés.`,
+        urgency: 'haute',
+        durMin: 35,
+        reqVol: 4,
+        ranks: ['CE', 'PSE2', 'PSE1'],
+        vehs: ['VPSP', 'VL'],
+        reward: 450
+      };
+    } else if (pheno === 'vent') {
+      missionDef = {
+        title: 'Tempête / Vent : Chute d’Arbre sur Véhicule & Sécurisation',
+        desc: `Rafales de vent à ${Math.round(game.weather.windGusts || 75)} km/h. Un arbre s’est abattu sur une voiture en circulation. 1 blessé léger coincé et axe départemental bloqué. Équipage VPSP et lot de balisage requis.`,
+        urgency: 'critique',
+        durMin: 30,
+        reqVol: 3,
+        ranks: ['CE', 'PSE2', 'PSE1'],
+        vehs: ['VPSP'],
+        reward: 420
+      };
+    } else if (pheno === 'canicule' || pheno === 'chaleur') {
+      missionDef = {
+        title: 'Canicule Préfectorale : Maraude Fraîcheur & Malaises Sériels',
+        desc: `Pic de chaleur à ${Math.round(game.weather.temp)}°C. Réquisition préfectorale pour la distribution d'eau potable d'urgence aux personnes sans abri et prise en charge de 3 malaises hyperthermiques en centre-ville.`,
+        urgency: 'normale',
+        durMin: 40,
+        reqVol: 3,
+        ranks: ['PSE2', 'PSE1'],
+        vehs: ['VPSP'],
+        reward: 380
+      };
+    } else if (pheno === 'grand_froid') {
+      missionDef = {
+        title: 'Plan Grand Froid : Maraude Sociale Nocturne & Mise à l’Abri',
+        desc: `Température de ${Math.round(game.weather.temp)}°C avec ressenti glacial. Le 115 sollicite la Protection Civile pour orienter 8 personnes vulnérables vers le gymnase d’hébergement d’urgence.`,
+        urgency: 'normale',
+        durMin: 45,
+        reqVol: 3,
+        ranks: ['PSE2', 'PSE1'],
+        vehs: ['VL'],
+        reward: 390
+      };
+    } else {
+      missionDef = {
+        title: 'Intempéries : Reconnaissance & Assistance aux Sinistrés',
+        desc: `Conditions météo dégradées. Reconnaissance des points bas et assistance logistique aux riverains isolés.`,
+        urgency: 'normale',
+        durMin: 30,
+        reqVol: 3,
+        ranks: ['PSE1'],
+        vehs: ['VL'],
+        reward: 350
+      };
+    }
+
+    const newWeatherMission = {
+      id: `m-meteo-${Date.now()}`,
+      type: 'meteo',
+      categoryLabel: `Météo-France - ${game.weather.alertTitle}`,
+      title: missionDef.title,
+      desc: missionDef.desc,
+      lat: base.lat + offsetLat,
+      lng: base.lng + offsetLng,
+      scale: `Dispositif Intempéries (${missionDef.reqVol} secouristes)`,
+      eventDate: { ...game.clock, hour: game.clock.hour },
+      durationSeconds: missionDef.durMin * 60,
+      durationHours: (missionDef.durMin / 60).toFixed(1),
+      requiredVolunteers: missionDef.reqVol,
+      requiredRanks: missionDef.ranks,
+      requiredVehicles: missionDef.vehs,
+      rewardMoney: missionDef.reward,
+      rewardReputation: 45,
+      progress: 0,
+      status: 'planifie',
+      registeredVolunteers: [],
+      assignedCrew: { volunteers: [], vehicles: [] }
+    };
+
+    game.missions.push(newWeatherMission);
+    game.renderMissions();
+    game.updateStatsUI();
+    game.saveGame();
+
+    if (window.ProtecIncidents) {
+      window.ProtecIncidents.sendSystemNotification(
+        `⛈️ ALERTE MÉTÉO-FRANCE EN COURS`,
+        `${missionDef.title} déclenchée par la Préfecture !`,
+        `meteo-${newWeatherMission.id}`
+      );
+    }
+    game.showToast('Réquisition Météo-France', `${missionDef.title} !`, 'orange');
   },
 
   updateWeatherAndDayNight(game) {
@@ -419,41 +723,23 @@ window.ProtecSystems = {
       filterEl.style.backgroundColor = cycle.color;
     }
 
-    // Événements de vigilance Météo-France tous les quelques jours
-    if (game.clock.day !== game.weather.lastUpdateDay && game.clock.hour === 8) {
-      game.weather.lastUpdateDay = game.clock.day;
-      const roll = Math.random();
-      if (roll < 0.15) {
-        game.weather.vigilance = 'orange';
-        game.weather.temp = 38;
-        game.weather.condition = 'heat';
-        game.weather.alertTitle = 'Vigilance Orange Canicule Préfectorale';
-        game.weather.alertDesc = 'Fortes chaleurs (>38°C). Risque élevé de malaises sur les DPS. Renforcez les points d’eau et maraudes fraîcheur.';
-        game.showToast('Alerte Météo-France', 'Passage en Vigilance ORANGE Canicule !', 'orange');
-      } else if (roll < 0.23) {
-        game.weather.vigilance = 'red';
-        game.weather.temp = 16;
-        game.weather.condition = 'flood';
-        game.weather.alertTitle = 'Vigilance Rouge Crues & Inondations (PCS)';
-        game.weather.alertDesc = 'Déclenchement du Plan Communal de Sauvegarde. Mobilisation générale pour l’ouverture de CAI et le pompage d’urgence.';
-        game.showToast('Alerte Préfectorale MAJEURE', 'Vigilance ROUGE Inondations activée !', 'orange');
-      } else if (roll < 0.45) {
-        game.weather.vigilance = 'yellow';
-        game.weather.temp = 19;
-        game.weather.condition = 'rain';
-        game.weather.alertTitle = 'Vigilance Jaune Orages & Pluie';
-        game.weather.alertDesc = 'Averses soutenues. Prévoyez des bâches et du matériel étanche sur vos dispositifs.';
-      } else {
-        game.weather.vigilance = 'green';
-        game.weather.temp = 22;
-        game.weather.condition = 'sun';
-        game.weather.alertTitle = 'Vigilance Verte - Conditions Nominales';
-        game.weather.alertDesc = 'Conditions météorologiques calmes.';
+    // Récupération automatique de la météo réelle toutes les 10 minutes ou au premier lancement
+    if (!game.weather.lastFetchTimestamp || (Date.now() - game.weather.lastFetchTimestamp > 10 * 60 * 1000)) {
+      this.fetchRealWeather(game);
+    }
+
+    // Déclenchement occasionnel d'une mission météo en cas de vigilance active (Jaune/Orange/Rouge)
+    if (game.clock && game.clock.second === 25 && (game.clock.minute % 3 === 0)) {
+      if (game.weather && ['yellow', 'orange', 'red'].includes(game.weather.vigilance)) {
+        const proba = game.weather.vigilance === 'red' ? 0.70 : (game.weather.vigilance === 'orange' ? 0.45 : 0.20);
+        if (Math.random() < proba) {
+          this.triggerWeatherEmergencyMission(game);
+        }
       }
     }
 
-    // Température affichée avec prise en compte du cycle diurne/nocturne naturel
-    const currentTemp = game.weather.temp + cycle.tempOffset;
+    // Température réelle mesurée (avec léger ressenti selon l'heure)
+    const currentTemp = Math.round(game.weather.temp != null ? game.weather.temp : 18);
 
     // Mise à jour widget météo dans le header
     const tempEl = document.getElementById('weather-temp');
@@ -467,7 +753,12 @@ window.ProtecSystems = {
     if (iconEl) {
       if (game.weather.condition === 'heat') iconEl.textContent = '🔥';
       else if (game.weather.condition === 'flood') iconEl.textContent = '🌊';
+      else if (game.weather.condition === 'storm') iconEl.textContent = '⚡';
+      else if (game.weather.condition === 'wind') iconEl.textContent = '💨';
+      else if (game.weather.condition === 'snow') iconEl.textContent = '❄️';
       else if (game.weather.condition === 'rain') iconEl.textContent = '🌧️';
+      else if (game.weather.condition === 'fog') iconEl.textContent = '🌫️';
+      else if (game.weather.condition === 'cloud') iconEl.textContent = '⛅';
       else iconEl.textContent = cycle.periodIcon;
     }
 
@@ -476,7 +767,7 @@ window.ProtecSystems = {
         badgeEl.className = 'px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800';
         badgeEl.textContent = 'Vert';
       } else if (game.weather.vigilance === 'yellow') {
-        badgeEl.className = 'px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800';
+        badgeEl.className = 'px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 animate-pulse';
         badgeEl.textContent = 'Jaune';
       } else if (game.weather.vigilance === 'orange') {
         badgeEl.className = 'px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-orange-100 text-pc-orange animate-pulse';
@@ -489,13 +780,18 @@ window.ProtecSystems = {
 
     if (textEl) {
       if (game.weather.condition === 'heat') textEl.textContent = 'Canicule';
-      else if (game.weather.condition === 'flood') textEl.textContent = 'Crue / Inondation';
-      else if (game.weather.condition === 'rain') textEl.textContent = 'Averses';
+      else if (game.weather.condition === 'flood') textEl.textContent = 'Inondation';
+      else if (game.weather.condition === 'storm') textEl.textContent = 'Orages';
+      else if (game.weather.condition === 'wind') textEl.textContent = 'Grand Vent';
+      else if (game.weather.condition === 'snow') textEl.textContent = 'Neige/Verglas';
+      else if (game.weather.condition === 'rain') textEl.textContent = 'Pluie';
+      else if (game.weather.condition === 'fog') textEl.textContent = 'Brouillard';
+      else if (game.weather.condition === 'cloud') textEl.textContent = 'Nuageux';
       else textEl.textContent = cycle.periodLabel;
     }
 
     if (weatherWidget) {
-      weatherWidget.setAttribute('title', `Bulletin Météo-France : ${cycle.periodLabel} (${currentTemp}°C) • Vigilance ${game.weather.vigilance.toUpperCase()}`);
+      weatherWidget.setAttribute('title', `Météo Réelle : ${currentTemp}°C à ${game.weather.locationName || 'votre antenne'} • Vigilance ${game.weather.vigilance.toUpperCase()} (${game.weather.alertTitle})`);
     }
   },
 

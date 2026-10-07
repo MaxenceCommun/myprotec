@@ -188,9 +188,12 @@ window.ProtecModals = {
                         <span class="text-[10px] text-slate-500 font-medium">${v.label || v.type}</span>
                       </div>
                     </div>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.status === 'dispo' && !needsDesinf ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
-                      ${needsDesinf ? 'Désinfection Requise' : (v.status === 'dispo' ? 'Opérationnel' : 'En Mission')}
-                    </span>
+                    <div class="flex flex-col items-end gap-1">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.isBrokenDown ? 'bg-red-600 text-white' : (v.needsRearming ? 'bg-amber-500 text-white' : (v.status === 'dispo' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'))}">
+                        ${v.isBrokenDown ? 'EN PANNE' : (v.needsRearming ? 'À Réarmer' : (v.status === 'dispo' ? 'Opérationnel' : 'En Mission'))}
+                      </span>
+                      ${v.quarterlyDisinfectionDone ? '<span class="text-[9px] font-bold text-teal-700">✓ Certifié ARS</span>' : ''}
+                    </div>
                   </div>
 
                   <!-- Jauges -->
@@ -206,29 +209,33 @@ window.ProtecModals = {
                     </div>
                     <div>
                       <div class="flex justify-between text-[11px] mb-1">
-                        <span class="text-slate-500">État mécanique</span>
-                        <strong class="font-mono text-slate-700">${mech}%</strong>
+                        <span class="text-slate-500">Santé mécanique</span>
+                        <strong class="font-mono ${mech < 50 ? 'text-red-600' : 'text-slate-700'}">${mech}%</strong>
                       </div>
                       <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden">
-                        <div class="bg-pc-blue h-full rounded-full" style="width: ${mech}%"></div>
+                        <div class="${mech < 50 ? 'bg-red-500' : 'bg-pc-blue'} h-full rounded-full" style="width: ${mech}%"></div>
                       </div>
                     </div>
                   </div>
 
-                  <!-- Actions garage -->
-                  <div class="flex items-center gap-2 pt-1 border-t border-slate-100/80">
-                    <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'fuel')" class="flex-1 py-1.5 rounded-xl text-[11px] font-bold glass-button text-slate-700 transition">
+                  <!-- Actions garage complètes -->
+                  <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100/80">
+                    <!-- Réarmement matériel post-mission -->
+                    <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'rearm')" class="py-1.5 rounded-xl text-[11px] font-bold ${v.needsRearming ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm' : 'glass-button text-slate-700'} transition">
+                      ${v.needsRearming ? 'Réarmer Sacs (30 €)' : 'Réarmer (30 €)'}
+                    </button>
+                    <!-- Carburant -->
+                    <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'fuel')" class="py-1.5 rounded-xl text-[11px] font-bold glass-button text-slate-700 transition">
                       Plein (75 €)
                     </button>
-                    ${needsDesinf ? `
-                      <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'disinfection')" class="flex-1 py-1.5 rounded-xl text-[11px] font-extrabold bg-pc-orange text-white hover:brightness-110 shadow-sm transition">
-                        Bionettoyage (25 €)
-                      </button>
-                    ` : `
-                      <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'mechanical')" class="flex-1 py-1.5 rounded-xl text-[11px] font-bold glass-button text-slate-700 transition">
-                        Révision (280 €)
-                      </button>
-                    `}
+                    <!-- Désinfection Trimestrielle / Bionettoyage -->
+                    <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'disinfection_trimestrielle')" class="py-1.5 rounded-xl text-[10px] font-bold glass-button text-teal-800 hover:bg-teal-50 transition" title="Désinfection approfondie trimestrielle agréée ARS">
+                      Désinf. Trimestre (60 €)
+                    </button>
+                    <!-- Révision & Réparation panne -->
+                    <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'mechanical')" class="py-1.5 rounded-xl text-[11px] font-bold ${v.isBrokenDown || mech < 60 ? 'bg-red-600 text-white hover:bg-red-700 shadow-sm' : 'glass-button text-slate-700'} transition">
+                      ${v.isBrokenDown ? 'Réparer Panne (280 €)' : 'Révision (280 €)'}
+                    </button>
                   </div>
                 </div>
               `;
@@ -241,7 +248,7 @@ window.ProtecModals = {
 
   // --- MODAL BULLETIN MÉTÉO & VIGILANCE PRÉFECTORALE ---
   renderMeteo(game) {
-    const w = game.weather || { vigilance: 'green', temp: 21, alertTitle: 'Vigilance Verte', alertDesc: 'Nominale' };
+    const w = game.weather || { vigilance: 'green', temp: 18, alertTitle: 'Vigilance Verte', alertDesc: 'Nominale' };
     let cardBg = 'bg-emerald-50 border-emerald-200 text-emerald-950';
     let badgeBg = 'bg-emerald-600 text-white';
 
@@ -249,36 +256,100 @@ window.ProtecModals = {
     if (w.vigilance === 'orange') { cardBg = 'bg-orange-50 border-orange-200 text-orange-950'; badgeBg = 'bg-pc-orange text-white'; }
     if (w.vigilance === 'red') { cardBg = 'bg-red-50 border-red-200 text-red-950'; badgeBg = 'bg-red-600 text-white'; }
 
+    const stationName = game.stations[0]?.name || w.locationName || 'Antenne';
+    const windText = `${Math.round(w.windGusts || w.windSpeed || 0)} km/h`;
+    const rainText = `${(w.precipitation || 0).toFixed(1)} mm/h`;
+    const humidityText = `${Math.round(w.humidity || 60)}%`;
+
     return `
       <div class="space-y-5">
+        <!-- Carte Principale Bulletin Météo & Vigilance -->
         <div class="p-5 rounded-2xl border ${cardBg} shadow-sm space-y-3 glass-card">
           <div class="flex items-center justify-between">
             <span class="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${badgeBg}">
               Vigilance ${w.vigilance.toUpperCase()}
             </span>
-            <span class="text-sm font-extrabold font-mono">${w.temp}°C • ${game.cities[game.currentCityKey]?.name}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-extrabold font-mono">${Math.round(w.temp)}°C</span>
+              <button onclick="window.ProtecSystems.fetchRealWeather(window.game, true).then(() => window.game.openModule('meteo'))" class="px-2 py-1 rounded-lg glass-button text-[10px] font-bold text-slate-700 hover:text-pc-blue flex items-center gap-1" title="Actualiser avec les relevés réels">
+                <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                Réel
+              </button>
+            </div>
           </div>
-          <h3 class="text-base font-black text-slate-900">${w.alertTitle}</h3>
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Localisation Réelle : ${stationName}</span>
+            <h3 class="text-base font-black text-slate-900 mt-0.5">${w.alertTitle}</h3>
+          </div>
           <p class="text-xs text-slate-700 leading-relaxed">${w.alertDesc}</p>
         </div>
 
+        <!-- Données Météorologiques Précises de la Station -->
+        <div class="grid grid-cols-3 gap-2.5 text-center">
+          <div class="p-3 rounded-2xl glass-card space-y-1">
+            <span class="text-[10px] font-bold uppercase text-slate-400 flex items-center justify-center gap-1">
+              <i data-lucide="wind" class="w-3 h-3 text-sky-500"></i> Rafales
+            </span>
+            <div class="text-sm font-black text-slate-800 mono-num">${windText}</div>
+          </div>
+          <div class="p-3 rounded-2xl glass-card space-y-1">
+            <span class="text-[10px] font-bold uppercase text-slate-400 flex items-center justify-center gap-1">
+              <i data-lucide="cloud-rain" class="w-3 h-3 text-blue-500"></i> Précipitations
+            </span>
+            <div class="text-sm font-black text-slate-800 mono-num">${rainText}</div>
+          </div>
+          <div class="p-3 rounded-2xl glass-card space-y-1">
+            <span class="text-[10px] font-bold uppercase text-slate-400 flex items-center justify-center gap-1">
+              <i data-lucide="droplets" class="w-3 h-3 text-teal-500"></i> Humidité
+            </span>
+            <div class="text-sm font-black text-slate-800 mono-num">${humidityText}</div>
+          </div>
+        </div>
+
+        <!-- Consignes Opérationnelles Spécifiques selon les Aléas -->
         <div class="space-y-3 text-xs">
-          <h4 class="font-extrabold text-slate-700 uppercase tracking-wider">Consignes Opérationnelles de Sécurité Civile</h4>
+          <h4 class="font-extrabold text-slate-700 uppercase tracking-wider">Consignes Opérationnelles & Risques Préfectoraux</h4>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div class="p-3.5 rounded-2xl glass-card space-y-1.5">
-              <span class="font-extrabold text-pc-blue flex items-center gap-1.5">
-                <i data-lucide="sun" class="w-4 h-4 text-amber-500"></i> Canicule & Coup de Chaleur
+            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border border-amber-200">
+              <span class="font-extrabold text-amber-700 flex items-center gap-1.5">
+                <i data-lucide="sun" class="w-4 h-4 text-amber-500"></i> Canicule & Coups de Chaleur
               </span>
-              <p class="text-slate-600">Doublement des stocks d'eau minérale, tentes de repos climatisées, rotations des secouristes toutes les 4 heures.</p>
+              <p class="text-slate-600">Distribution d’eau minérale, maraudes fraîcheur d’urgence auprès des sans-abri, tentes climatisées.</p>
             </div>
-            <div class="p-3.5 rounded-2xl glass-card space-y-1.5">
-              <span class="font-extrabold text-pc-blue flex items-center gap-1.5">
-                <i data-lucide="cloud-rain" class="w-4 h-4 text-sky-500"></i> Inondations & Crues (PCS)
+            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border border-sky-200">
+              <span class="font-extrabold text-sky-700 flex items-center gap-1.5">
+                <i data-lucide="waves" class="w-4 h-4 text-sky-500"></i> Inondations & Crues (PCS)
               </span>
-              <p class="text-slate-600">Activation immédiate du Poste Médical Avancé (PMA) et du Centre d'Accueil des Impliqués (CAI) dans un gymnase communal.</p>
+              <p class="text-slate-600">Activation du Plan Communal de Sauvegarde, ouverture de gymnases pour le Centre d'Accueil des Impliqués (CAI), pompage d’urgence.</p>
+            </div>
+            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border border-teal-200">
+              <span class="font-extrabold text-teal-700 flex items-center gap-1.5">
+                <i data-lucide="wind" class="w-4 h-4 text-teal-500"></i> Vents Violents & Chutes d'Arbres
+              </span>
+              <p class="text-slate-600">Balisage d’urgence des voies de circulation bloquées, renfort de protection contre les chutes de tuiles et branches.</p>
+            </div>
+            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border border-indigo-200">
+              <span class="font-extrabold text-indigo-700 flex items-center gap-1.5">
+                <i data-lucide="snowflake" class="w-4 h-4 text-indigo-500"></i> Neige, Verglas & Grand Froid
+              </span>
+              <p class="text-slate-600">Maraudes sociales nocturnes avec le 115, hébergement de crise, chaînes à neige obligatoires sur les véhicules.</p>
             </div>
           </div>
         </div>
+
+        <!-- Déclenchement d'une reconnaissance si vigilance supérieure -->
+        ${w.vigilance !== 'green' ? `
+          <div class="p-4 rounded-2xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-3">
+            <div>
+              <div class="text-xs font-black text-amber-900">Alerte Météo Préfectorale Active</div>
+              <div class="text-[11px] text-amber-800">Des missions de réquisition préfectorale (CAI, inondation, chute d’arbre, maraude) se déclenchent automatiquement.</div>
+            </div>
+            <button onclick="window.ProtecSystems.triggerWeatherEmergencyMission(window.game); window.game.closeModal();" class="px-3.5 py-2 rounded-xl bg-pc-orange hover:bg-pc-orange-hover text-white text-xs font-black shadow transition flex items-center gap-1.5 flex-shrink-0">
+              <i data-lucide="siren" class="w-4 h-4"></i>
+              Reconnaissance Immédiate
+            </button>
+          </div>
+        ` : ''}
       </div>
     `;
   },

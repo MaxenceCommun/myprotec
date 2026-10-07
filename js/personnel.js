@@ -190,7 +190,7 @@ window.ProtecPersonnel = {
   },
 
   // Calcul du statut de disponibilité dynamique
-  calculateAvailability(volunteer, game) {
+  calculateAvailability(volunteer, game, mission = null) {
     if (volunteer.isBurnout) {
       return { available: false, reason: 'Arrêt de travail / Burnout (surmenage)' };
     }
@@ -200,21 +200,26 @@ window.ProtecPersonnel = {
     }
 
     const profile = this.socialProfiles[volunteer.profilSocial] || this.socialProfiles.benevole;
-    const currentDayName = game.clock.daysNames[game.clock.day % 7];
+    const currentDayName = (mission && mission.eventDate?.dayName) ? mission.eventDate.dayName : game.clock.daysNames[game.clock.day % 7];
 
-    // Vérification du jour favori selon profil social
+    // Vérification du jour favori selon profil social et préférences
     const isPreferredDay = volunteer.dispoJours?.includes(currentDayName) || profile.favDays.includes(currentDayName);
     
-    // Probabilité d'acceptation selon le taux du profil
-    let chance = profile.baseDispoRate;
-    if (isPreferredDay) chance += 0.35;
-    if (volunteer.motivation > 75) chance += 0.15;
-    if (volunteer.energy > 70) chance += 0.10;
+    // Probabilité d'acceptation :
+    // Même si le bénévole a Samedi/Dimanche, il peut quand même se libérer en semaine (mardi, etc.) avec une probabilité réduite
+    let chance = isPreferredDay ? (profile.baseDispoRate + 0.35) : 0.16;
+    if (volunteer.motivation > 75) chance += 0.12;
+    if (volunteer.energy > 70) chance += 0.08;
+    
+    // Si petit poste de secours (durée <= 4h ou PAPS/DPS-PE), plus accessible en semaine
+    if (mission && (mission.durationHours <= 4 || (mission.scale && (mission.scale.includes('PE') || mission.scale.includes('PAPS'))))) {
+      chance += 0.10;
+    }
 
-    const available = Math.random() < Math.min(0.98, chance);
+    const available = Math.random() < Math.min(0.96, Math.max(0.08, chance));
     return {
       available,
-      reason: available ? 'Disponible' : `${profile.label} : indisponible ce jour`
+      reason: available ? 'Disponible' : `${profile.label} : indisponible ce jour-là`
     };
   },
 

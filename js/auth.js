@@ -420,10 +420,10 @@ window.ProtecAuth = {
       game.player.role = data.user.role || 'user';
       game.player.deptRole = data.user.deptRole || 'antenne_principale';
       game.player.departmentCode = data.user.departmentCode || departmentCode;
-
-      if (game.changeDepartment) {
-        game.changeDepartment(game.player.departmentCode);
-      }
+      game.currentDepartmentCode = game.player.departmentCode;
+      localStorage.setItem('protec_department_code', game.player.departmentCode);
+      if (game.populateDepartmentSelector) game.populateDepartmentSelector();
+      if (game.returnToMyAntenna) game.returnToMyAntenna();
 
       const roleLabel = game.player.deptRole === 'antenne_principale' ? 'Antenne Principale du Département' : 'Antenne Départementale';
       game.showToast('Compte Créé !', `Bienvenue ${data.user.username} (${roleLabel} • Dépt ${game.player.departmentCode}).`, 'green');
