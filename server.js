@@ -114,7 +114,8 @@ const server = http.createServer((req, res) => {
           sendJson(res, 201, result);
         }
       } catch (err) {
-        sendJson(res, 400, { success: false, error: 'Données invalides' });
+        console.error('Erreur API Inscription:', err);
+        sendJson(res, 400, { success: false, error: err.message || 'Données invalides' });
       }
     });
     return;

@@ -170,7 +170,7 @@ class Database {
   }
 
   // Inscription
-  registerUser(username, password, stationName, city) {
+  registerUser(username, password, stationName, city, departmentCode) {
     if (!username || typeof username !== 'string' || username.trim().length < 3) {
       return { error: 'Le nom d’utilisateur doit comporter au moins 3 caractères.' };
     }

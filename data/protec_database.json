@@ -1,51 +1,22 @@
 {
   "users": {
-    "directeurtest": {
-      "id": "usr_1791395620390_2k4s3q",
-      "username": "DirecteurTest",
-      "passwordHash": "f92fcc44183f72660a407890a9036c64cfdf11c94f0e132e068e77f2694841b2bec635b45bd069d7112591fc531d466a3235d7c504bc5aade9ed9d9b87687d8c",
-      "salt": "78f2ac90f37c8ff45f9875a3f10af384",
-      "stationName": "Antenne Centrale",
-      "city": "paris",
-      "createdAt": "2026-10-07T17:53:40.390Z",
-      "lastLogin": "2026-10-07T17:53:47.895Z"
-    },
     "admin": {
       "id": "usr_admin_master",
       "username": "Admin",
-      "passwordHash": "97774d2046720d46ab1e54664b5b36c593402de6fbfa8e86a992057c8f1eeb40245f13d2e48394e4c520e8f950bc4ab03b1cb6d43218b0bd32f0f5d50599151a",
-      "salt": "bbe1067ba02d39fcf8b2eb1c17e7436c",
+      "passwordHash": "2cf1e92e9f2fa2b9fdc0f70e893f18f4cf1d607dbd1dee09e0757a33afc94c0c8384ee2bdff227a94c37a45f8d88576f94f4e19b7f6ddd69e4b60b2443924ff5",
+      "salt": "657b32b3acc50abcc8b585e1ad0b26e4",
       "role": "admin",
       "isBanned": false,
       "stationName": "Direction Générale Nationale",
       "city": "paris",
-      "createdAt": "2026-10-07T18:52:41.364Z",
-      "lastLogin": "2026-10-07T18:52:41.365Z"
+      "createdAt": "2026-10-07T19:45:03.260Z",
+      "lastLogin": "2026-10-07T19:45:03.261Z"
     }
   },
-  "sessions": {
-    "ebe97d2ca0238d3893ccc0dd0011986255aa3009398478cf8b895ee257e24243": {
-      "userId": "usr_1791395620390_2k4s3q",
-      "username": "DirecteurTest",
-      "createdAt": 1791395620391,
-      "expiresAt": 1793987620391
-    },
-    "c946af32f03bc903b4d81aef84b8e514572cbdc4f4d07a979f407b5012fd4d53": {
-      "userId": "usr_1791395620390_2k4s3q",
-      "username": "DirecteurTest",
-      "createdAt": 1791395627895,
-      "expiresAt": 1793987627895
-    }
-  },
-  "savedGames": {
-    "usr_1791395620390_2k4s3q": {
-      "savedAt": "2026-10-07T17:53:47.902Z",
-      "data": {
-        "testData": 42,
-        "money": 50000
-      }
-    }
-  },
+  "sessions": {},
+  "savedGames": {},
+  "resetArchives": [],
+  "departments": {},
   "alliances": [
     {
       "id": "alliance-fnpc",
