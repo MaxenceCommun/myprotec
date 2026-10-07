@@ -69,13 +69,11 @@
           <!-- Logo MyProtec -->
           <img src="logo_myprotec.png" alt="MyProtec" class="h-6 sm:h-8 object-contain drop-shadow-sm flex-shrink-0" />
           <div class="border-l border-slate-200/80 pl-2">
-            <div class="flex items-center gap-1 sm:gap-1.5">
-              <span class="text-[8px] sm:text-[9px] font-black uppercase tracking-wider bg-pc-orange/15 text-pc-orange px-1 sm:px-1.5 py-0.2 rounded-md">LIVE MULTI</span>
-            </div>
-            <div class="text-[10px] sm:text-[11px] text-slate-500 font-semibold flex items-center gap-1">
+            <div class="text-[11px] sm:text-xs font-black text-slate-800 flex items-center gap-1">
               <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue"></i>
-              <span id="top-current-station-name" class="truncate max-w-[80px] sm:max-w-[160px]">Paris (75)</span>
+              <span id="top-current-station-name" class="truncate max-w-[90px] sm:max-w-[180px]">Antenne Locale</span>
             </div>
+            <span class="text-[9px] text-slate-400 font-bold block" id="top-antenna-role">Protection Civile</span>
           </div>
         </div>
 
@@ -184,7 +182,7 @@
           </div>
         </div>
 
-        <!-- Live Clock & Real-time status -->
+        <!-- Live Clock -->
         <div class="glass-panel px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-2xl flex items-center gap-2 shadow-sm">
           <div class="flex items-center gap-1.5">
             <i data-lucide="clock" class="w-3.5 h-3.5 text-pc-blue"></i>
@@ -193,20 +191,7 @@
               <span id="clock-time" class="text-xs font-extrabold mono-num text-slate-800">20:45:00</span>
             </div>
           </div>
-          <div class="h-5 w-px bg-slate-200"></div>
-          <div class="flex items-center gap-1 text-[9px] font-black tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200/60" title="Horloge synchronisée en temps réel multijoueur">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>TEMPS RÉEL</span>
-          </div>
         </div>
-
-        <!-- Add Station Button -->
-        <button onclick="window.game.startAntennaPlacement()" class="glass-panel px-3 py-2 rounded-2xl flex items-center gap-1.5 text-pc-blue hover:text-pc-orange hover:bg-white/90 transition shadow-sm group" title="Implanter une nouvelle antenne sur la carte">
-          <div class="w-6 h-6 rounded-lg bg-pc-orange/15 text-pc-orange flex items-center justify-center group-hover:bg-pc-orange group-hover:text-white transition">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-          </div>
-          <span class="text-xs font-bold hidden sm:inline">Antenne</span>
-        </button>
 
         <!-- Admin Panel Button -->
         <button id="admin-header-btn" onclick="window.ProtecAdmin.openAdminModal(window.game)" class="glass-panel px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-2xl flex items-center gap-1.5 text-indigo-700 hover:bg-indigo-50/80 transition shadow-sm group" title="Panel Administrateur BDD">
@@ -544,13 +529,13 @@
           <span class="text-[9px] text-slate-400">Vigilance</span>
         </button>
 
-        <!-- Implanter Antenne -->
-        <button onclick="window.game.closeMobileMenu(); window.game.startAntennaPlacement()" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-pc-orange/15 text-pc-orange flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="plus" class="w-5 h-5"></i>
+        <!-- Pôle Compétences & Bureau -->
+        <button onclick="window.game.closeMobileMenu(); window.game.openModule('competences')" class="mobile-grid-btn group">
+          <div class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+            <i data-lucide="award" class="w-5 h-5"></i>
           </div>
-          <span class="text-xs font-bold text-pc-orange">+ Antenne</span>
-          <span class="text-[9px] text-slate-400">Sur la carte</span>
+          <span class="text-xs font-bold text-slate-700">Bureau</span>
+          <span class="text-[9px] text-slate-400">Direction</span>
         </button>
       </div>
 
@@ -658,6 +643,54 @@
         <button onclick="window.game.executeSecureReset()" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/30 transition flex items-center gap-1.5">
           <i data-lucide="alert-octagon" class="w-4 h-4"></i>
           Réinitialiser & Archiver
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE VALIDATION D'EMPLACEMENT D'ANTENNE -->
+  <div id="placement-validation-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
+    <div class="glass-panel-heavy rounded-3xl w-full max-w-md p-6 shadow-2xl border border-white/95 modal-fade-in space-y-5">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-pc-blue/10 text-pc-blue flex items-center justify-center text-xl font-black">
+          📍
+        </div>
+        <div>
+          <h3 class="text-base font-black text-slate-900">Validation de l'Emplacement</h3>
+          <p class="text-[11px] text-slate-500 font-semibold">Implantation de votre Antenne</p>
+        </div>
+      </div>
+
+      <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs">
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">Département d'affectation :</span>
+          <strong id="placement-val-dept" class="text-pc-blue font-bold">Paris (75)</strong>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">Nom de l'antenne :</span>
+          <strong id="placement-val-name" class="text-slate-800 font-bold">Antenne Principale (75)</strong>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">Coordonnées GPS :</span>
+          <span id="placement-val-coords" class="font-mono text-[11px] text-slate-700 font-bold">48.8566, 2.3522</span>
+        </div>
+        <div class="flex justify-between items-center pt-2 border-t border-slate-200">
+          <span class="text-slate-500">Coût d'installation :</span>
+          <strong id="placement-val-cost" class="text-emerald-700 font-extrabold text-sm">2 500 €</strong>
+        </div>
+      </div>
+
+      <p class="text-[11px] text-slate-500 italic text-center">
+        Un repère temporaire a été positionné sur la carte. Confirmez-vous cet emplacement ou souhaitez-vous déplacer le repère ?
+      </p>
+
+      <div class="flex items-center justify-between gap-3 pt-2">
+        <button onclick="window.game.adjustPlacementMarker()" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
+          Déplacer le repère
+        </button>
+        <button onclick="window.game.confirmAntennaPlacementFinal()" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-pc-blue text-white hover:bg-pc-blue-light shadow-lg shadow-pc-blue/20 transition flex items-center justify-center gap-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          Valider l'emplacement
         </button>
       </div>
     </div>

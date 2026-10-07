@@ -63,6 +63,15 @@ class ProtecGame {
     // Département d'affectation du joueur (101 départements français)
     this.currentDepartmentCode = this.player.departmentCode || '75';
 
+    // Garde SAMU 15 (AASC conventionné)
+    this.samuGarde = {
+      active: false,
+      vehicleId: null,
+      crewVolunteerIds: [],
+      shiftStartedAt: null,
+      totalInterventions: 0
+    };
+
     // Données opérationnelles
     this.stations = [];
     this.vehicles = [];
@@ -471,6 +480,7 @@ class ProtecGame {
         rewards: this.rewards,
         bureau: this.bureau,
         manoeuvres: this.manoeuvres,
+        samuGarde: this.samuGarde,
         adRewards: this.adRewards
       };
       localStorage.setItem('protec_live_save_v4', JSON.stringify(state));
@@ -502,6 +512,7 @@ class ProtecGame {
           this.rewards = parsed.rewards || this.rewards;
           this.bureau = parsed.bureau || this.bureau;
           this.manoeuvres = parsed.manoeuvres || this.manoeuvres;
+          this.samuGarde = parsed.samuGarde || this.samuGarde;
           this.adRewards = parsed.adRewards || null;
           if (parsed.player) this.player = parsed.player;
         }
@@ -769,19 +780,37 @@ class ProtecGame {
   }
 
   startAntennaPlacement() {
+    if (this.stations.length >= 1) {
+      this.showToast('Limite d’Antenne Atteinte', 'En tant que Directeur, vous gérez votre antenne unique d’affectation départementale.', 'orange');
+      return;
+    }
     this.isPlacingAntenna = true;
     document.getElementById('antenna-placement-banner').classList.remove('hidden');
     document.getElementById('map').style.cursor = 'crosshair';
-    this.showToast('Implantation', 'Cliquez sur la carte pour choisir l’adresse de votre antenne.', 'blue');
+    this.showToast('Implantation', 'Cliquez sur la carte dans votre département pour positionner votre repère d’antenne.', 'blue');
   }
 
   cancelAntennaPlacement() {
     this.isPlacingAntenna = false;
-    document.getElementById('antenna-placement-banner').classList.add('hidden');
+    if (this.tempPlacementMarker) {
+      this.map.removeLayer(this.tempPlacementMarker);
+      this.tempPlacementMarker = null;
+    }
+    this.pendingPlacementLatLng = null;
+    const modal = document.getElementById('placement-validation-modal');
+    if (modal) modal.classList.add('hidden');
+    const banner = document.getElementById('antenna-placement-banner');
+    if (banner) banner.classList.add('hidden');
     document.getElementById('map').style.cursor = '';
   }
 
   confirmAntennaPlacement(latlng) {
+    if (this.stations.length >= 1) {
+      this.showToast('Action impossible', 'Vous possédez déjà votre antenne départementale.', 'orange');
+      this.cancelAntennaPlacement();
+      return;
+    }
+
     // 1. Contrôle strict de géolocalisation dans le bon département d'affectation
     const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
     if (window.ProtecDepartements) {
@@ -797,8 +826,71 @@ class ProtecGame {
       }
     }
 
-    const isFirst = this.stations.length === 0;
-    const cost = isFirst ? 2500 : 4500;
+    const cost = 2500;
+    if (this.resources.money < cost) {
+      this.showToast('Trésorerie insuffisante', `Il vous faut ${cost} € de trésorerie pour implanter l'antenne.`, 'orange');
+      this.cancelAntennaPlacement();
+      return;
+    }
+
+    // Sauvegarde temporaire des coordonnées
+    this.pendingPlacementLatLng = latlng;
+
+    // Création ou déplacement du repère temporaire visuel
+    if (this.tempPlacementMarker) {
+      this.tempPlacementMarker.setLatLng(latlng);
+    } else {
+      const el = document.createElement('div');
+      el.className = 'custom-leaflet-marker';
+      el.innerHTML = `
+        <div class="radar-ping-orange"></div>
+        <div class="marker-inner bg-pc-orange border-2 border-white p-1 shadow-2xl animate-pulse">
+          <span class="text-xs font-black text-white">📍</span>
+        </div>
+      `;
+      const icon = L.divIcon({
+        className: 'clean-marker',
+        html: el,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+      });
+      this.tempPlacementMarker = L.marker([latlng.lat, latlng.lng], { icon }).addTo(this.map);
+    }
+
+    // Remplissage des détails dans la modale de validation
+    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
+    const isMainAntenna = this.player.deptRole === 'antenne_principale';
+    const stationName = isMainAntenna 
+      ? `Antenne Principale (${deptCode})` 
+      : `Antenne Territoriale ${this.player.name} (${deptCode})`;
+
+    const deptEl = document.getElementById('placement-val-dept');
+    if (deptEl) deptEl.textContent = `${deptInfo?.name || deptCode} (${deptCode})`;
+    const nameEl = document.getElementById('placement-val-name');
+    if (nameEl) nameEl.textContent = stationName;
+    const coordsEl = document.getElementById('placement-val-coords');
+    if (coordsEl) coordsEl.textContent = `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+    const costEl = document.getElementById('placement-val-cost');
+    if (costEl) costEl.textContent = `${cost.toLocaleString('fr-FR')} €`;
+
+    const modal = document.getElementById('placement-validation-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+
+  adjustPlacementMarker() {
+    const modal = document.getElementById('placement-validation-modal');
+    if (modal) modal.classList.add('hidden');
+    this.showToast('Ajustement', 'Cliquez à un autre endroit dans votre département pour repositionner le repère.', 'blue');
+  }
+
+  confirmAntennaPlacementFinal() {
+    if (!this.pendingPlacementLatLng) return;
+    const latlng = this.pendingPlacementLatLng;
+    const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
+    const cost = 2500;
 
     if (this.resources.money < cost) {
       this.showToast('Trésorerie insuffisante', `Il vous faut ${cost} € de trésorerie.`, 'orange');
@@ -808,17 +900,10 @@ class ProtecGame {
 
     this.resources.money -= cost;
     const stationId = `station-${Date.now()}`;
-    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
     const isMainAntenna = this.player.deptRole === 'antenne_principale';
-    
-    let stationName = '';
-    if (isFirst) {
-      stationName = isMainAntenna 
-        ? `Antenne Principale (${deptCode})` 
-        : `Antenne Territoriale ${this.player.name} (${deptCode})`;
-    } else {
-      stationName = `Antenne Rattachée ${this.stations.length + 1} (${deptCode})`;
-    }
+    const stationName = isMainAntenna 
+      ? `Antenne Principale (${deptCode})` 
+      : `Antenne Territoriale ${this.player.name} (${deptCode})`;
 
     const newStation = {
       id: stationId,
@@ -827,12 +912,12 @@ class ProtecGame {
       city: deptCode,
       lat: latlng.lat,
       lng: latlng.lng,
-      isMain: isFirst && isMainAntenna,
+      isMain: isMainAntenna,
       level: 1,
       rooms: { formation: false, standard: true },
       vehicles: []
     };
-
+    const isFirst = this.stations.length === 0;
     if (isFirst) {
       const vehId = `vpsp-${Date.now()}`;
       this.vehicles.push({
@@ -943,24 +1028,31 @@ class ProtecGame {
     const base = this.stations[Math.floor(Math.random() * this.stations.length)];
     const cap = this.calculatePlayerCapacity ? this.calculatePlayerCapacity() : { tier: 1 };
 
+    // L'accès aux tailles de dispositifs et aux sollicitations dépend de la réputation de l'antenne
+    const rep = this.resources.reputationScore || 0;
+    let allowedTier = 1; // PAPS par défaut
+    if (rep >= 120 && cap.tier >= 2) allowedTier = 2; // DPS-PE accessible
+    if (rep >= 350 && cap.tier >= 3) allowedTier = 3; // DPS-ME accessible
+    if (rep >= 700 && cap.tier >= 4) allowedTier = 4; // DPS-GE accessible
+
     let eventsList = [];
-    if (cap.tier === 1) {
-      // Débutant : 2 à 3 secouristes, durées réalistes 2h à 4h
+    if (allowedTier === 1) {
+      // Débutant (PAPS : 2 à 3 secouristes, durées 2h à 4h)
       eventsList = [
         { name: 'Cross du Collège Pasteur', client: 'Éducation Nationale', cType: 'association', dur: 3, pub: '450 élèves', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [] },
         { name: 'Brocante de Quartier des Berges', client: 'Comité des Fêtes', cType: 'association', dur: 4, pub: '1 200 chineurs', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [] },
         { name: 'Tournoi Minimes de Handball', client: 'Club Omnisports', cType: 'club_sportif', dur: 3, pub: '600 personnes', scale: 'PAPS (3 secouristes)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: cap.vpspCount > 0 ? ['VPSP'] : [] },
-        { name: 'Gala Étudiant des Beaux-Arts', client: 'BDE Université', cType: 'association', dur: 4, pub: '800 étudiants', scale: 'DPS-PE (3 secouristes)', reqV: Math.min(3, Math.max(2, cap.totalVolunteers || 2)), ranks: ['PSE1', 'PSE2'], reqVeh: cap.vpspCount > 0 ? ['VPSP'] : [] }
+        { name: 'Fête de Quartier & Olympiades', client: 'Maison de Quartier', cType: 'association', dur: 4, pub: '800 habitants', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [] }
       ];
-    } else if (cap.tier === 2) {
-      // Opérationnel : 4 à 6 secouristes, 1 VPSP, durées 4h à 6h
+    } else if (allowedTier === 2) {
+      // Opérationnel (DPS-PE : 4 à 6 secouristes, 1 VPSP, durées 4h à 6h)
       eventsList = [
         { name: 'Course Nocturne des 10 km', client: 'Athlétic Club Régional', cType: 'association', dur: 5, pub: '2 500 coureurs', scale: 'DPS-PE (4 secouristes + VPSP)', reqV: 4, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
         { name: 'Feu d’Artifice & Bal Républicain', client: 'Mairie', cType: 'collectivite', dur: 4, pub: '3 500 spectateurs', scale: 'DPS-PE (5 secouristes + VPSP)', reqV: 5, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
         { name: 'Tournoi Régional de Judo', client: 'Ligue Régionale', cType: 'club_sportif', dur: 6, pub: '1 500 judokas & public', scale: 'DPS-PE (4 secouristes)', reqV: 4, ranks: ['PSE2', 'PSE1'], reqVeh: ['VPSP'] }
       ];
     } else {
-      // Confirmé / Grand Dispositif : 6 à 12 secouristes, 1 à 2 VPSP
+      // Confirmé / Grand Dispositif (DPS-ME / GE : 6 à 12 secouristes, 1 à 2 VPSP)
       eventsList = [
         { name: 'Festival Musical de Plein Air', client: 'Collectif Festif', cType: 'professionnel', dur: 8, pub: '6 000 festivaliers', scale: 'DPS-ME (8 secouristes + 2 VPSP)', reqV: 8, ranks: ['CD', 'CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
         { name: 'Triathlon Départemental', client: 'Fédération Triathlon', cType: 'association', dur: 7, pub: '4 000 participants', scale: 'DPS-ME (6 secouristes + VPSP + VTU)', reqV: 6, ranks: ['CE', 'PSE2', 'PSE1'], reqVeh: ['VPSP'] },
@@ -2061,9 +2153,9 @@ class ProtecGame {
               <span class="font-bold block">Fonctionnement du calendrier :</span>
               Chaque DPS a une date et heure fixées à l’avance. Les secouristes disponibles s’inscrivent d’eux-mêmes.
             </div>
-            <button onclick="window.game.generateRandomDevisOpportunity()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-pc-blue text-white hover:bg-pc-blue-light transition whitespace-nowrap ml-3 shadow-sm">
-              + Demande Organisateur
-            </button>
+            <div class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-white/80 border border-pc-blue/30 text-pc-blue whitespace-nowrap ml-3">
+              Flux Organisateur Automatique
+            </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2128,7 +2220,7 @@ class ProtecGame {
                 <i data-lucide="scale" class="w-4 h-4 text-amber-600"></i>
                 Barème Réglementaire de Référence (Protection Civile)
               </span>
-              <button onclick="window.game.generateRandomDevisOpportunity(); window.game.openModule('devis');" class="text-xs font-bold text-pc-blue hover:underline">+ Nouvelle Demande Organisateur</button>
+              <span class="text-[11px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-lg">Flux Organisateur Spontané</span>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-amber-800">
               <div class="p-2 glass-card rounded-xl">Vacation secouriste : <strong>18,00 €/h</strong></div>
@@ -2137,8 +2229,44 @@ class ProtecGame {
               <div class="p-2 glass-card rounded-xl">Frais convention : <strong>40,00 €</strong></div>
             </div>
             <p class="text-[11px] text-amber-700 italic">
-              Vous êtes libre de fixer le montant du devis. Attention : un tarif excessif par rapport au barème sera rejeté par l’organisateur pour dépassement budgétaire !
+              Les demandes de devis proviennent spontanément des organisateurs locaux selon la réputation et le rayonnement de votre antenne.
             </p>
+          </div>
+
+          <!-- Section Communication, Publicité & Rayonnement d'Antenne -->
+          <div class="p-4 rounded-2xl glass-card space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="text-xs font-black uppercase text-slate-800 tracking-wider">Rayonnement & Communication de l'Antenne</h4>
+                <p class="text-[11px] text-slate-500">Activez des campagnes de communication pour accroître votre popularité et recevoir des sollicitations d'organisateurs d'événements.</p>
+              </div>
+              <div class="text-right">
+                <span class="text-[10px] text-slate-400 font-bold uppercase block">Popularité</span>
+                <span class="text-xs font-black text-pc-blue">${this.resources.reputationScore} pts (${this.resources.followers} abonnés)</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div class="p-3 rounded-2xl glass-card flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-bold text-slate-800">Campagne Réseaux Sociaux</div>
+                  <div class="text-[10px] text-slate-500">Notoriété locale & associations (+sollicitations)</div>
+                </div>
+                <button onclick="window.game.toggleCampaign('social'); window.game.openModule('devis');" class="px-3 py-1.5 rounded-xl text-xs font-bold ${this.resources.campaigns.social ? 'bg-emerald-600 text-white' : 'glass-button text-slate-700'} transition">
+                  ${this.resources.campaigns.social ? 'Active ✓' : 'Lancer (150 €)'}
+                </button>
+              </div>
+
+              <div class="p-3 rounded-2xl glass-card flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-bold text-slate-800">Affichage & Mairie</div>
+                  <div class="text-[10px] text-slate-500">Visibilité municipale (+grands dispositifs)</div>
+                </div>
+                <button onclick="window.game.toggleCampaign('posters'); window.game.openModule('devis');" class="px-3 py-1.5 rounded-xl text-xs font-bold ${this.resources.campaigns.posters ? 'bg-emerald-600 text-white' : 'glass-button text-slate-700'} transition">
+                  ${this.resources.campaigns.posters ? 'Actif ✓' : 'Lancer (200 €)'}
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Section Subventions & Mécénat Participatif -->
@@ -2164,9 +2292,9 @@ class ProtecGame {
           </div>
 
           <div class="space-y-4">
-            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Demandes Reçues à Chiffrer (${pendingDevis.length})</h4>
+            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Demandes Reçues des Organisateurs (${pendingDevis.length})</h4>
 
-            ${pendingDevis.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucun devis en attente. Cliquez sur « + Nouvelle Demande » pour en simuler une.</p>' : ''}
+            ${pendingDevis.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune demande reçue pour le moment. Développez la communication et la réputation de votre antenne pour recevoir des devis d’organisateurs.</p>' : ''}
             
             ${pendingDevis.map(d => {
               const b = d.bareme;
@@ -2510,28 +2638,106 @@ class ProtecGame {
         </div>
       `;
     } else if (moduleKey === 'samu') {
-      title.textContent = 'Pôle Urgence SAMU 15';
-      subtitle.textContent = 'Départs réflexes ambulance VPSP sur demande de la régulation';
+      title.textContent = 'Permanence & Gardes SAMU 15 (AASC)';
+      subtitle.textContent = 'Mise à disposition conventionnée d’ambulances VPSP et équipages au profit du SAMU départemental';
       icon.setAttribute('data-lucide', 'activity');
 
+      const isGuardActive = this.samuGarde && this.samuGarde.active;
+      const vpsps = this.vehicles.filter(v => v.type === 'VPSP');
+      const dispoVpsps = vpsps.filter(v => v.status === 'dispo' || (isGuardActive && v.id === this.samuGarde.vehicleId));
+      const qualifiedVolunteers = this.volunteers.filter(v => ['CE', 'PSE2', 'PSE1'].includes(v.rank) && (v.status === 'dispo' || (isGuardActive && this.samuGarde.crewVolunteerIds.includes(v.id))));
+      const currentVpsp = isGuardActive ? this.vehicles.find(v => v.id === this.samuGarde.vehicleId) : null;
+      const currentCrew = isGuardActive ? this.volunteers.filter(v => this.samuGarde.crewVolunteerIds.includes(v.id)) : [];
       const samuMissions = this.missions.filter(m => m.type === 'samu');
+
       body.innerHTML = `
-        <div class="space-y-4">
-          <div class="p-4 rounded-2xl glass-card-orange text-xs text-orange-950">
-            <strong>Garde Urgence 15 :</strong> Les alertes SAMU surviennent inopinément et exigent le départ immédiat d’un VPSP avec secouristes qualifiés.
-          </div>
-          ${samuMissions.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucun départ réflexe en cours.</p>' : ''}
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            ${samuMissions.map(m => `
-              <div class="p-4 rounded-2xl glass-card space-y-2">
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-orange text-white">APPEL 15</span>
-                <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
-                <p class="text-xs text-slate-600">${m.desc}</p>
-                <div class="pt-2 border-t border-slate-100/70 flex justify-end">
-                  <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-pc-orange text-white hover:brightness-110 shadow-sm transition">Gérer</button>
+        <div class="space-y-5">
+          <!-- Carte Convention SAMU 15 -->
+          <div class="p-4 rounded-2xl ${isGuardActive ? 'bg-gradient-to-r from-emerald-500/15 to-pc-blue/15 border-2 border-emerald-500' : 'glass-card-orange'} space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-2xl ${isGuardActive ? 'bg-emerald-600 text-white' : 'bg-pc-orange text-white'} flex items-center justify-center font-bold text-lg shadow-sm">
+                  🚑
+                </div>
+                <div>
+                  <h4 class="text-sm font-black text-slate-900">Convention Cadre SAMU 15 & AASC</h4>
+                  <p class="text-[11px] text-slate-600">
+                    Mise à disposition opérationnelle en renfort des pompiers (BSPP/SDIS) et ambulanciers privés.
+                  </p>
                 </div>
               </div>
-            `).join('')}
+              <span class="px-3 py-1 rounded-full text-xs font-black ${isGuardActive ? 'bg-emerald-600 text-white animate-pulse' : 'bg-slate-200 text-slate-700'}">
+                ${isGuardActive ? 'GARDE ACTIVE (RÉFLEXE 15)' : 'ASTREINTE FERMÉE'}
+              </span>
+            </div>
+
+            <div class="p-3 rounded-xl bg-white/70 border border-slate-200/60 text-xs text-slate-700 space-y-1">
+              <div class="flex justify-between">
+                <span>Rémunération indemnitaire convention :</span>
+                <strong class="text-emerald-700 font-mono">280 à 480 € / intervention d'urgence</strong>
+              </div>
+              <div class="flex justify-between">
+                <span>Équipage réglementaire requis :</span>
+                <strong class="text-slate-800">1 VPSP + 3 à 4 secouristes (minimum 1 CE + 1 PSE2 + 1 PSE1)</strong>
+              </div>
+            </div>
+
+            <!-- Actions d'armement de la garde -->
+            <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between">
+              ${isGuardActive ? `
+                <div class="text-xs text-emerald-800">
+                  <span>Ambulance engagée : <strong>${currentVpsp?.name || 'VPSP'}</strong> • Équipage : <strong>${currentCrew.length} secouristes</strong></span>
+                </div>
+                <button onclick="window.game.stopSamuGuard()" class="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow transition">
+                  Mettre fin à la Garde SAMU
+                </button>
+              ` : `
+                <div class="text-xs text-slate-500">
+                  ${vpsps.length === 0 ? '⚠️ Vous devez posséder au moins 1 VPSP pour conventionner avec le SAMU.' : `${dispoVpsps.length} VPSP et ${qualifiedVolunteers.length} secouristes qualifiés disponibles.`}
+                </div>
+                <button onclick="window.game.startSamuGuard()" ${vpsps.length === 0 || qualifiedVolunteers.length < 3 ? 'disabled class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed"' : 'class="px-4 py-2 rounded-xl text-xs font-black bg-pc-orange hover:bg-pc-orange-hover text-white shadow-md transition"'}>
+                  Armer la Garde SAMU (VPSP)
+                </button>
+              `}
+            </div>
+          </div>
+
+          <!-- Alertes & Missions de la garde en cours -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">
+                Départs Réflexes Régulés (${samuMissions.length})
+              </h4>
+              ${isGuardActive ? '<span class="text-[11px] font-bold text-emerald-600 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Écoute régulation 15 active</span>' : ''}
+            </div>
+
+            ${samuMissions.length === 0 ? `
+              <div class="p-6 rounded-2xl glass-card text-center space-y-1">
+                <p class="text-xs font-bold text-slate-700">Aucun départ réflexe régulé pour l'instant.</p>
+                <p class="text-[11px] text-slate-500">
+                  ${isGuardActive ? 'Le centre 15 vous dépêchera dès qu’une urgence survient sur votre secteur.' : 'Armez une Garde SAMU ci-dessus pour recevoir des appels réflexes du 15.'}
+                </p>
+              </div>
+            ` : ''}
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              ${samuMissions.map(m => `
+                <div class="p-4 rounded-2xl glass-card space-y-2 border-l-4 border-pc-orange">
+                  <div class="flex items-center justify-between">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-pc-orange text-white">APPEL RÉFLEXE 15</span>
+                    <span class="text-xs font-bold mono-num text-emerald-700">+${m.rewardMoney} €</span>
+                  </div>
+                  <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
+                  <p class="text-xs text-slate-600">${m.desc}</p>
+                  <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <span class="text-[11px] text-slate-500 font-semibold">${m.scale}</span>
+                    <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-black bg-pc-blue text-white hover:bg-pc-blue-light shadow-sm transition">
+                      ${m.status === 'ongoing' ? 'Suivre Intervention' : 'Partir en Urgence'}
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
           </div>
         </div>
       `;
@@ -2647,10 +2853,8 @@ class ProtecGame {
           </div>
 
           <div class="flex items-center justify-between">
-            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Vos Antennes Opérationnelles (${this.stations.length})</h4>
-            <button onclick="window.game.closeModal(); window.game.startAntennaPlacement()" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-pc-orange text-white hover:bg-pc-orange-hover shadow-sm transition">
-              + Implanter Antenne (4 500 €)
-            </button>
+            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Votre Antenne Opérationnelle (${this.stations.length})</h4>
+            <span class="text-[11px] font-bold text-slate-500">Antenne Unique de Direction</span>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             ${this.stations.map(st => `
@@ -3027,17 +3231,28 @@ class ProtecGame {
         window.ProtecIncidents.checkOngoingMissions(this);
       }
 
-      // 3. Dispatch dynamique d'urgences SAMU 15 (aléatoire régulier)
+      // 3. Dispatch dynamique d'urgences SAMU 15 (uniquement si une Garde SAMU 15 est activée par convention)
       if (this.clock.second === 15 || this.clock.second === 45) {
-        if (this.stations.length > 0 && Math.random() < 0.15) {
-          this.triggerRandomSamuEmergency();
+        if (this.stations.length > 0 && this.samuGarde && this.samuGarde.active) {
+          if (Math.random() < 0.28) {
+            this.triggerRandomSamuEmergency();
+          }
         }
       }
 
-      // 4. Génération périodique de Devis adaptés aux moyens du joueur (toutes les 5 minutes)
-      if (this.clock.second === 0 && this.clock.minute % 5 === 0) {
-        if (this.stations.length > 0 && Math.random() < 0.50) {
-          this.generateRandomDevisOpportunity();
+      // 4. Sollicitations spontanées des organisateurs locaux (toutes les 2 à 3 minutes selon popularité & pub)
+      if (this.clock.second === 0 && this.clock.minute % 2 === 0) {
+        if (this.stations.length > 0) {
+          let devisChance = 0.20; // Chance de base
+          const repScore = this.resources.reputationScore || 0;
+          devisChance += Math.min(0.35, repScore / 1000); // Bonus réputation
+          if (this.resources.campaigns.social) devisChance += 0.25; // Bonus com réseaux
+          if (this.resources.campaigns.posters) devisChance += 0.20; // Bonus com affichage
+          
+          const pendingDevisCount = this.devis.filter(d => d.status === 'pending').length;
+          if (pendingDevisCount < 4 && Math.random() < devisChance) {
+            this.generateRandomDevisOpportunity();
+          }
         }
       }
 
@@ -3193,6 +3408,70 @@ class ProtecGame {
     }
 
     this.showToast('Appel Régulation SAMU 15', `Départ réflexe : ${pick.title} !`, 'orange');
+  }
+
+  startSamuGuard() {
+    const vpsp = this.vehicles.find(v => v.type === 'VPSP' && v.status === 'dispo');
+    if (!vpsp) {
+      this.showToast('Aucun VPSP disponible', 'Vous devez disposer d’au moins 1 ambulance VPSP libre au garage.', 'orange');
+      return;
+    }
+
+    // Sélection d'un équipage complet : 1 CE ou PSE2 en chef de bord, + 2 PSE1/PSE2
+    const availableQualif = this.volunteers.filter(v => v.status === 'dispo' && ['CE', 'PSE2', 'PSE1'].includes(v.rank));
+    if (availableQualif.length < 3) {
+      this.showToast('Équipage insuffisant', 'Une garde SAMU requiert au moins 3 secouristes qualifiés disponibles (CE, PSE2, PSE1).', 'orange');
+      return;
+    }
+
+    // Privilégier un CE ou PSE2
+    const leader = availableQualif.find(v => v.rank === 'CE') || availableQualif.find(v => v.rank === 'PSE2') || availableQualif[0];
+    const team = [leader];
+    for (const v of availableQualif) {
+      if (team.length < 3 && v.id !== leader.id) {
+        team.push(v);
+      }
+    }
+
+    this.samuGarde = {
+      active: true,
+      vehicleId: vpsp.id,
+      crewVolunteerIds: team.map(v => v.id),
+      shiftStartedAt: Date.now(),
+      totalInterventions: (this.samuGarde?.totalInterventions || 0)
+    };
+
+    vpsp.status = 'samu_garde';
+    team.forEach(v => { v.status = 'samu_garde'; });
+
+    this.showToast('Garde SAMU 15 Armée !', `Ambulance ${vpsp.name} et ${team.length} secouristes mis à disposition de la régulation départementale 15.`, 'green');
+    this.saveGame();
+    this.updateStatsUI();
+    this.openModule('samu');
+  }
+
+  stopSamuGuard() {
+    if (!this.samuGarde || !this.samuGarde.active) return;
+
+    if (this.samuGarde.vehicleId) {
+      const v = this.vehicles.find(veh => veh.id === this.samuGarde.vehicleId);
+      if (v && v.status === 'samu_garde') v.status = 'dispo';
+    }
+
+    (this.samuGarde.crewVolunteerIds || []).forEach(vid => {
+      const vol = this.volunteers.find(v => v.id === vid);
+      if (vol && vol.status === 'samu_garde') vol.status = 'dispo';
+    });
+
+    this.samuGarde.active = false;
+    this.samuGarde.vehicleId = null;
+    this.samuGarde.crewVolunteerIds = [];
+    this.samuGarde.shiftStartedAt = null;
+
+    this.showToast('Fin de Garde SAMU', 'L’ambulance et l’équipage ont réintégré l’antenne et sont à nouveau disponibles.', 'blue');
+    this.saveGame();
+    this.updateStatsUI();
+    this.openModule('samu');
   }
 
   // Candidature spontanée de bénévole

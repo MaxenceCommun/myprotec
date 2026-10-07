@@ -350,7 +350,7 @@ window.ProtecSystems = {
       period = 'aube';
       periodLabel = p < 0.6 ? 'Aube naissante' : 'Lever du soleil';
       periodIcon = '🌅';
-      tempOffset = -3 + p * 2;
+      tempOffset = Math.round(-3 + p * 2);
 
       // Première phase (05h30 - 06h45) : La nuit bleu marine s'estompe et accueille une douce teinte rosée
       if (p < 0.5) {
@@ -388,7 +388,7 @@ window.ProtecSystems = {
       period = 'crepuscule';
       periodLabel = 'Coucher de soleil';
       periodIcon = '🌇';
-      tempOffset = 1 - p * 2;
+      tempOffset = Math.round(1 - p * 2);
       const a = (0.12 * p).toFixed(3);
       color = `rgba(217, 119, 6, ${a})`;
     }
@@ -399,7 +399,7 @@ window.ProtecSystems = {
       period = 'crepuscule';
       periodLabel = 'Crépuscule';
       periodIcon = '🌆';
-      tempOffset = -1 - p * 3;
+      tempOffset = Math.round(-1 - p * 3);
       const r = Math.round(217 + (15 - 217) * p);
       const g = Math.round(119 + (23 - 119) * p);
       const b = Math.round(6 + (42 - 6) * p);
@@ -452,8 +452,8 @@ window.ProtecSystems = {
       }
     }
 
-    // Température affichée avec prise en compte du cycle diurne/nocturne naturel
-    const currentTemp = game.weather.temp + cycle.tempOffset;
+    // Température affichée avec prise en compte du cycle diurne/nocturne naturel (arrondi propre)
+    const currentTemp = Math.round(game.weather.temp + cycle.tempOffset);
 
     // Mise à jour widget météo dans le header
     const tempEl = document.getElementById('weather-temp');
