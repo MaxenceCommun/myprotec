@@ -104,6 +104,9 @@ class ProtecGame {
     if (window.ProtecAuth) {
       window.ProtecAuth.init(this);
     }
+    if (window.ProtecAds) {
+      window.ProtecAds.init(this);
+    }
   }
 
   openAuthModal() {
@@ -424,7 +427,8 @@ class ProtecGame {
         radioLogs: this.radioLogs,
         rewards: this.rewards,
         bureau: this.bureau,
-        manoeuvres: this.manoeuvres
+        manoeuvres: this.manoeuvres,
+        adRewards: this.adRewards
       };
       localStorage.setItem('protec_live_save_v4', JSON.stringify(state));
     } catch (e) {
@@ -455,6 +459,7 @@ class ProtecGame {
           this.rewards = parsed.rewards || this.rewards;
           this.bureau = parsed.bureau || this.bureau;
           this.manoeuvres = parsed.manoeuvres || this.manoeuvres;
+          this.adRewards = parsed.adRewards || null;
           if (parsed.player) this.player = parsed.player;
         }
       }
@@ -2401,6 +2406,23 @@ class ProtecGame {
   openTeamModal() { this.openModule('recrutement'); }
   openReputationModal() { this.openModule('recrutement'); }
 
+  openMobileMenu() {
+    const sheet = document.getElementById('mobile-modules-sheet');
+    if (sheet) {
+      sheet.classList.remove('hidden');
+      sheet.classList.add('flex');
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+
+  closeMobileMenu() {
+    const sheet = document.getElementById('mobile-modules-sheet');
+    if (sheet) {
+      sheet.classList.add('hidden');
+      sheet.classList.remove('flex');
+    }
+  }
+
   setFilter(filterKey) {
     this.currentFilter = filterKey;
     ['all', 'dps', 'samu', 'social', 'crise'].forEach(f => {
@@ -2545,6 +2567,9 @@ class ProtecGame {
     const timeEl = document.getElementById('clock-time');
     if (timeEl) timeEl.textContent = `${hh}:${mm}`;
 
+    const timeMobileEl = document.getElementById('clock-time-mobile');
+    if (timeMobileEl) timeMobileEl.textContent = `${hh}:${mm}`;
+
     const dateEl = document.getElementById('clock-date');
     if (dateEl) {
       dateEl.textContent = this.formatShortDate(this.clock) + ` ${this.clock.year}`;
@@ -2552,11 +2577,26 @@ class ProtecGame {
   }
 
   updateStatsUI() {
-    document.getElementById('stat-money').textContent = this.resources.money.toLocaleString('fr-FR');
+    const moneyFormatted = this.resources.money.toLocaleString('fr-FR');
+    const statMoney = document.getElementById('stat-money');
+    if (statMoney) statMoney.textContent = moneyFormatted;
+
+    const statMoneyMobile = document.getElementById('stat-money-mobile');
+    if (statMoneyMobile) {
+      if (this.resources.money >= 1000000) {
+        statMoneyMobile.textContent = (this.resources.money / 1000000).toFixed(1) + 'M €';
+      } else if (this.resources.money >= 10000) {
+        statMoneyMobile.textContent = Math.round(this.resources.money / 1000) + 'k €';
+      } else {
+        statMoneyMobile.textContent = moneyFormatted + ' €';
+      }
+    }
 
     const availableCount = this.volunteers.filter(v => v.status === 'dispo').length;
-    document.getElementById('stat-volunteers-avail').textContent = availableCount;
-    document.getElementById('stat-volunteers-total').textContent = this.volunteers.length;
+    const volAvail = document.getElementById('stat-volunteers-avail');
+    if (volAvail) volAvail.textContent = availableCount;
+    const volTotal = document.getElementById('stat-volunteers-total');
+    if (volTotal) volTotal.textContent = this.volunteers.length;
 
     const planCount = this.missions.filter(m => m.status === 'planifie' || m.status === 'ongoing').length;
     const devisCount = this.devis.filter(d => d.status === 'pending').length;
@@ -2565,6 +2605,16 @@ class ProtecGame {
 
     const bPlan = document.getElementById('badge-planning-dock');
     if (bPlan) bPlan.textContent = planCount;
+
+    const bPlanMobile = document.getElementById('badge-planning-dock-mobile');
+    if (bPlanMobile) bPlanMobile.textContent = planCount;
+
+    const samuCount = this.missions.filter(m => m.type === 'samu' && (m.status === 'planifie' || m.status === 'ongoing')).length;
+    const bSamuMobile = document.getElementById('badge-samu-dock-mobile');
+    if (bSamuMobile) bSamuMobile.textContent = samuCount;
+
+    const bRadioMobile = document.getElementById('badge-radio-dock-mobile');
+    if (bRadioMobile) bRadioMobile.textContent = this.missions.filter(m => m.status === 'ongoing').length;
 
     const bDev = document.getElementById('badge-devis-dock');
     if (bDev) bDev.textContent = devisCount;

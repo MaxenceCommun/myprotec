@@ -12,7 +12,8 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon'
+  '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=UTF-8'
 };
 
 // --- ÉTAT MULTIJOUEUR EN BDD ---

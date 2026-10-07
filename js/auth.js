@@ -473,7 +473,8 @@ window.ProtecAuth = {
         grants: game.grants,
         baseUpgrades: game.baseUpgrades,
         skillsTree: game.skillsTree,
-        challenges: game.challenges
+        challenges: game.challenges,
+        adRewards: game.adRewards
       };
 
       const res = await fetch('/api/game/save', {
@@ -536,6 +537,10 @@ window.ProtecAuth = {
       if (savedData.baseUpgrades) game.baseUpgrades = savedData.baseUpgrades;
       if (savedData.skillsTree) game.skillsTree = savedData.skillsTree;
       if (savedData.challenges) game.challenges = savedData.challenges;
+      if (savedData.adRewards) {
+        game.adRewards = savedData.adRewards;
+        if (window.ProtecAds) window.ProtecAds.updateUI(game);
+      }
 
       game.updateStatsUI();
       if (game.renderStationMarkers) game.renderStationMarkers();
