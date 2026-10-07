@@ -101,6 +101,15 @@ class ProtecGame {
     }
     this.init();
     this.initMultiplayer();
+    if (window.ProtecAuth) {
+      window.ProtecAuth.init(this);
+    }
+  }
+
+  openAuthModal() {
+    if (window.ProtecAuth) {
+      window.ProtecAuth.openAuthModal();
+    }
   }
 
   // --- DATES & CALENDRIER ---

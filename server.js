@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const db = require('./db');
 
 let PORT = parseInt(process.env.PORT || '8080', 10);
 const MIME_TYPES = {
@@ -14,96 +15,14 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon'
 };
 
-// --- ÉTAT MULTIJOUEUR EN MÉMOIRE DU SERVEUR ---
+// --- ÉTAT MULTIJOUEUR EN BDD ---
 const gameState = {
-  players: {}, // id -> { id, name, allianceId, stations: [], volunteersCount, vehiclesCount, lastSeen }
-  alliances: [
-    {
-      id: 'alliance-fnpc',
-      name: 'Union Fédérale de Sécurité Civile',
-      tag: 'UFSC',
-      description: 'Alliance fondatrice pour l’entraide opérationnelle, les renforts NOVI et les stages de cadres.',
-      leaderId: 'system',
-      leaderName: 'Direction Nationale',
-      treasury: 8500,
-      members: ['system-p1', 'system-p2'],
-      color: '#002E6D',
-      createdAt: '2026-10-01'
-    }
-  ],
-  // Antennes d'alliés simulés pour que la carte soit vivante dès le départ
-  allianceStations: [
-    {
-      id: 'station-allie-92',
-      playerId: 'system-p1',
-      playerName: 'Cdt. Thomas (PC 92)',
-      name: 'Antenne Hauts-de-Seine (Boulogne)',
-      city: 'paris',
-      lat: 48.8397,
-      lng: 2.2399,
-      level: 2,
-      vehicles: 3,
-      volunteers: 12,
-      allianceId: 'alliance-fnpc'
-    },
-    {
-      id: 'station-allie-93',
-      playerId: 'system-p2',
-      playerName: 'Cap. Sophie (PC 93)',
-      name: 'Antenne Seine-Saint-Denis (Saint-Denis)',
-      city: 'paris',
-      lat: 48.9362,
-      lng: 2.3574,
-      level: 2,
-      vehicles: 2,
-      volunteers: 10,
-      allianceId: 'alliance-fnpc'
-    }
-  ],
-  renforts: [],
-  formationsSpeciales: [
-    {
-      id: 'form-spec-1',
-      organizerPlayerId: 'system-p1',
-      organizerName: 'Cdt. Thomas (PC 92)',
-      allianceId: 'alliance-fnpc',
-      title: 'Stage Fédéral : Chef de Dispositif (CD) & Commandement',
-      type: 'CD',
-      desc: 'Formation de coordination d’envergure inter-antennes avec simulation de Poste de Commandement.',
-      stationName: 'Antenne Boulogne (PC 92)',
-      costPerCandidate: 250,
-      maxCandidates: 6,
-      registeredCandidates: [
-        { volunteerName: 'Julien Bernard', playerName: 'PC 93' }
-      ],
-      durationDays: 3,
-      status: 'open'
-    },
-    {
-      id: 'form-spec-2',
-      organizerPlayerId: 'system-p2',
-      organizerName: 'Cap. Sophie (PC 93)',
-      allianceId: 'alliance-fnpc',
-      title: 'Stage Spécial : Conduite d’Urgence VPSP & Tout-Terrain',
-      type: 'VPSP_PILOT',
-      desc: 'Habilitation conduite rapide en convoi et franchissement.',
-      stationName: 'Antenne Saint-Denis (PC 93)',
-      costPerCandidate: 120,
-      maxCandidates: 8,
-      registeredCandidates: [],
-      durationDays: 2,
-      status: 'open'
-    }
-  ],
-  chatMessages: [
-    {
-      id: 'msg-1',
-      senderName: 'Cdt. Thomas (PC 92)',
-      allianceId: 'alliance-fnpc',
-      text: 'Bienvenue aux nouvelles antennes dans l’Union Fédérale. Dispo pour renforts VPSP sur les gros DPS de fin de semaine !',
-      time: '08:15'
-    }
-  ]
+  players: {}, // En mémoire vive pour le statut connecté / lastSeen
+  get alliances() { return db.data.alliances; },
+  get allianceStations() { return db.data.allianceStations; },
+  get renforts() { return db.data.renforts; },
+  get formationsSpeciales() { return db.data.formationsSpeciales; },
+  get chatMessages() { return db.data.chatMessages; }
 };
 
 // Abonnés SSE pour le push en temps réel
@@ -120,8 +39,141 @@ function broadcastSSE(type, data) {
   });
 }
 
+function getAuthUser(req) {
+  const authHeader = req.headers['authorization'] || req.headers['x-auth-token'];
+  let token = null;
+  if (authHeader) {
+    token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
+  }
+  return db.getUserByToken(token);
+}
+
+function sendJson(res, statusCode, data) {
+  res.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=UTF-8',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-auth-token',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+  });
+  res.end(JSON.stringify(data));
+}
+
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
+
+  // Gestion CORS Preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-auth-token',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+    });
+    res.end();
+    return;
+  }
+
+  // --- API AUTHENTIFICATION & BASE DE DONNÉES ---
+
+  // Inscription
+  if (url === '/api/auth/register' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { username, password, stationName, city } = JSON.parse(body);
+        const result = db.registerUser(username, password, stationName, city);
+        if (result.error) {
+          sendJson(res, 400, { success: false, error: result.error });
+        } else {
+          sendJson(res, 201, result);
+        }
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: 'Données invalides' });
+      }
+    });
+    return;
+  }
+
+  // Connexion
+  if (url === '/api/auth/login' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { username, password } = JSON.parse(body);
+        const result = db.loginUser(username, password);
+        if (result.error) {
+          sendJson(res, 401, { success: false, error: result.error });
+        } else {
+          sendJson(res, 200, result);
+        }
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: 'Données invalides' });
+      }
+    });
+    return;
+  }
+
+  // Vérifier Session actuelle (Me)
+  if (url === '/api/auth/me' && req.method === 'GET') {
+    const user = getAuthUser(req);
+    if (!user) {
+      sendJson(res, 401, { success: false, error: 'Non authentifié' });
+    } else {
+      sendJson(res, 200, {
+        success: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          stationName: user.stationName,
+          city: user.city
+        }
+      });
+    }
+    return;
+  }
+
+  // Déconnexion
+  if (url === '/api/auth/logout' && req.method === 'POST') {
+    const authHeader = req.headers['authorization'] || req.headers['x-auth-token'];
+    let token = authHeader ? (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim()) : null;
+    db.logoutUser(token);
+    sendJson(res, 200, { success: true });
+    return;
+  }
+
+  // Sauvegarder la partie du joueur en BDD
+  if (url === '/api/game/save' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    if (!user) {
+      sendJson(res, 401, { success: false, error: 'Connexion requise pour sauvegarder en BDD' });
+      return;
+    }
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const gameData = JSON.parse(body);
+        db.saveGame(user.id, gameData);
+        sendJson(res, 200, { success: true, savedAt: new Date().toISOString() });
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: err.message });
+      }
+    });
+    return;
+  }
+
+  // Charger la partie du joueur depuis la BDD
+  if (url === '/api/game/load' && req.method === 'GET') {
+    const user = getAuthUser(req);
+    if (!user) {
+      sendJson(res, 401, { success: false, error: 'Connexion requise' });
+      return;
+    }
+    const saved = db.loadGame(user.id);
+    sendJson(res, 200, { success: true, save: saved ? saved.data : null, savedAt: saved ? saved.savedAt : null });
+    return;
+  }
 
   // --- API MULTIJOUEUR EN TEMPS RÉEL ---
 
@@ -153,11 +205,9 @@ const server = http.createServer((req, res) => {
         player.lastSeen = Date.now();
         gameState.players[player.id] = player;
         broadcastSSE('player_sync', { player });
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, gameState }));
+        sendJson(res, 200, { success: true, gameState });
       } catch (err) {
-        res.writeHead(400);
-        res.end(JSON.stringify({ error: err.message }));
+        sendJson(res, 400, { error: err.message });
       }
     });
     return;
@@ -165,8 +215,7 @@ const server = http.createServer((req, res) => {
 
   // 3. État global
   if (url === '/api/state') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(gameState));
+    sendJson(res, 200, gameState);
     return;
   }
 
@@ -189,16 +238,15 @@ const server = http.createServer((req, res) => {
           color: data.color || '#FF6600',
           createdAt: new Date().toISOString().split('T')[0]
         };
-        gameState.alliances.push(newAlliance);
+        db.data.alliances.push(newAlliance);
         if (gameState.players[data.playerId]) {
           gameState.players[data.playerId].allianceId = newAlliance.id;
         }
+        db.save();
         broadcastSSE('alliance_created', newAlliance);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, alliance: newAlliance }));
+        sendJson(res, 200, { success: true, alliance: newAlliance });
       } catch (err) {
-        res.writeHead(400);
-        res.end(JSON.stringify({ error: err.message }));
+        sendJson(res, 400, { error: err.message });
       }
     });
     return;
@@ -211,19 +259,18 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const { playerId, allianceId } = JSON.parse(body);
-        const alliance = gameState.alliances.find(a => a.id === allianceId);
+        const alliance = db.data.alliances.find(a => a.id === allianceId);
         if (alliance && !alliance.members.includes(playerId)) {
           alliance.members.push(playerId);
           if (gameState.players[playerId]) {
             gameState.players[playerId].allianceId = allianceId;
           }
+          db.save();
           broadcastSSE('alliance_joined', { playerId, allianceId });
         }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, alliance }));
+        sendJson(res, 200, { success: true, alliance });
       } catch (err) {
-        res.writeHead(400);
-        res.end(JSON.stringify({ error: err.message }));
+        sendJson(res, 400, { error: err.message });
       }
     });
     return;
@@ -235,17 +282,26 @@ const server = http.createServer((req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       try {
-        const renfort = JSON.parse(body);
-        renfort.id = `renf-${Date.now()}`;
-        renfort.createdAt = Date.now();
-        renfort.status = 'open'; // open, fulfilled, closed
-        gameState.renforts.unshift(renfort);
-        broadcastSSE('renfort_requested', renfort);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, renfort }));
+        const data = JSON.parse(body);
+        const renfortReq = {
+          id: `renfort-${Date.now()}`,
+          allianceId: data.allianceId,
+          requestingPlayerId: data.playerId,
+          requestingPlayerName: data.playerName,
+          stationName: data.stationName,
+          missionType: data.missionType || 'DPS Envergure',
+          neededType: data.neededType || 'VPSP', // VPSP, SECU, CADRE
+          neededCount: data.neededCount || 1,
+          createdAt: new Date().toISOString(),
+          status: 'pending' // pending, fulfilled
+        };
+        db.data.renforts.unshift(renfortReq);
+        if (db.data.renforts.length > 30) db.data.renforts.pop();
+        db.save();
+        broadcastSSE('renfort_requested', renfortReq);
+        sendJson(res, 200, { success: true, renfort: renfortReq });
       } catch (err) {
-        res.writeHead(400);
-        res.end(JSON.stringify({ error: err.message }));
+        sendJson(res, 400, { error: err.message });
       }
     });
     return;
@@ -258,17 +314,16 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const { renfortId, providerPlayerId, providerName, unitDetails } = JSON.parse(body);
-        const renfort = gameState.renforts.find(r => r.id === renfortId);
+        const renfort = db.data.renforts.find(r => r.id === renfortId);
         if (renfort) {
           renfort.status = 'fulfilled';
           renfort.fulfilledBy = { providerPlayerId, providerName, unitDetails };
+          db.save();
           broadcastSSE('renfort_fulfilled', renfort);
         }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, renfort }));
+        sendJson(res, 200, { success: true, renfort });
       } catch (err) {
-        res.writeHead(400);
-        res.end(JSON.stringify({ error: err.message }));
+        sendJson(res, 400, { error: err.message });
       }
     });
     return;
@@ -284,13 +339,12 @@ const server = http.createServer((req, res) => {
         form.id = `form-spec-${Date.now()}`;
         form.status = 'open';
         form.registeredCandidates = [];
-        gameState.formationsSpeciales.unshift(form);
+        db.data.formationsSpeciales.unshift(form);
+        db.save();
         broadcastSSE('formation_created', form);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, formation: form }));
+        sendJson(res, 200, { success: true, formation: form });
       } catch (err) {
-        res.writeHead(400);
-        res.end(JSON.stringify({ error: err.message }));
+        sendJson(res, 400, { error: err.message });
       }
     });
     return;
@@ -303,16 +357,15 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const { formationId, volunteerName, playerName, candidateRank } = JSON.parse(body);
-        const formation = gameState.formationsSpeciales.find(f => f.id === formationId);
+        const formation = db.data.formationsSpeciales.find(f => f.id === formationId);
         if (formation && formation.registeredCandidates.length < formation.maxCandidates) {
           formation.registeredCandidates.push({ volunteerName, playerName, candidateRank });
+          db.save();
           broadcastSSE('formation_registered', { formationId, candidate: { volunteerName, playerName } });
         }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, formation }));
+        sendJson(res, 200, { success: true, formation });
       } catch (err) {
-        res.writeHead(400);
-        res.end(JSON.stringify({ error: err.message }));
+        sendJson(res, 400, { error: err.message });
       }
     });
     return;
@@ -327,14 +380,13 @@ const server = http.createServer((req, res) => {
         const msg = JSON.parse(body);
         msg.id = `msg-${Date.now()}`;
         msg.time = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-        gameState.chatMessages.push(msg);
-        if (gameState.chatMessages.length > 50) gameState.chatMessages.shift();
+        db.data.chatMessages.push(msg);
+        if (db.data.chatMessages.length > 50) db.data.chatMessages.shift();
+        db.save();
         broadcastSSE('chat_message', msg);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, message: msg }));
+        sendJson(res, 200, { success: true, message: msg });
       } catch (err) {
-        res.writeHead(400);
-        res.end(JSON.stringify({ error: err.message }));
+        sendJson(res, 400, { error: err.message });
       }
     });
     return;
@@ -371,7 +423,7 @@ server.on('error', (e) => {
   if (e.code === 'EADDRINUSE') {
     console.warn(`Le port ${PORT} est déjà utilisé. Essai automatique sur le port ${PORT + 1}...`);
     PORT++;
-    server.listen(PORT);
+    server.listen(PORT, '0.0.0.0');
   } else {
     console.error('Erreur serveur:', e);
   }
