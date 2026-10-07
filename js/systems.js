@@ -171,6 +171,10 @@ window.ProtecSystems = {
       className: 'glass-panel text-xs p-2'
     });
 
+    const baseDurationSec = Math.max(12, Math.min(45, (routeCoords.length * 0.35)));
+    const durationMs = (baseDurationSec * 1000) / Math.max(1, game.speed || 1);
+    const now = Date.now();
+
     const transit = {
       id: transitId,
       vehicleId: vehicle.id,
@@ -178,6 +182,8 @@ window.ProtecSystems = {
       mission: mission,
       statusTarget: statusTarget,
       routeCoords: routeCoords,
+      startTime: now,
+      durationMs: durationMs,
       currentStep: 0,
       polyline: polyline,
       marker: marker,
@@ -196,18 +202,27 @@ window.ProtecSystems = {
   updateTransits(game) {
     if (!game.transits || game.transits.length === 0) return;
 
+    const now = Date.now();
+
     for (let i = game.transits.length - 1; i >= 0; i--) {
       const t = game.transits[i];
-      t.currentStep += 1 * Math.max(1, game.speed);
+      const elapsed = Math.max(0, now - (t.startTime || now));
+      const progress = Math.min(1, elapsed / (t.durationMs || 15000));
+      const stepIndex = Math.floor(progress * (t.routeCoords.length - 1));
+      t.currentStep = stepIndex;
 
-      if (t.currentStep < t.routeCoords.length) {
-        const nextPos = t.routeCoords[t.currentStep];
-        t.marker.setLatLng(nextPos);
+      if (progress < 1) {
+        const nextPos = t.routeCoords[stepIndex] || t.routeCoords[0];
+        if (t.marker && nextPos) {
+          t.marker.setLatLng(nextPos);
+        }
       } else {
         // Arrivée à destination
-        t.marker.setLatLng(t.routeCoords[t.routeCoords.length - 1]);
-        game.map.removeLayer(t.polyline);
-        game.map.removeLayer(t.marker);
+        if (t.marker && t.routeCoords.length > 0) {
+          t.marker.setLatLng(t.routeCoords[t.routeCoords.length - 1]);
+        }
+        if (t.polyline && game.map) game.map.removeLayer(t.polyline);
+        if (t.marker && game.map) game.map.removeLayer(t.marker);
         game.transits.splice(i, 1);
 
         this.playRadioChirp();
@@ -715,12 +730,35 @@ window.ProtecSystems = {
   },
 
   updateWeatherAndDayNight(game) {
-    const filterEl = document.getElementById('map-night-filter');
     const cycle = this.calculateDayNightCycle(game);
 
-    // Application progressive du filtre atmosphérique sur la carte
-    if (filterEl) {
-      filterEl.style.backgroundColor = cycle.color;
+    // Application de l'assombrissement nocturne exclusivement sur le fond de carte (tuiles Leaflet)
+    // Les marqueurs, véhicules, gyrophares et icônes restent à 100% éclatants au premier plan
+    const tilePane = document.querySelector('.leaflet-tile-pane');
+    if (tilePane) {
+      let nightOverlay = document.getElementById('leaflet-tile-night-overlay');
+      if (!nightOverlay) {
+        nightOverlay = document.createElement('div');
+        nightOverlay.id = 'leaflet-tile-night-overlay';
+        nightOverlay.style.position = 'absolute';
+        nightOverlay.style.width = '12000px';
+        nightOverlay.style.height = '12000px';
+        nightOverlay.style.left = '-6000px';
+        nightOverlay.style.top = '-6000px';
+        nightOverlay.style.pointerEvents = 'none';
+        nightOverlay.style.zIndex = '350';
+        nightOverlay.style.transition = 'background-color 1.5s ease';
+        tilePane.appendChild(nightOverlay);
+      }
+      nightOverlay.style.backgroundColor = cycle.color;
+
+      if (cycle.period === 'nuit') {
+        tilePane.style.filter = 'brightness(0.72) contrast(1.08)';
+      } else if (cycle.period === 'crepuscule' || cycle.period === 'aube') {
+        tilePane.style.filter = 'brightness(0.88)';
+      } else {
+        tilePane.style.filter = 'none';
+      }
     }
 
     // Récupération automatique de la météo réelle toutes les 10 minutes ou au premier lancement

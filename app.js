@@ -115,6 +115,9 @@ class ProtecGame {
     this.formationsSpeciales = [];
     this.chatMessages = [];
     this.activeAllianceTab = 'membres';
+    this.activePlanningTab = 'calendar';
+    this.modalHistory = [];
+    this.currentModalKey = null;
 
     // Marqueurs Leaflet
     this.markers = {
@@ -697,6 +700,8 @@ class ProtecGame {
     this.map.on('click', (e) => {
       if (this.isPlacingAntenna) {
         this.confirmAntennaPlacement(e.latlng);
+      } else {
+        this.closeDrawer();
       }
     });
   }
@@ -807,6 +812,12 @@ class ProtecGame {
 
     this.missions.forEach(mission => {
       if (this.currentFilter !== 'all' && mission.type !== this.currentFilter) return;
+
+      // Règle : Afficher sur la carte exclusivement les DPS programmés pour le jour même (ou en cours)
+      if (mission.type === 'dps' && mission.status === 'planifie') {
+        const isToday = mission.eventDate ? (mission.eventDate.day === this.clock.day && mission.eventDate.month === this.clock.month) : true;
+        if (!isToday) return;
+      }
 
       const el = document.createElement('div');
       el.className = 'custom-leaflet-marker';
@@ -1253,6 +1264,96 @@ class ProtecGame {
     this.showToast('Nouvelle Demande Organisateur', `« ${pick.name} » (${pick.scale}) vous a sollicité pour un devis.`, 'blue');
   }
 
+  setPlanningTab(tab) {
+    this.activePlanningTab = tab;
+    this.openModule('planning', true);
+  }
+
+  selectPlanningDay(day) {
+    this.selectedPlanningDay = day;
+    this.openModule('planning', true);
+  }
+
+  calculateDynamicBareme(devis) {
+    const ratePerHour = 18;
+    const vols = devis.configuredVolunteers || devis.requiredVolunteers || 4;
+    const dur = devis.durationHours || 4;
+    const personnelCost = vols * dur * ratePerHour;
+
+    let vehicleCost = 0;
+    const vehs = devis.configuredVehicles || devis.requiredVehicles || [];
+    vehs.forEach(v => {
+      if (v === 'VPSP') vehicleCost += 110;
+      else if (v === 'VTU') vehicleCost += 55;
+      else if (v === 'VL') vehicleCost += 35;
+    });
+
+    const scale = devis.configuredScale || devis.scale || 'DPS-PE';
+    let matCost = 35;
+    if (scale.includes('DPS-PE')) matCost = 65;
+    if (scale.includes('DPS-ME') || scale.includes('DPS-GE')) matCost = 120;
+    const adminCost = 40;
+    const totalBareme = personnelCost + vehicleCost + matCost + adminCost;
+
+    return {
+      ratePerHour,
+      personnelCost,
+      vehicleCost,
+      matCost,
+      adminCost,
+      totalBareme
+    };
+  }
+
+  updateDevisScale(devisId, scaleType) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+
+    devis.configuredScale = scaleType;
+    if (scaleType === 'PAPS') {
+      devis.configuredVolunteers = 2;
+      devis.configuredVehicles = [];
+    } else if (scaleType === 'DPS-PE') {
+      devis.configuredVolunteers = Math.max(4, Math.min(6, devis.configuredVolunteers || 4));
+      if (!devis.configuredVehicles || devis.configuredVehicles.length === 0) devis.configuredVehicles = ['VPSP'];
+    } else if (scaleType === 'DPS-ME') {
+      devis.configuredVolunteers = Math.max(8, Math.min(12, devis.configuredVolunteers || 8));
+      devis.configuredVehicles = ['VPSP', 'VPSP'];
+    } else if (scaleType === 'DPS-GE') {
+      devis.configuredVolunteers = Math.max(14, devis.configuredVolunteers || 14);
+      devis.configuredVehicles = ['VPSP', 'VPSP', 'VTU'];
+    }
+
+    const b = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = b.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  adjustDevisVolunteers(devisId, delta) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+
+    const current = devis.configuredVolunteers || 4;
+    devis.configuredVolunteers = Math.max(2, Math.min(36, current + delta));
+    const b = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = b.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  updateDevisVehicles(devisId, vehOption) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+
+    if (vehOption === 'none') devis.configuredVehicles = [];
+    else if (vehOption === 'vpsp1') devis.configuredVehicles = ['VPSP'];
+    else if (vehOption === 'vpsp2') devis.configuredVehicles = ['VPSP', 'VPSP'];
+    else if (vehOption === 'vpsp_vtu') devis.configuredVehicles = ['VPSP', 'VTU'];
+
+    const b = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = b.totalBareme;
+    this.openModule('devis', true);
+  }
+
   previewDevisPrice(devisId, enteredValue) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
@@ -1260,7 +1361,8 @@ class ProtecGame {
     const price = Math.max(0, parseFloat(enteredValue) || 0);
     devis.proposedPrice = price;
 
-    const bareme = devis.bareme.totalBareme;
+    const dynamicBareme = this.calculateDynamicBareme(devis);
+    const bareme = dynamicBareme.totalBareme;
     const ratio = bareme > 0 ? (price / bareme) : 1;
 
     const previewEl = document.getElementById(`devis-feedback-${devisId}`);
@@ -1272,24 +1374,20 @@ class ProtecGame {
 
     if (ratio <= 0.85) {
       badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
-      text = 'Tarif solidaire / réduit';
-      acceptRate = 'Acceptation quasi-certaine (~98%)';
+      text = 'Tarif très compétitif';
+      acceptRate = 'Très forte chance de remporter face à la concurrence (~85%)';
     } else if (ratio <= 1.05) {
       badgeClass = 'bg-blue-100 text-pc-blue border-blue-200';
-      text = 'Tarif conforme au barème national';
-      acceptRate = 'Acceptation très probable (~90%)';
+      text = 'Tarif conforme au barème';
+      acceptRate = 'Concurrence active (Croix-Rouge, Ordre de Malte) : gain probable (~65%)';
     } else if (ratio <= 1.25) {
       badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
-      text = 'Tarif majoré modéré';
-      acceptRate = 'Acceptation modérée (~65%)';
-    } else if (ratio <= 1.45) {
-      badgeClass = 'bg-orange-100 text-orange-800 border-orange-200';
-      text = 'Tarif élevé pour le budget';
-      acceptRate = 'Risque fort de refus (~30%)';
+      text = 'Tarif supérieur au barème';
+      acceptRate = 'Risque de perdre face aux offres concurrentes (~40%)';
     } else {
       badgeClass = 'bg-rose-100 text-rose-800 border-rose-300';
-      text = 'Tarif prohibitif';
-      acceptRate = 'Refus quasi-certain (>90%)';
+      text = 'Tarif excessif';
+      acceptRate = 'Rejet très probable par l’organisateur (<15%)';
     }
 
     const pctDiff = Math.round((ratio - 1) * 100);
@@ -1298,7 +1396,7 @@ class ProtecGame {
     previewEl.innerHTML = `
       <div class="p-2.5 rounded-xl border text-xs flex items-center justify-between ${badgeClass}">
         <div>
-          <span class="font-extrabold block">${text} (${sign} par rapport au barème)</span>
+          <span class="font-extrabold block">${text} (${sign} par rapport au dimensionnement)</span>
           <span class="text-[11px] opacity-90">${acceptRate}</span>
         </div>
         <span class="font-mono font-bold text-xs">${price} €</span>
@@ -1311,7 +1409,7 @@ class ProtecGame {
     if (!devis) return;
 
     const input = document.getElementById(`devis-price-input-${devisId}`);
-    const price = input ? parseFloat(input.value) : devis.proposedPrice;
+    const price = input ? parseFloat(input.value) : (devis.proposedPrice || 250);
 
     if (isNaN(price) || price <= 0) {
       this.showToast('Montant invalide', 'Veuillez saisir un tarif valide en euros.', 'orange');
@@ -1321,66 +1419,105 @@ class ProtecGame {
     devis.proposedPrice = price;
     devis.status = 'sent';
 
-    this.showToast('Devis transmis', `Devis de ${price} € envoyé à l’organisateur. Examen de conformité...`, 'blue');
-    this.openModule('devis');
+    this.showToast('Devis transmis', `Offre de ${price} € envoyée à l’organisateur. Commission de sécurité et étude des offres concurrentes...`, 'blue');
+    this.openModule('devis', true);
 
     setTimeout(() => {
-      const bareme = devis.bareme.totalBareme;
+      const dynamicBareme = this.calculateDynamicBareme(devis);
+      const bareme = dynamicBareme.totalBareme;
       const ratio = price / bareme;
 
-      let clientTolerance = 1.0;
-      if (devis.clientType === 'municipalite') clientTolerance = 1.15;
-      if (devis.clientType === 'professionnel') clientTolerance = 1.25;
-      if (devis.clientType === 'association') clientTolerance = 0.95;
+      // 1. CONTRÔLE DE SÉCURITÉ ET CONFORMITÉ (RNMSC)
+      // Extraction de l'affluence numérique (ex: "3 200 personnes" -> 3200)
+      const numMatch = (devis.publicCount || '').match(/\d[\d\s]*/);
+      const publicEst = numMatch ? parseInt(numMatch[0].replace(/\s/g, ''), 10) : 1000;
+      const vols = devis.configuredVolunteers || devis.requiredVolunteers || 4;
+      const vehs = devis.configuredVehicles || [];
 
-      const repBonus = (this.resources.reputationScore / 500) * 0.15;
+      // A. Rejet pour sous-dimensionnement manifeste
+      if (publicEst >= 3000 && vols < 4) {
+        devis.status = 'rejected_security';
+        this.showToast('Refus Préfectoral & Organisateur', `Offre rejetée : Dispositif très sous-dimensionné (${vols} secouristes pour ${devis.publicCount}). La commission de sécurité exige un dispositif renforcé.`, 'orange');
+        this.updateStatsUI();
+        this.saveGame();
+        return;
+      }
+      if (publicEst >= 1500 && vols < 3 && vehs.length === 0) {
+        devis.status = 'rejected_security';
+        this.showToast('Sous-dimensionnement', `Offre rejetée : Un simple PAPS à pied (${vols} secouristes) est insuffisant pour encadrer ${devis.publicCount}. Une ambulance VPSP est requise.`, 'orange');
+        this.updateStatsUI();
+        this.saveGame();
+        return;
+      }
 
-      let acceptProbability = 1.0;
-      if (ratio <= 0.85) acceptProbability = 0.98;
-      else if (ratio <= 1.05) acceptProbability = 0.90 + repBonus;
-      else if (ratio <= 1.25) acceptProbability = (0.65 * clientTolerance) + repBonus;
-      else if (ratio <= 1.45) acceptProbability = (0.30 * clientTolerance) + repBonus;
-      else acceptProbability = Math.max(0.05, 0.10 * clientTolerance);
+      // B. Rejet pour sur-dimensionnement absurde
+      if (publicEst <= 350 && vols >= 12 && price > 1200) {
+        devis.status = 'rejected_budget';
+        this.showToast('Offre Disproportionnée', `L'organisateur refuse l'offre : Dispositif sur-dimensionné (${vols} secouristes) et tarif hors budget pour un modeste rassemblement.`, 'orange');
+        this.updateStatsUI();
+        this.saveGame();
+        return;
+      }
 
-      const isAccepted = Math.random() <= acceptProbability;
+      // 2. CONCURRENCE DES AUTRES ASSOCIATIONS (Croix-Rouge, Ordre de Malte, etc.)
+      const competitors = ['la Croix-Rouge française', 'l’Ordre de Malte France', 'la Fédération Française de Sauvetage et de Secourisme (FFSS)'];
+      const rival = competitors[Math.floor(Math.random() * competitors.length)];
 
-      if (isAccepted) {
+      const repBonus = Math.min(0.20, ((this.resources.reputationScore || 50) / 500) * 0.15);
+      
+      // Facteur de concurrence : même dans la moyenne, il y a de la compétition !
+      let winProb = 0.62 + repBonus;
+      if (ratio <= 0.85) winProb += 0.20; // Tarif très avantageux
+      else if (ratio <= 1.05) winProb += 0.05; // Dans la moyenne
+      else if (ratio <= 1.25) winProb -= 0.20; // Plus cher
+      else winProb -= 0.45; // Nettement plus cher
+
+      winProb = Math.max(0.10, Math.min(0.92, winProb));
+
+      const isWon = Math.random() <= winProb;
+
+      if (isWon) {
         devis.status = 'signed';
         this.convertDevisToScheduledMission(devis);
-        this.showToast('Convention Signée !', `L’organisateur de « ${devis.eventName} » a validé le devis de ${price} € !`, 'green');
+        this.resources.reputationScore = (this.resources.reputationScore || 50) + 12;
+        this.showToast('Convention Signée !', `L’organisateur de « ${devis.eventName} » a retenu votre proposition face à ${rival} !`, 'green');
       } else {
-        devis.status = 'rejected';
-        this.showToast('Devis Décliné', `Montant de ${price} € jugé trop onéreux pour l'événement (Barème : ${bareme} €).`, 'orange');
+        devis.status = 'rejected_competition';
+        this.showToast('Offre Non Retenue', `L’organisateur a préféré l’offre concurrente de ${rival} (meilleur compromis). Continuez la prospection !`, 'orange');
       }
 
       this.updateStatsUI();
       this.saveGame();
-    }, 3500);
+    }, 3200);
   }
 
   convertDevisToScheduledMission(devis) {
+    const volsCount = devis.configuredVolunteers || devis.requiredVolunteers || 4;
+    const scaleChosen = devis.configuredScale || devis.scale || 'DPS-PE';
+    const vehsChosen = (devis.configuredVehicles !== undefined) ? devis.configuredVehicles : devis.requiredVehicles;
+
     const newMission = {
       id: `m-plan-${Date.now()}`,
       type: 'dps',
       categoryLabel: 'DPS - Dispositif Prévu au Calendrier',
       title: devis.eventName,
-      desc: `Couverture sanitaire pour ${devis.publicCount}. ${devis.scale}.`,
+      desc: `Couverture sanitaire pour ${devis.publicCount}. ${scaleChosen}.`,
       lat: devis.lat,
       lng: devis.lng,
-      scale: devis.scale,
+      scale: scaleChosen,
       eventDate: devis.eventDate,
       durationHours: devis.durationHours,
       startHour: devis.eventDate.startHour || devis.eventDate.hour,
       endHour: devis.eventDate.endHour || ((devis.eventDate.hour + devis.durationHours) % 24),
       duration: devis.durationHours * 10,
       durationSeconds: Math.round(devis.durationHours * 3600),
-      requiredVolunteers: devis.requiredVolunteers,
-      requiredRanks: devis.requiredRanks,
-      requiredVehicles: devis.requiredVehicles,
+      requiredVolunteers: volsCount,
+      requiredRanks: devis.requiredRanks || ['PSE1', 'PSE2'],
+      requiredVehicles: vehsChosen || [],
       rewardMoney: devis.proposedPrice,
       rewardReputation: 25,
       // Critères cachés de conformité
-      hiddenMinVolunteers: devis.hiddenMinVolunteers || devis.requiredVolunteers,
+      hiddenMinVolunteers: devis.hiddenMinVolunteers || volsCount,
       hiddenRequiredSkills: devis.hiddenRequiredSkills || devis.requiredRanks || [],
       consumableCost: devis.consumableCost || 30,
       clientName: devis.clientName,
@@ -1647,14 +1784,17 @@ class ProtecGame {
       vehicles: assignedVehicles
     };
 
-    // Trajet routier animé avec gyrophare si véhicule présent
+    // Trajets routiers animés avec gyrophares pour tous les véhicules affectés
     if (assignedVehicles.length > 0 && window.ProtecSystems) {
-      const veh = assignedVehicles[0];
-      const station = this.stations.find(s => s.id === veh.stationId) || this.stations[0];
-      const origin = { lat: station.lat, lng: station.lng };
-      const dest = { lat: mission.lat, lng: mission.lng };
-      window.ProtecSystems.startTransit(this, veh, origin, dest, mission, 2, () => {
-        // Arrivé sur place
+      assignedVehicles.forEach((veh, idx) => {
+        const station = this.stations.find(s => s.id === veh.stationId) || this.stations[0];
+        const origin = { lat: station.lat, lng: station.lng };
+        const dest = { lat: mission.lat, lng: mission.lng };
+        setTimeout(() => {
+          window.ProtecSystems.startTransit(this, veh, origin, dest, mission, 2, () => {
+            // Arrivé sur place
+          });
+        }, idx * 750);
       });
     }
 
@@ -2257,12 +2397,27 @@ class ProtecGame {
   }
 
   // --- POPUP MODULES DOCK ---
-  openModule(moduleKey) {
+  openModule(moduleKey, isBackNavigation = false) {
     const modal = document.getElementById('main-modal');
     const title = document.getElementById('modal-title');
     const subtitle = document.getElementById('modal-subtitle');
     const icon = document.getElementById('modal-icon');
     const body = document.getElementById('modal-body');
+    const backBtn = document.getElementById('modal-back-btn');
+
+    if (!isBackNavigation && this.currentModalKey && this.currentModalKey !== moduleKey) {
+      if (!this.modalHistory) this.modalHistory = [];
+      this.modalHistory.push(this.currentModalKey);
+    }
+    this.currentModalKey = moduleKey;
+
+    if (backBtn) {
+      if (this.modalHistory && this.modalHistory.length > 0) {
+        backBtn.classList.remove('hidden');
+      } else {
+        backBtn.classList.add('hidden');
+      }
+    }
 
     modal.classList.remove('hidden');
 
@@ -2477,73 +2632,242 @@ class ProtecGame {
         setTimeout(() => this.renderChatMessages(), 50);
       }
     } else if (moduleKey === 'planning') {
-      title.textContent = 'Planning des Dispositifs de Secours (DPS)';
-      subtitle.textContent = 'Événements programmés au calendrier officiel, suivi des effectifs et relances';
+      title.textContent = 'Planning Opérationnel des Dispositifs & Missions';
+      subtitle.textContent = 'Dispositifs prévisionnels (DPS), gardes SAMU/SDIS, maraudes sociales et calendrier officiel';
       icon.setAttribute('data-lucide', 'calendar');
 
-      const dpsMissions = this.missions.filter(m => m.type === 'dps');
+      const currentTab = this.activePlanningTab || 'calendar';
+      const allScheduled = this.missions.filter(m => m.status === 'planifie' || m.status === 'ongoing' || m.type === 'dps');
+      
+      const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+      const curMonthName = monthNames[this.clock.month] || 'Mois';
+      const curYear = this.clock.year || 2026;
+      const todayDay = this.clock.day || 1;
+      const selectedDay = this.selectedPlanningDay || todayDay;
+
+      // Calcul du calendrier mensuel
+      const daysInMonth = new Date(curYear, this.clock.month + 1, 0).getDate();
+      const firstDayIndex = (new Date(curYear, this.clock.month, 1).getDay() + 6) % 7; // 0 = Lundi, 6 = Dimanche
+
+      const selectedDayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === selectedDay && m.eventDate.month === this.clock.month);
 
       body.innerHTML = `
         <div class="space-y-5">
-          <div class="p-4 rounded-2xl glass-card-blue flex items-center justify-between text-xs text-pc-blue">
-            <div>
-              <span class="font-bold block">Fonctionnement du calendrier :</span>
-              Chaque DPS a une date et heure fixées à l’avance. Les secouristes disponibles s’inscrivent d’eux-mêmes.
+          <!-- Barre d'onglets Vue Calendrier / Vue Liste -->
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div class="flex items-center gap-2">
+              <button onclick="window.game.setPlanningTab('calendar')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'calendar' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}">
+                <i data-lucide="calendar" class="w-4 h-4"></i>
+                Vue Calendrier
+              </button>
+              <button onclick="window.game.setPlanningTab('list')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'list' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}">
+                <i data-lucide="list" class="w-4 h-4"></i>
+                Vue Liste Chronologique (${allScheduled.length})
+              </button>
             </div>
-            <div class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-white/80 border border-pc-blue/30 text-pc-blue whitespace-nowrap ml-3">
-              Flux Organisateur Automatique
+            <div class="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Aujourd'hui : <strong class="text-slate-800">${this.formatFullDate(this.clock)}</strong>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            ${dpsMissions.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour l’instant. Établissez des devis dans le module Devis pour remplir votre planning.</p>' : ''}
-            ${dpsMissions.map(m => {
-              const regCount = m.registeredVolunteers?.length || 0;
-              const isFull = regCount >= m.requiredVolunteers;
-              const dateStr = m.eventDate ? this.formatFullDate(m.eventDate) + ' à ' + m.eventDate.hour + 'h00' : 'Date à confirmer';
-
-              return `
-                <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
-                  <div class="space-y-1.5">
-                    <div class="flex items-center justify-between">
-                      <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-pc-blue text-white">${dateStr}</span>
-                      <span class="text-xs font-bold mono-num text-emerald-600">+${m.rewardMoney} €</span>
-                    </div>
-                    <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
-                    <p class="text-xs text-slate-500">${m.scale} • Durée : ${Math.round(m.duration / 10)}h d’intervention</p>
-                  </div>
-
-                  <div class="space-y-1.5 pt-2 border-t border-slate-100/70">
-                    <div class="flex items-center justify-between text-xs font-bold">
-                      <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
-                        ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
-                      </span>
-                      <div class="flex gap-2">
-                        <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold">
-                          Renfort Alliance
-                        </button>
-                        <button onclick="window.game.relanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold">
-                          Relancer
-                        </button>
-                      </div>
-                    </div>
-                    <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden">
-                      <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
-                    </div>
-                  </div>
-
-                  <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-2 rounded-xl text-xs font-bold glass-button text-slate-800 transition">
-                    Détail du dispositif
-                  </button>
+          ${currentTab === 'calendar' ? `
+            <!-- VUE CALENDRIER -->
+            <div class="space-y-4">
+              <div class="flex items-center justify-between px-1">
+                <div>
+                  <h4 class="text-base font-extrabold text-slate-900">${curMonthName} ${curYear}</h4>
+                  <p class="text-[11px] text-slate-500">Sélectionnez un jour pour consulter ou gérer les dispositifs programmés</p>
                 </div>
-              `;
-            }).join('')}
-          </div>
+                <div class="flex items-center gap-3 text-[11px] text-slate-600">
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-pc-blue"></span> DPS Événement</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-pc-orange"></span> Garde SAMU/SDIS</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Social</span>
+                </div>
+              </div>
+
+              <!-- Grille du calendrier -->
+              <div class="glass-card rounded-2xl p-4 shadow-sm">
+                <!-- En-têtes des jours de la semaine -->
+                <div class="grid grid-cols-7 gap-1 text-center text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
+                  <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
+                </div>
+
+                <!-- Cases des jours -->
+                <div class="grid grid-cols-7 gap-1.5">
+                  <!-- Décalage premier jour -->
+                  ${Array.from({ length: firstDayIndex }).map(() => `
+                    <div class="h-16 rounded-xl bg-slate-50/50 opacity-30 border border-transparent"></div>
+                  `).join('')}
+
+                  <!-- Jours du mois -->
+                  ${Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const isToday = day === todayDay;
+                    const isSelected = day === selectedDay;
+                    const dayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === day && m.eventDate.month === this.clock.month);
+                    const dpsCount = dayMissions.filter(m => m.type === 'dps').length;
+                    const otherCount = dayMissions.filter(m => m.type !== 'dps').length;
+
+                    let bgClass = 'bg-white hover:bg-slate-50 border-slate-200/80';
+                    if (isSelected) bgClass = 'bg-pc-blue/10 border-pc-blue ring-2 ring-pc-blue/30';
+                    else if (isToday) bgClass = 'bg-amber-50/80 border-amber-300';
+
+                    return `
+                      <button 
+                        onclick="window.game.selectPlanningDay(${day})" 
+                        class="h-16 rounded-xl p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
+                      >
+                        <div class="flex items-center justify-between w-full">
+                          <span class="text-xs font-extrabold ${isToday ? 'text-amber-800 font-black' : isSelected ? 'text-pc-blue' : 'text-slate-800'}">
+                            ${day}
+                          </span>
+                          ${isToday ? `<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-amber-950 uppercase">Auj.</span>` : ''}
+                        </div>
+
+                        <div class="flex flex-col gap-0.5 w-full">
+                          ${dpsCount > 0 ? `
+                            <div class="px-1 py-0.2 rounded text-[9px] font-extrabold bg-pc-blue text-white truncate text-center">
+                              DPS (${dpsCount})
+                            </div>
+                          ` : ''}
+                          ${otherCount > 0 ? `
+                            <div class="px-1 py-0.2 rounded text-[9px] font-extrabold bg-pc-orange text-white truncate text-center">
+                              Garde (${otherCount})
+                            </div>
+                          ` : ''}
+                        </div>
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+
+              <!-- Détail de la journée sélectionnée -->
+              <div class="p-4 rounded-2xl glass-card space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h4 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue"></i>
+                    Dispositifs & Missions du ${selectedDay} ${curMonthName} ${curYear}
+                    ${selectedDay === todayDay ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">Aujourd'hui sur la carte</span>` : ''}
+                  </h4>
+                  <span class="text-xs font-bold text-slate-500">${selectedDayMissions.length} mission(s) programmée(s)</span>
+                </div>
+
+                ${selectedDayMissions.length === 0 ? `
+                  <p class="text-xs text-slate-500 py-6 text-center italic">
+                    Aucun dispositif programmé pour cette date. Consultez vos devis reçus ou activez la communication pour recevoir des sollicitations.
+                  </p>
+                ` : `
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                    ${selectedDayMissions.map(m => {
+                      const regCount = m.registeredVolunteers?.length || 0;
+                      const isFull = regCount >= m.requiredVolunteers;
+                      const timeStr = `${m.startHour || m.eventDate?.hour || 14}h00 à ${(m.endHour || ((m.eventDate?.hour || 14) + (m.durationHours || 4)) % 24)}h00`;
+
+                      return `
+                        <div class="p-3.5 rounded-xl glass-card border border-slate-200/80 flex flex-col justify-between space-y-2.5">
+                          <div>
+                            <div class="flex items-center justify-between">
+                              <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${timeStr}</span>
+                              <span class="text-xs font-bold text-emerald-700 mono-num">+${m.rewardMoney} €</span>
+                            </div>
+                            <h5 class="text-xs font-extrabold text-slate-900 mt-1">${m.title}</h5>
+                            <p class="text-[11px] text-slate-500">${m.scale || 'DPS'} • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                          </div>
+
+                          <div class="pt-2 border-t border-slate-100 space-y-1.5">
+                            <div class="flex items-center justify-between text-xs font-bold">
+                              <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
+                                ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
+                              </span>
+                              <div class="flex gap-2">
+                                <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold">Renfort</button>
+                                <button onclick="window.game.relanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold">Relancer</button>
+                              </div>
+                            </div>
+                            <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                              <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
+                            </div>
+                          </div>
+
+                          <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl text-xs font-bold glass-button text-slate-800 transition">
+                            Fiche détaillée & Inscriptions
+                          </button>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                `}
+              </div>
+            </div>
+          ` : `
+            <!-- VUE LISTE CHRONOLOGIQUE -->
+            <div class="space-y-4">
+              <div class="p-4 rounded-2xl glass-card-blue flex items-center justify-between text-xs text-pc-blue">
+                <div>
+                  <span class="font-bold block">Calendrier des Dispositifs :</span>
+                  Vue continue de tous les postes et interventions planifiés dans le département. Seuls les postes du jour apparaissent sur la carte tactique.
+                </div>
+                <div class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-white/80 border border-pc-blue/30 text-pc-blue whitespace-nowrap ml-3">
+                  ${allScheduled.length} Dispositifs
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                ${allScheduled.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour l’instant. Établissez des devis dans le module Devis pour remplir votre planning.</p>' : ''}
+                ${allScheduled.map(m => {
+                  const regCount = m.registeredVolunteers?.length || 0;
+                  const isFull = regCount >= m.requiredVolunteers;
+                  const dateStr = m.eventDate ? this.formatFullDate(m.eventDate) + ' à ' + (m.startHour || m.eventDate.hour || 14) + 'h00' : 'Date à confirmer';
+                  const isToday = m.eventDate ? (m.eventDate.day === this.clock.day && m.eventDate.month === this.clock.month) : false;
+
+                  return `
+                    <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${isToday ? 'border-amber-300 ring-2 ring-amber-200' : 'border-slate-200/80'}">
+                      <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${isToday ? 'bg-amber-500 text-white' : 'bg-pc-blue text-white'}">
+                            ${dateStr} ${isToday ? '⭐ (AUJOURD’HUI)' : ''}
+                          </span>
+                          <span class="text-xs font-bold mono-num text-emerald-600">+${m.rewardMoney} €</span>
+                        </div>
+                        <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
+                        <p class="text-xs text-slate-500">${m.scale || 'DPS'} • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                      </div>
+
+                      <div class="space-y-1.5 pt-2 border-t border-slate-100/70">
+                        <div class="flex items-center justify-between text-xs font-bold">
+                          <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
+                            ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
+                          </span>
+                          <div class="flex gap-2">
+                            <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold">
+                              Renfort Alliance
+                            </button>
+                            <button onclick="window.game.relanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold">
+                              Relancer
+                            </button>
+                          </div>
+                        </div>
+                        <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden">
+                          <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
+                        </div>
+                      </div>
+
+                      <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-2 rounded-xl text-xs font-bold glass-button text-slate-800 transition">
+                        Détail du dispositif
+                      </button>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `}
         </div>
       `;
     } else if (moduleKey === 'devis') {
-      title.textContent = 'Gestion des Devis & Barème National';
-      subtitle.textContent = 'Saisie libre du montant avec barème de référence officiel et acceptation selon budget';
+      title.textContent = 'Gestion des Devis & Dimensionnement DPS';
+      subtitle.textContent = 'Configurez votre type de DPS, secouristes et véhicules. L’organisateur évalue votre offre face à la concurrence.';
       icon.setAttribute('data-lucide', 'file-check');
 
       const pendingDevis = this.devis.filter(d => d.status === 'pending');
@@ -2555,9 +2879,9 @@ class ProtecGame {
             <div class="flex items-center justify-between">
               <span class="font-extrabold flex items-center gap-1.5 text-amber-900">
                 <i data-lucide="scale" class="w-4 h-4 text-amber-600"></i>
-                Barème Réglementaire de Référence (Protection Civile)
+                Barème Réglementaire & Mise en Concurrence (RNMSC)
               </span>
-              <span class="text-[11px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-lg">Flux Organisateur Spontané</span>
+              <span class="text-[11px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-lg">Mise en Concurrence Active</span>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-amber-800">
               <div class="p-2 glass-card rounded-xl">Vacation secouriste : <strong>18,00 €/h</strong></div>
@@ -2566,7 +2890,7 @@ class ProtecGame {
               <div class="p-2 glass-card rounded-xl">Frais convention : <strong>40,00 €</strong></div>
             </div>
             <p class="text-[11px] text-amber-700 italic">
-              Les demandes de devis proviennent spontanément des organisateurs locaux selon la réputation et le rayonnement de votre antenne.
+              <strong>Règle :</strong> Vous définissez librement le type de DPS, le nombre de secouristes et les véhicules. L’organisateur évalue si votre dimensionnement respecte la sécurité, et compare votre tarif à ceux de la concurrence (Croix-Rouge, Ordre de Malte).
             </p>
           </div>
 
@@ -2589,7 +2913,7 @@ class ProtecGame {
                   <div class="text-xs font-bold text-slate-800">Campagne Réseaux Sociaux</div>
                   <div class="text-[10px] text-slate-500">Notoriété locale & associations (+sollicitations)</div>
                 </div>
-                <button onclick="window.game.toggleCampaign('social'); window.game.openModule('devis');" class="px-3 py-1.5 rounded-xl text-xs font-bold ${this.resources.campaigns.social ? 'bg-emerald-600 text-white' : 'glass-button text-slate-700'} transition">
+                <button onclick="window.game.toggleCampaign('social'); window.game.openModule('devis', true);" class="px-3 py-1.5 rounded-xl text-xs font-bold ${this.resources.campaigns.social ? 'bg-emerald-600 text-white' : 'glass-button text-slate-700'} transition">
                   ${this.resources.campaigns.social ? 'Active ✓' : 'Lancer (150 €)'}
                 </button>
               </div>
@@ -2599,7 +2923,7 @@ class ProtecGame {
                   <div class="text-xs font-bold text-slate-800">Affichage & Mairie</div>
                   <div class="text-[10px] text-slate-500">Visibilité municipale (+grands dispositifs)</div>
                 </div>
-                <button onclick="window.game.toggleCampaign('posters'); window.game.openModule('devis');" class="px-3 py-1.5 rounded-xl text-xs font-bold ${this.resources.campaigns.posters ? 'bg-emerald-600 text-white' : 'glass-button text-slate-700'} transition">
+                <button onclick="window.game.toggleCampaign('posters'); window.game.openModule('devis', true);" class="px-3 py-1.5 rounded-xl text-xs font-bold ${this.resources.campaigns.posters ? 'bg-emerald-600 text-white' : 'glass-button text-slate-700'} transition">
                   ${this.resources.campaigns.posters ? 'Actif ✓' : 'Lancer (200 €)'}
                 </button>
               </div>
@@ -2628,54 +2952,110 @@ class ProtecGame {
             </div>
           </div>
 
+          <!-- Demandes reçues avec configurateur personnalisé -->
           <div class="space-y-4">
             <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Demandes Reçues des Organisateurs (${pendingDevis.length})</h4>
 
             ${pendingDevis.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune demande reçue pour le moment. Développez la communication et la réputation de votre antenne pour recevoir des devis d’organisateurs.</p>' : ''}
             
             ${pendingDevis.map(d => {
-              const b = d.bareme;
+              // Initialisation des valeurs configurées par le joueur
+              if (!d.configuredScale) {
+                d.configuredScale = d.scale ? d.scale.split(' ')[0] : 'DPS-PE';
+                d.configuredVolunteers = d.requiredVolunteers || 4;
+                d.configuredVehicles = (d.requiredVehicles && d.requiredVehicles.length > 0) ? [...d.requiredVehicles] : ['VPSP'];
+              }
+
+              const dynamicBareme = this.calculateDynamicBareme(d);
               const dateStr = this.formatFullDate(d.eventDate);
-              const defaultVal = d.proposedPrice || b.totalBareme;
+              const defaultVal = d.proposedPrice || dynamicBareme.totalBareme;
+
+              const vehKey = (d.configuredVehicles.length === 0) ? 'none' : 
+                (d.configuredVehicles.length === 2 && d.configuredVehicles.includes('VTU')) ? 'vpsp_vtu' :
+                (d.configuredVehicles.length === 2) ? 'vpsp2' : 'vpsp1';
 
               return `
-                <div class="p-5 rounded-2xl glass-card space-y-4">
+                <div class="p-5 rounded-2xl glass-card space-y-4 border border-slate-200/80 shadow-sm" id="devis-card-${d.id}">
+                  <!-- En-tête de la demande -->
                   <div class="flex items-start justify-between">
                     <div>
                       <div class="flex items-center gap-2">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${d.scale}</span>
-                        <span class="text-xs font-bold text-slate-500">${d.clientName}</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${d.eventName}</span>
+                        <span class="text-xs font-bold text-slate-500">${d.clientName} (${d.clientType})</span>
                       </div>
                       <h4 class="text-base font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
-                      <p class="text-xs text-slate-500">Prévu le <strong>${dateStr}</strong> • Durée : <strong>${d.durationHours}h</strong> • Affluence : ${d.publicCount}</p>
+                      <p class="text-xs text-slate-500">
+                        Date : <strong>${dateStr}</strong> • Durée : <strong>${d.durationHours}h</strong> • Affluence attendue : <strong class="text-slate-800">${d.publicCount}</strong>
+                      </p>
                     </div>
                     <div class="text-right">
                       <span class="text-[10px] text-slate-400 font-bold uppercase block">Barème Conseillé</span>
-                      <span class="text-base font-extrabold mono-num text-slate-800">${b.totalBareme} €</span>
+                      <span class="text-base font-extrabold mono-num text-slate-800" id="bareme-total-display-${d.id}">${dynamicBareme.totalBareme} €</span>
                     </div>
                   </div>
 
-                  <div class="p-3 rounded-xl glass-card-blue text-xs space-y-1 text-slate-600">
-                    <div class="flex justify-between">
-                      <span>${d.requiredVolunteers} secouristes × ${d.durationHours}h × 18 €/h :</span>
-                      <strong class="font-mono text-slate-800">${b.personnelCost} €</strong>
+                  <!-- CONFIGURATEUR PAR LE JOUEUR -->
+                  <div class="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3">
+                    <div class="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center justify-between">
+                      <span>🛠️ Dimensionnement proposé par votre antenne</span>
+                      <span class="text-[10px] text-slate-400 font-bold lowercase">Défini par le joueur</span>
                     </div>
-                    ${b.vehicleCost > 0 ? `
-                      <div class="flex justify-between">
-                        <span>Forfait véhicule (${d.requiredVehicles.join(', ')}) :</span>
-                        <strong class="font-mono text-slate-800">${b.vehicleCost} €</strong>
+
+                    <!-- 1. Type de Dispositif -->
+                    <div>
+                      <label class="block text-[11px] font-bold text-slate-600 mb-1">Type de dispositif (RNMSC) :</label>
+                      <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
+                        <button onclick="window.game.updateDevisScale('${d.id}', 'PAPS')" class="p-2 rounded-xl font-bold transition text-center ${d.configuredScale === 'PAPS' ? 'bg-pc-blue text-white shadow-sm' : 'glass-button text-slate-700'}">
+                          PAPS (2 sec.)
+                        </button>
+                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-PE')" class="p-2 rounded-xl font-bold transition text-center ${d.configuredScale === 'DPS-PE' ? 'bg-pc-blue text-white shadow-sm' : 'glass-button text-slate-700'}">
+                          DPS-PE (3-6 sec.)
+                        </button>
+                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-ME')" class="p-2 rounded-xl font-bold transition text-center ${d.configuredScale === 'DPS-ME' ? 'bg-pc-blue text-white shadow-sm' : 'glass-button text-slate-700'}">
+                          DPS-ME (7-12 sec.)
+                        </button>
+                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-GE')" class="p-2 rounded-xl font-bold transition text-center ${d.configuredScale === 'DPS-GE' ? 'bg-pc-blue text-white shadow-sm' : 'glass-button text-slate-700'}">
+                          DPS-GE (13+ sec.)
+                        </button>
                       </div>
-                    ` : ''}
-                    <div class="flex justify-between">
-                      <span>Lots de premiers secours & DSA :</span>
-                      <strong class="font-mono text-slate-800">${b.matCost} €</strong>
                     </div>
-                    <div class="flex justify-between">
-                      <span>Frais de dossier et convention :</span>
-                      <strong class="font-mono text-slate-800">${b.adminCost} €</strong>
+
+                    <!-- 2. Effectif secouristes & Véhicules engagés -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <!-- Secouristes -->
+                      <div>
+                        <label class="block text-[11px] font-bold text-slate-600 mb-1">Effectif Secouriste Engagé :</label>
+                        <div class="flex items-center gap-2">
+                          <button onclick="window.game.adjustDevisVolunteers('${d.id}', -1)" class="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-700 font-black hover:bg-slate-100 transition">-</button>
+                          <div class="flex-1 text-center py-1.5 rounded-xl bg-white border border-slate-200 font-extrabold text-xs text-slate-800">
+                            <span class="text-sm font-black text-pc-blue" id="vol-count-${d.id}">${d.configuredVolunteers}</span> secouristes
+                          </div>
+                          <button onclick="window.game.adjustDevisVolunteers('${d.id}', 1)" class="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-700 font-black hover:bg-slate-100 transition">+</button>
+                        </div>
+                      </div>
+
+                      <!-- Véhicules -->
+                      <div>
+                        <label class="block text-[11px] font-bold text-slate-600 mb-1">Moyens Véhicules :</label>
+                        <select onchange="window.game.updateDevisVehicles('${d.id}', this.value)" class="w-full py-2 px-3 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800">
+                          <option value="none" ${vehKey === 'none' ? 'selected' : ''}>Sans véhicule (Poste pédestre / Tente)</option>
+                          <option value="vpsp1" ${vehKey === 'vpsp1' ? 'selected' : ''}>1 Ambulance VPSP (+110 €)</option>
+                          <option value="vpsp2" ${vehKey === 'vpsp2' ? 'selected' : ''}>2 Ambulances VPSP (+220 €)</option>
+                          <option value="vpsp_vtu" ${vehKey === 'vpsp_vtu' ? 'selected' : ''}>1 VPSP + 1 VTU Logistique (+165 €)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Décomposition du coût indicatif -->
+                    <div class="p-2.5 rounded-xl bg-white/80 border border-slate-200 text-[11px] text-slate-600 flex flex-wrap justify-between gap-2">
+                      <span>Personnel : <strong class="text-slate-800">${dynamicBareme.personnelCost} €</strong></span>
+                      <span>Véhicules : <strong class="text-slate-800">${dynamicBareme.vehicleCost} €</strong></span>
+                      <span>Matériel : <strong class="text-slate-800">${dynamicBareme.matCost} €</strong></span>
+                      <span>Dossier : <strong class="text-slate-800">${dynamicBareme.adminCost} €</strong></span>
                     </div>
                   </div>
 
+                  <!-- SAISIE DU PRIX PROPOSÉ PAR LE JOUEUR & SOUMISSION -->
                   <div class="p-4 rounded-xl glass-card space-y-3">
                     <div class="flex items-center justify-between gap-4">
                       <div class="flex-1">
@@ -2697,7 +3077,7 @@ class ProtecGame {
                       <div class="flex items-end">
                         <button onclick="window.game.submitCustomDevis('${d.id}')" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center gap-2">
                           <i data-lucide="send" class="w-4 h-4"></i>
-                          Soumettre le Devis
+                          Soumettre l'Offre
                         </button>
                       </div>
                     </div>
@@ -2705,8 +3085,8 @@ class ProtecGame {
                     <div id="devis-feedback-${d.id}">
                       <div class="p-2.5 rounded-xl border text-xs flex items-center justify-between glass-card-blue">
                         <div>
-                          <span class="font-extrabold block text-pc-blue">Tarif conforme au barème national</span>
-                          <span class="text-[11px] text-slate-500">Acceptation très probable (~90%)</span>
+                          <span class="font-extrabold block text-pc-blue">Tarif calqué sur votre dimensionnement</span>
+                          <span class="text-[11px] text-slate-500">Mise en concurrence avec la Croix-Rouge et l'Ordre de Malte</span>
                         </div>
                         <span class="font-mono font-bold text-pc-blue">${defaultVal} €</span>
                       </div>
@@ -3716,7 +4096,29 @@ class ProtecGame {
   }
 
   closeModal() {
-    document.getElementById('main-modal').classList.add('hidden');
+    const modal = document.getElementById('main-modal');
+    if (modal) modal.classList.add('hidden');
+    this.modalHistory = [];
+    this.currentModalKey = null;
+    const backBtn = document.getElementById('modal-back-btn');
+    if (backBtn) backBtn.classList.add('hidden');
+  }
+
+  goBackModal() {
+    if (this.modalHistory && this.modalHistory.length > 0) {
+      const prevKey = this.modalHistory.pop();
+      this.openModule(prevKey, true);
+    } else {
+      this.closeModal();
+    }
+  }
+
+  handleBackdropClick(event) {
+    if (this.modalHistory && this.modalHistory.length > 0) {
+      this.goBackModal();
+    } else {
+      this.closeModal();
+    }
   }
 
   openOverviewModal() { this.openModule('planning'); }

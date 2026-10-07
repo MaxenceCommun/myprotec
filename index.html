@@ -47,8 +47,7 @@
   <!-- MAP CONTAINER (Plein écran) -->
   <div id="map" class="absolute inset-0 w-full h-full z-0"></div>
 
-  <!-- OVERLAY NUIT DYNAMIQUE -->
-  <div id="map-night-filter" class="absolute inset-0 w-full h-full z-[1] bg-indigo-950/0 pointer-events-none transition-all duration-1000"></div>
+  <!-- OVERLAY NUIT GÉRÉ DANS LE TILE-PANE LEAFLET UNIQUEMENT -->
 
   <!-- OVERLAY MODE IMPLANTATION ANTENNE -->
   <div id="antenna-placement-banner" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-30 px-6 py-3 rounded-full glass-panel-heavy border-2 border-pc-orange shadow-xl flex items-center gap-3 animate-bounce">
@@ -636,7 +635,7 @@
   </aside>
 
   <!-- MODAL MULTI-USAGES (Formations, Flotte, Équipe, Finances...) -->
-  <div id="main-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-sm">
+  <div id="main-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-sm" onclick="if(event.target === this) window.game.handleBackdropClick(event)">
     <div class="glass-panel-heavy rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl border border-white/90 modal-fade-in overflow-hidden">
       
       <!-- Modal Header -->
@@ -650,9 +649,15 @@
             <p id="modal-subtitle" class="text-xs text-slate-500 font-medium">Sous-titre descriptif</p>
           </div>
         </div>
-        <button onclick="window.game.closeModal()" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
+        <div class="flex items-center gap-1.5">
+          <button id="modal-back-btn" onclick="window.game.goBackModal()" class="hidden px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition flex items-center gap-1">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <span>Retour</span>
+          </button>
+          <button onclick="window.game.closeModal()" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition" title="Fermer">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
       </div>
 
       <!-- Modal Body -->
@@ -663,7 +668,7 @@
   </div>
 
   <!-- MODAL DE RÉINITIALISATION SÉCURISÉE (ANTI FAUSSE-MANIPULATION & ARCHIVAGE LOGS) -->
-  <div id="reset-confirm-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+  <div id="reset-confirm-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md" onclick="if(event.target === this) window.game.closeResetModal()">
     <div class="glass-panel-heavy rounded-3xl w-full max-w-md p-6 shadow-2xl border border-red-300 modal-fade-in space-y-5">
       <div class="flex items-center gap-3">
         <div class="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center text-xl font-black">
@@ -700,7 +705,7 @@
   </div>
 
   <!-- MODAL DE VALIDATION D'EMPLACEMENT D'ANTENNE -->
-  <div id="placement-validation-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
+  <div id="placement-validation-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md" onclick="if(event.target === this) window.game.adjustPlacementMarker()">
     <div class="glass-panel-heavy rounded-3xl w-full max-w-md p-6 shadow-2xl border border-white/95 modal-fade-in space-y-5">
       <div class="flex items-center gap-3">
         <div class="w-12 h-12 rounded-2xl bg-pc-blue/10 text-pc-blue flex items-center justify-center text-xl font-black">
@@ -821,7 +826,7 @@
   </div>
 
   <!-- MODAL PUBLICITÉ RÉCOMPENSÉE -->
-  <div id="ad-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4 animate-in fade-in">
+  <div id="ad-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4 animate-in fade-in" onclick="if(event.target === this) window.ProtecAds.closeAdModal()">
     <div class="w-full max-w-lg rounded-3xl glass-panel-heavy border border-white/80 p-6 shadow-2xl relative">
       <!-- Header (Conformité AdSense : Titre Publicité clair) -->
       <div class="flex items-center justify-between pb-4 border-b border-slate-200/60 mb-4">
