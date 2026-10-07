@@ -1,3 +1,3 @@
 # Google AdSense ads.txt
 # Remplacez pub-0000000000000000 par votre identifiant éditeur Google AdSense (ex: pub-1234567890123456)
-google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
+google.com, pub-5561333212712163, DIRECT, f08c47fec0942fa0
