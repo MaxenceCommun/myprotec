@@ -821,4 +821,19 @@ html, body {
   border-color: rgba(255, 255, 255, 0.88) transparent transparent transparent;
 }
 
+/* Styles pour les abréviations & infobulles du glossaire */
+#global-abbr-tooltip {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+  pointer-events: none;
+}
+
+abbr.protec-abbr, [data-abbr], .protec-abbr {
+  text-decoration: underline dotted rgba(2, 132, 199, 0.5);
+  text-underline-offset: 2.5px;
+  cursor: help;
+}
+
+
 
