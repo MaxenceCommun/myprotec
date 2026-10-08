@@ -94,7 +94,7 @@ window.ProtecModals = {
       window.ProtecLogistique.renderModal(game);
       return '';
     }
-    const s = game.logistics || { oxygenBottles: 10, aedPads: 8, woundKits: 14, cervicalCollars: 6 };
+    const s = game.logistics || { oxygenBottles: 0, aedPads: 0, woundKits: 0, cervicalCollars: 0 };
     return `
       <div class="space-y-6">
         <!-- Bannière Matériel Opérationnel, Lots de Crise & Conditions de Travail -->

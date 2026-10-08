@@ -124,6 +124,7 @@ class ProtecGame {
     this.aascConvention = { signed: false, signedAt: null, cost: 800 };
     this.samuConvention = { signed: false, signedAt: null, totalInterventions: 0 };
     this.sdisConvention = { signed: false, signedAt: null, totalInterventions: 0 };
+    this.logistics = { oxygenBottles: 0, aedPads: 0, woundKits: 0, cervicalCollars: 0 };
 
     // Marqueurs Leaflet
     this.markers = {
@@ -2122,7 +2123,7 @@ class ProtecGame {
       return;
     }
 
-    const veh = this.vehicles.find(v => v.status === 'dispo' && (v.type === 'VPSP' || v.type === 'VTU')) || this.vehicles.find(v => v.status === 'dispo');
+    const veh = this.vehicles.find(v => v.status === 'dispo' && (v.type === 'VPSP' || v.type === 'VTU')) || this.vehicles.find(v => v.status === 'dispo' && !v.requiresTrailer);
     if (!veh) {
       this.showToast('Aucun véhicule disponible', 'Tous vos véhicules sont actuellement engagés.', 'orange');
       return;
@@ -2701,6 +2702,18 @@ class ProtecGame {
       }
 
       if (dispoVeh) {
+        // Vérification remorque (ERS Bateau, Quad, Remorque) : Tractage obligatoire
+        if (dispoVeh.requiresTrailer) {
+          const tractor = this.vehicles.find(v => v.id !== dispoVeh.id && v.status === 'dispo' && v.hasTowHitch);
+          if (!tractor) {
+            this.showToast('Véhicule avec Attelage Requis ! ⚠️', `${dispoVeh.name} est sur remorque (fournie). Il vous faut un véhicule tracteur équipé d'un crochet d'attelage disponible (VL, VTU...) pour le tracter sur la mission !`, 'orange');
+            return;
+          }
+          tractor.status = 'mission';
+          tractor.fuel = Math.max(10, (tractor.fuel || 90) - 10);
+          assignedVehicles.push(tractor);
+        }
+
         dispoVeh.status = 'mission';
         dispoVeh.fuel = Math.max(10, (dispoVeh.fuel || 90) - 12);
         assignedVehicles.push(dispoVeh);

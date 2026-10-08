@@ -366,7 +366,7 @@ window.ProtecOnboarding = {
       { icon: '🚑', title: 'Acquérir votre 1er véhicule opérationnel', desc: 'Commander une ambulance VPSP (5 places) ou un utilitaire VTU (3 places).', reward: '+600 €' },
       { icon: '📦', title: 'Équiper l’antenne en matériel de secours', desc: 'Acheter les premiers consommables (Oxygène O2, électrodes DAE, trousses de soins).', reward: '+400 €' },
       { icon: '📢', title: 'Publier 1 offre de recrutement', desc: 'Recruter un jeune en Service Civique ou un cadre opérationnel salarié.', reward: '+500 €' },
-      { icon: '📐', title: 'Aménager le local sur le Plan 2D CAD', desc: 'Disposer le mobilier et affecter les salles selon vos missions.', reward: '+750 €' }
+      { icon: '📐', title: 'Aménager le local sur le Plan 2D', desc: 'Disposer le mobilier et affecter les salles selon vos missions.', reward: '+750 €' }
     ];
 
     return `

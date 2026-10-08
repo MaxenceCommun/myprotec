@@ -1526,7 +1526,7 @@ window.ProtecLocaux = {
           <div class="flex items-center gap-2">
             <!-- Mode 2D Uniquement (Vue 3D désactivée pour le moment) -->
             <div class="flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 shadow text-xs font-black text-slate-300">
-              <span class="text-blue-400 mr-1.5">📐</span> Plan 2D CAD
+              <span class="text-blue-400 mr-1.5">📐</span> Plan 2D
             </div>
 
             <button type="button" onclick="window.ProtecLocaux.resetCamera()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition flex items-center gap-1">
@@ -1538,14 +1538,14 @@ window.ProtecLocaux = {
           </div>
         </div>
 
-        <!-- ZONE CENTRALE : PLAN CAD 2D HAUTE DÉFINITION -->
+        <!-- ZONE CENTRALE : PLAN 2D HAUTE DÉFINITION -->
         <div class="relative w-full h-[460px] sm:h-[500px] rounded-3xl bg-[#0a0e17] border-2 border-slate-800 shadow-xl overflow-hidden select-none">
           <canvas id="architect-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
 
           <!-- Badge En direct -->
           <div class="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow text-xs font-bold text-white pointer-events-none">
             <span class="text-blue-400">📐</span>
-            <span>Plan d’Architecte 2D CAD</span>
+            <span>Plan d’Architecte 2D</span>
             <span class="text-[9.5px] font-black px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">Éditable</span>
           </div>
 
@@ -1892,10 +1892,11 @@ window.ProtecLocaux = {
       const model = this.getArchitectModel();
       const rm = (model.rooms || []).find(r => r.id === roomId);
       if (rm) {
+        const areaLabel = this.isEditing ? ` (${rm.area.toFixed(1)} m²)` : '';
         contextBar.innerHTML = `
           <span class="flex items-center gap-1.5 font-bold text-blue-300">
             <span>🏛️</span>
-            <span>Salle active : <strong>${rm.name.split('\n')[0]}</strong> (${rm.area.toFixed(1)} m²)</span>
+            <span>Salle active : <strong>${rm.name.split('\n')[0]}</strong>${areaLabel}</span>
           </span>
         `;
       }
@@ -2283,7 +2284,7 @@ window.ProtecLocaux = {
           <!-- 1. En-tête gauche : Badge Plan 2D & Statut En direct -->
           <div class="absolute top-3.5 left-3.5 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-lg text-xs font-bold text-white pointer-events-none">
             <span class="text-blue-400 text-sm">📐</span>
-            <span>Plan 2D CAD</span>
+            <span>Plan 2D</span>
             <span class="flex items-center gap-1.5 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               En direct (1)
@@ -2934,10 +2935,11 @@ window.ProtecLocaux = {
 
       // Cartouche discret d'identification de la pièce (centré au milieu de la pièce)
       const roomTitle = r.name.split('\n')[0];
-      const roomSubtitle = `${r.area.toFixed(1)} m² • ${r.w.toFixed(1)}m × ${r.h.toFixed(1)}m`;
+      const showDimensions = !!this.isEditing;
+      const roomSubtitle = showDimensions ? `${r.area.toFixed(1)} m² • ${r.w.toFixed(1)}m × ${r.h.toFixed(1)}m` : '';
       
-      const badgeW = Math.min(rw - 16, 200);
-      const badgeH = 34;
+      const badgeW = Math.min(rw - 16, showDimensions ? 200 : 160);
+      const badgeH = showDimensions ? 34 : 24;
       const badgeX = rx + rw / 2 - badgeW / 2;
       const badgeY = ry + rh / 2 - badgeH / 2;
 
@@ -2955,14 +2957,17 @@ window.ProtecLocaux = {
       ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(roomTitle, rx + rw / 2, badgeY + 11);
-
-      ctx.fillStyle = isSelected ? '#93c5fd' : '#94a3b8';
-      ctx.font = '600 9.5px monospace';
-      ctx.fillText(roomSubtitle, rx + rw / 2, badgeY + 24);
+      if (showDimensions) {
+        ctx.fillText(roomTitle, rx + rw / 2, badgeY + 11);
+        ctx.fillStyle = isSelected ? '#93c5fd' : '#94a3b8';
+        ctx.font = '600 9.5px monospace';
+        ctx.fillText(roomSubtitle, rx + rw / 2, badgeY + 24);
+      } else {
+        ctx.fillText(roomTitle, rx + rw / 2, badgeY + 12);
+      }
     });
 
-    // 4. Tracé des murs porteurs et cloisons (double trait ardoise CAD)
+    // 4. Tracé des murs porteurs et cloisons (double trait ardoise)
     model.walls.forEach(w => {
       const x1 = ox + w.x1 * scale;
       const y1 = oy + w.y1 * scale;
@@ -2978,7 +2983,7 @@ window.ProtecLocaux = {
       ctx.lineTo(x2, y2);
       ctx.stroke();
 
-      // Bords clairs CAD
+      // Bords clairs
       ctx.strokeStyle = w.outer ? '#475569' : '#334155';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -3027,7 +3032,8 @@ window.ProtecLocaux = {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Cote de porte
+      // Cote de porte : taille uniquement en mode édition
+      const doorLabel = this.isEditing ? d.label : (d.label || '').replace(/\s*\(\d+cm\)/i, '').replace(/\s*\([\d\.]+m\)/i, '');
       ctx.fillStyle = '#cbd5e1';
       ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center';
@@ -3035,10 +3041,10 @@ window.ProtecLocaux = {
         ctx.save();
         ctx.translate(dx + (d.wall === 'W' ? -8 : 8), dy + dlen / 2);
         ctx.rotate(-Math.PI / 2);
-        ctx.fillText(d.label, 0, 0);
+        ctx.fillText(doorLabel, 0, 0);
         ctx.restore();
       } else {
-        ctx.fillText(d.label, dx + dlen / 2, dy - 8);
+        ctx.fillText(doorLabel, dx + dlen / 2, dy - 8);
       }
     });
 
@@ -3058,17 +3064,18 @@ window.ProtecLocaux = {
       }
       ctx.stroke();
 
-      // Cote de fenêtre (bien dégagée à l'extérieur des murs)
+      // Cote de fenêtre (taille uniquement en mode édition)
+      const winLabel = this.isEditing ? w.label : (w.label || '').replace(/\s*\([\d\.]+m\)/i, '').replace(/\s*\(\d+cm\)/i, '');
       ctx.fillStyle = '#38bdf8';
       ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center';
       if (w.wall === 'N' || w.wall === 'S') {
-        ctx.fillText(w.label, wx + wlen / 2, wy + (w.wall === 'N' ? -13 : 15));
+        ctx.fillText(winLabel, wx + wlen / 2, wy + (w.wall === 'N' ? -13 : 15));
       } else {
         ctx.save();
         ctx.translate(wx + (w.wall === 'W' ? -12 : 14), wy + wlen / 2);
         ctx.rotate(-Math.PI / 2);
-        ctx.fillText(w.label, 0, 0);
+        ctx.fillText(winLabel, 0, 0);
         ctx.restore();
       }
     });
@@ -3869,19 +3876,19 @@ window.ProtecLocaux = {
             <div class="space-y-2 text-xs">
               <div class="flex justify-between p-2 rounded-xl bg-slate-50">
                 <span>🫁 Bouteilles Oxygène B5 :</span>
-                <strong class="text-slate-800">${log.oxygenBottles || log.oxygenB5 || 12} bouteilles</strong>
+                <strong class="text-slate-800">${log.oxygenBottles || log.oxygenB5 || 0} bouteilles</strong>
               </div>
               <div class="flex justify-between p-2 rounded-xl bg-slate-50">
                 <span>🩹 Trousses PSE & Pansements :</span>
-                <strong class="text-slate-800">${log.woundKits || log.firstAidKits || 20} trousses</strong>
+                <strong class="text-slate-800">${log.woundKits || log.firstAidKits || 0} trousses</strong>
               </div>
               <div class="flex justify-between p-2 rounded-xl bg-slate-50">
                 <span>⚡ Électrodes DAE :</span>
-                <strong class="text-slate-800">${log.aedPads || 8} paires</strong>
+                <strong class="text-slate-800">${log.aedPads || 0} paires</strong>
               </div>
               <div class="flex justify-between p-2 rounded-xl bg-slate-50">
                 <span>🩻 Colliers Cervicaux :</span>
-                <strong class="text-slate-800">${log.cervicalCollars || 6} unités</strong>
+                <strong class="text-slate-800">${log.cervicalCollars || 0} unités</strong>
               </div>
             </div>
             

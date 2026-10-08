@@ -203,29 +203,114 @@ window.ProtecAdvancedModals = {
   },
 
   // --- 3. COMMANDE DE VÉHICULES SPÉCIALISÉS ---
+  vehicleFilter: 'all',
+  vehicleSort: 'price_asc',
+
+  setVehicleFilter(filterKey, stationId) {
+    this.vehicleFilter = filterKey;
+    if (window.game) {
+      const body = document.getElementById('modal-body');
+      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
+    }
+  },
+
+  setVehicleSort(sortKey, stationId) {
+    this.vehicleSort = sortKey;
+    if (window.game) {
+      const body = document.getElementById('modal-body');
+      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
+    }
+  },
+
   renderVehicleShop(game, stationId) {
     const st = game.stations.find(s => s.id === stationId) || game.stations[0];
     const garageLevel = st?.rooms?.garage || 1;
     const maxSlots = garageLevel === 1 ? 2 : (garageLevel === 2 ? 4 : 8);
     const usedSlots = st?.vehicles?.length || 0;
 
+    const activeFilter = this.vehicleFilter || 'all';
+    const activeSort = this.vehicleSort || 'price_asc';
+
+    let list = [...(window.ProtecAdvanced.vehicleCatalog || [])];
+
+    // 1. Filtrage par type de mission / véhicule
+    if (activeFilter !== 'all') {
+      list = list.filter(v => v.missionFilter && v.missionFilter.includes(activeFilter));
+    }
+
+    // 2. Tri par prix ou critère
+    if (activeSort === 'price_asc') {
+      list.sort((a, b) => a.cost - b.cost);
+    } else if (activeSort === 'price_desc') {
+      list.sort((a, b) => b.cost - a.cost);
+    } else if (activeSort === 'name_asc') {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    const filterOptions = [
+      { id: 'all', label: 'Tout le Catalogue', icon: '🏪' },
+      { id: 'secours', label: 'Secours & Sanitaire (VPSP, MPS)', icon: '🚑' },
+      { id: 'liaison', label: 'Reconnaissance & Commandement (VL, PCM)', icon: '🚗' },
+      { id: 'logistique', label: 'Logistique & Transport (VTU, VTP)', icon: '🚐' },
+      { id: 'social', label: 'Social & Accueil (VAHU)', icon: '☕' },
+      { id: 'usar', label: 'Spécialités USAR & Cyno', icon: '⛏️' },
+      { id: 'nautique', label: 'Nautique (ERS Bateau)', icon: '🚤' },
+      { id: 'tout_terrain', label: 'Tout-Terrain & Remorques', icon: '🚜' }
+    ];
+
     return `
       <div class="space-y-4">
-        <div class="p-4 rounded-2xl glass-card flex items-center justify-between text-xs">
+        <!-- Bandeau d'en-tête et capacité du hangar -->
+        <div class="p-4 rounded-2xl glass-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
           <div>
-            <h4 class="font-extrabold text-slate-900">Catalogue des Véhicules & Vecteurs de Secours</h4>
-            <p class="text-slate-500">Capacité du Hangar : <strong>${usedSlots} / ${maxSlots} véhicules</strong></p>
+            <h4 class="font-black text-slate-900 text-sm">Centrale d'Acquisition des Véhicules de Secours</h4>
+            <p class="text-slate-500 mt-0.5">Capacité du Hangar : <strong>${usedSlots} / ${maxSlots} véhicules</strong> • Antenne : <strong>${st?.name || 'Principale'}</strong></p>
           </div>
-          <span class="font-bold text-slate-600">Trésorerie : <strong class="text-pc-blue font-mono">${game.resources.money.toLocaleString('fr-FR')} €</strong></span>
+          <div class="flex items-center gap-3">
+            <span class="font-bold text-slate-600">Trésorerie disponible : <strong class="text-pc-blue font-mono text-sm">${game.resources.money.toLocaleString('fr-FR')} €</strong></span>
+          </div>
         </div>
 
+        <!-- Barre de Filtres par Type de Mission & Tri par Prix -->
+        <div class="p-3 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
+          <!-- Filtres par type de mission / véhicule -->
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+            ${filterOptions.map(f => {
+              const isActive = activeFilter === f.id;
+              return `
+                <button type="button" onclick="window.ProtecAdvancedModals.setVehicleFilter('${f.id}', '${st?.id}')" class="px-2.5 py-1.5 rounded-xl text-[11px] font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  isActive ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }">
+                  <span>${f.icon}</span>
+                  <span>${f.label}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+
+          <!-- Sélecteur de Tri par Prix -->
+          <div class="flex items-center gap-2 self-end md:self-auto shrink-0">
+            <span class="text-[11px] font-bold text-slate-500 whitespace-nowrap">Trier par :</span>
+            <select onchange="window.ProtecAdvancedModals.setVehicleSort(this.value, '${st?.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-300 font-bold text-xs text-slate-800 cursor-pointer focus:ring-2 focus:ring-pc-blue">
+              <option value="price_asc" ${activeSort === 'price_asc' ? 'selected' : ''}>Prix croissant (Moins cher ➜ Plus cher)</option>
+              <option value="price_desc" ${activeSort === 'price_desc' ? 'selected' : ''}>Prix décroissant (Plus cher ➜ Moins cher)</option>
+              <option value="name_asc" ${activeSort === 'name_asc' ? 'selected' : ''}>Nom alphabétique (A ➜ Z)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Grille des Véhicules filtrés et triés -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          ${window.ProtecAdvanced.vehicleCatalog.map(veh => `
+          ${list.length === 0 ? `
+            <div class="col-span-full p-8 text-center glass-card rounded-2xl text-slate-500">
+              <p class="font-bold text-sm">Aucun véhicule trouvé pour cette sélection.</p>
+            </div>
+          ` : list.map(veh => `
             <div class="p-4 rounded-2xl glass-card space-y-3 flex flex-col justify-between hover:shadow-lg transition">
               <div class="space-y-2">
                 <!-- Image officielle du véhicule -->
                 <div class="h-24 w-full flex items-center justify-center p-2 bg-gradient-to-b from-slate-50 to-slate-100/60 rounded-2xl border border-slate-100 overflow-hidden shadow-inner group">
-                  <img src="${veh.image || `images/vehicles/${veh.type}.png`}" alt="${veh.name}" class="max-h-full max-w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform" onerror="this.outerHTML='<span class=\'text-3xl\'>${veh.icon}</span>'" />
+                  <img src="${veh.image || `images/vehicles/${veh.type}.png`}" alt="${veh.name}" class="max-h-full max-w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform" onerror="this.outerHTML='<span class=\\'text-3xl\\'>${veh.icon}</span>'" />
                 </div>
 
                 <div class="flex items-center justify-between">
@@ -245,16 +330,26 @@ window.ProtecAdvancedModals = {
                     <span>Capacité : <strong class="text-slate-900">${veh.capacity} place${veh.capacity > 1 ? 's' : ''}</strong>${veh.extraCapacityLabel ? ` <span class="text-indigo-800 font-semibold">${veh.extraCapacityLabel}</span>` : ''}</span>
                     <span class="text-slate-600">Vitesse : ${veh.speedKmH} km/h</span>
                   </div>
+
+                  <!-- Présence d'attelage discrète -->
                   ${veh.hasTowHitch ? `
-                    <div class="text-[9px] text-emerald-700 bg-emerald-50 rounded-md px-1.5 py-0.5 font-semibold border border-emerald-200 flex items-center gap-1">
-                      <span>🔗 Véhicule tracteur avec attelage (peut tracter ERS, Quad, Remorque)</span>
+                    <div class="text-[10.5px] text-emerald-700 font-bold flex items-center gap-1">
+                      <span>✓ Attelage</span>
                     </div>
                   ` : ''}
+
+                  <!-- Remorque fournie à l'achat pour bateau ou quad -->
                   ${veh.requiresTrailer ? `
-                    <div class="text-[9px] text-amber-800 bg-amber-100/90 rounded-md px-1.5 py-0.5 font-bold border border-amber-300 flex items-center gap-1">
-                      <span>⚠️ Se déplace uniquement sur remorque avec un véhicule doté d'un attelage</span>
+                    <div class="text-[10px] bg-amber-50 rounded-lg p-2 border border-amber-200/80 space-y-0.5">
+                      <div class="text-emerald-700 font-bold flex items-center gap-1">
+                        <span>📦 Remorque fournie à l’achat</span>
+                      </div>
+                      <div class="text-amber-800 font-semibold text-[9.5px]">
+                        ⚠️ Se déplace tracté par un véhicule avec attelage (VL, VTU...)
+                      </div>
                     </div>
                   ` : ''}
+
                   ${veh.reqSkills && veh.reqSkills.length > 0 ? `
                     <div class="text-[9px] text-blue-900 bg-blue-100/80 rounded-md px-1.5 py-0.5 font-semibold border border-blue-200 flex items-center gap-1">
                       <span>📋 Qualifications requises : SSA & Conduite Bateau</span>
