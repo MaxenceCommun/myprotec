@@ -40,10 +40,10 @@ window.ProtecSystems = {
     if (!game.radioLogs) game.radioLogs = [];
     if (!game.logistics) {
       game.logistics = {
-        oxygenBottles: 10,
-        aedPads: 8,
-        woundKits: 14,
-        cervicalCollars: 6
+        oxygenBottles: 0,
+        aedPads: 0,
+        woundKits: 0,
+        cervicalCollars: 0
       };
     }
     if (!game.weather) {
@@ -782,117 +782,117 @@ window.ProtecSystems = {
     if (pheno === 'inondation' || pheno === 'pluie') {
       const inondationVariants = [
         {
-          title: 'Alerte Inondation : Évacuation Pavillonnaire & CAI',
-          desc: `Crue subite suite aux fortes pluies (${game.weather.precipitation || 12} mm/h). Le maire active le PCS. La Protection Civile est réquisitionnée pour ouvrir un Centre d'Accueil des Impliqués (CAI) dans un gymnase et évacuer 15 sinistrés.`,
+          title: 'Réquisition Préfecture : Évacuation & Accueil des Sinistrés (CAI)',
+          desc: `Crue subite suite aux fortes pluies (${game.weather.precipitation || 12} mm/h). Le Préfet et la Mairie activent les plans de sauvegarde. La Préfecture réquisitionne la Protection Civile (AASC) pour armer un Centre d'Accueil des Impliqués (CAI) dans un gymnase et assister les personnes évacuées.`,
           urgency: 'haute',
           durMin: 35,
           reqVol: 4,
           ranks: ['CE', 'PSE2', 'PSE1'],
           vehs: ['VPSP', 'VL'],
-          reward: 450
+          reward: 480
         },
         {
-          title: 'Crue Majeure : Reconnaissance Points Bas & Ravitaillement Hameaux Isolés',
-          desc: `La rivière est sortie de son lit. Trois lotissements sont coupés du réseau routier. Déploiement d’un équipage pour reconnaissance, distribution de vivres et d’eau en bouteilles aux riverains piégés.`,
+          title: 'Réquisition Préfecture : Reconnaissance Points Bas & Ravitaillement Hameaux Isolés',
+          desc: `Crue majeure constatée par le SIDPC. Des lotissements sont coupés du réseau routier. Réquisition d’un équipage AASC pour reconnaissance, transport et distribution de vivres de première urgence aux riverains sinistrés.`,
           urgency: 'haute',
           durMin: 40,
           reqVol: 4,
           ranks: ['CE', 'PSE2', 'PSE1'],
           vehs: ['VTU', 'VPSP'],
-          reward: 480
+          reward: 520
         }
       ];
       missionDef = inondationVariants[Math.floor(Math.random() * inondationVariants.length)];
     } else if (pheno === 'vent' || pheno === 'tempete') {
       const ventVariants = [
         {
-          title: 'Tempête / Vent : Chute d’Arbre sur Véhicule & Sécurisation',
-          desc: `Rafales de vent à ${Math.round(game.weather.windGusts || 75)} km/h. Un arbre s’est abattu sur une voiture en circulation. 1 blessé léger coincé et axe départemental bloqué. Équipage VPSP et lot de balisage requis.`,
+          title: 'Réquisition Préfecture : Sécurisation d’Axe & Assistance Suite Tempête',
+          desc: `Rafales mesurées à ${Math.round(game.weather.windGusts || 75)} km/h. Chute d’arbre sur véhicule et axe départemental bloqué. Le Centre Opérationnel Départemental (COD) sollicite l’engagement d’un équipage AASC avec lot de balisage et secours à personnes.`,
           urgency: 'critique',
           durMin: 30,
           reqVol: 3,
           ranks: ['CE', 'PSE2', 'PSE1'],
           vehs: ['VPSP'],
-          reward: 420
+          reward: 450
         },
         {
-          title: 'Vents Violents : Toitures Arrachées & Mise en Sécurité Riverains',
-          desc: `Bourrasques destructrices. Éléments de charpente et tuiles projetés sur la voie publique. Évacuation d’urgence de 8 habitants vers la salle polyvalente communale.`,
+          title: 'Réquisition Préfecture : Mise en Sécurité Riverains & Toitures Arrachées',
+          desc: `Vents violents et dégâts matériels importants. Le SIDPC demande à la Protection Civile d'assister les services municipaux pour évacuer et mettre à l'abri les habitants vers la salle polyvalente communale.`,
           urgency: 'critique',
           durMin: 35,
           reqVol: 4,
           ranks: ['CE', 'PSE2', 'PSE1'],
           vehs: ['VTU', 'VL'],
-          reward: 460
+          reward: 480
         }
       ];
       missionDef = ventVariants[Math.floor(Math.random() * ventVariants.length)];
     } else if (pheno === 'orage' || pheno === 'foudre') {
       missionDef = {
-        title: 'Orages Violents & Foudre : Impact sur Habitation & Évacuation',
-        desc: `Activité électrique intense. La foudre a touché un pavillon avec début d’incendie et coupure électrique générale. Prise en charge de la famille choquée et mise à l’abri sous tente d’urgence.`,
+        title: 'Réquisition Préfecture : Orages Violents & Prise en Charge d’Urgence',
+        desc: `Intense activité orageuse et foudroiement avec début d’incendie et coupure électrique générale. La Préfecture déclenche l’antenne AASC pour la prise en charge médico-psychologique de proximité et la mise à l’abri des familles.`,
         urgency: 'critique',
         durMin: 32,
         reqVol: 3,
         ranks: ['CE', 'PSE2', 'PSE1'],
         vehs: ['VPSP'],
-        reward: 440
+        reward: 460
       };
     } else if (pheno === 'neige' || pheno === 'verglas') {
       missionDef = {
-        title: 'Épisode Hivernal : Naufragés de la Route & Carambolage Verglas',
-        desc: `Chaussées verglacées et congères. Des dizaines d’automobilistes sont bloqués sur la voie express. Distribution de couvertures, boissons chaudes et assistance aux personnes vulnérables.`,
+        title: 'Réquisition Préfecture : Naufragés de la Route & Épisode Hivernal',
+        desc: `Verglas généralisé et axes bloqués. Sur ordre de la Préfecture (Cellule de Crise / COD), déploiement d’un dispositif AASC pour distribution de couvertures de survie, boissons chaudes et secours aux automobilistes bloqués.`,
         urgency: 'haute',
         durMin: 45,
         reqVol: 4,
         ranks: ['CE', 'PSE2', 'PSE1'],
         vehs: ['VTU', 'VPSP'],
-        reward: 490
+        reward: 520
       };
     } else if (pheno === 'canicule' || pheno === 'chaleur') {
       missionDef = {
-        title: 'Canicule Préfectorale : Maraude Fraîcheur & Malaises Sériels',
-        desc: `Pic de chaleur à ${Math.round(game.weather.temp)}°C. Réquisition préfectorale pour la distribution d'eau potable d'urgence aux personnes sans abri et prise en charge de 3 malaises hyperthermiques en centre-ville.`,
+        title: 'Réquisition Préfecture : Plan Canicule & Maraude Sanitaire d’Urgence',
+        desc: `Pic de canicule à ${Math.round(game.weather.temp)}°C. Réquisition préfectorale de l'antenne au titre des AASC : hydratation des personnes vulnérables, maraudes urbaines et premier bilan des malaises thermiques.`,
         urgency: 'normale',
         durMin: 40,
         reqVol: 3,
         ranks: ['PSE2', 'PSE1'],
         vehs: ['VPSP'],
-        reward: 380
+        reward: 420
       };
     } else if (pheno === 'grand_froid') {
       missionDef = {
-        title: 'Plan Grand Froid : Maraude Sociale Nocturne & Mise à l’Abri',
-        desc: `Température de ${Math.round(game.weather.temp)}°C avec ressenti glacial. Le 115 sollicite la Protection Civile pour orienter 8 personnes vulnérables vers le gymnase d’hébergement d’urgence.`,
+        title: 'Réquisition Préfecture : Plan Grand Froid & Hébergement d’Urgence',
+        desc: `Ressenti glacial (${Math.round(game.weather.temp)}°C). La Préfecture active le niveau 2 du Plan Grand Froid et demande à la Protection Civile de renforcer le 115 pour la mise à l’abri et l'accueil en gymnase.`,
         urgency: 'normale',
         durMin: 45,
         reqVol: 3,
         ranks: ['PSE2', 'PSE1'],
         vehs: ['VL'],
-        reward: 390
+        reward: 430
       };
     } else {
       missionDef = {
-        title: 'Intempéries : Reconnaissance & Assistance aux Sinistrés',
-        desc: `Conditions météo dégradées. Reconnaissance des points bas et assistance logistique aux riverains isolés.`,
+        title: 'Réquisition Préfecture : Assistance AASC Intempéries Dégradées',
+        desc: `Vigilance météo départementale. La Préfecture sollicite l'antenne pour patrouilles de reconnaissance et soutien aux populations sinistrées.`,
         urgency: 'normale',
         durMin: 30,
         reqVol: 3,
         ranks: ['PSE1'],
         vehs: ['VL'],
-        reward: 350
+        reward: 380
       };
     }
 
     const newWeatherMission = {
       id: `m-meteo-${Date.now()}`,
       type: 'meteo',
-      categoryLabel: `Préalerte Préfectorale - ${game.weather.alertTitle}`,
-      title: `[Préalerte] ${missionDef.title}`,
-      desc: `🟡 PRÉALERTE PRÉFECTURALE : Vigilance en cours (${game.weather.alertTitle}). ${missionDef.desc} La Préfecture demande la pré-mobilisation d'une équipe opérationnelle pour recensement des effectifs. Aucun personnel n'est affecté d'avance : lancez la mobilisation par SMS pour recenser vos disponibles.`,
+      categoryLabel: `Réquisition Préfectorale (AASC)`,
+      title: `[Préalerte Préfecture] ${missionDef.title}`,
+      desc: `🏛️ RÉQUISITION PRÉFECTORALE (AASC) : Face aux conditions météo (${game.weather.alertTitle}), le Préfet et le Centre Opérationnel Départemental (COD / SIDPC) sollicitent l'engagement de la Protection Civile au titre de ses agréments de Sécurité Civile. ${missionDef.desc} Mobilisez vos secouristes par SMS pour confirmer l'équipage disponible.`,
       lat: meteoCoords.lat,
       lng: meteoCoords.lng,
-      scale: `Dispositif Intempéries (${missionDef.reqVol} secouristes)`,
+      scale: `Dispositif Réquisition AASC (${missionDef.reqVol} secouristes)`,
       eventDate: { ...game.clock, hour: game.clock.hour },
       durationSeconds: missionDef.durMin * 60,
       durationHours: (missionDef.durMin / 60).toFixed(1),
@@ -926,8 +926,8 @@ window.ProtecSystems = {
     if (window.ProtecNotifications) {
       window.ProtecNotifications.notifyCategory(
         'weather',
-        `⚠️ PRÉALERTE PRÉFECTURE (${vigFr})`,
-        `Vigilance Météo active. La Préfecture demande la pré-mobilisation d'une équipe : ${missionDef.title}. Lancez la mobilisation par SMS !`,
+        `🏛️ RÉQUISITION PRÉFECTURE (AASC - ${vigFr})`,
+        `Le Préfet requiert l'engagement de l'antenne : ${missionDef.title}. Mobilisez vos bénévoles par SMS !`,
         `meteo-${newWeatherMission.id}`
       );
     } else if (window.ProtecIncidents) {

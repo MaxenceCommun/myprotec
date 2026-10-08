@@ -1861,9 +1861,10 @@ window.ProtecLocaux = {
             ${isSelected ? '<span class="text-[9.5px] text-pc-blue font-bold flex-shrink-0">Active ★</span>' : ''}
           </div>
           <select onclick="event.stopPropagation()" onchange="window.ProtecLocaux.assignRoomRole('${rm.id}', this.value)" class="w-full px-2 py-1 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue">
+            <option value="libre" ${rm.type === 'libre' ? 'selected' : ''}>⚪ Salle Libre (Non affectée)</option>
             <option value="bureau" ${rm.type === 'bureau' ? 'selected' : ''}>💼 Accueil & Direction</option>
             <option value="formation" ${rm.type === 'formation' ? 'selected' : ''}>🎓 Formation PSC1 & DPS</option>
-            <option value="stockage" ${rm.type === 'stockage' ? 'selected' : ''}>📦 Réserve Lots A/B</option>
+            <option value="stockage" ${rm.type === 'stockage' ? 'selected' : ''}>📦 Réserve Lots A/B & Vestiaires</option>
             <option value="detente" ${rm.type === 'detente' ? 'selected' : ''}>☕ Foyer & Détente</option>
             <option value="dortoir" ${rm.type === 'dortoir' ? 'selected' : ''}>🛏️ Dortoir de Garde</option>
             <option value="vestiaires" ${rm.type === 'vestiaires' ? 'selected' : ''}>🚿 Vestiaires & Sanitaires</option>
@@ -1901,7 +1902,9 @@ window.ProtecLocaux = {
     if (!room) return;
 
     room.type = newRole;
+    const roomIdx = (model.rooms || []).findIndex(r => r.id === roomId) + 1;
     const titles = {
+      libre: `Salle ${roomIdx || 1} (Libre)\n(Non affectée)`,
       bureau: 'Accueil & Direction\n(Poste de Commandement)',
       formation: 'Salle de Formation & DPS\n(Pédagogie Citoyenne)',
       stockage: 'Réserve Lots A/B & Vestiaires\n(Pharmacie & Casiers F1)',
@@ -1910,6 +1913,7 @@ window.ProtecLocaux = {
       vestiaires: 'Vestiaires Opérationnels\n(Casiers & Sanitaires)'
     };
     const colors = {
+      libre: '#131824',
       bureau: '#161d2b',
       formation: '#141a26',
       stockage: '#181b2a',
@@ -1918,8 +1922,8 @@ window.ProtecLocaux = {
       vestiaires: '#131e28'
     };
 
-    room.name = titles[newRole] || 'Pièce Opérationnelle';
-    room.color = colors[newRole] || '#161d2b';
+    room.name = titles[newRole] || `Salle ${roomIdx || 1} (Libre)\n(Non affectée)`;
+    room.color = colors[newRole] || '#131824';
 
     this.selectRoom(roomId);
     this.renderArchitectScene();
@@ -2638,11 +2642,29 @@ window.ProtecLocaux = {
       ? (window.game.stations.find(s => s.id === stationId) || window.game.stations[0])
       : null;
     if (st && st.premises && st.premises.architecture) {
-      return st.premises.architecture;
+      const arch = st.premises.architecture;
+      // Migration douce : si l'antenne a encore les anciens noms par défaut de démonstration, les passer en "Libre"
+      if (arch.rooms) {
+        arch.rooms.forEach((r, idx) => {
+          if (r.name && (r.name.includes('Accueil Public & Direction') || r.name.includes('Salle de Formation & DPS') || r.name.includes('Réserve Lots A/B & Vestiaires'))) {
+            r.type = 'libre';
+            r.name = `Salle ${idx + 1} (Libre)\n(Non affectée)`;
+            r.color = '#121722';
+          }
+        });
+      }
+      if (arch.parking && arch.parking.spots) {
+        arch.parking.spots.forEach((sp, idx) => {
+          if (sp.label && (sp.label.includes('VPSP 01') || sp.label.includes('VTU 01'))) {
+            sp.label = `🅿️ EMPLACEMENT LIBRE 0${idx + 1}`;
+          }
+        });
+      }
+      return arch;
     }
 
     return {
-      // 1. Parking opérationnel extérieur (2 places VPSP / VTU)
+      // 1. Parking opérationnel extérieur (places libres par défaut)
       parking: {
         x: 1.0,
         y: 1.5,
@@ -2650,44 +2672,44 @@ window.ProtecLocaux = {
         h: 9.0,
         label: 'Parking Opérationnel Extérieur',
         spots: [
-          { id: 'spot_1', label: '🚑 EMPLACEMENT VPSP 01', x: 1.4, y: 2.2, w: 4.0, d: 2.4 },
-          { id: 'spot_2', label: '🚐 EMPLACEMENT VTU 01', x: 1.4, y: 5.6, w: 4.0, d: 2.4 }
+          { id: 'spot_1', label: '🅿️ EMPLACEMENT LIBRE 01', x: 1.4, y: 2.2, w: 4.0, d: 2.4 },
+          { id: 'spot_2', label: '🅿️ EMPLACEMENT LIBRE 02', x: 1.4, y: 5.6, w: 4.0, d: 2.4 }
         ]
       },
-      // 2. Les 3 pièces intérieures de base
+      // 2. Les 3 pièces intérieures libres par défaut (aménagement et affectation par le joueur)
       rooms: [
         {
           id: 'room_1',
-          type: 'bureau',
-          name: 'Accueil Public & Direction\n(Poste de Commandement)',
+          type: 'libre',
+          name: 'Salle 1 (Libre)\n(Non affectée)',
           x: 6.2,
           y: 1.5,
           w: 4.6,
           h: 4.2,
           area: 19.3,
-          color: '#161d2b'
+          color: '#121722'
         },
         {
           id: 'room_2',
-          type: 'formation',
-          name: 'Salle de Formation & DPS\n(Pédagogie Citoyenne PSC1)',
+          type: 'libre',
+          name: 'Salle 2 (Libre)\n(Non affectée)',
           x: 10.8,
           y: 1.5,
           w: 4.8,
           h: 4.2,
           area: 20.2,
-          color: '#141a26'
+          color: '#121722'
         },
         {
           id: 'room_3',
-          type: 'stockage',
-          name: 'Réserve Lots A/B & Vestiaires\n(Logistique & Casiers F1)',
+          type: 'libre',
+          name: 'Salle 3 (Libre)\n(Non affectée)',
           x: 6.2,
           y: 5.7,
           w: 9.4,
           h: 4.8,
           area: 45.1,
-          color: '#181b2a'
+          color: '#121722'
         }
       ],
       // 3. Murs porteurs extérieurs et cloisons intérieures
@@ -2817,8 +2839,12 @@ window.ProtecLocaux = {
       ctx.textAlign = 'center';
       ctx.fillText(pk.label.toUpperCase(), px + pw / 2, py + 14);
 
-      // Tracé des 2 emplacements de véhicules de secours
-      (pk.spots || []).forEach(spot => {
+      // Tracé des emplacements de parking
+      const game = window.game;
+      const st = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+      const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id)) : [];
+
+      (pk.spots || []).forEach((spot, idx) => {
         const sx = ox + spot.x * scale;
         const sy = oy + spot.y * scale;
         const sw = spot.w * scale;
@@ -2835,10 +2861,13 @@ window.ProtecLocaux = {
         ctx.setLineDash([]);
 
         // Libellé de l'emplacement au sol
-        ctx.fillStyle = '#fbbf24';
+        const assignedVeh = stVehs[idx];
+        const displayLabel = assignedVeh ? `🚑 ${assignedVeh.name} (${assignedVeh.type})` : (spot.label || `🅿️ EMPLACEMENT LIBRE 0${idx + 1}`);
+
+        ctx.fillStyle = assignedVeh ? '#38bdf8' : '#fbbf24';
         ctx.font = 'bold 9px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(spot.label, sx + sw / 2, sy + sd / 2);
+        ctx.fillText(displayLabel, sx + sw / 2, sy + sd / 2);
       });
     }
 

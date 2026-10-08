@@ -977,7 +977,7 @@ class ProtecGame {
 
       if (mission.type === 'samu') { colorClass = 'bg-pc-orange'; pingClass = 'radar-ping-orange'; iconName = 'activity'; }
       else if (mission.type === 'pompiers') { colorClass = 'bg-red-700'; pingClass = 'radar-ping-red'; iconName = 'flame'; }
-      else if (mission.type === 'meteo') { colorClass = 'bg-sky-600'; pingClass = 'radar-ping-blue'; iconName = 'cloud-lightning'; }
+      else if (mission.type === 'meteo') { colorClass = 'bg-sky-700'; pingClass = 'radar-ping-blue'; iconName = 'shield-alert'; }
       else if (mission.type === 'social') { colorClass = 'bg-purple-600'; pingClass = 'radar-ping-purple'; iconName = 'heart-handshake'; }
       else if (mission.type === 'crise') { colorClass = 'bg-red-600'; pingClass = 'radar-ping-red'; iconName = 'siren'; }
 
@@ -1206,26 +1206,29 @@ class ProtecGame {
     };
     const isFirst = this.stations.length === 0;
     if (isFirst) {
-      const vehId = `vpsp-${Date.now()}`;
-      this.vehicles.push({
-        id: vehId,
-        name: 'VPSP 01',
-        type: 'VPSP',
-        label: 'Ambulance de Premiers Secours',
-        capacity: 4,
-        status: 'dispo',
-        stationId: stationId,
-        image: 'images/vehicles/VPSP.png'
-      });
-      newStation.vehicles.push(vehId);
+      // 1. ZÉRO VÉHICULE AU DÉPART (l'antenne doit acquérir son 1er véhicule)
+      this.vehicles = [];
+      newStation.vehicles = [];
 
+      // 2. ZÉRO MATÉRIEL AU DÉPART (stock vierge)
+      newStation.stock = {};
+      this.logistics = { oxygenBottles: 0, aedPads: 0, woundKits: 0, cervicalCollars: 0 };
+
+      // 3. ZÉRO CONVENTION AU DÉPART
+      this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
+      this.cumpConvention = { signed: false, signedAt: null, totalMissions: 0, successfulMissions: 0, normCompliant: false };
+      this.sdisGarde = { active: false, vehicleId: null, caserneCrew: [], astreinteCrew: [], mode: 'poste' };
+
+      // 4. EXACTEMENT 5 BÉNÉVOLES AVEC COMPÉTENCES DE BASE (1 CE, 2 PSE2, 2 PSE1)
       const starters = [
-        { name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', exp: 60, isTrainer: true, avatar: '👨‍💼', dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'], motivation: 85, skills: ['ce', 'pse2', 'pse1', 'permis_vpsp', 'permis_b', 'formateur_psc', 'formateur_ps'] },
-        { name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', exp: 40, isTrainer: false, avatar: '👩‍🚒', dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_vpsp', 'permis_b'] },
-        { name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', exp: 20, isTrainer: false, avatar: '🙋‍♂️', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 75, skills: ['pse1', 'permis_b'] },
-        { name: 'Élodie Leroy', role: 'Bénévole Stagiaire', rank: 'Stagiaire', exp: 5, isTrainer: false, avatar: '🧑', dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'], motivation: 90, skills: ['stagiaire', 'psc1'] }
+        { name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', exp: 30, isTrainer: false, avatar: '👨‍💼', dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'], motivation: 85, skills: ['ce', 'pse2', 'pse1', 'permis_b'] },
+        { name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', exp: 25, isTrainer: false, avatar: '👩‍🚒', dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b'] },
+        { name: 'Thomas Girard', role: 'Équipier Secouriste', rank: 'PSE2', exp: 20, isTrainer: false, avatar: '🧑‍🚒', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1'] },
+        { name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', exp: 15, isTrainer: false, avatar: '🙋‍♂️', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 75, skills: ['pse1', 'permis_b'] },
+        { name: 'Élodie Leroy', role: 'Secouriste', rank: 'PSE1', exp: 10, isTrainer: false, avatar: '🧑', dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'], motivation: 85, skills: ['pse1'] }
       ];
 
+      this.volunteers = [];
       starters.forEach(s => {
         this.volunteers.push({
           id: `vol-${Date.now()}-${Math.random()}`,
@@ -1233,13 +1236,17 @@ class ProtecGame {
           role: s.role,
           rank: s.rank,
           exp: s.exp,
+          energy: 100,
+          motivation: s.motivation,
+          humeur: 85,
+          contractType: 'benevole',
+          profilSocial: s.dispoType === 'étudiante' ? 'etudiant' : 'salarie',
           status: 'dispo',
           stationId: stationId,
           isTrainer: s.isTrainer,
           avatar: s.avatar,
           dispoType: s.dispoType,
           dispoJours: s.dispoJours,
-          motivation: s.motivation,
           skills: s.skills || []
         });
       });
@@ -5229,14 +5236,14 @@ class ProtecGame {
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div class="flex items-center gap-2">
-                  <h4 class="text-xs font-black uppercase text-indigo-950 tracking-wider">Postes Salariés Ouverts & Offres d’Emploi (${(this.jobOffers || []).length})</h4>
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">Forfait 151h • Code du Travail</span>
+                  <h4 class="text-xs font-black uppercase text-indigo-950 tracking-wider">Offres Ouvertes : Salariés & Services Civiques (${(this.jobOffers || []).length})</h4>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">Recrutements & Engagements</span>
                 </div>
-                <p class="text-[11px] text-slate-500">Ouvrez des postes en CDD ou CDI avec missions définies. Les candidatures tombent dans les heures suivantes.</p>
+                <p class="text-[11px] text-slate-500">Ouvrez des missions de Service Civique (18-25 ans) ou des postes de cadres salariés (CDD/CDI). Les candidatures arrivent progressivement pour passage d'entretien.</p>
               </div>
               <button onclick="window.ProtecPersonnel.openJobOfferModal(window.game)" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-indigo-600 to-blue-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 flex-shrink-0">
                 <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
-                + Ouvrir un Poste (CDD / CDI)
+                + Ouvrir un Poste / Mission
               </button>
             </div>
 
@@ -5475,8 +5482,8 @@ class ProtecGame {
                 <span class="text-[11px] font-extrabold text-amber-900">
                   Actifs : ${this.volunteers.filter(v => v.contractType === 'service_civique').length}
                 </span>
-                <button onclick="window.ProtecPersonnel.hireServiceCivique(window.game)" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition">
-                  + Recruter (250 €)
+                <button onclick="window.ProtecPersonnel.openJobOfferModal(window.game, 'service_civique')" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition">
+                  + Ouvrir Mission (50 €)
                 </button>
               </div>
             </div>
@@ -5494,8 +5501,8 @@ class ProtecGame {
                   <span class="text-[11px] font-extrabold text-indigo-900">
                     Actifs : ${this.volunteers.filter(v => v.contractType === 'salarie').length}
                   </span>
-                  <button onclick="window.ProtecPersonnel.hireSalarie(window.game)" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
-                    + Embaucher (1 200 €)
+                  <button onclick="window.ProtecPersonnel.openJobOfferModal(window.game, 'CDI')" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
+                    + Ouvrir Poste (180 €)
                   </button>
                 </div>
                 <button onclick="window.ProtecPersonnel.openSalarieManagementModal(window.game)" class="w-full py-1.5 rounded-xl text-xs font-black bg-indigo-100/80 hover:bg-indigo-200 text-indigo-900 border border-indigo-300/70 transition flex items-center justify-center gap-1.5 shadow-sm">

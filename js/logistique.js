@@ -421,21 +421,7 @@ window.ProtecLogistique = {
   ensureStationStock(station, game) {
     if (!station) return;
     if (!station.stock) {
-      station.stock = {
-        oxygenBottles: 8,
-        aedPads: 6,
-        woundKits: 12,
-        cervicalCollars: 4,
-        tourniquets: 4,
-        attelles_pack: 1,
-        bavu_ambu: 2,
-        trousse_brulures: 2,
-        lot_secours_a: 1,
-        lot_secours_b: 1,
-        tenue_f1: 4,
-        radio_antares: 2,
-        couvertures_pack: 1
-      };
+      station.stock = {};
     }
     // Synchroniser avec game.logistics si existant
     if (game && game.logistics) {

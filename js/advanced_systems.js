@@ -252,28 +252,24 @@ window.ProtecAdvanced = {
     { id: 'formateur_de_formateur', name: 'Formateur de Formateurs (FdF)', icon: '👑', xpRequired: 65, desc: 'Grade pédagogique suprême de la Protection Civile : forme et certifie tous les formateurs de l’association (PSC, PS, SST, AEP).' }
   ],
 
-  // 1. Initialisation de l'état étendu
+  // 1. Initialisation de l'état étendu avec tâches progressives selon le stade de l'antenne
   injectAdvancedState(game) {
     if (!game.rewards) {
       game.rewards = {
         streakDays: 1,
+        tier: 1,
         lastDailyClaimDay: null,
-        dailyTasks: [
-          { id: 'task-1', title: 'Assurer 1 départ en mission', goal: 1, current: 0, reward: 250, done: false },
-          { id: 'task-2', title: 'Valider 1 devis conforme au barème', goal: 1, current: 0, reward: 200, done: false },
-          { id: 'task-3', title: 'Maintenir la flotte révisée & désinfectée', goal: 1, current: 0, reward: 150, done: false }
-        ],
-        weeklyTasks: [
-          { id: 'w-task-1', title: 'Cumuler 15h de bénévolat d’intérêt public', goal: 15, current: 0, reward: 1200, done: false },
-          { id: 'w-task-2', title: 'Promouvoir ou qualifier 1 bénévole', goal: 1, current: 0, reward: 600, done: false }
-        ]
+        dailyTasks: this.getTasksForTier(1, false),
+        weeklyTasks: this.getTasksForTier(1, true)
       };
     } else {
+      if (!game.rewards.tier) game.rewards.tier = this.detectAntennaTier(game);
       // Nettoyage et assainissement des sauvegardes avec données résiduelles antérieures
       const hasAntenna = game.stations && game.stations.length > 0;
       if (!hasAntenna) {
-        (game.rewards.dailyTasks || []).forEach(t => { t.current = 0; t.done = false; });
-        (game.rewards.weeklyTasks || []).forEach(w => { w.current = 0; w.done = false; });
+        game.rewards.tier = 1;
+        game.rewards.dailyTasks = this.getTasksForTier(1, false);
+        game.rewards.weeklyTasks = this.getTasksForTier(1, true);
         if (game.grants) game.grants.totalVolunteerHours = 0;
       }
     }
@@ -384,27 +380,116 @@ window.ProtecAdvanced = {
     game.openModule('recompenses');
   },
 
+  // Détection du palier de développement de l'antenne (Tier 1: Lancement, Tier 2: Développement, Tier 3: Envergure)
+  detectAntennaTier(game) {
+    if (!game.stations || game.stations.length === 0) return 1;
+    const vehCount = (game.vehicles || []).length;
+    const convCount = (game.sncfConvention?.signed ? 1 : 0) + (game.cumpConvention?.signed ? 1 : 0) + (game.sdisGarde?.active ? 1 : 0);
+    const completedMissions = (game.missions || []).filter(m => m.status === 'completed').length;
+    const totalVolunteers = (game.volunteers || []).length;
+
+    // Palier 1 (Lancement d'antenne) : pas encore de véhicule, ou aucune convention signée, ou moins de 2 missions
+    if (vehCount === 0 || convCount === 0 || completedMissions < 2) {
+      return 1;
+    }
+    // Palier 3 (Grande Envergure / Rayonnement) : >= 8 missions terminées, >= 2 véhicules, >= 8 secouristes
+    if (completedMissions >= 8 && vehCount >= 2 && totalVolunteers >= 8) {
+      return 3;
+    }
+    // Palier 2 (Développement / Consolidation)
+    return 2;
+  },
+
+  getTasksForTier(tier, isWeekly = false) {
+    if (isWeekly) {
+      if (tier === 1) {
+        return [
+          { id: 'w-task-starter-recrut', title: 'Publier 1 offre de recrutement (Service Civique ou Salarié)', goal: 1, current: 0, reward: 500, done: false },
+          { id: 'w-task-starter-locaux', title: 'Aménager le local de secours sur le Plan 2D CAD', goal: 1, current: 0, reward: 750, done: false }
+        ];
+      } else if (tier === 2) {
+        return [
+          { id: 'w-task-mid-hours', title: 'Cumuler 15h de bénévolat d’intérêt public', goal: 15, current: 0, reward: 1500, done: false },
+          { id: 'w-task-mid-qualif', title: 'Promouvoir ou qualifier 1 bénévole (PSE2, CE, permis)', goal: 1, current: 0, reward: 900, done: false }
+        ];
+      } else {
+        return [
+          { id: 'w-task-high-hours', title: 'Cumuler 40h de missions de sécurité civile', goal: 40, current: 0, reward: 3500, done: false },
+          { id: 'w-task-high-fleet', title: 'Maintenir la flotte (≥ 3 véhicules) 100% opérationnelle', goal: 1, current: 0, reward: 2500, done: false }
+        ];
+      }
+    } else {
+      if (tier === 1) {
+        return [
+          { id: 'task-starter-veh', title: 'Acquérir votre 1er véhicule opérationnel (VPSP ou VTU)', goal: 1, current: 0, reward: 600, done: false },
+          { id: 'task-starter-mat', title: 'Équiper l’antenne en matériel de secours (Boutique)', goal: 5, current: 0, reward: 400, done: false },
+          { id: 'task-starter-conv', title: 'Signer une 1ère convention (SNCF, CUMP ou SDIS)', goal: 1, current: 0, reward: 500, done: false }
+        ];
+      } else if (tier === 2) {
+        return [
+          { id: 'task-mid-missions', title: 'Assurer 2 départs en mission (DPS ou Secours)', goal: 2, current: 0, reward: 700, done: false },
+          { id: 'task-mid-devis', title: 'Valider 1 devis conforme au barème fédéral', goal: 1, current: 0, reward: 500, done: false },
+          { id: 'task-mid-flotte', title: 'Maintenir la flotte révisée & désinfectée', goal: 1, current: 0, reward: 450, done: false }
+        ];
+      } else {
+        return [
+          { id: 'task-high-missions', title: 'Assurer 4 missions de secours ou réquisitions préfectorales', goal: 4, current: 0, reward: 1800, done: false },
+          { id: 'task-high-garde', title: 'Armer une garde SDIS ou astreinte CUMP SAMU', goal: 1, current: 0, reward: 1400, done: false },
+          { id: 'task-high-pref', title: 'Accomplir 1 réquisition préfectorale AASC ou Plan d’Urgence', goal: 1, current: 0, reward: 2000, done: false }
+        ];
+      }
+    }
+  },
+
+  syncAdaptiveTasks(game) {
+    if (!game.rewards) return;
+    const currentTier = this.detectAntennaTier(game);
+    if (!game.rewards.tier || game.rewards.tier !== currentTier || !game.rewards.dailyTasks || game.rewards.dailyTasks.length === 0) {
+      const canSwitch = !game.rewards.dailyTasks || game.rewards.dailyTasks.every(t => t.done) || (game.rewards.tier && currentTier > game.rewards.tier);
+      if (canSwitch) {
+        game.rewards.tier = currentTier;
+        game.rewards.dailyTasks = this.getTasksForTier(currentTier, false);
+        game.rewards.weeklyTasks = this.getTasksForTier(currentTier, true);
+      }
+    }
+  },
+
   // Calcul dynamique de la progression réelle des objectifs
   updateTasksProgress(game) {
     if (!game.rewards) return;
 
     const hasAntenna = game.stations && game.stations.length > 0;
     if (!hasAntenna) {
+      game.rewards.tier = 1;
       (game.rewards.dailyTasks || []).forEach(t => { t.current = 0; t.done = false; });
       (game.rewards.weeklyTasks || []).forEach(w => { w.current = 0; w.done = false; });
       if (game.grants) game.grants.totalVolunteerHours = 0;
       return;
     }
 
+    this.syncAdaptiveTasks(game);
+
     // Tâches quotidiennes
     (game.rewards.dailyTasks || []).forEach(t => {
-      if (t.id === 'task-1') {
+      // 1. Tâches de démarrage (Tier 1)
+      if (t.id === 'task-starter-veh') {
+        t.current = Math.min(t.goal, (game.vehicles || []).length);
+      } else if (t.id === 'task-starter-mat') {
+        const st = game.stations[0];
+        const totalStock = Object.values(st?.stock || {}).reduce((sum, n) => sum + (Number(n) || 0), 0);
+        t.current = Math.min(t.goal, totalStock);
+      } else if (t.id === 'task-starter-conv') {
+        const convSigned = (game.sncfConvention?.signed || game.cumpConvention?.signed || (game.sdisGarde?.active)) ? 1 : 0;
+        t.current = convSigned;
+      }
+      // 2. Tâches de développement (Tier 2 & génériques)
+      else if (t.id === 'task-mid-missions' || t.id === 'task-1') {
         const activeOrDone = (game.missions || []).filter(m => ['ongoing', 'completed'].includes(m.status)).length;
         t.current = Math.min(t.goal, (game.missionsLaunchedCount || 0) + activeOrDone);
-      } else if (t.id === 'task-2') {
+      } else if (t.id === 'task-mid-devis' || t.id === 'task-2') {
         const signedCount = (game.devis || []).filter(d => d.status === 'signed').length;
         t.current = Math.min(t.goal, signedCount);
-      } else if (t.id === 'task-3') {
+      } else if (t.id === 'task-mid-flotte' || t.id === 'task-3') {
         const allVehs = (game.stations || []).flatMap(s => s.vehicles || []);
         if (!allVehs || allVehs.length === 0) {
           t.current = 0;
@@ -413,21 +498,41 @@ window.ProtecAdvanced = {
           t.current = (cleanVehs.length === allVehs.length) ? 1 : 0;
         }
       }
+      // 3. Tâches de grande envergure (Tier 3)
+      else if (t.id === 'task-high-missions') {
+        const completedCount = (game.missions || []).filter(m => m.status === 'completed').length;
+        t.current = Math.min(t.goal, completedCount);
+      } else if (t.id === 'task-high-garde') {
+        const sdisOrCump = ((game.sdisGarde && game.sdisGarde.active) || (game.cumpConvention && game.cumpConvention.signed)) ? 1 : 0;
+        t.current = sdisOrCump;
+      } else if (t.id === 'task-high-pref') {
+        const prefMissions = (game.missions || []).filter(m => m.type === 'meteo' && m.status === 'completed').length;
+        t.current = Math.min(t.goal, prefMissions);
+      }
     });
 
     // Défis hebdomadaires
     (game.rewards.weeklyTasks || []).forEach(w => {
-      if (w.id === 'w-task-1') {
-        const completedMissionsCount = (game.missions || []).filter(m => m.status === 'completed').length;
-        if (completedMissionsCount === 0 && (!game.grants || !game.grants.totalVolunteerHours)) {
-          w.current = 0;
-        } else {
-          const hours = Math.max(0, game.grants?.totalVolunteerHours || 0);
-          w.current = Math.min(w.goal, hours);
-        }
-      } else if (w.id === 'w-task-2') {
-        const qualifiedCount = (game.volunteers || []).filter(v => (v.promotionsCount && v.promotionsCount > 0) || (v.acquiredSkills && v.acquiredSkills.length > 0) || (v.trainingHistory && v.trainingHistory.length > 0)).length;
+      // 1. Défis de démarrage (Tier 1)
+      if (w.id === 'w-task-starter-recrut') {
+        const hasOffer = ((game.jobOffers && game.jobOffers.length > 0) || (game.candidatures && game.candidatures.length > 0)) ? 1 : 0;
+        w.current = hasOffer;
+      } else if (w.id === 'w-task-starter-locaux') {
+        const arch = game.stations?.[0]?.premises?.architecture;
+        const hasLayout = (arch && ((arch.furniture && arch.furniture.length > 0) || (arch.rooms && arch.rooms.some(r => r.type !== 'libre')))) ? 1 : 0;
+        w.current = hasLayout;
+      }
+      // 2. Défis de développement & envergure
+      else if (w.id === 'w-task-mid-hours' || w.id === 'w-task-high-hours' || w.id === 'w-task-1') {
+        const hours = Math.max(0, game.grants?.totalVolunteerHours || 0);
+        w.current = Math.min(w.goal, hours);
+      } else if (w.id === 'w-task-mid-qualif' || w.id === 'w-task-2') {
+        const qualifiedCount = (game.volunteers || []).filter(v => (v.promotionsCount && v.promotionsCount > 0) || (v.acquiredSkills && v.acquiredSkills.length > 0) || (v.trainingHistory && v.trainingHistory.length > 0) || v.rank === 'CE' || v.rank === 'PSE2').length;
         w.current = Math.min(w.goal, qualifiedCount);
+      } else if (w.id === 'w-task-high-fleet') {
+        const vehs = game.vehicles || [];
+        const isFleetReady = vehs.length >= 3 && vehs.every(v => !v.isBrokenDown && !v.needsRearming);
+        w.current = isFleetReady ? 1 : 0;
       }
     });
   },
@@ -454,11 +559,12 @@ window.ProtecAdvanced = {
 
     task.done = true;
     game.resources.money += task.reward;
-    game.resources.reputationScore += 15;
+    const repGained = task.reward >= 1000 ? 50 : (task.reward >= 500 ? 30 : 15);
+    game.resources.reputationScore += repGained;
 
     game.updateStatsUI();
     game.saveGame();
-    game.showToast('Objectif Accompli !', `+${task.reward} € et +15 réputation versés à l’association !`, 'green');
+    game.showToast('Objectif Accompli !', `+${task.reward} € et +${repGained} réputation versés à l’antenne !`, 'green');
     game.openModule('recompenses');
   },
 
