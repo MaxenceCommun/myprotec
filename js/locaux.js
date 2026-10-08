@@ -933,9 +933,13 @@ window.ProtecLocaux = {
 
     body.innerHTML = this.renderStarterSelection(game, station);
     if (window.lucide) window.lucide.createIcons();
-    setTimeout(() => {
+
+    // Rendu immédiat et synchronisé avec l'animation de la modal
+    requestAnimationFrame(() => {
       this.initArchitectCanvas();
-    }, 60);
+    });
+    setTimeout(() => { this.initArchitectCanvas(); }, 60);
+    setTimeout(() => { this.initArchitectCanvas(); }, 200);
   },
 
   // Achat d'un bâtiment existant (Catalogue)
@@ -1497,10 +1501,12 @@ window.ProtecLocaux = {
     const selectedRoom = (model.rooms || []).find(r => r.id === this.selectedRoomId) || model.rooms[0];
     const selectedItem = (model.furniture || []).find(f => f.id === this.selectedFurnitureId);
 
-    // Déclenchement de l'initialisation du Canvas
-    setTimeout(() => {
+    // Déclenchement réactif de l'initialisation et du tracé du Canvas
+    requestAnimationFrame(() => {
       this.initArchitectCanvas();
-    }, 60);
+    });
+    setTimeout(() => { this.initArchitectCanvas(); }, 60);
+    setTimeout(() => { this.initArchitectCanvas(); }, 200);
 
     return `
       <div class="space-y-3.5 max-w-6xl mx-auto py-1">
@@ -2177,10 +2183,12 @@ window.ProtecLocaux = {
   renderPlanTab(game, premises, stats) {
     const isOwner = premises.tenure === 'owned';
 
-    // Déclenchement de l'initialisation du Canvas après le rendu dans le DOM
-    setTimeout(() => {
+    // Déclenchement réactif de l'initialisation du Canvas après le rendu dans le DOM
+    requestAnimationFrame(() => {
       this.initArchitectCanvas();
-    }, 40);
+    });
+    setTimeout(() => { this.initArchitectCanvas(); }, 60);
+    setTimeout(() => { this.initArchitectCanvas(); }, 200);
 
     return `
       <div class="space-y-4">
@@ -2417,6 +2425,7 @@ window.ProtecLocaux = {
 
   resetCamera() {
     this.fitView();
+    this.renderArchitectScene();
   },
 
   initArchitectCanvas() {
@@ -2425,14 +2434,40 @@ window.ProtecLocaux = {
 
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    const parent = canvas.parentElement;
+    const w = (rect.width > 50 ? rect.width : (parent ? parent.clientWidth : 800)) || 800;
+    const h = (rect.height > 50 ? rect.height : (parent ? parent.clientHeight : 500)) || 500;
+
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
 
     this.setupCanvasEvents(canvas);
     this.fitView(canvas.width, canvas.height);
+    this.renderArchitectScene();
   },
 
   setupCanvasEvents(canvas) {
+    if (window.ResizeObserver && !canvas._resizeObserverBound) {
+      canvas._resizeObserverBound = true;
+      const ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const cr = entry.contentRect;
+          if (cr.width > 50 && cr.height > 50) {
+            const d = window.devicePixelRatio || 1;
+            const newW = Math.round(cr.width * d);
+            const newH = Math.round(cr.height * d);
+            if (canvas.width !== newW || canvas.height !== newH) {
+              canvas.width = newW;
+              canvas.height = newH;
+              this.fitView(canvas.width, canvas.height);
+              this.renderArchitectScene();
+            }
+          }
+        }
+      });
+      ro.observe(canvas.parentElement || canvas);
+    }
+
     if (canvas._eventsBound) return;
     canvas._eventsBound = true;
 
@@ -2627,9 +2662,13 @@ window.ProtecLocaux = {
       if (!c) return;
       const r = c.getBoundingClientRect();
       const d = window.devicePixelRatio || 1;
-      c.width = r.width * d;
-      c.height = r.height * d;
+      const parent = c.parentElement;
+      const w = (r.width > 50 ? r.width : (parent ? parent.clientWidth : 800)) || 800;
+      const h = (r.height > 50 ? r.height : (parent ? parent.clientHeight : 500)) || 500;
+      c.width = Math.round(w * d);
+      c.height = Math.round(h * d);
       this.fitView(c.width, c.height);
+      this.renderArchitectScene();
     });
   },
 
