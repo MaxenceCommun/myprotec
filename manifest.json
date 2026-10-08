@@ -1,25 +1,74 @@
 {
-  "name": "MyProtec - Simulateur Protection Civile",
+  "id": "/",
+  "name": "MyProtec - Simulateur de la Protection Civile",
   "short_name": "MyProtec",
-  "description": "Simulateur opérationnel de la Protection Civile : DPS, urgences SAMU 15, gardes pompiers et gestion d'antenne.",
-  "start_url": "/",
+  "description": "Simulateur opérationnel officiel de gestion d'une antenne de la Protection Civile : DPS événementiels, urgences SAMU 15, gardes pompiers SDIS, action sociale, crise et logistique.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#1e3a8a",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#002E6D",
+  "lang": "fr-FR",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "categories": ["games", "simulation", "education"],
   "icons": [
     {
       "src": "logo_myprotec_icon.png",
-      "sizes": "192x192",
+      "sizes": "192x192 400x400 512x512",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "logo_myprotec.png",
-      "sizes": "512x512",
+      "src": "logo_protection_civile.png",
+      "sizes": "192x192 256x256",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "logo_myprotec.png",
+      "sizes": "512x512 890x321",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
-  "categories": ["games", "simulation"]
+  "shortcuts": [
+    {
+      "name": "Urgences SAMU 15",
+      "short_name": "SAMU 15",
+      "description": "Départs réflexes ambulance VPSP et régulation médicale",
+      "url": "/?module=samu",
+      "icons": [{ "src": "logo_myprotec_icon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Planning des DPS",
+      "short_name": "Planning",
+      "description": "Dispositifs prévisionnels de secours et calendrier officiel",
+      "url": "/?module=planning",
+      "icons": [{ "src": "logo_myprotec_icon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Garde Pompiers SDIS",
+      "short_name": "SDIS Pompiers",
+      "description": "Garde caserne et renforts VSAV / violences urbaines",
+      "url": "/?module=pompiers",
+      "icons": [{ "src": "logo_myprotec_icon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Météo-France & Crises",
+      "short_name": "Météo / Crises",
+      "description": "Bulletins de vigilance et réquisitions préfectorales",
+      "url": "/?module=meteo",
+      "icons": [{ "src": "logo_myprotec_icon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Action Sociale",
+      "short_name": "Pôle Social",
+      "description": "Collectes de dons, achats solidaires et maraudes 115",
+      "url": "/?module=social",
+      "icons": [{ "src": "logo_myprotec_icon.png", "sizes": "192x192" }]
+    }
+  ]
 }

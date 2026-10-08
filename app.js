@@ -4540,9 +4540,9 @@ class ProtecGame {
                   <button onclick="window.game.closeModal(); window.game.openStationDetails('${st.id}')" class="py-2 rounded-xl text-xs font-bold glass-button text-slate-700 transition">
                     Gérer l’antenne
                   </button>
-                  <button onclick="window.game.openModule('amenagement')" class="py-2 rounded-xl text-xs font-black bg-pc-blue/10 hover:bg-pc-blue/20 text-pc-blue transition flex items-center justify-center gap-1">
-                    <i data-lucide="hammer" class="w-3.5 h-3.5"></i>
-                    Aménager
+                  <button onclick="window.game.openModule('locaux')" class="py-2 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center justify-center gap-1.5 shadow-sm" title="Gestion des locaux, capacité de stockage, salles de formation et éditeur 2D">
+                    <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
+                    Locaux & Plan 2D
                   </button>
                 </div>
               </div>
@@ -4578,11 +4578,13 @@ class ProtecGame {
       if (window.ProtecAdvancedModals) {
         body.innerHTML = window.ProtecAdvancedModals.renderRewards(this);
       }
-    } else if (moduleKey === 'amenagement') {
-      title.textContent = 'Aménagement & Évolution du Local';
-      subtitle.textContent = 'Améliorez vos pièces pour débloquer des bonus passifs permanents';
-      icon.setAttribute('data-lucide', 'hammer');
-      if (window.ProtecAdvancedModals) {
+    } else if (moduleKey === 'amenagement' || moduleKey === 'locaux') {
+      if (window.ProtecLocaux) {
+        window.ProtecLocaux.renderModal(this);
+      } else if (window.ProtecAdvancedModals) {
+        title.textContent = 'Aménagement & Évolution du Local';
+        subtitle.textContent = 'Améliorez vos pièces pour débloquer des bonus passifs permanents';
+        icon.setAttribute('data-lucide', 'hammer');
         body.innerHTML = window.ProtecAdvancedModals.renderStationRooms(this, this.selectedStationId || this.stations[0]?.id);
       }
     } else if (moduleKey === 'poles') {

@@ -106,9 +106,21 @@ window.ProtecFormations = {
   },
 
   // Créer une nouvelle session de formation planifiée par le joueur
-  createSession(game, courseId, discountType, isInternal, targetAudience) {
+  createSession(game, courseId, discountType, isInternal, targetAudience, locationType = 'antenne') {
     const course = this.catalog.find(c => c.id === courseId);
     if (!course) return;
+
+    // Vérification de la salle de formation pour l'accueil à l'antenne
+    if (locationType === 'antenne') {
+      if (window.ProtecLocaux && !window.ProtecLocaux.hasFormationRoom(game)) {
+        game.showToast(
+          'Salle de Formation Requise !',
+          'Votre antenne ne possède aucune salle de formation pour accueillir le grand public. Aménagez une zone de formation dans vos locaux ou choisissez « Délocalisée chez l’entreprise demanderesse » !',
+          'orange'
+        );
+        return;
+      }
+    }
 
     // Calcul du tarif appliqué
     let finalPrice = course.basePricePublic;
@@ -138,6 +150,8 @@ window.ProtecFormations = {
       title: course.title,
       category: course.category,
       isInternal: !!isInternal,
+      locationType: locationType,
+      locationLabel: locationType === 'antenne' ? 'À l’Antenne (Salle Pédagogique)' : 'Délocalisée (Entreprise Demanderesse)',
       targetAudience: targetAudience || 'Grand Public',
       finalPrice: finalPrice,
       costOrganization: course.costOrganization,
@@ -154,7 +168,7 @@ window.ProtecFormations = {
 
     game.sessionsFormation.unshift(newSession);
     game.saveGame();
-    game.showToast('Session Programmée', `La session « ${course.id} » (${newSession.targetAudience}) est ouverte aux inscriptions.`, 'green');
+    game.showToast('Session Programmée', `La session « ${course.id} » (${newSession.locationLabel}) est ouverte aux inscriptions.`, 'green');
     this.renderModal(game);
   },
 
@@ -301,7 +315,7 @@ window.ProtecFormations = {
         <!-- Programmateur de nouvelle session -->
         <div class="p-4 rounded-2xl glass-card space-y-3 border border-slate-200">
           <h4 class="text-xs font-black uppercase text-slate-800">Ouvrir une nouvelle session au calendrier</h4>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
             <div>
               <label class="text-[10px] font-bold uppercase text-slate-400">Cursus :</label>
               <select id="new-course-id" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800">
@@ -319,6 +333,13 @@ window.ProtecFormations = {
               </select>
             </div>
             <div>
+              <label class="text-[10px] font-bold uppercase text-slate-400">Lieu d'accueil :</label>
+              <select id="new-course-loc" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-pc-blue">
+                <option value="antenne">🏛️ À l’Antenne (Salle requise)</option>
+                <option value="entreprise">🏢 Chez l’Entreprise demanderesse</option>
+              </select>
+            </div>
+            <div>
               <label class="text-[10px] font-bold uppercase text-slate-400">Public & Tarification :</label>
               <select id="new-course-tariff" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-semibold text-slate-800">
                 <option value="standard">Tarif Standard Normal</option>
@@ -332,12 +353,13 @@ window.ProtecFormations = {
             <div class="flex items-end">
               <button onclick="
                 const cId = document.getElementById('new-course-id').value;
+                const cLoc = document.getElementById('new-course-loc').value;
                 const tTar = document.getElementById('new-course-tariff').value;
                 const isInt = (tTar === 'internal_free' || tTar === 'volunteer_pays');
-                window.ProtecFormations.createSession(window.game, cId, tTar, isInt, isInt ? 'Interne Antenne' : 'Mairie & Citoyens');
-              " class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
+                window.ProtecFormations.createSession(window.game, cId, tTar, isInt, isInt ? 'Interne Antenne' : (cLoc === 'entreprise' ? 'Salariés Entreprise' : 'Mairie & Citoyens'), cLoc);
+              " class="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
                 <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                Programmer la Session
+                Programmer
               </button>
             </div>
           </div>

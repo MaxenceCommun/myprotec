@@ -34,6 +34,23 @@ window.ProtecSocial = {
   // 1. Lancement d'une opération collecte solidaire (supermarché partenaire)
   startCollecte(game) {
     this.injectState(game);
+
+    // Vérification de la zone de stockage obligatoire dans les locaux
+    if (window.ProtecLocaux && !window.ProtecLocaux.hasStorageRoom(game)) {
+      game.showToast('Zone de Stockage Requise !', 'Votre antenne ne possède aucune zone de stockage pour entreposer les dons. Aménagez une zone de stockage dans vos locaux !', 'orange');
+      return;
+    }
+
+    // Vérification de la saturation du stockage
+    if (window.ProtecLocaux) {
+      const maxCap = window.ProtecLocaux.getStorageCapacity(game);
+      const usedCap = window.ProtecLocaux.getCurrentStorageUsed(game);
+      if (usedCap >= maxCap) {
+        game.showToast('Stockage Plein !', `Votre zone de stockage est saturée (${usedCap}/${maxCap} unités). Agrandissez votre réserve ou distribuez vos denrées en maraude.`, 'orange');
+        return;
+      }
+    }
+
     if (game.socialData.activeCollecte) {
       game.showToast('Collecte déjà en cours', 'Une opération caddie solidaire est déjà active sur le terrain.', 'orange');
       return;
@@ -103,6 +120,20 @@ window.ProtecSocial = {
   // 2. Achat de denrées alimentaires en gros
   buyFoodWholesale(game, quantity = 10, cost = 45) {
     this.injectState(game);
+
+    if (window.ProtecLocaux) {
+      if (!window.ProtecLocaux.hasStorageRoom(game)) {
+        game.showToast('Zone de Stockage Requise !', 'Votre antenne n’a pas de zone de stockage pour entreposer les colis alimentaires.', 'orange');
+        return;
+      }
+      const maxCap = window.ProtecLocaux.getStorageCapacity(game);
+      const usedCap = window.ProtecLocaux.getCurrentStorageUsed(game);
+      if (usedCap + quantity > maxCap) {
+        game.showToast('Stockage Saturé !', `Capacité maximale dépassée (${usedCap + quantity}/${maxCap} unités). Agrandissez votre réserve de stockage.`, 'orange');
+        return;
+      }
+    }
+
     if (game.resources.money < cost) {
       game.showToast('Trésorerie insuffisante', `L’achat de ${quantity} colis requiert ${cost} €.`, 'orange');
       return;
@@ -119,6 +150,20 @@ window.ProtecSocial = {
   // Achat de kits hygiène en gros
   buyHygieneKits(game, quantity = 10, cost = 35) {
     this.injectState(game);
+
+    if (window.ProtecLocaux) {
+      if (!window.ProtecLocaux.hasStorageRoom(game)) {
+        game.showToast('Zone de Stockage Requise !', 'Votre antenne n’a pas de zone de stockage pour entreposer les kits.', 'orange');
+        return;
+      }
+      const maxCap = window.ProtecLocaux.getStorageCapacity(game);
+      const usedCap = window.ProtecLocaux.getCurrentStorageUsed(game);
+      if (usedCap + quantity > maxCap) {
+        game.showToast('Stockage Saturé !', `Capacité maximale dépassée (${usedCap + quantity}/${maxCap} unités). Agrandissez votre réserve de stockage.`, 'orange');
+        return;
+      }
+    }
+
     if (game.resources.money < cost) {
       game.showToast('Trésorerie insuffisante', `L’achat de ${quantity} trousses d'hygiène requiert ${cost} €.`, 'orange');
       return;
