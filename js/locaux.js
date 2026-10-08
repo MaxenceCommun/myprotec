@@ -877,25 +877,35 @@ window.ProtecLocaux = {
     this.renderModal(game);
   },
 
-  confirmCustomStarterSetup(game, stationId, r1 = 'bureau', r2 = 'formation', r3 = 'stockage') {
-    const layout = {
-      id: 'starter_base_pc',
-      name: 'Local de Base Protection Civile',
-      width: 4,
-      height: 3,
-      surfaceM2: 300,
-      tenure: 'rented',
-      grid: [
-        'parking', 'parking', r1, r1,
-        'parking', 'parking', r2, r2,
-        'parking', 'parking', r3, r3
-      ]
-    };
-    this.applyLayout(game, stationId || game.stations[0]?.id, layout);
-    game.showToast('🎉 Antenne Inaugurée !', `Bienvenue dans votre nouvelle antenne de Protection Civile ! Aménagement validé. La partie commence !`, 'green');
+  confirmCustomStarterSetup(game, stationId) {
+    const stId = stationId || game.stations[0]?.id;
+    const station = game.stations.find(s => s.id === stId) || game.stations[0];
+    if (!station) return;
+
+    const model = this.getArchitectModel(station.id);
+
+    if (!station.premises) {
+      station.premises = {
+        tenure: 'rented',
+        level: 1,
+        monthlyRent: 350,
+        securityEquipment: []
+      };
+    }
+    // Sauvegarder la structure architecturale personnalisée complète
+    station.premises.architecture = JSON.parse(JSON.stringify(model));
+    station.premises.tenure = 'rented';
+
+    // Nettoyer l'état temporaire
+    this._currentSetupModel = null;
+
+    // Fermer la modale
+    const modal = document.getElementById('main-modal');
+    if (modal) modal.classList.add('hidden');
+
+    game.showToast('🎉 Caserne Inaugurée !', `Bienvenue dans votre nouvelle antenne de Protection Civile ! Aménagement validé. La mission commence !`, 'green');
     game.saveGame();
     game.updateStatsUI();
-    this.renderModal(game);
   },
 
   openInitialSetupModal(game, stationId) {
@@ -906,13 +916,22 @@ window.ProtecLocaux = {
     const body = document.getElementById('modal-body');
 
     modal.classList.remove('hidden');
-    title.textContent = 'Configuration Initiale de votre Local';
-    subtitle.textContent = 'Définissez la fonction des 3 pièces de votre local avant d\'ouvrir l\'antenne';
-    icon.setAttribute('data-lucide', 'layout-grid');
+    title.textContent = 'Plan d\'Architecte 2D • Bâtiment de Base Protection Civile';
+    subtitle.textContent = 'Affectez les vocations des pièces et disposez votre mobilier comme dans Les Sims avant d\'ouvrir';
+    icon.setAttribute('data-lucide', 'home');
 
     const station = game.stations.find(s => s.id === stationId) || game.stations[0];
+    this._currentSetupStationId = station ? station.id : '';
+    if (!this._currentSetupModel) {
+      this._currentSetupModel = JSON.parse(JSON.stringify(this.getArchitectModel()));
+    }
+    this.selectedRoomId = this.selectedRoomId || 'room_1';
+
     body.innerHTML = this.renderStarterSelection(game, station);
     if (window.lucide) window.lucide.createIcons();
+    setTimeout(() => {
+      this.initArchitectCanvas();
+    }, 60);
   },
 
   // Achat d'un bâtiment existant (Catalogue)
@@ -1446,123 +1465,348 @@ window.ProtecLocaux = {
   // ÉCRAN INITIAL : CHOIX ENTRE LES 3 DISPOSITIONS DE DÉPART
   // =========================================================================
 
+  // Catalogue des meubles et équipements pour l'agencement "Les Sims"
+  FURNITURE_CATALOG: [
+    { type: 'bureau', name: 'Bureau Direction & PC', cat: 'bureau', w: 1.8, d: 0.9, color: '#334155', cost: 250, icon: '🗄️' },
+    { type: 'chaise', name: 'Chaise de Réunion', cat: 'bureau', w: 0.5, d: 0.5, color: '#0284c7', cost: 45, icon: '🪑' },
+    { type: 'table_formation', name: 'Table Formation Pédagogique', cat: 'formation', w: 2.2, d: 1.1, color: '#ea580c', cost: 180, icon: '🪑' },
+    { type: 'tableau_blanc', name: 'Tableau Blanc Mural', cat: 'formation', w: 2.2, d: 0.2, color: '#f8fafc', cost: 120, icon: '📋' },
+    { type: 'mannequin_rcp', name: 'Mannequin Secourisme RCP', cat: 'formation', w: 0.6, d: 1.2, color: '#f59e0b', cost: 320, icon: '🩺' },
+    { type: 'dae_mural', name: 'Défibrillateur DAE Mural', cat: 'secours', w: 0.35, d: 0.35, color: '#10b981', cost: 450, icon: '⚡' },
+    { type: 'armoire_pharmacie', name: 'Armoire Pharmacie d’Urgence', cat: 'secours', w: 1.2, d: 0.4, color: '#dc2626', cost: 190, icon: '🧰' },
+    { type: 'etagere_lots', name: 'Étagère Métallique Lots A/B', cat: 'stockage', w: 0.6, d: 2.4, color: '#475569', cost: 150, icon: '📦' },
+    { type: 'casiers_vestiaire', name: 'Casiers Tenues F1 Protec', cat: 'stockage', w: 0.6, d: 2.5, color: '#0f172a', cost: 180, icon: '👕' },
+    { type: 'lit_garde', name: 'Lit de Camp / Astreinte', cat: 'detente', w: 1.0, d: 2.0, color: '#a855f7', cost: 220, icon: '🛏️' },
+    { type: 'canape_detente', name: 'Canapé Foyer Bénévoles', cat: 'detente', w: 2.0, d: 0.9, color: '#059669', cost: 280, icon: '🛋️' },
+    { type: 'machine_cafe', name: 'Machine à Café & Pause', cat: 'detente', w: 0.8, d: 0.6, color: '#d97706', cost: 85, icon: '☕' }
+  ],
+
+  // =========================================================================
+  // ÉCRAN INITIAL : VÉRITABLE PLAN D'ARCHITECTE 2D & AMÉNAGEMENT STYLE LES SIMS
+  // =========================================================================
+
   renderStarterSelection(game, station) {
     const stId = station ? station.id : (game.stations[0]?.id || '');
-    const r1 = this._tempSetupR1 || 'bureau';
-    const r2 = this._tempSetupR2 || 'formation';
-    const r3 = this._tempSetupR3 || 'stockage';
-
-    const tempLayout = {
-      width: 4,
-      height: 3,
-      grid: [
-        'parking', 'parking', r1, r1,
-        'parking', 'parking', r2, r2,
-        'parking', 'parking', r3, r3
-      ]
-    };
+    const model = this.getArchitectModel(stId);
+    this._currentSetupModel = model;
+    this.selectedRoomId = this.selectedRoomId || 'room_1';
+    const selectedRoom = model.rooms.find(r => r.id === this.selectedRoomId) || model.rooms[0];
 
     return `
-      <div class="space-y-6 max-w-4xl mx-auto py-2">
-        <div class="text-center space-y-2">
-          <span class="px-3 py-1 rounded-full text-xs font-black bg-pc-blue/10 text-pc-blue uppercase tracking-wider">
-            Procédure d'Ouverture d'Antenne
-          </span>
-          <h3 class="text-xl font-black text-slate-900">Aménagement du Local de Base de la Protection Civile</h3>
-          <p class="text-xs text-slate-600 max-w-xl mx-auto leading-relaxed">
-            Votre bâtiment de départ comprend un <strong>parking extérieur pour les véhicules de secours</strong> et <strong>3 pièces intérieures vides</strong>. Définissez la vocation de chaque pièce pour démarrer votre activité :
-          </p>
+      <div class="space-y-4 max-w-6xl mx-auto py-1">
+        <!-- En-tête officiel de démarrage -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+          <div class="space-y-0.5">
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-pc-blue/10 text-pc-blue uppercase tracking-wider">
+                Procédure d'Ouverture d'Antenne
+              </span>
+              <span class="text-xs font-bold text-slate-500">• Bâtiment de Base Déjà Construit</span>
+            </div>
+            <h3 class="text-lg font-black text-slate-900">Aménagement Réaliste du Local de Base (Protection Civile)</h3>
+            <p class="text-xs text-slate-600">Votre base comprend un parking 2 places et 3 pièces intérieures. Définissez la vocation des pièces et agencez le mobilier comme dans Les Sims :</p>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <!-- Commutateur 2D / 3D (3D grisé comme demandé) -->
+            <div class="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-700 shadow text-xs font-black">
+              <button type="button" class="px-3.5 py-1.5 rounded-lg bg-blue-600 text-white shadow-xs flex items-center gap-1.5">
+                <span>📐</span> Plan 2D
+              </button>
+              <button type="button" disabled class="px-3.5 py-1.5 rounded-lg opacity-40 cursor-not-allowed flex items-center gap-1 text-slate-400 bg-slate-800/80" title="Mode 3D désactivé pour la V1 (Bientôt en V2)">
+                <span>🧊</span> Mode 3D <span class="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold">V2</span>
+              </button>
+            </div>
+
+            <button type="button" onclick="window.ProtecLocaux.resetCamera()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition flex items-center gap-1">
+              <span>🎯</span> Recentrer
+            </button>
+          </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-          <!-- Aperçu 2D d'architecte en direct -->
-          <div class="p-4 rounded-3xl bg-slate-900 border-2 border-slate-700 shadow-xl space-y-3">
-            <div class="flex items-center justify-between text-white text-xs font-bold">
-              <span class="flex items-center gap-1.5 text-amber-400">
-                <i data-lucide="layout-grid" class="w-4 h-4"></i>
-                Plan 2D d'Architecte (Temps Réel)
-              </span>
-              <span class="text-[10px] text-slate-400 font-mono">4 x 3 cases • 300 m²</span>
+        <!-- Grille 2 colonnes : Plan 2D Canvas (gauche) + Panneau d'Aménagement Les Sims (droite) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          
+          <!-- Colonne GAUCHE (7/12) : Visualiseur Canvas d'Architecte 2D -->
+          <div class="lg:col-span-7 flex flex-col space-y-2">
+            <div class="relative w-full h-[480px] sm:h-[530px] rounded-3xl bg-[#0b0f19] border-2 border-slate-800 shadow-xl overflow-hidden select-none">
+              
+              <canvas id="architect-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+
+              <!-- Badge En direct -->
+              <div class="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow text-xs font-bold text-white pointer-events-none">
+                <span class="text-orange-400">🏠</span>
+                <span>Plan 2D d'Architecte</span>
+                <span class="text-[9.5px] font-black px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">En direct (1)</span>
+              </div>
+
+              <!-- Boutons d'outils droite -->
+              <div class="absolute top-3 right-3 z-10 flex flex-col items-center gap-1.5 p-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow">
+                <button type="button" onclick="window.ProtecLocaux.zoomCamera(1.2)" class="w-7 h-7 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 font-black text-sm flex items-center justify-center transition" title="Zoom avant">+</button>
+                <button type="button" onclick="window.ProtecLocaux.zoomCamera(0.8)" class="w-7 h-7 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 font-black text-sm flex items-center justify-center transition" title="Zoom arrière">−</button>
+                <button type="button" onclick="window.ProtecLocaux.toggleMagnet()" class="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition ${this.snapToGrid ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}" title="Aimant Grille">🧲</button>
+              </div>
+
+              <!-- Guide interactif inférieur -->
+              <div class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/70 text-[10.5px] text-slate-300 pointer-events-none text-center whitespace-nowrap shadow">
+                💡 Clic sur une pièce pour la configurer • Cliquez / Déplacez un meuble • [R] Pivoter
+              </div>
             </div>
 
-            <!-- Grille SVG du plan -->
-            <div class="grid grid-cols-4 gap-1 p-2 rounded-2xl bg-slate-950 border border-slate-800">
-              ${tempLayout.grid.map((tileKey, idx) => `
-                <div class="aspect-square rounded-lg overflow-hidden border border-slate-700 relative">
-                  ${this.renderFurnitureSVG(tileKey)}
-                  <span class="absolute bottom-1 right-1 px-1 rounded text-[8px] font-black uppercase ${tileKey === 'parking' ? 'bg-slate-800/80 text-amber-300' : 'bg-slate-900/80 text-white'}">
-                    ${tileKey === 'parking' ? 'Parking' : (idx === 2 || idx === 3) ? 'Pièce 1' : (idx === 6 || idx === 7) ? 'Pièce 2' : 'Pièce 3'}
-                  </span>
-                </div>
-              `).join('')}
-            </div>
-
-            <div class="p-2.5 rounded-xl bg-slate-800/80 text-[11px] text-slate-300 flex items-center justify-between">
-              <span>🚗 Parking extérieur : <strong>2 places VPSP/VTU</strong></span>
-              <span>🚪 Accès : <strong>Portail & Entrée piétonne</strong></span>
+            <!-- Spécifications techniques du bâtiment -->
+            <div class="p-2.5 rounded-2xl bg-white border border-slate-200 text-xs text-slate-700 flex items-center justify-between font-medium shadow-2xs">
+              <span>🚗 <strong>Parking extérieur</strong> : 2 places d'ambulance VPSP/VTU</span>
+              <span>🚪 <strong>Accès</strong> : Entrée piétonne & issue parking</span>
+              <span>📐 <strong>Surface</strong> : 138.5 m² (3 pièces)</span>
             </div>
           </div>
 
-          <!-- Choix des fonctions des 3 pièces -->
-          <div class="space-y-4">
+          <!-- Colonne DROITE (5/12) : Affectation des 3 pièces + Outils Les Sims -->
+          <div class="lg:col-span-5 flex flex-col space-y-3.5">
             
-            <!-- Pièce 1 -->
-            <div class="p-4 rounded-2xl glass-card space-y-2 border border-slate-200">
+            <!-- 1. Affectation des vocations pour chaque pièce -->
+            <div class="p-4 rounded-2xl bg-white border border-slate-300 shadow-xs space-y-2.5">
               <div class="flex items-center justify-between">
-                <h5 class="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                  <span class="w-5 h-5 rounded-full bg-pc-blue text-white flex items-center justify-center text-[10px]">1</span>
-                  Pièce 1 (Entrée & Accueil public)
-                </h5>
-                <span class="text-[10px] text-pc-blue font-bold">Aile Principale</span>
+                <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <i data-lucide="layout-grid" class="w-3.5 h-3.5 text-pc-blue"></i>
+                  Affectation des 3 Salles
+                </h4>
+                <span class="text-[10px] text-slate-500 font-semibold">Cliquez pour configurer</span>
               </div>
-              <select onchange="window.ProtecLocaux._tempSetupR1 = this.value; window.ProtecLocaux.openInitialSetupModal(window.game, '${stId}');" class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue">
-                <option value="bureau" ${r1 === 'bureau' ? 'selected' : ''}>💼 Bureau d'Accueil & Direction (Recommandé)</option>
-                <option value="formation" ${r1 === 'formation' ? 'selected' : ''}>🎓 Salle de Formation Citoyenne PSC1</option>
-              </select>
+
+              <!-- Liste des pièces -->
+              <div id="starter-rooms-list" class="space-y-2">
+                ${this.renderRoomsListHTML(model)}
+              </div>
             </div>
 
-            <!-- Pièce 2 -->
-            <div class="p-4 rounded-2xl glass-card space-y-2 border border-slate-200">
+            <!-- 2. Mode Aménagement "Les Sims" (Ajout de Meubles) -->
+            <div class="p-3.5 rounded-2xl bg-white border border-slate-300 shadow-xs space-y-2">
               <div class="flex items-center justify-between">
-                <h5 class="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                  <span class="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">2</span>
-                  Pièce 2 (Opérations & Équipe)
-                </h5>
-                <span class="text-[10px] text-indigo-600 font-bold">Aile Opérationnelle</span>
+                <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🛋️</span> Mobilier & Aménagement (Les Sims)
+                </h4>
+                <span class="text-[10px] text-amber-700 font-bold">Pièce active : ${selectedRoom?.area?.toFixed(1) || '24'} m²</span>
               </div>
-              <select onchange="window.ProtecLocaux._tempSetupR2 = this.value; window.ProtecLocaux.openInitialSetupModal(window.game, '${stId}');" class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500">
-                <option value="formation" ${r2 === 'formation' ? 'selected' : ''}>🎓 Salle de Formation & Réunions (Recommandé)</option>
-                <option value="bureau" ${r2 === 'bureau' ? 'selected' : ''}>💼 Bureau Opérationnel des Chefs d'Équipe</option>
-                <option value="detente" ${r2 === 'detente' ? 'selected' : ''}>☕ Foyer & Détente des Bénévoles</option>
-              </select>
+              
+              <p class="text-[11px] text-slate-600 leading-tight">
+                Cliquez pour équiper la pièce sélectionnée. Vous pouvez ensuite glisser les meubles sur le plan ou appuyer sur <strong>[R]</strong> pour les pivoter :
+              </p>
+
+              <!-- Catalogue d'objets rapides -->
+              <div class="grid grid-cols-3 gap-1.5 pt-1">
+                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('bureau')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
+                  <span>🗄️</span><span class="text-[9.5px]">Bureau</span>
+                </button>
+                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('table_formation')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
+                  <span>🪑</span><span class="text-[9.5px]">Table Form.</span>
+                </button>
+                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('chaise')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
+                  <span>🪑</span><span class="text-[9.5px]">Chaise</span>
+                </button>
+                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('tableau_blanc')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
+                  <span>📋</span><span class="text-[9.5px]">Tableau</span>
+                </button>
+                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('mannequin_rcp')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
+                  <span>🩺</span><span class="text-[9.5px]">Mannequin</span>
+                </button>
+                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('dae_mural')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
+                  <span>⚡</span><span class="text-[9.5px]">DAE Mural</span>
+                </button>
+                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('etagere_lots')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
+                  <span>📦</span><span class="text-[9.5px]">Lots A/B</span>
+                </button>
+                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('casiers_vestiaire')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
+                  <span>👕</span><span class="text-[9.5px]">Casiers</span>
+                </button>
+                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('lit_garde')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
+                  <span>🛏️</span><span class="text-[9.5px]">Lit Garde</span>
+                </button>
+              </div>
+
+              <!-- Actions sur meuble sélectionné -->
+              <div class="flex items-center gap-2 pt-1.5 border-t border-slate-100">
+                <button type="button" onclick="window.ProtecLocaux.rotateSelectedItem()" class="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition flex items-center justify-center gap-1">
+                  <span>🔄</span> Pivoter [R]
+                </button>
+                <button type="button" onclick="window.ProtecLocaux.deleteSelectedItem()" class="flex-1 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-bold transition flex items-center justify-center gap-1">
+                  <span>🗑️</span> Retirer Objet
+                </button>
+              </div>
             </div>
 
-            <!-- Pièce 3 -->
-            <div class="p-4 rounded-2xl glass-card space-y-2 border border-slate-200">
-              <div class="flex items-center justify-between">
-                <h5 class="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                  <span class="w-5 h-5 rounded-full bg-amber-600 text-white flex items-center justify-center text-[10px]">3</span>
-                  Pièce 3 (Logistique & Matériel)
-                </h5>
-                <span class="text-[10px] text-amber-600 font-bold">Aile Logistique</span>
-              </div>
-              <select onchange="window.ProtecLocaux._tempSetupR3 = this.value; window.ProtecLocaux.openInitialSetupModal(window.game, '${stId}');" class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500">
-                <option value="stockage" ${r3 === 'stockage' ? 'selected' : ''}>📦 Zone de Stockage / Lots & Dons (Recommandé)</option>
-                <option value="vestiaires" ${r3 === 'vestiaires' ? 'selected' : ''}>🚿 Vestiaires & Casiers d'Intervention</option>
-              </select>
-            </div>
-
-            <!-- Bouton de validation -->
-            <button onclick="window.ProtecLocaux.confirmCustomStarterSetup(window.game, '${stId}', '${r1}', '${r2}', '${r3}')" class="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-black text-xs shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+            <!-- 3. Validation de l'aménagement & début de partie -->
+            <button type="button" onclick="window.ProtecLocaux.confirmCustomStarterSetup(window.game, '${stId}')" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-black text-sm shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
               <i data-lucide="check-circle" class="w-4 h-4"></i>
               <span>Valider l'Aménagement et Commencer la Partie</span>
             </button>
 
           </div>
+
         </div>
 
       </div>
     `;
+  },
+
+  renderRoomsListHTML(model) {
+    const m = model || this.getArchitectModel();
+    return m.rooms.map((rm, idx) => {
+      const isSelected = this.selectedRoomId === rm.id;
+      return `
+        <div onclick="window.ProtecLocaux.selectRoom('${rm.id}')" class="p-2.5 rounded-xl border transition cursor-pointer ${isSelected ? 'bg-blue-50/90 border-pc-blue ring-2 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}">
+          <div class="flex items-center justify-between text-xs font-black mb-1">
+            <span class="flex items-center gap-1.5 text-slate-900">
+              <span class="w-5 h-5 rounded-full ${isSelected ? 'bg-pc-blue text-white' : 'bg-slate-200 text-slate-700'} flex items-center justify-center text-[10px] font-mono">${idx + 1}</span>
+              <span>Pièce ${idx + 1} (${rm.area.toFixed(1)} m²)</span>
+            </span>
+            ${isSelected ? '<span class="text-[9.5px] text-pc-blue font-bold">Active ★</span>' : ''}
+          </div>
+          <select onclick="event.stopPropagation()" onchange="window.ProtecLocaux.assignRoomRole('${rm.id}', this.value)" class="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue">
+            <option value="bureau" ${rm.type === 'bureau' ? 'selected' : ''}>💼 Bureau d'Accueil & Direction</option>
+            <option value="formation" ${rm.type === 'formation' ? 'selected' : ''}>🎓 Salle de Formation PSC1 & DPS</option>
+            <option value="stockage" ${rm.type === 'stockage' ? 'selected' : ''}>📦 Réserve Logistique & Lots A/B</option>
+            <option value="detente" ${rm.type === 'detente' ? 'selected' : ''}>☕ Foyer & Détente des Bénévoles</option>
+            <option value="dortoir" ${rm.type === 'dortoir' ? 'selected' : ''}>🛏️ Dortoir de Garde SAMU 15</option>
+            <option value="vestiaires" ${rm.type === 'vestiaires' ? 'selected' : ''}>🚿 Vestiaires & Sanitaires F1</option>
+          </select>
+        </div>
+      `;
+    }).join('');
+  },
+
+  selectRoom(roomId) {
+    this.selectedRoomId = roomId;
+    this.renderArchitectScene();
+    const container = document.getElementById('starter-rooms-list');
+    if (container) {
+      container.innerHTML = this.renderRoomsListHTML();
+    }
+  },
+
+  assignRoomRole(roomId, newRole) {
+    const model = this.getArchitectModel();
+    const room = model.rooms.find(r => r.id === roomId);
+    if (!room) return;
+
+    room.type = newRole;
+    const titles = {
+      bureau: 'Accueil & Direction\n(Poste de Commandement)',
+      formation: 'Salle de Formation & DPS\n(Pédagogie Citoyenne)',
+      stockage: 'Réserve & Stockage Lots\n(Pharmacie & Casiers F1)',
+      detente: 'Foyer & Détente\n(Espace Convivial Bénévoles)',
+      dortoir: 'Dortoir d\'Astreinte\n(Garde SAMU 15 / CUMP)',
+      vestiaires: 'Vestiaires Opérationnels\n(Casiers & Sanitaires)'
+    };
+    const colors = {
+      bureau: '#161d2b',
+      formation: '#141a26',
+      stockage: '#181b2a',
+      detente: '#14241e',
+      dortoir: '#22182c',
+      vestiaires: '#131e28'
+    };
+
+    room.name = titles[newRole] || 'Pièce Opérationnelle';
+    room.color = colors[newRole] || '#161d2b';
+
+    // Remplacer le mobilier par le mobilier adapté à la vocation
+    this.repopulateRoomFurniture(model, room, newRole);
+
+    this.selectRoom(roomId);
+    this.renderArchitectScene();
+  },
+
+  repopulateRoomFurniture(model, room, role) {
+    model.furniture = (model.furniture || []).filter(f => f.roomId !== room.id);
+    const rx = room.x;
+    const ry = room.y;
+
+    if (role === 'bureau') {
+      model.furniture.push(
+        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 1.2, y: ry + 1.0, w: 1.8, d: 0.9, color: '#334155', label: 'Bureau Direction' },
+        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 1.8, y: ry + 0.4, w: 0.5, d: 0.5, color: '#0284c7', label: 'Fauteuil' },
+        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 3.8, y: ry + 0.8, w: 0.5, d: 1.8, color: '#1e293b', label: 'Baie Radio PC' },
+        { id: `f_${Date.now()}_4`, roomId: room.id, x: rx + 1.4, y: ry + 2.4, w: 1.4, d: 0.5, color: '#475569', label: 'Chaises Visiteurs' }
+      );
+    } else if (role === 'formation') {
+      model.furniture.push(
+        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 1.2, y: ry + 2.5, w: 2.4, d: 1.2, color: '#ea580c', label: 'Table PSC1 / DPS' },
+        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 1.2, y: ry + 0.4, w: 2.4, d: 0.15, color: '#f8fafc', label: 'Tableau Blanc' },
+        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 3.8, y: ry + 1.2, w: 0.6, d: 1.2, color: '#f59e0b', label: 'Mannequin RCP' },
+        { id: `f_${Date.now()}_4`, roomId: room.id, x: rx + 4.2, y: ry + 3.0, w: 0.3, d: 0.4, color: '#10b981', label: 'DAE Pédagogique' },
+        { id: `f_${Date.now()}_5`, roomId: room.id, x: rx + 1.2, y: ry + 4.2, w: 2.4, d: 0.5, color: '#0284c7', label: 'Rangée Sièges (6)' }
+      );
+    } else if (role === 'stockage') {
+      model.furniture.push(
+        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 0.5, y: ry + 0.8, w: 0.6, d: 2.5, color: '#475569', label: 'Étagères Lots A/B' },
+        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 2.0, y: ry + 3.8, w: 1.4, d: 0.4, color: '#dc2626', label: 'Armoire Pharmacie' },
+        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 3.8, y: ry + 0.8, w: 0.6, d: 2.5, color: '#0f172a', label: 'Casiers F1 Protec' }
+      );
+    } else if (role === 'detente') {
+      model.furniture.push(
+        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 1.0, y: ry + 1.2, w: 2.2, d: 1.0, color: '#059669', label: 'Canapé Foyer' },
+        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 1.4, y: ry + 2.6, w: 1.4, d: 0.7, color: '#f8fafc', label: 'Table Basse' },
+        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 3.8, y: ry + 0.8, w: 0.8, d: 0.6, color: '#d97706', label: 'Machine à Café' }
+      );
+    } else if (role === 'dortoir') {
+      model.furniture.push(
+        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 0.8, y: ry + 0.8, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit de Garde 1' },
+        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 2.6, y: ry + 0.8, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit de Garde 2' },
+        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 4.2, y: ry + 0.8, w: 0.5, d: 1.8, color: '#334155', label: 'Armoires Garde' }
+      );
+    } else if (role === 'vestiaires') {
+      model.furniture.push(
+        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 0.6, y: ry + 0.6, w: 0.6, d: 3.0, color: '#0f172a', label: 'Rangée Casiers' },
+        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 3.8, y: ry + 0.6, w: 0.6, d: 3.0, color: '#0f172a', label: 'Rangée Casiers' },
+        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 2.0, y: ry + 1.2, w: 0.5, d: 2.0, color: '#0284c7', label: 'Banc Vestiaire' }
+      );
+    }
+  },
+
+  addFurnitureItem(type) {
+    const catalogItem = this.FURNITURE_CATALOG.find(c => c.type === type);
+    if (!catalogItem) return;
+    const model = this.getArchitectModel();
+    const room = model.rooms.find(r => r.id === this.selectedRoomId) || model.rooms[0];
+    if (!room) return;
+
+    const newItem = {
+      id: `f_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      roomId: room.id,
+      type: type,
+      x: room.x + (room.w - catalogItem.w) / 2 + (Math.random() - 0.5) * 0.4,
+      y: room.y + (room.h - catalogItem.d) / 2 + (Math.random() - 0.5) * 0.4,
+      w: catalogItem.w,
+      d: catalogItem.d,
+      color: catalogItem.color,
+      label: catalogItem.name,
+      rotation: 0
+    };
+
+    model.furniture.push(newItem);
+    this.selectedFurnitureId = newItem.id;
+    this.renderArchitectScene();
+  },
+
+  rotateSelectedItem() {
+    if (!this.selectedFurnitureId) return;
+    const model = this.getArchitectModel();
+    const item = model.furniture.find(f => f.id === this.selectedFurnitureId);
+    if (!item) return;
+    item.rotation = ((item.rotation || 0) + Math.PI / 2) % (Math.PI * 2);
+    const tmp = item.w;
+    item.w = item.d;
+    item.d = tmp;
+    this.renderArchitectScene();
+  },
+
+  deleteSelectedItem() {
+    if (!this.selectedFurnitureId) return;
+    const model = this.getArchitectModel();
+    model.furniture = model.furniture.filter(f => f.id !== this.selectedFurnitureId);
+    this.selectedFurnitureId = null;
+    this.renderArchitectScene();
   },
 
   // Rendu selon l'onglet actif
@@ -1617,9 +1861,11 @@ window.ProtecLocaux = {
 
             <!-- Indicateur de surface totale et hauteur sous plafond -->
             <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
-              <span>Hauteur sous plafond : <strong>2.70 m</strong></span>
+              <span>Hauteur sous plafond : <strong>2.80 m</strong></span>
               <span>•</span>
-              <span>Surface Totale : <strong class="text-pc-blue">69.8 m²</strong></span>
+              <span>Surface Bâtiment : <strong class="text-pc-blue">84.6 m²</strong></span>
+              <span>•</span>
+              <span>Cour & Parking : <strong class="text-amber-600">43.2 m²</strong></span>
             </div>
           </div>
 
@@ -1753,34 +1999,34 @@ window.ProtecLocaux = {
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 text-xs">
           <div class="p-3 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-1">
             <div class="flex items-center justify-between font-black text-slate-200">
-              <span>💼 Poste de Commandement</span>
-              <span class="text-pc-blue bg-blue-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">29.3 m²</span>
+              <span>🚗 Parking Opérationnel</span>
+              <span class="text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">43.2 m²</span>
             </div>
-            <p class="text-[10px] text-slate-400 leading-tight">6.5m × 4.5m • Direction opérationnelle, accueil et régulation DPS.</p>
+            <p class="text-[10px] text-slate-400 leading-tight">4.8m × 9.0m • 2 places d'ambulance VPSP 01 / VTU 01 et accès cour.</p>
           </div>
 
           <div class="p-3 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-1">
             <div class="flex items-center justify-between font-black text-slate-200">
-              <span>🎓 Salle Pédagogique PSC1</span>
-              <span class="text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">15.8 m²</span>
+              <span>💼 Accueil & Direction</span>
+              <span class="text-pc-blue bg-blue-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">19.3 m²</span>
             </div>
-            <p class="text-[10px] text-slate-400 leading-tight">3.5m × 4.5m • Formations secouristes citoyennes et recyclages PSE.</p>
+            <p class="text-[10px] text-slate-400 leading-tight">4.6m × 4.2m • Direction opérationnelle, accueil et régulation DPS.</p>
           </div>
 
           <div class="p-3 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-1">
             <div class="flex items-center justify-between font-black text-slate-200">
-              <span>🛏️ Dortoir de Garde SAMU</span>
-              <span class="text-purple-300 bg-purple-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">16.0 m²</span>
+              <span>🎓 Salle de Formation</span>
+              <span class="text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">20.2 m²</span>
             </div>
-            <p class="text-[10px] text-slate-400 leading-tight">4.2m × 3.8m • Astreintes nocturnes et repos des équipages VPSP.</p>
+            <p class="text-[10px] text-slate-400 leading-tight">4.8m × 4.2m • Formations secouristes PSC1, SST et recyclages PSE.</p>
           </div>
 
           <div class="p-3 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-1">
             <div class="flex items-center justify-between font-black text-slate-200">
-              <span>🚿 Sanitaires & Vestiaires</span>
-              <span class="text-cyan-300 bg-cyan-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">8.7 m²</span>
+              <span>📦 Réserve Lots & Vestiaires</span>
+              <span class="text-cyan-300 bg-cyan-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">45.1 m²</span>
             </div>
-            <p class="text-[10px] text-slate-400 leading-tight">2.3m × 3.8m • Hygiène opérationnelle et casiers tenues de secours.</p>
+            <p class="text-[10px] text-slate-400 leading-tight">9.4m × 4.8m • Lots de secours A/B, pharmacie, casiers tenues F1.</p>
           </div>
         </div>
 
@@ -1840,38 +2086,143 @@ window.ProtecLocaux = {
     if (canvas._eventsBound) return;
     canvas._eventsBound = true;
 
+    const getMouseWorldPos = (clientX, clientY) => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const screenX = (clientX - rect.left) * (canvas.width / rect.width);
+      const screenY = (clientY - rect.top) * (canvas.height / rect.height);
+      const cx = canvas.width / 2 + this.camera2D.panX;
+      const cy = canvas.height / 2 + this.camera2D.panY;
+      const scale = this.camera2D.zoom;
+      const ox = cx - 8.3 * scale;
+      const oy = cy - 6.0 * scale;
+      return {
+        wx: (screenX - ox) / scale,
+        wy: (screenY - oy) / scale,
+        screenX,
+        screenY
+      };
+    };
+
     const onPointerDown = (clientX, clientY, button) => {
+      const { wx, wy } = getMouseWorldPos(clientX, clientY);
+      const model = this.getArchitectModel();
+
+      if (button === 0) {
+        // 1. Détection de clic sur un meuble (mode Les Sims)
+        const clickedFurniture = (model.furniture || []).slice().reverse().find(f => {
+          return wx >= f.x && wx <= f.x + f.w && wy >= f.y && wy <= f.y + f.d;
+        });
+
+        if (clickedFurniture) {
+          this.selectedFurnitureId = clickedFurniture.id;
+          this.draggingFurniture = clickedFurniture;
+          this.dragOffset = { x: clickedFurniture.x - wx, y: clickedFurniture.y - wy };
+          if (clickedFurniture.roomId) {
+            this.selectedRoomId = clickedFurniture.roomId;
+            const roomsList = document.getElementById('starter-rooms-list');
+            if (roomsList) roomsList.innerHTML = this.renderRoomsListHTML(model);
+          }
+          this.renderArchitectScene();
+          return;
+        }
+
+        // 2. Détection de clic sur une pièce
+        const clickedRoom = (model.rooms || []).find(r => {
+          return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h;
+        });
+
+        if (clickedRoom) {
+          this.selectedFurnitureId = null;
+          this.selectRoom(clickedRoom.id);
+          this.renderArchitectScene();
+          return;
+        }
+      }
+
+      // 3. Clic dans le vide -> déplacement de la caméra (Pan)
+      this.selectedFurnitureId = null;
       this.isDraggingCanvas = true;
       this.dragStart = { x: clientX, y: clientY };
       this.dragButton = button;
-    };
-
-    const onPointerMove = (clientX, clientY) => {
-      if (!this.isDraggingCanvas) return;
-      const dx = clientX - this.dragStart.x;
-      const dy = clientY - this.dragStart.y;
-      this.dragStart = { x: clientX, y: clientY };
-
-      if (this.dimensionMode === '3d') {
-        if (this.dragButton === 2) {
-          // Pan
-          this.camera3D.panX += dx;
-          this.camera3D.panY += dy;
-        } else {
-          // Orbit rotation
-          this.camera3D.yaw += dx * 0.008;
-          this.camera3D.pitch = Math.max(0.2, Math.min(1.4, this.camera3D.pitch + dy * 0.008));
-        }
-      } else {
-        // Pan 2D
-        this.camera2D.panX += dx;
-        this.camera2D.panY += dy;
-      }
-
       this.renderArchitectScene();
     };
 
+    const onPointerMove = (clientX, clientY) => {
+      const { wx, wy } = getMouseWorldPos(clientX, clientY);
+
+      // Déplacement interactif d'un meuble (Les Sims)
+      if (this.draggingFurniture) {
+        let newX = wx + this.dragOffset.x;
+        let newY = wy + this.dragOffset.y;
+
+        if (this.snapToGrid) {
+          newX = Math.round(newX * 5) / 5; // précision 0.2m
+          newY = Math.round(newY * 5) / 5;
+        }
+
+        this.draggingFurniture.x = Math.max(1.0, Math.min(15.2 - this.draggingFurniture.w, newX));
+        this.draggingFurniture.y = Math.max(1.5, Math.min(10.3 - this.draggingFurniture.d, newY));
+
+        // Détection automatique de la pièce hôte
+        const model = this.getArchitectModel();
+        const curRoom = (model.rooms || []).find(r => {
+          const mx = this.draggingFurniture.x + this.draggingFurniture.w / 2;
+          const my = this.draggingFurniture.y + this.draggingFurniture.d / 2;
+          return mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
+        });
+
+        if (curRoom && curRoom.id !== this.draggingFurniture.roomId) {
+          this.draggingFurniture.roomId = curRoom.id;
+          this.selectedRoomId = curRoom.id;
+          const roomsList = document.getElementById('starter-rooms-list');
+          if (roomsList) roomsList.innerHTML = this.renderRoomsListHTML(model);
+        }
+
+        this.renderArchitectScene();
+        return;
+      }
+
+      // Déplacement de la caméra 2D
+      if (this.isDraggingCanvas) {
+        const dx = clientX - this.dragStart.x;
+        const dy = clientY - this.dragStart.y;
+        this.dragStart = { x: clientX, y: clientY };
+
+        if (this.dimensionMode === '3d') {
+          if (this.dragButton === 2) {
+            this.camera3D.panX += dx;
+            this.camera3D.panY += dy;
+          } else {
+            this.camera3D.yaw += dx * 0.008;
+            this.camera3D.pitch = Math.max(0.2, Math.min(1.4, this.camera3D.pitch + dy * 0.008));
+          }
+        } else {
+          this.camera2D.panX += dx;
+          this.camera2D.panY += dy;
+        }
+
+        this.renderArchitectScene();
+        return;
+      }
+
+      // Curseur dynamique selon survol
+      const model = this.getArchitectModel();
+      const hoveredFurniture = (model.furniture || []).find(f => {
+        return wx >= f.x && wx <= f.x + f.w && wy >= f.y && wy <= f.y + f.d;
+      });
+      if (hoveredFurniture) {
+        canvas.style.cursor = 'move';
+      } else {
+        const hoveredRoom = (model.rooms || []).find(r => {
+          return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h;
+        });
+        canvas.style.cursor = hoveredRoom ? 'pointer' : 'grab';
+      }
+    };
+
     const onPointerUp = () => {
+      this.draggingFurniture = null;
       this.isDraggingCanvas = false;
     };
 
@@ -1887,6 +2238,16 @@ window.ProtecLocaux = {
       const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
       this.zoomCamera(zoomFactor);
     }, { passive: false });
+
+    // Raccourcis clavier (R pour pivoter, Delete pour retirer)
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      if (e.key === 'r' || e.key === 'R') {
+        this.rotateSelectedItem();
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        this.deleteSelectedItem();
+      }
+    });
 
     // Tactile Mobile / Tablette
     canvas.addEventListener('touchstart', (e) => {
@@ -1915,60 +2276,120 @@ window.ProtecLocaux = {
     });
   },
 
-  // Modèle Géométrique CAD des Pièces et Éléments de Construction
-  getArchitectModel() {
+  // Modèle Géométrique CAD Officiel de l'Antenne de Base de la Protection Civile
+  getArchitectModel(stationId) {
+    if (this._currentSetupModel) {
+      return this._currentSetupModel;
+    }
+    const st = (window.game && window.game.stations)
+      ? (window.game.stations.find(s => s.id === stationId) || window.game.stations[0])
+      : null;
+    if (st && st.premises && st.premises.architecture) {
+      return st.premises.architecture;
+    }
+
     return {
+      // 1. Parking opérationnel extérieur (2 places VPSP / VTU)
+      parking: {
+        x: 1.0,
+        y: 1.5,
+        w: 4.8,
+        h: 9.0,
+        label: 'Parking Opérationnel Extérieur',
+        spots: [
+          { id: 'spot_1', label: '🚑 EMPLACEMENT VPSP 01', x: 1.4, y: 2.2, w: 4.0, d: 2.4 },
+          { id: 'spot_2', label: '🚐 EMPLACEMENT VTU 01', x: 1.4, y: 5.6, w: 4.0, d: 2.4 }
+        ]
+      },
+      // 2. Les 3 pièces intérieures de base
       rooms: [
-        { id: 'sejour', name: 'Séjour & Salon\n(Poste de Commandement)', x: 2.0, y: 1.5, w: 6.5, h: 4.5, area: 29.3, color: '#161d2b' },
-        { id: 'cuisine', name: 'Cuisine Ouverte\n(Salle Pédagogique PSC1)', x: 8.5, y: 1.5, w: 3.5, h: 4.5, area: 15.8, color: '#141a26' },
-        { id: 'chambre', name: 'Chambre 1\n(Dortoir de Garde SAMU)', x: 2.0, y: 6.0, w: 4.2, h: 3.8, area: 16.0, color: '#181b2a' },
-        { id: 'sdb', name: 'Salle de Bain\n(Sanitaires & Douches)', x: 6.2, y: 6.0, w: 2.3, h: 3.8, area: 8.7, color: '#131e28' }
+        {
+          id: 'room_1',
+          type: 'bureau',
+          name: 'Accueil Public & Direction\n(Poste de Commandement)',
+          x: 6.2,
+          y: 1.5,
+          w: 4.6,
+          h: 4.2,
+          area: 19.3,
+          color: '#161d2b'
+        },
+        {
+          id: 'room_2',
+          type: 'formation',
+          name: 'Salle de Formation & DPS\n(Pédagogie Citoyenne PSC1)',
+          x: 10.8,
+          y: 1.5,
+          w: 4.8,
+          h: 4.2,
+          area: 20.2,
+          color: '#141a26'
+        },
+        {
+          id: 'room_3',
+          type: 'stockage',
+          name: 'Réserve Lots A/B & Vestiaires\n(Logistique & Casiers F1)',
+          x: 6.2,
+          y: 5.7,
+          w: 9.4,
+          h: 4.8,
+          area: 45.1,
+          color: '#181b2a'
+        }
       ],
+      // 3. Murs porteurs extérieurs et cloisons intérieures
       walls: [
-        // Murs extérieurs (épaisseur 0.24m)
-        { x1: 2.0, y1: 1.5, x2: 12.0, y2: 1.5, th: 0.24, outer: true },
-        { x1: 12.0, y1: 1.5, x2: 12.0, y2: 6.0, th: 0.24, outer: true },
-        { x1: 12.0, y1: 6.0, x2: 8.5, y2: 6.0, th: 0.24, outer: true },
-        { x1: 8.5, y1: 6.0, x2: 8.5, y2: 9.8, th: 0.24, outer: true },
-        { x1: 8.5, y1: 9.8, x2: 2.0, y2: 9.8, th: 0.24, outer: true },
-        { x1: 2.0, y1: 9.8, x2: 2.0, y2: 1.5, th: 0.24, outer: true },
+        // Murs extérieurs porteurs (épaisseur 0.24m)
+        { x1: 6.2, y1: 1.5, x2: 15.6, y2: 1.5, th: 0.24, outer: true },
+        { x1: 15.6, y1: 1.5, x2: 15.6, y2: 10.5, th: 0.24, outer: true },
+        { x1: 15.6, y1: 10.5, x2: 6.2, y2: 10.5, th: 0.24, outer: true },
+        { x1: 6.2, y1: 10.5, x2: 6.2, y2: 1.5, th: 0.24, outer: true },
         // Cloisons intérieures (épaisseur 0.12m)
-        { x1: 2.0, y1: 6.0, x2: 8.5, y2: 6.0, th: 0.12, outer: false },
-        { x1: 6.2, y1: 6.0, x2: 6.2, y2: 9.8, th: 0.12, outer: false },
-        { x1: 8.5, y1: 1.5, x2: 8.5, y2: 3.2, th: 0.12, outer: false } // Séparation partielle Séjour/Cuisine
+        { x1: 10.8, y1: 1.5, x2: 10.8, y2: 5.7, th: 0.12, outer: false },
+        { x1: 6.2, y1: 5.7, x2: 15.6, y2: 5.7, th: 0.12, outer: false }
       ],
+      // 4. Portes réelles avec sens d'ouverture et cotes d'architecte
       doors: [
-        { id: 'd_entree', x: 2.5, y: 1.5, len: 0.93, wall: 'N', label: 'Porte d’Entrée (93cm)', swingAngle: Math.PI / 2, isMain: true },
-        { id: 'd_chambre', x: 3.3, y: 6.0, len: 0.83, wall: 'N', label: 'Porte Chambre (83cm)', swingAngle: Math.PI / 2, isMain: false },
-        { id: 'd_sdb', x: 6.5, y: 6.0, len: 0.73, wall: 'N', label: 'Porte Salle de Bain (73cm)', swingAngle: Math.PI / 2, isMain: false }
+        { id: 'd_entree', x: 6.2, y: 2.2, len: 0.93, wall: 'W', label: 'Porte d’Entrée (93cm)', isMain: true },
+        { id: 'd_form', x: 10.8, y: 3.2, len: 0.83, wall: 'W', label: 'Porte Formation (83cm)', isMain: false },
+        { id: 'd_reserve', x: 8.2, y: 5.7, len: 0.83, wall: 'N', label: 'Porte Réserve (83cm)', isMain: false },
+        { id: 'd_service', x: 6.2, y: 7.6, len: 0.93, wall: 'W', label: 'Accès Matériel (93cm)', isMain: false }
       ],
+      // 5. Fenêtres extérieures cyan avec cotes
       windows: [
-        { id: 'w_baie', x: 4.8, y: 1.5, len: 2.40, wall: 'N', label: 'Baie Vitrée Séjour (2.40m)' },
-        { id: 'w_cuisine', x: 9.7, y: 1.5, len: 1.20, wall: 'N', label: 'Fenêtre Cuisine (1.20m)' },
-        { id: 'w_chambre', x: 2.0, y: 7.4, len: 1.40, wall: 'W', label: 'Fenêtre Chambre (1.40m)' }
+        { id: 'w_bureau', x: 7.4, y: 1.5, len: 1.60, wall: 'N', label: 'Fenêtre Accueil (1.60m)' },
+        { id: 'w_form_n', x: 12.0, y: 1.5, len: 1.80, wall: 'N', label: 'Baie Formation (1.80m)' },
+        { id: 'w_form_e', x: 15.6, y: 2.8, len: 1.40, wall: 'E', label: 'Fenêtre Est (1.40m)' },
+        { id: 'w_res_s', x: 8.4, y: 10.5, len: 1.60, wall: 'S', label: 'Fenêtre Haute Sud (1.60m)' },
+        { id: 'w_res_e', x: 15.6, y: 7.5, len: 1.60, wall: 'E', label: 'Fenêtre Haute Est (1.60m)' }
       ],
+      // 6. Équipements techniques fixes (radiateurs, TGBT, extincteurs)
       fixtures: [
-        { id: 'rad_salon', x: 7.4, y: 1.5, len: 1.00, wall: 'N', label: 'Radiateur Salon (1.00m)', type: 'radiator' },
-        { id: 'rad_chambre', x: 2.0, y: 6.3, len: 0.80, wall: 'W', label: 'Radiateur Chambre (0.80m)', type: 'radiator' },
-        { id: 'rad_sdb', x: 8.5, y: 7.6, len: 0.80, wall: 'E', label: 'Sèche-Serviettes SdB', type: 'radiator' },
-        { id: 'pilier', x: 8.4, y: 3.5, w: 0.30, h: 0.30, label: 'PILIER', type: 'pillar' },
-        { id: 'gaine', x: 6.2, y: 6.0, w: 0.40, h: 0.40, label: 'GAINE', type: 'duct' }
+        { id: 'rad_bureau', x: 9.3, y: 1.5, len: 0.90, wall: 'N', label: 'Radiateur', type: 'radiator' },
+        { id: 'rad_form', x: 14.0, y: 1.5, len: 1.10, wall: 'N', label: 'Radiateur', type: 'radiator' },
+        { id: 'rad_reserve', x: 12.5, y: 10.5, len: 1.20, wall: 'S', label: 'Aérotherme', type: 'radiator' },
+        { id: 'tgbt', x: 6.3, y: 9.8, w: 0.50, h: 0.35, label: 'TGBT', type: 'duct' },
+        { id: 'extincteur_1', x: 6.3, y: 5.8, w: 0.25, h: 0.25, label: 'EXT', type: 'extinguisher' },
+        { id: 'extincteur_2', x: 10.9, y: 5.3, w: 0.25, h: 0.25, label: 'EXT', type: 'extinguisher' }
       ],
+      // 7. Mobilier de départ réaliste de la Protection Civile
       furniture: [
-        // Séjour : Grande table de réunion orange, table basse blanche, meuble mural gris
-        { id: 'f_table', x: 4.5, y: 3.2, z: 0, w: 1.7, d: 1.0, h: 0.75, color: '#f97316', label: 'Table Réunion PC' },
-        { id: 'f_table_basse', x: 5.1, y: 4.8, z: 0, w: 1.2, d: 0.6, h: 0.45, color: '#f8fafc', label: 'Table Basse' },
-        { id: 'f_meuble_pc', x: 2.3, y: 2.7, z: 0, w: 0.45, d: 2.1, h: 1.6, color: '#334155', label: 'Baie Radio & Écrans' },
-        // Cuisine : Évier cyan/bleu, comptoir gris
-        { id: 'f_evier', x: 9.0, y: 2.0, z: 0, w: 0.9, d: 1.1, h: 0.85, color: '#0284c7', label: 'Évier Inox' },
-        { id: 'f_comptoir', x: 10.3, y: 2.0, z: 0, w: 1.3, d: 0.9, h: 0.85, color: '#64748b', label: 'Plan Travail' },
-        // Chambre : Lit double violet, chevet orange, meuble TV gris
-        { id: 'f_lit', x: 3.4, y: 7.2, z: 0, w: 1.8, d: 1.9, h: 0.60, color: '#a855f7', label: 'Lit de Garde SAMU' },
-        { id: 'f_chevet', x: 2.4, y: 7.2, z: 0, w: 0.55, d: 0.55, h: 0.55, color: '#ea580c', label: 'Chevet' },
-        { id: 'f_armoire', x: 5.4, y: 7.0, z: 0, w: 0.35, d: 1.6, h: 1.5, color: '#334155', label: 'Armoire Caserne' },
-        // SdB : Sanitaire baignoire/douche cyan, meuble vasque
-        { id: 'f_douche', x: 6.7, y: 6.8, z: 0, w: 1.4, d: 0.85, h: 0.55, color: '#06b6d4', label: 'Douche Décontamination' },
-        { id: 'f_vasque', x: 6.7, y: 8.2, z: 0, w: 1.1, d: 0.45, h: 0.80, color: '#334155', label: 'Vasque' }
+        // Pièce 1 : Accueil & Direction
+        { id: 'f_init_1', roomId: 'room_1', type: 'bureau', x: 7.4, y: 2.5, w: 1.8, d: 0.9, color: '#334155', label: 'Bureau Direction', rotation: 0 },
+        { id: 'f_init_2', roomId: 'room_1', type: 'chaise', x: 8.0, y: 1.9, w: 0.5, d: 0.5, color: '#0284c7', label: 'Fauteuil', rotation: 0 },
+        { id: 'f_init_3', roomId: 'room_1', type: 'bureau', x: 9.8, y: 2.2, w: 0.5, d: 1.8, color: '#1e293b', label: 'Baie Radio PC', rotation: 0 },
+        { id: 'f_init_4', roomId: 'room_1', type: 'chaise', x: 7.6, y: 3.8, w: 1.4, d: 0.5, color: '#475569', label: 'Chaises Visiteurs', rotation: 0 },
+        // Pièce 2 : Salle de Formation
+        { id: 'f_init_5', roomId: 'room_2', type: 'table_formation', x: 11.8, y: 3.2, w: 2.2, d: 1.1, color: '#ea580c', label: 'Table Formation PSC1', rotation: 0 },
+        { id: 'f_init_6', roomId: 'room_2', type: 'tableau_blanc', x: 11.8, y: 1.7, w: 2.2, d: 0.2, color: '#f8fafc', label: 'Tableau Blanc', rotation: 0 },
+        { id: 'f_init_7', roomId: 'room_2', type: 'mannequin_rcp', x: 14.5, y: 2.4, w: 0.6, d: 1.2, color: '#f59e0b', label: 'Mannequin RCP', rotation: 0 },
+        { id: 'f_init_8', roomId: 'room_2', type: 'dae_mural', x: 15.1, y: 4.2, w: 0.35, d: 0.35, color: '#10b981', label: 'DAE Formation', rotation: 0 },
+        // Pièce 3 : Réserve Lots A/B & Vestiaires
+        { id: 'f_init_9', roomId: 'room_3', type: 'etagere_lots', x: 6.8, y: 6.4, w: 0.6, d: 2.4, color: '#475569', label: 'Rayonnage Lots A/B', rotation: 0 },
+        { id: 'f_init_10', roomId: 'room_3', type: 'etagere_lots', x: 7.8, y: 6.4, w: 0.6, d: 2.4, color: '#475569', label: 'Rayonnage Lots A/B', rotation: 0 },
+        { id: 'f_init_11', roomId: 'room_3', type: 'armoire_pharmacie', x: 10.2, y: 9.8, w: 1.2, d: 0.4, color: '#dc2626', label: 'Pharmacie Secours', rotation: 0 },
+        { id: 'f_init_12', roomId: 'room_3', type: 'casiers_vestiaire', x: 14.6, y: 6.4, w: 0.6, d: 2.5, color: '#0f172a', label: 'Casiers Tenues F1', rotation: 0 },
+        { id: 'f_init_13', roomId: 'room_3', type: 'lit_garde', x: 12.0, y: 7.8, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit de Camp Astreinte', rotation: 0 }
       ]
     };
   },
@@ -1992,7 +2413,7 @@ window.ProtecLocaux = {
   },
 
   // =========================================================================
-  // RENDU 2D ARCHITECTURAL STYLE CAD (CONFORME À L'IMAGE 2)
+  // RENDU 2D ARCHITECTURAL STYLE CAD (CONFORME À LA MAQUETTE OFFICIELLE)
   // =========================================================================
 
   render2D(ctx, width, height) {
@@ -2031,19 +2452,81 @@ window.ProtecLocaux = {
     }
     ctx.stroke();
 
-    // Décalage pour centrer le bâtiment (centre du bâtiment à x=7, y=5.5)
-    const ox = cx - 7.0 * scale;
-    const oy = cy - 5.5 * scale;
+    // Centrage du complexe (centre vers x=8.3m, y=6.0m)
+    const ox = cx - 8.3 * scale;
+    const oy = cy - 6.0 * scale;
 
-    // 2. Tracé des sols de pièces
+    // 2. Tracé de la zone extérieure : Parking Opérationnel 2 places
+    if (model.parking) {
+      const pk = model.parking;
+      const px = ox + pk.x * scale;
+      const py = oy + pk.y * scale;
+      const pw = pk.w * scale;
+      const ph = pk.h * scale;
+
+      // Sol bitumé d'antenne
+      ctx.fillStyle = '#111724';
+      ctx.fillRect(px, py, pw, ph);
+
+      // Bordure extérieure de la cour
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(px, py, pw, ph);
+      ctx.setLineDash([]);
+
+      // Titre de la zone parking
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(pk.label.toUpperCase(), px + pw / 2, py + 14);
+
+      // Tracé des 2 emplacements de véhicules de secours
+      (pk.spots || []).forEach(spot => {
+        const sx = ox + spot.x * scale;
+        const sy = oy + spot.y * scale;
+        const sw = spot.w * scale;
+        const sd = spot.d * scale;
+
+        // Tracé au sol jaune/orange sécurité
+        ctx.fillStyle = 'rgba(234, 88, 12, 0.06)';
+        ctx.fillRect(sx, sy, sw, sd);
+
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(sx, sy, sw, sd);
+        ctx.setLineDash([]);
+
+        // Libellé de l'emplacement au sol
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(spot.label, sx + sw / 2, sy + sd / 2);
+      });
+    }
+
+    // 3. Tracé des sols des 3 pièces intérieures
     model.rooms.forEach(r => {
       const rx = ox + r.x * scale;
       const ry = oy + r.y * scale;
       const rw = r.w * scale;
       const rh = r.h * scale;
+      const isSelected = this.selectedRoomId === r.id;
 
       ctx.fillStyle = r.color;
       ctx.fillRect(rx, ry, rw, rh);
+
+      // Si la pièce est sélectionnée par le joueur, surbrillance néon
+      if (isSelected) {
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(rx, ry, rw, rh);
+
+        // Lueur néon
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.08)';
+        ctx.fillRect(rx, ry, rw, rh);
+      }
 
       // Nom de la pièce et dimensions au centre
       ctx.fillStyle = '#f8fafc';
@@ -2054,12 +2537,12 @@ window.ProtecLocaux = {
       const lines = r.name.split('\n');
       ctx.fillText(lines[0], rx + rw / 2, ry + rh / 2 - 10);
 
-      ctx.fillStyle = '#94a3b8';
+      ctx.fillStyle = isSelected ? '#60a5fa' : '#94a3b8';
       ctx.font = '600 10px monospace';
       ctx.fillText(`${r.area.toFixed(1)} m² (${r.w.toFixed(1)}m × ${r.h.toFixed(1)}m)`, rx + rw / 2, ry + rh / 2 + 10);
     });
 
-    // 3. Tracé des murs porteurs et cloisons (double trait ardoise)
+    // 4. Tracé des murs porteurs et cloisons (double trait ardoise CAD)
     model.walls.forEach(w => {
       const x1 = ox + w.x1 * scale;
       const y1 = oy + w.y1 * scale;
@@ -2084,18 +2567,25 @@ window.ProtecLocaux = {
       ctx.stroke();
     });
 
-    // 4. Tracé des portes avec débattement en arc pointillé et battant marron
+    // 5. Tracé des portes avec arc de débattement et battant marron
     model.doors.forEach(d => {
       const dx = ox + d.x * scale;
       const dy = oy + d.y * scale;
       const dlen = d.len * scale;
 
-      // Battant ouvert à 90° (marron/orange bois)
+      // Battant de porte ouvert à 90° (marron bois)
       ctx.strokeStyle = '#b45309';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(dx, dy);
-      if (d.wall === 'N') {
+
+      if (d.wall === 'W') {
+        ctx.lineTo(dx + dlen, dy);
+      } else if (d.wall === 'E') {
+        ctx.lineTo(dx - dlen, dy);
+      } else if (d.wall === 'S') {
+        ctx.lineTo(dx, dy - dlen);
+      } else {
         ctx.lineTo(dx, dy + dlen);
       }
       ctx.stroke();
@@ -2105,22 +2595,34 @@ window.ProtecLocaux = {
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
-      if (d.wall === 'N') {
+      if (d.wall === 'W') {
+        ctx.arc(dx, dy, dlen, 0, Math.PI / 2, false);
+      } else if (d.wall === 'E') {
+        ctx.arc(dx, dy, dlen, Math.PI, Math.PI * 1.5, false);
+      } else if (d.wall === 'S') {
+        ctx.arc(dx, dy, dlen, Math.PI * 1.5, Math.PI * 2, false);
+      } else {
         ctx.arc(dx, dy, dlen, 0, Math.PI / 2, false);
       }
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Libellé de cote de porte
+      // Cote de porte
       ctx.fillStyle = '#cbd5e1';
       ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center';
-      if (d.wall === 'N') {
+      if (d.wall === 'W' || d.wall === 'E') {
+        ctx.save();
+        ctx.translate(dx + (d.wall === 'W' ? -8 : 8), dy + dlen / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText(d.label, 0, 0);
+        ctx.restore();
+      } else {
         ctx.fillText(d.label, dx + dlen / 2, dy - 8);
       }
     });
 
-    // 5. Tracé des fenêtres (cyan double vitrage)
+    // 6. Tracé des fenêtres (cyan double vitrage)
     model.windows.forEach(w => {
       const wx = ox + w.x * scale;
       const wy = oy + w.y * scale;
@@ -2129,7 +2631,7 @@ window.ProtecLocaux = {
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = 5;
       ctx.beginPath();
-      if (w.wall === 'N') {
+      if (w.wall === 'N' || w.wall === 'S') {
         ctx.moveTo(wx, wy); ctx.lineTo(wx + wlen, wy);
       } else {
         ctx.moveTo(wx, wy); ctx.lineTo(wx, wy + wlen);
@@ -2140,18 +2642,18 @@ window.ProtecLocaux = {
       ctx.fillStyle = '#38bdf8';
       ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center';
-      if (w.wall === 'N') {
-        ctx.fillText(w.label, wx + wlen / 2, wy - 8);
+      if (w.wall === 'N' || w.wall === 'S') {
+        ctx.fillText(w.label, wx + wlen / 2, wy + (w.wall === 'N' ? -8 : 14));
       } else {
         ctx.save();
-        ctx.translate(wx - 10, wy + wlen / 2);
+        ctx.translate(wx + (w.wall === 'W' ? -10 : 12), wy + wlen / 2);
         ctx.rotate(-Math.PI / 2);
         ctx.fillText(w.label, 0, 0);
         ctx.restore();
       }
     });
 
-    // 6. Tracé des radiateurs, piliers et gaines
+    // 7. Tracé des équipements fixes (radiateurs, extincteurs, TGBT)
     model.fixtures.forEach(f => {
       if (f.type === 'radiator') {
         const fx = ox + f.x * scale;
@@ -2162,12 +2664,12 @@ window.ProtecLocaux = {
         ctx.lineWidth = 4;
         ctx.setLineDash([2, 2]);
         ctx.beginPath();
-        if (f.wall === 'N') {
-          ctx.moveTo(fx, fy + 4); ctx.lineTo(fx + flen, fy + 4);
-        } else if (f.wall === 'W') {
-          ctx.moveTo(fx + 4, fy); ctx.lineTo(fx + 4, fy + flen);
-        } else if (f.wall === 'E') {
-          ctx.moveTo(fx - 4, fy); ctx.lineTo(fx - 4, fy + flen);
+        if (f.wall === 'N' || f.wall === 'S') {
+          ctx.moveTo(fx, fy + (f.wall === 'N' ? 5 : -5));
+          ctx.lineTo(fx + flen, fy + (f.wall === 'N' ? 5 : -5));
+        } else {
+          ctx.moveTo(fx + (f.wall === 'W' ? 5 : -5), fy);
+          ctx.lineTo(fx + (f.wall === 'W' ? 5 : -5), fy + flen);
         }
         ctx.stroke();
         ctx.setLineDash([]);
@@ -2175,52 +2677,103 @@ window.ProtecLocaux = {
         ctx.fillStyle = '#ea580c';
         ctx.font = 'bold 8px monospace';
         ctx.textAlign = 'center';
-        if (f.wall === 'N') {
-          ctx.fillText(f.label, fx + flen / 2, fy + 15);
-        } else {
-          ctx.save();
-          ctx.translate(f.wall === 'W' ? fx - 8 : fx + 8, fy + flen / 2);
-          ctx.rotate(f.wall === 'W' ? -Math.PI / 2 : Math.PI / 2);
-          ctx.fillText(f.label, 0, 0);
-          ctx.restore();
-        }
-      } else if (f.type === 'pillar' || f.type === 'duct') {
+        ctx.fillText(f.label, fx + flen / 2, fy + (f.wall === 'N' ? 16 : -10));
+      } else if (f.type === 'duct' || f.type === 'extinguisher') {
         const px = ox + f.x * scale;
         const py = oy + f.y * scale;
         const pw = f.w * scale;
         const ph = f.h * scale;
 
-        ctx.fillStyle = '#1e293b';
+        ctx.fillStyle = f.type === 'extinguisher' ? '#dc2626' : '#1e293b';
         ctx.fillRect(px, py, pw, ph);
-        ctx.strokeStyle = '#64748b';
+        ctx.strokeStyle = f.type === 'extinguisher' ? '#ef4444' : '#64748b';
         ctx.lineWidth = 1.5;
         ctx.strokeRect(px, py, pw, ph);
 
-        // Hachures
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
-        ctx.beginPath();
-        ctx.moveTo(px, py + ph); ctx.lineTo(px + pw, py);
-        ctx.stroke();
-
-        ctx.fillStyle = '#94a3b8';
+        ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 8px monospace';
         ctx.textAlign = 'center';
         ctx.fillText(f.label, px + pw / 2, py + ph / 2 + 3);
       }
     });
 
-    // 7. Tracé du mobilier en vue de dessus
-    model.furniture.forEach(item => {
+    // 8. Tracé du mobilier en vue de dessus détaillée (style Les Sims)
+    (model.furniture || []).forEach(item => {
       const ix = ox + item.x * scale;
       const iy = oy + item.y * scale;
       const iw = item.w * scale;
       const ih = item.d * scale;
+      const isSelected = this.selectedFurnitureId === item.id;
 
-      ctx.fillStyle = item.color;
+      // Ombre portée du meuble
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.fillRect(ix + 2, iy + 2, iw, ih);
+
+      // Corps du meuble
+      ctx.fillStyle = item.color || '#334155';
       ctx.fillRect(ix, iy, iw, ih);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+
+      // Bordure intérieure
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
       ctx.lineWidth = 1;
       ctx.strokeRect(ix, iy, iw, ih);
+
+      // Détails graphiques selon le type
+      if (item.type === 'mannequin_rcp') {
+        // Tête et torse
+        ctx.fillStyle = '#fed7aa';
+        ctx.beginPath();
+        ctx.arc(ix + iw / 2, iy + ih * 0.25, Math.min(iw, ih) * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (item.type === 'dae_mural') {
+        // Croix ou flash
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.4, iy + ih * 0.2, iw * 0.2, ih * 0.6);
+        ctx.fillRect(ix + iw * 0.2, iy + ih * 0.4, iw * 0.6, ih * 0.2);
+      } else if (item.type === 'armoire_pharmacie') {
+        // Croix rouge
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.45, iy + ih * 0.25, iw * 0.1, ih * 0.5);
+        ctx.fillRect(ix + iw * 0.3, iy + ih * 0.45, iw * 0.4, ih * 0.1);
+      } else if (item.type === 'etagere_lots') {
+        // Rayonnages
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(ix, iy + ih * 0.33); ctx.lineTo(ix + iw, iy + ih * 0.33);
+        ctx.moveTo(ix, iy + ih * 0.66); ctx.lineTo(ix + iw, iy + ih * 0.66);
+        ctx.stroke();
+      } else if (item.type === 'lit_garde') {
+        // Oreiller
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.15, iy + ih * 0.08, iw * 0.7, ih * 0.25);
+      }
+
+      // Si le meuble est sélectionné : cadre animé et poignée de rotation
+      if (isSelected) {
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(ix - 3, iy - 3, iw + 6, ih + 6);
+        ctx.setLineDash([]);
+
+        // Poignée de rotation au sommet
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(ix + iw / 2, iy - 10, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // Libellé de l'objet au centre avec ombre lisible
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 8.5px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(item.label, ix + iw / 2 + 1, iy + ih / 2 + 3);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(item.label, ix + iw / 2, iy + ih / 2 + 2);
     });
   },
 
