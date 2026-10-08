@@ -490,8 +490,9 @@ window.ProtecAdvanced = {
         t.current = Math.min(t.goal, (game.vehicles || []).length);
       } else if (t.id === 'task-starter-mat') {
         const st = game.stations[0];
-        const totalStock = Object.values(st?.stock || {}).reduce((sum, n) => sum + (Number(n) || 0), 0);
-        t.current = Math.min(t.goal, totalStock);
+        const stockItems = Object.values(st?.stock || {}).reduce((sum, n) => sum + (Number(n) || 0), 0);
+        const logiItems = game.logistics ? ((game.logistics.oxygenBottles || 0) + (game.logistics.aedPads || 0) + (game.logistics.woundKits || 0) + (game.logistics.cervicalCollars || 0)) : 0;
+        t.current = Math.min(t.goal, Math.max(stockItems, logiItems));
       } else if (t.id === 'task-starter-conv') {
         const convSigned = (game.sncfConvention?.signed || game.cumpConvention?.signed || (game.sdisGarde?.active)) ? 1 : 0;
         t.current = convSigned;
