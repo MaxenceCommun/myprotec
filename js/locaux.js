@@ -1518,14 +1518,9 @@ window.ProtecLocaux = {
           </div>
           
           <div class="flex items-center gap-2">
-            <!-- Commutateur 2D / 3D TEMPS RÉEL (100% ACTIFS) -->
-            <div class="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-700 shadow text-xs font-black">
-              <button type="button" onclick="window.ProtecLocaux.setDimensionMode('2d')" class="px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '2d' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'}">
-                <span>📐</span> Plan 2D CAD
-              </button>
-              <button type="button" onclick="window.ProtecLocaux.setDimensionMode('3d')" class="px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '3d' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'}">
-                <span>🧊</span> Vue 3D Réelle
-              </button>
+            <!-- Mode 2D Uniquement (Vue 3D désactivée pour le moment) -->
+            <div class="flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 shadow text-xs font-black text-slate-300">
+              <span class="text-blue-400 mr-1.5">📐</span> Plan 2D CAD
             </div>
 
             <button type="button" onclick="window.ProtecLocaux.resetCamera()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition flex items-center gap-1">
@@ -1537,14 +1532,14 @@ window.ProtecLocaux = {
           </div>
         </div>
 
-        <!-- ZONE CENTRALE : PLAN CAD 2D / 3D HAUTE DÉFINITION -->
-        <div class="relative w-full h-[400px] sm:h-[450px] rounded-3xl bg-[#0a0e17] border-2 border-slate-800 shadow-xl overflow-hidden select-none">
+        <!-- ZONE CENTRALE : PLAN CAD 2D HAUTE DÉFINITION -->
+        <div class="relative w-full h-[460px] sm:h-[500px] rounded-3xl bg-[#0a0e17] border-2 border-slate-800 shadow-xl overflow-hidden select-none">
           <canvas id="architect-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
 
           <!-- Badge En direct -->
           <div class="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow text-xs font-bold text-white pointer-events-none">
-            <span class="text-orange-400">${this.dimensionMode === '3d' ? '🧊' : '📐'}</span>
-            <span>Plan ${this.dimensionMode === '3d' ? '3D Volumétrique' : '2D d’Architecte CAD'}</span>
+            <span class="text-blue-400">📐</span>
+            <span>Plan d’Architecte 2D CAD</span>
             <span class="text-[9.5px] font-black px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">Éditable</span>
           </div>
 
@@ -1564,15 +1559,15 @@ window.ProtecLocaux = {
               </span>
               <div class="h-4 w-[1px] bg-slate-700"></div>
               <button type="button" onclick="window.ProtecLocaux.rotateSelectedItem()" class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] flex items-center gap-1 transition">
-                <span>🔄</span> Pivoter [R]
+                <span>🔄</span> Pivoter [R] (Gratuit)
               </button>
               <button type="button" onclick="window.ProtecLocaux.deleteSelectedItem()" class="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-[11px] flex items-center gap-1 transition">
-                <span>🗑️</span> Retirer [Suppr]
+                <span>🗑️</span> Revendre [Suppr] (50%)
               </button>
             ` : `
               <span class="text-slate-300 text-[11px] font-medium flex items-center gap-1.5">
                 <span>💡</span>
-                <span>Cliquez sur un meuble pour le déplacer / pivoter • Cliquez sur une pièce pour l'aménager</span>
+                <span>Cliquez sur un meuble pour le déplacer (gratuit) ou pivoter [R] • Cliquez sur une pièce pour l'aménager</span>
               </span>
             `}
           </div>
@@ -1640,20 +1635,27 @@ window.ProtecLocaux = {
   renderEditorToolsHTML(model) {
     const m = model || this.getArchitectModel();
     const selectedRoom = (m.rooms || []).find(r => r.id === this.selectedRoomId) || m.rooms[0];
+    const money = window.game?.resources?.money || 0;
 
     if (this.editorTab === 'furniture') {
       return `
-        <div class="space-y-2">
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-slate-600">Cliquez sur un meuble pour le placer dans <strong>${selectedRoom?.name?.split('\n')[0] || 'la pièce'}</strong> :</span>
-            <span class="text-pc-blue font-bold text-[11px]">Déplaçable à la souris / [R] pour pivoter</span>
+        <div class="space-y-2.5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1 pb-1 border-b border-slate-100">
+            <span class="text-slate-600">Sélectionnez un mobilier à acheter et placer dans <strong>${selectedRoom?.name?.split('\n')[0] || 'la pièce'}</strong> :</span>
+            <div class="flex items-center gap-3">
+              <span class="text-xs font-bold text-slate-700">Trésorerie disponible : <strong class="text-emerald-600 font-black">${money.toLocaleString('fr-FR')} €</strong></span>
+              <span class="text-pc-blue font-bold text-[11px] hidden sm:inline">• Déplacement & rotation [R] 100% gratuits</span>
+            </div>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
             ${this.FURNITURE_CATALOG.map(item => `
               <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('${item.type}')" class="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50/80 border border-slate-200 hover:border-pc-blue text-slate-800 transition flex flex-col items-center justify-center gap-1 shadow-2xs group active:scale-95">
                 <span class="text-xl group-hover:scale-110 transition">${item.icon}</span>
                 <span class="text-[10px] font-bold text-center leading-tight truncate w-full">${item.name}</span>
-                <span class="text-[9px] text-slate-500 font-mono">${item.w}m × ${item.d}m</span>
+                <div class="flex items-center justify-between w-full px-1 text-[9px]">
+                  <span class="text-slate-500 font-mono">${item.w}m × ${item.d}m</span>
+                  <span class="font-black text-emerald-700 bg-emerald-100/70 px-1 rounded">${item.cost} €</span>
+                </div>
               </button>
             `).join('')}
           </div>
@@ -1663,29 +1665,41 @@ window.ProtecLocaux = {
 
     if (this.editorTab === 'doors') {
       return `
-        <div class="space-y-2">
-          <div class="text-xs text-slate-600">Ajoutez des ouvertures (portes battantes ou baies vitrées) sur les murs :</div>
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between text-xs pb-1 border-b border-slate-100">
+            <span class="text-slate-600">Ajoutez des ouvertures sur les murs :</span>
+            <span class="text-xs font-bold text-slate-700">Trésorerie disponible : <strong class="text-emerald-600 font-black">${money.toLocaleString('fr-FR')} €</strong></span>
+          </div>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            <button type="button" onclick="window.ProtecLocaux.addDoorItem('W')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center gap-3">
-              <span class="text-2xl">🚪</span>
-              <div>
-                <strong class="block text-xs font-black text-slate-900">+ Porte d'Entrée (93cm)</strong>
-                <span class="text-[10.5px] text-slate-500">Accès parking / extérieur</span>
+            <button type="button" onclick="window.ProtecLocaux.addDoorItem('W')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">🚪</span>
+                <div>
+                  <strong class="block text-xs font-black text-slate-900">+ Porte d'Entrée (93cm)</strong>
+                  <span class="text-[10.5px] text-slate-500">Accès parking / extérieur</span>
+                </div>
               </div>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">120 €</span>
             </button>
-            <button type="button" onclick="window.ProtecLocaux.addDoorItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center gap-3">
-              <span class="text-2xl">🚪</span>
-              <div>
-                <strong class="block text-xs font-black text-slate-900">+ Porte Intérieure (83cm)</strong>
-                <span class="text-[10.5px] text-slate-500">Cloison de communication</span>
+            <button type="button" onclick="window.ProtecLocaux.addDoorItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">🚪</span>
+                <div>
+                  <strong class="block text-xs font-black text-slate-900">+ Porte Intérieure (83cm)</strong>
+                  <span class="text-[10.5px] text-slate-500">Cloison de communication</span>
+                </div>
               </div>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">120 €</span>
             </button>
-            <button type="button" onclick="window.ProtecLocaux.addWindowItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center gap-3">
-              <span class="text-2xl">🪟</span>
-              <div>
-                <strong class="block text-xs font-black text-slate-900">+ Fenêtre Cyan (1.40m)</strong>
-                <span class="text-[10.5px] text-slate-500">Double vitrage isolant</span>
+            <button type="button" onclick="window.ProtecLocaux.addWindowItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">🪟</span>
+                <div>
+                  <strong class="block text-xs font-black text-slate-900">+ Fenêtre Cyan (1.40m)</strong>
+                  <span class="text-[10.5px] text-slate-500">Double vitrage isolant</span>
+                </div>
               </div>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">180 €</span>
             </button>
           </div>
         </div>
@@ -1695,7 +1709,7 @@ window.ProtecLocaux = {
     if (this.editorTab === 'rooms') {
       return `
         <div class="space-y-2">
-          <div class="text-xs text-slate-600">Affectez la vocation et la fonction de chaque salle de votre caserne :</div>
+          <div class="text-xs text-slate-600">Affectez la vocation et la fonction de chaque salle de votre caserne (gratuit) :</div>
           <div id="starter-rooms-list" class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             ${this.renderRoomsListHTML(m)}
           </div>
@@ -1707,15 +1721,16 @@ window.ProtecLocaux = {
       return `
         <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div class="space-y-0.5">
-            <strong class="font-black text-amber-900 block flex items-center gap-1.5">
-              <span>🏗️</span> Extension de Caserne (Nouvelle Pièce)
+            <strong class="font-black text-amber-900 flex items-center gap-1.5">
+              <span>🏗️</span> Extension de Caserne (Nouvelle Pièce de 16.1 m²)
             </strong>
             <p class="text-[11px] text-amber-800">
-              Agrandissez le bâtiment de plain-pied avec une 4ème pièce dédiée (Foyer des bénévoles ou Dortoir de garde SAMU, +16.1 m²).
+              Agrandissez le bâtiment de plain-pied avec une 4ème pièce dédiée (Foyer des bénévoles ou Dortoir de garde SAMU).
             </p>
           </div>
-          <button type="button" onclick="window.ProtecLocaux.addCustomRoom()" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow transition flex-shrink-0">
-            ➕ Construire l'Extension (+16 m²)
+          <button type="button" onclick="window.ProtecLocaux.addCustomRoom()" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow transition flex-shrink-0 flex items-center gap-1.5 active:scale-95">
+            <span>➕ Bâtir l'Extension (+16 m²)</span>
+            <span class="bg-amber-800/60 px-1.5 py-0.5 rounded text-[10px]">2 500 €</span>
           </button>
         </div>
       `;
@@ -1798,61 +1813,24 @@ window.ProtecLocaux = {
     room.name = titles[newRole] || 'Pièce Opérationnelle';
     room.color = colors[newRole] || '#161d2b';
 
-    // Remplacer le mobilier par le mobilier adapté à la vocation
-    this.repopulateRoomFurniture(model, room, newRole);
-
     this.selectRoom(roomId);
     this.renderArchitectScene();
   },
 
-  repopulateRoomFurniture(model, room, role) {
-    model.furniture = (model.furniture || []).filter(f => f.roomId !== room.id);
-    const rx = room.x;
-    const ry = room.y;
-
-    if (role === 'bureau') {
-      model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'bureau', x: rx + 1.2, y: ry + 1.0, w: 1.8, d: 0.9, color: '#334155', label: 'Bureau Direction', rotation: 0 },
-        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'chaise', x: rx + 1.8, y: ry + 0.4, w: 0.5, d: 0.5, color: '#0284c7', label: 'Fauteuil', rotation: 0 },
-        { id: `f_${Date.now()}_3`, roomId: room.id, type: 'bureau', x: rx + 3.8, y: ry + 0.8, w: 0.5, d: 1.8, color: '#1e293b', label: 'Baie Radio PC', rotation: 0 },
-        { id: `f_${Date.now()}_4`, roomId: room.id, type: 'chaise', x: rx + 1.4, y: ry + 2.4, w: 1.4, d: 0.5, color: '#475569', label: 'Chaises Visiteurs', rotation: 0 }
-      );
-    } else if (role === 'formation') {
-      model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'table_formation', x: rx + 1.0, y: ry + 1.8, w: 2.2, d: 1.1, color: '#ea580c', label: 'Table Formation', rotation: 0 },
-        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'tableau_blanc', x: rx + 1.0, y: ry + 0.3, w: 2.2, d: 0.2, color: '#f8fafc', label: 'Tableau Blanc', rotation: 0 },
-        { id: `f_${Date.now()}_3`, roomId: room.id, type: 'mannequin_rcp', x: rx + 3.6, y: ry + 1.0, w: 0.6, d: 1.2, color: '#f59e0b', label: 'Mannequin RCP', rotation: 0 },
-        { id: `f_${Date.now()}_4`, roomId: room.id, type: 'dae_mural', x: rx + 4.0, y: ry + 2.8, w: 0.35, d: 0.35, color: '#10b981', label: 'DAE Formation', rotation: 0 }
-      );
-    } else if (role === 'stockage') {
-      model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'etagere_lots', x: rx + 0.6, y: ry + 0.8, w: 0.6, d: 2.4, color: '#475569', label: 'Rayonnage Lots A/B', rotation: 0 },
-        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'etagere_lots', x: rx + 1.6, y: ry + 0.8, w: 0.6, d: 2.4, color: '#475569', label: 'Rayonnage Lots A/B', rotation: 0 },
-        { id: `f_${Date.now()}_3`, roomId: room.id, type: 'armoire_pharmacie', x: rx + 4.0, y: ry + 4.0, w: 1.2, d: 0.4, color: '#dc2626', label: 'Pharmacie Secours', rotation: 0 },
-        { id: `f_${Date.now()}_4`, roomId: room.id, type: 'casiers_vestiaire', x: rx + 8.2, y: ry + 0.8, w: 0.6, d: 2.5, color: '#0f172a', label: 'Casiers Tenues F1', rotation: 0 },
-        { id: `f_${Date.now()}_5`, roomId: room.id, type: 'lit_garde', x: rx + 6.0, y: ry + 2.0, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit de Camp Astreinte', rotation: 0 }
-      );
-    } else if (role === 'detente') {
-      model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'canape_detente', x: rx + 0.8, y: ry + 1.0, w: 2.0, d: 0.9, color: '#059669', label: 'Canapé Foyer', rotation: 0 },
-        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'table_formation', x: rx + 1.0, y: ry + 2.3, w: 1.4, d: 0.7, color: '#f8fafc', label: 'Table Basse', rotation: 0 },
-        { id: `f_${Date.now()}_3`, roomId: room.id, type: 'machine_cafe', x: rx + 3.2, y: ry + 0.6, w: 0.8, d: 0.6, color: '#d97706', label: 'Machine Café', rotation: 0 }
-      );
-    } else if (role === 'dortoir') {
-      model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'lit_garde', x: rx + 0.8, y: ry + 0.8, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit Garde 1', rotation: 0 },
-        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'lit_garde', x: rx + 2.4, y: ry + 0.8, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit Garde 2', rotation: 0 },
-        { id: `f_${Date.now()}_3`, roomId: room.id, type: 'casiers_vestiaire', x: rx + 3.8, y: ry + 0.8, w: 0.5, d: 1.8, color: '#334155', label: 'Armoires Garde', rotation: 0 }
-      );
-    } else if (role === 'vestiaires') {
-      model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'casiers_vestiaire', x: rx + 0.6, y: ry + 0.6, w: 0.6, d: 3.0, color: '#0f172a', label: 'Casiers F1', rotation: 0 },
-        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'casiers_vestiaire', x: rx + 3.4, y: ry + 0.6, w: 0.6, d: 3.0, color: '#0f172a', label: 'Casiers F1', rotation: 0 }
-      );
-    }
-  },
-
   addDoorItem(wall = 'W') {
+    const cost = 120;
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour poser une porte intérieure. Solde : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Porte Installée (-120 €)', 'Nouvelle porte intérieure positionnée sur le plan.', 'blue');
+    }
+
     const model = this.getArchitectModel();
     const newDoor = {
       id: `d_${Date.now()}`,
@@ -1865,10 +1843,24 @@ window.ProtecLocaux = {
     };
     model.doors.push(newDoor);
     this.renderArchitectScene();
-    if (window.game) window.game.showToast('Porte Ajoutée', 'Nouvelle porte intérieure positionnée sur le plan.', 'blue');
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
   },
 
   addWindowItem(wall = 'N') {
+    const cost = 180;
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour poser une ouverture vitrée. Solde : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Fenêtre Installée (-180 €)', 'Nouvelle ouverture double vitrage posée.', 'cyan');
+    }
+
     const model = this.getArchitectModel();
     const newWindow = {
       id: `w_${Date.now()}`,
@@ -1880,10 +1872,24 @@ window.ProtecLocaux = {
     };
     model.windows.push(newWindow);
     this.renderArchitectScene();
-    if (window.game) window.game.showToast('Fenêtre Ajoutée', 'Nouvelle ouverture vitrée posée sur le plan.', 'cyan');
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
   },
 
   addCustomRoom() {
+    const cost = 2500;
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `La construction d'une extension de 16 m² requiert ${cost.toLocaleString('fr-FR')} €. Solde : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Extension Bâtie (-2 500 €)', 'Extension créée : Nouvelle salle disponible (+16 m²).', 'green');
+    }
+
     const model = this.getArchitectModel();
     const count = (model.rooms || []).length;
     const newRoomId = `room_${count + 1}`;
@@ -1918,18 +1924,30 @@ window.ProtecLocaux = {
       label: 'Porte Foyer (83cm)',
       isMain: false
     });
-    // Meubles foyer
-    this.repopulateRoomFurniture(model, newRoom, 'detente');
 
     this.selectRoom(newRoomId);
     this.fitView();
     this.renderArchitectScene();
-    if (window.game) window.game.showToast('Nouvelle Salle Construite !', 'Extension créée : Foyer & Détente des Bénévoles (+16 m²).', 'green');
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
   },
 
   addFurnitureItem(type) {
     const catalogItem = this.FURNITURE_CATALOG.find(c => c.type === type);
     if (!catalogItem) return;
+
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < catalogItem.cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous faut ${catalogItem.cost} € pour acheter « ${catalogItem.name} ». Solde disponible : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= catalogItem.cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Mobilier Acquis (-' + catalogItem.cost + ' €)', `« ${catalogItem.name} » ajouté à votre caserne.`, 'blue');
+    }
+
     const model = this.getArchitectModel();
     const room = (model.rooms || []).find(r => r.id === this.selectedRoomId) || model.rooms[0];
     if (!room) return;
@@ -1961,13 +1979,16 @@ window.ProtecLocaux = {
         </span>
         <div class="h-4 w-[1px] bg-slate-700"></div>
         <button type="button" onclick="window.ProtecLocaux.rotateSelectedItem()" class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] flex items-center gap-1 transition">
-          <span>🔄</span> Pivoter [R]
+          <span>🔄</span> Pivoter [R] (Gratuit)
         </button>
         <button type="button" onclick="window.ProtecLocaux.deleteSelectedItem()" class="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-[11px] flex items-center gap-1 transition">
-          <span>🗑️</span> Retirer [Suppr]
+          <span>🗑️</span> Revendre [Suppr] (50%)
         </button>
       `;
     }
+
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
   },
 
   rotateSelectedItem() {
@@ -1985,6 +2006,20 @@ window.ProtecLocaux = {
   deleteSelectedItem() {
     if (!this.selectedFurnitureId) return;
     const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === this.selectedFurnitureId);
+    if (!item) return;
+
+    // Remboursement à 50% de la valeur d'achat
+    const catItem = this.FURNITURE_CATALOG.find(c => c.type === item.type);
+    const refund = catItem ? Math.round(catItem.cost * 0.5) : 0;
+    const game = window.game;
+    if (game && game.resources && refund > 0) {
+      game.resources.money += refund;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Mobilier Revendu (+' + refund + ' €)', `« ${item.label} » revendu à 50% de son prix d'achat.`, 'green');
+    }
+
     model.furniture = (model.furniture || []).filter(f => f.id !== this.selectedFurnitureId);
     this.selectedFurnitureId = null;
     this.renderArchitectScene();
@@ -1994,10 +2029,13 @@ window.ProtecLocaux = {
       contextBar.innerHTML = `
         <span class="text-slate-300 text-[11px] font-medium flex items-center gap-1.5">
           <span>💡</span>
-          <span>Cliquez sur un meuble pour le déplacer / pivoter • Cliquez sur une pièce pour l'aménager</span>
+          <span>Cliquez sur un meuble pour le déplacer (gratuit) ou pivoter [R] • Cliquez sur une pièce pour l'aménager</span>
         </span>
       `;
     }
+
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
   },
 
   // Rendu selon l'onglet actif
@@ -2122,24 +2160,19 @@ window.ProtecLocaux = {
           <!-- CANVAS PRINCIPAL HAUTE DÉFINITION -->
           <canvas id="architect-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
 
-          <!-- 1. En-tête gauche : Badge Plan 2D/3D & Statut En direct -->
+          <!-- 1. En-tête gauche : Badge Plan 2D & Statut En direct -->
           <div class="absolute top-3.5 left-3.5 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-lg text-xs font-bold text-white pointer-events-none">
-            <span class="text-orange-400 text-sm">🏠</span>
-            <span>Plan ${this.dimensionMode === '3d' ? '3D' : '2D'}</span>
+            <span class="text-blue-400 text-sm">📐</span>
+            <span>Plan 2D CAD</span>
             <span class="flex items-center gap-1.5 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               En direct (1)
             </span>
           </div>
 
-          <!-- 2. En-tête centre : Commutateur [ 📐 2D | 🧊 3D ] -->
-          <div class="absolute top-3.5 left-1/2 -translate-x-1/2 z-20 flex items-center p-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-xl text-xs font-black">
-            <button onclick="window.ProtecLocaux.setDimensionMode('2d')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '2d' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}">
-              <span class="text-xs">📐</span> 2D
-            </button>
-            <button onclick="window.ProtecLocaux.setDimensionMode('3d')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '3d' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}">
-              <span class="text-xs">🧊</span> 3D
-            </button>
+          <!-- 2. En-tête centre : Badge 2D -->
+          <div class="absolute top-3.5 left-1/2 -translate-x-1/2 z-20 flex items-center px-3.5 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-xl text-xs font-black text-slate-200 pointer-events-none">
+            <span class="text-blue-400 mr-1.5">📐</span> Plan d'Architecte 2D
           </div>
 
           <!-- 3. En-tête droite : Boutons + et { } -->
@@ -2179,9 +2212,7 @@ window.ProtecLocaux = {
 
           <!-- 5. Barre d'astuces contextuelle inférieure -->
           <div class="absolute bottom-3.5 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 rounded-xl bg-slate-900/85 backdrop-blur border border-slate-700/70 shadow-xl text-[11px] font-semibold text-slate-300 pointer-events-none flex items-center gap-2 text-center whitespace-nowrap">
-            ${this.dimensionMode === '3d'
-              ? 'Clic sur un objet: Déplacer • Clic dans le vide: Déplacer la caméra (Orbite / Pan) • Molette: Zoom'
-              : 'Clic pour sélectionner • Clic droit / Molette: Vue • [R] Pivoter • Glisser: Déplacer'}
+            Clic pour sélectionner • Clic droit / Molette: Vue • [R] Pivoter (Gratuit) • Glisser: Déplacer (Gratuit)
           </div>
 
         </div>
@@ -2226,11 +2257,11 @@ window.ProtecLocaux = {
   },
 
   // =========================================================================
-  // MOTEUR GRAPHIQUE ARCHITECTE 2D / 3D TEMPS RÉEL (CANVAS RENDERING ENGINE)
+  // MOTEUR GRAPHIQUE ARCHITECTE 2D TEMPS RÉEL (CANVAS RENDERING ENGINE)
   // =========================================================================
 
   setDimensionMode(mode) {
-    this.dimensionMode = mode;
+    this.dimensionMode = '2d'; // Vue 3D désactivée pour le moment
     this.renderModal(window.game);
   },
 
@@ -2243,11 +2274,7 @@ window.ProtecLocaux = {
   },
 
   zoomCamera(factor) {
-    if (this.dimensionMode === '3d') {
-      this.camera3D.zoom = Math.max(18, Math.min(95, this.camera3D.zoom * factor));
-    } else {
-      this.camera2D.zoom = Math.max(20, Math.min(100, this.camera2D.zoom * factor));
-    }
+    this.camera2D.zoom = Math.max(20, Math.min(100, this.camera2D.zoom * factor));
     this.renderArchitectScene();
   },
 
@@ -2257,15 +2284,15 @@ window.ProtecLocaux = {
     const h = height || (canvas ? canvas.height : 500);
 
     // Le complexe complet (parking + bâtiment) va de x: 0.8 à 15.8 (largeur ~15m) et y: 1.2 à 10.8 (hauteur ~9.6m).
-    // On calibre le zoom pour afficher l'ensemble avec une marge aérée
-    const scaleX = (w * 0.84) / 16.5;
-    const scaleY = (h * 0.84) / 11.0;
+    // On calibre le zoom pour afficher l'ensemble avec un dégagement suffisant
+    const scaleX = (w * 0.82) / 16.5;
+    const scaleY = ((h - 70) * 0.82) / 11.0;
     const optimalScale = Math.max(16, Math.min(38, Math.min(scaleX, scaleY)));
 
     this.camera2D = {
       zoom: optimalScale,
       panX: 0,
-      panY: 0
+      panY: -32 // Remonté pour ne pas masquer le mur sud / TGBT par la barre contextuelle
     };
     this.camera3D = {
       yaw: -0.72,
@@ -2274,7 +2301,6 @@ window.ProtecLocaux = {
       panX: 0,
       panY: -15
     };
-    this.renderArchitectScene();
   },
 
   resetCamera() {
@@ -2591,25 +2617,8 @@ window.ProtecLocaux = {
         { id: 'extincteur_1', x: 6.3, y: 5.8, w: 0.25, h: 0.25, label: 'EXT', type: 'extinguisher' },
         { id: 'extincteur_2', x: 10.9, y: 5.3, w: 0.25, h: 0.25, label: 'EXT', type: 'extinguisher' }
       ],
-      // 7. Mobilier de départ réaliste de la Protection Civile
-      furniture: [
-        // Pièce 1 : Accueil & Direction
-        { id: 'f_init_1', roomId: 'room_1', type: 'bureau', x: 7.4, y: 2.5, w: 1.8, d: 0.9, color: '#334155', label: 'Bureau Direction', rotation: 0 },
-        { id: 'f_init_2', roomId: 'room_1', type: 'chaise', x: 8.0, y: 1.9, w: 0.5, d: 0.5, color: '#0284c7', label: 'Fauteuil', rotation: 0 },
-        { id: 'f_init_3', roomId: 'room_1', type: 'bureau', x: 9.8, y: 2.2, w: 0.5, d: 1.8, color: '#1e293b', label: 'Baie Radio PC', rotation: 0 },
-        { id: 'f_init_4', roomId: 'room_1', type: 'chaise', x: 7.6, y: 3.8, w: 1.4, d: 0.5, color: '#475569', label: 'Chaises Visiteurs', rotation: 0 },
-        // Pièce 2 : Salle de Formation
-        { id: 'f_init_5', roomId: 'room_2', type: 'table_formation', x: 11.8, y: 3.2, w: 2.2, d: 1.1, color: '#ea580c', label: 'Table Formation PSC1', rotation: 0 },
-        { id: 'f_init_6', roomId: 'room_2', type: 'tableau_blanc', x: 11.8, y: 1.7, w: 2.2, d: 0.2, color: '#f8fafc', label: 'Tableau Blanc', rotation: 0 },
-        { id: 'f_init_7', roomId: 'room_2', type: 'mannequin_rcp', x: 14.5, y: 2.4, w: 0.6, d: 1.2, color: '#f59e0b', label: 'Mannequin RCP', rotation: 0 },
-        { id: 'f_init_8', roomId: 'room_2', type: 'dae_mural', x: 15.1, y: 4.2, w: 0.35, d: 0.35, color: '#10b981', label: 'DAE Formation', rotation: 0 },
-        // Pièce 3 : Réserve Lots A/B & Vestiaires
-        { id: 'f_init_9', roomId: 'room_3', type: 'etagere_lots', x: 6.8, y: 6.4, w: 0.6, d: 2.4, color: '#475569', label: 'Rayonnage Lots A/B', rotation: 0 },
-        { id: 'f_init_10', roomId: 'room_3', type: 'etagere_lots', x: 7.8, y: 6.4, w: 0.6, d: 2.4, color: '#475569', label: 'Rayonnage Lots A/B', rotation: 0 },
-        { id: 'f_init_11', roomId: 'room_3', type: 'armoire_pharmacie', x: 10.2, y: 9.8, w: 1.2, d: 0.4, color: '#dc2626', label: 'Pharmacie Secours', rotation: 0 },
-        { id: 'f_init_12', roomId: 'room_3', type: 'casiers_vestiaire', x: 14.6, y: 6.4, w: 0.6, d: 2.5, color: '#0f172a', label: 'Casiers Tenues F1', rotation: 0 },
-        { id: 'f_init_13', roomId: 'room_3', type: 'lit_garde', x: 12.0, y: 7.8, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit de Camp Astreinte', rotation: 0 }
-      ]
+      // 7. Mobilier (Initialement vide : au joueur d'aménager son antenne)
+      furniture: []
     };
   },
 
@@ -2747,14 +2756,14 @@ window.ProtecLocaux = {
         ctx.fillRect(rx, ry, rw, rh);
       }
 
-      // Cartouche discret d'identification de la pièce
+      // Cartouche discret d'identification de la pièce (centré au milieu de la pièce)
       const roomTitle = r.name.split('\n')[0];
       const roomSubtitle = `${r.area.toFixed(1)} m² • ${r.w.toFixed(1)}m × ${r.h.toFixed(1)}m`;
       
       const badgeW = Math.min(rw - 16, 200);
       const badgeH = 34;
       const badgeX = rx + rw / 2 - badgeW / 2;
-      const badgeY = ry + 10;
+      const badgeY = ry + rh / 2 - badgeH / 2;
 
       ctx.fillStyle = isSelected ? 'rgba(30, 58, 138, 0.85)' : 'rgba(15, 23, 42, 0.75)';
       ctx.beginPath();
@@ -2857,7 +2866,7 @@ window.ProtecLocaux = {
       }
     });
 
-    // 6. Tracé des fenêtres (cyan double vitrage)
+    // 6. Tracé des fenêtres (cyan double vitrage avec cotes dégagées)
     model.windows.forEach(w => {
       const wx = ox + w.x * scale;
       const wy = oy + w.y * scale;
@@ -2873,22 +2882,22 @@ window.ProtecLocaux = {
       }
       ctx.stroke();
 
-      // Cote de fenêtre
+      // Cote de fenêtre (bien dégagée à l'extérieur des murs)
       ctx.fillStyle = '#38bdf8';
       ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center';
       if (w.wall === 'N' || w.wall === 'S') {
-        ctx.fillText(w.label, wx + wlen / 2, wy + (w.wall === 'N' ? -8 : 14));
+        ctx.fillText(w.label, wx + wlen / 2, wy + (w.wall === 'N' ? -13 : 15));
       } else {
         ctx.save();
-        ctx.translate(wx + (w.wall === 'W' ? -10 : 12), wy + wlen / 2);
+        ctx.translate(wx + (w.wall === 'W' ? -12 : 14), wy + wlen / 2);
         ctx.rotate(-Math.PI / 2);
         ctx.fillText(w.label, 0, 0);
         ctx.restore();
       }
     });
 
-    // 7. Tracé des équipements fixes (radiateurs, extincteurs, TGBT)
+    // 7. Tracé des équipements techniques fixes (radiateurs, extincteurs, TGBT)
     model.fixtures.forEach(f => {
       if (f.type === 'radiator') {
         const fx = ox + f.x * scale;
@@ -2897,7 +2906,7 @@ window.ProtecLocaux = {
 
         ctx.strokeStyle = '#ea580c';
         ctx.lineWidth = 4;
-        ctx.setLineDash([2, 2]);
+        ctx.setLineDash([3, 2]);
         ctx.beginPath();
         if (f.wall === 'N' || f.wall === 'S') {
           ctx.moveTo(fx, fy + (f.wall === 'N' ? 5 : -5));
@@ -2908,11 +2917,7 @@ window.ProtecLocaux = {
         }
         ctx.stroke();
         ctx.setLineDash([]);
-
-        ctx.fillStyle = '#ea580c';
-        ctx.font = 'bold 8px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(f.label, fx + flen / 2, fy + (f.wall === 'N' ? 16 : -10));
+        // Symbole technique strié épuré (sans texte parasite orange qui masque les ouvertures)
       } else if (f.type === 'duct' || f.type === 'extinguisher') {
         const px = ox + f.x * scale;
         const py = oy + f.y * scale;

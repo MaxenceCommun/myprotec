@@ -581,6 +581,15 @@ class ProtecGame {
       this.showOnboardingModal();
     } else {
       this.showToast('Partie chargée', `Bienvenue ! Votre antenne compte ${this.volunteers.length} secouristes.`, 'blue');
+      // Si l'antenne n'a pas encore validé son aménagement d'ouverture, ouvrir automatiquement le plan 2D pour lancer la partie
+      const firstSt = this.stations[0];
+      if (firstSt && (!firstSt.premises || !firstSt.premises.architecture)) {
+        setTimeout(() => {
+          if (window.ProtecLocaux && typeof window.ProtecLocaux.openInitialSetupModal === 'function') {
+            window.ProtecLocaux.openInitialSetupModal(this, firstSt.id);
+          }
+        }, 500);
+      }
     }
   }
 
@@ -1249,9 +1258,11 @@ class ProtecGame {
       window.ProtecSystems.fetchRealWeather(this, true);
     }
 
-    this.showToast('Bâtiment Implanté !', `${stationName} est désormais implantée sur le secteur. Procédez à l'aménagement initial de vos pièces.`, 'green');
-    if (isFirst && window.ProtecLocaux && typeof window.ProtecLocaux.openInitialSetupModal === 'function') {
-      window.ProtecLocaux.openInitialSetupModal(this, stationId);
+    this.showToast('Bâtiment Implanté !', `${stationName} est désormais implantée sur le secteur. Ouverture du plan d'aménagement...`, 'green');
+    if (window.ProtecLocaux && typeof window.ProtecLocaux.openInitialSetupModal === 'function') {
+      setTimeout(() => {
+        window.ProtecLocaux.openInitialSetupModal(this, stationId);
+      }, 200);
     } else {
       this.openStationDetails(stationId);
     }
@@ -2763,6 +2774,113 @@ class ProtecGame {
     this.saveGame();
   }
 
+  // --- GESTION DES IDENTITÉS DES BÉNÉVOLES (NOM ET PRÉNOM UNIQUEMENT) ---
+  openRenameVolunteerModal(volunteerId) {
+    const v = this.volunteers.find(vol => vol.id === volunteerId);
+    if (!v) return;
+
+    const clean = this.cleanVolunteerName(v.name);
+    const parts = clean.trim().split(/\s+/);
+    const firstName = parts[0] || '';
+    const lastName = parts.slice(1).join(' ') || '';
+
+    const modalId = 'rename-volunteer-modal';
+    let modal = document.getElementById(modalId);
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = modalId;
+      modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-md p-6 shadow-2xl border border-white/95 space-y-4 animate-scale-in">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-2xl bg-pc-blue/10 text-pc-blue flex items-center justify-center text-xl">
+              ✏️
+            </div>
+            <div>
+              <h3 class="text-base font-black text-slate-900">Identité du Bénévole</h3>
+              <p class="text-xs text-slate-500">Modification du prénom et du nom uniquement</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('${modalId}').remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm transition">
+            ✕
+          </button>
+        </div>
+
+        <div class="p-3 rounded-2xl bg-blue-50/60 border border-blue-200 text-xs flex items-center gap-2.5 text-blue-900">
+          <span class="text-lg">ℹ️</span>
+          <span>Grade actuel : <strong>${v.rank}</strong> (${v.role || 'Secouriste'}). Les compétences et l'expérience restent inchangées.</span>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">Prénom</label>
+            <input id="rename-vol-firstname" type="text" value="${firstName.replace(/"/g, '&quot;')}" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-pc-blue focus:ring-2 focus:ring-pc-blue/30 text-xs font-bold text-slate-900 bg-white" placeholder="ex: Alexandre" />
+          </div>
+
+          <div>
+            <label class="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">Nom</label>
+            <input id="rename-vol-lastname" type="text" value="${lastName.replace(/"/g, '&quot;')}" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-pc-blue focus:ring-2 focus:ring-pc-blue/30 text-xs font-bold text-slate-900 bg-white" placeholder="ex: Roux" />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+          <button onclick="document.getElementById('${modalId}').remove()" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">
+            Annuler
+          </button>
+          <button onclick="window.game.confirmRenameVolunteer('${v.id}')" class="px-5 py-2.5 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+            <span>Enregistrer l'identité</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    setTimeout(() => {
+      const input = document.getElementById('rename-vol-firstname');
+      if (input) { input.focus(); input.select(); }
+    }, 100);
+  }
+
+  confirmRenameVolunteer(volunteerId) {
+    const v = this.volunteers.find(vol => vol.id === volunteerId);
+    if (!v) return;
+
+    const fnInput = document.getElementById('rename-vol-firstname');
+    const lnInput = document.getElementById('rename-vol-lastname');
+    const firstName = fnInput ? fnInput.value.trim() : '';
+    const lastName = lnInput ? lnInput.value.trim() : '';
+
+    if (!firstName && !lastName) {
+      this.showToast('Champ requis', 'Veuillez saisir au moins un prénom ou un nom.', 'orange');
+      return;
+    }
+
+    const newFullName = this.cleanVolunteerName(`${firstName} ${lastName}`.trim());
+    v.name = newFullName;
+
+    const modal = document.getElementById('rename-volunteer-modal');
+    if (modal) modal.remove();
+
+    this.saveGame();
+    this.updateStatsUI();
+    this.showToast('Identité Mise à Jour', `Le bénévole s'appelle désormais « ${newFullName} ».`, 'green');
+
+    // Rafraîchir l'affichage actif
+    if (this.selectedStationId) {
+      this.openStationDetails(this.selectedStationId);
+    }
+    const currentModule = document.getElementById('main-modal');
+    if (currentModule && !currentModule.classList.contains('hidden')) {
+      const title = document.getElementById('modal-title');
+      if (title && title.textContent.includes('Recrutement')) {
+        this.openModule('recrutement', true);
+      }
+    }
+  }
+
   // Nettoyage de sécurité pour garantir qu'aucune mention de genre ne persiste dans les noms ou tooltips
   cleanVolunteerName(name) {
     if (!name) return 'Secouriste';
@@ -3899,7 +4017,8 @@ class ProtecGame {
                   ${this.getVolunteerAvatarHTML(v)}
                   <div>
                     <div class="font-black text-slate-900 flex items-center gap-1.5">
-                      ${v.name}
+                      <span>${v.name}</span>
+                      <button type="button" onclick="window.game.openRenameVolunteerModal('${v.id}')" class="text-slate-400 hover:text-pc-blue p-0.5 rounded transition text-xs cursor-pointer" title="Modifier l'identité (prénom et nom)">✏️</button>
                       ${this.getVolunteerSkillsPopoverHTML(v)}
                     </div>
                   </div>
@@ -5478,7 +5597,10 @@ class ProtecGame {
                         <div class="flex items-center gap-2">
                           ${this.getVolunteerAvatarHTML(v, 'w-8 h-8')}
                           <div>
-                            <div class="font-black text-slate-900 leading-tight">${v.name}</div>
+                            <div class="font-black text-slate-900 leading-tight flex items-center gap-1.5">
+                              <span>${v.name}</span>
+                              <button type="button" onclick="window.game.openRenameVolunteerModal('${v.id}')" class="text-slate-400 hover:text-pc-blue p-0.5 rounded transition text-xs cursor-pointer" title="Modifier l'identité (prénom et nom)">✏️</button>
+                            </div>
                             <div class="text-[10px] text-slate-500 font-semibold">${v.rank} • ${contractLabel}</div>
                             ${this.getVolunteerSkillsPopoverHTML(v)}
                           </div>
