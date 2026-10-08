@@ -189,10 +189,16 @@ class ProtecGame {
 
   // --- INITIALISATION DU MULTIJOUEUR ---
   initMultiplayer() {
-    // 1. Récupération de l'état initial du serveur
+    this.isBackendOnline = false;
+
+    // 1. Détection de disponibilité du serveur backend optionnel
     fetch('/api/state')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`Backend non disponible (HTTP ${res.status})`);
+        return res.json();
+      })
       .then(data => {
+        this.isBackendOnline = true;
         if (data.alliances) this.alliances = data.alliances;
         if (data.allianceStations) {
           // FILTRE STRICT : Ne JAMAIS inclure d'antennes fictives système ni nos propres antennes
@@ -238,10 +244,24 @@ class ProtecGame {
             }
           }).catch(() => {});
         }
+
+        // 2. Connexion SSE (Server-Sent Events) uniquement si le backend est actif
+        if (window.EventSource) {
+          const evtSource = new EventSource('/api/events');
+          evtSource.onmessage = (e) => {
+            try {
+              const { type, data } = JSON.parse(e.data);
+              this.handleMultiplayerEvent(type, data);
+            } catch (err) {}
+          };
+          evtSource.onerror = () => {
+            evtSource.close();
+          };
+        }
       })
-      .catch(err => {
-        console.log('Mode hors ligne serveur:', err);
-        // Tentative Supabase autonome
+      .catch(() => {
+        // Mode autonome / Cloud direct (Supabase) : aucun message d'erreur inutile
+        this.isBackendOnline = false;
         if (window.ProtecSupabase && window.ProtecSupabase.client) {
           window.ProtecSupabase.getAllianceStations(this.player.id).then(supaStations => {
             if (supaStations && supaStations.length > 0) {
@@ -263,22 +283,6 @@ class ProtecGame {
           }).catch(() => {});
         }
       });
-
-    // 2. Connexion SSE (Server-Sent Events) en temps réel
-    if (window.EventSource) {
-      const evtSource = new EventSource('/api/events');
-      evtSource.onmessage = (e) => {
-        try {
-          const { type, data } = JSON.parse(e.data);
-          this.handleMultiplayerEvent(type, data);
-        } catch (err) {
-          console.warn('Erreur message SSE:', err);
-        }
-      };
-      evtSource.onerror = () => {
-        // En cas de coupure temporaire, EventSource reconnecte tout seul
-      };
-    }
 
     // 3. Battement de coeur périodique pour diffuser nos antennes aux autres joueurs
     setInterval(() => {
@@ -305,11 +309,13 @@ class ProtecGame {
       vehiclesCount: this.vehicles.length
     };
 
-    fetch('/api/player/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).catch(() => {});
+    if (this.isBackendOnline) {
+      fetch('/api/player/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    }
 
     // Synchronisation Cloud Supabase
     if (window.ProtecSupabase && this.stations && this.stations.length > 0) {

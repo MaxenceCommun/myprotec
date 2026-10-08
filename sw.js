@@ -9,7 +9,7 @@
  * 4. Gestion Web Push Notifications & interactions système
  */
 
-const CACHE_VERSION = 'myprotec-pwa-v1.4.1';
+const CACHE_VERSION = 'myprotec-pwa-v1.4.2';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 const TILES_CACHE = 'myprotec-tiles-v1';
 const MAX_TILE_ENTRIES = 250; // Limite pour ne pas saturer le stockage
@@ -38,6 +38,9 @@ const PRECACHE_ASSETS = [
   '/js/poles.js',
   '/js/formations.js',
   '/js/social.js',
+  '/js/conventions.js',
+  '/js/communication.js',
+  '/js/messaging.js',
   '/js/admin.js',
   '/js/locaux.js',
   '/js/finances.js',
@@ -161,12 +164,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // C. Assets statiques locaux et CDN (CSS, JS, Fonts, Icons) -> Stale-While-Revalidate
+  // C. Ne pas intercepter les requêtes cross-origin externes (hors tuiles carto)
+  // Laisse le navigateur charger directement les CDN avec leurs règles CORS natives (Leaflet CSS, Supabase, Lucide, Tailwind...)
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  // D. Assets statiques locaux (CSS, JS, Fonts, Images) -> Stale-While-Revalidate
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       const fetchPromise = fetch(request)
         .then((networkResponse) => {
-          if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+          if (networkResponse && networkResponse.status === 200) {
             const responseClone = networkResponse.clone();
             caches.open(STATIC_CACHE).then((cache) => {
               cache.put(request, responseClone);

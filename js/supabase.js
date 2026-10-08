@@ -238,9 +238,10 @@ window.ProtecSupabase = {
     if (!this.client || !player || !station) return;
 
     try {
+      const numericPlayerId = typeof player.id === 'number' ? player.id : (parseInt(player.id, 10) || null);
       const payload = {
-        id: station.id,
-        player_id: player.id,
+        id: String(station.id),
+        player_id: numericPlayerId,
         player_name: player.name || 'Directeur d’Antenne',
         station_name: station.name,
         city: station.city || 'Paris',
@@ -253,11 +254,22 @@ window.ProtecSupabase = {
         last_sync: new Date().toISOString()
       };
 
-      await this.client
+      const { error } = await this.client
         .from('alliance_stations')
         .upsert(payload, { onConflict: 'id' });
+
+      if (error) {
+        // En cas de conflit 409 sur la contrainte d'unicité, repli direct
+        const { error: updErr } = await this.client
+          .from('alliance_stations')
+          .update(payload)
+          .eq('id', String(station.id));
+        if (updErr) {
+          await this.client.from('alliance_stations').insert([payload]);
+        }
+      }
     } catch (e) {
-      console.warn('Erreur sync station Supabase:', e);
+      // Éviter de polluer la console en cas de micro-coupure réseau
     }
   },
 
