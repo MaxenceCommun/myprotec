@@ -751,7 +751,15 @@ class ProtecGame {
       console.warn('Erreur envoi archive serveur:', err);
     }
 
-    // 3. Effacement de la sauvegarde active
+    // 3. Effacement de la sauvegarde Cloud Supabase et de la sauvegarde active locale
+    try {
+      if (window.ProtecSupabase && window.ProtecSupabase.client && this.player && this.player.id) {
+        await window.ProtecSupabase.client.from('game_saves').delete().eq('user_id', this.player.id);
+      }
+    } catch (e) {
+      console.warn('Erreur purge cloud save:', e);
+    }
+
     localStorage.removeItem('protec_live_save_v4');
     this.closeResetModal();
     this.showToast('Antenne réinitialisée', 'Votre ancienne partie a été archivée avec succès. Rechargement...', 'green');
