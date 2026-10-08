@@ -40,15 +40,7 @@ window.ProtecOfflineEngine = {
     localStorage.setItem('protec_last_active_time', now.toString());
     this.lastCheckTime = now;
 
-    // 2. Écouteurs de mise en veille / fermeture de page
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        this.onPlayerDeparture(game);
-      } else {
-        this.onPlayerReturn(game);
-      }
-    });
-
+    // 2. Écouteurs de fermeture réelle du jeu (quand le joueur quitte et ferme l'application)
     window.addEventListener('beforeunload', () => {
       this.onPlayerDeparture(game);
     });

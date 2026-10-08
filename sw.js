@@ -9,7 +9,7 @@
  * 4. Gestion Web Push Notifications & interactions système
  */
 
-const CACHE_VERSION = 'myprotec-pwa-v1.3.0';
+const CACHE_VERSION = 'myprotec-pwa-v1.3.1';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 const TILES_CACHE = 'myprotec-tiles-v1';
 const MAX_TILE_ENTRIES = 250; // Limite pour ne pas saturer le stockage
@@ -23,6 +23,7 @@ const PRECACHE_ASSETS = [
   '/manifest.json',
   '/logo_myprotec.png',
   '/logo_myprotec_icon.png',
+  '/js/supabase.js',
   '/js/systems.js',
   '/js/modals.js',
   '/js/advanced_systems.js',
@@ -183,35 +184,45 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// 4. NOTIFICATIONS PUSH
+// 4. NOTIFICATIONS PUSH (Déclenchées UNIQUEMENT si le jeu est COMPLÈTEMENT FERMÉ)
 self.addEventListener('push', (event) => {
-  let data = {
-    title: '🚨 Alerte Protection Civile',
-    body: 'Une nouvelle intervention nécessite votre arbitrage ! Connectez-vous.',
-    icon: 'logo_myprotec_icon.png',
-    badge: 'logo_myprotec_icon.png',
-    tag: 'protec-push-alert',
-    data: { url: '/' }
-  };
-
-  if (event.data) {
-    try {
-      data = Object.assign(data, event.data.json());
-    } catch (e) {
-      data.body = event.data.text();
-    }
-  }
-
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: data.icon || 'logo_myprotec_icon.png',
-      badge: data.badge || 'logo_myprotec_icon.png',
-      tag: data.tag || 'protec-alert',
-      vibrate: [300, 150, 300, 150, 400],
-      renotify: true,
-      requireInteraction: true,
-      data: data.data || { url: '/' }
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // RÈGLE FORMELLE DE L'UTILISATEUR :
+      // Inactivité = le joueur n'a VRAIMENT PAS le jeu ouvert (ni téléphone, ni PC, ni tablette).
+      // Si au moins un onglet/fenêtre est ouvert sur cet appareil -> NE PAS ENVOYER de push notification !
+      if (clientList && clientList.length > 0) {
+        console.log('[SW Push] Notification bloquée : le jeu est actuellement ouvert.');
+        return;
+      }
+
+      let data = {
+        title: '🚨 Alerte Protection Civile',
+        body: 'Une nouvelle intervention nécessite votre arbitrage ! Connectez-vous.',
+        icon: 'logo_myprotec_icon.png',
+        badge: 'logo_myprotec_icon.png',
+        tag: 'protec-push-alert',
+        data: { url: '/' }
+      };
+
+      if (event.data) {
+        try {
+          data = Object.assign(data, event.data.json());
+        } catch (e) {
+          data.body = event.data.text();
+        }
+      }
+
+      return self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: data.icon || 'logo_myprotec_icon.png',
+        badge: data.badge || 'logo_myprotec_icon.png',
+        tag: data.tag || 'protec-alert',
+        vibrate: [300, 150, 300, 150, 400],
+        renotify: true,
+        requireInteraction: true,
+        data: data.data || { url: '/' }
+      });
     })
   );
 });
@@ -242,19 +253,39 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// 6. MESSAGES INTERNES & NOTIFICATIONS D'ARRIÈRE-PLAN HORS-LIGNE
+// 6. MESSAGES INTERNES & NOTIFICATIONS D'ARRIÈRE-PLAN LORS DE L'INACTIVITÉ RÉELLE
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+
+  // Ne jamais afficher de push notification directe si le jeu est ouvert
   if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
-    const { title, options } = event.data;
-    self.registration.showNotification(title, options);
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      if (clientList && clientList.length > 0) {
+        // Le jeu est ouvert -> pas de push système OS
+        return;
+      }
+      const { title, options } = event.data;
+      self.registration.showNotification(title, options);
+    });
   }
+
+  // Alertes planifiées pour l'absence du joueur (déclenchées uniquement si le jeu reste fermé)
   if (event.data && event.data.type === 'SCHEDULE_OFFLINE_ALERTS') {
     const alerts = event.data.alerts || [];
     alerts.forEach(item => {
-      setTimeout(() => {
+      setTimeout(async () => {
+        // VÉRIFICATION STRICTE DE L'INACTIVITÉ :
+        // Le joueur n'a-t-il vraiment pas le jeu ouvert ?
+        const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        if (clientList && clientList.length > 0) {
+          // Le joueur a le jeu ouvert sur cet appareil (PC, téléphone ou tablette) !
+          // RÈGLE FORMELLE : Le joueur n'est PAS inactif -> NE PAS ENVOYER de push notification !
+          console.log('[SW Schedule] Notification annulée : jeu ouvert.');
+          return;
+        }
+
         self.registration.showNotification(item.title, {
           body: item.body,
           icon: 'logo_myprotec_icon.png',

@@ -15,50 +15,27 @@ window.ProtecNotifications = {
   activeTab: 'history',
   lastUserInteraction: Date.now(),
 
+  // Identifiant unique de cette fenêtre de jeu
+  instanceId: `inst_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+
   isDeviceMobile() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth < 768 && ('ontouchstart' in window));
   },
 
-  isUserActivelyPlaying() {
-    const isVisible = (document.visibilityState === 'visible');
-    const hasFocus = (typeof document.hasFocus === 'function') ? document.hasFocus() : true;
-    const recentlyInteracted = (Date.now() - this.lastUserInteraction) < 30000; // Actif il y a moins de 30 secondes
-    return isVisible && hasFocus && recentlyInteracted;
+  // Vérifie si le jeu est actuellement ouvert sur n'importe quel appareil (PC, téléphone ou tablette)
+  isGameOpenOnAnyDevice() {
+    // 1. Cette fenêtre locale est actuellement ouverte et en cours d'exécution
+    return true;
   },
 
-  isPCOpenAndActive() {
-    try {
-      const pcHeartbeat = parseInt(localStorage.getItem('protec_pc_heartbeat') || '0', 10);
-      return (Date.now() - pcHeartbeat) < 30000; // PC actif il y a moins de 30 secondes
-    } catch (e) {
-      return false;
-    }
-  },
-
+  // Contrôle strict de l'envoi de notification système OS :
+  // RÈGLE FORMELLE : Inactivité = le joueur n'a VRAIMENT PAS le jeu ouvert (ni sur téléphone, ni sur PC ou tablette).
+  // Tant que le jeu est ouvert quelque part -> AUCUNE push notification système !
+  // Tout est géré dans le jeu (toasts, sons in-game, bandeau d'alerte, cloche de notifications).
   shouldSendSystemNotification() {
-    if (!this.config.enabled) return false;
-    if (this.permission !== 'granted') return false;
-
-    // RÈGLE 1 : Si le joueur est actif sur le jeu sur cet écran -> NE PAS envoyer de notification système OS
-    if (this.isUserActivelyPlaying()) {
-      return false;
-    }
-
-    const isMobile = this.isDeviceMobile();
-
-    if (isMobile) {
-      // RÈGLE 2 (TÉLÉPHONE) : Envoyer SEULEMENT si inactif sur le téléphone ET que le jeu est fermé ou inactif sur PC
-      if (this.isPCOpenAndActive()) {
-        return false; // Le joueur est sur son PC, ne pas sonner sur son téléphone
-      }
-      // Téléphone en arrière-plan, écran verrouillé ou joueur inactif
-      return true;
-    } else {
-      // RÈGLE 3 (PC) : Envoyer sur PC uniquement si le jeu est ouvert sur le PC MAIS que le joueur n'est pas sur la page
-      // (autre onglet actif, fenêtre masquée/minimisée ou inactivité sans interaction)
-      const isAwayFromPage = (document.visibilityState === 'hidden') || (document.hasFocus && !document.hasFocus()) || ((Date.now() - this.lastUserInteraction) >= 30000);
-      return isAwayFromPage;
-    }
+    // Si cette méthode est appelée depuis la page web ouverte, c'est que le jeu EST OUVERT.
+    // Donc le joueur n'est PAS inactif -> Pas de push notification système !
+    return false;
   },
 
   // Configuration utilisateur (sauvegardée en localStorage)
