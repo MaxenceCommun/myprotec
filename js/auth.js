@@ -126,10 +126,11 @@ window.ProtecAuth = {
       userLabel.className = 'text-xs font-bold text-pc-blue truncate max-w-[90px] sm:max-w-[120px]';
 
       if (offline) {
-        dbStatus.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Serveur en attente';
+        dbStatus.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Hors-ligne';
         dbStatus.className = 'text-[8px] sm:text-[9px] font-semibold text-amber-600 flex items-center gap-1';
       } else {
-        dbStatus.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> En ligne Multi`;
+        const isSupa = window.ProtecSupabase && window.ProtecSupabase.isConnected;
+        dbStatus.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> ${isSupa ? 'BDD Supabase' : 'En ligne Multi'}`;
         dbStatus.className = 'text-[8px] sm:text-[9px] font-semibold text-emerald-600 flex items-center gap-1';
       }
 
@@ -371,15 +372,38 @@ window.ProtecAuth = {
     submitBtn.innerHTML = '<span class="inline-block animate-spin mr-2">⏳</span> Connexion au serveur...';
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
+      let data = null;
 
-      if (!res.ok || !data.success) {
-        errorEl.textContent = data.error || 'Erreur lors de la connexion.';
+      // 1. Tentative de connexion via Supabase Cloud en priorité
+      if (window.ProtecSupabase && window.ProtecSupabase.client) {
+        const supaRes = await window.ProtecSupabase.loginPlayer(username, password);
+        if (supaRes && supaRes.user) {
+          data = {
+            success: true,
+            token: `supa-${supaRes.user.id}`,
+            user: {
+              id: supaRes.user.id,
+              username: supaRes.user.username,
+              role: supaRes.user.role || 'directeur',
+              stationName: supaRes.user.station_name,
+              city: supaRes.user.city
+            }
+          };
+        }
+      }
+
+      // 2. Si non connecté via Supabase, tentative serveur local
+      if (!data) {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        data = await res.json();
+      }
+
+      if (!data || !data.success) {
+        errorEl.textContent = (data && data.error) || 'Erreur lors de la connexion BDD.';
         errorEl.classList.remove('hidden');
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i> Entrer dans la Partie Multijoueur';
@@ -433,15 +457,46 @@ window.ProtecAuth = {
     submitBtn.innerHTML = '<span class="inline-block animate-spin mr-2">⏳</span> Création du compte joueur...';
 
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, stationName, departmentCode })
-      });
-      const data = await res.json();
+      let data = null;
 
-      if (!res.ok || !data.success) {
-        errorEl.textContent = data.error || 'Erreur lors de l’inscription.';
+      // 1. Enregistrement dans Supabase Cloud en priorité
+      if (window.ProtecSupabase && window.ProtecSupabase.client) {
+        const supaRes = await window.ProtecSupabase.registerPlayer(username, password, { stationName, departmentCode });
+        if (supaRes && supaRes.user) {
+          data = {
+            success: true,
+            token: `supa-${supaRes.user.id}`,
+            user: {
+              id: supaRes.user.id,
+              username: supaRes.user.username,
+              role: supaRes.user.role || 'directeur',
+              stationName: supaRes.user.station_name,
+              city: supaRes.user.city,
+              departmentCode: supaRes.user.department_code || departmentCode
+            }
+          };
+        } else if (supaRes && supaRes.error) {
+          errorEl.textContent = supaRes.error;
+          errorEl.classList.remove('hidden');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i data-lucide="shield-check" class="w-4 h-4"></i> Créer mon compte & Rejoindre la carte';
+          if (window.lucide) window.lucide.createIcons();
+          return;
+        }
+      }
+
+      // 2. Si pas de réponse Supabase, appel API locale
+      if (!data) {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, stationName, departmentCode })
+        });
+        data = await res.json();
+      }
+
+      if (!data || !data.success) {
+        errorEl.textContent = (data && data.error) || 'Erreur lors de l’inscription.';
         errorEl.classList.remove('hidden');
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<i data-lucide="shield-check" class="w-4 h-4"></i> Créer mon compte & Rejoindre la carte';
@@ -487,6 +542,24 @@ window.ProtecAuth = {
   },
 
   async checkCloudSaveOnLogin(game) {
+    if (!this.currentUser) return;
+
+    // 1. Chargement prioritaire depuis Supabase Cloud
+    if (window.ProtecSupabase && window.ProtecSupabase.client) {
+      try {
+        const supaSave = await window.ProtecSupabase.loadGameState(this.currentUser.id);
+        if (supaSave && supaSave.save_data) {
+          this.applyCloudSave(game, supaSave.save_data);
+          this.lastSyncTime = new Date(supaSave.updated_at || Date.now());
+          this.updateHeaderUI();
+          return;
+        }
+      } catch (supaErr) {
+        console.warn('Vérification Supabase différée:', supaErr);
+      }
+    }
+
+    // 2. Fallback serveur local si token disponible
     if (!this.token) return;
     try {
       const res = await fetch('/api/game/load', {
@@ -516,40 +589,45 @@ window.ProtecAuth = {
   },
 
   async saveToDatabase(game) {
-    if (!this.token || this.isSyncing) return;
+    if (!this.currentUser || this.isSyncing) return;
     this.isSyncing = true;
     try {
-      const stateToSave = {
-        player: game.player,
-        clock: game.clock,
-        resources: game.resources,
-        stations: game.stations,
-        vehicles: game.vehicles,
-        volunteers: game.volunteers,
-        missions: game.missions,
-        history: game.history,
-        grants: game.grants,
-        baseUpgrades: game.baseUpgrades,
-        skillsTree: game.skillsTree,
-        challenges: game.challenges,
-        adRewards: game.adRewards
-      };
-
-      const res = await fetch('/api/game/save', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.token}`
-        },
-        body: JSON.stringify(stateToSave)
-      });
-
-      if (res.ok) {
+      // 1. Sauvegarde instantanée dans Supabase Cloud (table game_saves)
+      if (window.ProtecSupabase && window.ProtecSupabase.client) {
+        await window.ProtecSupabase.saveGameState(this.currentUser.id, this.currentUser.username, game);
         this.lastSyncTime = new Date();
         this.updateHeaderUI();
       }
+
+      // 2. Synchronisation de redondance avec le serveur local
+      if (this.token && !this.token.startsWith('supa-')) {
+        const stateToSave = {
+          player: game.player,
+          clock: game.clock,
+          resources: game.resources,
+          stations: game.stations,
+          vehicles: game.vehicles,
+          volunteers: game.volunteers,
+          missions: game.missions,
+          history: game.history,
+          grants: game.grants,
+          baseUpgrades: game.baseUpgrades,
+          skillsTree: game.skillsTree,
+          challenges: game.challenges,
+          adRewards: game.adRewards
+        };
+
+        await fetch('/api/game/save', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`
+          },
+          body: JSON.stringify(stateToSave)
+        });
+      }
     } catch (e) {
-      console.warn('Sauvegarde serveur échouée:', e);
+      console.warn('Sauvegarde BDD différée:', e);
       this.updateHeaderUI(true);
     } finally {
       this.isSyncing = false;

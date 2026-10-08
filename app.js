@@ -195,9 +195,11 @@ class ProtecGame {
       .then(data => {
         if (data.alliances) this.alliances = data.alliances;
         if (data.allianceStations) {
-          // FILTRE STRICT : Ne JAMAIS inclure nos propres antennes dans les antennes alliées
+          // FILTRE STRICT : Ne JAMAIS inclure d'antennes fictives système ni nos propres antennes
           this.allianceStations = (data.allianceStations || []).filter(st => {
+            if (!st || !st.id || !st.playerId) return false;
             if (st.playerId === this.player.id) return false;
+            if (st.playerId.startsWith('system') || st.id.startsWith('station-allie') || st.isFictive) return false;
             if (this.stations.some(s => s.id === st.id)) return false;
             if (this.stations.some(s => Math.abs(s.lat - st.lat) < 0.0003 && Math.abs(s.lng - st.lng) < 0.0003)) return false;
             return true;
@@ -209,8 +211,58 @@ class ProtecGame {
 
         this.renderAllianceStations();
         this.updateStatsUI();
+
+        // Récupération complémentaire depuis Supabase Cloud
+        if (window.ProtecSupabase && window.ProtecSupabase.client) {
+          window.ProtecSupabase.getAllianceStations(this.player.id).then(supaStations => {
+            if (supaStations && supaStations.length > 0) {
+              const existingIds = new Set(this.allianceStations.map(s => s.id));
+              supaStations.forEach(st => {
+                if (!existingIds.has(st.id) && !this.stations.some(my => my.id === st.id)) {
+                  this.allianceStations.push({
+                    id: st.id,
+                    playerId: st.player_id,
+                    playerName: st.player_name || 'Directeur d’Antenne',
+                    name: st.station_name,
+                    city: st.city,
+                    lat: st.lat,
+                    lng: st.lng,
+                    level: st.level || 1,
+                    vehicles: st.vehicles_count || 1,
+                    volunteers: st.volunteers_count || 4,
+                    allianceId: st.alliance_id || 'alliance-fnpc'
+                  });
+                }
+              });
+              this.renderAllianceStations();
+            }
+          }).catch(() => {});
+        }
       })
-      .catch(err => console.log('Mode hors ligne serveur:', err));
+      .catch(err => {
+        console.log('Mode hors ligne serveur:', err);
+        // Tentative Supabase autonome
+        if (window.ProtecSupabase && window.ProtecSupabase.client) {
+          window.ProtecSupabase.getAllianceStations(this.player.id).then(supaStations => {
+            if (supaStations && supaStations.length > 0) {
+              this.allianceStations = supaStations.map(st => ({
+                id: st.id,
+                playerId: st.player_id,
+                playerName: st.player_name || 'Directeur d’Antenne',
+                name: st.station_name,
+                city: st.city,
+                lat: st.lat,
+                lng: st.lng,
+                level: st.level || 1,
+                vehicles: st.vehicles_count || 1,
+                volunteers: st.volunteers_count || 4,
+                allianceId: st.alliance_id || 'alliance-fnpc'
+              }));
+              this.renderAllianceStations();
+            }
+          }).catch(() => {});
+        }
+      });
 
     // 2. Connexion SSE (Server-Sent Events) en temps réel
     if (window.EventSource) {
@@ -258,6 +310,13 @@ class ProtecGame {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     }).catch(() => {});
+
+    // Synchronisation Cloud Supabase
+    if (window.ProtecSupabase && this.stations && this.stations.length > 0) {
+      this.stations.forEach(st => {
+        window.ProtecSupabase.syncStationToMap(this.player, st);
+      });
+    }
   }
 
   handleMultiplayerEvent(type, data) {
@@ -313,18 +372,20 @@ class ProtecGame {
   }
 
   updateRemotePlayerStations(remotePlayer) {
-    if (!remotePlayer || remotePlayer.id === this.player.id) return;
+    if (!remotePlayer || remotePlayer.id === this.player.id || remotePlayer.id.startsWith('system')) return;
 
     // Retirer anciennes stations de ce joueur et de nos propres stations
     this.allianceStations = this.allianceStations.filter(s =>
       s.playerId !== remotePlayer.id &&
+      !s.id.startsWith('station-allie') &&
       !this.stations.some(my => my.id === s.id) &&
       !this.stations.some(my => Math.abs(my.lat - s.lat) < 0.0003 && Math.abs(my.lng - s.lng) < 0.0003)
     );
 
-    // Ajouter les nouvelles
+    // Ajouter les nouvelles uniquement pour un vrai joueur humain
     if (remotePlayer.stations && remotePlayer.stations.length > 0) {
       remotePlayer.stations.forEach(st => {
+        if (!st || !st.id || st.id.startsWith('station-allie')) return;
         if (this.stations.some(my => my.id === st.id)) return;
         if (this.stations.some(my => Math.abs(my.lat - st.lat) < 0.0003 && Math.abs(my.lng - st.lng) < 0.0003)) return;
         this.allianceStations.push({
@@ -352,8 +413,10 @@ class ProtecGame {
     this.markers.allianceStations = {};
 
     this.allianceStations.forEach(st => {
-      // Sécurité absolue : ignorer si c'est notre antenne
+      // Sécurité absolue : ignorer si antenne fictive / système ou notre propre antenne
+      if (!st || !st.id || !st.playerId) return;
       if (st.playerId === this.player.id) return;
+      if (st.playerId.startsWith('system') || st.id.startsWith('station-allie') || st.isFictive) return;
       if (this.stations.some(my => my.id === st.id)) return;
       if (this.stations.some(my => Math.abs(my.lat - st.lat) < 0.0003 && Math.abs(my.lng - st.lng) < 0.0003)) return;
 
@@ -472,11 +535,25 @@ class ProtecGame {
 
   init() {
     this.initMap();
+    // Purge absolue de toute antenne fictive créée par le système
+    this.allianceStations = [];
+    if (this.markers && this.markers.allianceStations) {
+      Object.values(this.markers.allianceStations).forEach(m => this.map.removeLayer(m));
+      this.markers.allianceStations = {};
+    }
     this.renderStations();
     this.disperseOverlappingMissions();
     this.renderMissions();
     this.updateStatsUI();
+    this.updateDockAndFiltersVisibility();
     this.startSimulationClock();
+
+    // Fermeture automatique des sous-menus au clic en dehors du dock
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.dock-menu-wrapper')) {
+        this.closeAllDockSubmenus();
+      }
+    });
 
     if (window.lucide) {
       window.lucide.createIcons();
@@ -545,9 +622,15 @@ class ProtecGame {
           this.clock = parsed.clock || this.clock;
           this.resources = parsed.resources || this.resources;
           this.currentCityKey = parsed.currentCityKey || this.currentCityKey;
-          this.stations = parsed.stations || [];
+          this.stations = (parsed.stations || []).filter(s => s && s.id && !s.id.startsWith('station-allie') && !s.isFictive);
           this.vehicles = parsed.vehicles || [];
-          this.volunteers = parsed.volunteers || [];
+          this.volunteers = (parsed.volunteers || []).map(v => {
+            if (!v.skills || !Array.isArray(v.skills) || v.skills.length === 0) {
+              const detected = this.getVolunteerAllSkills(v);
+              v.skills = detected.map(s => s.id);
+            }
+            return v;
+          });
           this.devis = parsed.devis || [];
           this.missions = parsed.missions || [];
           this.candidatures = parsed.candidatures || [];
@@ -1102,10 +1185,10 @@ class ProtecGame {
       newStation.vehicles.push(vehId);
 
       const starters = [
-        { name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', exp: 60, isTrainer: true, avatar: '👨‍💼', dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'], motivation: 85 },
-        { name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', exp: 40, isTrainer: false, avatar: '👩‍🚒', dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'], motivation: 80 },
-        { name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', exp: 20, isTrainer: false, avatar: '🙋‍♂️', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 75 },
-        { name: 'Élodie Leroy', role: 'Bénévole Stagiaire', rank: 'Stagiaire', exp: 5, isTrainer: false, avatar: '🧑', dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'], motivation: 90 }
+        { name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', exp: 60, isTrainer: true, avatar: '👨‍💼', dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'], motivation: 85, skills: ['ce', 'pse2', 'pse1', 'permis_vpsp', 'permis_b', 'formateur_psc', 'formateur_ps'] },
+        { name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', exp: 40, isTrainer: false, avatar: '👩‍🚒', dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_vpsp', 'permis_b'] },
+        { name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', exp: 20, isTrainer: false, avatar: '🙋‍♂️', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 75, skills: ['pse1', 'permis_b'] },
+        { name: 'Élodie Leroy', role: 'Bénévole Stagiaire', rank: 'Stagiaire', exp: 5, isTrainer: false, avatar: '🧑', dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'], motivation: 90, skills: ['stagiaire', 'psc1'] }
       ];
 
       starters.forEach(s => {
@@ -1121,7 +1204,8 @@ class ProtecGame {
           avatar: s.avatar,
           dispoType: s.dispoType,
           dispoJours: s.dispoJours,
-          motivation: s.motivation
+          motivation: s.motivation,
+          skills: s.skills || []
         });
       });
     }
@@ -2678,51 +2762,134 @@ class ProtecGame {
     `;
   }
 
+  // Récupère l'ensemble exhaustif des compétences et qualifications d'un bénévole
+  getVolunteerAllSkills(v) {
+    if (!v) return [];
+    const skillsMap = {
+      'cd': { id: 'cd', label: 'Chef de Dispositif (CD)', cat: 'DPS', badge: 'CD', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+      'ce': { id: 'ce', label: 'Chef d’Équipe (CE)', cat: 'DPS', badge: 'CE', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' },
+      'pse2': { id: 'pse2', label: 'PSE2 Équipier Secouriste', cat: 'Secours', badge: 'PSE2', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
+      'pse1': { id: 'pse1', label: 'PSE1 Secouriste', cat: 'Secours', badge: 'PSE1', color: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
+      'stagiaire': { id: 'stagiaire', label: 'Stagiaire en Intégration', cat: 'Formation', badge: 'STAG', color: 'bg-slate-700 text-slate-300 border-slate-600' },
+      'psc1': { id: 'psc1', label: 'PSC1 / Premiers Secours', cat: 'Secours', badge: 'PSC1', color: 'bg-teal-500/20 text-teal-300 border-teal-500/40' },
+      'permis_vpsp': { id: 'permis_vpsp', label: 'P.VPSP Conduite Ambulance', cat: 'Véhicule', badge: 'P.VPSP', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+      'permis_b': { id: 'permis_b', label: 'Permis B (VL / VTU)', cat: 'Véhicule', badge: 'Permis B', color: 'bg-emerald-500/10 text-emerald-200 border-emerald-500/30' },
+      'formateur_ps': { id: 'formateur_ps', label: 'Formateur Premiers Secours (PS)', cat: 'Pédagogie', badge: 'Formateur PS', color: 'bg-orange-500/20 text-orange-300 border-orange-500/40' },
+      'formateur_psc': { id: 'formateur_psc', label: 'Formateur PSC (PIC F)', cat: 'Pédagogie', badge: 'Formateur PSC', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+      'formateur_sst': { id: 'formateur_sst', label: 'Formateur SST', cat: 'Pédagogie', badge: 'Formateur SST', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+      'formateur_de_formateur': { id: 'formateur_de_formateur', label: 'Formateur de Formateurs (FdF)', cat: 'Pédagogie', badge: 'FdF', color: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
+      'aep1': { id: 'aep1', label: 'AEP1 Écoute d’Urgence', cat: 'Soutien', badge: 'AEP1', color: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
+      'aep2': { id: 'aep2', label: 'AEP2 Soutien CAI & Catastrophe', cat: 'Soutien', badge: 'AEP2', color: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
+      'telepilote': { id: 'telepilote', label: 'Télépilote Drone S1/S3', cat: 'Spécialité', badge: 'Drone', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
+      'cyno': { id: 'cyno', label: 'Cynotechnie (Maître-Chien)', cat: 'Spécialité', badge: 'Cyno', color: 'bg-amber-600/20 text-amber-300 border-amber-600/40' },
+      'communication': { id: 'communication', label: 'Communication & Médias', cat: 'Presse', badge: 'Com/Média', color: 'bg-pink-500/20 text-pink-300 border-pink-500/40' }
+    };
+
+    const detected = new Set();
+    const existing = Array.isArray(v.skills) ? v.skills : [];
+    existing.forEach(s => {
+      if (!s) return;
+      const clean = String(s).toLowerCase().replace(/[- ]/g, '_');
+      if (clean.includes('vpsp') || clean.includes('pilotage')) detected.add('permis_vpsp');
+      else if (clean.includes('psc') && clean.includes('formateur')) detected.add('formateur_psc');
+      else if (clean.includes('ps') && clean.includes('formateur')) detected.add('formateur_ps');
+      else if (clean === 'formateur' || clean.includes('formateur')) {
+        detected.add('formateur_psc');
+        if (['PSE2', 'CE', 'CD'].includes(v.rank)) detected.add('formateur_ps');
+      } else if (clean.includes('ce') || clean === 'chef_equipe') detected.add('ce');
+      else if (clean.includes('cd') || clean === 'chef_dispositif') detected.add('cd');
+      else if (clean.includes('pse2')) detected.add('pse2');
+      else if (clean.includes('pse1')) detected.add('pse1');
+      else if (clean.includes('drone') || clean.includes('telepilote')) detected.add('telepilote');
+      else if (clean.includes('cyno') || clean.includes('chien')) detected.add('cyno');
+      else if (clean.includes('aep2')) detected.add('aep2');
+      else if (clean.includes('aep1') || clean.includes('aep')) detected.add('aep1');
+      else if (clean.includes('com')) detected.add('communication');
+      else if (skillsMap[clean]) detected.add(clean);
+    });
+
+    // Déduction selon le grade opérationnel officiel de la Protection Civile
+    const rank = v.rank || '';
+    if (rank === 'CD' || rank.includes('Dispositif')) {
+      detected.add('cd');
+      detected.add('ce');
+      detected.add('pse2');
+      detected.add('pse1');
+      detected.add('permis_vpsp');
+      detected.add('permis_b');
+    } else if (rank === 'CE' || rank.includes('Équipe')) {
+      detected.add('ce');
+      detected.add('pse2');
+      detected.add('pse1');
+      detected.add('permis_vpsp');
+      detected.add('permis_b');
+    } else if (rank === 'PSE2' || rank.includes('Équipier')) {
+      detected.add('pse2');
+      detected.add('pse1');
+      detected.add('permis_b');
+      if ((v.exp || 0) >= 25 || v.hasPermisVpsp) detected.add('permis_vpsp');
+    } else if (rank === 'PSE1' || rank.includes('Secouriste')) {
+      detected.add('pse1');
+      detected.add('permis_b');
+      if ((v.exp || 0) >= 35 || v.hasPermisVpsp) detected.add('permis_vpsp');
+    } else if (rank === 'Stagiaire' || rank.includes('Stagiaire')) {
+      detected.add('stagiaire');
+      detected.add('psc1');
+    }
+
+    if (v.isTrainer) {
+      detected.add('formateur_psc');
+      if (['PSE2', 'CE', 'CD'].includes(rank)) detected.add('formateur_ps');
+    }
+
+    return Array.from(detected).map(id => {
+      return skillsMap[id] || {
+        id: id,
+        label: id.toUpperCase(),
+        cat: 'Qualif',
+        badge: id.toUpperCase(),
+        color: 'bg-slate-700 text-slate-200 border-slate-600'
+      };
+    });
+  }
+
   // Rendu de l'infobulle "i" affichant les compétences détaillées au survol
   getVolunteerSkillsPopoverHTML(v) {
     if (!v) return '';
-    const skills = v.skills || [];
-    const skillsMap = {
-      'pse1': 'PSE1 Secouriste',
-      'pse2': 'PSE2 Équipier',
-      'ce': 'Chef d’Équipe (CE)',
-      'cd': 'Chef de Dispositif (CD)',
-      'aep1': 'AEP1 Écoute d’Urgence',
-      'aep2': 'AEP2 Soutien & CAI',
-      'formateur_psc': 'Formateur PSC (PIC F)',
-      'formateur_ps': 'Formateur Premiers Secours',
-      'formateur_sst': 'Formateur SST',
-      'formateur_aep': 'Formateur AEP',
-      'formateur_de_formateur': 'Formateur de Formateurs (FdF)',
-      'cef': 'CEF Encadrant Formation',
-      'communication': 'Communication & Médias',
-      'pilotage': 'Conduite d’Urgence VPSP'
-    };
+    const allSkills = this.getVolunteerAllSkills(v);
+    const summaryText = allSkills.length > 0 
+      ? allSkills.map(s => s.badge || s.label).join(' • ')
+      : `${v.rank || 'Secouriste'} (Formation initiale)`;
 
-    const skillsBadges = skills.length > 0
-      ? skills.map(s => {
-          const label = skillsMap[s] || s.toUpperCase();
-          return `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-800 text-slate-200 border border-slate-700">${label}</span>`;
-        }).join('')
+    const skillsBadges = allSkills.length > 0
+      ? allSkills.map(s => `
+          <div class="px-2 py-1 rounded-lg text-[10px] font-bold border flex items-center justify-between gap-2 ${s.color}">
+            <span class="font-mono font-black">${s.badge || s.id.toUpperCase()}</span>
+            <span class="text-[9px] opacity-90 truncate">${s.label}</span>
+          </div>
+        `).join('')
       : `<span class="text-[10px] text-slate-400 italic">Formation initiale ${v.rank || 'Secouriste'}</span>`;
 
     return `
       <div class="relative group/skill inline-flex items-center mt-0.5">
-        <button type="button" class="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-pc-blue transition cursor-help font-medium">
-          <span class="w-4 h-4 rounded-full bg-slate-100 hover:bg-pc-blue/15 text-slate-600 hover:text-pc-blue flex items-center justify-center font-bold text-[10px] border border-slate-200 transition">i</span>
-          <span class="text-[10px] text-slate-400 group-hover/skill:text-pc-blue font-semibold">Compétences</span>
+        <button type="button" title="Compétences : ${summaryText}" class="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-pc-blue transition cursor-help font-medium">
+          <span class="w-4 h-4 rounded-full bg-slate-100 group-hover/skill:bg-pc-blue group-hover/skill:text-white text-slate-600 flex items-center justify-center font-bold text-[10px] border border-slate-200 transition">i</span>
+          <span class="text-[10px] text-slate-500 group-hover/skill:text-pc-blue font-semibold">Compétences</span>
         </button>
-        <div class="hidden group-hover/skill:block absolute left-0 bottom-full mb-1.5 z-[80] w-64 p-3 rounded-2xl bg-slate-900 text-white shadow-2xl pointer-events-none border border-slate-700/80 transition-all">
-          <div class="font-extrabold text-[11px] text-white mb-1.5 pb-1 border-b border-slate-700 flex items-center justify-between">
-            <span>Compétences : ${v.name}</span>
-            <span class="text-[9px] font-mono text-pc-blue font-black">${v.rank || 'Secouriste'}</span>
+        <div class="hidden group-hover/skill:block absolute left-0 top-full mt-1.5 z-[120] w-72 p-3 rounded-2xl bg-slate-900/95 backdrop-blur-md text-white shadow-2xl pointer-events-none border border-slate-700/80 transition-all">
+          <div class="font-extrabold text-[11px] text-white mb-2 pb-1.5 border-b border-slate-700 flex items-center justify-between">
+            <span class="flex items-center gap-1.5 truncate">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              ${v.name}
+            </span>
+            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-pc-blue/30 text-sky-300 font-black border border-pc-blue/40">${v.rank || 'Secouriste'}</span>
           </div>
-          <div class="flex flex-wrap gap-1 mb-2">
+          <div class="space-y-1 mb-2 max-h-48 overflow-y-auto">
             ${skillsBadges}
           </div>
           <div class="text-[9px] text-slate-400 pt-1.5 border-t border-slate-800 flex justify-between">
-            <span>Dispo : <strong>${v.dispoJours?.join(', ') || 'Semaine & WE'}</strong></span>
-            <span>Énergie : <strong>${v.energy || 80}%</strong></span>
+            <span>Dispo : <strong class="text-slate-300">${v.dispoJours?.join(', ') || 'Semaine & WE'}</strong></span>
+            <span>Énergie : <strong class="text-emerald-400">${v.energy || 80}%</strong></span>
           </div>
         </div>
       </div>
@@ -3188,7 +3355,7 @@ class ProtecGame {
               </div>
             ` : ''}
 
-            <div class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+            <div class="space-y-2 max-h-64 overflow-y-auto pr-1 pb-20">
               ${registeredVols.length === 0 ? '<p class="text-xs text-amber-600 p-2.5 glass-card-amber rounded-xl">Aucun secouriste n’a encore validé sa disponibilité. Cliquez sur « SMS » ou utilisez l’appel individuel pour mobiliser vos effectifs.</p>' : ''}
               ${registeredVols.map(v => {
                 const currentRole = (mission.volunteerRoles && mission.volunteerRoles[v.id]) || (v.rank === 'Stagiaire' ? 'stagiaire' : 'secouriste');
@@ -3196,21 +3363,20 @@ class ProtecGame {
                 const hasCom = (v.skills || []).includes('communication') && currentRole === 'photographe';
 
                 return `
-                <div class="p-2.5 rounded-xl glass-card flex flex-col sm:flex-row sm:items-center justify-between text-xs hover:shadow-sm transition gap-2">
-                  <div class="flex items-center gap-2.5">
-                    ${this.getVolunteerAvatarHTML(v)}
-                    <div>
-                      <div class="flex items-center gap-1.5">
-                        <span class="font-bold text-slate-800 leading-tight">${v.name}</span>
-                        <span class="text-[9px] font-semibold text-slate-500">${v.rank || 'Secouriste'}</span>
+                <div class="p-2.5 rounded-xl bg-white border border-slate-200/90 shadow-xs flex items-center justify-between text-xs hover:border-slate-300 transition gap-2.5">
+                  <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                    ${this.getVolunteerAvatarHTML(v, 'w-8 h-8 text-xs')}
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="font-bold text-slate-800 leading-tight truncate max-w-[130px] sm:max-w-[180px]">${v.name}</span>
+                        <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">${v.rank || 'Secouriste'}</span>
                         ${hasCom ? '<span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-pink-100 text-pink-700">📸 Média</span>' : ''}
                       </div>
                       ${this.getVolunteerSkillsPopoverHTML(v)}
                     </div>
                   </div>
-                  <div class="flex items-center gap-1.5 self-end sm:self-auto">
-                    <label class="text-[10px] text-slate-500 font-bold hidden sm:inline">Rôle :</label>
-                    <select onchange="window.game.setVolunteerMissionRole('${mission.id}', '${v.id}', this.value)" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 cursor-pointer focus:ring-1 focus:ring-pc-blue">
+                  <div class="flex-shrink-0">
+                    <select onchange="window.game.setVolunteerMissionRole('${mission.id}', '${v.id}', this.value)" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-800 cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[130px] sm:max-w-[150px]">
                       ${rolesList.map(r => `
                         <option value="${r.id}" ${r.id === currentRole ? 'selected' : ''}>${r.label}</option>
                       `).join('')}
@@ -3734,8 +3900,240 @@ class ProtecGame {
     container.scrollTop = container.scrollHeight;
   }
 
+  // --- SYSTÈME DE DÉVERROUILLAGE & GESTION DES MENUS ET SOUS-MENUS ---
+
+  isFeatureUnlocked(featureKey) {
+    const totalVols = this.volunteers ? this.volunteers.length : 0;
+    const vpspCount = this.vehicles ? this.vehicles.filter(v => v.type === 'VPSP').length : 0;
+    const anyVehCount = this.vehicles ? this.vehicles.length : 0;
+    const repScore = this.resources ? (this.resources.reputationScore || 0) : 0;
+    const hasAntenne = this.stations && this.stations.length > 0;
+
+    switch (featureKey) {
+      // Missions de base
+      case 'dps':
+      case 'planning':
+      case 'devis':
+      case 'finances':
+        return true;
+
+      // SAMU 15 : Nécessite au moins 1 ambulance VPSP et 3 secouristes
+      case 'samu':
+        return vpspCount >= 1 && totalVols >= 3;
+
+      // Garde SDIS : Nécessite au moins 1 VPSP et 5 secouristes
+      case 'pompiers':
+      case 'sdis':
+        return vpspCount >= 1 && totalVols >= 5;
+
+      // Action Sociale : Nécessite au moins 1 véhicule et 3 secouristes
+      case 'social':
+        return anyVehCount >= 1 && totalVols >= 3;
+
+      // Crise NOVI & ORSEC : Nécessite au moins 1 VPSP, 6 secouristes et 40 pts de réputation
+      case 'crise':
+      case 'novi':
+        return vpspCount >= 1 && totalVols >= 6 && repScore >= 40;
+
+      // RH & Bénévoles de base
+      case 'benevoles':
+      case 'recrutement':
+      case 'formation':
+        return true;
+
+      // Pôles d'antenne : Nécessite au moins 6 secouristes
+      case 'poles':
+        return totalVols >= 6;
+
+      // Base & Matériel
+      case 'base':
+      case 'flotte':
+      case 'locaux':
+      case 'logistique':
+        return hasAntenne;
+
+      // Spécialités (Drone, Cyno, Bateau, 4x4, Moto) : Nécessite au moins 8 secouristes et 60 pts de réputation
+      case 'specialites':
+        return totalVols >= 8 && repScore >= 60;
+
+      // Alliances : Nécessite au moins 5 secouristes et 20 pts de réputation
+      case 'alliance':
+        return totalVols >= 5 && repScore >= 20;
+
+      // Radio & Météo
+      case 'radio':
+      case 'meteo':
+        return true;
+
+      default:
+        return true;
+    }
+  }
+
+  getModuleCategory(moduleKey) {
+    const categories = {
+      'planning': 'missions',
+      'devis': 'missions',
+      'samu': 'missions',
+      'pompiers': 'missions',
+      'social': 'missions',
+      'crise': 'missions',
+
+      'recrutement': 'rh',
+      'formation': 'rh',
+      'poles': 'rh',
+      'competences': 'rh',
+
+      'base': 'materiel',
+      'locaux': 'materiel',
+      'logistique': 'materiel',
+      'specialites': 'materiel',
+
+      'radio': 'liaisons',
+      'alliance': 'liaisons',
+      'meteo': 'liaisons'
+    };
+    return categories[moduleKey] || null;
+  }
+
+  toggleDockSubmenu(menuKey, event) {
+    if (event) event.stopPropagation();
+    const submenu = document.getElementById(`dock-submenu-${menuKey}`);
+    if (!submenu) return;
+    const isCurrentlyActive = submenu.classList.contains('active');
+    this.closeAllDockSubmenus();
+    if (!isCurrentlyActive) {
+      submenu.classList.add('active');
+      this.updateDockAndFiltersVisibility();
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+
+  closeAllDockSubmenus() {
+    document.querySelectorAll('.dock-submenu').forEach(sm => sm.classList.remove('active'));
+  }
+
+  updateDockAndFiltersVisibility() {
+    // 1. Mise à jour de la visibilité des éléments sous-menus (data-feature-key)
+    document.querySelectorAll('[data-feature-key]').forEach(el => {
+      const key = el.getAttribute('data-feature-key');
+      const isUnlocked = this.isFeatureUnlocked(key);
+      if (isUnlocked) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    });
+
+    // 2. Si le filtre actif sur la carte a été masqué (car non débloqué), revenir à "all"
+    if (this.currentFilter && this.currentFilter !== 'all' && !this.isFeatureUnlocked(this.currentFilter)) {
+      this.setFilter('all');
+    }
+  }
+
+  renderModalCategorySubnav(currentModuleKey) {
+    const subnavEl = document.getElementById('modal-category-subnav');
+    if (!subnavEl) return;
+
+    const category = this.getModuleCategory(currentModuleKey);
+    if (!category) {
+      subnavEl.classList.add('hidden');
+      subnavEl.innerHTML = '';
+      return;
+    }
+
+    const planCount = this.missions ? this.missions.filter(m => m.status === 'planifie' || m.status === 'ongoing' || m.type === 'dps').length : 0;
+    const devisCount = this.devis ? this.devis.filter(d => d.status === 'pending').length : 0;
+    const samuCount = this.missions ? this.missions.filter(m => m.type === 'samu' && (m.status === 'planifie' || m.status === 'ongoing')).length : 0;
+    const sdisCount = this.missions ? this.missions.filter(m => m.type === 'pompiers' && (m.status === 'planifie' || m.status === 'ongoing')).length : 0;
+    const socialCount = this.missions ? this.missions.filter(m => m.type === 'social').length : 0;
+    const criseCount = this.missions ? this.missions.filter(m => m.type === 'crise' || m.urgency === 'critique').length : 0;
+
+    const categoryDefs = {
+      missions: [
+        { key: 'planning', label: 'Planning & DPS', icon: 'calendar', count: planCount },
+        { key: 'devis', label: 'Devis & Contrats', icon: 'file-text', count: devisCount },
+        { key: 'samu', label: 'SAMU 15', icon: 'activity', count: samuCount },
+        { key: 'pompiers', label: 'Garde SDIS', icon: 'flame', count: sdisCount },
+        { key: 'social', label: 'Social', icon: 'heart-handshake', count: socialCount },
+        { key: 'crise', label: 'Crise NOVI', icon: 'siren', count: criseCount }
+      ],
+      rh: [
+        { key: 'recrutement', label: 'Bénévoles & Équipe', icon: 'users', count: this.volunteers?.length || 0 },
+        { key: 'formation', label: 'Formations', icon: 'graduation-cap' },
+        { key: 'poles', label: 'Pôles d\'Antenne', icon: 'layers' }
+      ],
+      materiel: [
+        { key: 'base', label: 'Antenne & Flotte', icon: 'truck', count: this.vehicles?.length || 0 },
+        { key: 'locaux', label: 'Locaux & Plan 2D', icon: 'layout-grid' },
+        { key: 'logistique', label: 'Logistique & Lots', icon: 'package-check' },
+        { key: 'specialites', label: 'Spécialités', icon: 'crosshair' }
+      ],
+      liaisons: [
+        { key: 'radio', label: 'Radio PC', icon: 'radio' },
+        { key: 'alliance', label: 'Alliances', icon: 'handshake', count: this.renforts?.filter(r => r.status === 'open').length || 0 },
+        { key: 'meteo', label: 'Météo-France', icon: 'cloud-sun' }
+      ]
+    };
+
+    const items = categoryDefs[category] || [];
+    // Filtrage STRICT des sous-menus déverrouillés
+    const unlockedItems = items.filter(item => this.isFeatureUnlocked(item.key));
+
+    if (unlockedItems.length <= 1) {
+      subnavEl.classList.add('hidden');
+      subnavEl.innerHTML = '';
+      return;
+    }
+
+    subnavEl.classList.remove('hidden');
+    subnavEl.innerHTML = `
+      <div class="flex items-center gap-1.5 pb-2.5">
+        ${unlockedItems.map(item => {
+          const isActive = item.key === currentModuleKey;
+          return `
+            <button onclick="window.game.openModule('${item.key}')" 
+              class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${isActive 
+                ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/20' 
+                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/80'}">
+              <i data-lucide="${item.icon}" class="w-3.5 h-3.5"></i>
+              <span>${item.label}</span>
+              ${item.count !== undefined && item.count > 0 ? `
+                <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}">
+                  ${item.count}
+                </span>
+              ` : ''}
+            </button>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
   // --- POPUP MODULES DOCK ---
   openModule(moduleKey, isBackNavigation = false) {
+    this.closeAllDockSubmenus();
+
+    const aliases = {
+      'missions': 'planning',
+      'mission': 'planning',
+      'benevoles': 'recrutement',
+      'personnel': 'recrutement',
+      'flotte': 'base',
+      'vehicules': 'base',
+      'antennes': 'base',
+      'devis_dps': 'devis',
+      'dps': 'planning'
+    };
+    if (moduleKey && aliases[moduleKey]) {
+      moduleKey = aliases[moduleKey];
+    }
+
+    // Affichage des sous-onglets contextuels de catégorie
+    this.renderModalCategorySubnav(moduleKey);
+
     const modal = document.getElementById('main-modal');
     const title = document.getElementById('modal-title');
     const subtitle = document.getElementById('modal-subtitle');
@@ -5613,6 +6011,10 @@ class ProtecGame {
           </div>
         </div>
       `;
+    } else {
+      // Fallback de sécurité : si la clé n'est pas reconnue, rediriger proprement vers le planning
+      this.openModule('planning', isBackNavigation);
+      return;
     }
 
     if (window.lucide) window.lucide.createIcons();
@@ -5844,6 +6246,8 @@ class ProtecGame {
   closeModal() {
     const modal = document.getElementById('main-modal');
     if (modal) modal.classList.add('hidden');
+    const subnav = document.getElementById('modal-category-subnav');
+    if (subnav) subnav.classList.add('hidden');
     this.modalHistory = [];
     this.currentModalKey = null;
     const backBtn = document.getElementById('modal-back-btn');
@@ -6848,43 +7252,102 @@ class ProtecGame {
       volTotal.title = `${this.volunteers.length} secouriste(s) au total dans l'antenne`;
     }
 
-    const planCount = this.missions.filter(m => m.status === 'planifie' || m.status === 'ongoing').length;
+    const planCount = this.missions.filter(m => m.status === 'planifie' || m.status === 'ongoing' || m.type === 'dps').length;
     const devisCount = this.devis.filter(d => d.status === 'pending').length;
+    const samuCount = this.missions.filter(m => m.type === 'samu' && (m.status === 'planifie' || m.status === 'ongoing')).length;
+    const sdisCount = this.missions.filter(m => m.type === 'pompiers' && (m.status === 'planifie' || m.status === 'ongoing')).length;
+    const criseCount = this.missions.filter(m => m.type === 'crise' || m.urgency === 'critique').length;
     const candCount = this.candidatures.length;
     const renfCount = this.renforts.filter(r => r.status === 'open').length;
+    const ongoingCount = this.missions.filter(m => m.status === 'ongoing').length;
 
+    // Badges Grands Menus Principaux Desktop
+    const totalMissionsActive = planCount + devisCount + samuCount + sdisCount + criseCount;
+    const bMissionsMain = document.getElementById('badge-missions-main-dock');
+    if (bMissionsMain) {
+      bMissionsMain.textContent = totalMissionsActive;
+      bMissionsMain.className = totalMissionsActive > 0 
+        ? 'absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-pc-blue text-white shadow-sm'
+        : 'hidden';
+    }
+
+    const bRhMain = document.getElementById('badge-rh-main-dock');
+    if (bRhMain) {
+      bRhMain.textContent = candCount;
+      bRhMain.className = candCount > 0 
+        ? 'absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-indigo-500 text-white shadow-sm'
+        : 'hidden';
+    }
+
+    const bLiaisonsMain = document.getElementById('badge-liaisons-main-dock');
+    if (bLiaisonsMain) {
+      bLiaisonsMain.textContent = renfCount;
+      bLiaisonsMain.className = renfCount > 0 
+        ? 'absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-sky-600 text-white shadow-sm'
+        : 'hidden';
+    }
+
+    // Badges Mobile
+    const bMissionsMob = document.getElementById('badge-missions-mobile');
+    if (bMissionsMob) bMissionsMob.textContent = totalMissionsActive;
+
+    const bRhMob = document.getElementById('badge-rh-mobile');
+    if (bRhMob) bRhMob.textContent = candCount;
+
+    const bLiaisonsMob = document.getElementById('badge-liaisons-mobile');
+    if (bLiaisonsMob) {
+      bLiaisonsMob.textContent = renfCount;
+      bLiaisonsMob.className = renfCount > 0 
+        ? 'absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-sky-600 text-white min-w-[14px] text-center leading-tight'
+        : 'hidden';
+    }
+
+    // Badges Sous-menus Flottants
+    const bSubPlan = document.getElementById('badge-submenu-planning');
+    if (bSubPlan) bSubPlan.textContent = planCount;
+
+    const bSubDev = document.getElementById('badge-submenu-devis');
+    if (bSubDev) bSubDev.textContent = devisCount;
+
+    const bSubSamu = document.getElementById('badge-submenu-samu');
+    if (bSubSamu) bSubSamu.textContent = samuCount;
+
+    const bSubPomp = document.getElementById('badge-submenu-pompiers');
+    if (bSubPomp) bSubPomp.textContent = sdisCount;
+
+    const bSubCrise = document.getElementById('badge-submenu-crise');
+    if (bSubCrise) bSubCrise.textContent = criseCount;
+
+    const bSubBenev = document.getElementById('badge-submenu-benevoles');
+    if (bSubBenev) bSubBenev.textContent = this.volunteers.length;
+
+    const bSubRecrut = document.getElementById('badge-submenu-recrutement');
+    if (bSubRecrut) bSubRecrut.textContent = candCount;
+
+    const bSubVeh = document.getElementById('badge-submenu-vehicules');
+    if (bSubVeh) bSubVeh.textContent = this.vehicles.length;
+
+    const bSubRadio = document.getElementById('badge-submenu-radio');
+    if (bSubRadio) bSubRadio.textContent = ongoingCount;
+
+    const bSubAll = document.getElementById('badge-submenu-alliance');
+    if (bSubAll) {
+      bSubAll.textContent = renfCount;
+      bSubAll.className = renfCount > 0 
+        ? 'text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 font-bold'
+        : 'hidden';
+    }
+
+    // Rétrocompatibilité anciens badges
     const bPlan = document.getElementById('badge-planning-dock');
     if (bPlan) bPlan.textContent = planCount;
-
-    const bPlanMobile = document.getElementById('badge-planning-dock-mobile');
-    if (bPlanMobile) bPlanMobile.textContent = planCount;
-
-    const samuCount = this.missions.filter(m => m.type === 'samu' && (m.status === 'planifie' || m.status === 'ongoing')).length;
-    const bSamuMobile = document.getElementById('badge-samu-dock-mobile');
-    if (bSamuMobile) bSamuMobile.textContent = samuCount;
-
-    const bRadioMobile = document.getElementById('badge-radio-dock-mobile');
-    if (bRadioMobile) bRadioMobile.textContent = this.missions.filter(m => m.status === 'ongoing').length;
-
-    const sdisCount = this.missions.filter(m => m.type === 'pompiers' && (m.status === 'planifie' || m.status === 'ongoing')).length;
-    const bPompiers = document.getElementById('badge-pompiers-dock');
-    if (bPompiers) bPompiers.textContent = sdisCount;
-
     const bDev = document.getElementById('badge-devis-dock');
     if (bDev) bDev.textContent = devisCount;
-
     const bCand = document.getElementById('badge-recrutement-dock');
     if (bCand) bCand.textContent = candCount;
 
-    const bAll = document.getElementById('badge-alliance-dock');
-    if (bAll) {
-      if (renfCount > 0) {
-        bAll.textContent = renfCount;
-        bAll.classList.remove('hidden');
-      } else {
-        bAll.classList.add('hidden');
-      }
-    }
+    // Actualisation du masquage/déblocage automatique
+    this.updateDockAndFiltersVisibility();
 
     // Gestion de la notification cadeau : UNIQUEMENT s'il y a quelque chose de prêt à être réclamé
     const r = this.rewards;
@@ -7027,6 +7490,15 @@ class ProtecGame {
     toast.addEventListener('click', (e) => {
       if (e.target.closest('button')) return; // Clic sur la croix
       toast.remove();
+      if (target) {
+        if (target.type === 'mission' && target.id) {
+          this.openMissionDetails(target.id);
+          return;
+        } else if (target.type === 'module' && target.id) {
+          this.openModule(target.id);
+          return;
+        }
+      }
       if (window.ProtecNotifications && typeof window.ProtecNotifications.handleNotificationClick === 'function') {
         window.ProtecNotifications.handleNotificationClick(0); // Ouvre la toute dernière entrée
       }

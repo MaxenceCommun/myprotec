@@ -30,83 +30,15 @@ const defaultDb = {
       leaderId: 'system',
       leaderName: 'Direction Nationale',
       treasury: 8500,
-      members: ['system-p1', 'system-p2'],
+      members: [],
       color: '#002E6D',
       createdAt: '2026-10-01'
     }
   ],
-  allianceStations: [
-    {
-      id: 'station-allie-92',
-      playerId: 'system-p1',
-      playerName: 'Cdt. Thomas (PC 92)',
-      name: 'Antenne Hauts-de-Seine (Boulogne)',
-      city: 'paris',
-      lat: 48.8397,
-      lng: 2.2399,
-      level: 2,
-      vehicles: 3,
-      volunteers: 12,
-      allianceId: 'alliance-fnpc'
-    },
-    {
-      id: 'station-allie-93',
-      playerId: 'system-p2',
-      playerName: 'Cap. Sophie (PC 93)',
-      name: 'Antenne Seine-Saint-Denis (Saint-Denis)',
-      city: 'paris',
-      lat: 48.9362,
-      lng: 2.3574,
-      level: 2,
-      vehicles: 2,
-      volunteers: 10,
-      allianceId: 'alliance-fnpc'
-    }
-  ],
+  allianceStations: [],
   renforts: [],
-  formationsSpeciales: [
-    {
-      id: 'form-spec-1',
-      organizerPlayerId: 'system-p1',
-      organizerName: 'Cdt. Thomas (PC 92)',
-      allianceId: 'alliance-fnpc',
-      title: 'Stage Fédéral : Chef de Dispositif (CD) & Commandement',
-      type: 'CD',
-      desc: 'Formation de coordination d’envergure inter-antennes avec simulation de Poste de Commandement.',
-      stationName: 'Antenne Boulogne (PC 92)',
-      costPerCandidate: 250,
-      maxCandidates: 6,
-      registeredCandidates: [
-        { volunteerName: 'Julien Bernard', playerName: 'PC 93' }
-      ],
-      durationDays: 3,
-      status: 'open'
-    },
-    {
-      id: 'form-spec-2',
-      organizerPlayerId: 'system-p2',
-      organizerName: 'Cap. Sophie (PC 93)',
-      allianceId: 'alliance-fnpc',
-      title: 'Stage Spécial : Conduite d’Urgence VPSP & Tout-Terrain',
-      type: 'VPSP_PILOT',
-      desc: 'Habilitation conduite rapide en convoi et franchissement.',
-      stationName: 'Antenne Saint-Denis (PC 93)',
-      costPerCandidate: 120,
-      maxCandidates: 8,
-      registeredCandidates: [],
-      durationDays: 2,
-      status: 'open'
-    }
-  ],
-  chatMessages: [
-    {
-      id: 'msg-1',
-      senderName: 'Cdt. Thomas (PC 92)',
-      allianceId: 'alliance-fnpc',
-      text: 'Bienvenue aux nouvelles antennes dans l’Union Fédérale. Dispo pour renforts VPSP sur les gros DPS de fin de semaine !',
-      time: '08:15'
-    }
-  ]
+  formationsSpeciales: [],
+  chatMessages: []
 };
 
 class Database {
@@ -121,7 +53,11 @@ class Database {
       try {
         const raw = fs.readFileSync(DB_FILE, 'utf8');
         const parsed = JSON.parse(raw);
-        // Fusionne avec les valeurs par défaut
+        // Filtrer strictement pour éradiquer TOUTES les antennes fictives créées par le système
+        const cleanedStations = (parsed.allianceStations || []).filter(st => 
+          st && st.id && !st.id.startsWith('station-allie') && !(st.playerId && st.playerId.startsWith('system'))
+        );
+
         return {
           ...defaultDb,
           ...parsed,
@@ -131,9 +67,9 @@ class Database {
           resetArchives: parsed.resetArchives || [],
           departments: parsed.departments || {},
           alliances: parsed.alliances && parsed.alliances.length ? parsed.alliances : defaultDb.alliances,
-          allianceStations: parsed.allianceStations && parsed.allianceStations.length ? parsed.allianceStations : defaultDb.allianceStations,
-          formationsSpeciales: parsed.formationsSpeciales && parsed.formationsSpeciales.length ? parsed.formationsSpeciales : defaultDb.formationsSpeciales,
-          chatMessages: parsed.chatMessages && parsed.chatMessages.length ? parsed.chatMessages : defaultDb.chatMessages
+          allianceStations: cleanedStations,
+          formationsSpeciales: (parsed.formationsSpeciales || []).filter(f => !(f.organizerPlayerId && f.organizerPlayerId.startsWith('system'))),
+          chatMessages: parsed.chatMessages || []
         };
       } catch (e) {
         console.error('Erreur lecture BDD, utilisation état par défaut:', e);

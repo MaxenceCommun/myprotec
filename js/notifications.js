@@ -342,57 +342,94 @@ window.ProtecNotifications = {
       return;
     }
 
-    // Catégories thématiques
-    if (title.includes('devis') || msg.includes('devis')) {
-      game.openModule('missions');
-      setTimeout(() => {
-        const devisTabBtn = document.querySelector('[onclick*="devis"]');
-        if (devisTabBtn) devisTabBtn.click();
-      }, 100);
+    // Catégories thématiques et modules cibles réels
+    if (title.includes('devis') || msg.includes('devis') || item.category === 'dps') {
+      game.openModule('devis');
       return;
     }
 
     if (title.includes('candidat') || title.includes('recrutement') || msg.includes('candidature') || item.category === 'rh') {
-      game.openModule('benevoles');
+      game.openModule('recrutement');
       return;
     }
 
-    if (title.includes('samu') || title.includes('15') || title.includes('garde') || title.includes('sdis') || title.includes('alerte') || title.includes('départ') || title.includes('secours') || title.includes('crise') || title.includes('cai') || title.includes('cump') || title.includes('sinistre')) {
-      const activeUrgent = game.missions.find(m => ['declenche', 'prealerte', 'ongoing'].includes(m.status));
-      if (activeUrgent) {
-        game.openMissionDetails(activeUrgent.id);
+    if (title.includes('samu') || title.includes('15') || item.category === 'samu') {
+      const samuMission = game.missions.find(m => m.type === 'samu' && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
+      if (samuMission) {
+        game.openMissionDetails(samuMission.id);
       } else {
-        game.openModule('missions');
+        game.openModule('samu');
       }
+      return;
+    }
+
+    if (title.includes('sdis') || title.includes('pompier') || title.includes('18') || item.category === 'sdis') {
+      const sdisMission = game.missions.find(m => m.type === 'pompiers' && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
+      if (sdisMission) {
+        game.openMissionDetails(sdisMission.id);
+      } else {
+        game.openModule('pompiers');
+      }
+      return;
+    }
+
+    if (title.includes('crise') || title.includes('novi') || title.includes('cai') || title.includes('cump') || title.includes('sinistre') || title.includes('crash') || title.includes('catastrophe')) {
+      const crisisMission = game.missions.find(m => (m.isCrisis || m.type === 'crise') && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
+      if (crisisMission) {
+        game.openMissionDetails(crisisMission.id);
+      } else {
+        game.openModule('crise');
+      }
+      return;
+    }
+
+    if (title.includes('météo') || title.includes('meteo') || title.includes('vigilance') || title.includes('inondation') || item.category === 'weather' || item.category === 'meteo') {
+      game.openModule('meteo');
+      return;
+    }
+
+    if (title.includes('alliance') || title.includes('fédéral') || item.category === 'alliance') {
+      game.openModule('alliance');
       return;
     }
 
     if (title.includes('spécialité') || title.includes('drone') || title.includes('cyno') || title.includes('bateau')) {
-      if (window.ProtecSpecialites) {
-        window.ProtecSpecialites.openSpecialitesModal(game);
-      }
+      game.openModule('specialites');
       return;
     }
 
     if (title.includes('pôle') || title.includes('pole')) {
-      if (window.ProtecPoles) {
-        window.ProtecPoles.openModal(game);
-      }
+      game.openModule('poles');
       return;
     }
 
-    if (title.includes('local') || title.includes('bâtiment') || title.includes('sécurité') || title.includes('travaux')) {
+    if (title.includes('local') || title.includes('bâtiment') || title.includes('sécurité') || title.includes('travaux') || title.includes('aménagement')) {
       game.openModule('locaux');
       return;
     }
 
-    if (title.includes('flotte') || title.includes('véhicule') || title.includes('vpsp') || title.includes('réarmement')) {
-      game.openModule('flotte');
+    if (title.includes('flotte') || title.includes('véhicule') || title.includes('vpsp') || title.includes('réarmement') || title.includes('ambulance')) {
+      game.openModule('base');
       return;
     }
 
-    // Par défaut : ouvrir les missions
-    game.openModule('missions');
+    if (title.includes('social') || title.includes('maraude') || title.includes('115')) {
+      game.openModule('social');
+      return;
+    }
+
+    if (title.includes('formation') || title.includes('psc1') || title.includes('sst')) {
+      game.openModule('formation');
+      return;
+    }
+
+    // Par défaut : ouvrir le planning des missions opérationnelles
+    const firstActive = game.missions.find(m => ['declenche', 'prealerte', 'ongoing', 'planifie'].includes(m.status));
+    if (firstActive) {
+      game.openMissionDetails(firstActive.id);
+    } else {
+      game.openModule('planning');
+    }
   },
 
   clearHistory() {

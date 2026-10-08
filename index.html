@@ -304,41 +304,44 @@
         <span class="w-2 h-2 rounded-full bg-pc-blue"></span>
         DPS (<span id="count-dps">0</span>)
       </button>
-      <button onclick="window.game.setFilter('samu')" id="filter-btn-samu" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-pc-orange transition flex items-center gap-1.5 flex-shrink-0">
+      <button data-feature-key="samu" onclick="window.game.setFilter('samu')" id="filter-btn-samu" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-pc-orange transition flex items-center gap-1.5 flex-shrink-0">
         <span class="w-2 h-2 rounded-full bg-pc-orange"></span>
         SAMU 15 (<span id="count-samu">0</span>)
       </button>
-      <button onclick="window.game.setFilter('social')" id="filter-btn-social" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-purple-600 transition flex items-center gap-1.5 flex-shrink-0">
+      <button data-feature-key="pompiers" onclick="window.game.setFilter('pompiers')" id="filter-btn-pompiers" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-red-700 transition flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-red-700"></span>
+        Garde SDIS (<span id="count-pompiers">0</span>)
+      </button>
+      <button data-feature-key="social" onclick="window.game.setFilter('social')" id="filter-btn-social" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-purple-600 transition flex items-center gap-1.5 flex-shrink-0">
         <span class="w-2 h-2 rounded-full bg-purple-600"></span>
         Social (<span id="count-social">0</span>)
       </button>
-      <button onclick="window.game.setFilter('crise')" id="filter-btn-crise" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-red-600 transition flex items-center gap-1.5 flex-shrink-0">
+      <button data-feature-key="crise" onclick="window.game.setFilter('crise')" id="filter-btn-crise" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-red-600 transition flex items-center gap-1.5 flex-shrink-0">
         <span class="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
         Crise NOVI (<span id="count-crise">0</span>)
       </button>
-      <button onclick="window.game.openModule('pompiers')" id="filter-btn-pompiers" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-red-700 transition flex items-center gap-1.5 flex-shrink-0">
-        <span class="w-2 h-2 rounded-full bg-red-700"></span>
-        Garde Caserne / Astreinte (<span id="count-pompiers">0</span>)
-      </button>
       <button onclick="window.game.setFilter('meteo')" id="filter-btn-meteo" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-sky-600 transition flex items-center gap-1.5 flex-shrink-0">
         <span class="w-2 h-2 rounded-full bg-sky-500"></span>
-        Météo-France (<span id="count-meteo">0</span>)
+        Météo (<span id="count-meteo">0</span>)
       </button>
 
-      <!-- Raccourcis utiles sur mobile intégrés dans le défilement horizontal fluide -->
+      <!-- Raccourcis utiles sur mobile avec icônes SVG propres -->
       <button onclick="window.ProtecAds.openAdModal(window.game)" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-700 items-center gap-1 flex-shrink-0" title="Publicité (+500 €)">
-        <span>📺</span>
+        <i data-lucide="tv" class="w-3.5 h-3.5 text-amber-600"></i>
         <span>Pub</span>
         <span id="ad-count-badge-mobile" class="text-[9px] font-black bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded">5/5</span>
       </button>
       <button onclick="window.game.openModule('meteo')" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 items-center gap-1 flex-shrink-0">
-        <span>🌤️</span> Météo
+        <i data-lucide="cloud-sun" class="w-3.5 h-3.5 text-sky-600"></i>
+        <span>Météo</span>
       </button>
       <button onclick="window.game.openModule('recompenses')" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 items-center gap-1 flex-shrink-0">
-        <span>🎁</span> Cadeaux
+        <i data-lucide="gift" class="w-3.5 h-3.5 text-rose-500"></i>
+        <span>Cadeaux</span>
       </button>
       <button id="pwa-install-btn-mobile" onclick="window.ProtecPWA.promptInstall()" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-bold text-pc-blue items-center gap-1 flex-shrink-0" title="Installer l'application">
-        <span>📲</span> App
+        <i data-lucide="download" class="w-3.5 h-3.5 text-pc-blue"></i>
+        <span>App</span>
       </button>
     </div>
   </header>
@@ -356,198 +359,271 @@
   <!-- BOTTOM FLOATING ACTION DOCK (Responsive Mobile & Desktop) -->
   <nav class="fixed bottom-2 sm:bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto max-w-[100vw] px-2 flex justify-center w-full">
     
-    <!-- DESKTOP DOCK (>= 768px) -->
-    <div class="hidden md:flex glass-panel-heavy dock-container no-scrollbar px-3 py-2 rounded-3xl items-center gap-2 shadow-2xl border border-white/80 overflow-x-auto">
+    <!-- DESKTOP DOCK (>= 768px) : Hiérarchie par Menus & Sous-menus déverrouillés -->
+    <div class="hidden md:flex glass-panel-heavy dock-container px-3 py-2 rounded-3xl items-center gap-2 shadow-2xl border border-white/80">
       
-      <!-- Planning & DPS Module -->
-      <button onclick="window.game.openModule('planning')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-pc-blue/10 transition-all duration-200 flex-shrink-0">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-pc-blue group-hover:scale-110 transition-transform">
-          <i data-lucide="calendar" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
-        </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-pc-blue tracking-tight">Planning</span>
-        <span id="badge-planning-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-pc-blue text-white shadow-sm">0</span>
-      </button>
+      <!-- 1. MENU PRINCIPAL : MISSIONS -->
+      <div class="dock-menu-wrapper relative">
+        <button onclick="window.game.toggleDockSubmenu('missions', event)" id="dock-btn-missions" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-pc-blue/10 transition-all duration-200 flex-shrink-0" title="Toutes les missions et opérations">
+          <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-pc-blue group-hover:scale-110 transition-transform">
+            <i data-lucide="calendar" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+          </div>
+          <span class="text-[9px] sm:text-[10px] font-bold text-slate-700 group-hover:text-pc-blue tracking-tight">Missions</span>
+          <span id="badge-missions-main-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-pc-blue text-white shadow-sm">0</span>
+        </button>
 
-      <!-- Devis & Subventions Module -->
-      <button onclick="window.game.openModule('devis')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-amber-50 transition-all duration-200 flex-shrink-0">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
-          <i data-lucide="file-check" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+        <!-- Sous-menu Missions flottant -->
+        <div id="dock-submenu-missions" class="dock-submenu">
+          <div class="dock-submenu-header">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Missions & Dispositifs</span>
+            <span class="text-[9px] font-bold text-pc-blue">Menu</span>
+          </div>
+          <button onclick="window.game.openModule('planning'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
+              <span>Planning & DPS</span>
+            </div>
+            <span id="badge-submenu-planning" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('devis'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="file-text" class="w-4 h-4 text-amber-600"></i>
+              <span>Devis & Contrats</span>
+            </div>
+            <span id="badge-submenu-devis" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button data-feature-key="samu" onclick="window.game.openModule('samu'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="activity" class="w-4 h-4 text-pc-orange"></i>
+              <span>SAMU 15 (VPSP)</span>
+            </div>
+            <span id="badge-submenu-samu" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button data-feature-key="pompiers" onclick="window.game.openModule('pompiers'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="flame" class="w-4 h-4 text-red-700"></i>
+              <span>Garde SDIS</span>
+            </div>
+            <span id="badge-submenu-pompiers" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button data-feature-key="social" onclick="window.game.openModule('social'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="heart-handshake" class="w-4 h-4 text-purple-600"></i>
+              <span>Action Sociale</span>
+            </div>
+            <span id="badge-submenu-social" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button data-feature-key="crise" onclick="window.game.openModule('crise'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="siren" class="w-4 h-4 text-red-600"></i>
+              <span>Crise NOVI / ORSEC</span>
+            </div>
+            <span id="badge-submenu-crise" class="text-[9px] px-1.5 py-0.2 rounded-full bg-red-100 text-red-700 font-bold">0</span>
+          </button>
         </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-amber-600 tracking-tight">Finances</span>
-        <span id="badge-devis-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-amber-500 text-white shadow-sm">0</span>
-      </button>
+      </div>
 
-      <!-- SAMU 15 Module -->
-      <button onclick="window.game.openModule('samu')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-pc-orange/10 transition-all duration-200 flex-shrink-0">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-pc-orange group-hover:scale-110 transition-transform">
-          <i data-lucide="activity" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
-        </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-pc-orange tracking-tight">SAMU 15</span>
-        <span id="badge-samu-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-pc-orange text-white shadow-sm">0</span>
-      </button>
+      <!-- 2. MENU PRINCIPAL : EFFECTIFS & RH -->
+      <div class="dock-menu-wrapper relative">
+        <button onclick="window.game.toggleDockSubmenu('rh', event)" id="dock-btn-rh" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-indigo-50 transition-all duration-200 flex-shrink-0" title="Gestion des bénévoles et formations">
+          <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+            <i data-lucide="users" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+          </div>
+          <span class="text-[9px] sm:text-[10px] font-bold text-slate-700 group-hover:text-indigo-600 tracking-tight">Effectifs</span>
+          <span id="badge-rh-main-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-indigo-500 text-white shadow-sm">0</span>
+        </button>
 
-      <!-- Main Courante & Radio Module -->
-      <button onclick="window.game.openModule('radio')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-sky-50 transition-all duration-200 flex-shrink-0">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-sky-600 group-hover:scale-110 transition-transform">
-          <i data-lucide="radio" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+        <!-- Sous-menu RH flottant -->
+        <div id="dock-submenu-rh" class="dock-submenu">
+          <div class="dock-submenu-header">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Effectifs & Ressources</span>
+            <span class="text-[9px] font-bold text-indigo-600">RH</span>
+          </div>
+          <button onclick="window.game.openModule('recrutement'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="users" class="w-4 h-4 text-indigo-600"></i>
+              <span>Bénévoles & Équipe</span>
+            </div>
+            <span id="badge-submenu-benevoles" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('recrutement'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="user-plus" class="w-4 h-4 text-indigo-600"></i>
+              <span>Recrutement & Civiques</span>
+            </div>
+            <span id="badge-submenu-recrutement" class="text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('formation'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="graduation-cap" class="w-4 h-4 text-emerald-600"></i>
+              <span>Formations & Rangs</span>
+            </div>
+          </button>
+          <button data-feature-key="poles" onclick="window.game.openModule('poles'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="layers" class="w-4 h-4 text-indigo-600"></i>
+              <span>Pôles d'Antenne</span>
+            </div>
+          </button>
         </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-sky-600 tracking-tight">Radio PC</span>
-        <span id="badge-radio-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-sky-600 text-white shadow-sm">0</span>
-      </button>
+      </div>
 
-      <!-- Logistique & Pharmacie Module -->
-      <button onclick="window.game.openModule('logistique')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-teal-50 transition-all duration-200 flex-shrink-0">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-teal-600 group-hover:scale-110 transition-transform">
-          <i data-lucide="package-check" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
-        </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-teal-600 tracking-tight">Logistique</span>
-        <span id="badge-logistique-dock" class="hidden absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-amber-500 text-white shadow-sm">!</span>
-      </button>
+      <!-- 3. MENU PRINCIPAL : BASE & MATÉRIEL -->
+      <div class="dock-menu-wrapper relative">
+        <button onclick="window.game.toggleDockSubmenu('materiel', event)" id="dock-btn-materiel" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-slate-100 transition-all duration-200 flex-shrink-0" title="Véhicules, locaux et logistique">
+          <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 group-hover:scale-110 transition-transform">
+            <i data-lucide="building-2" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+          </div>
+          <span class="text-[9px] sm:text-[10px] font-bold text-slate-700 group-hover:text-slate-900 tracking-tight">Matériel</span>
+          <span id="badge-materiel-main-dock" class="hidden absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-amber-500 text-white shadow-sm">!</span>
+        </button>
 
-      <!-- Action Sociale Module -->
-      <button onclick="window.game.openModule('social')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-purple-50 transition-all duration-200 flex-shrink-0">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform">
-          <i data-lucide="heart-handshake" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+        <!-- Sous-menu Matériel flottant -->
+        <div id="dock-submenu-materiel" class="dock-submenu">
+          <div class="dock-submenu-header">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Base, Locaux & Logistique</span>
+            <span class="text-[9px] font-bold text-slate-600">Flotte</span>
+          </div>
+          <button onclick="window.game.openModule('base'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="truck" class="w-4 h-4 text-slate-700"></i>
+              <span>Antennes & Flotte</span>
+            </div>
+            <span id="badge-submenu-vehicules" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('locaux'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="layout-grid" class="w-4 h-4 text-amber-600"></i>
+              <span>Locaux & Plan 2D</span>
+            </div>
+          </button>
+          <button onclick="window.game.openModule('logistique'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="package-check" class="w-4 h-4 text-teal-600"></i>
+              <span>Logistique & Lots A/B/C</span>
+            </div>
+            <span id="badge-submenu-logistique" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-700 font-bold">!</span>
+          </button>
+          <button data-feature-key="specialites" onclick="window.game.openModule('specialites'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="crosshair" class="w-4 h-4 text-sky-600"></i>
+              <span>Spécialités (Drone, Cyno...)</span>
+            </div>
+          </button>
         </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-purple-600 tracking-tight">Social</span>
-        <span id="badge-social-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-purple-600 text-white shadow-sm">0</span>
-      </button>
+      </div>
+
+      <!-- 4. MENU PRINCIPAL : LIAISONS & RÉSEAU -->
+      <div class="dock-menu-wrapper relative">
+        <button onclick="window.game.toggleDockSubmenu('liaisons', event)" id="dock-btn-liaisons" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-sky-50 transition-all duration-200 flex-shrink-0" title="Radio, alliances et veille">
+          <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-sky-600 group-hover:scale-110 transition-transform">
+            <i data-lucide="radio" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+          </div>
+          <span class="text-[9px] sm:text-[10px] font-bold text-slate-700 group-hover:text-sky-600 tracking-tight">Liaisons</span>
+          <span id="badge-liaisons-main-dock" class="hidden absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-sky-600 text-white shadow-sm">0</span>
+        </button>
+
+        <!-- Sous-menu Liaisons flottant -->
+        <div id="dock-submenu-liaisons" class="dock-submenu">
+          <div class="dock-submenu-header">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Liaisons & Réseau</span>
+            <span class="text-[9px] font-bold text-sky-600">Radio</span>
+          </div>
+          <button onclick="window.game.openModule('radio'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="radio" class="w-4 h-4 text-sky-600"></i>
+              <span>Radio PC & Main courante</span>
+            </div>
+            <span id="badge-submenu-radio" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button data-feature-key="alliance" onclick="window.game.openModule('alliance'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="handshake" class="w-4 h-4 text-indigo-600"></i>
+              <span>Alliances & Renforts</span>
+            </div>
+            <span id="badge-submenu-alliance" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('meteo'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="cloud-sun" class="w-4 h-4 text-sky-600"></i>
+              <span>Météo-France</span>
+            </div>
+          </button>
+        </div>
+      </div>
 
       <div class="h-8 w-px bg-slate-200 mx-0.5 sm:mx-1 flex-shrink-0"></div>
 
-      <!-- Recrutement, Vie Assos & Cohésion Module -->
-      <button onclick="window.game.openModule('recrutement')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-indigo-50 transition-all duration-200 flex-shrink-0">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-          <i data-lucide="users" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
-        </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-indigo-600 tracking-tight">Bénévoles</span>
-        <span id="badge-recrutement-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-indigo-500 text-white shadow-sm">0</span>
-      </button>
-
-      <!-- Formation Module -->
-      <button onclick="window.game.openModule('formation')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-emerald-50 transition-all duration-200 flex-shrink-0">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
-          <i data-lucide="graduation-cap" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
-        </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-emerald-600 tracking-tight">Formation</span>
-      </button>
-
-      <!-- Bâtiments & Véhicules -->
-      <button onclick="window.game.openModule('base')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-slate-100 transition-all duration-200 flex-shrink-0">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 group-hover:scale-110 transition-transform">
-          <i data-lucide="building-2" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
-        </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-slate-900 tracking-tight">Antennes</span>
-      </button>
-
-      <!-- Locaux & Bâtiment d'Antenne -->
-      <button onclick="window.game.openModule('locaux')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-amber-50 transition-all duration-200 flex-shrink-0" title="Gestion des Locaux, Plan 2D & Zones d'Aménagement">
+      <!-- 5. ACCÈS DIRECT FINANCES & DEVIS -->
+      <button onclick="window.game.openModule('devis')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-amber-50 transition-all duration-200 flex-shrink-0" title="Trésorerie, devis et subventions">
         <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
-          <i data-lucide="layout-grid" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+          <i data-lucide="file-check" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
         </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-amber-600 tracking-tight">Locaux</span>
+        <span class="text-[9px] sm:text-[10px] font-bold text-slate-700 group-hover:text-amber-600 tracking-tight">Finances</span>
+        <span id="badge-devis-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-amber-500 text-white shadow-sm">0</span>
       </button>
 
-      <!-- Pôles Opérationnels & Gouvernance -->
-      <button onclick="window.game.openModule('poles')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-indigo-50 transition-all duration-200 flex-shrink-0" title="4 Pôles d'Antenne">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-          <i data-lucide="layers" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
-        </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-indigo-600 tracking-tight">Pôles</span>
-      </button>
-
-      <!-- Spécialités Opérationnelles (Drone, Cyno, Bateau, 4x4, Moto) -->
-      <button onclick="window.game.openModule('specialites')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-sky-50 transition-all duration-200 flex-shrink-0" title="Spécialités : Drones, Chiens de recherche, Bateaux, 4x4, Motos">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-sky-600 group-hover:scale-110 transition-transform">
-          <i data-lucide="crosshair" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
-        </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-sky-600 tracking-tight">Spécialités</span>
-      </button>
-
-      <!-- Alliance & Multijoueur Module -->
-      <button onclick="window.game.openModule('alliance')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-indigo-50 transition-all duration-200 flex-shrink-0">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-          <i data-lucide="handshake" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
-        </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-indigo-600 tracking-tight">Alliances</span>
-        <span id="badge-alliance-dock" class="hidden absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-indigo-600 text-white shadow-sm">0</span>
-      </button>
-
-      <!-- Garde Caserne Pompiers & Astreinte Domicile (Violences urbaines / Débordements) -->
-      <button onclick="window.game.openModule('pompiers')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-red-50 transition-all duration-200 flex-shrink-0" title="Garde Caserne Pompiers & Astreinte Domicile">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-red-700 group-hover:scale-110 transition-transform">
-          <i data-lucide="flame" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
-        </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-red-700 tracking-tight">Garde SDIS</span>
-        <span id="badge-pompiers-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-red-700 text-white shadow-sm">0</span>
-      </button>
-
-      <!-- Plan NOVI / Crises -->
-      <button onclick="window.game.openModule('crise')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-red-50 transition-all duration-200 flex-shrink-0">
-        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-red-600 group-hover:scale-110 transition-transform">
-          <i data-lucide="siren" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
-        </div>
-        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-red-600 tracking-tight">Crise NOVI</span>
-        <span id="badge-crise-dock" class="hidden absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-red-600 text-white animate-bounce shadow">URGENT</span>
-      </button>
     </div>
 
     <!-- MOBILE BOTTOM BAR (< 768px) : Dock 5 onglets fluide au pouce -->
     <div class="flex md:hidden glass-panel-heavy dock-container safe-bottom px-1.5 py-1.5 rounded-2xl items-center justify-around gap-0.5 shadow-2xl border border-white/80 w-[calc(100vw-1rem)] max-w-sm">
-      <!-- 1. Planning -->
-      <button onclick="window.game.openModule('planning')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-pc-blue/10 min-w-0">
+      <!-- 1. Missions -->
+      <button onclick="window.game.openModule('planning')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-pc-blue/10 min-w-0" title="Planning & Missions">
         <div class="relative">
           <i data-lucide="calendar" class="w-5 h-5 text-pc-blue"></i>
-          <span id="badge-planning-dock-mobile" class="absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-pc-blue text-white min-w-[14px] text-center leading-tight">0</span>
+          <span id="badge-missions-mobile" class="absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-pc-blue text-white min-w-[14px] text-center leading-tight">0</span>
         </div>
-        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Planning</span>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Missions</span>
       </button>
 
-      <!-- 2. SAMU 15 -->
-      <button onclick="window.game.openModule('samu')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-pc-orange/10 min-w-0">
+      <!-- 2. Effectifs & RH -->
+      <button onclick="window.game.openModule('recrutement')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-indigo-50 min-w-0" title="Bénévoles & Recrutement">
         <div class="relative">
-          <i data-lucide="activity" class="w-5 h-5 text-pc-orange"></i>
-          <span id="badge-samu-dock-mobile" class="absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-pc-orange text-white min-w-[14px] text-center leading-tight">0</span>
+          <i data-lucide="users" class="w-5 h-5 text-indigo-600"></i>
+          <span id="badge-rh-mobile" class="absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-indigo-600 text-white min-w-[14px] text-center leading-tight">0</span>
         </div>
-        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">SAMU 15</span>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Effectifs</span>
       </button>
 
-      <!-- 3. Radio PC -->
-      <button onclick="window.game.openModule('radio')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-sky-50 min-w-0">
+      <!-- 3. Base & Matériel -->
+      <button onclick="window.game.openModule('base')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-slate-100 min-w-0" title="Flotte & Locaux">
+        <div class="relative">
+          <i data-lucide="building-2" class="w-5 h-5 text-slate-700"></i>
+          <span id="badge-materiel-mobile" class="hidden absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-amber-500 text-white min-w-[14px] text-center leading-tight">!</span>
+        </div>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Matériel</span>
+      </button>
+
+      <!-- 4. Liaisons & Radio -->
+      <button onclick="window.game.openModule('radio')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-sky-50 min-w-0" title="Radio & Liaisons">
         <div class="relative">
           <i data-lucide="radio" class="w-5 h-5 text-sky-600"></i>
-          <span id="badge-radio-dock-mobile" class="absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-sky-600 text-white min-w-[14px] text-center leading-tight">0</span>
+          <span id="badge-liaisons-mobile" class="hidden absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-sky-600 text-white min-w-[14px] text-center leading-tight">0</span>
         </div>
-        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Radio</span>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Liaisons</span>
       </button>
 
-      <!-- 4. Antenne / Flotte -->
-      <button onclick="window.game.openModule('base')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-indigo-50 min-w-0">
-        <i data-lucide="building-2" class="w-5 h-5 text-indigo-600"></i>
-        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Antennes</span>
-      </button>
-
-      <!-- 5. Tous les Modules (Menu rapide) -->
-      <button onclick="window.game.openMobileMenu()" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-amber-50 min-w-0 text-pc-orange">
+      <!-- 5. Tous les Modules (Menu hiérarchique) -->
+      <button onclick="window.game.openMobileMenu()" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-amber-50 min-w-0 text-pc-orange" title="Centre de Commandement">
         <i data-lucide="layout-grid" class="w-5 h-5"></i>
-        <span class="text-[9px] font-extrabold mt-0.5 truncate max-w-full">Modules</span>
+        <span class="text-[9px] font-extrabold mt-0.5 truncate max-w-full">Menu</span>
       </button>
     </div>
   </nav>
 
   <!-- MODAL VOLET RAPIDE MODULES MOBILE -->
   <div id="mobile-modules-sheet" class="hidden fixed inset-0 z-50 items-end justify-center bg-slate-950/70 backdrop-blur-md p-2 sm:p-4 animate-in fade-in" onclick="if(event.target === this) window.game.closeMobileMenu()">
-    <div class="w-full max-w-lg rounded-t-3xl sm:rounded-3xl glass-panel-heavy border border-white/90 p-5 shadow-2xl relative max-h-[85vh] overflow-y-auto no-scrollbar">
+    <div class="w-full max-w-lg rounded-t-3xl sm:rounded-3xl glass-panel-heavy border border-white/90 p-5 shadow-2xl relative max-h-[85vh] overflow-y-auto no-scrollbar space-y-4">
       <!-- Handle bar & Header -->
-      <div class="w-12 h-1.5 rounded-full bg-slate-300 mx-auto mb-3"></div>
-      <div class="flex items-center justify-between pb-3 border-b border-slate-200/60 mb-4">
+      <div class="w-12 h-1.5 rounded-full bg-slate-300 mx-auto"></div>
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200/60">
         <div class="flex items-center gap-2.5">
           <div class="w-8 h-8 rounded-xl bg-pc-blue/10 text-pc-blue flex items-center justify-center font-bold">
             <i data-lucide="layout-grid" class="w-4 h-4"></i>
           </div>
           <div>
             <h3 class="text-sm font-black text-slate-900">Centre Opérationnel</h3>
-            <p class="text-[10px] text-slate-500 font-semibold">Tous les modules & actions</p>
+            <p class="text-[10px] text-slate-500 font-semibold">Modules et services actifs</p>
           </div>
         </div>
         <button onclick="window.game.closeMobileMenu()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
@@ -555,106 +631,144 @@
         </button>
       </div>
 
-      <!-- Grille d'actions 3x3 -->
-      <div class="grid grid-cols-3 gap-2.5 text-center">
-        <!-- Devis & Finances -->
-        <button onclick="window.game.closeMobileMenu(); window.game.openModule('devis')" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="file-check" class="w-5 h-5"></i>
-          </div>
-          <span class="text-xs font-bold text-slate-700">Finances</span>
-          <span class="text-[9px] text-slate-400">Devis & Dons</span>
-        </button>
+      <!-- Section 1 : Missions & Dispositifs -->
+      <div class="space-y-1.5">
+        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Missions & Urgences</span>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('planning')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-blue-50 text-pc-blue flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="calendar" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Planning</span>
+            <span class="text-[9px] text-slate-400">DPS</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('devis')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="file-text" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Devis</span>
+            <span class="text-[9px] text-slate-400">Contrats</span>
+          </button>
+          <button data-feature-key="samu" onclick="window.game.closeMobileMenu(); window.game.openModule('samu')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-orange-50 text-pc-orange flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="activity" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">SAMU 15</span>
+            <span class="text-[9px] text-slate-400">Astreinte</span>
+          </button>
+          <button data-feature-key="pompiers" onclick="window.game.closeMobileMenu(); window.game.openModule('pompiers')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-red-50 text-red-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="flame" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-red-700">Garde SDIS</span>
+            <span class="text-[9px] text-slate-400">Caserne</span>
+          </button>
+          <button data-feature-key="social" onclick="window.game.closeMobileMenu(); window.game.openModule('social')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="heart-handshake" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Social</span>
+            <span class="text-[9px] text-slate-400">Maraudes</span>
+          </button>
+          <button data-feature-key="crise" onclick="window.game.closeMobileMenu(); window.game.openModule('crise')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-red-100 text-red-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="siren" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-red-600">Crise NOVI</span>
+            <span class="text-[9px] text-slate-400">ORSEC</span>
+          </button>
+        </div>
+      </div>
 
-        <!-- Logistique & Pharmacie -->
-        <button onclick="window.game.closeMobileMenu(); window.game.openModule('logistique')" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="package-check" class="w-5 h-5"></i>
-          </div>
-          <span class="text-xs font-bold text-slate-700">Logistique</span>
-          <span class="text-[9px] text-slate-400">Pharmacie</span>
-        </button>
+      <!-- Section 2 : Effectifs & RH -->
+      <div class="space-y-1.5">
+        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Effectifs & Bénévoles</span>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('recrutement')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="users" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Bénévoles</span>
+            <span class="text-[9px] text-slate-400">Recrutement</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('formation')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="graduation-cap" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Formation</span>
+            <span class="text-[9px] text-slate-400">PSE & Rangs</span>
+          </button>
+          <button data-feature-key="poles" onclick="window.game.closeMobileMenu(); window.game.openModule('poles')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="layers" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Pôles</span>
+            <span class="text-[9px] text-slate-400">Direction</span>
+          </button>
+        </div>
+      </div>
 
-        <!-- Locaux & Bâtiment d'Antenne -->
-        <button onclick="window.game.closeMobileMenu(); window.game.openModule('locaux')" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="layout-grid" class="w-5 h-5"></i>
-          </div>
-          <span class="text-xs font-bold text-slate-700">Locaux</span>
-          <span class="text-[9px] text-slate-400">Plan 2D & Zones</span>
-        </button>
+      <!-- Section 3 : Base, Locaux & Matériel -->
+      <div class="space-y-1.5">
+        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Base & Matériel</span>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('base')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="truck" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Flotte</span>
+            <span class="text-[9px] text-slate-400">Véhicules</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('locaux')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="layout-grid" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Locaux</span>
+            <span class="text-[9px] text-slate-400">Plan 2D</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('logistique')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="package-check" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Lots A/B/C</span>
+            <span class="text-[9px] text-slate-400">Pharmacie</span>
+          </button>
+          <button data-feature-key="specialites" onclick="window.game.closeMobileMenu(); window.game.openModule('specialites')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="crosshair" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Spécialités</span>
+            <span class="text-[9px] text-slate-400">Drones / Cyno</span>
+          </button>
+        </div>
+      </div>
 
-        <!-- Action Sociale -->
-        <button onclick="window.game.closeMobileMenu(); window.game.openModule('social')" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="heart-handshake" class="w-5 h-5"></i>
-          </div>
-          <span class="text-xs font-bold text-slate-700">Social</span>
-          <span class="text-[9px] text-slate-400">Maraudes</span>
-        </button>
-
-        <!-- Bénévoles & Recrutement -->
-        <button onclick="window.game.closeMobileMenu(); window.game.openModule('recrutement')" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="users" class="w-5 h-5"></i>
-          </div>
-          <span class="text-xs font-bold text-slate-700">Bénévoles</span>
-          <span class="text-[9px] text-slate-400">Recrutement</span>
-        </button>
-
-        <!-- Pôle Formation -->
-        <button onclick="window.game.closeMobileMenu(); window.game.openModule('formation')" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="graduation-cap" class="w-5 h-5"></i>
-          </div>
-          <span class="text-xs font-bold text-slate-700">Formation</span>
-          <span class="text-[9px] text-slate-400">PSC1 & Rangs</span>
-        </button>
-
-        <!-- Alliances Multijoueur -->
-        <button onclick="window.game.closeMobileMenu(); window.game.openModule('alliance')" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-blue-50 text-pc-blue flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="handshake" class="w-5 h-5"></i>
-          </div>
-          <span class="text-xs font-bold text-slate-700">Alliances</span>
-          <span class="text-[9px] text-slate-400">Multijoueur</span>
-        </button>
-
-        <!-- Garde SDIS Pompiers & Astreinte Domicile -->
-        <button onclick="window.game.closeMobileMenu(); window.game.openModule('pompiers')" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="flame" class="w-5 h-5"></i>
-          </div>
-          <span class="text-xs font-bold text-red-700">Garde SDIS</span>
-          <span class="text-[9px] text-slate-400">Caserne / Astreinte</span>
-        </button>
-
-        <!-- Crises NOVI -->
-        <button onclick="window.game.closeMobileMenu(); window.game.openModule('crise')" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="siren" class="w-5 h-5"></i>
-          </div>
-          <span class="text-xs font-bold text-red-600">Crise NOVI</span>
-          <span class="text-[9px] text-slate-400">ORSEC & PMA</span>
-        </button>
-
-        <!-- Météo-France -->
-        <button onclick="window.game.closeMobileMenu(); window.game.openModule('meteo')" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="cloud-sun" class="w-5 h-5"></i>
-          </div>
-          <span class="text-xs font-bold text-slate-700">Météo</span>
-          <span class="text-[9px] text-slate-400">Vigilance</span>
-        </button>
-
-        <!-- Pôle Compétences & Bureau -->
-        <button onclick="window.game.closeMobileMenu(); window.game.openModule('competences')" class="mobile-grid-btn group">
-          <div class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
-            <i data-lucide="award" class="w-5 h-5"></i>
-          </div>
-          <span class="text-xs font-bold text-slate-700">Bureau</span>
-          <span class="text-[9px] text-slate-400">Direction</span>
-        </button>
+      <!-- Section 4 : Liaisons & Réseau -->
+      <div class="space-y-1.5">
+        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Liaisons & Réseau</span>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('radio')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="radio" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Radio PC</span>
+            <span class="text-[9px] text-slate-400">En direct</span>
+          </button>
+          <button data-feature-key="alliance" onclick="window.game.closeMobileMenu(); window.game.openModule('alliance')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-blue-50 text-pc-blue flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="handshake" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Alliances</span>
+            <span class="text-[9px] text-slate-400">Renforts</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('meteo')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="cloud-sun" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Météo</span>
+            <span class="text-[9px] text-slate-400">Vigilance</span>
+          </button>
+        </div>
       </div>
 
       <!-- Actions de bas de volet -->
@@ -673,17 +787,17 @@
   </div>
 
   <!-- SLIDING CONTEXT DRAWER (Panneau Latéral Droit) -->
-  <aside id="context-drawer" class="fixed top-4 right-4 bottom-4 w-full sm:w-[440px] z-40 hidden flex-col glass-panel-heavy rounded-3xl overflow-hidden shadow-2xl border border-white/90">
+  <aside id="context-drawer" class="fixed top-2 sm:top-4 right-2 sm:right-4 bottom-2 sm:bottom-4 w-[calc(100vw-1rem)] sm:w-[470px] md:w-[490px] z-40 hidden flex-col glass-panel-heavy rounded-3xl overflow-hidden shadow-2xl border border-white/90">
     
     <!-- Drawer Header -->
     <div class="px-5 py-4 border-b border-slate-100/80 flex items-center justify-between bg-white/40">
-      <div class="flex items-center gap-2.5">
-        <div id="drawer-icon-box" class="w-9 h-9 rounded-xl bg-pc-blue/10 text-pc-blue flex items-center justify-center">
+      <div class="flex items-center gap-2.5 flex-1 min-w-0 pr-2">
+        <div id="drawer-icon-box" class="w-9 h-9 rounded-xl bg-pc-blue/10 text-pc-blue flex items-center justify-center flex-shrink-0">
           <i id="drawer-header-icon" data-lucide="file-text" class="w-5 h-5"></i>
         </div>
-        <div>
-          <span id="drawer-category-badge" class="text-[10px] uppercase font-bold tracking-wider text-slate-400">FICHE MISSION</span>
-          <h2 id="drawer-title" class="text-sm font-extrabold text-slate-900 leading-tight truncate max-w-[260px]">Détail</h2>
+        <div class="min-w-0 flex-1">
+          <span id="drawer-category-badge" class="text-[10px] uppercase font-bold tracking-wider text-slate-400 block truncate">FICHE MISSION</span>
+          <h2 id="drawer-title" class="text-sm font-extrabold text-slate-900 leading-tight line-clamp-2">Détail</h2>
         </div>
       </div>
       <button onclick="window.game.closeDrawer()" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition">
@@ -697,7 +811,7 @@
     </div>
 
     <!-- Drawer Action Footer -->
-    <div id="drawer-footer" class="p-4 border-t border-slate-100/80 bg-white/60 flex items-center justify-between gap-3">
+    <div id="drawer-footer" class="p-3 sm:p-4 border-t border-slate-200/80 bg-slate-50/90 flex flex-wrap items-center justify-between gap-2">
       <!-- Boutons dynamiques (Engager, Clôturer, etc.) -->
     </div>
   </aside>
@@ -726,6 +840,11 @@
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
         </div>
+      </div>
+
+      <!-- Sous-navigation contextuelle de catégorie (Menus et sous-menus d'onglets) -->
+      <div id="modal-category-subnav" class="hidden px-6 pt-3 pb-0 border-b border-slate-100 bg-slate-50/70 overflow-x-auto no-scrollbar">
+        <!-- Rempli dynamiquement par renderModalCategorySubnav() -->
       </div>
 
       <!-- Modal Body -->
@@ -922,7 +1041,10 @@
   <script src="js/modals.js"></script>
   <script src="js/advanced_systems.js"></script>
   <script src="js/advanced_modals.js"></script>
-  <script src="js/departements.js"></script>
+  <!-- SUPABASE CLOUD DATABASE CLIENT (POSTGRESQL) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js"></script>
+
   <script src="js/auth.js"></script>
   <script src="js/privacy.js"></script>
   <script src="js/ads.js"></script>

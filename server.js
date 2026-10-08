@@ -21,24 +21,26 @@ const gameState = {
   players: {}, // En mémoire vive pour le statut connecté / lastSeen
   get alliances() { return db.data.alliances; },
   get allianceStations() {
-    const list = [...db.data.allianceStations];
-    // Fusionner les antennes de tous les joueurs en ligne
+    const list = [];
+    // Fusionner UNIQUEMENT les antennes de vrais joueurs connectés ou enregistrés
     Object.values(this.players).forEach(p => {
-      if (p && p.stations && Array.isArray(p.stations)) {
+      if (p && p.id && !p.id.startsWith('system') && p.stations && Array.isArray(p.stations)) {
         p.stations.forEach(st => {
-          list.push({
-            id: st.id,
-            playerId: p.id,
-            playerName: p.name || 'Directeur d’Antenne',
-            name: st.name,
-            city: st.city,
-            lat: st.lat,
-            lng: st.lng,
-            level: st.level || 1,
-            vehicles: st.vehiclesCount || 1,
-            volunteers: st.volunteersCount || 4,
-            allianceId: p.allianceId || 'alliance-fnpc'
-          });
+          if (st && st.id && !st.id.startsWith('station-allie')) {
+            list.push({
+              id: st.id,
+              playerId: p.id,
+              playerName: p.name || 'Directeur d’Antenne',
+              name: st.name,
+              city: st.city,
+              lat: st.lat,
+              lng: st.lng,
+              level: st.level || 1,
+              vehicles: st.vehiclesCount || 1,
+              volunteers: st.volunteersCount || 4,
+              allianceId: p.allianceId || 'alliance-fnpc'
+            });
+          }
         });
       }
     });

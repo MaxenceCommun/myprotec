@@ -25,7 +25,8 @@ window.ProtecPWA = {
       window.matchMedia('(display-mode: standalone)').matches ||
       window.matchMedia('(display-mode: window-controls-overlay)').matches ||
       navigator.standalone === true ||
-      document.referrer.includes('android-app://')
+      document.referrer.includes('android-app://') ||
+      localStorage.getItem('protec_pwa_installed') === 'true'
     );
   },
 
@@ -76,9 +77,10 @@ window.ProtecPWA = {
       console.log('🎉 [PWA] MyProtec a été installé avec succès !');
       this.deferredPrompt = null;
       this.isStandalone = true;
+      try { localStorage.setItem('protec_pwa_installed', 'true'); } catch (e) {}
       this.updateUI();
       if (window.game && typeof window.game.showToast === 'function') {
-        window.game.showToast('🎉 Application MyProtec installée sur votre appareil !', 'success');
+        window.game.showToast('Application installée', 'MyProtec est maintenant installée sur votre appareil.', 'green');
       }
     });
   },
@@ -288,10 +290,12 @@ window.ProtecPWA = {
     const desktopBtn = document.getElementById('pwa-install-btn');
     const mobileBtn = document.getElementById('pwa-install-btn-mobile');
 
-    // Si déjà installé en standalone, on masque les boutons d'installation
-    if (this.isStandalone) {
-      if (desktopBtn) desktopBtn.classList.add('hidden');
-      if (mobileBtn) mobileBtn.classList.add('hidden');
+    const isInstalled = this.isStandalone || localStorage.getItem('protec_pwa_installed') === 'true';
+
+    // Si déjà installé en standalone ou enregistré, on retire définitivement les boutons
+    if (isInstalled) {
+      if (desktopBtn) desktopBtn.remove();
+      if (mobileBtn) mobileBtn.remove();
       return;
     }
 

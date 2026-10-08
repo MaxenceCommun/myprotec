@@ -23,6 +23,13 @@
  */
 
 window.ProtecLocaux = {
+  dimensionMode: '3d', // '2d' (Plan d'architecte CAD) | '3d' (Vue isométrique volumétrique)
+  snapToGrid: true, // Aimant / Magnétisme à la grille
+  camera3D: { yaw: -0.72, pitch: 0.62, zoom: 42, panX: 0, panY: -20 },
+  camera2D: { zoom: 46, panX: 0, panY: 0 },
+  isDraggingCanvas: false,
+  dragStart: { x: 0, y: 0 },
+  dragButton: 0,
   activeTab: 'plan', // 'plan' | 'securite' | 'catalogue' | 'construction' | 'stock'
   selectedTool: 'formation', // outil actif dans l'éditeur 2D
   isEditing: false, // mode modification de cloisons actif
@@ -1463,17 +1470,21 @@ window.ProtecLocaux = {
   },
 
   // =========================================================================
-  // 1. ONGLET PLAN D'ARCHITECTE 2D & AMÉNAGEMENTS
+  // 1. ONGLET PLAN D'ARCHITECTE 2D & 3D INTERACTIF
   // =========================================================================
 
   renderPlanTab(game, premises, stats) {
     const isOwner = premises.tenure === 'owned';
-    const worksList = premises.ongoingWorks || [];
+
+    // Déclenchement de l'initialisation du Canvas après le rendu dans le DOM
+    setTimeout(() => {
+      this.initArchitectCanvas();
+    }, 40);
 
     return `
       <div class="space-y-4">
         
-        <!-- Barre de Contrôle du Plan & Avertissement Location -->
+        <!-- Barre supérieure : Alertes & Statut de Propriété -->
         <div class="p-3.5 rounded-2xl glass-panel-heavy border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div class="flex items-center gap-2 flex-wrap">
             ${isOwner ? `
@@ -1484,38 +1495,38 @@ window.ProtecLocaux = {
             ` : `
               <button onclick="window.ProtecLocaux.showRentalRestrictedModal(window.game)" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-500 cursor-not-allowed flex items-center gap-2" title="Travaux interdits en location">
                 <i data-lucide="lock" class="w-4 h-4 text-slate-400"></i>
-                <span>Aménagements Verrouillés (Locataire)</span>
+                <span>Aménagements Verrouillés (Bail Locatif)</span>
               </button>
             `}
 
-            <!-- Bascule de style : Meublé / Blueprint -->
-            <div class="flex items-center rounded-xl bg-slate-100 p-1 border border-slate-200 text-[11px] font-bold">
-              <button onclick="window.ProtecLocaux.setViewMode('furnished', window.game)" class="px-2.5 py-1 rounded-lg transition ${this.viewMode === 'furnished' ? 'bg-white shadow text-slate-900 font-black' : 'text-slate-500'}">
-                Vue Meublée 2D
-              </button>
-              <button onclick="window.ProtecLocaux.setViewMode('blueprint', window.game)" class="px-2.5 py-1 rounded-lg transition ${this.viewMode === 'blueprint' ? 'bg-blue-900 shadow text-white font-black' : 'text-slate-500'}">
-                Bleu d’Architecte
-              </button>
+            <!-- Indicateur de surface totale et hauteur sous plafond -->
+            <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
+              <span>Hauteur sous plafond : <strong>2.70 m</strong></span>
+              <span>•</span>
+              <span>Surface Totale : <strong class="text-pc-blue">69.8 m²</strong></span>
             </div>
           </div>
 
-          <!-- Statut et dimensions -->
-          <div class="flex items-center gap-2 text-xs font-bold text-slate-600">
-            <span>Grille : <strong>${premises.width} × ${premises.height}</strong></span>
-            <span>•</span>
-            <span>Surface : <strong class="text-pc-blue">${stats.surfaceM2} m²</strong></span>
+          <!-- Actions rapides -->
+          <div class="flex items-center gap-2 text-xs font-bold">
+            <button onclick="window.ProtecLocaux.resetCamera()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5">
+              <span>🎯</span> Recentrer la Vue
+            </button>
+            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition flex items-center gap-1.5">
+              <span class="font-mono text-cyan-400">{ }</span> Fiche Technique
+            </button>
           </div>
         </div>
 
-        <!-- Alerte pédagogique si Locataire -->
+        <!-- Avertissement pédagogique si Locataire -->
         ${!isOwner ? `
           <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-950 text-xs flex items-start justify-between gap-3">
             <div class="flex items-start gap-2.5">
               <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5"></i>
               <div class="space-y-0.5">
-                <strong class="font-black text-amber-900 block">Bâtiment sous Convention de Location (Bail Communal)</strong>
+                <strong class="font-black text-amber-900 block">Locataire sous Convention Municipale</strong>
                 <p class="text-[11px] text-amber-800 leading-relaxed">
-                  En tant que locataire, le propriétaire communal vous interdit d'abattre des cloisons ou de modifier la structure. Pour réaménager librement votre base, rachetez les murs ci-dessus.
+                  En location, le bailleur vous interdit de casser les cloisons ou de modifier la structure. Pour aménager librement la caserne, rachetez les murs.
                 </p>
               </div>
             </div>
@@ -1530,13 +1541,13 @@ window.ProtecLocaux = {
           <div class="p-3.5 rounded-2xl bg-slate-900 text-white space-y-2 animate-in fade-in">
             <div class="flex items-center justify-between">
               <span class="text-xs font-black text-amber-400 flex items-center gap-1.5">
-                <span>🖌️</span> Palette d'Aménagement : Sélectionnez la pièce puis cliquez sur une case
+                <span>🖌️</span> Palette d'Aménagement : Sélectionnez l'espace à réaffecter
               </span>
-              <span class="text-[11px] text-slate-400">Chaque aménagement génère un devis et un chantier en temps réel</span>
+              <span class="text-[11px] text-slate-400">Devis et délai de chantier pris en compte en temps réel</span>
             </div>
             
-            <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-1.5">
-              ${Object.values(this.ZONE_TYPES).map(z => {
+            <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-1.5">
+              ${Object.values(this.ZONE_TYPES).filter(z => z.id !== 'vide').map(z => {
                 const isSelected = this.selectedTool === z.id;
                 return `
                   <button onclick="window.ProtecLocaux.selectTool('${z.id}', window.game)" class="p-2 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center gap-1 border-2 ${isSelected ? 'border-amber-400 bg-white/20 scale-105 shadow-md' : 'border-transparent bg-slate-800/80 hover:bg-slate-800 text-slate-200'}">
@@ -1550,122 +1561,861 @@ window.ProtecLocaux = {
           </div>
         ` : ''}
 
-        <!-- GRILLE 2D INTERACTIVE DU PLAN D'ARCHITECTE -->
-        <div class="p-4 sm:p-6 rounded-3xl ${this.viewMode === 'blueprint' ? 'blueprint-paper' : 'bg-slate-900'} shadow-2xl border-4 border-slate-900 relative overflow-x-auto flex flex-col justify-center items-center">
+        <!-- ========================================================================= -->
+        <!-- ZONE VISUALISEUR D'ARCHITECTE 2D / 3D TEMPS RÉEL (IDENTIQUE AU MODÈLE)    -->
+        <!-- ========================================================================= -->
+        <div class="relative w-full h-[540px] sm:h-[600px] rounded-3xl bg-[#0b0f19] border-2 border-slate-800 shadow-2xl overflow-hidden select-none">
           
-          <!-- En-tête technique du plan -->
-          <div class="w-full flex items-center justify-between text-[11px] font-mono text-slate-400 mb-3 px-2 border-b border-slate-800 pb-2">
-            <span class="flex items-center gap-1.5 text-blue-400 font-bold">
-              <i data-lucide="compass" class="w-3.5 h-3.5"></i>
-              PLAN DE CASERNE AU SOL • ÉCHELLE 1:100 (1 case = 25 m²)
+          <!-- CANVAS PRINCIPAL HAUTE DÉFINITION -->
+          <canvas id="architect-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+
+          <!-- 1. En-tête gauche : Badge Plan 2D/3D & Statut En direct -->
+          <div class="absolute top-3.5 left-3.5 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-lg text-xs font-bold text-white pointer-events-none">
+            <span class="text-orange-400 text-sm">🏠</span>
+            <span>Plan ${this.dimensionMode === '3d' ? '3D' : '2D'}</span>
+            <span class="flex items-center gap-1.5 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              En direct (1)
             </span>
-            <span>NORD ⬆️ • ACCÈS VOIE PUBLIQUE AU SUD ⬇️</span>
           </div>
 
-          <!-- Quadrillage du Bâtiment -->
-          <div class="inline-grid gap-1.5 p-3 rounded-2xl bg-slate-950/90 shadow-2xl border-4 border-slate-800" style="grid-template-columns: repeat(${premises.width}, minmax(80px, 110px));">
-            ${premises.grid.map((tileKey, idx) => {
-              const borders = this.getTileWallBorders(idx, premises.width, premises.height, premises.grid);
-              const z = this.ZONE_TYPES[tileKey] || this.ZONE_TYPES.vide;
-              const work = worksList.find(w => w.tileIndex === idx);
-              const isWork = !!work;
+          <!-- 2. En-tête centre : Commutateur [ 📐 2D | 🧊 3D ] -->
+          <div class="absolute top-3.5 left-1/2 -translate-x-1/2 z-20 flex items-center p-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-xl text-xs font-black">
+            <button onclick="window.ProtecLocaux.setDimensionMode('2d')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '2d' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}">
+              <span class="text-xs">📐</span> 2D
+            </button>
+            <button onclick="window.ProtecLocaux.setDimensionMode('3d')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '3d' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}">
+              <span class="text-xs">🧊</span> 3D
+            </button>
+          </div>
 
-              // Murs extérieurs et cloisons intérieures
-              const wallClasses = [
-                borders.isOuterNorth ? 'border-t-4 border-t-slate-900' : (borders.wallNorth ? 'border-t-2 border-t-slate-500' : ''),
-                borders.isOuterSouth ? 'border-b-4 border-b-slate-900' : (borders.wallSouth ? 'border-b-2 border-b-slate-500' : ''),
-                borders.isOuterWest ? 'border-l-4 border-l-slate-900' : (borders.wallWest ? 'border-l-2 border-l-slate-500' : ''),
-                borders.isOuterEast ? 'border-r-4 border-r-slate-900' : (borders.wallEast ? 'border-r-2 border-r-slate-500' : '')
-              ].filter(Boolean).join(' ');
+          <!-- 3. En-tête droite : Boutons + et { } -->
+          <div class="absolute top-3.5 right-3.5 z-20 flex items-center gap-2">
+            <button onclick="window.ProtecLocaux.showAddElementModal(window.game)" class="w-9 h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white border border-slate-700/80 flex items-center justify-center font-black text-lg shadow-lg transition active:scale-95" title="Ajouter un équipement ou mobilier">
+              +
+            </button>
+            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="w-9 h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-cyan-400 border border-slate-700/80 flex items-center justify-center font-mono font-bold text-sm shadow-lg transition active:scale-95" title="Fiche technique & cotes d'architecte">
+              { }
+            </button>
+          </div>
 
-              return `
-                <div onclick="window.ProtecLocaux.onTileClick(window.game, ${idx})" class="group aspect-square rounded-xl overflow-hidden relative shadow-md transition-all ${wallClasses} ${this.viewMode === 'blueprint' ? z.blueprintClass : z.bgClass} ${this.isEditing ? 'cursor-pointer hover:scale-105 hover:ring-2 hover:ring-amber-400' : 'cursor-pointer hover:brightness-105'}">
-                  
-                  <!-- Contenu de la pièce : Meublé 2D SVG ou Chantier -->
-                  ${isWork ? `
-                    <!-- ÉTAT CHANTIER EN COURS -->
-                    <div class="w-full h-full construction-ribbon flex flex-col items-center justify-center p-1 text-white relative">
-                      <div class="p-1 rounded-full bg-slate-900/90 text-amber-400 text-base animate-bounce shadow">
-                        🔨
-                      </div>
-                      <span class="text-[9px] font-black uppercase text-amber-300 drop-shadow mt-1">Chantier</span>
-                      <span class="work-timer-badge px-1.5 py-0.5 rounded bg-slate-900/90 text-[10px] font-mono font-bold text-white shadow-sm mt-0.5" data-tile-index="${idx}">
-                        ${Math.floor(work.remainingSeconds / 60).toString().padStart(2, '0')}:${(work.remainingSeconds % 60).toString().padStart(2, '0')}
-                      </span>
-                    </div>
-                  ` : `
-                    <!-- PLAN MEUBLÉ DE LA PIÈCE -->
-                    <div class="w-full h-full relative">
-                      ${this.renderFurnitureSVG(tileKey)}
-                      
-                      <!-- Porte d'entrée principale vitrée -->
-                      ${borders.isMainEntrance ? `
-                        <div class="absolute top-0 left-1/4 right-1/4 h-2 bg-emerald-500 rounded-b shadow border-b border-white z-10 flex items-center justify-center text-[7px] text-white font-black" title="Porte d'Entrée Principale">
-                          ACCÈS
-                        </div>
-                      ` : ''}
+          <!-- 4. Barre d'outils latérale droite (Flottante sombre) -->
+          <div class="absolute top-1/2 -translate-y-1/2 right-3.5 z-20 flex flex-col items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-2xl">
+            <!-- Crayon / Éditer -->
+            <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="w-8 h-8 rounded-xl flex items-center justify-center transition ${this.isEditing ? 'bg-amber-500 text-white shadow-md animate-pulse' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" title="${isOwner ? 'Réaménager cloisons' : 'Aménagement interdit en location'}">
+              ✏️
+            </button>
+            <!-- Aimant Snap / Magnétisme -->
+            <button onclick="window.ProtecLocaux.toggleMagnet()" class="w-8 h-8 rounded-xl flex items-center justify-center transition ${this.snapToGrid ? 'bg-blue-600 text-white shadow-md shadow-blue-500/50 ring-2 ring-blue-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" title="Magnétisme Grille (Snap)">
+              🧲
+            </button>
+            <div class="w-5 h-[1px] bg-slate-700/80 my-0.5"></div>
+            <!-- Zoom + -->
+            <button onclick="window.ProtecLocaux.zoomCamera(1.2)" class="w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center justify-center font-black text-base transition" title="Zoom avant">
+              +
+            </button>
+            <!-- Zoom - -->
+            <button onclick="window.ProtecLocaux.zoomCamera(0.8)" class="w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center justify-center font-black text-base transition" title="Zoom arrière">
+              −
+            </button>
+            <!-- Centrer caméra -->
+            <button onclick="window.ProtecLocaux.resetCamera()" class="w-8 h-8 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-slate-800 flex items-center justify-center transition" title="Recentrer la vue">
+              🎯
+            </button>
+          </div>
 
-                      <!-- Porte sectionnelle de garage -->
-                      ${borders.isGarageGate ? `
-                        <div class="absolute bottom-0 left-1 right-1 h-3 bg-red-600 rounded-t border-t-2 border-white/80 z-10 flex items-center justify-center text-[8px] text-white font-black shadow-sm" title="Porte Sectionnelle de Garage Motorisée">
-                          BAIE VPSP
-                        </div>
-                      ` : ''}
-
-                      <!-- Portes intérieures battantes avec arc de débattement SVG -->
-                      ${borders.hasDoorNorth ? `
-                        <div class="absolute top-0 left-1/3 w-4 h-1 bg-amber-600 rounded-b" title="Porte Intérieure"></div>
-                      ` : ''}
-                      ${borders.hasDoorWest ? `
-                        <div class="absolute top-1/3 left-0 w-1 h-4 bg-amber-600 rounded-r" title="Porte Intérieure"></div>
-                      ` : ''}
-
-                      <!-- Fenêtres extérieures sur murs périphériques -->
-                      ${borders.isOuterEast && tileKey !== 'garage' ? `
-                        <div class="absolute top-1/4 bottom-1/4 right-0 w-1 bg-sky-400 border-l border-white shadow-sm" title="Fenêtre Extérieure"></div>
-                      ` : ''}
-
-                      <!-- Nom de la pièce et numéro -->
-                      <div class="absolute bottom-0 inset-x-0 bg-slate-900/70 backdrop-blur-xs p-0.5 text-center">
-                        <span class="text-[8px] sm:text-[9px] font-black text-white truncate block">
-                          ${z.name}
-                        </span>
-                      </div>
-                    </div>
-                  `}
-
-                  <!-- Badge numéro de case en haut à droite -->
-                  <div class="absolute top-1 right-1 px-1 rounded bg-slate-900/70 text-[8px] font-mono text-white/80">
-                    #${idx + 1}
-                  </div>
-
-                </div>
-              `;
-            }).join('')}
+          <!-- 5. Barre d'astuces contextuelle inférieure -->
+          <div class="absolute bottom-3.5 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 rounded-xl bg-slate-900/85 backdrop-blur border border-slate-700/70 shadow-xl text-[11px] font-semibold text-slate-300 pointer-events-none flex items-center gap-2 text-center whitespace-nowrap">
+            ${this.dimensionMode === '3d'
+              ? 'Clic sur un objet: Déplacer • Clic dans le vide: Déplacer la caméra (Orbite / Pan) • Molette: Zoom'
+              : 'Clic pour sélectionner • Clic droit / Molette: Vue • [R] Pivoter • Glisser: Déplacer'}
           </div>
 
         </div>
 
-        <!-- Légende Opérationnelle des Pièces -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-          ${Object.values(this.ZONE_TYPES).filter(z => z.id !== 'vide').map(z => `
-            <div class="p-2.5 rounded-xl ${z.lightBg} border flex items-center gap-2">
-              <span class="text-base">${z.icon}</span>
-              <div>
-                <strong class="block text-[11px] leading-tight">${z.name}</strong>
-                <span class="text-[9px] opacity-80">${z.desc}</span>
-              </div>
+        <!-- Récapitulatif des Espaces Aménagés de la Caserne -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 text-xs">
+          <div class="p-3 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-1">
+            <div class="flex items-center justify-between font-black text-slate-200">
+              <span>💼 Poste de Commandement</span>
+              <span class="text-pc-blue bg-blue-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">29.3 m²</span>
             </div>
-          `).join('')}
+            <p class="text-[10px] text-slate-400 leading-tight">6.5m × 4.5m • Direction opérationnelle, accueil et régulation DPS.</p>
+          </div>
+
+          <div class="p-3 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-1">
+            <div class="flex items-center justify-between font-black text-slate-200">
+              <span>🎓 Salle Pédagogique PSC1</span>
+              <span class="text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">15.8 m²</span>
+            </div>
+            <p class="text-[10px] text-slate-400 leading-tight">3.5m × 4.5m • Formations secouristes citoyennes et recyclages PSE.</p>
+          </div>
+
+          <div class="p-3 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-1">
+            <div class="flex items-center justify-between font-black text-slate-200">
+              <span>🛏️ Dortoir de Garde SAMU</span>
+              <span class="text-purple-300 bg-purple-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">16.0 m²</span>
+            </div>
+            <p class="text-[10px] text-slate-400 leading-tight">4.2m × 3.8m • Astreintes nocturnes et repos des équipages VPSP.</p>
+          </div>
+
+          <div class="p-3 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-1">
+            <div class="flex items-center justify-between font-black text-slate-200">
+              <span>🚿 Sanitaires & Vestiaires</span>
+              <span class="text-cyan-300 bg-cyan-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">8.7 m²</span>
+            </div>
+            <p class="text-[10px] text-slate-400 leading-tight">2.3m × 3.8m • Hygiène opérationnelle et casiers tenues de secours.</p>
+          </div>
         </div>
 
       </div>
     `;
   },
 
-  setViewMode(mode, game) {
-    this.viewMode = mode;
-    this.renderModal(game);
+  // =========================================================================
+  // MOTEUR GRAPHIQUE ARCHITECTE 2D / 3D TEMPS RÉEL (CANVAS RENDERING ENGINE)
+  // =========================================================================
+
+  setDimensionMode(mode) {
+    this.dimensionMode = mode;
+    this.renderModal(window.game);
+  },
+
+  toggleMagnet() {
+    this.snapToGrid = !this.snapToGrid;
+    if (window.game) {
+      window.game.showToast('Magnétisme Grille', this.snapToGrid ? 'Snap actif (précision 0.1m)' : 'Snap désactivé (placement libre)', 'blue');
+    }
+    this.renderArchitectScene();
+  },
+
+  zoomCamera(factor) {
+    if (this.dimensionMode === '3d') {
+      this.camera3D.zoom = Math.max(18, Math.min(95, this.camera3D.zoom * factor));
+    } else {
+      this.camera2D.zoom = Math.max(20, Math.min(100, this.camera2D.zoom * factor));
+    }
+    this.renderArchitectScene();
+  },
+
+  resetCamera() {
+    if (this.dimensionMode === '3d') {
+      this.camera3D = { yaw: -0.72, pitch: 0.62, zoom: 42, panX: 0, panY: -20 };
+    } else {
+      this.camera2D = { zoom: 46, panX: 0, panY: 0 };
+    }
+    this.renderArchitectScene();
+  },
+
+  initArchitectCanvas() {
+    const canvas = document.getElementById('architect-canvas');
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+
+    this.setupCanvasEvents(canvas);
+    this.renderArchitectScene();
+  },
+
+  setupCanvasEvents(canvas) {
+    if (canvas._eventsBound) return;
+    canvas._eventsBound = true;
+
+    const onPointerDown = (clientX, clientY, button) => {
+      this.isDraggingCanvas = true;
+      this.dragStart = { x: clientX, y: clientY };
+      this.dragButton = button;
+    };
+
+    const onPointerMove = (clientX, clientY) => {
+      if (!this.isDraggingCanvas) return;
+      const dx = clientX - this.dragStart.x;
+      const dy = clientY - this.dragStart.y;
+      this.dragStart = { x: clientX, y: clientY };
+
+      if (this.dimensionMode === '3d') {
+        if (this.dragButton === 2) {
+          // Pan
+          this.camera3D.panX += dx;
+          this.camera3D.panY += dy;
+        } else {
+          // Orbit rotation
+          this.camera3D.yaw += dx * 0.008;
+          this.camera3D.pitch = Math.max(0.2, Math.min(1.4, this.camera3D.pitch + dy * 0.008));
+        }
+      } else {
+        // Pan 2D
+        this.camera2D.panX += dx;
+        this.camera2D.panY += dy;
+      }
+
+      this.renderArchitectScene();
+    };
+
+    const onPointerUp = () => {
+      this.isDraggingCanvas = false;
+    };
+
+    // Souris
+    canvas.addEventListener('mousedown', (e) => onPointerDown(e.clientX, e.clientY, e.button));
+    window.addEventListener('mousemove', (e) => onPointerMove(e.clientX, e.clientY));
+    window.addEventListener('mouseup', () => onPointerUp());
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Molette Zoom
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+      this.zoomCamera(zoomFactor);
+    }, { passive: false });
+
+    // Tactile Mobile / Tablette
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        onPointerDown(e.touches[0].clientX, e.touches[0].clientY, 0);
+      }
+    }, { passive: true });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1) {
+        onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+
+    canvas.addEventListener('touchend', () => onPointerUp(), { passive: true });
+
+    // Redimensionnement de fenêtre
+    window.addEventListener('resize', () => {
+      const c = document.getElementById('architect-canvas');
+      if (!c) return;
+      const r = c.getBoundingClientRect();
+      const d = window.devicePixelRatio || 1;
+      c.width = r.width * d;
+      c.height = r.height * d;
+      this.renderArchitectScene();
+    });
+  },
+
+  // Modèle Géométrique CAD des Pièces et Éléments de Construction
+  getArchitectModel() {
+    return {
+      rooms: [
+        { id: 'sejour', name: 'Séjour & Salon\n(Poste de Commandement)', x: 2.0, y: 1.5, w: 6.5, h: 4.5, area: 29.3, color: '#161d2b' },
+        { id: 'cuisine', name: 'Cuisine Ouverte\n(Salle Pédagogique PSC1)', x: 8.5, y: 1.5, w: 3.5, h: 4.5, area: 15.8, color: '#141a26' },
+        { id: 'chambre', name: 'Chambre 1\n(Dortoir de Garde SAMU)', x: 2.0, y: 6.0, w: 4.2, h: 3.8, area: 16.0, color: '#181b2a' },
+        { id: 'sdb', name: 'Salle de Bain\n(Sanitaires & Douches)', x: 6.2, y: 6.0, w: 2.3, h: 3.8, area: 8.7, color: '#131e28' }
+      ],
+      walls: [
+        // Murs extérieurs (épaisseur 0.24m)
+        { x1: 2.0, y1: 1.5, x2: 12.0, y2: 1.5, th: 0.24, outer: true },
+        { x1: 12.0, y1: 1.5, x2: 12.0, y2: 6.0, th: 0.24, outer: true },
+        { x1: 12.0, y1: 6.0, x2: 8.5, y2: 6.0, th: 0.24, outer: true },
+        { x1: 8.5, y1: 6.0, x2: 8.5, y2: 9.8, th: 0.24, outer: true },
+        { x1: 8.5, y1: 9.8, x2: 2.0, y2: 9.8, th: 0.24, outer: true },
+        { x1: 2.0, y1: 9.8, x2: 2.0, y2: 1.5, th: 0.24, outer: true },
+        // Cloisons intérieures (épaisseur 0.12m)
+        { x1: 2.0, y1: 6.0, x2: 8.5, y2: 6.0, th: 0.12, outer: false },
+        { x1: 6.2, y1: 6.0, x2: 6.2, y2: 9.8, th: 0.12, outer: false },
+        { x1: 8.5, y1: 1.5, x2: 8.5, y2: 3.2, th: 0.12, outer: false } // Séparation partielle Séjour/Cuisine
+      ],
+      doors: [
+        { id: 'd_entree', x: 2.5, y: 1.5, len: 0.93, wall: 'N', label: 'Porte d’Entrée (93cm)', swingAngle: Math.PI / 2, isMain: true },
+        { id: 'd_chambre', x: 3.3, y: 6.0, len: 0.83, wall: 'N', label: 'Porte Chambre (83cm)', swingAngle: Math.PI / 2, isMain: false },
+        { id: 'd_sdb', x: 6.5, y: 6.0, len: 0.73, wall: 'N', label: 'Porte Salle de Bain (73cm)', swingAngle: Math.PI / 2, isMain: false }
+      ],
+      windows: [
+        { id: 'w_baie', x: 4.8, y: 1.5, len: 2.40, wall: 'N', label: 'Baie Vitrée Séjour (2.40m)' },
+        { id: 'w_cuisine', x: 9.7, y: 1.5, len: 1.20, wall: 'N', label: 'Fenêtre Cuisine (1.20m)' },
+        { id: 'w_chambre', x: 2.0, y: 7.4, len: 1.40, wall: 'W', label: 'Fenêtre Chambre (1.40m)' }
+      ],
+      fixtures: [
+        { id: 'rad_salon', x: 7.4, y: 1.5, len: 1.00, wall: 'N', label: 'Radiateur Salon (1.00m)', type: 'radiator' },
+        { id: 'rad_chambre', x: 2.0, y: 6.3, len: 0.80, wall: 'W', label: 'Radiateur Chambre (0.80m)', type: 'radiator' },
+        { id: 'rad_sdb', x: 8.5, y: 7.6, len: 0.80, wall: 'E', label: 'Sèche-Serviettes SdB', type: 'radiator' },
+        { id: 'pilier', x: 8.4, y: 3.5, w: 0.30, h: 0.30, label: 'PILIER', type: 'pillar' },
+        { id: 'gaine', x: 6.2, y: 6.0, w: 0.40, h: 0.40, label: 'GAINE', type: 'duct' }
+      ],
+      furniture: [
+        // Séjour : Grande table de réunion orange, table basse blanche, meuble mural gris
+        { id: 'f_table', x: 4.5, y: 3.2, z: 0, w: 1.7, d: 1.0, h: 0.75, color: '#f97316', label: 'Table Réunion PC' },
+        { id: 'f_table_basse', x: 5.1, y: 4.8, z: 0, w: 1.2, d: 0.6, h: 0.45, color: '#f8fafc', label: 'Table Basse' },
+        { id: 'f_meuble_pc', x: 2.3, y: 2.7, z: 0, w: 0.45, d: 2.1, h: 1.6, color: '#334155', label: 'Baie Radio & Écrans' },
+        // Cuisine : Évier cyan/bleu, comptoir gris
+        { id: 'f_evier', x: 9.0, y: 2.0, z: 0, w: 0.9, d: 1.1, h: 0.85, color: '#0284c7', label: 'Évier Inox' },
+        { id: 'f_comptoir', x: 10.3, y: 2.0, z: 0, w: 1.3, d: 0.9, h: 0.85, color: '#64748b', label: 'Plan Travail' },
+        // Chambre : Lit double violet, chevet orange, meuble TV gris
+        { id: 'f_lit', x: 3.4, y: 7.2, z: 0, w: 1.8, d: 1.9, h: 0.60, color: '#a855f7', label: 'Lit de Garde SAMU' },
+        { id: 'f_chevet', x: 2.4, y: 7.2, z: 0, w: 0.55, d: 0.55, h: 0.55, color: '#ea580c', label: 'Chevet' },
+        { id: 'f_armoire', x: 5.4, y: 7.0, z: 0, w: 0.35, d: 1.6, h: 1.5, color: '#334155', label: 'Armoire Caserne' },
+        // SdB : Sanitaire baignoire/douche cyan, meuble vasque
+        { id: 'f_douche', x: 6.7, y: 6.8, z: 0, w: 1.4, d: 0.85, h: 0.55, color: '#06b6d4', label: 'Douche Décontamination' },
+        { id: 'f_vasque', x: 6.7, y: 8.2, z: 0, w: 1.1, d: 0.45, h: 0.80, color: '#334155', label: 'Vasque' }
+      ]
+    };
+  },
+
+  // Rendu global de la scène selon le mode actif (2D ou 3D)
+  renderArchitectScene() {
+    const canvas = document.getElementById('architect-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    if (this.dimensionMode === '3d') {
+      this.render3D(ctx, w, h);
+    } else {
+      this.render2D(ctx, w, h);
+    }
+  },
+
+  // =========================================================================
+  // RENDU 2D ARCHITECTURAL STYLE CAD (CONFORME À L'IMAGE 2)
+  // =========================================================================
+
+  render2D(ctx, width, height) {
+    const model = this.getArchitectModel();
+    const cx = width / 2 + this.camera2D.panX;
+    const cy = height / 2 + this.camera2D.panY;
+    const scale = this.camera2D.zoom;
+
+    // 1. Fond sombre CAD et grille millimétrée
+    ctx.fillStyle = '#0a0e17';
+    ctx.fillRect(0, 0, width, height);
+
+    // Grille 0.5m et 1.0m
+    ctx.lineWidth = 1;
+    const gridSize = 1.0 * scale;
+    const startX = (cx % gridSize);
+    const startY = (cy % gridSize);
+
+    ctx.strokeStyle = '#121927';
+    ctx.beginPath();
+    for (let x = startX - gridSize; x < width + gridSize; x += gridSize / 2) {
+      ctx.moveTo(x, 0); ctx.lineTo(x, height);
+    }
+    for (let y = startY - gridSize; y < height + gridSize; y += gridSize / 2) {
+      ctx.moveTo(0, y); ctx.lineTo(width, y);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = '#1b2438';
+    ctx.beginPath();
+    for (let x = startX - gridSize; x < width + gridSize; x += gridSize) {
+      ctx.moveTo(x, 0); ctx.lineTo(x, height);
+    }
+    for (let y = startY - gridSize; y < height + gridSize; y += gridSize) {
+      ctx.moveTo(0, y); ctx.lineTo(width, y);
+    }
+    ctx.stroke();
+
+    // Décalage pour centrer le bâtiment (centre du bâtiment à x=7, y=5.5)
+    const ox = cx - 7.0 * scale;
+    const oy = cy - 5.5 * scale;
+
+    // 2. Tracé des sols de pièces
+    model.rooms.forEach(r => {
+      const rx = ox + r.x * scale;
+      const ry = oy + r.y * scale;
+      const rw = r.w * scale;
+      const rh = r.h * scale;
+
+      ctx.fillStyle = r.color;
+      ctx.fillRect(rx, ry, rw, rh);
+
+      // Nom de la pièce et dimensions au centre
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = 'bold 12px "Plus Jakarta Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      const lines = r.name.split('\n');
+      ctx.fillText(lines[0], rx + rw / 2, ry + rh / 2 - 10);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '600 10px monospace';
+      ctx.fillText(`${r.area.toFixed(1)} m² (${r.w.toFixed(1)}m × ${r.h.toFixed(1)}m)`, rx + rw / 2, ry + rh / 2 + 10);
+    });
+
+    // 3. Tracé des murs porteurs et cloisons (double trait ardoise)
+    model.walls.forEach(w => {
+      const x1 = ox + w.x1 * scale;
+      const y1 = oy + w.y1 * scale;
+      const x2 = ox + w.x2 * scale;
+      const y2 = oy + w.y2 * scale;
+      const th = Math.max(4, w.th * scale);
+
+      ctx.strokeStyle = '#273349';
+      ctx.lineWidth = th;
+      ctx.lineCap = 'square';
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      // Bords clairs CAD
+      ctx.strokeStyle = w.outer ? '#475569' : '#334155';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    });
+
+    // 4. Tracé des portes avec débattement en arc pointillé et battant marron
+    model.doors.forEach(d => {
+      const dx = ox + d.x * scale;
+      const dy = oy + d.y * scale;
+      const dlen = d.len * scale;
+
+      // Battant ouvert à 90° (marron/orange bois)
+      ctx.strokeStyle = '#b45309';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(dx, dy);
+      if (d.wall === 'N') {
+        ctx.lineTo(dx, dy + dlen);
+      }
+      ctx.stroke();
+
+      // Arc de débattement en tirets blancs
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      if (d.wall === 'N') {
+        ctx.arc(dx, dy, dlen, 0, Math.PI / 2, false);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Libellé de cote de porte
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      if (d.wall === 'N') {
+        ctx.fillText(d.label, dx + dlen / 2, dy - 8);
+      }
+    });
+
+    // 5. Tracé des fenêtres (cyan double vitrage)
+    model.windows.forEach(w => {
+      const wx = ox + w.x * scale;
+      const wy = oy + w.y * scale;
+      const wlen = w.len * scale;
+
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      if (w.wall === 'N') {
+        ctx.moveTo(wx, wy); ctx.lineTo(wx + wlen, wy);
+      } else {
+        ctx.moveTo(wx, wy); ctx.lineTo(wx, wy + wlen);
+      }
+      ctx.stroke();
+
+      // Cote de fenêtre
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      if (w.wall === 'N') {
+        ctx.fillText(w.label, wx + wlen / 2, wy - 8);
+      } else {
+        ctx.save();
+        ctx.translate(wx - 10, wy + wlen / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText(w.label, 0, 0);
+        ctx.restore();
+      }
+    });
+
+    // 6. Tracé des radiateurs, piliers et gaines
+    model.fixtures.forEach(f => {
+      if (f.type === 'radiator') {
+        const fx = ox + f.x * scale;
+        const fy = oy + f.y * scale;
+        const flen = f.len * scale;
+
+        ctx.strokeStyle = '#ea580c';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        if (f.wall === 'N') {
+          ctx.moveTo(fx, fy + 4); ctx.lineTo(fx + flen, fy + 4);
+        } else if (f.wall === 'W') {
+          ctx.moveTo(fx + 4, fy); ctx.lineTo(fx + 4, fy + flen);
+        } else if (f.wall === 'E') {
+          ctx.moveTo(fx - 4, fy); ctx.lineTo(fx - 4, fy + flen);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#ea580c';
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        if (f.wall === 'N') {
+          ctx.fillText(f.label, fx + flen / 2, fy + 15);
+        } else {
+          ctx.save();
+          ctx.translate(f.wall === 'W' ? fx - 8 : fx + 8, fy + flen / 2);
+          ctx.rotate(f.wall === 'W' ? -Math.PI / 2 : Math.PI / 2);
+          ctx.fillText(f.label, 0, 0);
+          ctx.restore();
+        }
+      } else if (f.type === 'pillar' || f.type === 'duct') {
+        const px = ox + f.x * scale;
+        const py = oy + f.y * scale;
+        const pw = f.w * scale;
+        const ph = f.h * scale;
+
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(px, py, pw, ph);
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(px, py, pw, ph);
+
+        // Hachures
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+        ctx.beginPath();
+        ctx.moveTo(px, py + ph); ctx.lineTo(px + pw, py);
+        ctx.stroke();
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(f.label, px + pw / 2, py + ph / 2 + 3);
+      }
+    });
+
+    // 7. Tracé du mobilier en vue de dessus
+    model.furniture.forEach(item => {
+      const ix = ox + item.x * scale;
+      const iy = oy + item.y * scale;
+      const iw = item.w * scale;
+      const ih = item.d * scale;
+
+      ctx.fillStyle = item.color;
+      ctx.fillRect(ix, iy, iw, ih);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(ix, iy, iw, ih);
+    });
+  },
+
+  // =========================================================================
+  // RENDU 3D ISOMÉTRIQUE TEMPS RÉEL VOLUMÉTRIQUE (CONFORME À L'IMAGE 1)
+  // =========================================================================
+
+  render3D(ctx, width, height) {
+    const model = this.getArchitectModel();
+    const cx = width / 2 + this.camera3D.panX;
+    const cy = height / 2 + this.camera3D.panY;
+    const cam = this.camera3D;
+
+    // 1. Fond sombre élégant de scène 3D
+    ctx.fillStyle = '#0b0f19';
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Dalle de sol du bâtiment 3D (Polygon projeté)
+    const floorCorners = [
+      { x: 1.8, y: 1.3 },
+      { x: 12.2, y: 1.3 },
+      { x: 12.2, y: 6.2 },
+      { x: 8.7, y: 6.2 },
+      { x: 8.7, y: 10.0 },
+      { x: 1.8, y: 10.0 }
+    ];
+
+    const projFloor = floorCorners.map(p => this.project3D(p.x, p.y, 0, cam, cx, cy));
+
+    // Ombre globale au sol
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.beginPath();
+    projFloor.forEach((p, idx) => {
+      const sx = p.x + 8; const sy = p.y + 12;
+      if (idx === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    });
+    ctx.closePath();
+    ctx.fill();
+
+    // Dalle de sol sombre
+    ctx.fillStyle = '#1e2430';
+    ctx.beginPath();
+    projFloor.forEach((p, idx) => {
+      if (idx === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    });
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#2d3748';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 3. Dessin des pièces et démarcations au sol
+    model.rooms.forEach(r => {
+      const p1 = this.project3D(r.x, r.y, 0.01, cam, cx, cy);
+      const p2 = this.project3D(r.x + r.w, r.y, 0.01, cam, cx, cy);
+      const p3 = this.project3D(r.x + r.w, r.y + r.h, 0.01, cam, cx, cy);
+      const p4 = this.project3D(r.x, r.y + r.h, 0.01, cam, cx, cy);
+
+      ctx.fillStyle = r.color;
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+      ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#283344';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    // 4. Dessin des ombres portées sous les meubles
+    model.furniture.forEach(item => {
+      const sp1 = this.project3D(item.x + 0.15, item.y + 0.15, 0.01, cam, cx, cy);
+      const sp2 = this.project3D(item.x + item.w + 0.25, item.y + 0.15, 0.01, cam, cx, cy);
+      const sp3 = this.project3D(item.x + item.w + 0.25, item.y + item.d + 0.3, 0.01, cam, cx, cy);
+      const sp4 = this.project3D(item.x + 0.15, item.y + item.d + 0.3, 0.01, cam, cx, cy);
+
+      ctx.fillStyle = 'rgba(5, 8, 14, 0.45)';
+      ctx.beginPath();
+      ctx.moveTo(sp1.x, sp1.y); ctx.lineTo(sp2.x, sp2.y);
+      ctx.lineTo(sp3.x, sp3.y); ctx.lineTo(sp4.x, sp4.y);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    // 5. Rendu des Meubles en 3D Volumétrique
+    model.furniture.forEach(item => {
+      this.draw3DBox(ctx, item.x, item.y, 0, item.w, item.d, item.h, item.color, cam, cx, cy);
+    });
+
+    // 6. Rendu des Murs 3D Extrudés avec embrasures de portes et fenêtres
+    const wallH = 2.40; // Hauteur sous plafond 2.4m
+
+    model.walls.forEach(w => {
+      const isH = Math.abs(w.y1 - w.y2) < 0.01;
+      const len = isH ? Math.abs(w.x2 - w.x1) : Math.abs(w.y2 - w.y1);
+      const minX = Math.min(w.x1, w.x2);
+      const minY = Math.min(w.y1, w.y2);
+
+      // Si le mur contient une porte ou une fenêtre, on échancre pour créer le passage
+      this.draw3DWallSegment(ctx, minX, minY, isH ? minX + len : minX, isH ? minY : minY + len, w.th, wallH, cam, cx, cy);
+    });
+
+    // 7. Rendu des Portes 3D Ouvertes (Vantail marron/orange)
+    model.doors.forEach(d => {
+      // Montant et vantail 3D ouvert en biais
+      const px = d.x; const py = d.y;
+      this.draw3DBox(ctx, px, py, 0, 0.06, d.len * 0.9, 2.05, '#b45309', cam, cx, cy);
+    });
+
+    // 8. Rendu des Fenêtres 3D (Vitres semi-transparentes cyan)
+    model.windows.forEach(w => {
+      const wx = w.x; const wy = w.y;
+      const isN = w.wall === 'N';
+      this.draw3DBox(ctx, wx, wy, 0.85, isN ? w.len : 0.08, isN ? 0.08 : w.len, 1.25, 'rgba(56, 189, 248, 0.65)', cam, cx, cy);
+    });
+  },
+
+  // Projection mathématique 3D vers écran (Perspective cavalière / isométrique)
+  project3D(wx, wy, wz, camera, cx, cy) {
+    const ox = wx - 7.0;
+    const oy = wy - 5.5;
+    const oz = wz;
+
+    const cosY = Math.cos(camera.yaw);
+    const sinY = Math.sin(camera.yaw);
+    const rx = ox * cosY - oy * sinY;
+    const ry = ox * sinY + oy * cosY;
+
+    const cosP = Math.cos(camera.pitch);
+    const sinP = Math.sin(camera.pitch);
+    const py = ry * cosP - oz * sinP;
+    const pz = ry * sinP + oz * cosP;
+
+    return {
+      x: cx + rx * camera.zoom,
+      y: cy + py * camera.zoom,
+      depth: pz
+    };
+  },
+
+  // Dessin d'un volume 3D (Boîte parallélépipédique) avec ombrage de Lambert
+  draw3DBox(ctx, x, y, z, w, d, h, baseColor, camera, cx, cy) {
+    const p0 = this.project3D(x, y, z, camera, cx, cy);
+    const p1 = this.project3D(x + w, y, z, camera, cx, cy);
+    const p2 = this.project3D(x + w, y + d, z, camera, cx, cy);
+    const p3 = this.project3D(x, y + d, z, camera, cx, cy);
+
+    const pt0 = this.project3D(x, y, z + h, camera, cx, cy);
+    const pt1 = this.project3D(x + w, y, z + h, camera, cx, cy);
+    const pt2 = this.project3D(x + w, y + d, z + h, camera, cx, cy);
+    const pt3 = this.project3D(x, y + d, z + h, camera, cx, cy);
+
+    // Face supérieure (Top) - Plus lumineuse
+    ctx.fillStyle = baseColor;
+    ctx.beginPath();
+    ctx.moveTo(pt0.x, pt0.y); ctx.lineTo(pt1.x, pt1.y);
+    ctx.lineTo(pt2.x, pt2.y); ctx.lineTo(pt3.x, pt3.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Faces latérales avec ombrage automatique
+    // Face avant (South)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(p3.x, p3.y); ctx.lineTo(p2.x, p2.y);
+    ctx.lineTo(pt2.x, pt2.y); ctx.lineTo(pt3.x, pt3.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = baseColor;
+    ctx.fill();
+
+    // Face droite (East)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath();
+    ctx.moveTo(p2.x, p2.y); ctx.lineTo(p1.x, p1.y);
+    ctx.lineTo(pt1.x, pt1.y); ctx.lineTo(pt2.x, pt2.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = baseColor;
+    ctx.fill();
+  },
+
+  // Dessin d'un mur 3D extrudé
+  draw3DWallSegment(ctx, x1, y1, x2, y2, th, height, camera, cx, cy) {
+    const isH = Math.abs(y1 - y2) < 0.01;
+    const w = isH ? Math.abs(x2 - x1) : th;
+    const d = isH ? th : Math.abs(y2 - y1);
+    const minX = Math.min(x1, x2) - (isH ? 0 : th / 2);
+    const minY = Math.min(y1, y2) - (isH ? th / 2 : 0);
+
+    const wallColorTop = '#475569';
+    const wallColorSide = '#334155';
+    const wallColorShade = '#1e293b';
+
+    const p0 = this.project3D(minX, minY, 0, camera, cx, cy);
+    const p1 = this.project3D(minX + w, minY, 0, camera, cx, cy);
+    const p2 = this.project3D(minX + w, minY + d, 0, camera, cx, cy);
+    const p3 = this.project3D(minX, minY + d, 0, camera, cx, cy);
+
+    const pt0 = this.project3D(minX, minY, height, camera, cx, cy);
+    const pt1 = this.project3D(minX + w, minY, height, camera, cx, cy);
+    const pt2 = this.project3D(minX + w, minY + d, height, camera, cx, cy);
+    const pt3 = this.project3D(minX, minY + d, height, camera, cx, cy);
+
+    // Faces latérales visibles
+    ctx.fillStyle = wallColorSide;
+    ctx.beginPath();
+    ctx.moveTo(p3.x, p3.y); ctx.lineTo(p2.x, p2.y);
+    ctx.lineTo(pt2.x, pt2.y); ctx.lineTo(pt3.x, pt3.y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = wallColorShade;
+    ctx.beginPath();
+    ctx.moveTo(p2.x, p2.y); ctx.lineTo(p1.x, p1.y);
+    ctx.lineTo(pt1.x, pt1.y); ctx.lineTo(pt2.x, pt2.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Face supérieure du mur
+    ctx.fillStyle = wallColorTop;
+    ctx.beginPath();
+    ctx.moveTo(pt0.x, pt0.y); ctx.lineTo(pt1.x, pt1.y);
+    ctx.lineTo(pt2.x, pt2.y); ctx.lineTo(pt3.x, pt3.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  },
+
+  // Modal d'ajout d'équipement / meuble (+)
+  showAddElementModal(game) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4';
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl p-6 max-w-lg w-full space-y-4 border border-slate-700 shadow-2xl bg-slate-900 text-white">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">🧰</span>
+            <h3 class="font-black text-base">Ajouter un Mobilier ou Équipement de Secours</h3>
+          </div>
+          <button onclick="this.closest('.fixed').remove()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 font-bold">✕</button>
+        </div>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Sélectionnez un agencement à installer dans vos locaux :
+        </p>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Baie Radio & PC Fixe opérationnelle dans le Poste de Commandement.', 'blue')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
+            <strong class="block font-black text-white">📡 Baie Radio Fixe</strong>
+            <span class="text-[10px] text-slate-400">Communication Antac & PC</span>
+          </button>
+          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Armoire DAE & Pharmacie installée.', 'green')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
+            <strong class="block font-black text-white">💚 Armoire DAE Murale</strong>
+            <span class="text-[10px] text-slate-400">Accès d'urgence 24/7</span>
+          </button>
+          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Tableau blanc interactif installé dans la salle PSC1.', 'amber')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
+            <strong class="block font-black text-white">🎓 Écran Vidéoprojection</strong>
+            <span class="text-[10px] text-slate-400">Pour formations PSC1/SST</span>
+          </button>
+          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Rack Bouteilles B5 Oxygène sécurisé.', 'emerald')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
+            <strong class="block font-black text-white">🫁 Rack Bouteilles Oxygène</strong>
+            <span class="text-[10px] text-slate-400">Capacité réserve accrue</span>
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  },
+
+  // Modal de fiche technique et cotes { }
+  showTechnicalSpecsModal(game) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4';
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl p-6 max-w-lg w-full space-y-4 border border-slate-700 shadow-2xl bg-slate-900 text-white">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2">
+            <span class="text-cyan-400 font-mono font-black text-lg">{ }</span>
+            <h3 class="font-black text-base">Fiche Technique d’Architecte & Conformité</h3>
+          </div>
+          <button onclick="this.closest('.fixed').remove()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 font-bold">✕</button>
+        </div>
+        <div class="space-y-2 text-xs font-mono text-slate-300">
+          <div class="p-2.5 rounded-xl bg-slate-800/80 flex justify-between">
+            <span>Surface Utile Brute (SUB) :</span>
+            <strong class="text-cyan-300">69.8 m²</strong>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-800/80 flex justify-between">
+            <span>Hauteur sous Plafond (HSP) :</span>
+            <strong class="text-white">2.70 m</strong>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-800/80 flex justify-between">
+            <span>Volume d’Air Traité :</span>
+            <strong class="text-white">188.4 m³</strong>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-800/80 flex justify-between">
+            <span>Classement ERP Sécurité Civile :</span>
+            <strong class="text-emerald-400">5ème Catégorie (Type R / W)</strong>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-800/80 flex justify-between">
+            <span>Largeur Dégagements & UP :</span>
+            <strong class="text-amber-400">1.40 m (2 Unités de Passage)</strong>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
   },
 
   toggleEditMode(game) {
@@ -1676,7 +2426,7 @@ window.ProtecLocaux = {
     }
     this.isEditing = !this.isEditing;
     if (this.isEditing) {
-      game.showToast('Mode Aménagement Actif', 'Sélectionnez un type de pièce dans la palette et cliquez sur une case pour lancer le chantier.', 'purple');
+      game.showToast('Mode Aménagement Actif', 'Sélectionnez un type de pièce dans la palette pour réaménager vos cloisons.', 'purple');
     } else {
       game.showToast('Plan Validé', 'Le plan d’aménagement de vos locaux est enregistré.', 'green');
     }
