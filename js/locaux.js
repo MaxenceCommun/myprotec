@@ -1590,6 +1590,9 @@ window.ProtecLocaux = {
               <button type="button" onclick="window.ProtecLocaux.setEditorTab('expand')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${this.editorTab === 'expand' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
                 <span>➕</span> Agrandir (Extension)
               </button>
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('metrics')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${this.editorTab === 'metrics' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>📊</span> Métriques & Flux
+              </button>
             </div>
 
             <div class="hidden sm:flex items-center gap-2 text-xs text-slate-500 font-semibold">
@@ -1732,6 +1735,111 @@ window.ProtecLocaux = {
             <span>➕ Bâtir l'Extension (+16 m²)</span>
             <span class="bg-amber-800/60 px-1.5 py-0.5 rounded text-[10px]">2 500 €</span>
           </button>
+        </div>
+      `;
+    }
+
+    if (this.editorTab === 'metrics') {
+      const metrics = window.ProtecBuildingSystem
+        ? window.ProtecBuildingSystem.analyzeLayout(m)
+        : null;
+
+      if (!metrics) {
+        return '<p class="text-xs text-slate-500 p-3">Moteur de calcul des métriques non disponible.</p>';
+      }
+
+      return `
+        <div class="space-y-3">
+          <!-- En-tête Score Global & Diagnostic -->
+          <div class="p-3.5 rounded-2xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-black text-amber-400 uppercase tracking-wider">Score d'Efficacité Opérationnelle</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${metrics.globalScore >= 80 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : (metrics.globalScore >= 60 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' : 'bg-amber-500/20 text-amber-400 border border-amber-500/40')}">
+                  ${metrics.globalScore >= 80 ? 'Excellent' : (metrics.globalScore >= 60 ? 'Fonctionnel' : 'À Optimiser')}
+                </span>
+              </div>
+              <p class="text-xs text-slate-300 font-medium">${metrics.summary}</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="text-right">
+                <span class="text-2xl font-black text-amber-400">${metrics.globalScore}%</span>
+                <span class="block text-[10px] text-slate-400">Rendement tactique</span>
+              </div>
+              <div class="w-16 bg-slate-800 h-3 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                <div class="h-full rounded-full ${metrics.globalScore >= 75 ? 'bg-emerald-400' : 'bg-amber-400'}" style="width: ${metrics.globalScore}%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Grille des 4 Métriques Spécifiées -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+            <!-- 1. Temps d'accès / Chrono Départ -->
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <div class="flex items-center justify-between text-xs font-black text-slate-800">
+                <span class="flex items-center gap-1">⏱️ Chrono Départ</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded font-mono ${metrics.dispatchFlow.rating === 'EXCELLENT' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}">
+                  ${metrics.dispatchFlow.rating}
+                </span>
+              </div>
+              <div class="text-base font-black text-slate-900">${metrics.dispatchFlow.totalDispatchTimeSeconds} sec.</div>
+              <p class="text-[10px] text-slate-500">Trajet Vestiaires → Stock → Garage : <strong>${metrics.dispatchFlow.totalWalkDistanceMeters}m</strong> (Habillage : ${metrics.dispatchFlow.dressingTimeSeconds}s)</p>
+            </div>
+
+            <!-- 2. Capacité d'accueil max (ERP) -->
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <div class="flex items-center justify-between text-xs font-black text-slate-800">
+                <span class="flex items-center gap-1">👥 Capacité ERP</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
+                  ${metrics.capacityMetrics.erpClassification}
+                </span>
+              </div>
+              <div class="text-base font-black text-slate-900">${metrics.capacityMetrics.maxSimultaneousVolunteers} pers. max</div>
+              <p class="text-[10px] text-slate-500">${metrics.capacityMetrics.totalUsableSurfaceM2} m² utiles • <strong>${metrics.capacityMetrics.nightDutyBedsCount} lit(s)</strong> garde 24h • <strong>${metrics.capacityMetrics.studentTrainingCapacity}</strong> places cours</p>
+            </div>
+
+            <!-- 3. Autonomie en consommables -->
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <div class="flex items-center justify-between text-xs font-black text-slate-800">
+                <span class="flex items-center gap-1">🩺 Autonomie Soins</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded font-mono ${metrics.supplyMetrics.rating === 'AUTONOME' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                  ${metrics.supplyMetrics.rating}
+                </span>
+              </div>
+              <div class="text-base font-black text-slate-900">${metrics.supplyMetrics.medicalAutonomyDays} jours</div>
+              <p class="text-[10px] text-slate-500">Réserve : <strong>${metrics.supplyMetrics.totalStorageSlots} slots</strong> • Capacité : <strong>${metrics.supplyMetrics.consecutiveDpsAutonomy}</strong> DPS simultanés</p>
+            </div>
+
+            <!-- 4. Coûts d'entretien journalier (OPEX) -->
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <div class="flex items-center justify-between text-xs font-black text-slate-800">
+                <span class="flex items-center gap-1">💡 OPEX Quotidien</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
+                  ${metrics.opexMetrics.monthlyProjectionEuro} €/mois
+                </span>
+              </div>
+              <div class="text-base font-black text-slate-900">${metrics.opexMetrics.totalDailyOpexEuro} € / jour</div>
+              <p class="text-[10px] text-slate-500">Énergie : ${metrics.opexMetrics.energyCostDaily}€ • Équipements : ${metrics.opexMetrics.equipmentMaintenanceDaily}€ • ERP : ${metrics.opexMetrics.erpSafetyComplianceDaily}€</p>
+            </div>
+          </div>
+
+          <!-- Recommandations tactiques -->
+          ${metrics.recommendations.length > 0 ? `
+            <div class="space-y-1.5 pt-1">
+              <div class="text-[11px] font-black uppercase text-slate-600 tracking-wider">Conseils d'Optimisation Tactique :</div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                ${metrics.recommendations.map(rec => `
+                  <div class="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200/80 text-xs flex items-start gap-2 text-slate-800">
+                    <span class="text-base flex-shrink-0">${rec.icon}</span>
+                    <div class="space-y-0.5">
+                      <strong class="font-black text-slate-900 block leading-tight">${rec.title}</strong>
+                      <p class="text-[11px] text-slate-600 leading-snug">${rec.text}</p>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
         </div>
       `;
     }
