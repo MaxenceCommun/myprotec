@@ -240,9 +240,26 @@ window.ProtecAdvancedModals = {
 
                 <p class="text-[11px] text-slate-600 leading-relaxed">${veh.desc}</p>
 
-                <div class="p-2 rounded-xl glass-card-blue text-[10px] text-pc-blue font-bold flex justify-between">
-                  <span>Équipage : ${veh.capacity} secouristes</span>
-                  <span>Vitesse : ${veh.speedKmH} km/h</span>
+                <div class="p-2.5 rounded-xl glass-card-blue text-[10px] text-pc-blue font-bold flex flex-col gap-1.5">
+                  <div class="flex justify-between items-center">
+                    <span>Capacité : <strong class="text-slate-900">${veh.capacity} place${veh.capacity > 1 ? 's' : ''}</strong>${veh.extraCapacityLabel ? ` <span class="text-indigo-800 font-semibold">${veh.extraCapacityLabel}</span>` : ''}</span>
+                    <span class="text-slate-600">Vitesse : ${veh.speedKmH} km/h</span>
+                  </div>
+                  ${veh.hasTowHitch ? `
+                    <div class="text-[9px] text-emerald-700 bg-emerald-50 rounded-md px-1.5 py-0.5 font-semibold border border-emerald-200 flex items-center gap-1">
+                      <span>🔗 Véhicule tracteur avec attelage (peut tracter ERS, Quad, Remorque)</span>
+                    </div>
+                  ` : ''}
+                  ${veh.requiresTrailer ? `
+                    <div class="text-[9px] text-amber-800 bg-amber-100/90 rounded-md px-1.5 py-0.5 font-bold border border-amber-300 flex items-center gap-1">
+                      <span>⚠️ Se déplace uniquement sur remorque avec un véhicule doté d'un attelage</span>
+                    </div>
+                  ` : ''}
+                  ${veh.reqSkills && veh.reqSkills.length > 0 ? `
+                    <div class="text-[9px] text-blue-900 bg-blue-100/80 rounded-md px-1.5 py-0.5 font-semibold border border-blue-200 flex items-center gap-1">
+                      <span>📋 Qualifications requises : SSA & Conduite Bateau</span>
+                    </div>
+                  ` : ''}
                 </div>
               </div>
 

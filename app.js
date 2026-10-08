@@ -6494,9 +6494,10 @@ class ProtecGame {
   }
 
   buyVehicle(stationId, type) {
-    const cost = type === 'VPSP' ? 3200 : 1800;
+    const catalogItem = window.ProtecAdvanced?.vehicleCatalog?.find(v => v.type === type);
+    const cost = catalogItem ? catalogItem.cost : (type === 'VPSP' ? 28500 : 11500);
     if (this.resources.money < cost) {
-      this.showToast('Trésorerie insuffisante', `L’achat requiert ${cost} €.`, 'orange');
+      this.showToast('Trésorerie insuffisante', `L’achat requiert ${cost.toLocaleString('fr-FR')} €.`, 'orange');
       return;
     }
 
@@ -6509,8 +6510,13 @@ class ProtecGame {
       id: vehId,
       name: `${type} 0${station.vehicles.length + 1}`,
       type: type,
-      label: type === 'VPSP' ? 'Ambulance de Premiers Secours' : 'Véhicule Social & Logistique',
-      capacity: 4,
+      label: catalogItem?.name || (type === 'VPSP' ? 'Véhicule de Premiers Secours à Personnes' : type),
+      capacity: catalogItem ? catalogItem.capacity : (type === 'VPSP' ? 5 : 4),
+      seatsCount: catalogItem ? catalogItem.capacity : (type === 'VPSP' ? 5 : 4),
+      extraCapacityLabel: catalogItem?.extraCapacityLabel || null,
+      hasTowHitch: catalogItem?.hasTowHitch || false,
+      requiresTrailer: catalogItem?.requiresTrailer || false,
+      reqSkills: catalogItem?.reqSkills || [],
       status: 'dispo',
       stationId: stationId,
       image: this.getVehicleImage(type)
@@ -6546,6 +6552,7 @@ class ProtecGame {
       'VTD': 'images/vehicles/VTD.png',
       'ERS': 'images/vehicles/ERS.png',
       'BLS': 'images/vehicles/ERS.png',
+      'MPS': 'images/vehicles/Moto.png',
       'MOTO': 'images/vehicles/Moto.png',
       'QUAD': 'images/vehicles/QUAD.png',
       'VELO': 'images/vehicles/VELO.png',

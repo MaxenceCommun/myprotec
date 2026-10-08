@@ -55,14 +55,21 @@ window.ProtecCriseLogistique = {
     if (game.vehicles && Array.isArray(game.vehicles)) {
       game.vehicles.forEach(v => {
         if (v.isRearmed === undefined) v.isRearmed = true;
-        if (!v.seatsCount) {
-          if (v.type === 'VPSP' || v.name.includes('VPSP')) v.seatsCount = 4;
+        if (!v.seatsCount || v.seatsCount === 4 && (v.type === 'VPSP' || v.type === 'PCM' || v.type === 'VL')) {
+          if (v.capacity !== undefined) v.seatsCount = v.capacity;
+          else if (v.type === 'VPSP' || v.name.includes('VPSP')) v.seatsCount = 5;
           else if (v.type === 'VTP' || v.name.includes('VTP')) v.seatsCount = 9;
-          else if (v.type === 'VL' || v.name.includes('VL')) v.seatsCount = 5;
+          else if (v.type === 'VL' || v.name.includes('VL')) v.seatsCount = 4;
           else if (v.type === 'VTU' || v.name.includes('VTU')) v.seatsCount = 3;
-          else if (v.type === 'PC' || v.name.includes('PC')) v.seatsCount = 4;
-          else if (v.type === 'VLTT' || v.name.includes('VLTT') || v.name.includes('4x4')) v.seatsCount = 5;
-          else if (v.type === 'MOTO' || v.name.includes('Moto')) v.seatsCount = 1;
+          else if (v.type === 'PCM' || v.type === 'PC' || v.name.includes('PCM') || v.name.includes('PC')) v.seatsCount = 3;
+          else if (v.type === 'VAHU' || v.name.includes('VAHU')) v.seatsCount = 3;
+          else if (v.type === 'FLIT' || v.name.includes('FLIT')) v.seatsCount = 3;
+          else if (v.type === 'VCYN' || v.name.includes('VCYN')) v.seatsCount = 3;
+          else if (v.type === 'ERS' || v.name.includes('ERS')) v.seatsCount = 4;
+          else if (v.type === 'MPS' || v.type === 'MOTO' || v.name.includes('MPS') || v.name.includes('Moto')) v.seatsCount = 2;
+          else if (v.type === 'QUAD' || v.name.includes('Quad')) v.seatsCount = 2;
+          else if (v.type === 'VTD' || v.name.includes('VTD')) v.seatsCount = 3;
+          else if (v.type === 'VLTT' || v.type === 'VLHR' || v.name.includes('VLHR') || v.name.includes('4x4')) v.seatsCount = 4;
           else v.seatsCount = 4;
         }
       });
@@ -105,7 +112,7 @@ window.ProtecCriseLogistique = {
   checkVehiclesSeatingCapacity(engagedVehicles, volunteersCount) {
     let totalSeats = 0;
     engagedVehicles.forEach(v => {
-      totalSeats += (v.seatsCount || 4);
+      totalSeats += (v.seatsCount || v.capacity || 4);
     });
     return {
       totalSeats,
@@ -476,7 +483,7 @@ window.ProtecCriseLogistique = {
     let unrearmedVehNames = [];
 
     assignedVehs.forEach(v => {
-      totalSeats += (v.seatsCount || 4);
+      totalSeats += (v.seatsCount || v.capacity || 4);
       if (v.isRearmed === false) {
         hasUnrearmed = true;
         unrearmedVehNames.push(v.name);
