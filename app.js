@@ -2942,7 +2942,7 @@ class ProtecGame {
         <i data-lucide="award" class="w-3.5 h-3.5 text-amber-400 flex-shrink-0"></i>
         <span>Compétences & Habilitations :</span>
       </div>
-      <div class="space-y-1.5 mb-2.5 max-h-56 overflow-y-auto pr-1">
+      <div class="space-y-1.5 mb-2.5 max-h-72 overflow-y-auto pr-1.5 custom-scrollbar">
         ${skillsBadges}
       </div>
       <div class="text-[9.5px] text-slate-300 pt-2 border-t border-slate-800 flex justify-between items-center font-medium">
@@ -2953,21 +2953,32 @@ class ProtecGame {
 
     const target = e.currentTarget || e.target;
     const rect = target.getBoundingClientRect();
-    const tooltipWidth = 288;
+    const tooltipWidth = 300;
     let left = rect.left;
     if (left + tooltipWidth > window.innerWidth - 12) {
       left = window.innerWidth - tooltipWidth - 12;
     }
     if (left < 12) left = 12;
 
+    // Calcul de position sans tronquage
+    el.classList.remove('hidden');
+    el.style.left = `${left}px`;
+    el.style.top = '-9999px';
+    const tipHeight = el.offsetHeight || 320;
+
     let top = rect.bottom + 6;
-    if (top + 230 > window.innerHeight) {
-      top = Math.max(10, rect.top - 230);
+    if (top + tipHeight > window.innerHeight - 12) {
+      // Si dépasse en bas, placer au-dessus de l'élément
+      top = rect.top - tipHeight - 6;
+    }
+    if (top < 12) {
+      top = 12;
+      el.style.maxHeight = `${window.innerHeight - 24}px`;
+    } else {
+      el.style.maxHeight = '';
     }
 
-    el.style.left = `${left}px`;
     el.style.top = `${top}px`;
-    el.classList.remove('hidden');
     if (window.lucide) window.lucide.createIcons();
 
     if (isClick) {
@@ -3858,7 +3869,7 @@ class ProtecGame {
             <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider">Effectif Rattaché (${stationVolunteers.length})</h4>
             <button onclick="window.game.openModule('recrutement')" class="text-xs font-extrabold text-pc-blue hover:underline">Recruter (Candidatures)</button>
           </div>
-          <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+          <div class="space-y-1.5">
             ${stationVolunteers.map(v => `
               <div class="p-2.5 rounded-xl bg-white border border-slate-300 shadow-xs flex items-center justify-between text-xs hover:border-slate-400 transition">
                 <div class="flex items-center gap-2">

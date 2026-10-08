@@ -23,10 +23,11 @@
  */
 
 window.ProtecLocaux = {
-  dimensionMode: '2d', // '2d' (Plan d'architecte CAD) | '3d' (Vue isométrique - grisé V1)
-  snapToGrid: true, // Aimant / Magnétisme à la grille
-  camera3D: { yaw: -0.72, pitch: 0.62, zoom: 42, panX: 0, panY: -20 },
-  camera2D: { zoom: 46, panX: 0, panY: 0 },
+  dimensionMode: '2d', // '2d' (Plan d'architecte CAD) | '3d' (Vue isométrique 3D)
+  editorTab: 'furniture', // 'furniture' | 'doors' | 'rooms' | 'expand'
+  snapToGrid: true, // Aimant / Magnétisme à la grille (0.2m)
+  camera3D: { yaw: -0.72, pitch: 0.62, zoom: 32, panX: 0, panY: -10 },
+  camera2D: { zoom: 25, panX: 0, panY: 0 },
   isDraggingCanvas: false,
   dragStart: { x: 0, y: 0 },
   dragButton: 0,
@@ -35,6 +36,9 @@ window.ProtecLocaux = {
   isEditing: false, // mode modification de cloisons actif
   viewMode: 'furnished', // 'furnished' (meublé réaliste) | 'blueprint' (bleu technique d'architecte)
   selectedTileDetail: null, // index de la pièce affichée en détail
+  selectedFurnitureId: null,
+  hoveredFurnitureId: null,
+  selectedRoomId: 'room_1',
 
   // Définition des types de pièces et caractéristiques
   ZONE_TYPES: {
@@ -1482,7 +1486,7 @@ window.ProtecLocaux = {
   ],
 
   // =========================================================================
-  // ÉCRAN INITIAL : VÉRITABLE PLAN D'ARCHITECTE 2D & AMÉNAGEMENT STYLE LES SIMS
+  // ÉCRAN INITIAL & GESTION : VÉRITABLE PLAN D'ARCHITECTE 2D/3D & OUTILS LES SIMS
   // =========================================================================
 
   renderStarterSelection(game, station) {
@@ -1490,185 +1494,256 @@ window.ProtecLocaux = {
     const model = this.getArchitectModel(stId);
     this._currentSetupModel = model;
     this.selectedRoomId = this.selectedRoomId || 'room_1';
-    const selectedRoom = model.rooms.find(r => r.id === this.selectedRoomId) || model.rooms[0];
+    const selectedRoom = (model.rooms || []).find(r => r.id === this.selectedRoomId) || model.rooms[0];
+    const selectedItem = (model.furniture || []).find(f => f.id === this.selectedFurnitureId);
+
+    // Déclenchement de l'initialisation du Canvas
+    setTimeout(() => {
+      this.initArchitectCanvas();
+    }, 60);
 
     return `
-      <div class="space-y-4 max-w-6xl mx-auto py-1">
+      <div class="space-y-3.5 max-w-6xl mx-auto py-1">
         <!-- En-tête officiel de démarrage -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2.5 border-b border-slate-200">
           <div class="space-y-0.5">
             <div class="flex items-center gap-2">
               <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-pc-blue/10 text-pc-blue uppercase tracking-wider">
                 Procédure d'Ouverture d'Antenne
               </span>
-              <span class="text-xs font-bold text-slate-500">• Bâtiment de Base Déjà Construit</span>
+              <span class="text-xs font-bold text-slate-500">• Bâtiment de Base Déjà Bâti</span>
             </div>
-            <h3 class="text-lg font-black text-slate-900">Aménagement Réaliste du Local de Base (Protection Civile)</h3>
-            <p class="text-xs text-slate-600">Votre base comprend un parking 2 places et 3 pièces intérieures. Définissez la vocation des pièces et agencez le mobilier comme dans Les Sims :</p>
+            <h3 class="text-base sm:text-lg font-black text-slate-900">Architecture & Agencement des Locaux (Protection Civile)</h3>
+            <p class="text-xs text-slate-600">Aménagez librement les 3 pièces, placez vos meubles, portes et cloisons comme dans Les Sims :</p>
           </div>
           
           <div class="flex items-center gap-2">
-            <!-- Commutateur 2D / 3D (3D grisé comme demandé) -->
+            <!-- Commutateur 2D / 3D TEMPS RÉEL (100% ACTIFS) -->
             <div class="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-700 shadow text-xs font-black">
-              <button type="button" class="px-3.5 py-1.5 rounded-lg bg-blue-600 text-white shadow-xs flex items-center gap-1.5">
-                <span>📐</span> Plan 2D
+              <button type="button" onclick="window.ProtecLocaux.setDimensionMode('2d')" class="px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '2d' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'}">
+                <span>📐</span> Plan 2D CAD
               </button>
-              <button type="button" disabled class="px-3.5 py-1.5 rounded-lg opacity-40 cursor-not-allowed flex items-center gap-1 text-slate-400 bg-slate-800/80" title="Mode 3D désactivé pour la V1 (Bientôt en V2)">
-                <span>🧊</span> Mode 3D <span class="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold">V2</span>
+              <button type="button" onclick="window.ProtecLocaux.setDimensionMode('3d')" class="px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '3d' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'}">
+                <span>🧊</span> Vue 3D Réelle
               </button>
             </div>
 
             <button type="button" onclick="window.ProtecLocaux.resetCamera()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition flex items-center gap-1">
               <span>🎯</span> Recentrer
             </button>
-          </div>
-        </div>
-
-        <!-- Grille 2 colonnes : Plan 2D Canvas (gauche) + Panneau d'Aménagement Les Sims (droite) -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          
-          <!-- Colonne GAUCHE (7/12) : Visualiseur Canvas d'Architecte 2D -->
-          <div class="lg:col-span-7 flex flex-col space-y-2">
-            <div class="relative w-full h-[480px] sm:h-[530px] rounded-3xl bg-[#0b0f19] border-2 border-slate-800 shadow-xl overflow-hidden select-none">
-              
-              <canvas id="architect-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
-
-              <!-- Badge En direct -->
-              <div class="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow text-xs font-bold text-white pointer-events-none">
-                <span class="text-orange-400">🏠</span>
-                <span>Plan 2D d'Architecte</span>
-                <span class="text-[9.5px] font-black px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">En direct (1)</span>
-              </div>
-
-              <!-- Boutons d'outils droite -->
-              <div class="absolute top-3 right-3 z-10 flex flex-col items-center gap-1.5 p-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow">
-                <button type="button" onclick="window.ProtecLocaux.zoomCamera(1.2)" class="w-7 h-7 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 font-black text-sm flex items-center justify-center transition" title="Zoom avant">+</button>
-                <button type="button" onclick="window.ProtecLocaux.zoomCamera(0.8)" class="w-7 h-7 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 font-black text-sm flex items-center justify-center transition" title="Zoom arrière">−</button>
-                <button type="button" onclick="window.ProtecLocaux.toggleMagnet()" class="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition ${this.snapToGrid ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}" title="Aimant Grille">🧲</button>
-              </div>
-
-              <!-- Guide interactif inférieur -->
-              <div class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/70 text-[10.5px] text-slate-300 pointer-events-none text-center whitespace-nowrap shadow">
-                💡 Clic sur une pièce pour la configurer • Cliquez / Déplacez un meuble • [R] Pivoter
-              </div>
-            </div>
-
-            <!-- Spécifications techniques du bâtiment -->
-            <div class="p-2.5 rounded-2xl bg-white border border-slate-200 text-xs text-slate-700 flex items-center justify-between font-medium shadow-2xs">
-              <span>🚗 <strong>Parking extérieur</strong> : 2 places d'ambulance VPSP/VTU</span>
-              <span>🚪 <strong>Accès</strong> : Entrée piétonne & issue parking</span>
-              <span>📐 <strong>Surface</strong> : 138.5 m² (3 pièces)</span>
-            </div>
-          </div>
-
-          <!-- Colonne DROITE (5/12) : Affectation des 3 pièces + Outils Les Sims -->
-          <div class="lg:col-span-5 flex flex-col space-y-3.5">
-            
-            <!-- 1. Affectation des vocations pour chaque pièce -->
-            <div class="p-4 rounded-2xl bg-white border border-slate-300 shadow-xs space-y-2.5">
-              <div class="flex items-center justify-between">
-                <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                  <i data-lucide="layout-grid" class="w-3.5 h-3.5 text-pc-blue"></i>
-                  Affectation des 3 Salles
-                </h4>
-                <span class="text-[10px] text-slate-500 font-semibold">Cliquez pour configurer</span>
-              </div>
-
-              <!-- Liste des pièces -->
-              <div id="starter-rooms-list" class="space-y-2">
-                ${this.renderRoomsListHTML(model)}
-              </div>
-            </div>
-
-            <!-- 2. Mode Aménagement "Les Sims" (Ajout de Meubles) -->
-            <div class="p-3.5 rounded-2xl bg-white border border-slate-300 shadow-xs space-y-2">
-              <div class="flex items-center justify-between">
-                <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                  <span>🛋️</span> Mobilier & Aménagement (Les Sims)
-                </h4>
-                <span class="text-[10px] text-amber-700 font-bold">Pièce active : ${selectedRoom?.area?.toFixed(1) || '24'} m²</span>
-              </div>
-              
-              <p class="text-[11px] text-slate-600 leading-tight">
-                Cliquez pour équiper la pièce sélectionnée. Vous pouvez ensuite glisser les meubles sur le plan ou appuyer sur <strong>[R]</strong> pour les pivoter :
-              </p>
-
-              <!-- Catalogue d'objets rapides -->
-              <div class="grid grid-cols-3 gap-1.5 pt-1">
-                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('bureau')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
-                  <span>🗄️</span><span class="text-[9.5px]">Bureau</span>
-                </button>
-                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('table_formation')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
-                  <span>🪑</span><span class="text-[9.5px]">Table Form.</span>
-                </button>
-                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('chaise')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
-                  <span>🪑</span><span class="text-[9.5px]">Chaise</span>
-                </button>
-                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('tableau_blanc')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
-                  <span>📋</span><span class="text-[9.5px]">Tableau</span>
-                </button>
-                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('mannequin_rcp')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
-                  <span>🩺</span><span class="text-[9.5px]">Mannequin</span>
-                </button>
-                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('dae_mural')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
-                  <span>⚡</span><span class="text-[9.5px]">DAE Mural</span>
-                </button>
-                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('etagere_lots')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
-                  <span>📦</span><span class="text-[9.5px]">Lots A/B</span>
-                </button>
-                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('casiers_vestiaire')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
-                  <span>👕</span><span class="text-[9.5px]">Casiers</span>
-                </button>
-                <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('lit_garde')" class="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 flex flex-col items-center gap-0.5 transition shadow-2xs">
-                  <span>🛏️</span><span class="text-[9.5px]">Lit Garde</span>
-                </button>
-              </div>
-
-              <!-- Actions sur meuble sélectionné -->
-              <div class="flex items-center gap-2 pt-1.5 border-t border-slate-100">
-                <button type="button" onclick="window.ProtecLocaux.rotateSelectedItem()" class="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition flex items-center justify-center gap-1">
-                  <span>🔄</span> Pivoter [R]
-                </button>
-                <button type="button" onclick="window.ProtecLocaux.deleteSelectedItem()" class="flex-1 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-bold transition flex items-center justify-center gap-1">
-                  <span>🗑️</span> Retirer Objet
-                </button>
-              </div>
-            </div>
-
-            <!-- 3. Validation de l'aménagement & début de partie -->
-            <button type="button" onclick="window.ProtecLocaux.confirmCustomStarterSetup(window.game, '${stId}')" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-black text-sm shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
-              <i data-lucide="check-circle" class="w-4 h-4"></i>
-              <span>Valider l'Aménagement et Commencer la Partie</span>
+            <button type="button" onclick="window.ProtecLocaux.toggleMagnet()" class="px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1 ${this.snapToGrid ? 'bg-blue-50 text-pc-blue border-blue-300' : 'bg-slate-100 text-slate-600 border-slate-200'}">
+              <span>🧲</span> Aimant Grille
             </button>
-
           </div>
-
         </div>
 
+        <!-- ZONE CENTRALE : PLAN CAD 2D / 3D HAUTE DÉFINITION -->
+        <div class="relative w-full h-[400px] sm:h-[450px] rounded-3xl bg-[#0a0e17] border-2 border-slate-800 shadow-xl overflow-hidden select-none">
+          <canvas id="architect-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+
+          <!-- Badge En direct -->
+          <div class="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow text-xs font-bold text-white pointer-events-none">
+            <span class="text-orange-400">${this.dimensionMode === '3d' ? '🧊' : '📐'}</span>
+            <span>Plan ${this.dimensionMode === '3d' ? '3D Volumétrique' : '2D d’Architecte CAD'}</span>
+            <span class="text-[9.5px] font-black px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">Éditable</span>
+          </div>
+
+          <!-- Boutons de zoom et outils rapides droite -->
+          <div class="absolute top-3 right-3 z-10 flex flex-col items-center gap-1.5 p-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow">
+            <button type="button" onclick="window.ProtecLocaux.zoomCamera(1.2)" class="w-7 h-7 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 font-black text-sm flex items-center justify-center transition" title="Zoom avant">+</button>
+            <button type="button" onclick="window.ProtecLocaux.zoomCamera(0.8)" class="w-7 h-7 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 font-black text-sm flex items-center justify-center transition" title="Zoom arrière">−</button>
+            <button type="button" onclick="window.ProtecLocaux.resetCamera()" class="w-7 h-7 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-slate-800 font-black text-xs flex items-center justify-center transition" title="Recentrer">🎯</button>
+          </div>
+
+          <!-- BANDEAU CONTEXTUEL INFÉRIEUR DYNAMIQUE -->
+          <div id="canvas-context-bar" class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-10 px-3.5 py-1.5 rounded-xl bg-slate-900/95 backdrop-blur border border-slate-700/80 text-xs text-white shadow-xl flex items-center gap-3">
+            ${selectedItem ? `
+              <span class="flex items-center gap-1.5 font-bold text-amber-300">
+                <span>🛋️</span>
+                <span>Objet : <strong>${selectedItem.label}</strong></span>
+              </span>
+              <div class="h-4 w-[1px] bg-slate-700"></div>
+              <button type="button" onclick="window.ProtecLocaux.rotateSelectedItem()" class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] flex items-center gap-1 transition">
+                <span>🔄</span> Pivoter [R]
+              </button>
+              <button type="button" onclick="window.ProtecLocaux.deleteSelectedItem()" class="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-[11px] flex items-center gap-1 transition">
+                <span>🗑️</span> Retirer [Suppr]
+              </button>
+            ` : `
+              <span class="text-slate-300 text-[11px] font-medium flex items-center gap-1.5">
+                <span>💡</span>
+                <span>Cliquez sur un meuble pour le déplacer / pivoter • Cliquez sur une pièce pour l'aménager</span>
+              </span>
+            `}
+          </div>
+        </div>
+
+        <!-- BARRE D'OUTILS D'ÉDITION "LES SIMS" AVEC 4 ONGLETS INTERACTIFS -->
+        <div class="p-4 rounded-2xl bg-white border border-slate-300 shadow-sm space-y-3">
+          <!-- Onglets de la barre d'outils -->
+          <div class="flex items-center justify-between border-b border-slate-200 pb-2.5">
+            <div class="flex items-center gap-1.5 overflow-x-auto">
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('furniture')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${this.editorTab === 'furniture' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>🛋️</span> Mobilier & Matériel
+              </button>
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('doors')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${this.editorTab === 'doors' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>🚪</span> Portes & Fenêtres
+              </button>
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('rooms')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${this.editorTab === 'rooms' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>🏛️</span> Vocation des 3 Salles
+              </button>
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('expand')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${this.editorTab === 'expand' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>➕</span> Agrandir (Extension)
+              </button>
+            </div>
+
+            <div class="hidden sm:flex items-center gap-2 text-xs text-slate-500 font-semibold">
+              <span>Salle Active : <strong class="text-slate-800">${selectedRoom?.name?.split('\n')[0] || 'Salle 1'}</strong></span>
+            </div>
+          </div>
+
+          <!-- Contenu interactif de l'onglet actif -->
+          <div id="editor-subpanel">
+            ${this.renderEditorToolsHTML(model)}
+          </div>
+        </div>
+
+        <!-- BOUTON PRINCIPAL : VALIDATION & COMMENCER LA PARTIE -->
+        <div class="pt-1">
+          <button type="button" onclick="window.ProtecLocaux.confirmCustomStarterSetup(window.game, '${stId}')" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-black text-sm sm:text-base shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+            <i data-lucide="check-circle" class="w-5 h-5"></i>
+            <span>Valider l'Aménagement et Commencer la Partie</span>
+          </button>
+        </div>
       </div>
     `;
   },
 
+  setEditorTab(tabKey) {
+    this.editorTab = tabKey;
+    const panel = document.getElementById('editor-subpanel');
+    if (panel) {
+      panel.innerHTML = this.renderEditorToolsHTML();
+      if (window.lucide) window.lucide.createIcons();
+    }
+    // Rafraîchir l'en-tête d'onglets
+    const container = document.getElementById('main-modal');
+    if (container) {
+      const tabs = container.querySelectorAll('[onclick^="window.ProtecLocaux.setEditorTab"]');
+      tabs.forEach(btn => {
+        const isCurrent = btn.getAttribute('onclick').includes(`'${tabKey}'`);
+        btn.className = `px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${isCurrent ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`;
+      });
+    }
+  },
+
+  renderEditorToolsHTML(model) {
+    const m = model || this.getArchitectModel();
+    const selectedRoom = (m.rooms || []).find(r => r.id === this.selectedRoomId) || m.rooms[0];
+
+    if (this.editorTab === 'furniture') {
+      return `
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-600">Cliquez sur un meuble pour le placer dans <strong>${selectedRoom?.name?.split('\n')[0] || 'la pièce'}</strong> :</span>
+            <span class="text-pc-blue font-bold text-[11px]">Déplaçable à la souris / [R] pour pivoter</span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+            ${this.FURNITURE_CATALOG.map(item => `
+              <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('${item.type}')" class="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50/80 border border-slate-200 hover:border-pc-blue text-slate-800 transition flex flex-col items-center justify-center gap-1 shadow-2xs group active:scale-95">
+                <span class="text-xl group-hover:scale-110 transition">${item.icon}</span>
+                <span class="text-[10px] font-bold text-center leading-tight truncate w-full">${item.name}</span>
+                <span class="text-[9px] text-slate-500 font-mono">${item.w}m × ${item.d}m</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    if (this.editorTab === 'doors') {
+      return `
+        <div class="space-y-2">
+          <div class="text-xs text-slate-600">Ajoutez des ouvertures (portes battantes ou baies vitrées) sur les murs :</div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <button type="button" onclick="window.ProtecLocaux.addDoorItem('W')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center gap-3">
+              <span class="text-2xl">🚪</span>
+              <div>
+                <strong class="block text-xs font-black text-slate-900">+ Porte d'Entrée (93cm)</strong>
+                <span class="text-[10.5px] text-slate-500">Accès parking / extérieur</span>
+              </div>
+            </button>
+            <button type="button" onclick="window.ProtecLocaux.addDoorItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center gap-3">
+              <span class="text-2xl">🚪</span>
+              <div>
+                <strong class="block text-xs font-black text-slate-900">+ Porte Intérieure (83cm)</strong>
+                <span class="text-[10.5px] text-slate-500">Cloison de communication</span>
+              </div>
+            </button>
+            <button type="button" onclick="window.ProtecLocaux.addWindowItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center gap-3">
+              <span class="text-2xl">🪟</span>
+              <div>
+                <strong class="block text-xs font-black text-slate-900">+ Fenêtre Cyan (1.40m)</strong>
+                <span class="text-[10.5px] text-slate-500">Double vitrage isolant</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    if (this.editorTab === 'rooms') {
+      return `
+        <div class="space-y-2">
+          <div class="text-xs text-slate-600">Affectez la vocation et la fonction de chaque salle de votre caserne :</div>
+          <div id="starter-rooms-list" class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            ${this.renderRoomsListHTML(m)}
+          </div>
+        </div>
+      `;
+    }
+
+    if (this.editorTab === 'expand') {
+      return `
+        <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="space-y-0.5">
+            <strong class="font-black text-amber-900 block flex items-center gap-1.5">
+              <span>🏗️</span> Extension de Caserne (Nouvelle Pièce)
+            </strong>
+            <p class="text-[11px] text-amber-800">
+              Agrandissez le bâtiment de plain-pied avec une 4ème pièce dédiée (Foyer des bénévoles ou Dortoir de garde SAMU, +16.1 m²).
+            </p>
+          </div>
+          <button type="button" onclick="window.ProtecLocaux.addCustomRoom()" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow transition flex-shrink-0">
+            ➕ Construire l'Extension (+16 m²)
+          </button>
+        </div>
+      `;
+    }
+
+    return '';
+  },
+
   renderRoomsListHTML(model) {
     const m = model || this.getArchitectModel();
-    return m.rooms.map((rm, idx) => {
+    return (m.rooms || []).map((rm, idx) => {
       const isSelected = this.selectedRoomId === rm.id;
       return `
         <div onclick="window.ProtecLocaux.selectRoom('${rm.id}')" class="p-2.5 rounded-xl border transition cursor-pointer ${isSelected ? 'bg-blue-50/90 border-pc-blue ring-2 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}">
-          <div class="flex items-center justify-between text-xs font-black mb-1">
-            <span class="flex items-center gap-1.5 text-slate-900">
-              <span class="w-5 h-5 rounded-full ${isSelected ? 'bg-pc-blue text-white' : 'bg-slate-200 text-slate-700'} flex items-center justify-center text-[10px] font-mono">${idx + 1}</span>
-              <span>Pièce ${idx + 1} (${rm.area.toFixed(1)} m²)</span>
+          <div class="flex items-center justify-between text-xs font-black mb-1.5">
+            <span class="flex items-center gap-1.5 text-slate-900 truncate">
+              <span class="w-5 h-5 rounded-full ${isSelected ? 'bg-pc-blue text-white' : 'bg-slate-200 text-slate-700'} flex items-center justify-center text-[10px] font-mono flex-shrink-0">${idx + 1}</span>
+              <span class="truncate">Pièce ${idx + 1} (${rm.area.toFixed(1)} m²)</span>
             </span>
-            ${isSelected ? '<span class="text-[9.5px] text-pc-blue font-bold">Active ★</span>' : ''}
+            ${isSelected ? '<span class="text-[9.5px] text-pc-blue font-bold flex-shrink-0">Active ★</span>' : ''}
           </div>
-          <select onclick="event.stopPropagation()" onchange="window.ProtecLocaux.assignRoomRole('${rm.id}', this.value)" class="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue">
-            <option value="bureau" ${rm.type === 'bureau' ? 'selected' : ''}>💼 Bureau d'Accueil & Direction</option>
-            <option value="formation" ${rm.type === 'formation' ? 'selected' : ''}>🎓 Salle de Formation PSC1 & DPS</option>
-            <option value="stockage" ${rm.type === 'stockage' ? 'selected' : ''}>📦 Réserve Logistique & Lots A/B</option>
-            <option value="detente" ${rm.type === 'detente' ? 'selected' : ''}>☕ Foyer & Détente des Bénévoles</option>
-            <option value="dortoir" ${rm.type === 'dortoir' ? 'selected' : ''}>🛏️ Dortoir de Garde SAMU 15</option>
-            <option value="vestiaires" ${rm.type === 'vestiaires' ? 'selected' : ''}>🚿 Vestiaires & Sanitaires F1</option>
+          <select onclick="event.stopPropagation()" onchange="window.ProtecLocaux.assignRoomRole('${rm.id}', this.value)" class="w-full px-2 py-1 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue">
+            <option value="bureau" ${rm.type === 'bureau' ? 'selected' : ''}>💼 Accueil & Direction</option>
+            <option value="formation" ${rm.type === 'formation' ? 'selected' : ''}>🎓 Formation PSC1 & DPS</option>
+            <option value="stockage" ${rm.type === 'stockage' ? 'selected' : ''}>📦 Réserve Lots A/B</option>
+            <option value="detente" ${rm.type === 'detente' ? 'selected' : ''}>☕ Foyer & Détente</option>
+            <option value="dortoir" ${rm.type === 'dortoir' ? 'selected' : ''}>🛏️ Dortoir de Garde</option>
+            <option value="vestiaires" ${rm.type === 'vestiaires' ? 'selected' : ''}>🚿 Vestiaires & Sanitaires</option>
           </select>
         </div>
       `;
@@ -1682,18 +1757,31 @@ window.ProtecLocaux = {
     if (container) {
       container.innerHTML = this.renderRoomsListHTML();
     }
+    const contextBar = document.getElementById('canvas-context-bar');
+    if (contextBar && !this.selectedFurnitureId) {
+      const model = this.getArchitectModel();
+      const rm = (model.rooms || []).find(r => r.id === roomId);
+      if (rm) {
+        contextBar.innerHTML = `
+          <span class="flex items-center gap-1.5 font-bold text-blue-300">
+            <span>🏛️</span>
+            <span>Salle active : <strong>${rm.name.split('\n')[0]}</strong> (${rm.area.toFixed(1)} m²)</span>
+          </span>
+        `;
+      }
+    }
   },
 
   assignRoomRole(roomId, newRole) {
     const model = this.getArchitectModel();
-    const room = model.rooms.find(r => r.id === roomId);
+    const room = (model.rooms || []).find(r => r.id === roomId);
     if (!room) return;
 
     room.type = newRole;
     const titles = {
       bureau: 'Accueil & Direction\n(Poste de Commandement)',
       formation: 'Salle de Formation & DPS\n(Pédagogie Citoyenne)',
-      stockage: 'Réserve & Stockage Lots\n(Pharmacie & Casiers F1)',
+      stockage: 'Réserve Lots A/B & Vestiaires\n(Pharmacie & Casiers F1)',
       detente: 'Foyer & Détente\n(Espace Convivial Bénévoles)',
       dortoir: 'Dortoir d\'Astreinte\n(Garde SAMU 15 / CUMP)',
       vestiaires: 'Vestiaires Opérationnels\n(Casiers & Sanitaires)'
@@ -1724,51 +1812,126 @@ window.ProtecLocaux = {
 
     if (role === 'bureau') {
       model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 1.2, y: ry + 1.0, w: 1.8, d: 0.9, color: '#334155', label: 'Bureau Direction' },
-        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 1.8, y: ry + 0.4, w: 0.5, d: 0.5, color: '#0284c7', label: 'Fauteuil' },
-        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 3.8, y: ry + 0.8, w: 0.5, d: 1.8, color: '#1e293b', label: 'Baie Radio PC' },
-        { id: `f_${Date.now()}_4`, roomId: room.id, x: rx + 1.4, y: ry + 2.4, w: 1.4, d: 0.5, color: '#475569', label: 'Chaises Visiteurs' }
+        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'bureau', x: rx + 1.2, y: ry + 1.0, w: 1.8, d: 0.9, color: '#334155', label: 'Bureau Direction', rotation: 0 },
+        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'chaise', x: rx + 1.8, y: ry + 0.4, w: 0.5, d: 0.5, color: '#0284c7', label: 'Fauteuil', rotation: 0 },
+        { id: `f_${Date.now()}_3`, roomId: room.id, type: 'bureau', x: rx + 3.8, y: ry + 0.8, w: 0.5, d: 1.8, color: '#1e293b', label: 'Baie Radio PC', rotation: 0 },
+        { id: `f_${Date.now()}_4`, roomId: room.id, type: 'chaise', x: rx + 1.4, y: ry + 2.4, w: 1.4, d: 0.5, color: '#475569', label: 'Chaises Visiteurs', rotation: 0 }
       );
     } else if (role === 'formation') {
       model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 1.2, y: ry + 2.5, w: 2.4, d: 1.2, color: '#ea580c', label: 'Table PSC1 / DPS' },
-        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 1.2, y: ry + 0.4, w: 2.4, d: 0.15, color: '#f8fafc', label: 'Tableau Blanc' },
-        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 3.8, y: ry + 1.2, w: 0.6, d: 1.2, color: '#f59e0b', label: 'Mannequin RCP' },
-        { id: `f_${Date.now()}_4`, roomId: room.id, x: rx + 4.2, y: ry + 3.0, w: 0.3, d: 0.4, color: '#10b981', label: 'DAE Pédagogique' },
-        { id: `f_${Date.now()}_5`, roomId: room.id, x: rx + 1.2, y: ry + 4.2, w: 2.4, d: 0.5, color: '#0284c7', label: 'Rangée Sièges (6)' }
+        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'table_formation', x: rx + 1.0, y: ry + 1.8, w: 2.2, d: 1.1, color: '#ea580c', label: 'Table Formation', rotation: 0 },
+        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'tableau_blanc', x: rx + 1.0, y: ry + 0.3, w: 2.2, d: 0.2, color: '#f8fafc', label: 'Tableau Blanc', rotation: 0 },
+        { id: `f_${Date.now()}_3`, roomId: room.id, type: 'mannequin_rcp', x: rx + 3.6, y: ry + 1.0, w: 0.6, d: 1.2, color: '#f59e0b', label: 'Mannequin RCP', rotation: 0 },
+        { id: `f_${Date.now()}_4`, roomId: room.id, type: 'dae_mural', x: rx + 4.0, y: ry + 2.8, w: 0.35, d: 0.35, color: '#10b981', label: 'DAE Formation', rotation: 0 }
       );
     } else if (role === 'stockage') {
       model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 0.5, y: ry + 0.8, w: 0.6, d: 2.5, color: '#475569', label: 'Étagères Lots A/B' },
-        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 2.0, y: ry + 3.8, w: 1.4, d: 0.4, color: '#dc2626', label: 'Armoire Pharmacie' },
-        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 3.8, y: ry + 0.8, w: 0.6, d: 2.5, color: '#0f172a', label: 'Casiers F1 Protec' }
+        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'etagere_lots', x: rx + 0.6, y: ry + 0.8, w: 0.6, d: 2.4, color: '#475569', label: 'Rayonnage Lots A/B', rotation: 0 },
+        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'etagere_lots', x: rx + 1.6, y: ry + 0.8, w: 0.6, d: 2.4, color: '#475569', label: 'Rayonnage Lots A/B', rotation: 0 },
+        { id: `f_${Date.now()}_3`, roomId: room.id, type: 'armoire_pharmacie', x: rx + 4.0, y: ry + 4.0, w: 1.2, d: 0.4, color: '#dc2626', label: 'Pharmacie Secours', rotation: 0 },
+        { id: `f_${Date.now()}_4`, roomId: room.id, type: 'casiers_vestiaire', x: rx + 8.2, y: ry + 0.8, w: 0.6, d: 2.5, color: '#0f172a', label: 'Casiers Tenues F1', rotation: 0 },
+        { id: `f_${Date.now()}_5`, roomId: room.id, type: 'lit_garde', x: rx + 6.0, y: ry + 2.0, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit de Camp Astreinte', rotation: 0 }
       );
     } else if (role === 'detente') {
       model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 1.0, y: ry + 1.2, w: 2.2, d: 1.0, color: '#059669', label: 'Canapé Foyer' },
-        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 1.4, y: ry + 2.6, w: 1.4, d: 0.7, color: '#f8fafc', label: 'Table Basse' },
-        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 3.8, y: ry + 0.8, w: 0.8, d: 0.6, color: '#d97706', label: 'Machine à Café' }
+        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'canape_detente', x: rx + 0.8, y: ry + 1.0, w: 2.0, d: 0.9, color: '#059669', label: 'Canapé Foyer', rotation: 0 },
+        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'table_formation', x: rx + 1.0, y: ry + 2.3, w: 1.4, d: 0.7, color: '#f8fafc', label: 'Table Basse', rotation: 0 },
+        { id: `f_${Date.now()}_3`, roomId: room.id, type: 'machine_cafe', x: rx + 3.2, y: ry + 0.6, w: 0.8, d: 0.6, color: '#d97706', label: 'Machine Café', rotation: 0 }
       );
     } else if (role === 'dortoir') {
       model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 0.8, y: ry + 0.8, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit de Garde 1' },
-        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 2.6, y: ry + 0.8, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit de Garde 2' },
-        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 4.2, y: ry + 0.8, w: 0.5, d: 1.8, color: '#334155', label: 'Armoires Garde' }
+        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'lit_garde', x: rx + 0.8, y: ry + 0.8, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit Garde 1', rotation: 0 },
+        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'lit_garde', x: rx + 2.4, y: ry + 0.8, w: 1.0, d: 2.0, color: '#a855f7', label: 'Lit Garde 2', rotation: 0 },
+        { id: `f_${Date.now()}_3`, roomId: room.id, type: 'casiers_vestiaire', x: rx + 3.8, y: ry + 0.8, w: 0.5, d: 1.8, color: '#334155', label: 'Armoires Garde', rotation: 0 }
       );
     } else if (role === 'vestiaires') {
       model.furniture.push(
-        { id: `f_${Date.now()}_1`, roomId: room.id, x: rx + 0.6, y: ry + 0.6, w: 0.6, d: 3.0, color: '#0f172a', label: 'Rangée Casiers' },
-        { id: `f_${Date.now()}_2`, roomId: room.id, x: rx + 3.8, y: ry + 0.6, w: 0.6, d: 3.0, color: '#0f172a', label: 'Rangée Casiers' },
-        { id: `f_${Date.now()}_3`, roomId: room.id, x: rx + 2.0, y: ry + 1.2, w: 0.5, d: 2.0, color: '#0284c7', label: 'Banc Vestiaire' }
+        { id: `f_${Date.now()}_1`, roomId: room.id, type: 'casiers_vestiaire', x: rx + 0.6, y: ry + 0.6, w: 0.6, d: 3.0, color: '#0f172a', label: 'Casiers F1', rotation: 0 },
+        { id: `f_${Date.now()}_2`, roomId: room.id, type: 'casiers_vestiaire', x: rx + 3.4, y: ry + 0.6, w: 0.6, d: 3.0, color: '#0f172a', label: 'Casiers F1', rotation: 0 }
       );
     }
+  },
+
+  addDoorItem(wall = 'W') {
+    const model = this.getArchitectModel();
+    const newDoor = {
+      id: `d_${Date.now()}`,
+      x: wall === 'W' ? 6.2 : (wall === 'E' ? 15.6 : 10.8),
+      y: 4.5,
+      len: 0.83,
+      wall: wall,
+      label: 'Porte Intérieure (83cm)',
+      isMain: false
+    };
+    model.doors.push(newDoor);
+    this.renderArchitectScene();
+    if (window.game) window.game.showToast('Porte Ajoutée', 'Nouvelle porte intérieure positionnée sur le plan.', 'blue');
+  },
+
+  addWindowItem(wall = 'N') {
+    const model = this.getArchitectModel();
+    const newWindow = {
+      id: `w_${Date.now()}`,
+      x: wall === 'N' ? 10.0 : 15.6,
+      y: wall === 'N' ? 1.5 : 5.0,
+      len: 1.40,
+      wall: wall,
+      label: 'Fenêtre (1.40m)'
+    };
+    model.windows.push(newWindow);
+    this.renderArchitectScene();
+    if (window.game) window.game.showToast('Fenêtre Ajoutée', 'Nouvelle ouverture vitrée posée sur le plan.', 'cyan');
+  },
+
+  addCustomRoom() {
+    const model = this.getArchitectModel();
+    const count = (model.rooms || []).length;
+    const newRoomId = `room_${count + 1}`;
+    
+    // Positionner une 4ème pièce (Foyer ou Dortoir)
+    const newRoom = {
+      id: newRoomId,
+      type: 'detente',
+      name: 'Foyer & Détente Bénévoles\n(Espace Convivial)',
+      x: 6.2,
+      y: 10.5,
+      w: 4.6,
+      h: 3.5,
+      area: 16.1,
+      color: '#14241e'
+    };
+    model.rooms.push(newRoom);
+    
+    // Étendre les murs
+    model.walls.push(
+      { x1: 6.2, y1: 10.5, x2: 6.2, y2: 14.0, th: 0.24, outer: true },
+      { x1: 6.2, y1: 14.0, x2: 10.8, y2: 14.0, th: 0.24, outer: true },
+      { x1: 10.8, y1: 14.0, x2: 10.8, y2: 10.5, th: 0.24, outer: true }
+    );
+    // Porte d'accès
+    model.doors.push({
+      id: `d_foyer_${Date.now()}`,
+      x: 8.0,
+      y: 10.5,
+      len: 0.83,
+      wall: 'N',
+      label: 'Porte Foyer (83cm)',
+      isMain: false
+    });
+    // Meubles foyer
+    this.repopulateRoomFurniture(model, newRoom, 'detente');
+
+    this.selectRoom(newRoomId);
+    this.fitView();
+    this.renderArchitectScene();
+    if (window.game) window.game.showToast('Nouvelle Salle Construite !', 'Extension créée : Foyer & Détente des Bénévoles (+16 m²).', 'green');
   },
 
   addFurnitureItem(type) {
     const catalogItem = this.FURNITURE_CATALOG.find(c => c.type === type);
     if (!catalogItem) return;
     const model = this.getArchitectModel();
-    const room = model.rooms.find(r => r.id === this.selectedRoomId) || model.rooms[0];
+    const room = (model.rooms || []).find(r => r.id === this.selectedRoomId) || model.rooms[0];
     if (!room) return;
 
     const newItem = {
@@ -1787,12 +1950,30 @@ window.ProtecLocaux = {
     model.furniture.push(newItem);
     this.selectedFurnitureId = newItem.id;
     this.renderArchitectScene();
+
+    // Mettre à jour la barre contextuelle
+    const contextBar = document.getElementById('canvas-context-bar');
+    if (contextBar) {
+      contextBar.innerHTML = `
+        <span class="flex items-center gap-1.5 font-bold text-amber-300">
+          <span>🛋️</span>
+          <span>Objet : <strong>${newItem.label}</strong></span>
+        </span>
+        <div class="h-4 w-[1px] bg-slate-700"></div>
+        <button type="button" onclick="window.ProtecLocaux.rotateSelectedItem()" class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] flex items-center gap-1 transition">
+          <span>🔄</span> Pivoter [R]
+        </button>
+        <button type="button" onclick="window.ProtecLocaux.deleteSelectedItem()" class="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-[11px] flex items-center gap-1 transition">
+          <span>🗑️</span> Retirer [Suppr]
+        </button>
+      `;
+    }
   },
 
   rotateSelectedItem() {
     if (!this.selectedFurnitureId) return;
     const model = this.getArchitectModel();
-    const item = model.furniture.find(f => f.id === this.selectedFurnitureId);
+    const item = (model.furniture || []).find(f => f.id === this.selectedFurnitureId);
     if (!item) return;
     item.rotation = ((item.rotation || 0) + Math.PI / 2) % (Math.PI * 2);
     const tmp = item.w;
@@ -1804,9 +1985,19 @@ window.ProtecLocaux = {
   deleteSelectedItem() {
     if (!this.selectedFurnitureId) return;
     const model = this.getArchitectModel();
-    model.furniture = model.furniture.filter(f => f.id !== this.selectedFurnitureId);
+    model.furniture = (model.furniture || []).filter(f => f.id !== this.selectedFurnitureId);
     this.selectedFurnitureId = null;
     this.renderArchitectScene();
+
+    const contextBar = document.getElementById('canvas-context-bar');
+    if (contextBar) {
+      contextBar.innerHTML = `
+        <span class="text-slate-300 text-[11px] font-medium flex items-center gap-1.5">
+          <span>💡</span>
+          <span>Cliquez sur un meuble pour le déplacer / pivoter • Cliquez sur une pièce pour l'aménager</span>
+        </span>
+      `;
+    }
   },
 
   // Rendu selon l'onglet actif
@@ -1946,8 +2137,8 @@ window.ProtecLocaux = {
             <button onclick="window.ProtecLocaux.setDimensionMode('2d')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '2d' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}">
               <span class="text-xs">📐</span> 2D
             </button>
-            <button disabled class="px-3 py-1.5 rounded-lg opacity-40 cursor-not-allowed flex items-center gap-1 text-slate-400 bg-slate-800/80" title="Mode 3D désactivé pour la V1 (Bientôt disponible en V2)">
-              <span class="text-xs">🧊</span> 3D <span class="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold">V2</span>
+            <button onclick="window.ProtecLocaux.setDimensionMode('3d')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '3d' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}">
+              <span class="text-xs">🧊</span> 3D
             </button>
           </div>
 
@@ -2060,13 +2251,34 @@ window.ProtecLocaux = {
     this.renderArchitectScene();
   },
 
-  resetCamera() {
-    if (this.dimensionMode === '3d') {
-      this.camera3D = { yaw: -0.72, pitch: 0.62, zoom: 42, panX: 0, panY: -20 };
-    } else {
-      this.camera2D = { zoom: 46, panX: 0, panY: 0 };
-    }
+  fitView(width, height) {
+    const canvas = document.getElementById('architect-canvas');
+    const w = width || (canvas ? canvas.width : 800);
+    const h = height || (canvas ? canvas.height : 500);
+
+    // Le complexe complet (parking + bâtiment) va de x: 0.8 à 15.8 (largeur ~15m) et y: 1.2 à 10.8 (hauteur ~9.6m).
+    // On calibre le zoom pour afficher l'ensemble avec une marge aérée
+    const scaleX = (w * 0.84) / 16.5;
+    const scaleY = (h * 0.84) / 11.0;
+    const optimalScale = Math.max(16, Math.min(38, Math.min(scaleX, scaleY)));
+
+    this.camera2D = {
+      zoom: optimalScale,
+      panX: 0,
+      panY: 0
+    };
+    this.camera3D = {
+      yaw: -0.72,
+      pitch: 0.62,
+      zoom: optimalScale * 1.35,
+      panX: 0,
+      panY: -15
+    };
     this.renderArchitectScene();
+  },
+
+  resetCamera() {
+    this.fitView();
   },
 
   initArchitectCanvas() {
@@ -2079,7 +2291,7 @@ window.ProtecLocaux = {
     canvas.height = rect.height * dpr;
 
     this.setupCanvasEvents(canvas);
-    this.renderArchitectScene();
+    this.fitView(canvas.width, canvas.height);
   },
 
   setupCanvasEvents(canvas) {
@@ -2206,11 +2418,18 @@ window.ProtecLocaux = {
         return;
       }
 
-      // Curseur dynamique selon survol
+      // Curseur dynamique selon survol et tracking du meuble sous le curseur
       const model = this.getArchitectModel();
-      const hoveredFurniture = (model.furniture || []).find(f => {
+      const hoveredFurniture = (model.furniture || []).slice().reverse().find(f => {
         return wx >= f.x && wx <= f.x + f.w && wy >= f.y && wy <= f.y + f.d;
       });
+
+      const newHoveredId = hoveredFurniture ? hoveredFurniture.id : null;
+      if (this.hoveredFurnitureId !== newHoveredId) {
+        this.hoveredFurnitureId = newHoveredId;
+        this.renderArchitectScene();
+      }
+
       if (hoveredFurniture) {
         canvas.style.cursor = 'move';
       } else {
@@ -2272,7 +2491,7 @@ window.ProtecLocaux = {
       const d = window.devicePixelRatio || 1;
       c.width = r.width * d;
       c.height = r.height * d;
-      this.renderArchitectScene();
+      this.fitView(c.width, c.height);
     });
   },
 
@@ -2528,18 +2747,34 @@ window.ProtecLocaux = {
         ctx.fillRect(rx, ry, rw, rh);
       }
 
-      // Nom de la pièce et dimensions au centre
+      // Cartouche discret d'identification de la pièce
+      const roomTitle = r.name.split('\n')[0];
+      const roomSubtitle = `${r.area.toFixed(1)} m² • ${r.w.toFixed(1)}m × ${r.h.toFixed(1)}m`;
+      
+      const badgeW = Math.min(rw - 16, 200);
+      const badgeH = 34;
+      const badgeX = rx + rw / 2 - badgeW / 2;
+      const badgeY = ry + 10;
+
+      ctx.fillStyle = isSelected ? 'rgba(30, 58, 138, 0.85)' : 'rgba(15, 23, 42, 0.75)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 6);
+      else ctx.rect(badgeX, badgeY, badgeW, badgeH);
+      ctx.fill();
+
+      ctx.strokeStyle = isSelected ? '#3b82f6' : 'rgba(148, 163, 184, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
       ctx.fillStyle = '#f8fafc';
-      ctx.font = 'bold 12px "Plus Jakarta Sans", sans-serif';
+      ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      ctx.fillText(roomTitle, rx + rw / 2, badgeY + 11);
 
-      const lines = r.name.split('\n');
-      ctx.fillText(lines[0], rx + rw / 2, ry + rh / 2 - 10);
-
-      ctx.fillStyle = isSelected ? '#60a5fa' : '#94a3b8';
-      ctx.font = '600 10px monospace';
-      ctx.fillText(`${r.area.toFixed(1)} m² (${r.w.toFixed(1)}m × ${r.h.toFixed(1)}m)`, rx + rw / 2, ry + rh / 2 + 10);
+      ctx.fillStyle = isSelected ? '#93c5fd' : '#94a3b8';
+      ctx.font = '600 9.5px monospace';
+      ctx.fillText(roomSubtitle, rx + rw / 2, badgeY + 24);
     });
 
     // 4. Tracé des murs porteurs et cloisons (double trait ardoise CAD)
@@ -2749,31 +2984,49 @@ window.ProtecLocaux = {
         ctx.fillRect(ix + iw * 0.15, iy + ih * 0.08, iw * 0.7, ih * 0.25);
       }
 
-      // Si le meuble est sélectionné : cadre animé et poignée de rotation
-      if (isSelected) {
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
+      // Si le meuble est sélectionné ou survolé : surbrillance + cartouche d'information
+      const isHovered = this.hoveredFurnitureId === item.id;
+      if (isSelected || isHovered) {
+        ctx.strokeStyle = isSelected ? '#38bdf8' : '#67e8f9';
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        ctx.setLineDash(isSelected ? [4, 4] : []);
         ctx.strokeRect(ix - 3, iy - 3, iw + 6, ih + 6);
         ctx.setLineDash([]);
 
-        // Poignée de rotation au sommet
-        ctx.fillStyle = '#38bdf8';
+        if (isSelected) {
+          // Poignée de rotation au sommet
+          ctx.fillStyle = '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(ix + iw / 2, iy - 10, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+
+        // Cartouche flottante informative au-dessus de l'objet
+        const infoText = `${item.label} (${item.w.toFixed(1)}m × ${item.d.toFixed(1)}m)`;
+        ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+        const cardW = ctx.measureText(infoText).width + 16;
+        const cardH = 22;
+        const cardX = Math.max(8, Math.min(width - cardW - 8, ix + iw / 2 - cardW / 2));
+        const cardY = iy - (isSelected ? 32 : 26);
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
         ctx.beginPath();
-        ctx.arc(ix + iw / 2, iy - 10, 4, 0, Math.PI * 2);
+        if (ctx.roundRect) ctx.roundRect(cardX, cardY, cardW, cardH, 5);
+        else ctx.rect(cardX, cardY, cardW, cardH);
         ctx.fill();
-        ctx.strokeStyle = '#ffffff';
+
+        ctx.strokeStyle = isSelected ? '#38bdf8' : '#64748b';
         ctx.lineWidth = 1;
         ctx.stroke();
-      }
 
-      // Libellé de l'objet au centre avec ombre lisible
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 8.5px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(item.label, ix + iw / 2 + 1, iy + ih / 2 + 3);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText(item.label, ix + iw / 2, iy + ih / 2 + 2);
+        ctx.fillStyle = '#f8fafc';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(infoText, cardX + cardW / 2, cardY + cardH / 2);
+      }
     });
   },
 
@@ -2791,14 +3044,12 @@ window.ProtecLocaux = {
     ctx.fillStyle = '#0b0f19';
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Dalle de sol du bâtiment 3D (Polygon projeté)
+    // 2. Dalle de sol du bâtiment 3D (adaptée aux dimensions réelles)
     const floorCorners = [
-      { x: 1.8, y: 1.3 },
-      { x: 12.2, y: 1.3 },
-      { x: 12.2, y: 6.2 },
-      { x: 8.7, y: 6.2 },
-      { x: 8.7, y: 10.0 },
-      { x: 1.8, y: 10.0 }
+      { x: 0.8, y: 1.3 },
+      { x: 15.8, y: 1.3 },
+      { x: 15.8, y: 10.7 },
+      { x: 0.8, y: 10.7 }
     ];
 
     const projFloor = floorCorners.map(p => this.project3D(p.x, p.y, 0, cam, cx, cy));
@@ -2893,8 +3144,8 @@ window.ProtecLocaux = {
 
   // Projection mathématique 3D vers écran (Perspective cavalière / isométrique)
   project3D(wx, wy, wz, camera, cx, cy) {
-    const ox = wx - 7.0;
-    const oy = wy - 5.5;
+    const ox = wx - 8.3;
+    const oy = wy - 6.0;
     const oz = wz;
 
     const cosY = Math.cos(camera.yaw);
