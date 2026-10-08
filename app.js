@@ -122,6 +122,8 @@ class ProtecGame {
     this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
     this.cumpConvention = { signed: false, signedAt: null, totalMissions: 0, successfulMissions: 0, complianceScore: 100 };
     this.aascConvention = { signed: false, signedAt: null, cost: 800 };
+    this.samuConvention = { signed: false, signedAt: null, totalInterventions: 0 };
+    this.sdisConvention = { signed: false, signedAt: null, totalInterventions: 0 };
 
     // Marqueurs Leaflet
     this.markers = {
@@ -627,6 +629,8 @@ class ProtecGame {
         sncfConvention: this.sncfConvention,
         cumpConvention: this.cumpConvention,
         aascConvention: this.aascConvention,
+        samuConvention: this.samuConvention,
+        sdisConvention: this.sdisConvention,
         tutorialState: this.tutorialState,
         jobOffers: this.jobOffers,
         adRewards: this.adRewards,
@@ -678,6 +682,8 @@ class ProtecGame {
           this.sncfConvention = parsed.sncfConvention || this.sncfConvention;
           this.cumpConvention = parsed.cumpConvention || this.cumpConvention;
           this.aascConvention = parsed.aascConvention || this.aascConvention || { signed: false, signedAt: null, cost: 800 };
+          this.samuConvention = parsed.samuConvention || this.samuConvention || { signed: false, signedAt: null, totalInterventions: 0 };
+          this.sdisConvention = parsed.sdisConvention || this.sdisConvention || { signed: false, signedAt: null, totalInterventions: 0 };
           this.tutorialState = parsed.tutorialState || this.tutorialState || null;
           this.adRewards = parsed.adRewards || null;
           if (parsed.player) this.player = parsed.player;
@@ -1232,6 +1238,8 @@ class ProtecGame {
 
       // 3. ZÉRO CONVENTION AU DÉPART (ni AASC, ni partenaires)
       this.aascConvention = { signed: false, signedAt: null, cost: 800 };
+      this.samuConvention = { signed: false, signedAt: null, totalInterventions: 0 };
+      this.sdisConvention = { signed: false, signedAt: null, totalInterventions: 0 };
       this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
       this.cumpConvention = { signed: false, signedAt: null, totalMissions: 0, successfulMissions: 0, normCompliant: false };
       this.sdisGarde = { active: false, vehicleId: null, caserneCrew: [], astreinteCrew: [], mode: 'poste' };
@@ -2254,6 +2262,94 @@ class ProtecGame {
     if (this.currentModalKey === 'conventions' && window.ProtecConventions) {
       window.ProtecConventions.renderModal(this);
     }
+  }
+
+  // --- CONVENTION CADRE SAMU 15 (URGENCES RÉFLEXES VPSP) ---
+  signSamuConvention() {
+    if (!this.aascConvention || !this.aascConvention.signed) {
+      this.showToast('Convention AASC Requise ⚠️', 'Votre antenne doit préalablement souscrire sa Convention d’AASC auprès de la Préfecture.', 'orange');
+      this.openModule('conventions');
+      return;
+    }
+    const vpsps = this.vehicles.filter(v => v.type === 'VPSP');
+    const qualified = this.volunteers.filter(v => ['CE', 'PSE2', 'PSE1'].includes(v.rank));
+    if (vpsps.length < 1 || qualified.length < 3) {
+      this.showToast('Critères Non Remplis', 'Pour conventionner avec le SAMU 15, votre antenne doit disposer d’au moins 1 ambulance VPSP et 3 secouristes qualifiés (CE, PSE2, PSE1).', 'orange');
+      return;
+    }
+
+    this.samuConvention = {
+      signed: true,
+      signedAt: Date.now(),
+      totalInterventions: 0
+    };
+    this.resources.money += 350; // Dotation de mise en route SAMU
+    this.resources.reputationScore = (this.resources.reputationScore || 0) + 20;
+    this.showToast('Convention SAMU 15 Signée ! 🚑', 'Partenariat avec la régulation départementale 15 activé (+350 € dotation). Vous pouvez désormais armer des gardes.', 'green');
+    this.saveGame();
+    this.updateStatsUI();
+
+    if (window.ProtecAdvancedSystems) {
+      window.ProtecAdvancedSystems.syncAdaptiveTasks(this);
+    }
+    if (this.currentModalKey === 'samu') this.openModule('samu');
+    else if (this.currentModalKey === 'conventions') window.ProtecConventions.renderModal(this);
+  }
+
+  terminateSamuConvention() {
+    if (this.samuGarde && this.samuGarde.active) {
+      this.stopSamuGuard();
+    }
+    this.samuConvention = { signed: false, signedAt: null, totalInterventions: 0 };
+    this.showToast('Convention SAMU 15 Résiliée', 'La convention avec la régulation SAMU a été suspendue.', 'slate');
+    this.saveGame();
+    this.updateStatsUI();
+    if (this.currentModalKey === 'samu') this.openModule('samu');
+    else if (this.currentModalKey === 'conventions') window.ProtecConventions.renderModal(this);
+  }
+
+  // --- CONVENTION PARTENARIALE SDIS (GARDES CASERNE POMPIERS) ---
+  signSdisConvention() {
+    if (!this.aascConvention || !this.aascConvention.signed) {
+      this.showToast('Convention AASC Requise ⚠️', 'Votre antenne doit préalablement souscrire sa Convention d’AASC auprès de la Préfecture.', 'orange');
+      this.openModule('conventions');
+      return;
+    }
+    const vpsps = this.vehicles.filter(v => v.type === 'VPSP');
+    const qualified = this.volunteers.filter(v => ['CE', 'PSE2', 'PSE1'].includes(v.rank));
+    if (vpsps.length < 1 || qualified.length < 3) {
+      this.showToast('Critères Non Remplis', 'Pour conventionner avec le SDIS, votre antenne doit disposer d’au moins 1 ambulance VPSP et 3 secouristes qualifiés.', 'orange');
+      return;
+    }
+
+    this.sdisConvention = {
+      signed: true,
+      signedAt: Date.now(),
+      totalInterventions: 0
+    };
+    this.resources.money += 350; // Dotation de mise en route SDIS
+    this.resources.reputationScore = (this.resources.reputationScore || 0) + 20;
+    this.showToast('Convention SDIS Signée ! 🚒', 'Partenariat avec le Service Départemental d’Incendie et de Secours activé (+350 € dotation). Vous pouvez armer les gardes pompiers.', 'green');
+    this.saveGame();
+    this.updateStatsUI();
+
+    if (window.ProtecAdvancedSystems) {
+      window.ProtecAdvancedSystems.syncAdaptiveTasks(this);
+    }
+    if (this.currentModalKey === 'pompiers') this.openModule('pompiers');
+    else if (this.currentModalKey === 'conventions') window.ProtecConventions.renderModal(this);
+  }
+
+  terminateSdisConvention() {
+    if (this.sdisGarde && this.sdisGarde.active) {
+      this.disarmSdisDispositif();
+    }
+    this.sdisConvention = { signed: false, signedAt: null, totalInterventions: 0 };
+    this.showToast('Convention SDIS Résiliée', 'La convention partenariale avec les pompiers a été suspendue.', 'slate');
+    this.saveGame();
+    this.updateStatsUI();
+    if (this.currentModalKey === 'pompiers') this.openModule('pompiers');
+    else if (this.currentModalKey === 'conventions') window.ProtecConventions.renderModal(this);
   }
 
   // --- CONVENTION PARTENAIRE RÉSEAU FERRÉ SNCF (ASSISTANCE & CHU) ---
@@ -5750,8 +5846,8 @@ class ProtecGame {
                   </p>
                 </div>
               </div>
-              <span class="px-3 py-1 rounded-full text-xs font-black ${isGuardActive ? 'bg-emerald-600 text-white animate-pulse' : 'bg-slate-200 text-slate-700'}">
-                ${isGuardActive ? 'GARDE ACTIVE (RÉFLEXE 15)' : 'ASTREINTE FERMÉE'}
+              <span class="px-3 py-1 rounded-full text-xs font-black ${isGuardActive ? 'bg-emerald-600 text-white animate-pulse' : (this.samuConvention?.signed ? 'bg-slate-200 text-slate-700' : 'bg-amber-200 text-amber-900 border border-amber-300')}">
+                ${isGuardActive ? 'GARDE ACTIVE (RÉFLEXE 15)' : (this.samuConvention?.signed ? 'ASTREINTE FERMÉE' : 'NON CONVENTIONNÉ')}
               </span>
             </div>
 
@@ -5766,47 +5862,81 @@ class ProtecGame {
               </div>
             </div>
 
-            <!-- Choix du joueur : Déclenchement Automatique (Garde Postée) vs Manuel (Astreinte) -->
-            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <div class="text-xs font-bold text-slate-800 flex items-center gap-2">
-                  <span>Déclenchement Opérationnel :</span>
-                  <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${this.samuGarde?.mode === 'poste' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-pc-blue border border-blue-300'}">
-                    ${this.samuGarde?.mode === 'poste' ? '🛡️ Garde Postée (Départ Auto)' : '🏠 Astreinte Domicile (Départ Manuel)'}
-                  </span>
+            ${!this.samuConvention?.signed ? `
+              <!-- Avertissement Convention Non Signée : Paramétrage Verrouillé -->
+              <div class="p-4 rounded-2xl bg-amber-50/80 border-2 border-amber-300 space-y-3">
+                <div class="flex items-start gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-amber-200 text-amber-900 flex items-center justify-center text-xl shrink-0">
+                    ⚠️
+                  </div>
+                  <div>
+                    <h5 class="text-xs font-black uppercase text-amber-950">Convention Cadre SAMU 15 Requise</h5>
+                    <p class="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
+                      ${!this.aascConvention?.signed 
+                        ? 'Votre antenne doit préalablement souscrire sa <strong>Convention Cadre d’AASC</strong> auprès de la Préfecture pour pouvoir conclure des partenariats officiels de sécurité civile.' 
+                        : 'Le paramétrage des astreintes et l’armement des ambulances sont verrouillés : vous devez préalablement signer la <strong>Convention Cadre avec la direction du SAMU 15</strong>.'}
+                    </p>
+                  </div>
                 </div>
-                <p class="text-[10px] text-slate-500 mt-0.5">
-                  ${this.samuGarde?.mode === 'poste' ? 'Départ réflexe automatique instantané dès appel 15 (0 clic, réactivité max, fatigue accrue -15).' : 'L’équipage attend à domicile, vous déclenchez vous-même le départ (moins fatiguant -5).'}
-                </p>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button onclick="window.game.setSamuGuardMode('poste')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.samuGarde?.mode === 'poste' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
-                  🛡️ Garde Postée (Auto)
-                </button>
-                <button onclick="window.game.setSamuGuardMode('astreinte')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.samuGarde?.mode !== 'poste' ? 'bg-pc-blue text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
-                  🏠 Astreinte (Manuel)
-                </button>
-              </div>
-            </div>
 
-            <!-- Actions d'armement de la garde -->
-            <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between">
-              ${isGuardActive ? `
-                <div class="text-xs text-emerald-800">
-                  <span>Ambulance engagée : <strong>${currentVpsp?.name || 'VPSP'}</strong> • Équipage : <strong>${currentCrew.length} secouristes</strong></span>
+                <div class="pt-2 border-t border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div class="text-[10.5px] text-amber-800 font-bold">
+                    ${!this.aascConvention?.signed ? 'Étape requise : Convention Préfectorale d’AASC (800 €)' : 'Prérequis SAMU : 1 ambulance VPSP et 3 secouristes qualifiés'}
+                  </div>
+                  ${!this.aascConvention?.signed ? `
+                    <button onclick="window.game.openModule('conventions')" class="px-4 py-2 rounded-xl text-xs font-black bg-amber-700 hover:bg-amber-800 text-white shadow-sm transition cursor-pointer">
+                      Souscrire l’AASC (Conventions)
+                    </button>
+                  ` : `
+                    <button onclick="window.game.signSamuConvention()" ${vpsps.length === 0 || qualifiedVolunteers.length < 3 ? 'disabled class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed"' : 'class="px-4 py-2 rounded-xl text-xs font-black bg-pc-blue hover:brightness-110 text-white shadow-md transition cursor-pointer"'}>
+                      ✍️ Signer la Convention SAMU 15 (+350 €)
+                    </button>
+                  `}
                 </div>
-                <button onclick="window.game.stopSamuGuard()" class="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow transition">
-                  Mettre fin à la Garde SAMU
-                </button>
-              ` : `
-                <div class="text-xs text-slate-500">
-                  ${vpsps.length === 0 ? '⚠️ Vous devez posséder au moins 1 VPSP pour conventionner avec le SAMU.' : `${dispoVpsps.length} VPSP et ${qualifiedVolunteers.length} secouristes qualifiés disponibles.`}
+              </div>
+            ` : `
+              <!-- Choix du joueur : Déclenchement Automatique (Garde Postée) vs Manuel (Astreinte) -->
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <div class="text-xs font-bold text-slate-800 flex items-center gap-2">
+                    <span>Déclenchement Opérationnel :</span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${this.samuGarde?.mode === 'poste' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-pc-blue border border-blue-300'}">
+                      ${this.samuGarde?.mode === 'poste' ? '🛡️ Garde Postée (Départ Auto)' : '🏠 Astreinte Domicile (Départ Manuel)'}
+                    </span>
+                  </div>
+                  <p class="text-[10px] text-slate-500 mt-0.5">
+                    ${this.samuGarde?.mode === 'poste' ? 'Départ réflexe automatique instantané dès appel 15 (0 clic, réactivité max, fatigue accrue -15).' : 'L’équipage attend à domicile, vous déclenchez vous-même le départ (moins fatiguant -5).'}
+                  </p>
                 </div>
-                <button onclick="window.game.startSamuGuard()" ${vpsps.length === 0 || qualifiedVolunteers.length < 3 ? 'disabled class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed"' : 'class="px-4 py-2 rounded-xl text-xs font-black bg-pc-orange hover:bg-pc-orange-hover text-white shadow-md transition"'}>
-                  Armer la Garde SAMU (VPSP)
-                </button>
-              `}
-            </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button onclick="window.game.setSamuGuardMode('poste')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.samuGarde?.mode === 'poste' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
+                    🛡️ Garde Postée (Auto)
+                  </button>
+                  <button onclick="window.game.setSamuGuardMode('astreinte')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.samuGarde?.mode !== 'poste' ? 'bg-pc-blue text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
+                    🏠 Astreinte (Manuel)
+                  </button>
+                </div>
+              </div>
+
+              <!-- Actions d'armement de la garde -->
+              <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                ${isGuardActive ? `
+                  <div class="text-xs text-emerald-800">
+                    <span>Ambulance engagée : <strong>${currentVpsp?.name || 'VPSP'}</strong> • Équipage : <strong>${currentCrew.length} secouristes</strong></span>
+                  </div>
+                  <button onclick="window.game.stopSamuGuard()" class="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow transition cursor-pointer">
+                    Mettre fin à la Garde SAMU
+                  </button>
+                ` : `
+                  <div class="text-xs text-slate-500">
+                    ${vpsps.length === 0 ? '⚠️ Vous devez posséder au moins 1 VPSP pour armer une garde SAMU.' : `${dispoVpsps.length} VPSP et ${qualifiedVolunteers.length} secouristes qualifiés disponibles.`}
+                  </div>
+                  <button onclick="window.game.startSamuGuard()" ${vpsps.length === 0 || qualifiedVolunteers.length < 3 ? 'disabled class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed"' : 'class="px-4 py-2 rounded-xl text-xs font-black bg-pc-orange hover:bg-pc-orange-hover text-white shadow-md transition cursor-pointer"'}>
+                    Armer la Garde SAMU (VPSP)
+                  </button>
+                `}
+              </div>
+            `}
           </div>
 
           <!-- Alertes & Missions de la garde en cours -->
@@ -5914,122 +6044,154 @@ class ProtecGame {
                 </div>
               </div>
 
-              <span class="px-3 py-1.5 rounded-full text-xs font-black ${isGuardActive ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-100 text-slate-600'}">
-                ${isGuardActive ? 'DISPOSITIF ARMÉ' : 'HORS SERVICE'}
+              <span class="px-3 py-1.5 rounded-full text-xs font-black ${!this.sdisConvention?.signed ? 'bg-amber-100 text-amber-800 border border-amber-300' : (isGuardActive ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-100 text-slate-600')}">
+                ${!this.sdisConvention?.signed ? 'NON CONVENTIONNÉ' : (isGuardActive ? 'DISPOSITIF ARMÉ' : 'HORS SERVICE')}
               </span>
             </div>
 
-            <!-- Choix du joueur : Déclenchement Automatique (Garde Caserne Postée) vs Manuel (Astreinte) -->
-            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <div class="text-xs font-bold text-slate-800 flex items-center gap-2">
-                  <span>Déclenchement Opérationnel :</span>
-                  <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${sdis?.mode === 'poste' ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-blue-100 text-pc-blue border border-blue-300'}">
-                    ${sdis?.mode === 'poste' ? '🛡️ Caserne Postée (Départ Auto)' : '🏠 Astreinte Domicile (Départ Manuel)'}
-                  </span>
-                </div>
-                <p class="text-[10px] text-slate-500 mt-0.5">
-                  ${sdis?.mode === 'poste' ? 'Départ automatique immédiat dès alerte CODIS (0 clic, réactivité max, fatigue accrue -15).' : 'L’équipage attend vos ordres, vous déclenchez vous-même le départ (moins fatiguant -5).'}
-                </p>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button onclick="window.game.setSdisGuardMode('poste')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${sdis?.mode === 'poste' ? 'bg-red-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
-                  🛡️ Caserne Postée (Auto)
-                </button>
-                <button onclick="window.game.setSdisGuardMode('astreinte')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${sdis?.mode !== 'poste' ? 'bg-pc-blue text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
-                  🏠 Astreinte (Manuel)
-                </button>
-              </div>
-            </div>
-
-            ${!isGuardActive ? `
-              <!-- Paramétrage par le joueur -->
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 text-xs">
-                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
-                  <label class="font-extrabold text-slate-800 block">Contexte opérationnel :</label>
-                  <select id="sdis-event-select" class="w-full p-2 rounded-lg bg-white border border-slate-300 font-bold text-xs">
-                    <option value="violences_urbaines">Violences urbaines & Mouvements lycéens (Tension élevée)</option>
-                    <option value="fete_nationale">Dispositif renforcé Nuit du 14 Juillet</option>
-                    <option value="greve_transports">Astreinte Débordements & Grands Rassemblements</option>
-                    <option value="garde_sdis_renfort">Garde Caserne Pompier Classique (Renfort VSAV)</option>
-                  </select>
-                </div>
-
-                <div class="p-3 rounded-xl bg-red-50/70 border border-red-200 space-y-1.5">
-                  <div class="flex justify-between items-center">
-                    <label class="font-extrabold text-red-900 block">Équipe Garde Caserne (VPSP) :</label>
-                    <span id="sdis-caserne-count-badge" class="font-bold text-red-700">3 pers</span>
+            ${!this.sdisConvention?.signed ? `
+              <!-- Avertissement et prérequis convention SDIS requise -->
+              <div class="p-4 rounded-xl bg-amber-50/70 border border-amber-200 space-y-3">
+                <div class="flex items-start gap-3">
+                  <span class="text-2xl">🚒</span>
+                  <div>
+                    <h5 class="text-xs font-black text-amber-950 uppercase tracking-wider">
+                      Convention Partenariale SDIS Requise
+                    </h5>
+                    <p class="text-[11.5px] text-amber-900 mt-0.5 leading-relaxed">
+                      Pour intégrer le schéma de réponse opérationnelle des Sapeurs-Pompiers (SDIS / CTA-CODIS) et assurer des gardes caserne avec un VPSP, votre antenne doit être signataire de la <strong>Convention Partenariale SDIS</strong>.
+                    </p>
                   </div>
-                  <input type="range" id="sdis-caserne-slider" min="2" max="4" value="3" oninput="document.getElementById('sdis-caserne-count-badge').textContent = this.value + ' pers'" class="w-full accent-red-600">
-                  <p class="text-[10px] text-red-700">Présents physiquement à la caserne, départ sous 2 min.</p>
                 </div>
 
-                <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1.5">
-                  <div class="flex justify-between items-center">
-                    <label class="font-extrabold text-amber-900 block">Équipe Astreinte Domicile :</label>
-                    <span id="sdis-astreinte-count-badge" class="font-bold text-amber-700">2 pers</span>
+                <div class="pt-2 border-t border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div class="text-[10.5px] text-amber-800 font-bold">
+                    ${!this.aascConvention?.signed ? 'Étape requise : Convention Préfectorale d’AASC (800 €)' : 'Prérequis SDIS : 1 ambulance VPSP et 3 secouristes qualifiés'}
                   </div>
-                  <input type="range" id="sdis-astreinte-slider" min="0" max="4" value="2" oninput="document.getElementById('sdis-astreinte-count-badge').textContent = this.value + ' pers'" class="w-full accent-amber-600">
-                  <p class="text-[10px] text-amber-700">Chez eux, rappelables sous 15 min en cas de débordement.</p>
+                  ${!this.aascConvention?.signed ? `
+                    <button onclick="window.game.openModule('conventions')" class="px-4 py-2 rounded-xl text-xs font-black bg-amber-700 hover:bg-amber-800 text-white shadow-sm transition cursor-pointer">
+                      Souscrire l’AASC (Conventions)
+                    </button>
+                  ` : `
+                    <button onclick="window.game.signSdisConvention()" ${vpsps.length === 0 || dispoVolunteers.length < 3 ? 'disabled class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed"' : 'class="px-4 py-2 rounded-xl text-xs font-black bg-red-600 hover:bg-red-700 text-white shadow-md transition cursor-pointer"'}>
+                      ✍️ Signer la Convention SDIS (+350 €)
+                    </button>
+                  `}
                 </div>
-              </div>
-
-              <div class="flex items-center justify-between pt-2 border-t border-slate-200 text-xs">
-                <span class="text-slate-500">
-                  ${dispoVpsps.length === 0 ? '⚠️ Aucun VPSP disponible.' : `${dispoVpsps.length} VPSP et ${dispoVolunteers.length} secouristes disponibles.`}
-                </span>
-                <button onclick="window.game.armSdisDispositif()" ${dispoVpsps.length === 0 || dispoVolunteers.length < 3 || isSuspended ? 'disabled class="px-5 py-2.5 rounded-xl font-black bg-slate-200 text-slate-400 cursor-not-allowed"' : 'class="px-5 py-2.5 rounded-xl font-black bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/25 transition flex items-center gap-1.5"'}>
-                  <i data-lucide="shield-alert" class="w-4 h-4"></i>
-                  Armer la Garde Pompiers & Astreinte
-                </button>
               </div>
             ` : `
-              <!-- Dispositif Actif : Suivi direct et interaction continue -->
-              <div class="space-y-3">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  <div class="p-3.5 rounded-xl bg-red-100/60 border border-red-300 space-y-2">
-                    <div class="flex items-center justify-between">
-                      <span class="font-black text-red-950 flex items-center gap-1.5">
-                        <i data-lucide="radio" class="w-4 h-4 text-red-600"></i>
-                        Postés à la Caserne (${caserneCrewVols.length} secouristes)
-                      </span>
-                      <span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white">Prêt au départ</span>
-                    </div>
-                    <div class="space-y-1 text-[11px] text-red-900">
-                      <div>Ambulance : <strong>${currentVpsp?.name || 'VPSP'}</strong></div>
-                      <div>Équipage : <strong>${caserneCrewVols.map(v => `${v.name} (${v.rank})`).join(', ')}</strong></div>
-                    </div>
+              <!-- Choix du joueur : Déclenchement Automatique (Garde Caserne Postée) vs Manuel (Astreinte) -->
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <div class="text-xs font-bold text-slate-800 flex items-center gap-2">
+                    <span>Déclenchement Opérationnel :</span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${sdis?.mode === 'poste' ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-blue-100 text-pc-blue border border-blue-300'}">
+                      ${sdis?.mode === 'poste' ? '🛡️ Caserne Postée (Départ Auto)' : '🏠 Astreinte Domicile (Départ Manuel)'}
+                    </span>
                   </div>
-
-                  <div class="p-3.5 rounded-xl bg-amber-100/60 border border-amber-300 space-y-2">
-                    <div class="flex items-center justify-between">
-                      <span class="font-black text-amber-950 flex items-center gap-1.5">
-                        <i data-lucide="home" class="w-4 h-4 text-amber-600"></i>
-                        Astreinte Domicile (${astreinteCrewVols.length} secouristes)
-                      </span>
-                      <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-600 text-white">Dispo appel</span>
-                    </div>
-                    <div class="space-y-1 text-[11px] text-amber-900">
-                      <div>Délai de rappel estimé : <strong>10 à 15 min</strong></div>
-                      <div>Secouristes : <strong>${astreinteCrewVols.length > 0 ? astreinteCrewVols.map(v => `${v.name} (${v.rank})`).join(', ') : 'Aucun'}</strong></div>
-                    </div>
-                    ${astreinteCrewVols.length > 0 ? `
-                      <button onclick="window.game.recallAstreinteCrewToCaserne()" class="w-full py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition">
-                        Biper & Rappeler l'astreinte en caserne
-                      </button>
-                    ` : ''}
-                  </div>
+                  <p class="text-[10px] text-slate-500 mt-0.5">
+                    ${sdis?.mode === 'poste' ? 'Départ automatique immédiat dès alerte CODIS (0 clic, réactivité max, fatigue accrue -15).' : 'L’équipage attend vos ordres, vous déclenchez vous-même le départ (moins fatiguant -5).'}
+                  </p>
                 </div>
-
-                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-                  <div class="text-slate-600">
-                    Dispositif armé pour <strong>${sdis.durationHours || 6} heures</strong> • Satisfaction Préfecture : <strong class="text-red-700">${sdis.stateSatisfaction || 100}%</strong>
-                  </div>
-                  <button onclick="window.game.disarmSdisDispositif()" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-800 transition">
-                    Mettre fin au dispositif
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button onclick="window.game.setSdisGuardMode('poste')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${sdis?.mode === 'poste' ? 'bg-red-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
+                    🛡️ Caserne Postée (Auto)
+                  </button>
+                  <button onclick="window.game.setSdisGuardMode('astreinte')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${sdis?.mode !== 'poste' ? 'bg-pc-blue text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
+                    🏠 Astreinte (Manuel)
                   </button>
                 </div>
               </div>
+
+              ${!isGuardActive ? `
+                <!-- Paramétrage par le joueur -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 text-xs">
+                  <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                    <label class="font-extrabold text-slate-800 block">Contexte opérationnel :</label>
+                    <select id="sdis-event-select" class="w-full p-2 rounded-lg bg-white border border-slate-300 font-bold text-xs">
+                      <option value="violences_urbaines">Violences urbaines & Mouvements lycéens (Tension élevée)</option>
+                      <option value="fete_nationale">Dispositif renforcé Nuit du 14 Juillet</option>
+                      <option value="greve_transports">Astreinte Débordements & Grands Rassemblements</option>
+                      <option value="garde_sdis_renfort">Garde Caserne Pompier Classique (Renfort VSAV)</option>
+                    </select>
+                  </div>
+
+                  <div class="p-3 rounded-xl bg-red-50/70 border border-red-200 space-y-1.5">
+                    <div class="flex justify-between items-center">
+                      <label class="font-extrabold text-red-900 block">Équipe Garde Caserne (VPSP) :</label>
+                      <span id="sdis-caserne-count-badge" class="font-bold text-red-700">3 pers</span>
+                    </div>
+                    <input type="range" id="sdis-caserne-slider" min="2" max="4" value="3" oninput="document.getElementById('sdis-caserne-count-badge').textContent = this.value + ' pers'" class="w-full accent-red-600">
+                    <p class="text-[10px] text-red-700">Présents physiquement à la caserne, départ sous 2 min.</p>
+                  </div>
+
+                  <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1.5">
+                    <div class="flex justify-between items-center">
+                      <label class="font-extrabold text-amber-900 block">Équipe Astreinte Domicile :</label>
+                      <span id="sdis-astreinte-count-badge" class="font-bold text-amber-700">2 pers</span>
+                    </div>
+                    <input type="range" id="sdis-astreinte-slider" min="0" max="4" value="2" oninput="document.getElementById('sdis-astreinte-count-badge').textContent = this.value + ' pers'" class="w-full accent-amber-600">
+                    <p class="text-[10px] text-amber-700">Chez eux, rappelables sous 15 min en cas de débordement.</p>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-2 border-t border-slate-200 text-xs">
+                  <span class="text-slate-500">
+                    ${dispoVpsps.length === 0 ? '⚠️ Aucun VPSP disponible.' : `${dispoVpsps.length} VPSP et ${dispoVolunteers.length} secouristes disponibles.`}
+                  </span>
+                  <button onclick="window.game.armSdisDispositif()" ${dispoVpsps.length === 0 || dispoVolunteers.length < 3 || isSuspended ? 'disabled class="px-5 py-2.5 rounded-xl font-black bg-slate-200 text-slate-400 cursor-not-allowed"' : 'class="px-5 py-2.5 rounded-xl font-black bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/25 transition flex items-center gap-1.5"'}>
+                    <i data-lucide="shield-alert" class="w-4 h-4"></i>
+                    Armer la Garde Pompiers & Astreinte
+                  </button>
+                </div>
+              ` : `
+                <!-- Dispositif Actif : Suivi direct et interaction continue -->
+                <div class="space-y-3">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div class="p-3.5 rounded-xl bg-red-100/60 border border-red-300 space-y-2">
+                      <div class="flex items-center justify-between">
+                        <span class="font-black text-red-950 flex items-center gap-1.5">
+                          <i data-lucide="radio" class="w-4 h-4 text-red-600"></i>
+                          Postés à la Caserne (${caserneCrewVols.length} secouristes)
+                        </span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white">Prêt au départ</span>
+                      </div>
+                      <div class="space-y-1 text-[11px] text-red-900">
+                        <div>Ambulance : <strong>${currentVpsp?.name || 'VPSP'}</strong></div>
+                        <div>Équipage : <strong>${caserneCrewVols.map(v => `${v.name} (${v.rank})`).join(', ')}</strong></div>
+                      </div>
+                    </div>
+
+                    <div class="p-3.5 rounded-xl bg-amber-100/60 border border-amber-300 space-y-2">
+                      <div class="flex items-center justify-between">
+                        <span class="font-black text-amber-950 flex items-center gap-1.5">
+                          <i data-lucide="home" class="w-4 h-4 text-amber-600"></i>
+                          Astreinte Domicile (${astreinteCrewVols.length} secouristes)
+                        </span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-600 text-white">Dispo appel</span>
+                      </div>
+                      <div class="space-y-1 text-[11px] text-amber-900">
+                        <div>Délai de rappel estimé : <strong>10 à 15 min</strong></div>
+                        <div>Secouristes : <strong>${astreinteCrewVols.length > 0 ? astreinteCrewVols.map(v => `${v.name} (${v.rank})`).join(', ') : 'Aucun'}</strong></div>
+                      </div>
+                      ${astreinteCrewVols.length > 0 ? `
+                        <button onclick="window.game.recallAstreinteCrewToCaserne()" class="w-full py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition">
+                          Biper & Rappeler l'astreinte en caserne
+                        </button>
+                      ` : ''}
+                    </div>
+                  </div>
+
+                  <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                    <div class="text-slate-600">
+                      Dispositif armé pour <strong>${sdis.durationHours || 6} heures</strong> • Satisfaction Préfecture : <strong class="text-red-700">${sdis.stateSatisfaction || 100}%</strong>
+                    </div>
+                    <button onclick="window.game.disarmSdisDispositif()" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-800 transition">
+                      Mettre fin au dispositif
+                    </button>
+                  </div>
+                </div>
+              `}
             `}
           </div>
 
@@ -7177,6 +7339,17 @@ class ProtecGame {
   }
 
   startSamuGuard() {
+    if (!this.aascConvention?.signed) {
+      this.showToast('Convention AASC Requise ⚠️', 'Vous devez d’abord souscrire la Convention Cadre Fondatrice AASC.', 'orange');
+      this.openModule('conventions');
+      return;
+    }
+    if (!this.samuConvention?.signed) {
+      this.showToast('Convention SAMU 15 Requise ⚠️', 'Vous devez signer la Convention Cadre SAMU 15 avant d’armer une garde.', 'orange');
+      this.openModule('samu');
+      return;
+    }
+
     const vpsp = this.vehicles.find(v => v.type === 'VPSP' && v.status === 'dispo');
     if (!vpsp) {
       this.showToast('Aucun VPSP disponible', 'Vous devez disposer d’au moins 1 ambulance VPSP libre au garage.', 'orange');
@@ -7243,6 +7416,16 @@ class ProtecGame {
 
   // --- GARDE CASERNE POMPIERS & ASTREINTE DOMICILE (SDIS / PRÉFECTURE) ---
   armSdisDispositif() {
+    if (!this.aascConvention?.signed) {
+      this.showToast('Convention AASC Requise ⚠️', 'Vous devez d’abord souscrire la Convention Cadre Fondatrice AASC.', 'orange');
+      this.openModule('conventions');
+      return;
+    }
+    if (!this.sdisConvention?.signed) {
+      this.showToast('Convention SDIS Requise ⚠️', 'Vous devez signer la Convention Partenariale SDIS avant d’armer un dispositif pompier.', 'orange');
+      this.openModule('pompiers');
+      return;
+    }
     if (this.prefectureState && this.prefectureState.agrementSuspended) {
       this.showToast('Agrément Suspendu', 'L’agrément préfectoral de votre antenne est suspendu pour manquements graves.', 'red');
       return;

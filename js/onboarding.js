@@ -485,6 +485,8 @@ window.ProtecOnboarding = {
 
     // 3. Zéro convention au départ (ni AASC, ni partenaires)
     game.aascConvention = { signed: false, signedAt: null, cost: 800 };
+    game.samuConvention = { signed: false, signedAt: null, totalInterventions: 0 };
+    game.sdisConvention = { signed: false, signedAt: null, totalInterventions: 0 };
     game.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
     game.cumpConvention = { signed: false, signedAt: null, totalMissions: 0, successfulMissions: 0, normCompliant: false };
     game.sdisGarde = { active: false, vehicleId: null, caserneCrew: [], astreinteCrew: [], mode: 'poste' };

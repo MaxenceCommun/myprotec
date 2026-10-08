@@ -100,7 +100,107 @@ window.ProtecConventions = {
         <!-- Grille des autres conventions partenariales -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-          <!-- 1. CONVENTION CUMP (SAMU 15) -->
+          <!-- 1. CONVENTION CADRE SAMU 15 (GARDES RÉFLEXES VPSP) -->
+          <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${game.samuConvention?.signed ? 'border-sky-300 ring-1 ring-sky-300/30' : 'border-slate-200'}">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase bg-sky-100 text-sky-900 border border-sky-200">
+                  SAMU 15 • Urgences VPSP
+                </span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${game.samuConvention?.signed ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}">
+                  ${game.samuConvention?.signed ? 'Convention Signée ✓' : 'Non Signée'}
+                </span>
+              </div>
+
+              <div>
+                <h5 class="text-xs font-black text-slate-900">Convention Cadre SAMU 15 (Permanence & Gardes VPSP)</h5>
+                <p class="text-[11px] text-slate-600 mt-1">Mise à disposition conventionnée d'une ambulance VPSP armée pour départs réflexes et interventions d'urgence sous régulation médicale 15.</p>
+              </div>
+
+              <div class="p-2.5 rounded-xl bg-slate-50 text-[10px] space-y-1 font-semibold text-slate-700">
+                <div class="flex justify-between">
+                  <span>Indemnisation SAMU :</span>
+                  <span class="text-emerald-700 font-bold">280 à 480 € / intervention</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Dotation de signature :</span>
+                  <span class="text-emerald-700 font-bold">+350 €</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Prérequis :</span>
+                  <span>Convention AASC, 1 VPSP, 3 secouristes qualifiés</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+              ${game.samuConvention?.signed ? `
+                <button onclick="window.game.openModule('samu')" class="px-3.5 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white font-extrabold text-xs shadow-sm transition">
+                  Gérer la Garde SAMU 15
+                </button>
+                <button onclick="window.game.terminateSamuConvention()" class="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 transition border border-rose-200">
+                  Résilier
+                </button>
+              ` : `
+                <button onclick="window.game.signSamuConvention()" ${!game.aascConvention?.signed ? 'disabled class="w-full px-3.5 py-1.5 rounded-xl bg-slate-200 text-slate-400 font-bold text-xs cursor-not-allowed"' : 'class="w-full px-3.5 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"'}>
+                  <span>✍️</span>
+                  <span>Signer la Convention SAMU 15 (+350 €)</span>
+                </button>
+              `}
+            </div>
+          </div>
+
+          <!-- 2. CONVENTION SDIS (POMPIERS) -->
+          <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${game.sdisConvention?.signed ? 'border-orange-300 ring-1 ring-orange-300/30' : 'border-slate-200'}">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase bg-orange-100 text-orange-900 border border-orange-200">
+                  SDIS • Gardes Pompiers
+                </span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${game.sdisConvention?.signed ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}">
+                  ${game.sdisConvention?.signed ? 'Convention Signée ✓' : 'Non Signée'}
+                </span>
+              </div>
+
+              <div>
+                <h5 class="text-xs font-black text-slate-900">Convention Partenariale SDIS (Pompiers)</h5>
+                <p class="text-[11px] text-slate-600 mt-1">Mise à disposition conventionnée d'un équipage VPSP pour gardes caserne ou astreintes renforcées au profit du CODIS.</p>
+              </div>
+
+              <div class="p-2.5 rounded-xl bg-slate-50 text-[10px] space-y-1 font-semibold text-slate-700">
+                <div class="flex justify-between">
+                  <span>Indemnisation SDIS :</span>
+                  <span class="text-emerald-700 font-bold">45 € / heure de garde VPSP</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Dotation de signature :</span>
+                  <span class="text-emerald-700 font-bold">+350 €</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Prérequis :</span>
+                  <span>Convention AASC, 1 VPSP, 3 secouristes</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+              ${game.sdisConvention?.signed ? `
+                <button onclick="window.game.openModule('pompiers')" class="px-3.5 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs shadow-sm transition">
+                  Gérer la Garde SDIS
+                </button>
+                <button onclick="window.game.terminateSdisConvention()" class="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 transition border border-rose-200">
+                  Résilier
+                </button>
+              ` : `
+                <button onclick="window.game.signSdisConvention()" ${!game.aascConvention?.signed ? 'disabled class="w-full px-3.5 py-1.5 rounded-xl bg-slate-200 text-slate-400 font-bold text-xs cursor-not-allowed"' : 'class="w-full px-3.5 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"'}>
+                  <span>✍️</span>
+                  <span>Signer la Convention SDIS (+350 €)</span>
+                </button>
+              `}
+            </div>
+          </div>
+
+          <!-- 3. CONVENTION CUMP (SAMU 15 - URGENCE PSYCHO) -->
           <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${cump.signed ? 'border-red-400/50 ring-1 ring-red-400/20' : 'border-slate-200'}">
             <div class="space-y-2">
               <div class="flex items-center justify-between">
@@ -132,42 +232,6 @@ window.ProtecConventions = {
             <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
               <button onclick="window.ProtecCump.renderCumpTab(window.game)" class="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-sm transition">
                 Gérer la Convention CUMP
-              </button>
-            </div>
-          </div>
-
-          <!-- 2. CONVENTION SDIS (POMPIERS) -->
-          <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border border-slate-200">
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase bg-orange-100 text-orange-900 border border-orange-200">
-                  SDIS • Gardes Pompiers
-                </span>
-                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${sdis.active ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}">
-                  ${sdis.active ? 'Dispositif Armé' : 'Convention Active'}
-                </span>
-              </div>
-
-              <div>
-                <h5 class="text-xs font-black text-slate-900">Convention Partenariale SDIS</h5>
-                <p class="text-[11px] text-slate-600 mt-1">Mise à disposition conventionnée d'un équipage VPSP pour gardes caserne ou astreintes renforcées au profit du CODIS.</p>
-              </div>
-
-              <div class="p-2.5 rounded-xl bg-slate-50 text-[10px] space-y-1 font-semibold text-slate-700">
-                <div class="flex justify-between">
-                  <span>Indemnisation SDIS :</span>
-                  <span>45 € / heure de garde VPSP</span>
-                </div>
-                <div class="flex justify-between">
-                  <span>Agrément requis :</span>
-                  <span>Agrément A (Secours à Personnes)</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
-              <button onclick="window.game.openModule('pompiers')" class="px-3.5 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs shadow-sm transition">
-                Gérer la Garde SDIS
               </button>
             </div>
           </div>
