@@ -117,39 +117,51 @@ window.ProtecConventions = {
             </div>
           </div>
 
-          <!-- 3. CONVENTION SNCF (NAUFRAGÉS DU RAIL) -->
-          <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border border-slate-200">
+          <!-- 3. CONVENTION SNCF (NAUFRAGÉS DU RAIL & CHU) -->
+          <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${game.sncfConvention?.signed ? 'border-purple-300 ring-1 ring-purple-300/30' : 'border-slate-200'}">
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase bg-purple-100 text-purple-900 border border-purple-200">
-                  SNCF Voyageurs
+                  SNCF Voyageurs • Crise
                 </span>
-                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-600 text-white">
-                  Convention Signée
+                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${game.sncfConvention?.signed ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}">
+                  ${game.sncfConvention?.signed ? 'Convention Signée ✓' : 'Non Signée'}
                 </span>
               </div>
 
               <div>
                 <h5 class="text-xs font-black text-slate-900">Convention Nationale SNCF - Naufragés du Rail</h5>
-                <p class="text-[11px] text-slate-600 mt-1">Prise en charge des voyageurs bloqués en gare ou pleine voie lors d'avaries majeures du réseau ferré (eau, réconfort, hébergement).</p>
+                <p class="text-[11px] text-slate-600 mt-1">Prise en charge des voyageurs bloqués en gare ou pleine voie lors d'avaries majeures du réseau ferré (eau, réconfort, hébergement d'urgence en gare).</p>
               </div>
 
               <div class="p-2.5 rounded-xl bg-slate-50 text-[10px] space-y-1 font-semibold text-slate-700">
                 <div class="flex justify-between">
-                  <span>Moyens requis :</span>
-                  <span>VTU, couvertures, packs d'eau, kits réconfort</span>
+                  <span>Dotation initiale :</span>
+                  <span class="text-emerald-700 font-bold">+400 €</span>
                 </div>
                 <div class="flex justify-between">
-                  <span>Rémunération :</span>
-                  <span>Facturation horaire + remboursement frais réels</span>
+                  <span>Indemnité de veille :</span>
+                  <span>+120 € / levée</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Prestation CHU gare :</span>
+                  <span>+420 € à +480 €</span>
                 </div>
               </div>
             </div>
 
             <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
-              <button onclick="window.game.showToast('Convention SNCF Active', 'Votre antenne est référencée auprès de la direction de crise SNCF.', 'blue')" class="px-3.5 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-xs shadow-sm transition">
-                Détails Convention SNCF
-              </button>
+              ${game.sncfConvention?.signed ? `
+                <span class="text-[10px] font-bold text-emerald-700">✓ En vigueur</span>
+                <button onclick="window.game.terminateSncfConvention(); window.game.openModule('conventions');" class="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 transition border border-rose-200">
+                  Résilier
+                </button>
+              ` : `
+                <button onclick="window.game.signSncfConvention(); window.game.openModule('conventions');" class="w-full px-3.5 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5">
+                  <span>✍️</span>
+                  <span>Signer la Convention SNCF (+400 €)</span>
+                </button>
+              `}
             </div>
           </div>
 
