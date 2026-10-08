@@ -2814,23 +2814,23 @@ class ProtecGame {
   getVolunteerAllSkills(v) {
     if (!v) return [];
     const skillsMap = {
-      'cd': { id: 'cd', label: 'Chef de Dispositif (CD)', cat: 'DPS', badge: 'CD', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
-      'ce': { id: 'ce', label: 'Chef d’Équipe (CE)', cat: 'DPS', badge: 'CE', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' },
-      'pse2': { id: 'pse2', label: 'PSE2 Équipier Secouriste', cat: 'Secours', badge: 'PSE2', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
-      'pse1': { id: 'pse1', label: 'PSE1 Secouriste', cat: 'Secours', badge: 'PSE1', color: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
-      'stagiaire': { id: 'stagiaire', label: 'Stagiaire en Intégration', cat: 'Formation', badge: 'STAG', color: 'bg-slate-700 text-slate-300 border-slate-600' },
-      'psc1': { id: 'psc1', label: 'PSC1 / Premiers Secours', cat: 'Secours', badge: 'PSC1', color: 'bg-teal-500/20 text-teal-300 border-teal-500/40' },
-      'permis_vpsp': { id: 'permis_vpsp', label: 'P.VPSP Conduite Ambulance', cat: 'Véhicule', badge: 'P.VPSP', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
-      'permis_b': { id: 'permis_b', label: 'Permis B (VL / VTU)', cat: 'Véhicule', badge: 'Permis B', color: 'bg-emerald-500/10 text-emerald-200 border-emerald-500/30' },
-      'formateur_ps': { id: 'formateur_ps', label: 'Formateur Premiers Secours (PS)', cat: 'Pédagogie', badge: 'Formateur PS', color: 'bg-orange-500/20 text-orange-300 border-orange-500/40' },
-      'formateur_psc': { id: 'formateur_psc', label: 'Formateur PSC (PIC F)', cat: 'Pédagogie', badge: 'Formateur PSC', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
-      'formateur_sst': { id: 'formateur_sst', label: 'Formateur SST', cat: 'Pédagogie', badge: 'Formateur SST', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
-      'formateur_de_formateur': { id: 'formateur_de_formateur', label: 'Formateur de Formateurs (FdF)', cat: 'Pédagogie', badge: 'FdF', color: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
-      'aep1': { id: 'aep1', label: 'AEP1 Écoute d’Urgence', cat: 'Soutien', badge: 'AEP1', color: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
-      'aep2': { id: 'aep2', label: 'AEP2 Soutien CAI & Catastrophe', cat: 'Soutien', badge: 'AEP2', color: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
-      'telepilote': { id: 'telepilote', label: 'Télépilote Drone S1/S3', cat: 'Spécialité', badge: 'Drone', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
-      'cyno': { id: 'cyno', label: 'Cynotechnie (Maître-Chien)', cat: 'Spécialité', badge: 'Cyno', color: 'bg-amber-600/20 text-amber-300 border-amber-600/40' },
-      'communication': { id: 'communication', label: 'Communication & Médias', cat: 'Presse', badge: 'Com/Média', color: 'bg-pink-500/20 text-pink-300 border-pink-500/40' }
+      'cd': { id: 'cd', label: 'Chef de Dispositif (CD)', cat: 'DPS', badge: 'CD', color: 'bg-amber-950/90 text-amber-300 border-amber-500/70' },
+      'ce': { id: 'ce', label: 'Chef d’Équipe (CE)', cat: 'DPS', badge: 'CE', color: 'bg-indigo-950/90 text-indigo-300 border-indigo-500/70' },
+      'pse2': { id: 'pse2', label: 'PSE2 Équipier Secouriste', cat: 'Secours', badge: 'PSE2', color: 'bg-blue-950/90 text-sky-300 border-sky-400/70' },
+      'pse1': { id: 'pse1', label: 'PSE1 Secouriste', cat: 'Secours', badge: 'PSE1', color: 'bg-sky-950/90 text-sky-300 border-sky-400/70' },
+      'stagiaire': { id: 'stagiaire', label: 'Stagiaire en Intégration', cat: 'Formation', badge: 'STAG', color: 'bg-slate-800 text-slate-300 border-slate-600' },
+      'psc1': { id: 'psc1', label: 'PSC1 / Premiers Secours', cat: 'Secours', badge: 'PSC1', color: 'bg-teal-950/90 text-teal-300 border-teal-500/70' },
+      'permis_vpsp': { id: 'permis_vpsp', label: 'P.VPSP Conduite Ambulance', cat: 'Véhicule', badge: 'P.VPSP', color: 'bg-emerald-950/90 text-emerald-300 border-emerald-500/70' },
+      'permis_b': { id: 'permis_b', label: 'Permis B (VL / VTU)', cat: 'Véhicule', badge: 'Permis B', color: 'bg-emerald-950/90 text-emerald-300 border-emerald-500/70' },
+      'formateur_ps': { id: 'formateur_ps', label: 'Formateur Premiers Secours (PS)', cat: 'Pédagogie', badge: 'Formateur PS', color: 'bg-orange-950/90 text-orange-300 border-orange-500/70' },
+      'formateur_psc': { id: 'formateur_psc', label: 'Formateur PSC (PIC F)', cat: 'Pédagogie', badge: 'Formateur PSC', color: 'bg-amber-950/90 text-amber-300 border-amber-500/70' },
+      'formateur_sst': { id: 'formateur_sst', label: 'Formateur SST', cat: 'Pédagogie', badge: 'Formateur SST', color: 'bg-amber-950/90 text-amber-300 border-amber-500/70' },
+      'formateur_de_formateur': { id: 'formateur_de_formateur', label: 'Formateur de Formateurs (FdF)', cat: 'Pédagogie', badge: 'FdF', color: 'bg-purple-950/90 text-purple-300 border-purple-500/70' },
+      'aep1': { id: 'aep1', label: 'AEP1 Écoute d’Urgence', cat: 'Soutien', badge: 'AEP1', color: 'bg-rose-950/90 text-rose-300 border-rose-500/70' },
+      'aep2': { id: 'aep2', label: 'AEP2 Soutien CAI & Catastrophe', cat: 'Soutien', badge: 'AEP2', color: 'bg-rose-950/90 text-rose-300 border-rose-500/70' },
+      'telepilote': { id: 'telepilote', label: 'Télépilote Drone S1/S3', cat: 'Spécialité', badge: 'Drone', color: 'bg-cyan-950/90 text-cyan-300 border-cyan-500/70' },
+      'cyno': { id: 'cyno', label: 'Cynotechnie (Maître-Chien)', cat: 'Spécialité', badge: 'Cyno', color: 'bg-amber-950/90 text-amber-300 border-amber-600/70' },
+      'communication': { id: 'communication', label: 'Communication & Médias', cat: 'Presse', badge: 'Com/Média', color: 'bg-pink-950/90 text-pink-300 border-pink-500/70' }
     };
 
     const detected = new Set();
@@ -2907,31 +2907,41 @@ class ProtecGame {
     const vol = (this.volunteers || []).find(v => String(v.id) === String(volId)) || (this.candidatures || []).find(c => String(c.id) === String(volId));
     if (!el || !vol) return;
 
+    // Forcer le style sombre haute visibilité directement en JS pour garantir un contraste sans faille
+    el.style.backgroundColor = '#0b1120';
+    el.style.color = '#f8fafc';
+    el.style.border = '2px solid #334155';
+    el.style.boxShadow = '0 25px 50px -12px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.12)';
+    el.style.zIndex = '99999';
+
     const allSkills = this.getVolunteerAllSkills(vol);
     const skillsBadges = allSkills.length > 0
       ? allSkills.map(s => `
-          <div class="px-2 py-1 rounded-lg text-[10px] font-bold border flex items-center justify-between gap-2 ${s.color}">
-            <span class="font-mono font-black">${s.badge || s.id.toUpperCase()}</span>
-            <span class="text-[9px] opacity-90 truncate">${s.label}</span>
+          <div class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold border flex items-center justify-between gap-2 shadow-xs ${s.color}">
+            <span class="font-mono font-black tracking-wide">${s.badge || s.id.toUpperCase()}</span>
+            <span class="text-[9.5px] font-medium opacity-95 truncate">${s.label}</span>
           </div>
         `).join('')
-      : `<span class="text-[10px] text-slate-400 italic">Formation initiale ${vol.rank || 'Secouriste'}</span>`;
+      : `<span class="text-[10px] text-slate-300 italic">Formation initiale ${vol.rank || 'Secouriste'}</span>`;
 
     el.innerHTML = `
-      <div class="font-black text-xs text-white mb-2 pb-1.5 border-b border-slate-700/80 flex items-center justify-between">
-        <span class="flex items-center gap-1.5 truncate">
-          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-          ${vol.name}
+      <div class="font-black text-xs text-white mb-2.5 pb-2 border-b border-slate-700/80 flex items-center justify-between gap-2">
+        <span class="flex items-center gap-2 truncate">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/30 flex-shrink-0"></span>
+          <span class="text-white font-black truncate">${vol.name}</span>
         </span>
-        <span class="text-[9px] font-mono px-2 py-0.5 rounded-full bg-pc-blue/30 text-sky-300 font-black border border-pc-blue/40">${vol.rank || 'Secouriste'}</span>
+        <span class="text-[9.5px] font-mono px-2 py-0.5 rounded-full bg-pc-blue text-white font-black border border-blue-400/80 flex-shrink-0">${vol.rank || 'Secouriste'}</span>
       </div>
-      <div class="text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">Compétences & Habilitations Terrain :</div>
-      <div class="space-y-1 mb-2.5 max-h-52 overflow-y-auto pr-1">
+      <div class="text-[10px] font-black uppercase text-amber-300 mb-2 tracking-wider flex items-center gap-1.5">
+        <i data-lucide="award" class="w-3.5 h-3.5 text-amber-400 flex-shrink-0"></i>
+        <span>Compétences & Habilitations :</span>
+      </div>
+      <div class="space-y-1.5 mb-2.5 max-h-56 overflow-y-auto pr-1">
         ${skillsBadges}
       </div>
-      <div class="text-[9px] text-slate-400 pt-1.5 border-t border-slate-800 flex justify-between">
-        <span>Dispo : <strong class="text-slate-300">${vol.dispoJours?.join(', ') || 'Semaine & WE'}</strong></span>
-        <span>Énergie : <strong class="text-emerald-400">${vol.energy || 80}%</strong></span>
+      <div class="text-[9.5px] text-slate-300 pt-2 border-t border-slate-800 flex justify-between items-center font-medium">
+        <span>Dispo : <strong class="text-white font-bold">${vol.dispoJours?.join(', ') || 'Semaine & WE'}</strong></span>
+        <span>Énergie : <strong class="text-emerald-400 font-bold">${vol.energy || 80}%</strong></span>
       </div>
     `;
 
@@ -2952,6 +2962,7 @@ class ProtecGame {
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
     el.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
 
     if (isClick) {
       const dismiss = (ev) => {
@@ -2978,8 +2989,8 @@ class ProtecGame {
           onmouseenter="window.game.showFloatingSkillsTooltip(event, '${v.id}')"
           onmouseleave="window.game.hideFloatingSkillsTooltip()"
           onclick="event.stopPropagation(); window.game.showFloatingSkillsTooltip(event, '${v.id}', true)"
-          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 hover:bg-pc-blue/15 hover:text-pc-blue text-[10px] text-slate-600 transition cursor-pointer font-bold border border-slate-200 shadow-2xs group/skill-btn">
-          <i data-lucide="award" class="w-3 h-3 text-pc-blue group-hover/skill-btn:scale-110 transition-transform"></i>
+          class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 hover:bg-pc-blue hover:text-white text-[10.5px] text-slate-700 transition cursor-pointer font-bold border border-slate-300 shadow-2xs group/skill-btn">
+          <i data-lucide="award" class="w-3.5 h-3.5 text-pc-blue group-hover/skill-btn:text-white transition-colors"></i>
           <span>Compétences</span>
         </button>
       </div>
@@ -3803,32 +3814,32 @@ class ProtecGame {
 
     body.innerHTML = `
       <div class="space-y-4">
-        <div class="p-3.5 rounded-2xl glass-card space-y-1">
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-300 shadow-xs space-y-1">
           <div class="flex items-center justify-between text-xs">
-            <span class="font-bold text-pc-blue">Niveau du Local</span>
-            <span class="px-2 py-0.5 rounded font-extrabold bg-pc-blue text-white">Niveau ${station.level}</span>
+            <span class="font-extrabold text-pc-blue">Niveau du Local</span>
+            <span class="px-2.5 py-0.5 rounded font-black bg-pc-blue text-white shadow-2xs">Niveau ${station.level}</span>
           </div>
-          <p class="text-xs text-slate-500">Standard radio et armoire de secours opérationnels.</p>
+          <p class="text-xs text-slate-600 font-medium">Standard radio et armoire de secours opérationnels.</p>
         </div>
 
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Flotte (${stationVehicles.length})</h4>
-            <button onclick="window.game.openBuyVehicleModal('${station.id}')" class="text-xs font-bold text-pc-orange hover:underline">+ Acheter Véhicule</button>
+            <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider">Flotte (${stationVehicles.length})</h4>
+            <button onclick="window.game.openBuyVehicleModal('${station.id}')" class="text-xs font-extrabold text-pc-orange hover:underline">+ Acheter Véhicule</button>
           </div>
           <div class="space-y-1.5">
             ${stationVehicles.map(v => `
-              <div class="p-2.5 rounded-xl glass-card flex items-center justify-between text-xs">
+              <div class="p-2.5 rounded-xl bg-white border border-slate-300 shadow-xs flex items-center justify-between text-xs hover:border-slate-400 transition">
                 <div class="flex items-center gap-2.5">
-                  <div class="w-10 h-7 bg-slate-100/90 rounded-lg p-0.5 flex items-center justify-center flex-shrink-0 border border-slate-200/60 shadow-inner">
+                  <div class="w-10 h-7 bg-slate-100 rounded-lg p-0.5 flex items-center justify-center flex-shrink-0 border border-slate-300 shadow-inner">
                     <img src="${v.image || window.game.getVehicleImage(v.type)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='🚑'" />
                   </div>
                   <div>
-                    <span class="font-black text-slate-800 leading-tight block">${v.name}</span>
-                    <span class="text-[9px] text-slate-400 font-semibold">${v.label || v.type}</span>
+                    <span class="font-black text-slate-900 leading-tight block">${v.name}</span>
+                    <span class="text-[9.5px] text-slate-500 font-semibold">${v.label || v.type}</span>
                   </div>
                 </div>
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.status === 'dispo' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black border ${v.status === 'dispo' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300'}">
                   ${v.status === 'dispo' ? 'DISPO' : 'ENGAGÉ'}
                 </span>
               </div>
@@ -3838,22 +3849,22 @@ class ProtecGame {
 
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Effectif Rattaché (${stationVolunteers.length})</h4>
-            <button onclick="window.game.openModule('recrutement')" class="text-xs font-bold text-pc-blue hover:underline">Recruter (Candidatures)</button>
+            <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider">Effectif Rattaché (${stationVolunteers.length})</h4>
+            <button onclick="window.game.openModule('recrutement')" class="text-xs font-extrabold text-pc-blue hover:underline">Recruter (Candidatures)</button>
           </div>
           <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1">
             ${stationVolunteers.map(v => `
-              <div class="p-2.5 rounded-xl glass-card flex items-center justify-between text-xs">
+              <div class="p-2.5 rounded-xl bg-white border border-slate-300 shadow-xs flex items-center justify-between text-xs hover:border-slate-400 transition">
                 <div class="flex items-center gap-2">
                   ${this.getVolunteerAvatarHTML(v)}
                   <div>
-                    <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                    <div class="font-black text-slate-900 flex items-center gap-1.5">
                       ${v.name}
                       ${this.getVolunteerSkillsPopoverHTML(v)}
                     </div>
                   </div>
                 </div>
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue/10 text-pc-blue">${v.rank}</span>
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-black bg-blue-50 text-pc-blue border border-blue-200/90">${v.rank}</span>
               </div>
             `).join('')}
           </div>
@@ -3862,7 +3873,7 @@ class ProtecGame {
     `;
 
     footer.innerHTML = `
-      <button onclick="window.game.closeDrawer()" class="w-full px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">Fermer</button>
+      <button onclick="window.game.closeDrawer()" class="w-full px-4 py-2.5 rounded-xl text-xs font-black bg-slate-200 hover:bg-slate-300 text-slate-800 border border-slate-300 shadow-xs transition">Fermer</button>
     `;
 
     drawer.classList.remove('hidden');
