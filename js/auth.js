@@ -516,6 +516,23 @@ window.ProtecAuth = {
       game.player.departmentCode = data.user.departmentCode || departmentCode;
       game.currentDepartmentCode = game.player.departmentCode;
       localStorage.setItem('protec_department_code', game.player.departmentCode);
+
+      // Nouveau compte : état d'antenne vierge et remise à zéro pour démarrer l'implantation
+      game.stations = [];
+      game.vehicles = [];
+      game.volunteers = [];
+      game.missions = [];
+      game.devis = [];
+      game.candidatures = [];
+      game.resources.money = 15000;
+      game.resources.reputationScore = 50;
+      if (game.rewards) {
+        (game.rewards.dailyTasks || []).forEach(t => { t.current = 0; t.done = false; });
+        (game.rewards.weeklyTasks || []).forEach(w => { w.current = 0; w.done = false; });
+      }
+      if (game.grants) game.grants.totalVolunteerHours = 0;
+      game.updateStatsUI();
+
       if (game.populateDepartmentSelector) game.populateDepartmentSelector();
       if (game.returnToMyAntenna) game.returnToMyAntenna();
 
@@ -530,6 +547,15 @@ window.ProtecAuth = {
       if (game.syncPlayerToServer) {
         game.syncPlayerToServer();
       }
+
+      // Proposer immédiatement d'implanter le bâtiment sur la carte
+      setTimeout(() => {
+        if (game.showOnboardingModal) {
+          game.showOnboardingModal();
+        } else if (game.startFirstStationOnboarding) {
+          game.startFirstStationOnboarding();
+        }
+      }, 500);
 
     } catch (err) {
       errorEl.textContent = 'Impossible de contacter le serveur multijoueur.';
@@ -574,6 +600,15 @@ window.ProtecAuth = {
       }
     } catch (e) {
       console.warn('Erreur chargement cloud:', e);
+    }
+
+    // Si aucune antenne n'existe après le chargement, inviter à implanter le bâtiment
+    if (!game.stations || game.stations.length === 0) {
+      setTimeout(() => {
+        if (game.showOnboardingModal) {
+          game.showOnboardingModal();
+        }
+      }, 500);
     }
   },
 

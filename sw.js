@@ -9,7 +9,7 @@
  * 4. Gestion Web Push Notifications & interactions système
  */
 
-const CACHE_VERSION = 'myprotec-pwa-v1.3.1';
+const CACHE_VERSION = 'myprotec-pwa-v1.4.0';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 const TILES_CACHE = 'myprotec-tiles-v1';
 const MAX_TILE_ENTRIES = 250; // Limite pour ne pas saturer le stockage

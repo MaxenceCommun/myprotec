@@ -469,5 +469,56 @@ window.ProtecCump = {
     `;
 
     if (window.lucide) window.lucide.createIcons();
+  },
+
+  // Décompte périodique pour la convention CUMP et conformité 48h
+  updateCumpMissionsClock(game) {
+    if (typeof this.checkComplianceTimer === 'function') {
+      this.checkComplianceTimer(game);
+    }
+  },
+
+  // Déclenchement d'alerte CUMP / CAI par le SAMU 15
+  triggerCumpAlert(game) {
+    if (!game.cumpConvention || !game.cumpConvention.signed || !game.cumpConvention.normCompliant) return;
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.notifyCategory(
+        'alertes',
+        '🚨 Réquisition SAMU : Urgence CUMP',
+        'Le SAMU sollicite l’antenne pour l’ouverture et l’armement immédiat d’un Centre d’Accueil des Impliqués (CAI).',
+        `cump-alert-${Date.now()}`
+      );
+    }
+  },
+
+  // Rendu de la carte résumé de convention CUMP pour la vue Devis / Conventions
+  renderConventionCardHTML(game) {
+    this.injectState(game);
+    const conv = game.cumpConvention;
+    const prereq = this.checkPrerequisites(game);
+
+    return `
+      <div class="p-4 rounded-2xl glass-card border border-slate-200 space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center text-xl font-black">
+              🏥
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h4 class="text-xs font-black text-slate-900">Convention SAMU 15 / CUMP</h4>
+                <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${conv.signed ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-600'}">
+                  ${conv.signed ? (conv.normCompliant ? 'Convention Active ✅' : 'Mise aux normes (48h) ⏳') : (prereq.eligible ? 'Sollicitation reçue 📩' : 'Non éligible 🔒')}
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-500">Mise à disposition de lots d’accueil, CAI et matériel de confort psychologique d’urgence.</p>
+            </div>
+          </div>
+          <button onclick="window.game.openModule('conventions')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-pc-blue text-white hover:bg-pc-blue-light transition shadow-sm">
+            ${conv.signed ? 'Gérer la Convention' : 'Voir les Détails'}
+          </button>
+        </div>
+      </div>
+    `;
   }
 };

@@ -1093,7 +1093,7 @@ class ProtecGame {
       return;
     }
 
-    const cost = 2500;
+    const cost = this.stations.length === 0 ? 0 : 2500;
     if (this.resources.money < cost) {
       this.showToast('Trésorerie insuffisante', `Il vous faut ${cost} € de trésorerie pour implanter l'antenne.`, 'orange');
       this.cancelAntennaPlacement();
@@ -1129,9 +1129,9 @@ class ProtecGame {
     // Remplissage des détails dans la modale de validation
     const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
     const isMainAntenna = this.player.deptRole === 'antenne_principale';
-    const stationName = isMainAntenna 
+    const stationName = this.pendingPlacementName || (isMainAntenna 
       ? `Antenne de ${detectedCity} (Principale ${deptCode})` 
-      : `Antenne de ${detectedCity} (${deptCode})`;
+      : `Antenne de ${detectedCity} (${deptCode})`);
 
     this.pendingPlacementName = stationName;
 
@@ -1142,7 +1142,7 @@ class ProtecGame {
     const coordsEl = document.getElementById('placement-val-coords');
     if (coordsEl) coordsEl.textContent = `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
     const costEl = document.getElementById('placement-val-cost');
-    if (costEl) costEl.textContent = `${cost.toLocaleString('fr-FR')} €`;
+    if (costEl) costEl.textContent = cost === 0 ? 'Gratuit (Subvention inaugurale)' : `${cost.toLocaleString('fr-FR')} €`;
 
     const modal = document.getElementById('placement-validation-modal');
     if (modal) {
@@ -1161,7 +1161,7 @@ class ProtecGame {
     if (!this.pendingPlacementLatLng) return;
     const latlng = this.pendingPlacementLatLng;
     const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
-    const cost = 2500;
+    const cost = this.stations.length === 0 ? 0 : 2500;
 
     if (this.resources.money < cost) {
       this.showToast('Trésorerie insuffisante', `Il vous faut ${cost} € de trésorerie.`, 'orange');
@@ -4906,7 +4906,7 @@ class ProtecGame {
           </div>
 
           <!-- Section Convention AASC - CUMP (Centre d'Accueil des Impliqués) -->
-          ${window.ProtecCump ? window.ProtecCump.renderConventionCardHTML(this) : ''}
+          ${window.ProtecCump && typeof window.ProtecCump.renderConventionCardHTML === 'function' ? window.ProtecCump.renderConventionCardHTML(this) : ''}
 
           <!-- Demandes reçues avec configurateur personnalisé -->
           <div class="space-y-4">
@@ -6701,14 +6701,14 @@ class ProtecGame {
       // 3e. Déclenchement d'Ordre de Mission CUMP / CAI (si Convention AASC-CUMP signée)
       if (this.clock.second === 40 && this.clock.minute % 12 === 0) {
         if (this.stations.length > 0 && this.cumpConvention && this.cumpConvention.signed) {
-          if (Math.random() < 0.35 && window.ProtecCump) {
+          if (Math.random() < 0.35 && window.ProtecCump && typeof window.ProtecCump.triggerCumpAlert === 'function') {
             window.ProtecCump.triggerCumpAlert(this);
           }
         }
       }
 
       // 3f. Décompte des délais chronométrés pour les missions CAI / CUMP actives
-      if (window.ProtecCump) {
+      if (window.ProtecCump && typeof window.ProtecCump.updateCumpMissionsClock === 'function') {
         window.ProtecCump.updateCumpMissionsClock(this);
       }
 
