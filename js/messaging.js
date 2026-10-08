@@ -3,13 +3,14 @@
  * 
  * 4 Canaux de communication distincts :
  * 1. National (toute la communauté des directeurs d'antenne de France)
- * 2. Régional (directeurs de la région administrative)
+ * 2. Régional (les 18 vraies régions administratives de France avec sélection libre et région d'antenne par défaut)
  * 3. Départemental (directeurs du département d'affectation)
  * 4. Messages Privés (MP) directs 1-à-1 entre deux directeurs d'antenne
  */
 
 window.ProtecMessaging = {
   currentChannel: 'national', // 'national' | 'regional' | 'departemental' | 'mp'
+  selectedRegionName: null,
   selectedMpRecipientId: null,
 
   injectState(game) {
@@ -26,15 +27,55 @@ window.ProtecMessaging = {
             time: '08:00'
           }
         ],
-        regional: [],
+        regional: {}, // Mapping par nom de vraie région de France
         departemental: [],
         mp: {} // recipientId -> [ messages ]
       };
+    } else {
+      // Assurer la compatibilité si regional était un simple tableau
+      if (Array.isArray(game.messagesHistory.regional)) {
+        const oldRegional = game.messagesHistory.regional;
+        game.messagesHistory.regional = {};
+        const myDeptCode = game.stations?.[0]?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '75';
+        const myRegion = window.ProtecDepartements?.getRegion(myDeptCode) || 'Île-de-France';
+        if (oldRegional.length > 0) {
+          game.messagesHistory.regional[myRegion] = oldRegional;
+        }
+      }
+    }
+
+    // Déterminer la région active par défaut (celle de l'antenne du joueur)
+    const myDeptCode = game.stations?.[0]?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '75';
+    const myRegion = window.ProtecDepartements?.getRegion(myDeptCode) || 'Île-de-France';
+    if (!this.selectedRegionName) {
+      this.selectedRegionName = myRegion;
+    }
+
+    // Assurer l'existence du canal pour la région active avec un message initial de l'état-major
+    if (!game.messagesHistory.regional[this.selectedRegionName] || game.messagesHistory.regional[this.selectedRegionName].length === 0) {
+      game.messagesHistory.regional[this.selectedRegionName] = [
+        {
+          id: `init-reg-${this.selectedRegionName}`,
+          senderId: 'sys-dir-reg',
+          senderName: `État-Major Régional (${this.selectedRegionName})`,
+          deptCode: 'DIRR',
+          channel: 'regional',
+          regionName: this.selectedRegionName,
+          text: `Fréquence opérationnelle de la région ${this.selectedRegionName} active. Veille inter-antennes et coordination zonale de Sécurité Civile.`,
+          time: '08:00'
+        }
+      ];
     }
   },
 
   setChannel(channelKey, game) {
     this.currentChannel = channelKey;
+    this.renderModal(game);
+  },
+
+  selectRegion(regionName, game) {
+    this.selectedRegionName = regionName;
+    this.injectState(game);
     this.renderModal(game);
   },
 
@@ -51,9 +92,9 @@ window.ProtecMessaging = {
     const text = input.value.trim();
     input.value = '';
 
-    const deptCode = game.currentDepartmentCode || game.player?.departmentCode || '75';
-    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
-    const regionName = deptInfo ? deptInfo.region : 'Île-de-France';
+    const deptCode = game.stations?.[0]?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '75';
+    const myRegion = window.ProtecDepartements?.getRegion(deptCode) || 'Île-de-France';
+    const targetRegion = this.selectedRegionName || myRegion;
 
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -61,7 +102,7 @@ window.ProtecMessaging = {
     const msgObj = {
       id: `msg-${Date.now()}`,
       senderId: game.player?.id || 'me',
-      senderName: game.player?.name || 'Directeur d\'Antenne',
+      senderName: game.player?.name || 'Directeur d’Antenne',
       deptCode: deptCode,
       channel: this.currentChannel,
       text: text,
@@ -70,7 +111,7 @@ window.ProtecMessaging = {
 
     if (this.currentChannel === 'mp') {
       if (!this.selectedMpRecipientId) {
-        game.showToast('Destinataire Requis', 'Veuillez sélectionner un directeur d\'antenne pour envoyer un message privé.', 'orange');
+        game.showToast('Destinataire Requis', 'Veuillez sélectionner un directeur d’antenne pour envoyer un message privé.', 'orange');
         return;
       }
       msgObj.recipientId = this.selectedMpRecipientId;
@@ -79,7 +120,7 @@ window.ProtecMessaging = {
       }
       game.messagesHistory.mp[this.selectedMpRecipientId].push(msgObj);
 
-      // Simulation de réponse courtoise si joueur simulé
+      // Simulation de réponse courtoise si NPC simulé
       if (this.selectedMpRecipientId.startsWith('npc-')) {
         setTimeout(() => {
           const reply = {
@@ -95,6 +136,22 @@ window.ProtecMessaging = {
           if (this.currentChannel === 'mp') this.renderModal(game);
         }, 1200);
       }
+    } else if (this.currentChannel === 'regional') {
+      msgObj.regionName = targetRegion;
+      if (!game.messagesHistory.regional[targetRegion]) {
+        game.messagesHistory.regional[targetRegion] = [];
+      }
+      game.messagesHistory.regional[targetRegion].push(msgObj);
+
+      if (window.ProtecSupabase && window.ProtecSupabase.client) {
+        window.ProtecSupabase.sendChatMessage({
+          channel: 'regional',
+          deptCode: deptCode,
+          regionName: targetRegion,
+          senderName: game.player?.name,
+          message: text
+        });
+      }
     } else {
       if (!game.messagesHistory[this.currentChannel]) {
         game.messagesHistory[this.currentChannel] = [];
@@ -106,7 +163,7 @@ window.ProtecMessaging = {
         window.ProtecSupabase.sendChatMessage({
           channel: this.currentChannel,
           deptCode: deptCode,
-          regionName: regionName,
+          regionName: myRegion,
           senderName: game.player?.name,
           message: text
         });
@@ -130,9 +187,10 @@ window.ProtecMessaging = {
     subtitle.textContent = 'Échanges entre directeurs de Protection Civile : National, Régional, Départemental et Messages Privés (MP)';
     icon.setAttribute('data-lucide', 'message-square');
 
-    const myDeptCode = game.currentDepartmentCode || game.player?.departmentCode || '75';
-    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(myDeptCode) : null;
-    const regionName = deptInfo ? deptInfo.region : 'Île-de-France';
+    const myDeptCode = game.stations?.[0]?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '75';
+    const myRegion = window.ProtecDepartements?.getRegion(myDeptCode) || 'Île-de-France';
+    const activeRegion = this.selectedRegionName || myRegion;
+    const allRegions = window.ProtecDepartements?.REGIONS || [];
 
     // Liste des interlocuteurs pour les MP (autres directeurs de la fédération ou alliés)
     const availableRecipients = [
@@ -140,7 +198,10 @@ window.ProtecMessaging = {
       { id: 'npc-marseille', name: 'Directeur PC Bouches-du-Rhône (13)', dept: '13', city: 'Marseille' },
       { id: 'npc-bordeaux', name: 'Directeur PC Gironde (33)', dept: '33', city: 'Bordeaux' },
       { id: 'npc-lille', name: 'Directeur PC Nord (59)', dept: '59', city: 'Lille' },
-      { id: 'npc-toulouse', name: 'Directeur PC Haute-Garonne (31)', dept: '31', city: 'Toulouse' }
+      { id: 'npc-toulouse', name: 'Directeur PC Haute-Garonne (31)', dept: '31', city: 'Toulouse' },
+      { id: 'npc-strasbourg', name: 'Directeur PC Bas-Rhin (67)', dept: '67', city: 'Strasbourg' },
+      { id: 'npc-rennes', name: 'Directeur PC Ille-et-Vilaine (35)', dept: '35', city: 'Rennes' },
+      { id: 'npc-nantes', name: 'Directeur PC Loire-Atlantique (44)', dept: '44', city: 'Nantes' }
     ];
 
     if (!this.selectedMpRecipientId && availableRecipients.length > 0) {
@@ -151,6 +212,8 @@ window.ProtecMessaging = {
     let currentMessages = [];
     if (this.currentChannel === 'mp') {
       currentMessages = (game.messagesHistory.mp && game.messagesHistory.mp[this.selectedMpRecipientId]) || [];
+    } else if (this.currentChannel === 'regional') {
+      currentMessages = (game.messagesHistory.regional && game.messagesHistory.regional[activeRegion]) || [];
     } else {
       currentMessages = game.messagesHistory[this.currentChannel] || [];
     }
@@ -158,25 +221,48 @@ window.ProtecMessaging = {
     body.innerHTML = `
       <div class="space-y-4">
 
-        <!-- Onglets des 4 canaux -->
-        <div class="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold overflow-x-auto">
-          <button onclick="window.ProtecMessaging.setChannel('national', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 ${this.currentChannel === 'national' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
+        <!-- Onglets des 4 canaux officiels -->
+        <div class="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold overflow-x-auto custom-scrollbar">
+          <button onclick="window.ProtecMessaging.setChannel('national', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${this.currentChannel === 'national' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
             <span>🇫🇷</span>
             <span>National</span>
           </button>
-          <button onclick="window.ProtecMessaging.setChannel('regional', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 ${this.currentChannel === 'regional' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
+          <button onclick="window.ProtecMessaging.setChannel('regional', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${this.currentChannel === 'regional' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
             <span>🗺️</span>
-            <span>Régional (${regionName})</span>
+            <span>Régional (${activeRegion})</span>
           </button>
-          <button onclick="window.ProtecMessaging.setChannel('departemental', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 ${this.currentChannel === 'departemental' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
+          <button onclick="window.ProtecMessaging.setChannel('departemental', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${this.currentChannel === 'departemental' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
             <span>📍</span>
             <span>Département (${myDeptCode})</span>
           </button>
-          <button onclick="window.ProtecMessaging.setChannel('mp', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 ${this.currentChannel === 'mp' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
+          <button onclick="window.ProtecMessaging.setChannel('mp', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${this.currentChannel === 'mp' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
             <span>🔒</span>
             <span>Messages Privés (MP)</span>
           </button>
         </div>
+
+        <!-- Sous-barre spécifique pour le Canal Régional : Vraies régions de France -->
+        ${this.currentChannel === 'regional' ? `
+          <div class="p-3 rounded-2xl bg-sky-50/80 border border-sky-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🗺️</span>
+              <div>
+                <span class="font-black text-slate-900 block">Canal Régional Officiel : <strong class="text-pc-blue">${activeRegion}</strong></span>
+                <span class="text-[10px] text-slate-500 font-medium">Fréquence zonale de coordination des antennes Protection Civile</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-[11px] font-bold text-slate-600 flex-shrink-0">Changer de région :</label>
+              <select onchange="window.ProtecMessaging.selectRegion(this.value, window.game)" class="px-3 py-1.5 rounded-xl bg-white border border-sky-300 font-bold text-xs text-slate-900 focus:ring-2 focus:ring-pc-blue shadow-xs">
+                ${allRegions.map(reg => `
+                  <option value="${reg}" ${reg === activeRegion ? 'selected' : ''}>
+                    ${reg} ${reg === myRegion ? '⭐ (Votre Antenne)' : ''}
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+          </div>
+        ` : ''}
 
         <!-- Sous-barre spécifique pour les Messages Privés -->
         ${this.currentChannel === 'mp' ? `
@@ -209,6 +295,7 @@ window.ProtecMessaging = {
                 <div class="flex items-center gap-1.5 text-[10px] text-slate-400 mb-0.5 px-1">
                   <strong class="${isMe ? 'text-pc-blue' : 'text-slate-700'}">${m.senderName}</strong>
                   ${m.deptCode ? `<span class="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-bold text-[9px]">${m.deptCode}</span>` : ''}
+                  ${m.regionName ? `<span class="px-1.5 py-0.2 rounded bg-sky-100 text-sky-800 font-bold text-[9px]">${m.regionName}</span>` : ''}
                   <span>${m.time || ''}</span>
                 </div>
                 <div class="p-3 rounded-2xl text-xs max-w-md ${isMe ? 'bg-pc-blue text-white rounded-tr-none' : 'bg-white border border-slate-200/90 text-slate-800 rounded-tl-none shadow-sm'}">
@@ -224,7 +311,7 @@ window.ProtecMessaging = {
           <input 
             id="messaging-input" 
             type="text" 
-            placeholder="${this.currentChannel === 'mp' ? 'Envoyer un message privé direct...' : 'Transmettre sur la fréquence du canal...'}" 
+            placeholder="${this.currentChannel === 'mp' ? 'Envoyer un message privé direct...' : (this.currentChannel === 'regional' ? `Transmettre sur le canal régional (${activeRegion})...` : 'Transmettre sur la fréquence du canal...')}" 
             onkeydown="if(event.key === 'Enter') window.ProtecMessaging.sendMessage(window.game);"
             class="flex-1 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-pc-blue shadow-sm"
           />
