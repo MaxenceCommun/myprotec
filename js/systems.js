@@ -139,41 +139,66 @@ window.ProtecSystems = {
     const routeCoords = await this.fetchRouteCoordinates(originCoords, destCoords);
     const transitId = `transit-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
+    // Détection d'un départ d'urgence (SAMU, transport CH, pompiers, crise CUMP/NOVI, préfecture)
+    const isEmergency = (
+      statusTarget === 4 ||
+      mission?.type === 'samu' ||
+      mission?.type === 'pompiers' ||
+      mission?.type === 'crise' ||
+      mission?.isCumpCai === true ||
+      ['critique', 'haute'].includes(mission?.urgency)
+    );
+
     // Polyline Leaflet sur la route
     const polyline = L.polyline(routeCoords, {
-      color: statusTarget === 4 ? '#ef4444' : '#0284c7',
-      weight: 4,
-      opacity: 0.75,
-      className: 'route-line-animated'
+      color: isEmergency ? (statusTarget === 4 ? '#ef4444' : '#f97316') : '#0284c7',
+      weight: isEmergency ? 5 : 3.5,
+      opacity: isEmergency ? 0.85 : 0.65,
+      dashArray: isEmergency ? null : '6, 6',
+      className: isEmergency ? 'route-line-animated' : 'route-line-normal'
     }).addTo(game.map);
 
-    // Marqueur du véhicule avec gyrophare clignotant
+    // Marqueur du véhicule : gyrophare clignotant UNIQUEMENT en urgence, puce discrète en allure normale
     const imgUrl = vehicle.image || (game.getVehicleImage ? game.getVehicleImage(vehicle.type) : `images/vehicles/${vehicle.type}.png`);
     const iconHtml = `
-      <div class="vehicle-marker-container flex items-center gap-1.5 px-2 py-1 rounded-xl bg-white/95 border-2 ${statusTarget === 4 ? 'border-red-500' : 'border-pc-blue'} shadow-xl text-slate-800 text-[10px] font-black cursor-pointer">
-        <div class="beacon-flash"></div>
-        <img src="${imgUrl}" alt="${vehicle.name}" class="h-4 w-7 object-contain flex-shrink-0 drop-shadow-sm" onerror="this.outerHTML='🚑'" />
+      <div class="vehicle-marker-container flex items-center gap-1.5 px-2 py-1 rounded-xl bg-white/95 border-2 ${isEmergency ? (statusTarget === 4 ? 'border-red-500 ring-2 ring-red-400/50' : 'border-pc-orange ring-1 ring-orange-400/40') : 'border-slate-300 shadow-md'} shadow-xl text-slate-800 text-[10px] font-black cursor-pointer">
+        ${isEmergency ? '<div class="beacon-flash"></div>' : '<div class="w-2 h-2 rounded-full bg-slate-400"></div>'}
+        <img src="${imgUrl}" alt="${vehicle.name}" class="h-4 w-7 object-contain flex-shrink-0 drop-shadow-sm" onerror="this.outerHTML='<span class=\"text-xs font-bold text-pc-blue\">VPSP</span>'" />
         <span class="tracking-tight">${vehicle.name}</span>
+        ${isEmergency ? '<span class="text-[8px] px-1 py-0.2 rounded font-extrabold bg-red-100 text-red-700 uppercase">Urgence</span>' : ''}
       </div>
     `;
 
     const icon = L.divIcon({
       html: iconHtml,
       className: 'vehicle-leaflet-icon',
-      iconSize: [120, 32],
-      iconAnchor: [60, 16]
+      iconSize: [126, 32],
+      iconAnchor: [63, 16]
     });
 
-    const marker = L.marker(routeCoords[0], { icon: icon, zIndexOffset: 1000 }).addTo(game.map);
-    marker.bindTooltip(`<strong>${vehicle.name}</strong><br>En route (${statusTarget === 4 ? 'Statut 4 : CHU' : 'Statut 2 : Intervention'})`, {
+    const marker = L.marker(routeCoords[0], { icon: icon, zIndexOffset: isEmergency ? 1200 : 800 }).addTo(game.map);
+
+    // Calcul de la distance réelle en kilomètres
+    const distKm = Math.max(0.8, Math.hypot(
+      (destCoords.lat - originCoords.lat) * 111,
+      (destCoords.lng - originCoords.lng) * 111 * Math.cos(originCoords.lat * Math.PI / 180)
+    ));
+
+    // Vitesse adaptée :
+    // - Allure normale (DPS, maraude, retour antenne statut 6) : 45 km/h sans gyrophare
+    // - Départ urgence (SAMU, transport CH, NOVI, pompiers) : +50% plus rapide (~70-75 km/h avec gyrophare)
+    const realisticSpeedKmh = isEmergency ? (statusTarget === 4 ? 74 : 68) : 45;
+    const baseDurationSec = Math.max(20, Math.min(180, Math.round((distKm / realisticSpeedKmh) * 3600 * 0.35)));
+    const durationMs = (baseDurationSec * 1000) / Math.max(1, game.speed || 1);
+    const now = Date.now();
+
+    const modeLabel = isEmergency ? (statusTarget === 4 ? 'Statut 4 : Évacuation CHU (Urgence)' : 'Statut 2 : Départ Urgence (Gyrophare)') : (statusTarget === 6 ? 'Statut 6 : Retour Antenne (Normal)' : 'Statut 2 : Déplacement Normal');
+
+    marker.bindTooltip(`<strong>${vehicle.name}</strong><br>Vitesse : ~${realisticSpeedKmh} km/h • Distance : ${distKm.toFixed(1)} km<br>${modeLabel}`, {
       direction: 'top',
       offset: [0, -18],
       className: 'glass-panel text-xs p-2'
     });
-
-    const baseDurationSec = Math.max(12, Math.min(45, (routeCoords.length * 0.35)));
-    const durationMs = (baseDurationSec * 1000) / Math.max(1, game.speed || 1);
-    const now = Date.now();
 
     const transit = {
       id: transitId,
@@ -181,7 +206,10 @@ window.ProtecSystems = {
       vehicle: vehicle,
       mission: mission,
       statusTarget: statusTarget,
+      isEmergency: isEmergency,
       routeCoords: routeCoords,
+      distKm: distKm,
+      speedKmh: realisticSpeedKmh,
       startTime: now,
       durationMs: durationMs,
       currentStep: 0,
@@ -194,9 +222,9 @@ window.ProtecSystems = {
 
     // Bip radio et message de départ
     this.playRadioChirp();
-    const statusLabel = statusTarget === 4 ? 'STATUT 4 : Transport CHU' : 'STATUT 2 : Départ en route';
-    this.addRadioLog(game, vehicle.name, statusTarget, `${statusLabel} vers ${mission ? mission.title : 'Destination'}.`);
-    game.showToast(statusLabel, `${vehicle.name} est en route sur le réseau routier.`, statusTarget === 4 ? 'orange' : 'blue');
+    const statusLabel = isEmergency ? (statusTarget === 4 ? 'STATUT 4 : Transport CHU (Urgence)' : 'STATUT 2 : Départ Urgence (Gyrophare)') : (statusTarget === 6 ? 'STATUT 6 : Retour Antenne' : 'STATUT 2 : Départ en route (Allure normale)');
+    this.addRadioLog(game, vehicle.name, statusTarget, `${statusLabel} vers ${mission ? mission.title : 'Destination'} (${distKm.toFixed(1)} km, ~${realisticSpeedKmh} km/h).`);
+    game.showToast(statusLabel, `${vehicle.name} est en route (${isEmergency ? 'Urgence +50% rapidité' : 'Allure normale'}, ~${realisticSpeedKmh} km/h, ${distKm.toFixed(1)} km).`, isEmergency ? 'orange' : 'blue');
   },
 
   updateTransits(game) {
@@ -207,7 +235,7 @@ window.ProtecSystems = {
     for (let i = game.transits.length - 1; i >= 0; i--) {
       const t = game.transits[i];
       const elapsed = Math.max(0, now - (t.startTime || now));
-      const progress = Math.min(1, elapsed / (t.durationMs || 15000));
+      const progress = Math.min(1, elapsed / (t.durationMs || 30000));
       const stepIndex = Math.floor(progress * (t.routeCoords.length - 1));
       t.currentStep = stepIndex;
 
@@ -215,6 +243,15 @@ window.ProtecSystems = {
         const nextPos = t.routeCoords[stepIndex] || t.routeCoords[0];
         if (t.marker && nextPos) {
           t.marker.setLatLng(nextPos);
+          const remainingKm = (t.distKm * (1 - progress)).toFixed(1);
+          const remainingSec = Math.max(1, Math.round((t.durationMs - elapsed) / 1000));
+          t.marker.setTooltipContent(`
+            <div class="text-xs space-y-0.5">
+              <strong class="text-pc-blue block">${t.vehicle.name}</strong>
+              <div class="text-[10px] text-slate-600">Vitesse : <span class="font-bold text-red-600">${t.speedKmh} km/h</span> • Reste : <strong>${remainingKm} km</strong> (~${remainingSec}s)</div>
+              <div class="text-[9px] font-bold text-slate-500">${t.statusTarget === 4 ? '🚨 Transport Sanitaire vers Urgences CHU' : '🚑 Transit d\'Urgence vers l\'Intervention'}</div>
+            </div>
+          `);
         }
       } else {
         // Arrivée à destination
@@ -230,11 +267,11 @@ window.ProtecSystems = {
           this.addRadioLog(game, t.vehicle.name, 3, `STATUT 3 : Sur les lieux. Dispositif en place pour « ${t.mission?.title} ».`);
           game.showToast('Arrivée sur les lieux', `${t.vehicle.name} est au contact. Statut 3 activé.`, 'green');
         } else if (t.statusTarget === 4) {
-          this.addRadioLog(game, t.vehicle.name, 5, `STATUT 5 : Arrivée aux Urgences CHU. Dépôt de la fiche bilan.`);
-          game.showToast('Arrivée CHU', `${t.vehicle.name} est aux Urgences du CHU. Bilan transmis.`, 'green');
+          this.addRadioLog(game, t.vehicle.name, 5, `STATUT 5 : Arrivée aux Urgences Hospitalières de secteur. Prise en charge médicale.`);
+          game.showToast('Arrivée Urgences CHU', `${t.vehicle.name} est arrivé aux Urgences hospitalières. Relève effectuée.`, 'green');
         } else if (t.statusTarget === 6) {
           this.addRadioLog(game, t.vehicle.name, 1, `STATUT 1 : De retour à l’antenne. Véhicule disponible.`);
-          game.showToast('Retour Antenne', `${t.vehicle.name} est rentré. Bionettoyage requis si transport.`, 'blue');
+          game.showToast('Retour Antenne', `${t.vehicle.name} a regagné sa base. Véhicule disponible.`, 'blue');
         }
 
         if (typeof t.onArrival === 'function') {
@@ -244,19 +281,121 @@ window.ProtecSystems = {
     }
   },
 
-  // Trouver l'hôpital le plus proche
+  // Récupération dynamique et détection des Hôpitaux de secteur
   getNearestHospital(game, lat, lng) {
-    const list = this.hospitals[game.currentCityKey] || this.hospitals.paris;
-    let nearest = list[0];
+    // 1. Si des hôpitaux de secteur ont été récupérés en arrière-plan (OSM Overpass)
+    if (game.sectorHospitals && game.sectorHospitals.length > 0) {
+      let nearest = game.sectorHospitals[0];
+      let minDist = 9999;
+      game.sectorHospitals.forEach(h => {
+        const d = Math.hypot(h.lat - lat, h.lng - lng);
+        if (d < minDist) {
+          minDist = d;
+          nearest = h;
+        }
+      });
+      return nearest;
+    }
+
+    // 2. Base départementale de référence complète (Couverture nationale des CHU & CH)
+    const nationalHospitals = [
+      // 54 Meurthe-et-Moselle (Nancy)
+      { name: 'CHRU de Nancy - Hôpital Central (Urgences & Déchocage)', lat: 48.6882, lng: 6.1895, dept: '54' },
+      { name: 'CHRU de Nancy - Hôpital de Brabois (Pôle Spécialités)', lat: 48.6491, lng: 6.1482, dept: '54' },
+      { name: 'Centre Hospitalier de Saint-Charles (Toul)', lat: 48.6744, lng: 5.8856, dept: '54' },
+      // 75 Paris & IDF
+      { name: 'AP-HP Urgences Pitié-Salpêtrière (Trauma Center)', lat: 48.8385, lng: 2.3650, dept: '75' },
+      { name: 'AP-HP Urgences Lariboisière', lat: 48.8827, lng: 2.3533, dept: '75' },
+      { name: 'AP-HP Urgences Georges-Pompidou (HEGP)', lat: 48.8388, lng: 2.2736, dept: '75' },
+      { name: 'AP-HP Urgences Henri-Mondor (Créteil)', lat: 48.7963, lng: 2.4512, dept: '94' },
+      { name: 'AP-HP Urgences Avicenne (Bobigny)', lat: 48.9142, lng: 2.4243, dept: '93' },
+      // 69 Rhône (Lyon)
+      { name: 'HCL Urgences Édouard Herriot (Pavillon H)', lat: 45.7438, lng: 4.8821, dept: '69' },
+      { name: 'HCL Urgences Centre Hospitalier Lyon Sud', lat: 45.7001, lng: 4.8192, dept: '69' },
+      { name: 'HCL Hôpital de la Croix-Rousse', lat: 45.7797, lng: 4.8322, dept: '69' },
+      // 13 Bouches-du-Rhône (Marseille)
+      { name: 'AP-HM Urgences Hôpital de La Timone', lat: 43.2894, lng: 5.4011, dept: '13' },
+      { name: 'AP-HM Urgences Hôpital Nord (Marseille)', lat: 43.3712, lng: 5.3619, dept: '13' },
+      // 33 Gironde (Bordeaux)
+      { name: 'CHU de Bordeaux - Urgences Pellegrin (Tripode)', lat: 44.8299, lng: -0.6053, dept: '33' },
+      { name: 'CHU Hôpital Saint-André', lat: 44.8344, lng: -0.5815, dept: '33' },
+      // 59 Nord (Lille)
+      { name: 'CHU de Lille - Urgences Roger Salengro', lat: 50.6095, lng: 3.0338, dept: '59' },
+      { name: 'Centre Hospitalier de Tourcoing', lat: 50.7239, lng: 3.1611, dept: '59' },
+      // 67 Bas-Rhin (Strasbourg)
+      { name: 'Hôpitaux Universitaires de Strasbourg - Hautepierre', lat: 48.5912, lng: 7.7051, dept: '67' },
+      { name: 'Nouvel Hôpital Civil de Strasbourg', lat: 48.5771, lng: 7.7408, dept: '67' },
+      // 31 Haute-Garonne (Toulouse)
+      { name: 'CHU de Toulouse - Hôpital Purpan (Urgences)', lat: 43.6112, lng: 1.4005, dept: '31' },
+      { name: 'CHU de Toulouse - Hôpital Rangueil', lat: 43.5583, lng: 1.4642, dept: '31' },
+      // 44 Loire-Atlantique (Nantes)
+      { name: 'CHU de Nantes - Hôtel-Dieu (Urgences Adultes)', lat: 47.2120, lng: -1.5528, dept: '44' },
+      // 35 Ille-et-Vilaine (Rennes)
+      { name: 'CHU de Rennes - Hôpital Pontchaillou', lat: 48.1189, lng: -1.6961, dept: '35' },
+      // 06 Alpes-Maritimes (Nice)
+      { name: 'CHU de Nice - Hôpital Pasteur 2', lat: 43.7258, lng: 7.2831, dept: '06' },
+      // 34 Hérault (Montpellier)
+      { name: 'CHU de Montpellier - Hôpital Lapeyronie', lat: 43.6331, lng: 3.8642, dept: '34' }
+    ];
+
+    let nearest = nationalHospitals[0];
     let minDist = 9999;
-    list.forEach(h => {
+    nationalHospitals.forEach(h => {
       const d = Math.hypot(h.lat - lat, h.lng - lng);
       if (d < minDist) {
         minDist = d;
         nearest = h;
       }
     });
+
+    // Si on est à plus de 45 km d'un hôpital de la liste (département rural)
+    if (minDist * 111 > 45) {
+      const station = game.stations?.[0];
+      const cityName = station?.city || 'Secteur';
+      return {
+        name: `Centre Hospitalier de ${cityName} (Urgences de Secteur)`,
+        lat: lat + 0.015,
+        lng: lng + 0.012
+      };
+    }
+
     return nearest;
+  },
+
+  // Requête en arrière-plan pour scanner les hôpitaux de secteur réels autour de l'antenne
+  async fetchSectorHospitalsBackground(game) {
+    const station = game.stations?.[0];
+    if (!station || !station.lat) return;
+
+    if (!game.sectorHospitals) game.sectorHospitals = [];
+    if (game.sectorHospitals.length > 0) return; // Déjà chargés
+
+    try {
+      const cLat = station.lat;
+      const cLng = station.lng;
+      const query = `[out:json][timeout:4];node["amenity"="hospital"](around:25000,${cLat},${cLng});out body 6;`;
+      const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.elements && data.elements.length > 0) {
+          game.sectorHospitals = data.elements.map(el => ({
+            name: el.tags?.name || `Centre Hospitalier de Secteur (${el.tags?.operator || 'Urgences'})`,
+            lat: el.lat,
+            lng: el.lon,
+            osmId: el.id
+          }));
+          console.log(`🏥 [Hôpitaux] ${game.sectorHospitals.length} hôpitaux de secteur réels détectés autour de ${station.name}.`);
+        }
+      }
+    } catch (e) {
+      // Mode hors-ligne ou timeout : repli automatique vers la base nationale intégrée
+    }
   },
 
   // --- 3. MAIN COURANTE RADIO & STATUTS ---
@@ -613,7 +752,9 @@ window.ProtecSystems = {
     // Toast de notification si passage à une vigilance supérieure
     if (previousVigilance !== vigilance && ['yellow', 'orange', 'red'].includes(vigilance)) {
       const color = vigilance === 'red' ? 'red' : (vigilance === 'orange' ? 'orange' : 'amber');
-      game.showToast(`Bulletin Météo-France (${vigilance.toUpperCase()})`, alertTitle, color);
+      const vigLabels = { green: 'VERT', yellow: 'JAUNE', orange: 'ORANGE', red: 'ROUGE' };
+      const vigFr = vigLabels[vigilance] || vigilance.toUpperCase();
+      game.showToast(`Bulletin Météo-France (${vigFr})`, alertTitle, color);
     }
   },
 
@@ -621,7 +762,8 @@ window.ProtecSystems = {
   triggerWeatherEmergencyMission(game) {
     if (!game.weather) return;
     const v = game.weather.vigilance;
-    if (v === 'green') return; // Pas de mission de crise météo si tout est calme
+    // Règle stricte : la vigilance jaune ne déclenche aucune mission d'urgence. Seules orange (peu de chance) et rouge (moyennement) peuvent déclencher.
+    if (v === 'green' || v === 'yellow') return;
 
     // Maximum 2 missions météo actives à la fois
     const ongoingWeatherMissions = game.missions.filter(m => m.type === 'meteo' && ['planifie', 'ongoing'].includes(m.status));
@@ -758,8 +900,8 @@ window.ProtecSystems = {
       progress: 0,
       status: 'prealerte',
       alertOrigin: 'meteo',
-      prealertSecondsLeft: 65,
-      prealertTotalSec: 65,
+      prealertSecondsLeft: 180,
+      prealertTotalSec: 180,
       evolutionResolved: false,
       registeredVolunteers: [],
       assignedCrew: { volunteers: [], vehicles: [] }
@@ -774,10 +916,13 @@ window.ProtecSystems = {
     game.updateStatsUI();
     game.saveGame();
 
+    const vigLabels = { green: 'VERT', yellow: 'JAUNE', orange: 'ORANGE', red: 'ROUGE' };
+    const vigFr = vigLabels[game.weather.vigilance] || game.weather.vigilance.toUpperCase();
+
     if (window.ProtecNotifications) {
       window.ProtecNotifications.notifyCategory(
         'weather',
-        `⚠️ PRÉALERTE PRÉFECTURE (${game.weather.vigilance.toUpperCase()})`,
+        `⚠️ PRÉALERTE PRÉFECTURE (${vigFr})`,
         `Vigilance Météo active. La Préfecture demande la pré-mobilisation d'une équipe : ${missionDef.title}. Lancez la mobilisation par SMS !`,
         `meteo-${newWeatherMission.id}`
       );
@@ -828,10 +973,13 @@ window.ProtecSystems = {
       this.fetchRealWeather(game);
     }
 
-    // Déclenchement occasionnel d'une mission météo en cas de vigilance active (Jaune/Orange/Rouge)
-    if (game.clock && game.clock.second === 25 && (game.clock.minute % 3 === 0)) {
-      if (game.weather && ['yellow', 'orange', 'red'].includes(game.weather.vigilance)) {
-        const proba = game.weather.vigilance === 'red' ? 0.70 : (game.weather.vigilance === 'orange' ? 0.45 : 0.20);
+    // Déclenchement calibré d'une mission météo en cas de vigilance active (Jaune = rien, Orange = peu de chance, Rouge = moyennement)
+    if (game.clock && game.clock.second === 25 && (game.clock.minute % 4 === 0)) {
+      if (game.weather && ['orange', 'red'].includes(game.weather.vigilance)) {
+        let proba = 0;
+        if (game.weather.vigilance === 'red') proba = 0.28; // Moyennement en rouge
+        else if (game.weather.vigilance === 'orange') proba = 0.08; // Peu de chance en orange
+        
         if (Math.random() < proba) {
           this.triggerWeatherEmergencyMission(game);
         }

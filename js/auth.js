@@ -53,15 +53,53 @@ window.ProtecAuth = {
           game.syncPlayerToServer();
         }
       } else {
-        // Session invalide ou expirée -> retour au sas obligatoire
-        this.clearSession();
-        this.openAuthModal(true);
+        // Token expiré ou serveur redémarré : tenter une reconnexion transparente si identifiants mémorisés
+        const savedUser = localStorage.getItem('protec_last_login_username');
+        const savedPass = localStorage.getItem('protec_last_login_password');
+        if (savedUser && savedPass) {
+          try {
+            const reloginRes = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: savedUser, password: savedPass })
+            });
+            const reloginData = await reloginRes.json();
+            if (reloginRes.ok && reloginData.success && reloginData.token) {
+              this.token = reloginData.token;
+              this.currentUser = reloginData.user;
+              localStorage.setItem('protec_auth_token', reloginData.token);
+              localStorage.setItem('protec_user', JSON.stringify(reloginData.user));
+              game.player.id = reloginData.user.id;
+              game.player.name = reloginData.user.username;
+              game.player.role = reloginData.user.role || 'user';
+              this.updateHeaderUI();
+              this.closeAuthModal();
+              return;
+            }
+          } catch (reloginErr) {
+            console.warn('Auto-reconnexion échouée:', reloginErr);
+          }
+        }
+
+        // Si compte local présent, maintenir actif en local sans forcer la fermeture
+        if (this.currentUser) {
+          game.player.id = this.currentUser.id;
+          game.player.name = this.currentUser.username;
+          this.updateHeaderUI(true);
+          this.closeAuthModal();
+        } else {
+          this.clearSession();
+          this.openAuthModal(true);
+        }
       }
     } catch (e) {
       console.warn('Erreur vérification session multijoueur:', e);
-      // Si le serveur est momentanément inaccessible mais qu'un compte existe en local
+      // Serveur temporairement hors-ligne : préserver impérativement le compte local actif
       if (this.currentUser) {
+        game.player.id = this.currentUser.id;
+        game.player.name = this.currentUser.username;
         this.updateHeaderUI(true);
+        this.closeAuthModal();
       } else {
         this.openAuthModal(true);
       }
@@ -242,7 +280,7 @@ window.ProtecAuth = {
               <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Identifiant Directeur</label>
               <div class="relative">
                 <i data-lucide="user" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                <input type="text" id="auth-login-username" required placeholder="Ex: Cdt_Dupont" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                <input type="text" id="auth-login-username" required value="${localStorage.getItem('protec_last_login_username') || this.currentUser?.username || ''}" placeholder="Ex: Cdt_Dupont" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
               </div>
             </div>
 
@@ -250,7 +288,7 @@ window.ProtecAuth = {
               <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Mot de passe</label>
               <div class="relative">
                 <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                <input type="password" id="auth-login-password" required placeholder="••••••••" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                <input type="password" id="auth-login-password" required value="${localStorage.getItem('protec_last_login_password') || ''}" placeholder="••••••••" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
               </div>
             </div>
 
@@ -354,6 +392,8 @@ window.ProtecAuth = {
       this.currentUser = data.user;
       localStorage.setItem('protec_auth_token', data.token);
       localStorage.setItem('protec_user', JSON.stringify(data.user));
+      localStorage.setItem('protec_last_login_username', username);
+      localStorage.setItem('protec_last_login_password', password);
 
       game.player.id = data.user.id;
       game.player.name = data.user.username;
@@ -414,6 +454,8 @@ window.ProtecAuth = {
       this.currentUser = data.user;
       localStorage.setItem('protec_auth_token', data.token);
       localStorage.setItem('protec_user', JSON.stringify(data.user));
+      localStorage.setItem('protec_last_login_username', username);
+      localStorage.setItem('protec_last_login_password', password);
 
       game.player.id = data.user.id;
       game.player.name = data.user.username;

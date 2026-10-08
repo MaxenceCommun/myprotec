@@ -58,22 +58,34 @@ window.ProtecAdvancedModals = {
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            ${r.dailyTasks.map(t => `
-              <div class="p-3.5 rounded-2xl glass-card space-y-2 flex flex-col justify-between">
-                <div>
-                  <div class="flex justify-between items-center text-xs">
-                    <span class="font-bold text-slate-800">${t.title}</span>
-                    <span class="font-mono font-extrabold text-emerald-600">+${t.reward} €</span>
+            ${r.dailyTasks.map(t => {
+              const cur = t.current || 0;
+              const pct = Math.min(100, Math.round((cur / t.goal) * 100));
+              const canClaim = !t.done && (cur >= t.goal);
+
+              return `
+                <div class="p-3.5 rounded-2xl glass-card space-y-2 flex flex-col justify-between border ${canClaim ? 'border-emerald-300 ring-1 ring-emerald-300' : 'border-slate-200'}">
+                  <div>
+                    <div class="flex justify-between items-center text-xs">
+                      <span class="font-bold text-slate-800">${t.title}</span>
+                      <span class="font-mono font-extrabold text-emerald-600">+${t.reward} €</span>
+                    </div>
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                      <span>Progression</span>
+                      <span class="font-bold text-slate-600 font-mono">${cur} / ${t.goal}</span>
+                    </div>
+                    <div class="w-full bg-slate-200/60 h-2 rounded-full overflow-hidden mt-1">
+                      <div class="${t.done || canClaim ? 'bg-emerald-500' : 'bg-pc-blue'} h-full rounded-full transition-all duration-300" style="width: ${t.done ? '100%' : pct + '%'}"></div>
+                    </div>
                   </div>
-                  <div class="w-full bg-slate-200/60 h-1.5 rounded-full overflow-hidden mt-2">
-                    <div class="bg-pc-blue h-full rounded-full" style="width: ${t.done ? '100%' : '50%'}"></div>
-                  </div>
+                  <button onclick="window.ProtecAdvanced.claimTaskReward(window.game, '${t.id}', false)" 
+                    class="w-full py-1.5 rounded-xl text-xs font-bold transition ${t.done ? 'bg-slate-200/60 text-slate-400 cursor-not-allowed' : (canClaim ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow animate-bounce' : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed')}"
+                    ${!canClaim && !t.done ? 'disabled' : ''}>
+                    ${t.done ? 'Accompli ✓' : (canClaim ? 'Réclamer (+ ' + t.reward + ' €)' : 'En cours (' + cur + '/' + t.goal + ')')}
+                  </button>
                 </div>
-                <button onclick="window.ProtecAdvanced.claimTaskReward(window.game, '${t.id}', false)" class="w-full py-1.5 rounded-xl text-xs font-bold ${t.done ? 'bg-slate-200/50 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'} transition">
-                  ${t.done ? 'Accompli ✓' : 'Réclamer (+ ' + t.reward + ' €)'}
-                </button>
-              </div>
-            `).join('')}
+              `;
+            }).join('')}
           </div>
         </div>
 
@@ -81,19 +93,31 @@ window.ProtecAdvancedModals = {
         <div class="space-y-3">
           <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Défis de la Semaine</h4>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            ${r.weeklyTasks.map(w => `
-              <div class="p-4 rounded-2xl glass-card flex items-center justify-between gap-4">
-                <div class="flex-1 space-y-1">
-                  <span class="text-xs font-bold text-slate-800 block">${w.title}</span>
-                  <div class="flex items-center gap-2 text-[11px] text-slate-500">
-                    <span>Récompense : <strong class="text-emerald-700 font-mono">+${w.reward} €</strong></span>
+            ${r.weeklyTasks.map(w => {
+              const cur = w.current || 0;
+              const pct = Math.min(100, Math.round((cur / w.goal) * 100));
+              const canClaim = !w.done && (cur >= w.goal);
+
+              return `
+                <div class="p-4 rounded-2xl glass-card flex items-center justify-between gap-4 border ${canClaim ? 'border-emerald-300 ring-1 ring-emerald-300' : 'border-slate-200'}">
+                  <div class="flex-1 space-y-1.5">
+                    <span class="text-xs font-bold text-slate-800 block">${w.title}</span>
+                    <div class="flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Progression : <strong class="font-mono text-slate-700">${cur} / ${w.goal}</strong></span>
+                      <span>Gain : <strong class="text-emerald-700 font-mono">+${w.reward} €</strong></span>
+                    </div>
+                    <div class="w-full bg-slate-200/60 h-2 rounded-full overflow-hidden">
+                      <div class="${w.done || canClaim ? 'bg-emerald-500' : 'bg-pc-blue'} h-full rounded-full transition-all duration-300" style="width: ${w.done ? '100%' : pct + '%'}"></div>
+                    </div>
                   </div>
+                  <button onclick="window.ProtecAdvanced.claimTaskReward(window.game, '${w.id}', true)" 
+                    class="px-4 py-2 rounded-xl text-xs font-extrabold transition flex-shrink-0 ${w.done ? 'bg-slate-200/60 text-slate-400 cursor-not-allowed' : (canClaim ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow animate-bounce' : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed')}"
+                    ${!canClaim && !w.done ? 'disabled' : ''}>
+                    ${w.done ? 'Validé ✓' : (canClaim ? 'Réclamer (+ ' + w.reward + ' €)' : 'En cours (' + cur + '/' + w.goal + ')')}
+                  </button>
                 </div>
-                <button onclick="window.ProtecAdvanced.claimTaskReward(window.game, '${w.id}', true)" class="px-4 py-2 rounded-xl text-xs font-extrabold ${w.done ? 'bg-slate-200/50 text-slate-400' : 'bg-pc-blue text-white hover:bg-pc-blue-light'} shadow-sm transition">
-                  ${w.done ? 'Validé ✓' : 'Valider'}
-                </button>
-              </div>
-            `).join('')}
+              `;
+            }).join('')}
           </div>
         </div>
       </div>

@@ -237,8 +237,19 @@ window.ProtecAdvanced = {
     { id: 'pilotage', name: 'Conduite Urgence & Gyrophares', icon: '🚑', xpRequired: 30, desc: 'Permet de conduire le VPSP et VPC en intervention prioritaire.' },
     { id: 'radio', name: 'Opérateur Radio & PC', icon: '📻', xpRequired: 20, desc: 'Maîtrise parfaite des procédures SAMU 15 et transmissions CODIS.' },
     { id: 'nautique', name: 'Sauvetage Aquatique & Fleuve', icon: '🏊', xpRequired: 40, desc: 'Habilitation pour embarcation BLS sur fleuve et zones inondées.' },
-    { id: 'psy', name: 'Soutien Psychologique (CUMP)', icon: '🧠', xpRequired: 35, desc: 'Prise en charge du choc émotionnel des impliqués lors des crises.' },
-    { id: 'formateur', name: 'Formateur PSC / SST', icon: '🎓', xpRequired: 45, desc: 'Anime des sessions de gestes qui sauvent pour le grand public.' }
+    { id: 'communication', name: 'Communication & Médias (Photo/Vidéo)', icon: '📸', xpRequired: 25, desc: 'Photographe / Vidéaste d’antenne valorisant les interventions (+dons et candidatures).' },
+    
+    // Filière Aide & Écoute Psychologique (AEP)
+    { id: 'aep1', name: 'Aide & Écoute Psychologique 1 (AEP1)', icon: '🧠', xpRequired: 25, desc: 'Sensibilisation à l’AEP : posture d’écoute active, réconfort immédiat des impliqués et premiers secours émotionnels.' },
+    { id: 'aep2', name: 'Aide & Écoute Psychologique 2 (AEP2)', icon: '🫂', xpRequired: 45, reqSkill: 'aep1', desc: 'Prise en charge approfondie : deuil traumatique, defusing post-mission (réduit la fatigue équipage de 50%) et CAI en crise NOVI.' },
+    
+    // Filière Pédagogique & Formateurs Officiels (formations.protection-civile.org)
+    { id: 'formateur_psc', name: 'Formateur PSC (avec PIC F)', icon: '🎓', xpRequired: 35, desc: 'Pédagogie Initiale & Commune de Formateur. Habilité à certifier le grand public aux Gestes Qui Sauvent (GQS) et PSC1.' },
+    { id: 'formateur_ps', name: 'Formateur PS (Premiers Secours)', icon: '🚑', xpRequired: 45, reqSkill: 'formateur_psc', desc: 'Habilité à former les équipiers secouristes opérationnels aux diplômes PSE1 et PSE2.' },
+    { id: 'formateur_sst', name: 'Formateur SST (Secourisme Travail)', icon: '💼', xpRequired: 40, desc: 'Habilitation INRS pour animer les formations de Sauveteur Secouriste du Travail en entreprises.' },
+    { id: 'formateur_aep', name: 'Formateur AEP (Écoute Psycho)', icon: '🗣️', xpRequired: 45, reqSkill: 'aep2', desc: 'Habilité à former les bénévoles et partenaires aux modules d’Aide et Écoute Psychologique (AEP1 & AEP2).' },
+    { id: 'cef', name: 'CEF - Concepteur / Encadrant Formation', icon: '📋', xpRequired: 50, desc: 'Ingénierie pédagogique, conception des référentiels et coordination des équipes de formateurs d’antenne.' },
+    { id: 'formateur_de_formateur', name: 'Formateur de Formateurs (FdF)', icon: '👑', xpRequired: 65, desc: 'Grade pédagogique suprême de la Protection Civile : forme et certifie tous les formateurs de l’association (PSC, PS, SST, AEP).' }
   ],
 
   // 1. Initialisation de l'état étendu
@@ -360,10 +371,52 @@ window.ProtecAdvanced = {
     game.openModule('recompenses');
   },
 
+  // Calcul dynamique de la progression réelle des objectifs
+  updateTasksProgress(game) {
+    if (!game.rewards) return;
+
+    // Tâches quotidiennes
+    (game.rewards.dailyTasks || []).forEach(t => {
+      if (t.id === 'task-1') {
+        const activeOrDone = (game.missions || []).filter(m => ['ongoing', 'completed'].includes(m.status)).length;
+        t.current = Math.min(t.goal, (game.missionsLaunchedCount || 0) + activeOrDone);
+      } else if (t.id === 'task-2') {
+        const signedCount = (game.devis || []).filter(d => d.status === 'signed').length;
+        t.current = Math.min(t.goal, signedCount);
+      } else if (t.id === 'task-3') {
+        const allVehs = (game.stations || []).flatMap(s => s.vehicles || []);
+        const cleanVehs = allVehs.filter(v => !v.isBrokenDown && !v.needsRearming && (v.mechanical || 100) >= 60);
+        t.current = (allVehs.length > 0 && cleanVehs.length === allVehs.length) ? 1 : 0;
+      }
+    });
+
+    // Défis hebdomadaires
+    (game.rewards.weeklyTasks || []).forEach(w => {
+      if (w.id === 'w-task-1') {
+        const hours = (game.grants?.totalVolunteerHours || 0) + ((game.missions || []).filter(m => m.status === 'completed').length * 4);
+        w.current = Math.min(w.goal, hours);
+      } else if (w.id === 'w-task-2') {
+        const qualifiedCount = (game.volunteers || []).filter(v => ['PSE2', 'CE', 'CD'].includes(v.rank) || (v.skills && v.skills.length > 1)).length;
+        w.current = Math.min(w.goal, qualifiedCount);
+      }
+    });
+  },
+
   claimTaskReward(game, taskId, isWeekly = false) {
+    this.updateTasksProgress(game);
     const list = isWeekly ? game.rewards.weeklyTasks : game.rewards.dailyTasks;
     const task = list.find(t => t.id === taskId);
-    if (!task || task.done) return;
+    if (!task) return;
+
+    if (task.done) {
+      game.showToast('Déjà Récupéré', 'Cette récompense a déjà été obtenue.', 'blue');
+      return;
+    }
+
+    if (task.current < task.goal) {
+      game.showToast('Objectif Non Rempli', `Progression actuelle : ${task.current || 0} / ${task.goal}. Vous devez d’abord accomplir cet objectif !`, 'orange');
+      return;
+    }
 
     task.done = true;
     game.resources.money += task.reward;
@@ -371,7 +424,7 @@ window.ProtecAdvanced = {
 
     game.updateStatsUI();
     game.saveGame();
-    game.showToast('Objectif Accompli !', `+${task.reward} € versés à l’association !`, 'green');
+    game.showToast('Objectif Accompli !', `+${task.reward} € et +15 réputation versés à l’association !`, 'green');
     game.openModule('recompenses');
   },
 
@@ -465,6 +518,13 @@ window.ProtecAdvanced = {
     if (!v.skills) v.skills = [];
     if (v.skills.includes(skillId)) return;
 
+    // Vérification du prérequis
+    if (skill.reqSkill && !v.skills.includes(skill.reqSkill)) {
+      const prereq = this.skillsList.find(s => s.id === skill.reqSkill);
+      game.showToast('Prérequis Manquant', `${v.name} doit d’abord valider la compétence « ${prereq?.name || skill.reqSkill} ».`, 'orange');
+      return;
+    }
+
     if ((v.exp || 0) < skill.xpRequired) {
       game.showToast('Expérience insuffisante', `${v.name} a besoin de ${skill.xpRequired} XP pour valider cette qualification (XP actuel : ${v.exp || 0}).`, 'orange');
       return;
@@ -472,12 +532,15 @@ window.ProtecAdvanced = {
 
     v.exp -= skill.xpRequired;
     v.skills.push(skillId);
+    if (skillId.startsWith('formateur_') || skillId === 'formateur_de_formateur' || skillId === 'cef') {
+      v.isTrainer = true;
+    }
     v.moral = Math.min(100, (v.moral || 80) + 15);
 
     game.updateStatsUI();
     game.saveGame();
     game.showToast('Qualification Validée !', `${v.name} a obtenu la qualification « ${skill.name} » !`, 'green');
-    game.openModule('recrutement');
+    game.openModule('competences');
   },
 
   // Nomination au Bureau de l'Antenne

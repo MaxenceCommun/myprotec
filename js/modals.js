@@ -93,6 +93,23 @@ window.ProtecModals = {
     const s = game.logistics || { oxygenBottles: 10, aedPads: 8, woundKits: 14, cervicalCollars: 6 };
     return `
       <div class="space-y-6">
+        <!-- Bannière Matériel Opérationnel, Lots de Crise & Conditions de Travail -->
+        <div class="p-4 rounded-2xl bg-gradient-to-r from-blue-700 to-indigo-700 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+              📦
+            </div>
+            <div>
+              <h4 class="text-sm font-black leading-tight">Matériel Opérationnel, Lots de Crise & Équipements</h4>
+              <p class="text-xs text-blue-100 mt-0.5">Lots tronçonnage, pompage, éclairage, bâchage, hébergement, ravitaillement, soutien psycho et confort du personnel</p>
+            </div>
+          </div>
+          <button onclick="window.game.openModule('equipements')" class="px-4 py-2 rounded-xl text-xs font-black bg-white text-indigo-700 hover:bg-blue-50 shadow-md transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+            <span>Lots & Matériel</span>
+            <span>→</span>
+          </button>
+        </div>
+
         <!-- Section Pharmacie & Consommables -->
         <div>
           <div class="flex items-center justify-between mb-3">
@@ -406,45 +423,22 @@ window.ProtecModals = {
           </div>
         </div>
 
-        <!-- Paramètres Vitaux Mesurés -->
-        <div class="space-y-2">
-          <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Constantes Cliniques</h4>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div class="p-3 rounded-xl glass-card text-center">
-              <span class="text-[10px] text-slate-400 font-bold block">Fréquence Cardiaque</span>
-              <strong class="text-lg font-mono text-red-600">${pouls} <span class="text-xs">bpm</span></strong>
-            </div>
-            <div class="p-3 rounded-xl glass-card text-center">
-              <span class="text-[10px] text-slate-400 font-bold block">Tension Artérielle</span>
-              <strong class="text-lg font-mono text-pc-blue">${ta} <span class="text-xs">cmHg</span></strong>
-            </div>
-            <div class="p-3 rounded-xl glass-card text-center">
-              <span class="text-[10px] text-slate-400 font-bold block">Saturation O2</span>
-              <strong class="text-lg font-mono text-emerald-600">${spo2}%</strong>
-            </div>
-            <div class="p-3 rounded-xl glass-card text-center">
-              <span class="text-[10px] text-slate-400 font-bold block">Score Glasgow</span>
-              <strong class="text-lg font-mono text-slate-800">${glasgow}/15</strong>
-            </div>
-          </div>
-        </div>
-
-        <!-- Décision du Médecin Régulateur du SAMU 15 -->
+        <!-- Décision Opérationnelle avec la Régulation SAMU 15 -->
         <div class="p-5 rounded-2xl glass-card-orange space-y-3">
           <div class="flex items-center gap-2 text-pc-orange font-extrabold text-xs">
             <i data-lucide="phone-call" class="w-4 h-4"></i>
-            DÉCISION DU MÉDECIN RÉGULATEUR (CENTRE 15)
+            DÉCISION DE LA RÉGULATION MÉDICALE (CENTRE 15)
           </div>
-          <p class="text-xs text-slate-700">Choisissez l'orientation médicale convenue avec la régulation hospitalière :</p>
+          <p class="text-xs text-slate-700">Choisissez l'orientation convenue avec la régulation hospitalière :</p>
           
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-            <button onclick="window.ProtecModals.validateBilanDecision(window.game, '${mission.id}', '${vehicle?.id}', 'stay')" class="p-3.5 rounded-2xl glass-card text-left transition space-y-1 hover:brightness-105">
+            <button onclick="window.ProtecModals.validateBilanDecision(window.game, '${mission.id}', '${vehicle?.id}', 'stay')" class="p-3.5 rounded-2xl glass-card text-left transition space-y-1 hover:brightness-105 cursor-pointer">
               <span class="font-extrabold text-xs text-emerald-700 block">✓ Laissé sur place après soins</span>
-              <span class="text-[11px] text-slate-500 block">État stabilisé, avis médical favorable. Clôture de l'intervention.</span>
+              <span class="text-[11px] text-slate-500 block">État stabilisé, avis médical favorable. Fin de mission et retour VPSP disponible.</span>
             </button>
-            <button onclick="window.ProtecModals.validateBilanDecision(window.game, '${mission.id}', '${vehicle?.id}', 'evac')" class="p-3.5 rounded-2xl bg-gradient-to-r from-red-600 to-pc-orange text-white hover:brightness-110 shadow-lg text-left transition space-y-1">
-              <span class="font-extrabold text-xs block">🚨 Évacuation vers Urgences CHU (Statut 4)</span>
-              <span class="text-[11px] text-white/90 block">Transport sanitaire sous gyrophare vers le service des urgences le plus proche.</span>
+            <button onclick="window.ProtecModals.validateBilanDecision(window.game, '${mission.id}', '${vehicle?.id}', 'evac')" class="p-3.5 rounded-2xl bg-gradient-to-r from-red-600 to-pc-orange text-white hover:brightness-110 shadow-lg text-left transition space-y-1 cursor-pointer">
+              <span class="font-extrabold text-xs block">🚨 Évacuation vers Hôpital / CHU de secteur (Statut 4)</span>
+              <span class="text-[11px] text-white/90 block">Transport sanitaire sous gyrophare vers le service des urgences hospitalières de secteur.</span>
             </button>
           </div>
         </div>

@@ -261,7 +261,7 @@ window.ProtecPersonnel = {
   },
 
   // Déduction de fatigue et mise à jour psychologique lors d'une mission
-  applyMissionExertion(volunteer, mission) {
+  applyMissionExertion(volunteer, mission, hasAep2 = false) {
     const profile = this.socialProfiles[volunteer.profilSocial] || this.socialProfiles.benevole;
     let drain = 20 * (profile.energyDrainRatio || 1);
 
@@ -273,6 +273,9 @@ window.ProtecPersonnel = {
     // Trait dynamique récupère mieux
     if (volunteer.trait === 'dynamique') drain *= 0.75;
     if (volunteer.trait === 'sensible' && mission.type === 'samu') drain *= 1.25;
+
+    // Soutien et débriefing psychologique AEP2 (defusing d'équipage : -50% de fatigue morale et physique)
+    if (hasAep2) drain *= 0.50;
 
     volunteer.energy = Math.max(0, Math.round(volunteer.energy - drain));
     volunteer.missionsCount = (volunteer.missionsCount || 0) + 1;

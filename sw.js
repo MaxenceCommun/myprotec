@@ -9,7 +9,7 @@
  * 4. Gestion Web Push Notifications & interactions système
  */
 
-const CACHE_VERSION = 'myprotec-pwa-v1.2.0';
+const CACHE_VERSION = 'myprotec-pwa-v1.3.0';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 const TILES_CACHE = 'myprotec-tiles-v1';
 const MAX_TILE_ENTRIES = 250; // Limite pour ne pas saturer le stockage
@@ -39,7 +39,14 @@ const PRECACHE_ASSETS = [
   '/js/social.js',
   '/js/admin.js',
   '/js/locaux.js',
-  '/js/pwa.js'
+  '/js/finances.js',
+  '/js/equipements.js',
+  '/js/cump.js',
+  '/js/pwa.js',
+  '/js/audio.js',
+  '/js/specialites.js',
+  '/js/crise_logistique.js',
+  '/js/offline_engine.js'
 ];
 
 // 1. INSTALLATION : Pré-mise en cache des ressources critiques
@@ -235,7 +242,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// 6. MESSAGES INTERNES
+// 6. MESSAGES INTERNES & NOTIFICATIONS D'ARRIÈRE-PLAN HORS-LIGNE
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
@@ -243,5 +250,22 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
     const { title, options } = event.data;
     self.registration.showNotification(title, options);
+  }
+  if (event.data && event.data.type === 'SCHEDULE_OFFLINE_ALERTS') {
+    const alerts = event.data.alerts || [];
+    alerts.forEach(item => {
+      setTimeout(() => {
+        self.registration.showNotification(item.title, {
+          body: item.body,
+          icon: 'logo_myprotec_icon.png',
+          badge: 'logo_myprotec_icon.png',
+          tag: item.tag || `offline-${Date.now()}`,
+          vibrate: [300, 150, 300, 150, 450],
+          renotify: true,
+          requireInteraction: true,
+          data: item.data || { url: '/' }
+        });
+      }, item.delayMs);
+    });
   }
 });

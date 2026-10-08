@@ -1,17 +1,20 @@
 /**
  * PROTEC LIVE - GESTION DES PÔLES OPÉRATIONNELS D'ANTENNE
- * Permet d'organiser l'antenne en 4 pôles majeurs :
+ * Permet d'organiser l'antenne en pôles majeurs :
  * 1. Pôle Opérationnel (Secours, DPS, SAMU, Pompiers)
  * 2. Pôle Logistique & Parc Véhicules (Maintenance, Ravitaillement, Pharmacie)
  * 3. Pôle Communication & Événementiel (Visibilité, Réseaux, Recrutement)
  * 4. Pôle Mécénat, Partenariats & Finances (Subventions, Dons, Conventions d'État)
  * 
- * Chaque pôle a un nom personnalisable, un responsable nommé et une équipe affectée.
- * L'avancement (XP et compétences) est différencié : les salariés progressent plus régulièrement
- * grâce à leur temps plein, tandis que les bénévoles progressent par engagement et passion.
+ * MODIFICATIONS LIBRES À TOUT MOMENT :
+ * - Titre du pôle, intitulé des missions, description, bonus d'efficacité, icône et couleur
+ * - Création de nouveaux pôles personnalisés à la demande
+ * - Nomination de responsable et assignation de bénévoles / salariés
  */
 
 window.ProtecPoles = {
+  editingPoleId: null,
+
   defaultPoles: [
     {
       id: 'operationnel',
@@ -34,7 +37,7 @@ window.ProtecPoles = {
       icon: 'package-check',
       color: 'teal',
       desc: 'Entretien de la flotte VPSP/VTU/VL, gestion des stocks d’Oxygène, électrodes DAE et désinfections.',
-      missionLabel: 'Maintenance, Pharmacie & Bionettoyage',
+      missionLabel: 'Maintenance, Pharmacie & Réarmement Flotte',
       responsibleId: null,
       assignedVolunteerIds: [],
       xpMultiplierBenevole: 1.0,
@@ -75,7 +78,6 @@ window.ProtecPoles = {
   injectState(game) {
     if (!game.poles || !Array.isArray(game.poles) || game.poles.length === 0) {
       game.poles = JSON.parse(JSON.stringify(this.defaultPoles));
-      // Affectation initiale des bénévoles de départ si aucun pôle n'est assigné
       if (game.volunteers && game.volunteers.length > 0) {
         game.volunteers.forEach((v, idx) => {
           const poleIdx = idx % game.poles.length;
@@ -84,7 +86,6 @@ window.ProtecPoles = {
         });
       }
     } else {
-      // Vérification de cohérence
       this.defaultPoles.forEach(def => {
         if (!game.poles.some(p => p.id === def.id)) {
           game.poles.push(JSON.parse(JSON.stringify(def)));
@@ -93,18 +94,74 @@ window.ProtecPoles = {
     }
   },
 
-  // Renommer un pôle
-  renamePole(game, poleId, newName) {
+  // Ouvrir l'éditeur de pôle (Modification du titre, missions, description, etc.)
+  openEditModal(game, poleId) {
+    this.editingPoleId = poleId;
+    this.renderModal(game);
+  },
+
+  // Fermer l'éditeur de pôle
+  closeEditModal(game) {
+    this.editingPoleId = null;
+    this.renderModal(game);
+  },
+
+  // Sauvegarder les modifications du pôle
+  savePoleEdits(game, poleId) {
     const pole = game.poles.find(p => p.id === poleId);
     if (!pole) return;
-    const clean = (newName || '').trim();
-    if (clean.length < 3) {
-      game.showToast('Nom trop court', 'Le nom du pôle doit comporter au moins 3 caractères.', 'orange');
-      return;
+
+    const nameInput = document.getElementById('edit-pole-name');
+    const missionInput = document.getElementById('edit-pole-mission');
+    const descInput = document.getElementById('edit-pole-desc');
+    const bonusInput = document.getElementById('edit-pole-bonus');
+    const colorInput = document.getElementById('edit-pole-color');
+
+    if (nameInput && nameInput.value.trim().length >= 2) {
+      pole.name = nameInput.value.trim();
     }
-    pole.name = clean;
+    if (missionInput && missionInput.value.trim()) {
+      pole.missionLabel = missionInput.value.trim();
+    }
+    if (descInput && descInput.value.trim()) {
+      pole.desc = descInput.value.trim();
+    }
+    if (bonusInput && bonusInput.value.trim()) {
+      pole.bonusDesc = bonusInput.value.trim();
+    }
+    if (colorInput) {
+      pole.color = colorInput.value;
+    }
+
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+
     game.saveGame();
-    game.showToast('Pôle Renommé', `Le pôle s'appelle désormais « ${clean} ».`, 'green');
+    game.showToast('Pôle Modifié', `Les modifications du « ${pole.name} » ont été enregistrées avec succès.`, 'green');
+    this.editingPoleId = null;
+    this.renderModal(game);
+  },
+
+  // Ajouter un nouveau pôle personnalisé
+  addNewCustomPole(game) {
+    const id = `pole_custom_${Date.now()}`;
+    const newPole = {
+      id: id,
+      type: 'custom',
+      name: 'Nouveau Pôle Opérationnel',
+      icon: 'sparkles',
+      color: 'purple',
+      desc: 'Définissez la mission et les objectifs spécifiques de cette section de l’antenne.',
+      missionLabel: 'Missions Personnalisées',
+      responsibleId: null,
+      assignedVolunteerIds: [],
+      xpMultiplierBenevole: 1.1,
+      xpMultiplierSalarie: 1.4,
+      bonusDesc: '+10% d’efficacité sur les missions associées'
+    };
+    game.poles.push(newPole);
+    game.saveGame();
+    game.showToast('Nouveau Pôle Créé', 'Personnalisez son titre, ses missions et affectez ses membres.', 'green');
+    this.editingPoleId = id;
     this.renderModal(game);
   },
 
@@ -118,6 +175,7 @@ window.ProtecPoles = {
       const v = game.volunteers.find(vol => vol.id === volunteerId);
       if (v) v.assignedPoleId = pole.id;
     }
+    if (window.ProtecAudio) window.ProtecAudio.playRadioBeep();
     game.saveGame();
     const resp = game.volunteers.find(v => v.id === volunteerId);
     game.showToast('Responsable Nommé', `${resp ? resp.name : 'Poste vacant'} est à la tête du ${pole.name}.`, 'green');
@@ -129,7 +187,6 @@ window.ProtecPoles = {
     const v = game.volunteers.find(vol => vol.id === volunteerId);
     if (!v) return;
 
-    // Retirer des anciens pôles
     game.poles.forEach(p => {
       p.assignedVolunteerIds = p.assignedVolunteerIds.filter(id => id !== volunteerId);
       if (p.responsibleId === volunteerId && p.id !== targetPoleId) {
@@ -143,6 +200,7 @@ window.ProtecPoles = {
         targetPole.assignedVolunteerIds.push(volunteerId);
       }
       v.assignedPoleId = targetPole.id;
+      if (window.ProtecAudio) window.ProtecAudio.playClickSound();
       game.showToast('Affectation Pôle', `${v.name} a rejoint le ${targetPole.name}.`, 'blue');
     } else {
       v.assignedPoleId = null;
@@ -152,7 +210,7 @@ window.ProtecPoles = {
     this.renderModal(game);
   },
 
-  // Rendu de l'interface du modal Pôles d'Antenne
+  // Rendu de l'interface
   renderModal(game) {
     this.injectState(game);
     const body = document.getElementById('modal-body');
@@ -163,68 +221,128 @@ window.ProtecPoles = {
     if (!body || !title) return;
 
     title.textContent = 'Organisation des Pôles d’Antenne';
-    subtitle.textContent = 'Structure interne, responsables désignés et répartition des personnels';
+    subtitle.textContent = 'Personnalisation libre des missions, titres de pôles, responsables et effectifs';
     icon.setAttribute('data-lucide', 'network');
+
+    const editingPole = this.editingPoleId ? game.poles.find(p => p.id === this.editingPoleId) : null;
 
     body.innerHTML = `
       <div class="space-y-6">
-        <!-- Bannière explicative -->
-        <div class="p-4 rounded-2xl glass-card space-y-1.5 border border-indigo-200">
-          <div class="flex items-center justify-between">
+        
+        <!-- MODAL D'ÉDITION DU PÔLE (Si activé) -->
+        ${editingPole ? `
+          <div class="p-5 rounded-3xl bg-slate-900 text-white shadow-2xl border-2 border-indigo-400 space-y-4 animate-in fade-in">
+            <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+              <div class="flex items-center gap-2.5">
+                <span class="text-xl">✏️</span>
+                <h4 class="text-sm font-black text-amber-300">Modifier le Pôle : ${editingPole.name}</h4>
+              </div>
+              <button onclick="window.ProtecPoles.closeEditModal(window.game)" class="text-xs text-slate-400 hover:text-white transition">✕ Annuler</button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div class="space-y-1">
+                <label class="font-bold text-slate-300">Titre du Pôle :</label>
+                <input id="edit-pole-name" type="text" value="${editingPole.name}" class="w-full p-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold text-xs focus:border-amber-400 outline-none" />
+              </div>
+
+              <div class="space-y-1">
+                <label class="font-bold text-slate-300">Missions attribuées (Sous-titre) :</label>
+                <input id="edit-pole-mission" type="text" value="${editingPole.missionLabel || ''}" class="w-full p-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:border-amber-400 outline-none" />
+              </div>
+
+              <div class="space-y-1 sm:col-span-2">
+                <label class="font-bold text-slate-300">Description du Rôle Opérationnel :</label>
+                <textarea id="edit-pole-desc" rows="2" class="w-full p-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:border-amber-400 outline-none">${editingPole.desc || ''}</textarea>
+              </div>
+
+              <div class="space-y-1 sm:col-span-2">
+                <label class="font-bold text-slate-300">Bonus & Impact Opérationnel :</label>
+                <input id="edit-pole-bonus" type="text" value="${editingPole.bonusDesc || ''}" class="w-full p-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:border-amber-400 outline-none" />
+              </div>
+
+              <div class="space-y-1">
+                <label class="font-bold text-slate-300">Thème Couleur :</label>
+                <select id="edit-pole-color" class="w-full p-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs outline-none">
+                  <option value="blue" ${editingPole.color === 'blue' ? 'selected' : ''}>Bleu Protection Civile</option>
+                  <option value="teal" ${editingPole.color === 'teal' ? 'selected' : ''}>Sarcelle Logistique</option>
+                  <option value="indigo" ${editingPole.color === 'indigo' ? 'selected' : ''}>Indigo Communication</option>
+                  <option value="amber" ${editingPole.color === 'amber' ? 'selected' : ''}>Ambre Mécénat / Social</option>
+                  <option value="purple" ${editingPole.color === 'purple' ? 'selected' : ''}>Violet Spécialités</option>
+                  <option value="emerald" ${editingPole.color === 'emerald' ? 'selected' : ''}>Émeraude Formation</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button onclick="window.ProtecPoles.closeEditModal(window.game)" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800 transition">Annuler</button>
+              <button onclick="window.ProtecPoles.savePoleEdits(window.game, '${editingPole.id}')" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:brightness-110 transition flex items-center gap-1.5">
+                <i data-lucide="check" class="w-4 h-4"></i>
+                Enregistrer les Modifications
+              </button>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Bannière explicative & bouton création de pôle -->
+        <div class="p-4 rounded-2xl glass-card space-y-2 border border-indigo-200">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <span class="text-xs font-black uppercase text-pc-blue flex items-center gap-1.5">
               <i data-lucide="layers" class="w-4 h-4"></i> Fonctionnement des Pôles
             </span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue/10 text-pc-blue">
-              ${game.volunteers.length} effectifs répartis
-            </span>
+            <div class="flex items-center gap-2">
+              <button onclick="window.ProtecPoles.addNewCustomPole(window.game)" class="px-3 py-1 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition flex items-center gap-1">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                + Créer un Pôle
+              </button>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue/10 text-pc-blue">
+                ${game.volunteers.length} effectifs
+              </span>
+            </div>
           </div>
           <p class="text-xs text-slate-600 leading-relaxed">
-            Organisez votre antenne selon 4 spécialités. Chaque pôle confère des bonus d’efficacité. Les salariés permanents progressent plus vite en compétences professionnelles (+40% XP), tandis que les bénévoles s’épanouissent par les missions terrain.
+            Vous pouvez <strong>modifier à tout moment</strong> le titre, les missions et les bonus de chaque pôle via le bouton « Modifier ». Les salariés permanents bénéficient d'un boost de formation, tandis que les bénévoles s’épanouissent selon leurs affinités.
           </p>
-          <div class="pt-2 border-t border-indigo-100 flex justify-end">
-            <button onclick="if(window.ProtecPersonnel) window.ProtecPersonnel.openSalarieManagementModal(window.game);" class="px-3.5 py-1.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition flex items-center gap-1.5">
-              <i data-lucide="briefcase" class="w-3.5 h-3.5"></i>
-              Gérer les Salariés & Code du Travail (Heures & Repos)
-            </button>
-          </div>
         </div>
 
-        <!-- Grille des 4 Pôles -->
+        <!-- Grille des Pôles -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           ${game.poles.map(p => {
             const leader = game.volunteers.find(v => v.id === p.responsibleId);
             const members = game.volunteers.filter(v => p.assignedVolunteerIds.includes(v.id));
 
             return `
-              <div class="p-4 rounded-2xl glass-card space-y-4 border border-white/80 shadow-sm flex flex-col justify-between">
+              <div class="p-4 rounded-2xl glass-card space-y-4 border border-white/80 shadow-sm flex flex-col justify-between hover:shadow-md transition">
                 <div class="space-y-3">
-                  <!-- Header Pôle avec Renommage -->
+                  <!-- Header Pôle avec Bouton Modifier Complet -->
                   <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-2">
-                      <div class="w-8 h-8 rounded-xl bg-${p.color}-100 text-${p.color}-700 flex items-center justify-center font-bold">
-                        <i data-lucide="${p.icon}" class="w-4 h-4"></i>
+                      <div class="w-9 h-9 rounded-xl bg-${p.color || 'blue'}-100 text-${p.color || 'blue'}-700 flex items-center justify-center font-bold">
+                        <i data-lucide="${p.icon || 'shield'}" class="w-4 h-4"></i>
                       </div>
                       <div>
                         <h4 class="text-xs font-black text-slate-900">${p.name}</h4>
-                        <span class="text-[10px] text-slate-400 font-semibold">${p.missionLabel}</span>
+                        <span class="text-[10px] text-slate-400 font-semibold">${p.missionLabel || 'Missions'}</span>
                       </div>
                     </div>
-                    <button onclick="const n = prompt('Renommer ce pôle :', '${p.name}'); if(n) window.ProtecPoles.renamePole(window.game, '${p.id}', n);" class="p-1.5 rounded-lg text-slate-400 hover:text-pc-blue hover:bg-slate-100 transition" title="Renommer le pôle">
-                      <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                    
+                    <button onclick="window.ProtecPoles.openEditModal(window.game, '${p.id}')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition flex items-center gap-1 border border-indigo-200" title="Modifier le titre, les missions et descriptions">
+                      <i data-lucide="pencil" class="w-3 h-3"></i>
+                      <span>Modifier</span>
                     </button>
                   </div>
 
-                  <p class="text-xs text-slate-600">${p.desc}</p>
+                  <p class="text-xs text-slate-600 leading-normal">${p.desc || ''}</p>
                   
                   <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-[10px] text-slate-700 font-semibold flex items-center gap-1.5">
-                    <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-500"></i>
-                    <span>${p.bonusDesc}</span>
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-500 flex-shrink-0"></i>
+                    <span>${p.bonusDesc || 'Bonus opérationnel actif'}</span>
                   </div>
 
                   <!-- Responsable du Pôle -->
                   <div class="p-3 rounded-xl bg-slate-100/70 space-y-1.5">
                     <div class="flex items-center justify-between text-[11px]">
-                      <span class="font-bold text-slate-500 uppercase text-[9px]">Responsable du pôle :</span>
+                      <span class="font-bold text-slate-500 uppercase text-[9px]">Responsable désigné :</span>
                       <span class="font-black text-slate-800">${leader ? leader.name : 'Poste Vacant'}</span>
                     </div>
                     <select onchange="window.ProtecPoles.setPoleLeader(window.game, '${p.id}', this.value)" class="w-full text-xs p-1.5 rounded-lg border border-slate-200 glass-input font-medium">
@@ -251,11 +369,11 @@ window.ProtecPoles = {
                             <span>${m.avatar || '🙋'}</span>
                             <div>
                               <div class="font-bold text-slate-800">${m.name}</div>
-                              <div class="text-[9px] text-slate-400 font-medium">${m.rank} • ${m.dispoType === 'salarié' ? '👔 Salarié permanent' : '🤝 Bénévole'}</div>
+                              <div class="text-[9px] text-slate-400 font-medium">${m.rank} • ${m.dispoType === 'salarié' ? '👔 Salarié' : '🤝 Bénévole'}</div>
                             </div>
                           </div>
                           <span class="px-2 py-0.5 rounded text-[9px] font-black ${m.dispoType === 'salarié' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}">
-                            ${m.id === p.responsibleId ? 'Chef' : (m.dispoType === 'salarié' ? '+40% XP' : 'Membre')}
+                            ${m.id === p.responsibleId ? 'Responsable' : (m.dispoType === 'salarié' ? '+40% XP' : 'Membre')}
                           </span>
                         </div>
                       `).join('')}

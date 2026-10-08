@@ -38,19 +38,23 @@ window.ProtecAdmin = {
     this.activeTab = tab;
     const tabPlayersBtn = document.getElementById('admin-tab-players-btn');
     const tabArchivesBtn = document.getElementById('admin-tab-archives-btn');
+    const tabMissionsBtn = document.getElementById('admin-tab-missions-btn');
     const viewPlayers = document.getElementById('admin-view-players');
     const viewArchives = document.getElementById('admin-view-archives');
+    const viewMissions = document.getElementById('admin-view-missions');
 
-    if (tab === 'joueurs') {
-      if (tabPlayersBtn) tabPlayersBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm';
-      if (tabArchivesBtn) tabArchivesBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100';
-      if (viewPlayers) viewPlayers.classList.remove('hidden');
-      if (viewArchives) viewArchives.classList.add('hidden');
-    } else {
-      if (tabPlayersBtn) tabPlayersBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100';
-      if (tabArchivesBtn) tabArchivesBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm';
-      if (viewPlayers) viewPlayers.classList.add('hidden');
-      if (viewArchives) viewArchives.classList.remove('hidden');
+    const defaultClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition';
+    const activeClass = 'px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition';
+
+    if (tabPlayersBtn) tabPlayersBtn.className = (tab === 'joueurs' ? activeClass : defaultClass);
+    if (tabArchivesBtn) tabArchivesBtn.className = (tab === 'archives' ? activeClass : defaultClass);
+    if (tabMissionsBtn) tabMissionsBtn.className = (tab === 'missions' ? activeClass : defaultClass);
+
+    if (viewPlayers) viewPlayers.classList.toggle('hidden', tab !== 'joueurs');
+    if (viewArchives) viewArchives.classList.toggle('hidden', tab !== 'archives');
+    if (viewMissions) viewMissions.classList.toggle('hidden', tab !== 'missions');
+
+    if (tab === 'archives') {
       this.loadResetArchives();
     }
   },
@@ -454,13 +458,16 @@ window.ProtecAdmin = {
           </div>
         </div>
 
-        <!-- Onglets Directeurs / Archives de Sauvegarde -->
+        <!-- Onglets Directeurs / Archives / Déclencheur Missions -->
         <div class="flex items-center gap-2 mb-3 border-b border-slate-200/80 pb-2 flex-shrink-0">
           <button id="admin-tab-players-btn" onclick="window.ProtecAdmin.switchTab('joueurs')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition">
             👥 Directeurs & Comptes
           </button>
           <button id="admin-tab-archives-btn" onclick="window.ProtecAdmin.switchTab('archives')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5">
             📦 Archives & Remises à Zéro
+          </button>
+          <button id="admin-tab-missions-btn" onclick="window.ProtecAdmin.switchTab('missions')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5">
+            🚀 Déclencheur de Missions (Tests)
           </button>
         </div>
 
@@ -533,8 +540,597 @@ window.ProtecAdmin = {
           </div>
         </div>
 
+        <!-- Vue 3 : Déclencheur Universel de Missions (Tests & Sandbox) -->
+        <div id="admin-view-missions" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4">
+          <div class="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex items-center justify-between">
+            <div>
+              <span class="font-extrabold block">🛠️ Outil de Recette & Simulation Opérationnelle</span>
+              <span class="text-[11px] text-indigo-700">Déclenchez instantanément n'importe quel type de mission sur la carte pour tester l'engagement, les alertes, les effectifs et les lots.</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <!-- 1. DPS PAPS -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">DPS PAPS (2 pers.)</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-blue-100 text-pc-blue">Brocante</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Poste à pied modeste, idéal pour début de partie sans véhicule.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('dps_paps')" class="w-full py-2 rounded-xl text-xs font-black bg-pc-blue text-white hover:bg-pc-blue-light transition">
+                Générer PAPS
+              </button>
+            </div>
+
+            <!-- 2. DPS Moyen PE -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">DPS-PE (4 sec. + VPSP)</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-blue-100 text-pc-blue">Tournoi</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Dispositif standard avec 1 ambulance et 1 Chef d'Équipe.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('dps_pe')" class="w-full py-2 rounded-xl text-xs font-black bg-pc-blue text-white hover:bg-pc-blue-light transition">
+                Générer DPS-PE
+              </button>
+            </div>
+
+            <!-- 3. DPS Grand Rassemblement GE -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">DPS-GE (10 sec. + 2 VPSP)</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700">Festival</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Grande envergure nécessitant Chef de Dispositif et Lot C.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('dps_ge')" class="w-full py-2 rounded-xl text-xs font-black bg-purple-600 text-white hover:bg-purple-700 transition">
+                Générer DPS-GE
+              </button>
+            </div>
+
+            <!-- 4. SAMU 15 -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Urgence SAMU 15</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-pc-orange">Départ Réflexe</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Malaise grave à domicile ou détresse respiratoire régulée 15.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('samu')" class="w-full py-2 rounded-xl text-xs font-black bg-pc-orange text-white hover:brightness-110 transition">
+                Déclencher SAMU 15
+              </button>
+            </div>
+
+            <!-- 5. Pompiers SDIS -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Garde SDIS 18</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700">Renfort CODIS</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Accident de circulation carambolage ou renfort caserne.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('pompiers')" class="w-full py-2 rounded-xl text-xs font-black bg-red-600 text-white hover:bg-red-700 transition">
+                Déclencher SDIS
+              </button>
+            </div>
+
+            <!-- 6. Crise NOVI -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Plan NOVI / Catastrophe</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-800 animate-pulse">ORSEC</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Accident collectif ferroviaire, PMA, chaîne de tri et noria.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('crise_novi')" class="w-full py-2 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-rose-700 text-white hover:brightness-110 transition">
+                Déclencher Plan NOVI
+              </button>
+            </div>
+
+            <!-- 7. Alerte CUMP & CAI -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Alerte CUMP & CAI</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700">Soutien Psy</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Convention CUMP : montage sous 2h d'un Centre d'Accueil des Impliqués.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('cump_cai')" class="w-full py-2 rounded-xl text-xs font-black bg-purple-700 text-white hover:bg-purple-800 transition">
+                Déclencher CAI CUMP
+              </button>
+            </div>
+
+            <!-- 8. Crise Ferroviaire SNCF -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Convention SNCF Réseau</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">TGV Bloqué</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Rupture caténaire et déploiement CHU en gare.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('sncf')" class="w-full py-2 rounded-xl text-xs font-black bg-amber-600 text-white hover:bg-amber-700 transition">
+                Déclencher Préalerte SNCF
+              </button>
+            </div>
+
+            <!-- 9. Maraude Sociale -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Maraude Sociale 115</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700">Pôle Social</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Tournée de nuit avec boissons chaudes et duvets.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('social')" class="w-full py-2 rounded-xl text-xs font-black bg-purple-600 text-white hover:bg-purple-700 transition">
+                Lancer Maraude
+              </button>
+            </div>
+
+            <!-- 10. Formation Grand Public -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Formation PSC1 / SST</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">Pédagogie</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Session payante grand public avec formateurs de l'antenne.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('formation')" class="w-full py-2 rounded-xl text-xs font-black bg-emerald-600 text-white hover:bg-emerald-700 transition">
+                Ouvrir Session Formation
+              </button>
+            </div>
+
+            <!-- 11. Météo Crues / Inondations -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Alerte Intempéries Météo</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-800">Pompage / Crues</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Intervention motopompes et reconnaissance de voiries inondées.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('meteo')" class="w-full py-2 rounded-xl text-xs font-black bg-sky-600 text-white hover:bg-sky-700 transition">
+                Générer Alerte Météo
+              </button>
+            </div>
+
+            <!-- 12. Devis DPS Immédiat -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Nouvelle Demande Devis</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">Finances</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Sollicitation par une mairie ou un club avec dimensionnement libre.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('devis')" class="w-full py-2 rounded-xl text-xs font-black bg-amber-500 text-white hover:bg-amber-600 transition">
+                Recevoir un Devis
+              </button>
+            </div>
+
+            <!-- 13. Aléa de Sécurité Bâtiment -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Incident Sécurité Bâtiment</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800">Aléa / Risque</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Déclenche une tentative de vol ou de dégradation pour tester vos défenses.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('securite')" class="w-full py-2 rounded-xl text-xs font-black bg-rose-600 text-white hover:bg-rose-700 transition">
+                Simuler Effraction / Vol
+              </button>
+            </div>
+
+            <!-- 14. Livraison Rapide des Chantiers -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Livrer les Chantiers</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-teal-100 text-teal-800">Locaux</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Achève instantanément tous les travaux d'aménagement de pièces en cours.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('finish_works')" class="w-full py-2 rounded-xl text-xs font-black bg-teal-600 text-white hover:bg-teal-700 transition">
+                Achever Tous les Travaux
+              </button>
+            </div>
+
+            <!-- 15. Scénario Réel : Recherche Disparu Gendarmerie -->
+            <div class="p-3.5 rounded-2xl glass-card border border-indigo-200 bg-indigo-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Recherche Gendarmerie</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-800">Drone / Cyno</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Battue en forêt : réquisition PC, télépilote drone thermique, chiens et 4x4.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_recherche_disparu')" class="w-full py-2 rounded-xl text-xs font-black bg-indigo-600 text-white hover:bg-indigo-700 transition">
+                Déclencher Battue Gendarmerie
+              </button>
+            </div>
+
+            <!-- 16. Scénario Réel : Crash Aérien & CAI CUMP -->
+            <div class="p-3.5 rounded-2xl glass-card border border-rose-200 bg-rose-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Crash Aérien & CUMP</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 animate-pulse">50 Impliqués</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Plan catastrophe : CAI sous astreinte CUMP, secrétariat SINUS et réconfort.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_crash_aerien')" class="w-full py-2 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-rose-700 text-white hover:brightness-110 transition">
+                Déclencher Crash Aérien CAI
+              </button>
+            </div>
+
+            <!-- 17. Scénario Réel : Incendie EHPAD -->
+            <div class="p-3.5 rounded-2xl glass-card border border-amber-200 bg-amber-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Incendie EHPAD</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">Évacuation</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Évacuation sanitaire collective : noria d'ambulances VPSP et transport VTP.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_incendie_ehpad')" class="w-full py-2 rounded-xl text-xs font-black bg-amber-600 text-white hover:bg-amber-700 transition">
+                Déclencher Incendie EHPAD
+              </button>
+            </div>
+
+            <!-- 18. Scénario Réel : Manifestation Étudiante SDIS -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Manifestation & Garde SDIS</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-700">Préalerte J-1</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Astreinte H-12 et renfort VPSP en caserne pour tension urbaine.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_manifestation_etudiante')" class="w-full py-2 rounded-xl text-xs font-black bg-slate-800 text-white hover:bg-slate-900 transition">
+                Déclencher Garde Manif
+              </button>
+            </div>
+
+            <!-- 19. Scénario Réel : Vigilance Canicule SNCF -->
+            <div class="p-3.5 rounded-2xl glass-card border border-sky-200 bg-sky-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Canicule SNCF Gares</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-800">Convention</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Distribution d'eau et brumisateurs en gare et voies lors de blocages TGV.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_canicule_sncf')" class="w-full py-2 rounded-xl text-xs font-black bg-sky-600 text-white hover:bg-sky-700 transition">
+                Déclencher Canicule SNCF
+              </button>
+            </div>
+
+            <!-- 20. Scénario Réel : Tempête Alerte Rouge -->
+            <div class="p-3.5 rounded-2xl glass-card border border-red-300 bg-red-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Tempête Alerte Rouge</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-800">Interdépartemental</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Renforts 10 départements : CHU isolé, tronçonnage, bâchage et CHU.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_tempete_rouge')" class="w-full py-2 rounded-xl text-xs font-black bg-red-700 text-white hover:bg-red-800 transition">
+                Déclencher Tempête Rouge
+              </button>
+            </div>
+
+            <!-- 21. Scénario Réel : Grand Froid & Verglas -->
+            <div class="p-3.5 rounded-2xl glass-card border border-cyan-200 bg-cyan-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Grand Froid : 2 VPSP SDIS</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-cyan-100 text-cyan-800">Verglas / SUAP</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Chutes et carambolages : engagement de 2 ambulances en renfort pompiers.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_grand_froid')" class="w-full py-2 rounded-xl text-xs font-black bg-cyan-700 text-white hover:bg-cyan-800 transition">
+                Déclencher Grand Froid (2 VPSP)
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     `;
     document.body.appendChild(div);
+  },
+
+  // Déclencheur universel de missions pour test
+  triggerTestMission(type) {
+    const game = window.game;
+    if (!game) return;
+    const base = game.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne Principale' };
+    let m = null;
+    const now = Date.now();
+
+    if (type === 'dps_paps') {
+      const loc = game.calculateRealisticMissionLocation(base, 'dps');
+      m = {
+        id: `test-dps-${now}`,
+        title: 'DPS PAPS : Brocante de Printemps',
+        desc: 'Poste de secours pour 800 chineurs. PAPS à pied 2 secouristes.',
+        type: 'dps',
+        scale: 'PAPS (2 secouristes)',
+        urgency: 'normale',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 2,
+        requiredRanks: ['PSE1', 'PSE2'],
+        requiredVehicles: [],
+        rewardMoney: 280,
+        rewardReputation: 15,
+        durationSeconds: 180,
+        durationHours: '3.0',
+        eventDate: { ...game.clock },
+        status: 'planifie',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'dps_pe') {
+      const loc = game.calculateRealisticMissionLocation(base, 'dps');
+      m = {
+        id: `test-dps-${now}`,
+        title: 'DPS-PE : Tournoi Régional de Handball',
+        desc: 'Dispositif prévisionnel de secours petite envergure pour 2 500 spectateurs.',
+        type: 'dps',
+        scale: 'DPS-PE (4 secouristes + VPSP)',
+        urgency: 'normale',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 4,
+        requiredRanks: ['CE', 'PSE2', 'PSE1'],
+        requiredVehicles: ['VPSP'],
+        rewardMoney: 540,
+        rewardReputation: 25,
+        durationSeconds: 240,
+        durationHours: '4.5',
+        eventDate: { ...game.clock },
+        status: 'planifie',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'dps_ge') {
+      const loc = game.calculateRealisticMissionLocation(base, 'dps');
+      m = {
+        id: `test-dps-${now}`,
+        title: 'DPS-GE : Festival Électro & Son en Plein Air',
+        desc: 'Dispositif de grande envergure pour 12 000 festivaliers avec poste fixe et ambulances.',
+        type: 'dps',
+        scale: 'DPS-GE (10 secouristes + 2 VPSP + VTU)',
+        urgency: 'normale',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 10,
+        requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
+        requiredVehicles: ['VPSP', 'VPSP', 'VTU'],
+        rewardMoney: 1650,
+        rewardReputation: 55,
+        durationSeconds: 360,
+        durationHours: '7.0',
+        eventDate: { ...game.clock },
+        status: 'planifie',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'samu') {
+      const loc = game.calculateRealisticMissionLocation(base, 'samu');
+      m = {
+        id: `test-samu-${now}`,
+        title: 'SAMU 15 : Malaise Cardiaque à Domicile',
+        desc: 'Départ réflexe VPSP sur demande du médecin régulateur SAMU 15. Oxygénothérapie et transport CH.',
+        type: 'samu',
+        urgency: 'critique',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 3,
+        requiredRanks: ['CE', 'PSE2', 'PSE1'],
+        requiredVehicles: ['VPSP'],
+        rewardMoney: 320,
+        rewardReputation: 35,
+        durationSeconds: 90,
+        durationHours: '0.8',
+        eventDate: { ...game.clock },
+        status: 'declenche',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'pompiers') {
+      const loc = game.calculateRealisticMissionLocation(base, 'pompiers');
+      m = {
+        id: `test-sdis-${now}`,
+        title: 'SDIS 18 : Renfort Évacuation AVP Voie Rapide',
+        desc: 'Le CTA-CODIS sollicite un VPSP Protection Civile en renfort des sapeurs-pompiers suite à accident.',
+        type: 'pompiers',
+        urgency: 'haute',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 3,
+        requiredRanks: ['PSE2', 'PSE1'],
+        requiredVehicles: ['VPSP'],
+        rewardMoney: 380,
+        rewardReputation: 30,
+        durationSeconds: 100,
+        durationHours: '1.2',
+        eventDate: { ...game.clock },
+        status: 'declenche',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'crise_novi') {
+      const loc = game.calculateRealisticMissionLocation(base, 'crise');
+      m = {
+        id: `test-novi-${now}`,
+        title: 'CRISE NOVI : Déraillement Train Express & 35 Impliqués',
+        desc: 'Plan NOVI activé par la Préfecture. Montage d’un Poste Médical Avancé (PMA), CAI et noria de VPSP.',
+        type: 'crise',
+        scale: 'PLAN NOVI (8 secouristes + PMA + VPSP)',
+        urgency: 'critique',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 8,
+        requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
+        requiredVehicles: ['VPSP', 'VTU'],
+        rewardMoney: 1800,
+        rewardReputation: 70,
+        durationSeconds: 300,
+        durationHours: '5.0',
+        eventDate: { ...game.clock },
+        status: 'declenche',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'cump_cai') {
+      if (typeof game.generateCumpCaiMission === 'function') {
+        game.generateCumpCaiMission();
+        game.showToast('Test CUMP Déclenché', 'Mission Cellule d’Accueil des Impliqués générée avec succès.', 'green');
+        return;
+      }
+    } else if (type === 'sncf') {
+      if (typeof game.triggerSncfRailCrisis === 'function') {
+        game.triggerSncfRailCrisis();
+        game.showToast('Test SNCF Déclenché', 'Préalerte rupture caténaire générée avec succès.', 'green');
+        return;
+      }
+    } else if (type === 'social') {
+      const loc = game.calculateRealisticMissionLocation(base, 'social');
+      m = {
+        id: `test-social-${now}`,
+        title: 'Social : Maraude Nocturne & Urgence 115',
+        desc: 'Distribution de duvets, repas chauds et écoute des personnes sans-abri en centre-ville.',
+        type: 'social',
+        urgency: 'normale',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 3,
+        requiredRanks: ['PSE1', 'Secouriste'],
+        requiredVehicles: ['VTU'],
+        rewardMoney: 210,
+        rewardReputation: 35,
+        durationSeconds: 150,
+        durationHours: '3.0',
+        eventDate: { ...game.clock },
+        status: 'planifie',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'formation') {
+      const loc = game.calculateRealisticMissionLocation(base, 'dps');
+      m = {
+        id: `test-form-${now}`,
+        title: 'Formation : Session PSC1 Grand Public (10 élèves)',
+        desc: 'Formation aux gestes qui sauvent et délivrance des attestations officielles.',
+        type: 'formation',
+        urgency: 'normale',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 2,
+        requiredRanks: ['Formateur', 'PSE1'],
+        requiredVehicles: [],
+        rewardMoney: 600,
+        rewardReputation: 30,
+        durationSeconds: 180,
+        durationHours: '4.0',
+        eventDate: { ...game.clock },
+        status: 'planifie',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'meteo') {
+      const loc = game.calculateRealisticMissionLocation(base, 'meteo');
+      m = {
+        id: `test-meteo-${now}`,
+        title: 'Intempéries : Reconnaissance & Épuisement Crues',
+        desc: 'Inondations subites de caves et voiries. Déploiement des motopompes et soutien population.',
+        type: 'meteo',
+        urgency: 'haute',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 4,
+        requiredRanks: ['CE', 'PSE2', 'PSE1'],
+        requiredVehicles: ['VTU'],
+        rewardMoney: 490,
+        rewardReputation: 40,
+        durationSeconds: 180,
+        durationHours: '3.5',
+        eventDate: { ...game.clock },
+        status: 'declenche',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'devis') {
+      if (typeof game.generateRandomDevis === 'function') {
+        game.generateRandomDevis();
+        game.showToast('Devis Généré', 'Une nouvelle demande de devis est arrivée dans vos Finances !', 'green');
+        return;
+      }
+    } else if (type === 'securite') {
+      const prem = game.stations[0]?.premises;
+      if (!prem) {
+        game.showToast('Locaux Requis', 'Choisissez d’abord vos locaux d’antenne pour tester la sécurité.', 'orange');
+        return;
+      }
+      if (window.ProtecLocaux) {
+        window.ProtecLocaux.checkSecurityEvents(game, prem, true);
+      }
+      return;
+    } else if (type === 'finish_works') {
+      const prem = game.stations[0]?.premises;
+      if (!prem || !prem.ongoingWorks || prem.ongoingWorks.length === 0) {
+        game.showToast('Aucun Chantier', 'Il n’y a aucun chantier de travaux en cours sur vos locaux.', 'blue');
+        return;
+      }
+      const count = prem.ongoingWorks.length;
+      prem.ongoingWorks.forEach(w => {
+        prem.grid[w.tileIndex] = w.targetType;
+      });
+      prem.ongoingWorks = [];
+      game.saveGame();
+      game.updateStatsUI();
+      game.showToast('Chantiers Livrés !', `${count} travaux de pièces ont été achevés instantanément !`, 'green');
+      return;
+    } else if (type.startsWith('scen_')) {
+      const scenarioKey = type.replace('scen_', '');
+      if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.createScenarioMission === 'function') {
+        window.ProtecCriseLogistique.createScenarioMission(game, scenarioKey);
+        return;
+      }
+    }
+
+    if (m) {
+      if (game.enrichMissionLocationWithCity) game.enrichMissionLocationWithCity(m);
+      game.missions.push(m);
+      game.renderMissions();
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Mission Test Générée', `« ${m.title} » ajoutée sur la carte !`, 'green');
+      if (window.ProtecNotifications) {
+        window.ProtecNotifications.recordNotification({ title: m.title, message: m.desc, color: 'blue' });
+      }
+    }
   }
 };

@@ -559,17 +559,12 @@ window.ProtecIncidents = {
       choicesContainer.innerHTML = incident.choices.map((c, idx) => `
         <button onclick="window.ProtecIncidents.resolveIncident(window.game, '${mission.id}', ${idx})" 
           class="w-full text-left p-3.5 rounded-2xl glass-card hover:border-pc-orange hover:bg-orange-50/50 transition border border-slate-200/80 group">
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-xs font-extrabold text-slate-800 group-hover:text-pc-orange transition flex items-center gap-2">
-              <span class="w-5 h-5 rounded-full bg-pc-orange/15 text-pc-orange flex items-center justify-center text-[10px] font-black">${idx + 1}</span>
-              ${c.text}
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold text-slate-800 group-hover:text-pc-orange transition flex items-center gap-2.5">
+              <span class="w-6 h-6 rounded-full bg-pc-orange/15 text-pc-orange flex items-center justify-center text-[11px] font-black flex-shrink-0">${idx + 1}</span>
+              <span>${c.text}</span>
             </span>
-          </div>
-          <div class="text-[10px] text-slate-500 font-semibold pl-7 flex flex-wrap gap-2">
-            ${c.costSupply ? `<span class="text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Consomme : ${c.costQty} ${c.costSupply}</span>` : ''}
-            ${c.costMoney ? `<span class="text-rose-700 bg-rose-50 px-2 py-0.5 rounded">Coût : ${c.costMoney} €</span>` : ''}
-            ${c.rewardXp ? `<span class="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">+${c.rewardXp} XP Équipage</span>` : ''}
-            ${c.rewardReputation ? `<span class="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">+${c.rewardReputation} Notoriété</span>` : ''}
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-pc-orange group-hover:translate-x-0.5 transition flex-shrink-0"></i>
           </div>
         </button>
       `).join('');
@@ -609,6 +604,9 @@ window.ProtecIncidents = {
       // Notoriété
       if (choice.rewardReputation) {
         game.resources.followers = (game.resources.followers || 100) + choice.rewardReputation;
+        if (game.resources.reputationScore !== undefined) {
+          game.resources.reputationScore += choice.rewardReputation;
+        }
       }
 
       // XP aux bénévoles de la mission
@@ -619,14 +617,24 @@ window.ProtecIncidents = {
         });
       }
 
-      // Toast et log radio
-      game.showToast('Incident Maîtrisé !', choice.outcome || 'L’équipage a géré la situation avec sang-froid.', 'green');
+      // Compilation détaillée des résultats pour la notification après sélection
+      const resultsSummary = [];
+      if (choice.rewardReputation) resultsSummary.push(`+${choice.rewardReputation} Notoriété`);
+      if (choice.rewardXp) resultsSummary.push(`+${choice.rewardXp} XP Équipage`);
+      if (choice.rewardMoney) resultsSummary.push(`+${choice.rewardMoney} €`);
+      if (choice.costMoney) resultsSummary.push(`-${choice.costMoney} €`);
+      if (choice.costSupply) resultsSummary.push(`-${choice.costQty || 1} ${choice.costSupply}`);
+
+      const summaryStr = resultsSummary.length > 0 ? ` (Bilan : ${resultsSummary.join(', ')})` : '';
+
+      // Toast et log radio (le résultat est révélé seulement ici dans la notification)
+      game.showToast('Incident Résolu !', `${choice.outcome || 'L’équipage a géré la situation.'}${summaryStr}`, 'green');
 
       if (game.radioLogs) {
         game.radioLogs.unshift({
           time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
           channel: 'TACTIQUE-1',
-          text: `[INCIDENT RÉSOLU] ${mission.title} : ${choice.outcome}`,
+          text: `[INCIDENT RÉSOLU] ${mission.title} : ${choice.outcome || 'Action validée'}${summaryStr}`,
           type: 'success'
         });
       }

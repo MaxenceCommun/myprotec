@@ -2,7 +2,7 @@
 <html lang="fr" class="h-full">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Protection Civile - Simulateur Opérationnel</title>
   
   <!-- Tailwind CSS CDN -->
@@ -84,40 +84,40 @@
   </div>
 
   <!-- FLOATING TOP BAR CONTAINER (Responsive & Anti-Chevauchement) -->
-  <header class="absolute top-2 sm:top-3 left-2 sm:left-3 right-2 sm:right-3 z-20 flex flex-col gap-1.5 pointer-events-none">
+  <header class="fixed top-2 sm:top-3 left-2 sm:left-3 right-2 sm:right-3 z-20 flex flex-col gap-1.5 pointer-events-none max-w-[calc(100vw-1rem)] sm:max-w-none mx-auto">
     
     <!-- Ligne 1 : Navigation & Indicateurs Principaux -->
     <div class="flex items-center justify-between gap-1.5 sm:gap-2.5 w-full pointer-events-none">
       
       <!-- Gauche : Brand / Logo + Antenne active -->
       <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto flex-shrink-0">
-        <div class="glass-panel px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-2xl flex items-center gap-2 sm:gap-2.5 cursor-pointer hover:bg-white/90 transition shadow-sm" onclick="window.game.openOverviewModal()" title="Vue d'ensemble de l'antenne">
+        <div class="glass-panel px-2 sm:px-3.5 h-10 sm:h-12 rounded-xl sm:rounded-2xl flex items-center gap-1.5 sm:gap-2.5 cursor-pointer hover:bg-white/90 transition shadow-sm" onclick="window.game.openOverviewModal()" title="Vue d'ensemble de l'antenne">
           <!-- Logo MyProtec -->
-          <img src="logo_myprotec.png" alt="MyProtec" class="h-6 sm:h-8 object-contain drop-shadow-sm flex-shrink-0" />
-          <div class="border-l border-slate-200/80 pl-2">
-            <div class="text-[11px] sm:text-xs font-black text-slate-800 flex items-center gap-1">
+          <img src="logo_myprotec.png" alt="MyProtec" class="h-5 sm:h-8 object-contain drop-shadow-sm flex-shrink-0" />
+          <div class="border-l border-slate-200/80 pl-1.5 sm:pl-2">
+            <div class="text-[10px] sm:text-xs font-black text-slate-800 flex items-center gap-1">
               <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue"></i>
-              <span id="top-current-station-name" class="truncate max-w-[90px] sm:max-w-[180px]">Antenne Locale</span>
+              <span id="top-current-station-name" class="truncate max-w-[75px] xs:max-w-[120px] sm:max-w-[180px]">Antenne Locale</span>
             </div>
-            <span class="text-[9px] text-slate-400 font-bold block" id="top-antenna-role">Protection Civile</span>
+            <span class="text-[8px] sm:text-[9px] text-slate-400 font-bold block" id="top-antenna-role">Protection Civile</span>
           </div>
         </div>
 
         <!-- Consultation / Observation d'un autre département (Desktop) -->
-        <div class="hidden xl:flex glass-panel px-3 py-2 rounded-2xl items-center gap-2 pointer-events-auto shadow-sm">
+        <div class="hidden xl:flex glass-panel px-3 h-10 sm:h-12 rounded-2xl items-center gap-2 pointer-events-auto shadow-sm">
           <i data-lucide="eye" class="w-3.5 h-3.5 text-slate-400" title="Observer un autre département"></i>
           <span class="text-[11px] font-semibold text-slate-500">Explorer :</span>
           <select id="department-selector" onchange="window.game.inspectDepartment(this.value)" class="text-xs font-bold text-pc-blue bg-transparent outline-none cursor-pointer max-w-[155px]" title="Déplacer la vue pour observer un autre département">
             <!-- Rempli dynamiquement -->
           </select>
           <button id="btn-return-my-antenna" onclick="window.game.returnToMyAntenna()" class="hidden px-2 py-1 rounded-xl bg-pc-blue text-white text-[10px] font-extrabold hover:bg-pc-blue-light transition shadow-sm flex items-center gap-1" title="Revenir immédiatement à mon antenne">
-            <i data-lucide="crosshair" class="w-3 h-3"></i> Mon Antenne
+            <i data-lucide="crosshair" class="w-3.5 h-3.5"></i> Mon Antenne
           </button>
         </div>
       </div>
 
       <!-- Centre Desktop : Stats Primaires (Trésorerie, Bénévoles, Récompenses, Pubs) -->
-      <div class="hidden md:flex glass-panel px-3 sm:px-4 py-2 rounded-2xl items-center gap-3 sm:gap-5 overflow-x-auto no-scrollbar pointer-events-auto shadow-sm max-w-full">
+      <div class="hidden md:flex glass-panel px-3 sm:px-4 h-10 sm:h-12 rounded-2xl items-center gap-3 sm:gap-5 overflow-x-auto no-scrollbar pointer-events-auto shadow-sm max-w-full">
         <!-- Trésorerie -->
         <div class="flex items-center gap-2 cursor-pointer group flex-shrink-0" onclick="window.game.openFinancesModal()" title="Trésorerie de l'association">
           <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-100 transition">
@@ -134,16 +134,19 @@
         <div class="h-6 w-px bg-slate-200/80 flex-shrink-0"></div>
 
         <!-- Bénévoles Disponibles -->
-        <div class="flex items-center gap-2 cursor-pointer group flex-shrink-0" onclick="window.game.openTeamModal()" title="Effectif de secouristes bénévoles">
+        <div class="flex items-center gap-2 cursor-pointer group flex-shrink-0" onclick="window.game.openTeamModal()" title="Nombre de bénévoles disponibles actuellement / Effectif total de l'antenne">
           <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-pc-blue/10 text-pc-blue flex items-center justify-center group-hover:bg-pc-blue/20 transition">
             <i data-lucide="users" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
           </div>
           <div>
-            <div class="text-[9px] uppercase font-bold tracking-wider text-slate-400">Bénévoles</div>
+            <div class="text-[9px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1">
+              <span>Bénévoles</span>
+              <span class="text-[8px] font-extrabold text-pc-blue bg-blue-50 px-1 py-0.5 rounded border border-blue-200">Dispos</span>
+            </div>
             <div class="text-xs sm:text-sm font-extrabold text-slate-800 mono-num flex items-center gap-1">
-              <span id="stat-volunteers-avail" class="text-pc-blue">0</span>
+              <span id="stat-volunteers-avail" class="text-pc-blue" title="Bénévoles disponibles">0</span>
               <span class="text-slate-400 text-xs font-normal">/</span>
-              <span id="stat-volunteers-total" class="text-slate-600">0</span>
+              <span id="stat-volunteers-total" class="text-slate-600" title="Effectif total">0</span>
             </div>
           </div>
         </div>
@@ -201,7 +204,7 @@
       <!-- Droite Desktop : Météo, Horloge & Actions rapides (>= 768px) -->
       <div class="hidden md:flex items-center gap-2 pointer-events-auto flex-shrink-0">
         <!-- Météo & Vigilance Préfectorale -->
-        <div id="weather-widget" onclick="window.game.openModule('meteo')" class="glass-panel px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-2xl flex items-center gap-2 cursor-pointer hover:bg-white/90 transition shadow-sm pointer-events-auto" title="Bulletin Météo-France & Vigilance">
+        <div id="weather-widget" onclick="window.game.openModule('meteo')" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-2 cursor-pointer hover:bg-white/90 transition shadow-sm pointer-events-auto" title="Bulletin Météo-France & Vigilance">
           <span id="weather-icon" class="text-sm sm:text-base">☀️</span>
           <div class="flex flex-col">
             <div class="flex items-center gap-1">
@@ -213,7 +216,7 @@
         </div>
 
         <!-- Live Clock -->
-        <div class="glass-panel px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-2xl flex items-center gap-2 shadow-sm">
+        <div class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-2 shadow-sm">
           <div class="flex items-center gap-1.5">
             <i data-lucide="clock" class="w-3.5 h-3.5 text-pc-blue"></i>
             <div class="flex flex-col">
@@ -224,13 +227,13 @@
         </div>
 
         <!-- Admin Panel Button -->
-        <button id="admin-header-btn" onclick="window.ProtecAdmin.openAdminModal(window.game)" class="glass-panel px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-2xl flex items-center gap-1.5 text-indigo-700 hover:bg-indigo-50/80 transition shadow-sm group" title="Panel Administrateur BDD">
+        <button id="admin-header-btn" onclick="window.ProtecAdmin.openAdminModal(window.game)" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-1.5 text-indigo-700 hover:bg-indigo-50/80 transition shadow-sm group" title="Panel Administrateur BDD">
           <span class="text-sm">👑</span>
           <span class="text-xs font-extrabold hidden lg:inline">Admin</span>
         </button>
 
         <!-- Auth / Account Widget -->
-        <div id="auth-header-widget" class="glass-panel px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-2xl flex items-center gap-2 shadow-sm cursor-pointer hover:bg-white/90 transition group" onclick="window.ProtecAuth.openAuthModal()" title="Compte Directeur & Sauvegarde BDD">
+        <div id="auth-header-widget" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-2 shadow-sm cursor-pointer hover:bg-white/90 transition group" onclick="window.ProtecAuth.openAuthModal()" title="Compte Directeur & Sauvegarde BDD">
           <div id="auth-status-icon" class="w-6 h-6 rounded-lg bg-pc-blue/10 text-pc-blue flex items-center justify-center group-hover:bg-pc-blue group-hover:text-white transition">
             <i data-lucide="user" class="w-3.5 h-3.5"></i>
           </div>
@@ -243,66 +246,55 @@
         </div>
 
         <!-- PWA Install Button (Desktop) -->
-        <button id="pwa-install-btn" onclick="window.ProtecPWA.promptInstall()" class="glass-panel px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-2xl flex items-center gap-1.5 text-pc-blue hover:bg-pc-blue hover:text-white transition shadow-sm font-bold text-xs group" title="Installer l'application MyProtec sur cet appareil">
+        <button id="pwa-install-btn" onclick="window.ProtecPWA.promptInstall()" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-1.5 text-pc-blue hover:bg-pc-blue hover:text-white transition shadow-sm font-bold text-xs group" title="Installer l'application MyProtec sur cet appareil">
           <i data-lucide="download" class="w-3.5 h-3.5 text-pc-orange group-hover:text-white transition-colors"></i>
           <span class="hidden xl:inline">Installer l'App</span>
         </button>
 
         <!-- Push Notifications Widget (Desktop) -->
-        <button id="push-notif-btn" onclick="window.ProtecNotifications.openSettingsModal()" class="glass-panel p-2 rounded-2xl text-slate-500 hover:text-pc-orange hover:bg-white/90 transition shadow-sm relative group" title="Centre de Notifications Push & Alertes">
+        <button id="push-notif-btn" onclick="window.ProtecNotifications.openSettingsModal()" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-500 hover:text-pc-orange hover:bg-white/90 transition shadow-sm relative group flex items-center justify-center" title="Centre de Notifications Push & Alertes">
           <i data-lucide="bell" id="push-notif-icon" class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
           <span id="push-notif-badge" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-300 border-2 border-white"></span>
         </button>
 
         <!-- Mentions Légales & Confidentialité RGPD / AdSense -->
-        <button onclick="window.ProtecPrivacy.openModal()" class="glass-panel p-2 rounded-2xl text-slate-500 hover:text-pc-blue hover:bg-white/90 transition shadow-sm group" title="Mentions Légales, Cookies & Politique de Confidentialité AdSense">
+        <button onclick="window.ProtecPrivacy.openModal()" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-500 hover:text-pc-blue hover:bg-white/90 transition shadow-sm group flex items-center justify-center" title="Mentions Légales, Cookies & Politique de Confidentialité AdSense">
           <i data-lucide="shield-check" class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
         </button>
 
         <!-- Reset / Options Button -->
-        <button onclick="window.game.confirmResetGame()" class="glass-panel p-2 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-white/90 transition shadow-sm group" title="Recommencer une nouvelle partie à zéro">
+        <button onclick="window.game.confirmResetGame()" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-white/90 transition shadow-sm group flex items-center justify-center" title="Recommencer une nouvelle partie à zéro">
           <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 group-hover:-rotate-90 transition-transform"></i>
         </button>
       </div>
 
-      <!-- Droite Mobile : Barre d'accès rapide ultra-compacte (< 768px) -->
-      <div class="flex md:hidden items-center gap-1.5 pointer-events-auto flex-shrink-0">
-        <!-- PWA Install Button Mobile -->
-        <button id="pwa-install-btn-mobile" onclick="window.ProtecPWA.promptInstall()" class="glass-panel p-2 rounded-xl text-pc-blue active:scale-95 transition shadow-sm" title="Installer l'application MyProtec">
-          <i data-lucide="download" class="w-3.5 h-3.5 text-pc-orange"></i>
-        </button>
-
+      <!-- Droite Mobile : Barre d'accès rapide ultra-compacte (< 768px - Anti Débordement) -->
+      <div class="flex md:hidden items-center gap-1 pointer-events-auto flex-shrink-0">
         <!-- Trésorerie Mobile -->
-        <button onclick="window.game.openFinancesModal()" class="glass-panel px-2.5 py-1.5 rounded-xl flex items-center gap-1 text-emerald-600 font-extrabold text-xs shadow-sm active:scale-95 transition" title="Trésorerie">
+        <button onclick="window.game.openFinancesModal()" class="glass-panel px-2 h-10 rounded-xl flex items-center gap-1 text-emerald-600 font-extrabold text-[11px] shadow-sm active:scale-95 transition" title="Trésorerie de l'antenne">
           <span class="text-xs">💶</span>
           <span id="stat-money-mobile">15k €</span>
         </button>
 
-        <!-- Pub Récompensée Mobile -->
-        <button onclick="window.ProtecAds.openAdModal(window.game)" class="glass-panel px-2 py-1.5 rounded-xl flex items-center gap-1 text-amber-600 font-extrabold text-xs shadow-sm active:scale-95 transition" title="Publicité (+500 € virtuels)">
-          <span class="text-xs">📺</span>
-          <span id="ad-count-badge-mobile" class="text-[9px] font-black bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded">5/5</span>
-        </button>
-
-        <!-- Notifications Mobile -->
-        <button onclick="window.ProtecNotifications.openSettingsModal()" class="glass-panel p-2 rounded-xl text-slate-500 active:scale-95 transition shadow-sm relative" title="Notifications Push">
-          <i data-lucide="bell" class="w-3.5 h-3.5"></i>
-          <span id="push-notif-badge-mobile" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-300 border-2 border-white"></span>
-        </button>
-
         <!-- Horloge Mobile -->
-        <div class="glass-panel px-2 py-1.5 rounded-xl flex items-center gap-1 text-slate-700 font-extrabold text-xs mono-num shadow-sm">
+        <div class="glass-panel px-2 h-10 rounded-xl flex items-center text-slate-700 font-extrabold text-[11px] mono-num shadow-sm">
           <span id="clock-time-mobile">08:00</span>
         </div>
 
+        <!-- Notifications Mobile -->
+        <button onclick="window.ProtecNotifications.openSettingsModal()" class="glass-panel w-10 h-10 rounded-xl text-slate-500 active:scale-95 transition shadow-sm relative flex items-center justify-center" title="Notifications Push & Journal">
+          <i data-lucide="bell" class="w-4 h-4"></i>
+          <span id="push-notif-badge-mobile" class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-slate-300 border border-white"></span>
+        </button>
+
         <!-- Profil Mobile -->
-        <button onclick="window.ProtecAuth.openAuthModal()" class="glass-panel p-2 rounded-xl text-pc-blue shadow-sm active:scale-95 transition" title="Mon Compte">
+        <button onclick="window.ProtecAuth.openAuthModal()" class="glass-panel w-10 h-10 rounded-xl text-pc-blue shadow-sm active:scale-95 transition flex items-center justify-center" title="Mon Compte Directeur">
           <i data-lucide="user" class="w-4 h-4"></i>
         </button>
       </div>
     </div>
 
-    <!-- Ligne 2 : Filtres de carte & Raccourcis secondaires (Défilant fluide sans chevauchement) -->
+    <!-- Ligne 2 : Filtres de carte & Raccourcis secondaires (Défilant fluide sans déborder) -->
     <div class="pointer-events-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 mobile-scroll-x w-full">
       <button onclick="window.game.setFilter('all')" id="filter-btn-all" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-bold text-pc-blue border-pc-blue/40 shadow-sm flex items-center gap-1.5 flex-shrink-0">
         <span class="w-2 h-2 rounded-full bg-pc-blue"></span>
@@ -333,18 +325,26 @@
         Météo-France (<span id="count-meteo">0</span>)
       </button>
 
-      <!-- Raccourcis utiles sur mobile intégrés directement dans le flux -->
+      <!-- Raccourcis utiles sur mobile intégrés dans le défilement horizontal fluide -->
+      <button onclick="window.ProtecAds.openAdModal(window.game)" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-700 items-center gap-1 flex-shrink-0" title="Publicité (+500 €)">
+        <span>📺</span>
+        <span>Pub</span>
+        <span id="ad-count-badge-mobile" class="text-[9px] font-black bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded">5/5</span>
+      </button>
       <button onclick="window.game.openModule('meteo')" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 items-center gap-1 flex-shrink-0">
         <span>🌤️</span> Météo
       </button>
       <button onclick="window.game.openModule('recompenses')" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 items-center gap-1 flex-shrink-0">
         <span>🎁</span> Cadeaux
       </button>
+      <button id="pwa-install-btn-mobile" onclick="window.ProtecPWA.promptInstall()" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-bold text-pc-blue items-center gap-1 flex-shrink-0" title="Installer l'application">
+        <span>📲</span> App
+      </button>
     </div>
   </header>
 
-  <!-- FLOATING NOTIFICATIONS TOAST CONTAINER -->
-  <div id="toast-container" class="absolute top-20 right-4 z-30 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
+  <!-- FLOATING NOTIFICATIONS TOAST CONTAINER (z-[100] pour rester toujours visible au-dessus du tiroir latéral) -->
+  <div id="toast-container" class="fixed top-20 right-4 z-[100] flex flex-col gap-2 max-w-sm pointer-events-none transition-all duration-300"></div>
 
   <!-- FLOATING ACTIVE MISSIONS QUICK BAR (En bas à gauche) -->
   <div class="absolute bottom-24 left-4 z-10 flex flex-col gap-2 max-w-xs">
@@ -354,7 +354,7 @@
   </div>
 
   <!-- BOTTOM FLOATING ACTION DOCK (Responsive Mobile & Desktop) -->
-  <nav class="absolute bottom-2 sm:bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto max-w-[100vw] px-2">
+  <nav class="fixed bottom-2 sm:bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto max-w-[100vw] px-2 flex justify-center w-full">
     
     <!-- DESKTOP DOCK (>= 768px) -->
     <div class="hidden md:flex glass-panel-heavy dock-container no-scrollbar px-3 py-2 rounded-3xl items-center gap-2 shadow-2xl border border-white/80 overflow-x-auto">
@@ -456,6 +456,14 @@
         <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-indigo-600 tracking-tight">Pôles</span>
       </button>
 
+      <!-- Spécialités Opérationnelles (Drone, Cyno, Bateau, 4x4, Moto) -->
+      <button onclick="window.game.openModule('specialites')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-sky-50 transition-all duration-200 flex-shrink-0" title="Spécialités : Drones, Chiens de recherche, Bateaux, 4x4, Motos">
+        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-sky-600 group-hover:scale-110 transition-transform">
+          <i data-lucide="crosshair" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+        </div>
+        <span class="text-[9px] sm:text-[10px] font-bold text-slate-600 group-hover:text-sky-600 tracking-tight">Spécialités</span>
+      </button>
+
       <!-- Alliance & Multijoueur Module -->
       <button onclick="window.game.openModule('alliance')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-indigo-50 transition-all duration-200 flex-shrink-0">
         <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
@@ -485,38 +493,44 @@
     </div>
 
     <!-- MOBILE BOTTOM BAR (< 768px) : Dock 5 onglets fluide au pouce -->
-    <div class="flex md:hidden glass-panel-heavy dock-container safe-bottom px-2 py-1.5 rounded-2xl items-center justify-around gap-1 shadow-2xl border border-white/80 w-[calc(100vw-1rem)] max-w-md">
+    <div class="flex md:hidden glass-panel-heavy dock-container safe-bottom px-1.5 py-1.5 rounded-2xl items-center justify-around gap-0.5 shadow-2xl border border-white/80 w-[calc(100vw-1rem)] max-w-sm">
       <!-- 1. Planning -->
-      <button onclick="window.game.openModule('planning')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-pc-blue/10 relative">
-        <i data-lucide="calendar" class="w-5 h-5 text-pc-blue"></i>
-        <span class="text-[9px] font-bold text-slate-700 mt-0.5">Planning</span>
-        <span id="badge-planning-dock-mobile" class="absolute top-0 right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-pc-blue text-white">0</span>
+      <button onclick="window.game.openModule('planning')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-pc-blue/10 min-w-0">
+        <div class="relative">
+          <i data-lucide="calendar" class="w-5 h-5 text-pc-blue"></i>
+          <span id="badge-planning-dock-mobile" class="absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-pc-blue text-white min-w-[14px] text-center leading-tight">0</span>
+        </div>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Planning</span>
       </button>
 
       <!-- 2. SAMU 15 -->
-      <button onclick="window.game.openModule('samu')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-pc-orange/10 relative">
-        <i data-lucide="activity" class="w-5 h-5 text-pc-orange"></i>
-        <span class="text-[9px] font-bold text-slate-700 mt-0.5">SAMU 15</span>
-        <span id="badge-samu-dock-mobile" class="absolute top-0 right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-pc-orange text-white">0</span>
+      <button onclick="window.game.openModule('samu')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-pc-orange/10 min-w-0">
+        <div class="relative">
+          <i data-lucide="activity" class="w-5 h-5 text-pc-orange"></i>
+          <span id="badge-samu-dock-mobile" class="absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-pc-orange text-white min-w-[14px] text-center leading-tight">0</span>
+        </div>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">SAMU 15</span>
       </button>
 
       <!-- 3. Radio PC -->
-      <button onclick="window.game.openModule('radio')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-sky-50 relative">
-        <i data-lucide="radio" class="w-5 h-5 text-sky-600"></i>
-        <span class="text-[9px] font-bold text-slate-700 mt-0.5">Radio</span>
-        <span id="badge-radio-dock-mobile" class="absolute top-0 right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-sky-600 text-white">0</span>
+      <button onclick="window.game.openModule('radio')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-sky-50 min-w-0">
+        <div class="relative">
+          <i data-lucide="radio" class="w-5 h-5 text-sky-600"></i>
+          <span id="badge-radio-dock-mobile" class="absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-sky-600 text-white min-w-[14px] text-center leading-tight">0</span>
+        </div>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Radio</span>
       </button>
 
       <!-- 4. Antenne / Flotte -->
-      <button onclick="window.game.openModule('base')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-indigo-50 relative">
+      <button onclick="window.game.openModule('base')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-indigo-50 min-w-0">
         <i data-lucide="building-2" class="w-5 h-5 text-indigo-600"></i>
-        <span class="text-[9px] font-bold text-slate-700 mt-0.5">Antennes</span>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Antennes</span>
       </button>
 
       <!-- 5. Tous les Modules (Menu rapide) -->
-      <button onclick="window.game.openMobileMenu()" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-amber-50 relative text-pc-orange">
+      <button onclick="window.game.openMobileMenu()" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-amber-50 min-w-0 text-pc-orange">
         <i data-lucide="layout-grid" class="w-5 h-5"></i>
-        <span class="text-[9px] font-extrabold mt-0.5">Modules</span>
+        <span class="text-[9px] font-extrabold mt-0.5 truncate max-w-full">Modules</span>
       </button>
     </div>
   </nav>
@@ -920,6 +934,13 @@
   <script src="js/social.js"></script>
   <script src="js/admin.js"></script>
   <script src="js/locaux.js"></script>
+  <script src="js/finances.js"></script>
+  <script src="js/equipements.js"></script>
+  <script src="js/cump.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/specialites.js"></script>
+  <script src="js/crise_logistique.js"></script>
+  <script src="js/offline_engine.js"></script>
   <script src="js/pwa.js"></script>
   <script src="app.js"></script>
 </body>
