@@ -269,15 +269,22 @@ window.ProtecModals = {
 
   // --- MODAL BULLETIN MÉTÉO & VIGILANCE PRÉFECTORALE ---
   renderMeteo(game) {
-    const w = game.weather || { vigilance: 'green', temp: 18, alertTitle: 'Vigilance Verte', alertDesc: 'Nominale' };
+    const w = game.weather || { vigilance: 'green', temp: 18, alertTitle: 'Vigilance Verte - Conditions Nominales', alertDesc: 'Nominale' };
     let cardBg = 'bg-emerald-50 border-emerald-200 text-emerald-950';
     let badgeBg = 'bg-emerald-600 text-white';
+
+    const vigLabels = {
+      green: 'VERTE',
+      yellow: 'JAUNE',
+      orange: 'ORANGE',
+      red: 'ROUGE'
+    };
+    const vigFr = vigLabels[w.vigilance] || (w.vigilance ? w.vigilance.toUpperCase() : 'VERTE');
 
     if (w.vigilance === 'yellow') { cardBg = 'bg-amber-50 border-amber-200 text-amber-950'; badgeBg = 'bg-amber-500 text-white'; }
     if (w.vigilance === 'orange') { cardBg = 'bg-orange-50 border-orange-200 text-orange-950'; badgeBg = 'bg-pc-orange text-white'; }
     if (w.vigilance === 'red') { cardBg = 'bg-red-50 border-red-200 text-red-950'; badgeBg = 'bg-red-600 text-white'; }
 
-    const stationName = game.stations[0]?.name || w.locationName || 'Antenne';
     const windText = `${Math.round(w.windGusts || w.windSpeed || 0)} km/h`;
     const rainText = `${(w.precipitation || 0).toFixed(1)} mm/h`;
     const humidityText = `${Math.round(w.humidity || 60)}%`;
@@ -288,18 +295,13 @@ window.ProtecModals = {
         <div class="p-5 rounded-2xl border ${cardBg} shadow-sm space-y-3 glass-card">
           <div class="flex items-center justify-between">
             <span class="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${badgeBg}">
-              Vigilance ${w.vigilance.toUpperCase()}
+              VIGILANCE ${vigFr}
             </span>
             <div class="flex items-center gap-2">
               <span class="text-sm font-extrabold font-mono">${Math.round(w.temp)}°C</span>
-              <button onclick="window.ProtecSystems.fetchRealWeather(window.game, true).then(() => window.game.openModule('meteo'))" class="px-2 py-1 rounded-lg glass-button text-[10px] font-bold text-slate-700 hover:text-pc-blue flex items-center gap-1" title="Actualiser avec les relevés réels">
-                <i data-lucide="refresh-cw" class="w-3 h-3"></i>
-                Réel
-              </button>
             </div>
           </div>
           <div>
-            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Localisation Réelle : ${stationName}</span>
             <h3 class="text-base font-black text-slate-900 mt-0.5">${w.alertTitle}</h3>
           </div>
           <p class="text-xs text-slate-700 leading-relaxed">${w.alertDesc}</p>
@@ -366,8 +368,8 @@ window.ProtecModals = {
                 ⚠️
               </div>
               <div>
-                <div class="text-xs font-black text-amber-950">Veille Préfectorale Active (${w.vigilance.toUpperCase()})</div>
-                <div class="text-[11px] text-amber-800">Surveillance continue des données réelles. En cas d'événement majeur (tempête, rafales, crue), la Préfecture place automatiquement les AASC en préalerte opérationnelle.</div>
+                <div class="text-xs font-black text-amber-950">Veille Préfectorale Active (${vigFr})</div>
+                <div class="text-[11px] text-amber-800">Surveillance continue des données de terrain. En cas d'événement majeur (tempête, rafales, crue), la Préfecture place automatiquement les AASC en préalerte opérationnelle.</div>
               </div>
             </div>
             <span class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-amber-200 text-amber-900 uppercase tracking-wider whitespace-nowrap">
@@ -380,7 +382,7 @@ window.ProtecModals = {
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               Conditions météorologiques calmes sur le secteur. Aucune préalerte préfectorale en cours.
             </span>
-            <span class="text-[10px] font-extrabold uppercase bg-emerald-100 px-2 py-0.5 rounded-lg text-emerald-900">Normal</span>
+            <span class="text-[10px] font-extrabold uppercase bg-emerald-100 px-2 py-0.5 rounded-lg text-emerald-900">Calme</span>
           </div>
         `}
       </div>

@@ -121,6 +121,7 @@ class ProtecGame {
     this.currentModalKey = null;
     this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
     this.cumpConvention = { signed: false, signedAt: null, totalMissions: 0, successfulMissions: 0, complianceScore: 100 };
+    this.aascConvention = { signed: false, signedAt: null, cost: 800 };
 
     // Marqueurs Leaflet
     this.markers = {
@@ -594,6 +595,9 @@ class ProtecGame {
           }
         }, 500);
       }
+      if (window.ProtecTutorial) {
+        window.ProtecTutorial.init(this);
+      }
     }
   }
 
@@ -622,6 +626,8 @@ class ProtecGame {
         prefectureState: this.prefectureState,
         sncfConvention: this.sncfConvention,
         cumpConvention: this.cumpConvention,
+        aascConvention: this.aascConvention,
+        tutorialState: this.tutorialState,
         jobOffers: this.jobOffers,
         adRewards: this.adRewards,
         workplaceEquipment: this.workplaceEquipment
@@ -671,6 +677,8 @@ class ProtecGame {
           this.prefectureState = parsed.prefectureState || this.prefectureState;
           this.sncfConvention = parsed.sncfConvention || this.sncfConvention;
           this.cumpConvention = parsed.cumpConvention || this.cumpConvention;
+          this.aascConvention = parsed.aascConvention || this.aascConvention || { signed: false, signedAt: null, cost: 800 };
+          this.tutorialState = parsed.tutorialState || this.tutorialState || null;
           this.adRewards = parsed.adRewards || null;
           if (parsed.player) this.player = parsed.player;
 
@@ -1222,7 +1230,8 @@ class ProtecGame {
       newStation.stock = {};
       this.logistics = { oxygenBottles: 0, aedPads: 0, woundKits: 0, cervicalCollars: 0 };
 
-      // 3. ZÉRO CONVENTION AU DÉPART
+      // 3. ZÉRO CONVENTION AU DÉPART (ni AASC, ni partenaires)
+      this.aascConvention = { signed: false, signedAt: null, cost: 800 };
       this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
       this.cumpConvention = { signed: false, signedAt: null, totalMissions: 0, successfulMissions: 0, normCompliant: false };
       this.sdisGarde = { active: false, vehicleId: null, caserneCrew: [], astreinteCrew: [], mode: 'poste' };
@@ -2089,6 +2098,12 @@ class ProtecGame {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
 
+    if (!this.aascConvention || !this.aascConvention.signed) {
+      this.showToast('Convention d’AASC Requise ⚠️', 'Votre antenne doit obligatoirement souscrire sa Convention d’AASC auprès de la Préfecture (onglet Conventions) pour pouvoir engager des équipes en mission !', 'amber');
+      this.openModule('conventions');
+      return;
+    }
+
     const availableToDepart = (mission.registeredVolunteers || []).filter(vid => {
       const v = this.volunteers.find(x => x.id === vid);
       return v && v.status !== 'mission';
@@ -2208,6 +2223,37 @@ class ProtecGame {
     this.renderMissions();
     this.updateStatsUI();
     this.openMissionDetails(targetMissionId);
+  }
+
+  // --- CONVENTION PRÉFECTORALE D'AASC (BASE LÉGALE FONDATRICE) ---
+  signAascConvention() {
+    const cost = 800;
+    if (this.resources.money < cost) {
+      this.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour régler les frais d’enregistrement préfectoral de la Convention d'AASC.`, 'red');
+      return;
+    }
+
+    this.resources.money -= cost;
+    this.aascConvention = {
+      signed: true,
+      signedAt: Date.now(),
+      cost: cost
+    };
+    this.resources.reputationScore = (this.resources.reputationScore || 0) + 50;
+
+    this.showToast('Convention AASC Validée ! 📜', 'Votre antenne est désormais officiellement agréée de Sécurité Civile par la Préfecture ! Vous pouvez assurer vos missions.', 'green');
+    this.saveGame();
+    this.updateStatsUI();
+
+    if (window.ProtecAdvancedSystems) {
+      window.ProtecAdvancedSystems.syncAdaptiveTasks(this);
+    }
+    if (window.ProtecTutorial) {
+      window.ProtecTutorial.advance(this);
+    }
+    if (this.currentModalKey === 'conventions' && window.ProtecConventions) {
+      window.ProtecConventions.renderModal(this);
+    }
   }
 
   // --- CONVENTION PARTENAIRE RÉSEAU FERRÉ SNCF (ASSISTANCE & CHU) ---
@@ -2487,6 +2533,12 @@ class ProtecGame {
   launchScheduledMission(missionId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
+
+    if (!this.aascConvention || !this.aascConvention.signed) {
+      this.showToast('Convention d’AASC Requise ⚠️', 'Votre antenne doit obligatoirement souscrire sa Convention d’AASC auprès de la Préfecture (onglet Conventions) pour pouvoir engager des équipes en mission !', 'amber');
+      this.openModule('conventions');
+      return;
+    }
 
     // Vérification stricte des Agréments de Sécurité Civile officiels
     if (this.resources.agrements) {

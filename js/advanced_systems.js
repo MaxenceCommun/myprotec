@@ -402,8 +402,8 @@ window.ProtecAdvanced = {
     const completedMissions = (game.missions || []).filter(m => m.status === 'completed').length;
     const totalVolunteers = (game.volunteers || []).length;
 
-    // Palier 1 (Lancement d'antenne) : pas encore de véhicule, ou aucune convention signée, ou moins de 2 missions
-    if (vehCount === 0 || convCount === 0 || completedMissions < 2) {
+    // Palier 1 (Lancement d'antenne) : pas de convention AASC, pas de véhicule, ou moins de 2 missions
+    if (!game.aascConvention?.signed || vehCount === 0 || completedMissions < 2) {
       return 1;
     }
     // Palier 3 (Grande Envergure / Rayonnement) : >= 8 missions terminées, >= 2 véhicules, >= 8 secouristes
@@ -435,9 +435,9 @@ window.ProtecAdvanced = {
     } else {
       if (tier === 1) {
         return [
+          { id: 'task-starter-aasc', title: 'Souscrire la Convention Préfectorale d’AASC', goal: 1, current: 0, reward: 800, done: false },
           { id: 'task-starter-veh', title: 'Acquérir votre 1er véhicule opérationnel (VPSP ou VTU)', goal: 1, current: 0, reward: 600, done: false },
-          { id: 'task-starter-mat', title: 'Équiper l’antenne en matériel de secours (Boutique)', goal: 5, current: 0, reward: 400, done: false },
-          { id: 'task-starter-conv', title: 'Signer une 1ère convention (SNCF, CUMP ou SDIS)', goal: 1, current: 0, reward: 500, done: false }
+          { id: 'task-starter-mat', title: 'Équiper l’antenne en matériel de secours (Boutique)', goal: 5, current: 0, reward: 400, done: false }
         ];
       } else if (tier === 2) {
         return [
@@ -486,7 +486,9 @@ window.ProtecAdvanced = {
     // Tâches quotidiennes
     (game.rewards.dailyTasks || []).forEach(t => {
       // 1. Tâches de démarrage (Tier 1)
-      if (t.id === 'task-starter-veh') {
+      if (t.id === 'task-starter-aasc') {
+        t.current = (game.aascConvention?.signed) ? 1 : 0;
+      } else if (t.id === 'task-starter-veh') {
         t.current = Math.min(t.goal, (game.vehicles || []).length);
       } else if (t.id === 'task-starter-mat') {
         const st = game.stations[0];

@@ -362,9 +362,9 @@ window.ProtecOnboarding = {
   // --- ÉTAPE 3 : PRÉSENTATION DES OBJECTIFS ---
   renderStep3() {
     const starterTasks = [
-      { icon: '🚑', title: 'Acquérir votre 1er véhicule opérationnel', desc: 'Commander une ambulance VPSP (5 places) ou un utilitaire VTU.', reward: '+600 €' },
+      { icon: '📜', title: 'Souscrire la Convention Préfectorale d’AASC (800 €)', desc: 'Base légale indispensable pour opérer : signer la convention d’agrément avec la Préfecture.', reward: '+1 000 €' },
+      { icon: '🚑', title: 'Acquérir votre 1er véhicule opérationnel', desc: 'Commander une ambulance VPSP (5 places) ou un utilitaire VTU (3 places).', reward: '+600 €' },
       { icon: '📦', title: 'Équiper l’antenne en matériel de secours', desc: 'Acheter les premiers consommables (Oxygène O2, électrodes DAE, trousses de soins).', reward: '+400 €' },
-      { icon: '📝', title: 'Signer une 1ère convention officielle', desc: 'Activer une convention de partenariat (SNCF, CUMP ou garde SDIS).', reward: '+500 €' },
       { icon: '📢', title: 'Publier 1 offre de recrutement', desc: 'Recruter un jeune en Service Civique ou un cadre opérationnel salarié.', reward: '+500 €' },
       { icon: '📐', title: 'Aménager le local sur le Plan 2D CAD', desc: 'Disposer le mobilier et affecter les salles selon vos missions.', reward: '+750 €' }
     ];
@@ -483,7 +483,8 @@ window.ProtecOnboarding = {
     // 2. Zéro stock au départ
     game.logistics = { oxygenBottles: 0, aedPads: 0, woundKits: 0, cervicalCollars: 0 };
 
-    // 3. Zéro convention au départ
+    // 3. Zéro convention au départ (ni AASC, ni partenaires)
+    game.aascConvention = { signed: false, signedAt: null, cost: 800 };
     game.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
     game.cumpConvention = { signed: false, signedAt: null, totalMissions: 0, successfulMissions: 0, normCompliant: false };
     game.sdisGarde = { active: false, vehicleId: null, caserneCrew: [], astreinteCrew: [], mode: 'poste' };
@@ -540,6 +541,13 @@ window.ProtecOnboarding = {
       }, 250);
     }
 
-    game.showToast('Antenne Inaugurée ! 🎉', `Bienvenue à « ${stationName} » ! La carte est active, vos secouristes sont prêts.`, 'green');
+    game.showToast('Antenne Inaugurée ! 🎉', `Bienvenue à « ${stationName} » ! Suivez le guide pour souscrire votre convention AASC.`, 'green');
+
+    // Démarrer le tutoriel interactif de démarrage
+    if (window.ProtecTutorial) {
+      setTimeout(() => {
+        window.ProtecTutorial.start(game);
+      }, 500);
+    }
   }
 };

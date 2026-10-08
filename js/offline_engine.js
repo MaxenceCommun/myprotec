@@ -138,12 +138,13 @@ window.ProtecOfflineEngine = {
     }
 
     // D. Alerte Météo Préfecture : Uniquement si vigilance Orange ou Rouge
-    const weatherAlertLevel = (game.weather?.level || '').toLowerCase();
-    if (['orange', 'rouge'].includes(weatherAlertLevel) && Math.random() < 0.5) {
+    const rawVigilance = (game.weather?.vigilance || game.weather?.level || '').toLowerCase();
+    if (['orange', 'red', 'rouge'].includes(rawVigilance) && Math.random() < 0.5) {
+      const vigFr = (rawVigilance === 'red' || rawVigilance === 'rouge') ? 'ROUGE' : 'ORANGE';
       const delayMin = Math.floor(Math.random() * 30) + 15;
       possibleAlerts.push({
         delayMs: delayMin * 60 * 1000,
-        title: `⚠️ Vigilance Préfecture (${weatherAlertLevel.toUpperCase()})`,
+        title: `⚠️ Vigilance Préfecture (${vigFr})`,
         body: 'Aggravation des conditions météorologiques : pré-alerte opérationnelle émise pour l’antenne.',
         tag: 'offline-meteo',
         data: { url: '/', category: 'meteo' }

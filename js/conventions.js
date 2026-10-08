@@ -42,7 +42,62 @@ window.ProtecConventions = {
           </span>
         </div>
 
-        <!-- Grille des 4 conventions majeures -->
+        <!-- CONVENTION CADRE D'AASC (FONDATRICE & PRÉFECTURE) -->
+        <div class="p-5 rounded-3xl glass-card border-2 ${game.aascConvention?.signed ? 'border-emerald-400 bg-emerald-50/40' : 'border-amber-400 bg-amber-50/40 shadow-lg ring-2 ring-amber-300/30'} space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-slate-900 text-white tracking-wider flex items-center gap-1">
+                <span>🏛️</span> MINISTÈRE DE L'INTÉRIEUR • PRÉFECTURE
+              </span>
+              <span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${game.aascConvention?.signed ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white animate-pulse'}">
+                ${game.aascConvention?.signed ? 'Convention AASC Active ✓' : 'Obligatoire pour Opérer (Non Signée)'}
+              </span>
+            </div>
+            <div class="text-xs font-black text-slate-800">
+              ${game.aascConvention?.signed ? '<span class="text-emerald-700 font-bold">Agrément de Sécurité Civile délivré</span>' : '<span class="text-amber-800 font-bold">Frais de dossier : 800 €</span>'}
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <h4 class="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+              <span>📜</span> Convention Préfectorale d'AASC (Agrément de Sécurité Civile)
+            </h4>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Base légale absolue pour commencer le jeu. Cette convention cadre délivrée par l'autorité préfectorale attribue les <strong>Agréments Nationaux de Sécurité Civile</strong> (Missions A, B, C et D). Sans cette convention, aucun bénévole ne peut être légalement engagé en mission opérationnelle ni sur un poste de secours (DPS).
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] font-semibold text-slate-700">
+            <div class="p-2.5 rounded-xl bg-white/80 border border-slate-200">
+              <span class="text-[10px] text-slate-500 block uppercase">Missions autorisées</span>
+              <span class="font-bold text-slate-900">DPS, SAMU 15, SDIS & Réquisitions</span>
+            </div>
+            <div class="p-2.5 rounded-xl bg-white/80 border border-slate-200">
+              <span class="text-[10px] text-slate-500 block uppercase">Autorité de Tutelle</span>
+              <span class="font-bold text-slate-900">Préfecture & État-Major COZ</span>
+            </div>
+            <div class="p-2.5 rounded-xl bg-white/80 border border-slate-200">
+              <span class="text-[10px] text-slate-500 block uppercase">Statut Légal</span>
+              <span class="font-bold ${game.aascConvention?.signed ? 'text-emerald-700' : 'text-amber-700'}">${game.aascConvention?.signed ? 'Habilité Sécurité Civile' : 'En attente de souscription'}</span>
+            </div>
+          </div>
+
+          <div class="pt-1 flex items-center justify-between">
+            ${game.aascConvention?.signed ? `
+              <div class="flex items-center gap-2 text-xs font-bold text-emerald-800">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span>Convention signée avec la Préfecture • Agréments A, B, C et D en vigueur.</span>
+              </div>
+            ` : `
+              <button onclick="window.game.signAascConvention()" class="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-pc-blue to-pc-blue-light hover:brightness-110 active:scale-95 text-white font-black text-xs shadow-lg transition flex items-center justify-center gap-2 cursor-pointer animate-pulse">
+                <span>✍️</span>
+                <span>Acheter & Signer la Convention d’AASC (800 €)</span>
+              </button>
+            `}
+          </div>
+        </div>
+
+        <!-- Grille des autres conventions partenariales -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           <!-- 1. CONVENTION CUMP (SAMU 15) -->

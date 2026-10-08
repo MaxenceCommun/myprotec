@@ -615,8 +615,8 @@ window.ProtecSystems = {
     const coords = this.getPlayerAntennaCoords(game);
     const now = Date.now();
 
-    // Cache de 10 minutes pour éviter de surcharger le réseau
-    if (!force && game.weather && game.weather.lastFetchTimestamp && (now - game.weather.lastFetchTimestamp < 10 * 60 * 1000)) {
+    // Actualisation automatique régulière (toutes les 3 minutes)
+    if (!force && game.weather && game.weather.lastFetchTimestamp && (now - game.weather.lastFetchTimestamp < 3 * 60 * 1000)) {
       return;
     }
 
@@ -972,8 +972,8 @@ window.ProtecSystems = {
       }
     }
 
-    // Récupération automatique de la météo réelle toutes les 10 minutes ou au premier lancement
-    if (!game.weather.lastFetchTimestamp || (Date.now() - game.weather.lastFetchTimestamp > 10 * 60 * 1000)) {
+    // Récupération automatique de la météo réelle toutes les 3 minutes ou au premier lancement
+    if (!game.weather.lastFetchTimestamp || (Date.now() - game.weather.lastFetchTimestamp > 3 * 60 * 1000)) {
       this.fetchRealWeather(game);
     }
 
@@ -1043,7 +1043,9 @@ window.ProtecSystems = {
     }
 
     if (weatherWidget) {
-      weatherWidget.setAttribute('title', `Météo Réelle : ${currentTemp}°C à ${game.weather.locationName || 'votre antenne'} • Vigilance ${game.weather.vigilance.toUpperCase()} (${game.weather.alertTitle})`);
+      const vigLabels = { green: 'VERTE', yellow: 'JAUNE', orange: 'ORANGE', red: 'ROUGE' };
+      const vigFr = vigLabels[game.weather.vigilance] || 'VERTE';
+      weatherWidget.setAttribute('title', `Météo : ${currentTemp}°C • Vigilance ${vigFr} (${game.weather.alertTitle})`);
     }
   },
 
