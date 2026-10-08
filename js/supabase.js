@@ -69,10 +69,10 @@ window.ProtecSupabase = {
     if (badge) {
       if (connected) {
         badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 border border-emerald-300';
-        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> BDD Supabase Active';
+        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Réseau Connecté';
       } else {
         badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 border border-amber-300';
-        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> BDD Locale (Hors-ligne)';
+        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Mode Hors-ligne';
       }
     }
   },

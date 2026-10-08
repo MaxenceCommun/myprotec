@@ -9,22 +9,17 @@ window.ProtecFinances = {
   injectState(game) {
     if (!game.financesHistory || !Array.isArray(game.financesHistory)) {
       game.financesHistory = [];
+    } else {
+      // Purge stricte de toute ancienne donnée fictive mock (J-6, J-5, etc.)
+      game.financesHistory = game.financesHistory.filter(e => e.dateStr && !e.dateStr.includes('J-'));
     }
 
-    // Si aucun historique, peupler avec des données initiales représentatives
+    // Si aucun historique réel, initialiser avec la dotation réelle de départ de l'antenne (100% fonctionnel)
     if (game.financesHistory.length === 0) {
       const current = game.resources?.money || 15000;
       const now = Date.now();
-      const oneDay = 86400000;
-
       game.financesHistory = [
-        { timestamp: now - 6 * oneDay, dateStr: 'J-6', amount: 8000, label: 'Dotation Initiale Commune', type: 'recette', balance: 8000 },
-        { timestamp: now - 5 * oneDay, dateStr: 'J-5', amount: -2200, label: 'Achat Matériel Médical & DSA', type: 'depense', balance: 5800 },
-        { timestamp: now - 4 * oneDay, dateStr: 'J-4', amount: 1450, label: 'Indemnité Dispositif Fête Locale', type: 'recette', balance: 7250 },
-        { timestamp: now - 3 * oneDay, dateStr: 'J-3', amount: 3200, label: 'Subvention Conseil Départemental', type: 'recette', balance: 10450 },
-        { timestamp: now - 2 * oneDay, dateStr: 'J-2', amount: -1500, label: 'Révision & Carburant Flotte', type: 'depense', balance: 8950 },
-        { timestamp: now - 1 * oneDay, dateStr: 'J-1', amount: 2400, label: 'Formations PSC1 Grand Public', type: 'recette', balance: 11350 },
-        { timestamp: now, dateStr: 'Aujourd’hui', amount: current - 11350, label: 'Régulation Opérationnelle & Dons', type: (current >= 11350 ? 'recette' : 'depense'), balance: current }
+        { timestamp: now, dateStr: 'Lancement', amount: current, label: 'Dotation Initiale Commune & État', type: 'recette', balance: current }
       ];
     }
   },
@@ -212,8 +207,8 @@ window.ProtecFinances = {
 
   // Génération du SVG de courbe fluide
   renderSvgChart(history, minBalance, maxBalance) {
-    if (!history || history.length < 2) {
-      return '<div class="p-8 text-center text-xs text-slate-400">Données insuffisantes pour tracer la courbe.</div>';
+    if (!history || history.length === 0) {
+      return '<div class="p-8 text-center text-xs text-slate-400">Aucune transaction enregistrée.</div>';
     }
 
     const width = 640;
@@ -221,11 +216,17 @@ window.ProtecFinances = {
     const padX = 40;
     const padY = 25;
 
+    // Si un seul point (départ du jeu), afficher une ligne de base constante avec le point initial
+    const displayHistory = history.length === 1 ? [
+      { ...history[0], dateStr: 'Départ' },
+      { ...history[0], dateStr: 'En cours' }
+    ] : history;
+
     const rangeY = Math.max(1, maxBalance - minBalance);
-    const stepX = (width - padX * 2) / (history.length - 1);
+    const stepX = (width - padX * 2) / (displayHistory.length - 1);
 
     // Coordonnées des points
-    const points = history.map((item, idx) => {
+    const points = displayHistory.map((item, idx) => {
       const x = padX + (idx * stepX);
       const normY = (item.balance - minBalance) / rangeY;
       const y = (height - padY) - (normY * (height - padY * 2));

@@ -304,11 +304,16 @@ window.ProtecOfflineEngine = {
       }
     }
 
-    // - Nouvelles candidatures spontanées (1 toutes les 25-40 min, max 2)
-    const maxNewCand = Math.min(2, Math.floor(elapsedSec / 1800));
-    for (let i = 0; i < maxNewCand; i++) {
-      this.generateOfflineCandidature(game);
-      report.newCandidaturesCount++;
+    // - Nouvelles candidatures spontanées (Uniquement si campagne de pub active ou haute notoriété, jamais en début de partie)
+    const hasPubCampaign = !!(game.resources?.campaigns?.social || game.resources?.campaigns?.posters);
+    const hasMinRep = (game.resources?.reputationScore || 0) >= 70;
+    const currentCandCount = (game.candidatures || []).length;
+    if (game.stations?.length > 0 && (hasPubCampaign || hasMinRep) && currentCandCount < 3) {
+      const maxNewCand = Math.min(3 - currentCandCount, Math.floor(elapsedSec / 3600));
+      for (let i = 0; i < maxNewCand; i++) {
+        this.generateOfflineCandidature(game);
+        report.newCandidaturesCount++;
+      }
     }
 
     // - Appel à renfort d'Alliance (si absent plus de 20 min)

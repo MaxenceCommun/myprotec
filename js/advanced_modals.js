@@ -5,9 +5,13 @@
 window.ProtecAdvancedModals = {
   // --- 1. MODAL RÉCOMPENSES & DÉFIS ---
   renderRewards(game) {
+    if (window.ProtecAdvanced && window.ProtecAdvanced.updateTasksProgress) {
+      window.ProtecAdvanced.updateTasksProgress(game);
+    }
     const r = game.rewards || { streakDays: 1, dailyTasks: [], weeklyTasks: [] };
+    const hasAntenna = game.stations && game.stations.length > 0;
     const today = game.clock.day;
-    const canClaimStreak = r.lastDailyClaimDay !== today;
+    const canClaimStreak = hasAntenna && (r.lastDailyClaimDay !== today);
 
     const streakList = [
       { day: 1, title: 'Jour 1', gift: '300 € + O2', icon: '🎁' },
@@ -21,6 +25,16 @@ window.ProtecAdvancedModals = {
 
     return `
       <div class="space-y-6">
+        ${!hasAntenna ? `
+          <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-xs text-amber-800">
+            <span class="text-xl">📍</span>
+            <div>
+              <p class="font-extrabold">Antenne opérationnelle non définie</p>
+              <p class="text-[11px] text-amber-700">Placez d’abord votre antenne sur la carte géographique pour débloquer votre dotation de bienvenue et comptabiliser les objectifs opérationnels.</p>
+            </div>
+          </div>
+        ` : ''}
+
         <!-- Bandeau Dotation Quotidienne -->
         <div class="p-5 rounded-2xl bg-gradient-to-r from-rose-500 via-pink-600 to-purple-600 text-white shadow-xl space-y-3">
           <div class="flex items-center justify-between">
@@ -29,7 +43,7 @@ window.ProtecAdvancedModals = {
               <h3 class="text-lg font-black mt-0.5">Série en cours : Jour ${r.streakDays || 1} / 7</h3>
             </div>
             <button onclick="window.ProtecAdvanced.claimDailyStreak(window.game)" class="px-5 py-2.5 rounded-xl font-black text-xs ${canClaimStreak ? 'bg-white text-rose-600 hover:bg-rose-50 shadow-lg animate-bounce' : 'bg-white/30 text-white cursor-not-allowed'} transition">
-              ${canClaimStreak ? '🎁 Réclamer mon Cadeau' : 'Déjà réclamé aujourd’hui ✓'}
+              ${canClaimStreak ? '🎁 Réclamer mon Cadeau' : (!hasAntenna ? '📍 Antenne requise' : 'Déjà réclamé aujourd’hui ✓')}
             </button>
           </div>
 

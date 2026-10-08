@@ -52,8 +52,9 @@ window.ProtecFormations = {
       id: 'PSE1',
       category: 'professionnelle',
       title: 'PSE1 - Premiers Secours en Équipe de niveau 1',
-      desc: 'Formation de 35 heures pour devenir secouriste opérationnel sur les DPS.',
+      desc: 'Formation de 35 heures réparties sur 5 jours pour devenir secouriste opérationnel.',
       durationHours: 35,
+      durationDays: 5,
       basePricePublic: 250,
       costOrganization: 140,
       capacity: 6,
@@ -64,13 +65,14 @@ window.ProtecFormations = {
       id: 'PSE2',
       category: 'professionnelle',
       title: 'PSE2 - Premiers Secours en Équipe de niveau 2',
-      desc: 'Formation de 28 heures : immobilisations, brancardage, matériel VPSP et relevage complexe.',
+      desc: 'Formation de 28 heures réparties sur 4 jours : immobilisations, brancardage, matériel VPSP et relevage complexe.',
       durationHours: 28,
+      durationDays: 4,
       basePricePublic: 280,
       costOrganization: 160,
       capacity: 6,
       reqTrainerRank: 'CE',
-      unlocks: 'Équipier Secouriste VPSP'
+      unlocks: 'Équipier-Secouriste'
     },
     {
       id: 'CE',
@@ -502,21 +504,62 @@ window.ProtecFormations = {
 
     const trainers = game.volunteers.filter(v => v.isTrainer || (v.skills && v.skills.some(s => s.startsWith('formateur') || s === 'cef')));
 
+    const activeFilter = this.trainerFilter || 'all';
+    const filteredTrainers = trainers.filter(v => {
+      const skills = (v.skills || []).map(s => String(s).toLowerCase());
+      if (activeFilter === 'psc') return v.isTrainer || skills.includes('formateur_psc') || skills.includes('formateur');
+      if (activeFilter === 'ps') return skills.includes('formateur_ps') || (skills.includes('formateur') && ['CE', 'CD'].includes(v.rank));
+      if (activeFilter === 'sst') return skills.includes('formateur_sst');
+      if (activeFilter === 'fdf') return skills.includes('formateur_de_formateur');
+      return true;
+    });
+
     body.innerHTML = `
       <div class="space-y-6">
-        <!-- Bannière Pédagogique -->
-        <div class="p-4 rounded-2xl glass-card space-y-2 border border-emerald-200">
-          <div class="flex items-center justify-between">
+        <!-- Bannière Pédagogique & Liste filtrable des formateurs -->
+        <div class="p-4 rounded-2xl glass-card space-y-3 border border-emerald-200">
+          <div class="flex items-center justify-between flex-wrap gap-2">
             <span class="text-xs font-black uppercase text-emerald-800 flex items-center gap-1.5">
-              <i data-lucide="award" class="w-4 h-4 text-emerald-600"></i> Pôle Formateurs & Cadres Pédagogiques
+              <i data-lucide="award" class="w-4 h-4 text-emerald-600"></i> Formateurs & Cadres Pédagogiques (${trainers.length})
             </span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-              ${trainers.length} formateur(s) habilité(s)
-            </span>
+            <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
+              <button onclick="window.ProtecFormations.setTrainerFilter('all')" class="px-2 py-0.5 rounded-lg text-[10px] font-bold ${activeFilter === 'all' ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'} transition cursor-pointer">Tous (${trainers.length})</button>
+              <button onclick="window.ProtecFormations.setTrainerFilter('psc')" class="px-2 py-0.5 rounded-lg text-[10px] font-bold ${activeFilter === 'psc' ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'} transition cursor-pointer">PSC</button>
+              <button onclick="window.ProtecFormations.setTrainerFilter('ps')" class="px-2 py-0.5 rounded-lg text-[10px] font-bold ${activeFilter === 'ps' ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'} transition cursor-pointer">PS (PSE)</button>
+              <button onclick="window.ProtecFormations.setTrainerFilter('sst')" class="px-2 py-0.5 rounded-lg text-[10px] font-bold ${activeFilter === 'sst' ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'} transition cursor-pointer">SST</button>
+              <button onclick="window.ProtecFormations.setTrainerFilter('fdf')" class="px-2 py-0.5 rounded-lg text-[10px] font-bold ${activeFilter === 'fdf' ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'} transition cursor-pointer">FdF</button>
+            </div>
           </div>
-          <p class="text-xs text-slate-600">
-            Formez vos secouristes aux premiers secours (PSE1/2), à l’Aide et Écoute Psychologique (AEP1/2) et développez vos Formateurs (PSC, PS, SST, AEP, Formateur de Formateurs).
-          </p>
+
+          <!-- Cartes des Formateurs filtrés -->
+          ${filteredTrainers.length === 0 ? `
+            <p class="text-xs text-slate-500 italic py-1">Aucun formateur trouvé pour ce filtre de formation.</p>
+          ` : `
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+              ${filteredTrainers.map(t => {
+                const qualifs = [];
+                const s = (t.skills || []).map(x => String(x).toLowerCase());
+                if (t.isTrainer || s.includes('formateur_psc') || s.includes('formateur')) qualifs.push('PSC');
+                if (s.includes('formateur_ps') || (s.includes('formateur') && ['CE', 'CD'].includes(t.rank))) qualifs.push('PS (PSE)');
+                if (s.includes('formateur_sst')) qualifs.push('SST');
+                if (s.includes('formateur_de_formateur')) qualifs.push('FdF');
+                return `
+                  <div class="p-2.5 rounded-xl bg-white border border-emerald-200 flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-2">
+                      ${game.getVolunteerAvatarHTML(t, 'w-7 h-7 text-[10px]')}
+                      <div>
+                        <strong class="text-slate-800 block text-xs leading-tight">${t.name}</strong>
+                        <span class="text-[9px] text-slate-400">${t.rank || 'Secouriste'}</span>
+                      </div>
+                    </div>
+                    <div class="flex flex-wrap gap-1 justify-end max-w-[110px]">
+                      ${qualifs.map(q => `<span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-emerald-100 text-emerald-800">${q}</span>`).join('')}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
         </div>
 
         <!-- Programmateur de nouvelle session -->
@@ -528,14 +571,14 @@ window.ProtecFormations = {
               <select id="new-course-id" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800">
                 <optgroup label="Grand Public & Entreprises">
                   <option value="GQS">GQS (2h - Sensibilisation)</option>
-                  <option value="PSC" selected>PSC1 (7h - Certifiant)</option>
-                  <option value="SST">SST (14h - Salariés Entreprises)</option>
+                  <option value="PSC" selected>PSC1 (7h - Certifiant 1 jour)</option>
+                  <option value="SST">SST (14h - Salariés Entreprises 2 jours)</option>
                 </optgroup>
                 <optgroup label="Secourisme Opérationnel">
-                  <option value="PSE1">PSE1 (35h - Secouriste)</option>
-                  <option value="PSE2">PSE2 (28h - Équipier VPSP)</option>
-                  <option value="CE">Chef d’Équipe (21h)</option>
-                  <option value="CD">Chef de Dispositif (24h)</option>
+                  <option value="PSE1">PSE1 (35h sur 5 jours - Secouriste)</option>
+                  <option value="PSE2">PSE2 (28h sur 4 jours - Équipier-Secouriste)</option>
+                  <option value="CE">Chef d’Équipe (21h sur 3 jours)</option>
+                  <option value="CD">Chef de Dispositif (24h sur 3 jours)</option>
                 </optgroup>
                 <optgroup label="Soutien Psychologique (AEP)">
                   <option value="AEP1">AEP1 - Sensibilisation Écoute (7h)</option>

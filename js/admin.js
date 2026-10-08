@@ -427,7 +427,7 @@ window.ProtecAdmin = {
             </div>
             <div>
               <h3 class="text-base sm:text-lg font-black text-slate-900 leading-tight">Panel Administrateur Protec Live</h3>
-              <p class="text-xs text-indigo-600 font-bold">Gestion globale de la Base de Données des Directeurs</p>
+              <p class="text-xs text-indigo-600 font-bold">Gestion globale des Directeurs & Antennes</p>
             </div>
           </div>
           <button onclick="window.ProtecAdmin.closeAdminModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
@@ -449,7 +449,7 @@ window.ProtecAdmin = {
             <div class="text-lg font-black text-emerald-600" id="admin-stat-online">-</div>
           </div>
           <div class="p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
-            <div class="text-[9px] font-black uppercase text-slate-400">Parties Cloud BDD</div>
+            <div class="text-[9px] font-black uppercase text-slate-400">Parties Sauvegardées</div>
             <div class="text-lg font-black text-slate-800" id="admin-stat-saves">-</div>
           </div>
           <div class="p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">

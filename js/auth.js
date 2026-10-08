@@ -129,8 +129,7 @@ window.ProtecAuth = {
         dbStatus.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Hors-ligne';
         dbStatus.className = 'text-[8px] sm:text-[9px] font-semibold text-amber-600 flex items-center gap-1';
       } else {
-        const isSupa = window.ProtecSupabase && window.ProtecSupabase.isConnected;
-        dbStatus.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> ${isSupa ? 'BDD Supabase' : 'En ligne Multi'}`;
+        dbStatus.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> En ligne Multi';
         dbStatus.className = 'text-[8px] sm:text-[9px] font-semibold text-emerald-600 flex items-center gap-1';
       }
 
@@ -670,10 +669,18 @@ window.ProtecAuth = {
       if (savedData.grants) game.grants = savedData.grants;
       if (savedData.baseUpgrades) game.baseUpgrades = savedData.baseUpgrades;
       if (savedData.skillsTree) game.skillsTree = savedData.skillsTree;
-      if (savedData.challenges) game.challenges = savedData.challenges;
       if (savedData.adRewards) {
         game.adRewards = savedData.adRewards;
         if (window.ProtecAds) window.ProtecAds.updateUI(game);
+      }
+
+      // Assainissement si aucune antenne n'est encore configurée
+      if (!game.stations || game.stations.length === 0) {
+        if (game.grants) game.grants.totalVolunteerHours = 0;
+        if (game.rewards) {
+          (game.rewards.dailyTasks || []).forEach(t => { t.current = 0; t.done = false; });
+          (game.rewards.weeklyTasks || []).forEach(w => { w.current = 0; w.done = false; });
+        }
       }
 
       game.updateStatsUI();

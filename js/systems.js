@@ -67,11 +67,15 @@ window.ProtecSystems = {
     }
     if (!game.grants) {
       game.grants = {
-        totalVolunteerHours: 42,
+        totalVolunteerHours: 0,
         municipalDossierSubmitted: false,
         lastGrantAwarded: 0,
         publicDonationsActive: false
       };
+    } else if (!game.stations || game.stations.length === 0 || ((game.missions || []).filter(m => m.status === 'completed').length === 0 && (game.volunteers || []).length === 0)) {
+      if (game.grants.totalVolunteerHours === 42 || game.grants.totalVolunteerHours === 47 || game.grants.totalVolunteerHours === 40) {
+        game.grants.totalVolunteerHours = 0;
+      }
     }
   },
 
@@ -1082,7 +1086,7 @@ window.ProtecSystems = {
       return;
     }
 
-    const hours = game.grants.totalVolunteerHours || 40;
+    const hours = game.grants.totalVolunteerHours || 0;
     const estimatedAmount = Math.max(3000, Math.min(25000, Math.round(hours * 18 * 1.5)));
 
     game.grants.municipalDossierSubmitted = true;

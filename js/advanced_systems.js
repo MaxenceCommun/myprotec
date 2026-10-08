@@ -261,13 +261,21 @@ window.ProtecAdvanced = {
         dailyTasks: [
           { id: 'task-1', title: 'Assurer 1 départ en mission', goal: 1, current: 0, reward: 250, done: false },
           { id: 'task-2', title: 'Valider 1 devis conforme au barème', goal: 1, current: 0, reward: 200, done: false },
-          { id: 'task-3', title: 'Maintenir la flotte révisée & désinfectée', goal: 1, current: 1, reward: 150, done: false }
+          { id: 'task-3', title: 'Maintenir la flotte révisée & désinfectée', goal: 1, current: 0, reward: 150, done: false }
         ],
         weeklyTasks: [
-          { id: 'w-task-1', title: 'Cumuler 15h de bénévolat d’intérêt public', goal: 15, current: game.grants?.totalVolunteerHours || 5, reward: 1200, done: false },
+          { id: 'w-task-1', title: 'Cumuler 15h de bénévolat d’intérêt public', goal: 15, current: 0, reward: 1200, done: false },
           { id: 'w-task-2', title: 'Promouvoir ou qualifier 1 bénévole', goal: 1, current: 0, reward: 600, done: false }
         ]
       };
+    } else {
+      // Nettoyage et assainissement des sauvegardes avec données résiduelles antérieures
+      const hasAntenna = game.stations && game.stations.length > 0;
+      if (!hasAntenna) {
+        (game.rewards.dailyTasks || []).forEach(t => { t.current = 0; t.done = false; });
+        (game.rewards.weeklyTasks || []).forEach(w => { w.current = 0; w.done = false; });
+        if (game.grants) game.grants.totalVolunteerHours = 0;
+      }
     }
 
     // Assurer que les stations possèdent des pièces aménageables
@@ -337,6 +345,11 @@ window.ProtecAdvanced = {
 
   // 2. Gestion des Récompenses Quotidiennes
   claimDailyStreak(game) {
+    if (!game.stations || game.stations.length === 0) {
+      game.showToast('Antenne Requise', 'Implantez d’abord votre antenne sur la carte pour recevoir votre dotation fédérale !', 'orange');
+      return;
+    }
+
     const today = game.clock.day;
     if (game.rewards.lastDailyClaimDay === today) {
       game.showToast('Déjà réclamé', 'Vous avez déjà reçu votre dotation quotidienne pour aujourd’hui ! Revenez demain.', 'blue');
@@ -375,6 +388,14 @@ window.ProtecAdvanced = {
   updateTasksProgress(game) {
     if (!game.rewards) return;
 
+    const hasAntenna = game.stations && game.stations.length > 0;
+    if (!hasAntenna) {
+      (game.rewards.dailyTasks || []).forEach(t => { t.current = 0; t.done = false; });
+      (game.rewards.weeklyTasks || []).forEach(w => { w.current = 0; w.done = false; });
+      if (game.grants) game.grants.totalVolunteerHours = 0;
+      return;
+    }
+
     // Tâches quotidiennes
     (game.rewards.dailyTasks || []).forEach(t => {
       if (t.id === 'task-1') {
@@ -385,24 +406,37 @@ window.ProtecAdvanced = {
         t.current = Math.min(t.goal, signedCount);
       } else if (t.id === 'task-3') {
         const allVehs = (game.stations || []).flatMap(s => s.vehicles || []);
-        const cleanVehs = allVehs.filter(v => !v.isBrokenDown && !v.needsRearming && (v.mechanical || 100) >= 60);
-        t.current = (allVehs.length > 0 && cleanVehs.length === allVehs.length) ? 1 : 0;
+        if (!allVehs || allVehs.length === 0) {
+          t.current = 0;
+        } else {
+          const cleanVehs = allVehs.filter(v => !v.isBrokenDown && !v.needsRearming && (v.mechanical || 100) >= 60);
+          t.current = (cleanVehs.length === allVehs.length) ? 1 : 0;
+        }
       }
     });
 
     // Défis hebdomadaires
     (game.rewards.weeklyTasks || []).forEach(w => {
       if (w.id === 'w-task-1') {
-        const hours = (game.grants?.totalVolunteerHours || 0) + ((game.missions || []).filter(m => m.status === 'completed').length * 4);
-        w.current = Math.min(w.goal, hours);
+        const completedMissionsCount = (game.missions || []).filter(m => m.status === 'completed').length;
+        if (completedMissionsCount === 0 && (!game.grants || !game.grants.totalVolunteerHours)) {
+          w.current = 0;
+        } else {
+          const hours = Math.max(0, game.grants?.totalVolunteerHours || 0);
+          w.current = Math.min(w.goal, hours);
+        }
       } else if (w.id === 'w-task-2') {
-        const qualifiedCount = (game.volunteers || []).filter(v => ['PSE2', 'CE', 'CD'].includes(v.rank) || (v.skills && v.skills.length > 1)).length;
+        const qualifiedCount = (game.volunteers || []).filter(v => (v.promotionsCount && v.promotionsCount > 0) || (v.acquiredSkills && v.acquiredSkills.length > 0) || (v.trainingHistory && v.trainingHistory.length > 0)).length;
         w.current = Math.min(w.goal, qualifiedCount);
       }
     });
   },
 
   claimTaskReward(game, taskId, isWeekly = false) {
+    if (!game.stations || game.stations.length === 0) {
+      game.showToast('Antenne Requise', 'Implantez d’abord votre antenne sur la carte avant de valider des objectifs !', 'orange');
+      return;
+    }
     this.updateTasksProgress(game);
     const list = isWeekly ? game.rewards.weeklyTasks : game.rewards.dailyTasks;
     const task = list.find(t => t.id === taskId);

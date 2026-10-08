@@ -20,14 +20,27 @@ window.ProtecPWA = {
   },
 
   // 1. Détecte si l'application est déjà exécutée en tant qu'application installée (PWA Standalone)
-  checkStandalone() {
+  async checkStandalone() {
     this.isStandalone = (
       window.matchMedia('(display-mode: standalone)').matches ||
       window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches ||
       navigator.standalone === true ||
       document.referrer.includes('android-app://') ||
       localStorage.getItem('protec_pwa_installed') === 'true'
     );
+
+    if (!this.isStandalone && 'getInstalledRelatedApps' in navigator) {
+      try {
+        const related = await navigator.getInstalledRelatedApps();
+        if (related && related.length > 0) {
+          this.isStandalone = true;
+          try { localStorage.setItem('protec_pwa_installed', 'true'); } catch (e) {}
+          this.updateUI();
+        }
+      } catch (e) {}
+    }
   },
 
   // 2. Détecte la plateforme (iOS vs Android / PC)
@@ -266,7 +279,10 @@ window.ProtecPWA = {
           `}
         </div>
 
-        <div class="mt-5 flex justify-end">
+        <div class="mt-5 flex items-center justify-between gap-2">
+          <button onclick="localStorage.setItem('protec_pwa_installed', 'true'); window.ProtecPWA.isStandalone = true; window.ProtecPWA.updateUI(); window.ProtecPWA.closeInstallModal();" class="text-xs font-bold text-slate-500 hover:text-emerald-600 transition flex items-center gap-1">
+            ✓ Déjà installée sur mon appareil
+          </button>
           <button onclick="window.ProtecPWA.closeInstallModal()" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition">
             Fermer
           </button>

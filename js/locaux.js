@@ -23,7 +23,7 @@
  */
 
 window.ProtecLocaux = {
-  dimensionMode: '3d', // '2d' (Plan d'architecte CAD) | '3d' (Vue isométrique volumétrique)
+  dimensionMode: '2d', // '2d' (Plan d'architecte CAD) | '3d' (Vue isométrique - grisé V1)
   snapToGrid: true, // Aimant / Magnétisme à la grille
   camera3D: { yaw: -0.72, pitch: 0.62, zoom: 42, panX: 0, panY: -20 },
   camera2D: { zoom: 46, panX: 0, panY: 0 },
@@ -141,6 +141,19 @@ window.ProtecLocaux = {
       costPerTile: 200,
       workDurationSec: 60,
       perTileStats: {}
+    },
+    parking: {
+      id: 'parking',
+      name: 'Parking Opérationnel Extérieur',
+      icon: '🅿️',
+      bgClass: 'bg-slate-700 border-slate-600',
+      textClass: 'text-slate-200',
+      blueprintClass: 'bg-slate-900 border-slate-500 text-slate-300',
+      lightBg: 'bg-slate-100 text-slate-700 border-slate-300',
+      desc: 'Stationnement extérieur des véhicules de secours (VPSP, VTU, VL) et accès portail.',
+      costPerTile: 300,
+      workDurationSec: 60,
+      perTileStats: { vehicleCapacity: 2 }
     }
   },
 
@@ -864,6 +877,44 @@ window.ProtecLocaux = {
     this.renderModal(game);
   },
 
+  confirmCustomStarterSetup(game, stationId, r1 = 'bureau', r2 = 'formation', r3 = 'stockage') {
+    const layout = {
+      id: 'starter_base_pc',
+      name: 'Local de Base Protection Civile',
+      width: 4,
+      height: 3,
+      surfaceM2: 300,
+      tenure: 'rented',
+      grid: [
+        'parking', 'parking', r1, r1,
+        'parking', 'parking', r2, r2,
+        'parking', 'parking', r3, r3
+      ]
+    };
+    this.applyLayout(game, stationId || game.stations[0]?.id, layout);
+    game.showToast('🎉 Antenne Inaugurée !', `Bienvenue dans votre nouvelle antenne de Protection Civile ! Aménagement validé. La partie commence !`, 'green');
+    game.saveGame();
+    game.updateStatsUI();
+    this.renderModal(game);
+  },
+
+  openInitialSetupModal(game, stationId) {
+    const modal = document.getElementById('main-modal');
+    const title = document.getElementById('modal-title');
+    const subtitle = document.getElementById('modal-subtitle');
+    const icon = document.getElementById('modal-icon');
+    const body = document.getElementById('modal-body');
+
+    modal.classList.remove('hidden');
+    title.textContent = 'Configuration Initiale de votre Local';
+    subtitle.textContent = 'Définissez la fonction des 3 pièces de votre local avant d\'ouvrir l\'antenne';
+    icon.setAttribute('data-lucide', 'layout-grid');
+
+    const station = game.stations.find(s => s.id === stationId) || game.stations[0];
+    body.innerHTML = this.renderStarterSelection(game, station);
+    if (window.lucide) window.lucide.createIcons();
+  },
+
   // Achat d'un bâtiment existant (Catalogue)
   buyBuilding(game, buildingId) {
     const b = this.CATALOG_BUILDINGS.find(x => x.id === buildingId);
@@ -947,6 +998,20 @@ window.ProtecLocaux = {
 
   renderFurnitureSVG(type, widthPx = 80, heightPx = 80) {
     switch (type) {
+      case 'parking':
+        return `
+          <svg viewBox="0 0 100 100" class="w-full h-full pointer-events-none drop-shadow-sm">
+            <!-- Bitume gris foncé -->
+            <rect x="0" y="0" width="100" height="100" fill="#334155"/>
+            <!-- Marquages au sol blancs -->
+            <line x1="10" y1="5" x2="10" y2="95" stroke="#f8fafc" stroke-width="2" stroke-dasharray="6,4"/>
+            <line x1="90" y1="5" x2="90" y2="95" stroke="#f8fafc" stroke-width="2" stroke-dasharray="6,4"/>
+            <!-- Emplacement réservé véhicule de secours -->
+            <rect x="22" y="15" width="56" height="70" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="4,2" rx="4"/>
+            <text x="50" y="55" font-size="12" fill="#f59e0b" text-anchor="middle" font-weight="900">PC 🚑</text>
+          </svg>
+        `;
+
       case 'bureau':
         return `
           <svg viewBox="0 0 100 100" class="w-full h-full pointer-events-none drop-shadow-sm">
@@ -1382,69 +1447,120 @@ window.ProtecLocaux = {
   // =========================================================================
 
   renderStarterSelection(game, station) {
+    const stId = station ? station.id : (game.stations[0]?.id || '');
+    const r1 = this._tempSetupR1 || 'bureau';
+    const r2 = this._tempSetupR2 || 'formation';
+    const r3 = this._tempSetupR3 || 'stockage';
+
+    const tempLayout = {
+      width: 4,
+      height: 3,
+      grid: [
+        'parking', 'parking', r1, r1,
+        'parking', 'parking', r2, r2,
+        'parking', 'parking', r3, r3
+      ]
+    };
+
     return `
       <div class="space-y-6 max-w-4xl mx-auto py-2">
         <div class="text-center space-y-2">
           <span class="px-3 py-1 rounded-full text-xs font-black bg-pc-blue/10 text-pc-blue uppercase tracking-wider">
-            Inauguration de l’Antenne Locale
+            Procédure d'Ouverture d'Antenne
           </span>
-          <h3 class="text-xl font-black text-slate-900">Choisissez la Disposition de vos Premiers Locaux</h3>
+          <h3 class="text-xl font-black text-slate-900">Aménagement du Local de Base de la Protection Civile</h3>
           <p class="text-xs text-slate-600 max-w-xl mx-auto leading-relaxed">
-            Pour installer votre nouvelle antenne de Protection Civile, la commune met à votre disposition un local de <strong>400 m²</strong> (bail communal).
-            Sélectionnez l'aménagement initial sur le plan d'architecte :
+            Votre bâtiment de départ comprend un <strong>parking extérieur pour les véhicules de secours</strong> et <strong>3 pièces intérieures vides</strong>. Définissez la vocation de chaque pièce pour démarrer votre activité :
           </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-          ${this.STARTER_LAYOUTS.map(layout => {
-            const stats = this.calculatePremisesStats(layout);
-            return `
-              <div class="p-5 rounded-3xl glass-panel-heavy border-2 hover:border-pc-blue transition-all flex flex-col justify-between space-y-4 group shadow-md hover:shadow-xl">
-                <div class="space-y-3">
-                  <div class="flex items-center justify-between">
-                    <span class="text-3xl">${layout.icon}</span>
-                    <span class="px-2.5 py-1 rounded-xl text-[10px] font-black ${layout.badgeColor}">
-                      ${layout.badge}
-                    </span>
-                  </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+          <!-- Aperçu 2D d'architecte en direct -->
+          <div class="p-4 rounded-3xl bg-slate-900 border-2 border-slate-700 shadow-xl space-y-3">
+            <div class="flex items-center justify-between text-white text-xs font-bold">
+              <span class="flex items-center gap-1.5 text-amber-400">
+                <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                Plan 2D d'Architecte (Temps Réel)
+              </span>
+              <span class="text-[10px] text-slate-400 font-mono">4 x 3 cases • 300 m²</span>
+            </div>
 
-                  <div>
-                    <h4 class="text-sm font-black text-slate-900 group-hover:text-pc-blue transition">${layout.name}</h4>
-                    <p class="text-[11px] text-slate-500 mt-1 leading-normal">${layout.desc}</p>
-                  </div>
-
-                  <!-- Aperçu Plan 2D d'Architecte Réaliste -->
-                  ${this.renderStarterPreview(layout)}
-
-                  <!-- Résumé des Capacités -->
-                  <div class="space-y-1.5 text-[11px] font-bold text-slate-700 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <div class="flex justify-between">
-                      <span class="text-slate-500">📦 Capacité Stock :</span>
-                      <strong class="text-amber-600">${stats.storageCapacity} unités</strong>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-500">🎓 Salle Formation :</span>
-                      <strong class="${stats.hasFormation ? 'text-pc-blue' : 'text-slate-400'}">${stats.hasFormation ? `${stats.studentCapacity} élèves` : 'Non (Plus tard)'}</strong>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-500">🚒 Garage Couvert :</span>
-                      <strong class="text-red-600">${stats.vehicleCapacity} véhicule(s)</strong>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-500">🛏️ Dortoir Garde :</span>
-                      <strong class="text-purple-600">${stats.nightBeds > 0 ? `${stats.nightBeds} lits` : 'Non'}</strong>
-                    </div>
-                  </div>
+            <!-- Grille SVG du plan -->
+            <div class="grid grid-cols-4 gap-1 p-2 rounded-2xl bg-slate-950 border border-slate-800">
+              ${tempLayout.grid.map((tileKey, idx) => `
+                <div class="aspect-square rounded-lg overflow-hidden border border-slate-700 relative">
+                  ${this.renderFurnitureSVG(tileKey)}
+                  <span class="absolute bottom-1 right-1 px-1 rounded text-[8px] font-black uppercase ${tileKey === 'parking' ? 'bg-slate-800/80 text-amber-300' : 'bg-slate-900/80 text-white'}">
+                    ${tileKey === 'parking' ? 'Parking' : (idx === 2 || idx === 3) ? 'Pièce 1' : (idx === 6 || idx === 7) ? 'Pièce 2' : 'Pièce 3'}
+                  </span>
                 </div>
+              `).join('')}
+            </div>
 
-                <button onclick="window.ProtecLocaux.selectStarterLayout(window.game, '${layout.id}')" class="w-full py-2.5 rounded-2xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-md transition flex items-center justify-center gap-1.5 active:scale-95">
-                  <span>Choisir ce Local Gratuit</span>
-                  <i data-lucide="arrow-right" class="w-4 h-4"></i>
-                </button>
+            <div class="p-2.5 rounded-xl bg-slate-800/80 text-[11px] text-slate-300 flex items-center justify-between">
+              <span>🚗 Parking extérieur : <strong>2 places VPSP/VTU</strong></span>
+              <span>🚪 Accès : <strong>Portail & Entrée piétonne</strong></span>
+            </div>
+          </div>
+
+          <!-- Choix des fonctions des 3 pièces -->
+          <div class="space-y-4">
+            
+            <!-- Pièce 1 -->
+            <div class="p-4 rounded-2xl glass-card space-y-2 border border-slate-200">
+              <div class="flex items-center justify-between">
+                <h5 class="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-full bg-pc-blue text-white flex items-center justify-center text-[10px]">1</span>
+                  Pièce 1 (Entrée & Accueil public)
+                </h5>
+                <span class="text-[10px] text-pc-blue font-bold">Aile Principale</span>
               </div>
-            `;
-          }).join('')}
+              <select onchange="window.ProtecLocaux._tempSetupR1 = this.value; window.ProtecLocaux.openInitialSetupModal(window.game, '${stId}');" class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue">
+                <option value="bureau" ${r1 === 'bureau' ? 'selected' : ''}>💼 Bureau d'Accueil & Direction (Recommandé)</option>
+                <option value="formation" ${r1 === 'formation' ? 'selected' : ''}>🎓 Salle de Formation Citoyenne PSC1</option>
+              </select>
+            </div>
+
+            <!-- Pièce 2 -->
+            <div class="p-4 rounded-2xl glass-card space-y-2 border border-slate-200">
+              <div class="flex items-center justify-between">
+                <h5 class="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">2</span>
+                  Pièce 2 (Opérations & Équipe)
+                </h5>
+                <span class="text-[10px] text-indigo-600 font-bold">Aile Opérationnelle</span>
+              </div>
+              <select onchange="window.ProtecLocaux._tempSetupR2 = this.value; window.ProtecLocaux.openInitialSetupModal(window.game, '${stId}');" class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                <option value="formation" ${r2 === 'formation' ? 'selected' : ''}>🎓 Salle de Formation & Réunions (Recommandé)</option>
+                <option value="bureau" ${r2 === 'bureau' ? 'selected' : ''}>💼 Bureau Opérationnel des Chefs d'Équipe</option>
+                <option value="detente" ${r2 === 'detente' ? 'selected' : ''}>☕ Foyer & Détente des Bénévoles</option>
+              </select>
+            </div>
+
+            <!-- Pièce 3 -->
+            <div class="p-4 rounded-2xl glass-card space-y-2 border border-slate-200">
+              <div class="flex items-center justify-between">
+                <h5 class="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-full bg-amber-600 text-white flex items-center justify-center text-[10px]">3</span>
+                  Pièce 3 (Logistique & Matériel)
+                </h5>
+                <span class="text-[10px] text-amber-600 font-bold">Aile Logistique</span>
+              </div>
+              <select onchange="window.ProtecLocaux._tempSetupR3 = this.value; window.ProtecLocaux.openInitialSetupModal(window.game, '${stId}');" class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500">
+                <option value="stockage" ${r3 === 'stockage' ? 'selected' : ''}>📦 Zone de Stockage / Lots & Dons (Recommandé)</option>
+                <option value="vestiaires" ${r3 === 'vestiaires' ? 'selected' : ''}>🚿 Vestiaires & Casiers d'Intervention</option>
+              </select>
+            </div>
+
+            <!-- Bouton de validation -->
+            <button onclick="window.ProtecLocaux.confirmCustomStarterSetup(window.game, '${stId}', '${r1}', '${r2}', '${r3}')" class="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-black text-xs shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+              <i data-lucide="check-circle" class="w-4 h-4"></i>
+              <span>Valider l'Aménagement et Commencer la Partie</span>
+            </button>
+
+          </div>
         </div>
+
       </div>
     `;
   },
@@ -1584,8 +1700,8 @@ window.ProtecLocaux = {
             <button onclick="window.ProtecLocaux.setDimensionMode('2d')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '2d' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}">
               <span class="text-xs">📐</span> 2D
             </button>
-            <button onclick="window.ProtecLocaux.setDimensionMode('3d')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.dimensionMode === '3d' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}">
-              <span class="text-xs">🧊</span> 3D
+            <button disabled class="px-3 py-1.5 rounded-lg opacity-40 cursor-not-allowed flex items-center gap-1 text-slate-400 bg-slate-800/80" title="Mode 3D désactivé pour la V1 (Bientôt disponible en V2)">
+              <span class="text-xs">🧊</span> 3D <span class="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold">V2</span>
             </button>
           </div>
 

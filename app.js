@@ -649,8 +649,16 @@ class ProtecGame {
           this.sncfConvention = parsed.sncfConvention || this.sncfConvention;
           this.cumpConvention = parsed.cumpConvention || this.cumpConvention;
           this.adRewards = parsed.adRewards || null;
-          this.workplaceEquipment = parsed.workplaceEquipment || this.workplaceEquipment || null;
           if (parsed.player) this.player = parsed.player;
+
+          // Assainissement des objectifs et heures bénévoles si aucune antenne n'a encore été créée
+          if (!this.stations || this.stations.length === 0) {
+            if (this.grants) this.grants.totalVolunteerHours = 0;
+            if (this.rewards) {
+              (this.rewards.dailyTasks || []).forEach(t => { t.current = 0; t.done = false; });
+              (this.rewards.weeklyTasks || []).forEach(w => { w.current = 0; w.done = false; });
+            }
+          }
         }
       }
     } catch (e) {
@@ -1223,8 +1231,12 @@ class ProtecGame {
       window.ProtecSystems.fetchRealWeather(this, true);
     }
 
-    this.showToast('Antenne Inaugurée !', `${stationName} est désormais implantée. Attention : votre antenne est encore invisible au public. Lancez une campagne de pub ou prospectez pour recevoir vos premières sollicitations !`, 'green');
-    this.openStationDetails(stationId);
+    this.showToast('Bâtiment Implanté !', `${stationName} est désormais implantée sur le secteur. Procédez à l'aménagement initial de vos pièces.`, 'green');
+    if (isFirst && window.ProtecLocaux && typeof window.ProtecLocaux.openInitialSetupModal === 'function') {
+      window.ProtecLocaux.openInitialSetupModal(this, stationId);
+    } else {
+      this.openStationDetails(stationId);
+    }
   }
 
   // --- BARÈME ET DEVIS ---
@@ -1671,10 +1683,19 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
 
-    if (vehOption === 'none') devis.configuredVehicles = [];
-    else if (vehOption === 'vpsp1') devis.configuredVehicles = ['VPSP'];
-    else if (vehOption === 'vpsp2') devis.configuredVehicles = ['VPSP', 'VPSP'];
-    else if (vehOption === 'vpsp_vtu') devis.configuredVehicles = ['VPSP', 'VTU'];
+    devis.configuredVehicleId = vehOption;
+    if (vehOption === 'none') {
+      devis.configuredVehicles = [];
+    } else if (vehOption === 'all_fleet') {
+      devis.configuredVehicles = (this.vehicles || []).map(v => v.type || 'VPSP');
+    } else {
+      const selectedVeh = (this.vehicles || []).find(v => v.id === vehOption);
+      if (selectedVeh) {
+        devis.configuredVehicles = [selectedVeh.type || 'VPSP'];
+      } else {
+        devis.configuredVehicles = [];
+      }
+    }
 
     const b = this.calculateDynamicBareme(devis);
     devis.proposedPrice = b.totalBareme;
@@ -2332,38 +2353,7 @@ class ProtecGame {
   }
 
   generateStarterCandidatures() {
-    this.candidatures = [
-      {
-        id: `cand-${Date.now()}-1`,
-        name: 'Mathieu Garnier',
-        age: 22,
-        job: 'Étudiant en Droit',
-        motivation: 'Je souhaite m’engager pour me former aux gestes d’urgence et aider ma ville.',
-        dispoJours: ['Samedi', 'Dimanche'],
-        dispoType: 'étudiant',
-        avatar: '🙋‍♂️',
-        rank: 'Stagiaire',
-        role: 'Bénévole Stagiaire',
-        skills: ['PSC1'],
-        exp: 5,
-        isTrainer: false
-      },
-      {
-        id: `cand-${Date.now()}-2`,
-        name: 'Julie Rousseau',
-        age: 31,
-        job: 'Infirmière libérale',
-        motivation: 'Titulaire AFGSU et PSE2, je veux rejoindre les équipes de secours pour apporter mon soutien sur le terrain.',
-        dispoJours: ['Vendredi', 'Samedi', 'Dimanche'],
-        dispoType: 'salarié',
-        avatar: '👩‍⚕️',
-        rank: 'PSE2',
-        role: 'Équipier Secouriste',
-        skills: ['PSE2', 'AFGSU', 'formateur'],
-        exp: 50,
-        isTrainer: true
-      }
-    ];
+    this.candidatures = [];
   }
 
   toggleCampaign(campaignType) {
@@ -2402,6 +2392,10 @@ class ProtecGame {
     const initialRole = cand.role || (initialRank === 'CE' ? 'Chef d’Équipe' : (initialRank === 'PSE2' ? 'Équipier Secouriste' : (initialRank === 'PSE1' ? 'Secouriste' : 'Bénévole Stagiaire')));
     const initialExp = cand.exp !== undefined ? cand.exp : (initialRank === 'CE' ? 80 : (initialRank === 'PSE2' ? 45 : (initialRank === 'PSE1' ? 20 : 0)));
 
+    const currentDay = this.clock?.day || 1;
+    const waitDays = Math.max(0, currentDay - (cand.createdDay || currentDay));
+    const waitPenalty = waitDays >= 2 ? Math.min(40, waitDays * 15) : 0;
+
     const newVol = {
       id: `vol-${Date.now()}`,
       name: cand.name,
@@ -2415,18 +2409,27 @@ class ProtecGame {
       avatar: cand.avatar || '🙋',
       dispoType: cand.dispoType || 'bénévole',
       dispoJours: cand.dispoJours || ['Samedi', 'Dimanche'],
-      motivation: cand.motivationGrade ? Math.min(100, parseInt(cand.motivationGrade) * 5) : (cand.motivationScore || 85),
+      motivation: Math.max(30, (cand.motivationGrade ? Math.min(100, parseInt(cand.motivationGrade) * 5) : (cand.motivationScore || 85)) - waitPenalty),
       skills: cand.skills || [initialRank],
-      energy: 90,
-      humeur: 85
+      energy: Math.max(50, 90 - waitPenalty),
+      humeur: Math.max(30, 85 - waitPenalty)
     };
 
     this.volunteers.push(newVol);
     this.closeModal();
     this.updateStatsUI();
     this.saveGame();
-    this.showToast('Bénévole Intégré !', `${cand.name} (${initialRank}${cand.isTrainer ? ' • Formateur' : ''}) a signé sa charte d'engagement bénévole !`, 'green');
+    if (waitDays >= 2) {
+      this.showToast('Bénévole Intégré (Démotivé)', `${cand.name} a signé sa charte mais débute avec un moral entamé (${newVol.motivation}%) après ${waitDays} jours d’attente sans réponse.`, 'orange');
+    } else {
+      this.showToast('Bénévole Intégré !', `${cand.name} (${initialRank}${cand.isTrainer ? ' • Formateur' : ''}) a signé sa charte d'engagement bénévole !`, 'green');
+    }
     this.openModule('recrutement');
+  }
+
+  toggleShowCandidatures() {
+    this.showCandidaturesView = !this.showCandidaturesView;
+    this.openModule('recrutement', true);
   }
 
   rejectCandidature(candId) {
@@ -2447,10 +2450,7 @@ class ProtecGame {
         this.showToast('Agrément Manquant', 'L’Agrément A (SAMU 15) est obligatoire pour les départs réflexes ! Obtenez-le dans le pôle Recrutement.', 'orange');
         return;
       }
-      if (mission.type === 'social' && !this.resources.agrements.B) {
-        this.showToast('Agrément Manquant', 'L’Agrément B (Action Sociale) est obligatoire pour les maraudes ! Obtenez-le dans le pôle Recrutement.', 'orange');
-        return;
-      }
+      // Pour le social et les maraudes : pas d'agrément exigé (conventions de subventions d'objectifs DDETS, CCAS, CD, Métropole)
       if (mission.type === 'crise' && !this.resources.agrements.C) {
         this.showToast('Agrément Manquant', 'L’Agrément C (Soutien Sinistrés / NOVI) est requis pour les catastrophes ! Obtenez-le dans le pôle Recrutement.', 'orange');
         return;
@@ -2745,7 +2745,7 @@ class ProtecGame {
     this.saveGame();
   }
 
-  // Rendu moderne et professionnel de l'icône de bénévole (sans émojis cartoon, icône vectorielle homme / femme)
+  // Rendu moderne et professionnel de l'icône de bénévole (icônes vectorielles distinctes homme / femme sans distinction de couleur)
   getVolunteerAvatarHTML(v, sizeClass = 'w-7 h-7') {
     if (!v) return '';
     const nameLower = (v.name || '').toLowerCase();
@@ -2755,9 +2755,33 @@ class ProtecGame {
       ['sarah', 'élodie', 'elodie', 'léa', 'lea', 'manon', 'jade', 'chloé', 'chloe', 'inès', 'ines', 'pauline', 'océane', 'oceane', 'camille', 'stéphanie', 'stephanie', 'sophie', 'marie', 'clara', 'valérie', 'valerie', 'emma', 'charlotte', 'juliette', 'audrey', 'céline', 'celine', 'laura', 'marion'].some(fn => nameLower.startsWith(fn))
     );
 
+    const maleSvg = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
+        <!-- Tête Homme avec raie et découpe -->
+        <path d="M8.5 12.5 V7.2 H10.2 V3.8 C10.2 3.8 15.5 3.5 15.5 7.2 V12.5 C15.5 14.8 8.5 14.8 8.5 12.5 Z" />
+        <!-- Col rond -->
+        <path d="M10 16.3 C10.4 17.8 13.6 17.8 14 16.3" />
+        <!-- Épaules -->
+        <path d="M4 21.5 V18.2 C4 15.4 7 14.8 9.5 14.8" />
+        <path d="M14.5 14.8 C17 14.8 20 15.4 20 18.2 V21.5" />
+      </svg>
+    `;
+
+    const femaleSvg = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
+        <!-- Tête Femme coupe au carré et menton -->
+        <path d="M7.2 12.5 V7.5 C7.2 3.8 16.8 3.8 16.8 7.5 V12.5 H14.6 L12 14.8 L9.4 12.5 Z" />
+        <!-- Col V -->
+        <path d="M10 16.2 L12 18.6 L14 16.2" />
+        <!-- Épaules -->
+        <path d="M4 21.5 V18.2 C4 15.4 7 14.8 9.5 14.8" />
+        <path d="M14.5 14.8 C17 14.8 20 15.4 20 18.2 V21.5" />
+      </svg>
+    `;
+
     return `
-      <div class="${sizeClass} rounded-full flex items-center justify-center font-bold flex-shrink-0 ${isFemale ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-700 border border-slate-200'}" title="${isFemale ? 'Secouriste (Femme)' : 'Secouriste (Homme)'}">
-        <i data-lucide="user" class="w-3.5 h-3.5 ${isFemale ? 'text-rose-600' : 'text-slate-600'}"></i>
+      <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 text-slate-700 border border-slate-200/90 shadow-2xs transition" title="${v.name || 'Secouriste'}">
+        ${isFemale ? femaleSvg : maleSvg}
       </div>
     `;
   }
@@ -2853,14 +2877,13 @@ class ProtecGame {
     });
   }
 
-  // Rendu de l'infobulle "i" affichant les compétences détaillées au survol
-  getVolunteerSkillsPopoverHTML(v) {
-    if (!v) return '';
-    const allSkills = this.getVolunteerAllSkills(v);
-    const summaryText = allSkills.length > 0 
-      ? allSkills.map(s => s.badge || s.label).join(' • ')
-      : `${v.rank || 'Secouriste'} (Formation initiale)`;
+  // Infobulle globale et absolue pour l'affichage sans obstruction des compétences (z-index 99999)
+  showFloatingSkillsTooltip(e, volId, isClick = false) {
+    const el = document.getElementById('global-skills-tooltip');
+    const vol = (this.volunteers || []).find(v => String(v.id) === String(volId)) || (this.candidatures || []).find(c => String(c.id) === String(volId));
+    if (!el || !vol) return;
 
+    const allSkills = this.getVolunteerAllSkills(vol);
     const skillsBadges = allSkills.length > 0
       ? allSkills.map(s => `
           <div class="px-2 py-1 rounded-lg text-[10px] font-bold border flex items-center justify-between gap-2 ${s.color}">
@@ -2868,30 +2891,73 @@ class ProtecGame {
             <span class="text-[9px] opacity-90 truncate">${s.label}</span>
           </div>
         `).join('')
-      : `<span class="text-[10px] text-slate-400 italic">Formation initiale ${v.rank || 'Secouriste'}</span>`;
+      : `<span class="text-[10px] text-slate-400 italic">Formation initiale ${vol.rank || 'Secouriste'}</span>`;
 
+    el.innerHTML = `
+      <div class="font-black text-xs text-white mb-2 pb-1.5 border-b border-slate-700/80 flex items-center justify-between">
+        <span class="flex items-center gap-1.5 truncate">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          ${vol.name}
+        </span>
+        <span class="text-[9px] font-mono px-2 py-0.5 rounded-full bg-pc-blue/30 text-sky-300 font-black border border-pc-blue/40">${vol.rank || 'Secouriste'}</span>
+      </div>
+      <div class="text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">Compétences & Habilitations Terrain :</div>
+      <div class="space-y-1 mb-2.5 max-h-52 overflow-y-auto pr-1">
+        ${skillsBadges}
+      </div>
+      <div class="text-[9px] text-slate-400 pt-1.5 border-t border-slate-800 flex justify-between">
+        <span>Dispo : <strong class="text-slate-300">${vol.dispoJours?.join(', ') || 'Semaine & WE'}</strong></span>
+        <span>Énergie : <strong class="text-emerald-400">${vol.energy || 80}%</strong></span>
+      </div>
+    `;
+
+    const target = e.currentTarget || e.target;
+    const rect = target.getBoundingClientRect();
+    const tooltipWidth = 288;
+    let left = rect.left;
+    if (left + tooltipWidth > window.innerWidth - 12) {
+      left = window.innerWidth - tooltipWidth - 12;
+    }
+    if (left < 12) left = 12;
+
+    let top = rect.bottom + 6;
+    if (top + 230 > window.innerHeight) {
+      top = Math.max(10, rect.top - 230);
+    }
+
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.classList.remove('hidden');
+
+    if (isClick) {
+      const dismiss = (ev) => {
+        if (!el.contains(ev.target) && ev.target !== target) {
+          el.classList.add('hidden');
+          document.removeEventListener('click', dismiss);
+        }
+      };
+      setTimeout(() => document.addEventListener('click', dismiss), 50);
+    }
+  }
+
+  hideFloatingSkillsTooltip() {
+    const el = document.getElementById('global-skills-tooltip');
+    if (el) el.classList.add('hidden');
+  }
+
+  // Rendu de l'infobulle affichant les compétences détaillées au survol
+  getVolunteerSkillsPopoverHTML(v) {
+    if (!v) return '';
     return `
-      <div class="relative group/skill inline-flex items-center mt-0.5">
-        <button type="button" title="Compétences : ${summaryText}" class="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-pc-blue transition cursor-help font-medium">
-          <span class="w-4 h-4 rounded-full bg-slate-100 group-hover/skill:bg-pc-blue group-hover/skill:text-white text-slate-600 flex items-center justify-center font-bold text-[10px] border border-slate-200 transition">i</span>
-          <span class="text-[10px] text-slate-500 group-hover/skill:text-pc-blue font-semibold">Compétences</span>
+      <div class="inline-flex items-center mt-0.5">
+        <button type="button" 
+          onmouseenter="window.game.showFloatingSkillsTooltip(event, '${v.id}')"
+          onmouseleave="window.game.hideFloatingSkillsTooltip()"
+          onclick="event.stopPropagation(); window.game.showFloatingSkillsTooltip(event, '${v.id}', true)"
+          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 hover:bg-pc-blue/15 hover:text-pc-blue text-[10px] text-slate-600 transition cursor-pointer font-bold border border-slate-200 shadow-2xs group/skill-btn">
+          <i data-lucide="award" class="w-3 h-3 text-pc-blue group-hover/skill-btn:scale-110 transition-transform"></i>
+          <span>Compétences</span>
         </button>
-        <div class="hidden group-hover/skill:block absolute left-0 top-full mt-1.5 z-[120] w-72 p-3 rounded-2xl bg-slate-900/95 backdrop-blur-md text-white shadow-2xl pointer-events-none border border-slate-700/80 transition-all">
-          <div class="font-extrabold text-[11px] text-white mb-2 pb-1.5 border-b border-slate-700 flex items-center justify-between">
-            <span class="flex items-center gap-1.5 truncate">
-              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-              ${v.name}
-            </span>
-            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-pc-blue/30 text-sky-300 font-black border border-pc-blue/40">${v.rank || 'Secouriste'}</span>
-          </div>
-          <div class="space-y-1 mb-2 max-h-48 overflow-y-auto">
-            ${skillsBadges}
-          </div>
-          <div class="text-[9px] text-slate-400 pt-1.5 border-t border-slate-800 flex justify-between">
-            <span>Dispo : <strong class="text-slate-300">${v.dispoJours?.join(', ') || 'Semaine & WE'}</strong></span>
-            <span>Énergie : <strong class="text-emerald-400">${v.energy || 80}%</strong></span>
-          </div>
-        </div>
       </div>
     `;
   }
@@ -3206,75 +3272,102 @@ class ProtecGame {
           </div>
         ` : ''}
 
-        <div class="p-3.5 rounded-2xl glass-card text-xs text-slate-700 leading-relaxed">
-          ${mission.desc}
+        <!-- FICHE OPÉRATIONNELLE D'ALERTE / SITUATION DE TERRAIN -->
+        <div class="p-4 rounded-3xl border ${
+          mission.status === 'declenche' ? 'bg-red-50/80 border-red-300 text-red-950 shadow-sm' :
+          mission.status === 'prealerte' ? 'bg-amber-50/80 border-amber-300 text-amber-950 shadow-sm' :
+          mission.type === 'crise' ? 'bg-purple-50/80 border-purple-300 text-purple-950 shadow-sm' :
+          'bg-slate-50 border-slate-200 text-slate-800'
+        } space-y-3">
+          
+          <!-- Niveau d'alerte & Horodatage -->
+          <div class="flex items-center justify-between">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+              mission.status === 'declenche' ? 'bg-red-600 text-white animate-pulse' :
+              mission.status === 'prealerte' ? 'bg-amber-400 text-amber-950' :
+              mission.type === 'crise' ? 'bg-purple-700 text-white' :
+              'bg-pc-blue text-white'
+            }">
+              ${
+                mission.status === 'declenche' ? '🚨 Alerte Déclenchée - Engagement Terrain' :
+                mission.status === 'prealerte' ? '⏳ Vigilance / Préalerte Évolutive' :
+                mission.type === 'crise' ? '🚨 Crise Majeure / Plan NOVI' :
+                '📋 Dispositif Opérationnel Programmé'
+              }
+            </span>
+            <span class="text-[10px] font-bold text-slate-500">
+              ${mission.eventDate ? this.formatFullDate(mission.eventDate) + ' à ' + mission.eventDate.hour + 'h00' : 'Aujourd’hui'}
+            </span>
+          </div>
+
+          <!-- Type d'événement -->
+          <div>
+            <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Type d'Événement & Intitulé</span>
+            <h4 class="text-xs font-black text-slate-900 leading-snug">${mission.title}</h4>
+            <span class="text-[10px] text-slate-500 font-semibold">${mission.locationName || mission.city || 'Secteur d\'intervention territorial'}</span>
+          </div>
+
+          <!-- Situation terrain -->
+          <div class="p-3 rounded-2xl bg-white/90 border border-slate-200/80 text-xs text-slate-700 leading-relaxed space-y-1">
+            <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Situation Opérationnelle :</span>
+            <p>${mission.desc}</p>
+          </div>
+
+          <!-- Missions prévues sur le terrain -->
+          <div class="p-3 rounded-2xl bg-white/90 border border-slate-200/80 space-y-1.5">
+            <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Missions Prévues sur Site :</span>
+            <ul class="text-[11px] text-slate-700 space-y-1 list-disc list-inside">
+              <li>Reconnaissance de périmètre et bilans circonstanciés</li>
+              <li>Prise en charge des victimes et gestes de premiers secours</li>
+              <li>Accueil, réconfort et distribution d'urgence aux impliqués</li>
+              <li>Coordination radio PC et évacuations vers les urgences (CHU)</li>
+            </ul>
+          </div>
+
+          <!-- Effectif & Spécialités -->
+          <div class="grid grid-cols-2 gap-2 text-[10px]">
+            <div class="p-2.5 rounded-2xl bg-white/90 border border-slate-200 space-y-0.5">
+              <span class="text-slate-400 font-bold block text-[9px] uppercase">Personnel Nécessaire</span>
+              <strong class="text-slate-900 text-xs">${mission.requiredVolunteers} secouristes min.</strong>
+              <span class="text-slate-500 block text-[9px]">Effectif conseillé : ${mission.requiredVolunteers + 2}</span>
+            </div>
+            <div class="p-2.5 rounded-2xl bg-white/90 border border-slate-200 space-y-0.5">
+              <span class="text-slate-400 font-bold block text-[9px] uppercase">Spécialités Attendues</span>
+              <span class="text-emerald-700 font-bold block">Chef d'Équipe (CE) requis</span>
+              <span class="text-slate-600 block text-[9px]">Chauffeur VPSP, PSE2/PSE1</span>
+            </div>
+          </div>
+
+          <!-- Facturation & Réputation -->
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <div class="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-center justify-between">
+              <span class="text-[10px] text-emerald-800 font-bold">Indemnisation :</span>
+              <span class="text-xs font-black text-emerald-900 mono-num">+${mission.rewardMoney} €</span>
+            </div>
+            <div class="p-2.5 rounded-2xl bg-amber-50/70 border border-amber-200 flex items-center justify-between">
+              <span class="text-[10px] text-amber-800 font-bold">Notoriété :</span>
+              <span class="text-xs font-black text-amber-900 mono-num">+${mission.rewardReputation} pts</span>
+            </div>
+          </div>
+
+          ${mission.status === 'prealerte' ? `
+            <div class="p-3 rounded-2xl bg-amber-100/70 border border-amber-300 text-amber-950 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-black text-xs flex items-center gap-1.5 text-amber-900">
+                  <i data-lucide="hourglass" class="w-4 h-4 text-amber-600 animate-spin"></i>
+                  Veille Opérationnelle en cours
+                </span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 mono-num animate-pulse">
+                  ⏳ ${mission.prealertSecondsLeft || 0}s
+                </span>
+              </div>
+              <p class="text-[10px] text-amber-900 leading-snug">
+                Vous décidez si vous lancez la mobilisation générale par SMS. Les réponses des secouristes arriveront au fil des secondes.
+              </p>
+            </div>
+          ` : ''}
+
         </div>
-
-        <div class="p-3.5 rounded-2xl glass-card-blue flex items-center justify-between text-xs">
-          <div class="flex items-center gap-2 text-pc-blue font-bold">
-            <i data-lucide="clock" class="w-4 h-4"></i>
-            <span>Date : <strong>${mission.eventDate ? this.formatFullDate(mission.eventDate) + ' à ' + mission.eventDate.hour + 'h00' : 'Aujourd’hui'}</strong></span>
-          </div>
-          <span class="px-2.5 py-0.5 rounded-full font-extrabold ${isComplete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
-            ${isComplete ? 'Complet' : `Manque ${mission.requiredVolunteers - registeredVols.length}`}
-          </span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <div class="p-3 rounded-2xl glass-card-emerald flex items-center gap-3">
-            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">€</div>
-            <div>
-              <div class="text-[10px] text-emerald-700 font-bold uppercase">Facturation Convention</div>
-              <div class="text-sm font-extrabold text-emerald-800 mono-num">+${mission.rewardMoney} €</div>
-            </div>
-          </div>
-          <div class="p-3 rounded-2xl glass-card-amber flex items-center gap-3">
-            <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
-              <i data-lucide="award" class="w-4 h-4"></i>
-            </div>
-            <div>
-              <div class="text-[10px] text-amber-700 font-bold uppercase">Réputation</div>
-              <div class="text-sm font-extrabold text-amber-800 mono-num">+${mission.rewardReputation} pts</div>
-            </div>
-          </div>
-        </div>
-
-        ${mission.status === 'prealerte' ? `
-          <div class="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-3 shadow-sm">
-            <div class="flex items-center justify-between">
-              <span class="font-black text-xs flex items-center gap-1.5 text-amber-900">
-                <i data-lucide="hourglass" class="w-4 h-4 text-amber-600 animate-spin"></i>
-                VEILLE PRÉFECTORALE & PRÉALERTE ÉVOLUTIVE
-              </span>
-              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 mono-num animate-pulse">
-                ⏳ ${mission.prealertSecondsLeft || 0}s restantes
-              </span>
-            </div>
-            <p class="text-[11px] text-amber-800 leading-relaxed">
-              <strong>Zéro secouriste pré-engagé d’avance.</strong> Diffusez immédiatement la mobilisation par SMS. Les réponses arriveront au fil des secondes selon l’humeur, la fatigue et les disponibilités réelles de chacun.
-            </p>
-            <div class="w-full bg-amber-200/60 h-2 rounded-full overflow-hidden">
-              <div class="bg-amber-500 h-full rounded-full transition-all duration-300" style="width: ${Math.round(((mission.prealertTotalSec - (mission.prealertSecondsLeft || 0)) / (mission.prealertTotalSec || 60)) * 100)}%"></div>
-            </div>
-          </div>
-        ` : ''}
-
-        ${mission.status === 'declenche' ? `
-          <div class="p-4 rounded-2xl bg-red-50 border-2 border-red-400 text-red-950 space-y-2 shadow-sm animate-pulse">
-            <div class="flex items-center justify-between">
-              <span class="font-black text-xs flex items-center gap-1.5 text-red-900">
-                <i data-lucide="siren" class="w-4 h-4 text-red-600"></i>
-                ALERTE DÉCLENCHÉE - DÉPLOIEMENT IMMÉDIAT
-              </span>
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-200 text-red-900">
-                URGENT
-              </span>
-            </div>
-            <p class="text-[11px] text-red-800 leading-relaxed">
-              Aggravation confirmée ! La situation exige l’engagement de vos moyens sur le terrain. Complétez l’équipage et déclenchez le départ sans retard pour préserver la réputation de l’antenne.
-            </p>
-          </div>
-        ` : ''}
 
         ${mission.status === 'ongoing' ? `
           ${mission.currentIncident ? `
@@ -3915,6 +4008,11 @@ class ProtecGame {
       case 'planning':
       case 'devis':
       case 'finances':
+      case 'conventions':
+      case 'subventions':
+      case 'communication':
+      case 'tchat':
+      case 'messagerie':
         return true;
 
       // SAMU 15 : Nécessite au moins 1 ambulance VPSP et 3 secouristes
@@ -3973,6 +4071,7 @@ class ProtecGame {
   getModuleCategory(moduleKey) {
     const categories = {
       'planning': 'missions',
+      'conventions': 'missions',
       'devis': 'missions',
       'samu': 'missions',
       'pompiers': 'missions',
@@ -3982,6 +4081,7 @@ class ProtecGame {
       'recrutement': 'rh',
       'formation': 'rh',
       'poles': 'rh',
+      'communication': 'rh',
       'competences': 'rh',
 
       'base': 'materiel',
@@ -3990,8 +4090,13 @@ class ProtecGame {
       'specialites': 'materiel',
 
       'radio': 'liaisons',
+      'tchat': 'liaisons',
+      'messagerie': 'liaisons',
       'alliance': 'liaisons',
-      'meteo': 'liaisons'
+      'meteo': 'liaisons',
+
+      'finances': 'finances',
+      'subventions': 'finances'
     };
     return categories[moduleKey] || null;
   }
@@ -4052,16 +4157,18 @@ class ProtecGame {
     const categoryDefs = {
       missions: [
         { key: 'planning', label: 'Planning & DPS', icon: 'calendar', count: planCount },
-        { key: 'devis', label: 'Devis & Contrats', icon: 'file-text', count: devisCount },
+        { key: 'conventions', label: 'Conventions Officielles', icon: 'file-text' },
+        { key: 'devis', label: 'Devis & Contrats', icon: 'file-check', count: devisCount },
         { key: 'samu', label: 'SAMU 15', icon: 'activity', count: samuCount },
         { key: 'pompiers', label: 'Garde SDIS', icon: 'flame', count: sdisCount },
-        { key: 'social', label: 'Social', icon: 'heart-handshake', count: socialCount },
+        { key: 'social', label: 'Action Sociale', icon: 'heart-handshake', count: socialCount },
         { key: 'crise', label: 'Crise NOVI', icon: 'siren', count: criseCount }
       ],
       rh: [
         { key: 'recrutement', label: 'Bénévoles & Équipe', icon: 'users', count: this.volunteers?.length || 0 },
         { key: 'formation', label: 'Formations', icon: 'graduation-cap' },
-        { key: 'poles', label: 'Pôles d\'Antenne', icon: 'layers' }
+        { key: 'poles', label: 'Pôles d\'Antenne', icon: 'layers' },
+        { key: 'communication', label: 'Communication & Médias', icon: 'megaphone' }
       ],
       materiel: [
         { key: 'base', label: 'Antenne & Flotte', icon: 'truck', count: this.vehicles?.length || 0 },
@@ -4071,8 +4178,15 @@ class ProtecGame {
       ],
       liaisons: [
         { key: 'radio', label: 'Radio PC', icon: 'radio' },
+        { key: 'tchat', label: 'Messagerie & MP', icon: 'message-square' },
         { key: 'alliance', label: 'Alliances', icon: 'handshake', count: this.renforts?.filter(r => r.status === 'open').length || 0 },
         { key: 'meteo', label: 'Météo-France', icon: 'cloud-sun' }
+      ],
+      finances: [
+        { key: 'finances', label: 'Trésorerie & Bilan', icon: 'wallet' },
+        { key: 'subventions', label: 'Subventions Publiques', icon: 'landmark' },
+        { key: 'devis', label: 'Devis DPS', icon: 'file-check', count: devisCount },
+        { key: 'conventions', label: 'Conventions Officielles', icon: 'file-text' }
       ]
     };
 
@@ -4088,18 +4202,18 @@ class ProtecGame {
 
     subnavEl.classList.remove('hidden');
     subnavEl.innerHTML = `
-      <div class="flex items-center gap-1.5 pb-2.5">
+      <div class="flex items-center gap-2 flex-nowrap min-w-max py-0.5">
         ${unlockedItems.map(item => {
           const isActive = item.key === currentModuleKey;
           return `
             <button onclick="window.game.openModule('${item.key}')" 
-              class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${isActive 
-                ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/20' 
-                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/80'}">
-              <i data-lucide="${item.icon}" class="w-3.5 h-3.5"></i>
+              class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 whitespace-nowrap cursor-pointer ${isActive 
+                ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' 
+                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/90'}">
+              <i data-lucide="${item.icon}" class="w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-500'}"></i>
               <span>${item.label}</span>
               ${item.count !== undefined && item.count > 0 ? `
-                <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}">
+                <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black ${isActive ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-700 border border-slate-200'}">
                   ${item.count}
                 </span>
               ` : ''}
@@ -4165,6 +4279,31 @@ class ProtecGame {
     } else if (moduleKey === 'equipements') {
       if (window.ProtecEquipements) {
         window.ProtecEquipements.renderEquipementsModal(this);
+        return;
+      }
+    } else if (moduleKey === 'conventions') {
+      if (window.ProtecConventions) {
+        window.ProtecConventions.renderModal(this);
+        return;
+      }
+    } else if (moduleKey === 'subventions') {
+      if (window.ProtecSocial) {
+        window.ProtecSocial.renderModal(this);
+        return;
+      }
+    } else if (moduleKey === 'communication') {
+      if (window.ProtecCommunication) {
+        window.ProtecCommunication.renderModal(this);
+        return;
+      }
+    } else if (moduleKey === 'tchat' || moduleKey === 'messagerie') {
+      if (window.ProtecMessaging) {
+        window.ProtecMessaging.renderModal(this);
+        return;
+      }
+    } else if (moduleKey === 'cump') {
+      if (window.ProtecCump) {
+        window.ProtecCump.renderCumpTab(this);
         return;
       }
     }
@@ -4686,7 +4825,7 @@ class ProtecGame {
                 <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">🏛️</div>
                 <div>
                   <h4 class="text-xs font-extrabold text-slate-900">Dossier de Subvention Municipale & Mécénat</h4>
-                  <p class="text-[11px] text-slate-500">Heures de bénévolat d’intérêt général cumulées : <strong class="text-emerald-700 font-mono">${this.grants?.totalVolunteerHours || 42} h</strong> (valeur : ~${((this.grants?.totalVolunteerHours || 42) * 18).toLocaleString('fr-FR')} €)</p>
+                  <p class="text-[11px] text-slate-500">Heures de bénévolat d’intérêt général cumulées : <strong class="text-emerald-700 font-mono">${this.grants?.totalVolunteerHours || 0} h</strong> (valeur : ~${((this.grants?.totalVolunteerHours || 0) * 18).toLocaleString('fr-FR')} €)</p>
                 </div>
               </div>
               <div class="flex items-center gap-2">
@@ -4768,7 +4907,14 @@ class ProtecGame {
               if (!d.configuredScale) {
                 d.configuredScale = d.scale ? d.scale.split(' ')[0] : 'DPS-PE';
                 d.configuredVolunteers = d.requiredVolunteers || 4;
-                d.configuredVehicles = (d.requiredVehicles && d.requiredVehicles.length > 0) ? [...d.requiredVehicles] : ['VPSP'];
+                const ownedVehs = this.vehicles || [];
+                if (ownedVehs.length > 0) {
+                  d.configuredVehicles = [ownedVehs[0].type || 'VPSP'];
+                  d.configuredVehicleId = ownedVehs[0].id;
+                } else {
+                  d.configuredVehicles = [];
+                  d.configuredVehicleId = 'none';
+                }
               }
 
               const dynamicBareme = this.calculateDynamicBareme(d);
@@ -4840,14 +4986,19 @@ class ProtecGame {
                         </div>
                       </div>
 
-                      <!-- Véhicules -->
+                      <!-- Véhicules (Véhicules réels possédés par l'antenne) -->
                       <div>
-                        <label class="block text-[11px] font-bold text-slate-600 mb-1">Moyens Véhicules :</label>
+                        <label class="block text-[11px] font-bold text-slate-600 mb-1">Moyens Véhicules (Véhicules possédés) :</label>
                         <select onchange="window.game.updateDevisVehicles('${d.id}', this.value)" class="w-full py-2 px-3 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800">
-                          <option value="none" ${vehKey === 'none' ? 'selected' : ''}>Sans véhicule (Poste pédestre / Tente)</option>
-                          <option value="vpsp1" ${vehKey === 'vpsp1' ? 'selected' : ''}>1 Ambulance VPSP (+110 €)</option>
-                          <option value="vpsp2" ${vehKey === 'vpsp2' ? 'selected' : ''}>2 Ambulances VPSP (+220 €)</option>
-                          <option value="vpsp_vtu" ${vehKey === 'vpsp_vtu' ? 'selected' : ''}>1 VPSP + 1 VTU Logistique (+165 €)</option>
+                          <option value="none" ${(!d.configuredVehicles || d.configuredVehicles.length === 0) ? 'selected' : ''}>Sans véhicule (Poste pédestre / Tente de secours)</option>
+                          ${(this.vehicles || []).map(veh => {
+                            const vehCost = veh.type === 'VPSP' ? 110 : (veh.type === 'VTU' ? 55 : (veh.type === 'VL' ? 35 : 45));
+                            const isSel = d.configuredVehicleId === veh.id || (d.configuredVehicles || []).includes(veh.type);
+                            return `<option value="${veh.id}" ${isSel ? 'selected' : ''}>${veh.name} (${veh.label || veh.type}) [+${vehCost} €]</option>`;
+                          }).join('')}
+                          ${(this.vehicles || []).length >= 2 ? `
+                            <option value="all_fleet" ${d.configuredVehicleId === 'all_fleet' ? 'selected' : ''}>Toute la flotte (${(this.vehicles || []).length} véhicules)</option>
+                          ` : ''}
                         </select>
                       </div>
                     </div>
@@ -4998,11 +5149,17 @@ class ProtecGame {
             <!-- 1. CANDIDATURES BÉNÉVOLES -->
             <div class="space-y-3">
               <div class="flex items-center justify-between">
-                <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <i data-lucide="users" class="w-4 h-4 text-pc-blue"></i>
-                  Candidatures Bénévoles (${this.candidatures.filter(c => c.type !== 'salarie').length})
-                </h4>
-                <span class="text-[11px] text-slate-500 font-semibold">Engagement associatif bénévole</span>
+                <div>
+                  <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <i data-lucide="users" class="w-4 h-4 text-pc-blue"></i>
+                    Candidatures Bénévoles (${this.candidatures.filter(c => c.type !== 'salarie').length})
+                  </h4>
+                  <span class="text-[11px] text-slate-500 font-semibold">Citoyens souhaitant rejoindre l'association</span>
+                </div>
+                <button onclick="window.game.toggleShowCandidatures()" class="px-3 py-1.5 rounded-xl text-xs font-black ${this.showCandidaturesView ? 'bg-slate-200 text-slate-800' : 'bg-pc-blue text-white shadow-sm hover:bg-pc-blue-light'} transition flex items-center gap-1.5 cursor-pointer">
+                  <i data-lucide="${this.showCandidaturesView ? 'chevron-up' : 'eye'}" class="w-3.5 h-3.5"></i>
+                  <span>${this.showCandidaturesView ? 'Masquer les candidatures' : `Voir les candidatures (${this.candidatures.filter(c => c.type !== 'salarie').length})`}</span>
+                </button>
               </div>
 
               ${!isAntennaVisible ? `
@@ -5017,65 +5174,75 @@ class ProtecGame {
                 </div>
               ` : ''}
 
-              ${this.candidatures.filter(c => c.type !== 'salarie').length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune candidature bénévole reçue. Vous pouvez activer une campagne de communication ou de recrutement bénévole.</p>' : ''}
+              ${this.showCandidaturesView ? `
+                ${this.candidatures.filter(c => c.type !== 'salarie').length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune candidature bénévole en attente actuellement.</p>' : ''}
 
-              <div class="space-y-3">
-                ${this.candidatures.filter(c => c.type !== 'salarie').map(cand => `
-                  <div class="p-4 rounded-2xl glass-card space-y-3 border border-slate-200 hover:border-slate-300 transition">
-                    <div class="flex items-start gap-3">
-                      <div class="flex-shrink-0">${this.getVolunteerAvatarHTML(cand, 'w-10 h-10')}</div>
-                      <div class="flex-1">
-                        <div class="flex items-center justify-between">
-                          <div class="flex items-center gap-2">
-                            <h5 class="text-sm font-extrabold text-slate-900">${cand.name} (${cand.age} ans)</h5>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-black ${cand.rank && cand.rank !== 'Stagiaire' ? 'bg-pc-blue text-white' : 'bg-slate-200 text-slate-700'}">
-                              ${cand.rank || 'Bénévole'}
-                            </span>
-                            ${cand.isTrainer ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">Formateur</span>' : ''}
+                <div class="space-y-3">
+                  ${this.candidatures.filter(c => c.type !== 'salarie').map(cand => {
+                    const currentDay = this.clock?.day || 1;
+                    const daysWaiting = Math.max(0, currentDay - (cand.createdDay || currentDay));
+                    const isLate = daysWaiting >= 2;
+
+                    return `
+                    <div class="p-4 rounded-2xl glass-card space-y-3 border ${isLate ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200'} hover:border-slate-300 transition">
+                      <div class="flex items-start gap-3">
+                        <div class="flex-shrink-0">${this.getVolunteerAvatarHTML(cand, 'w-10 h-10')}</div>
+                        <div class="flex-1">
+                          <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                              <h5 class="text-sm font-extrabold text-slate-900">${cand.name} (${cand.age} ans)</h5>
+                              <span class="px-2 py-0.5 rounded text-[10px] font-black ${cand.rank && cand.rank !== 'Stagiaire' ? 'bg-pc-blue text-white' : 'bg-slate-200 text-slate-700'}">
+                                ${cand.rank || 'Bénévole'}
+                              </span>
+                              ${cand.isTrainer ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">Formateur</span>' : ''}
+                            </div>
+
+                            ${cand.interviewPassed ? `
+                              <span class="px-2.5 py-1 rounded-xl text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                Note : ${cand.motivationGrade} ✓
+                              </span>
+                            ` : `
+                              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isLate ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-100 text-slate-700'}">
+                                ${isLate ? `⏳ Attente : ${daysWaiting} jours (Démotivé)` : 'Entretien requis'}
+                              </span>
+                            `}
                           </div>
 
-                          ${cand.interviewPassed ? `
-                            <span class="px-2.5 py-1 rounded-xl text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                              Note : ${cand.motivationGrade} ✓
-                            </span>
-                          ` : `
-                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                              Entretien requis
-                            </span>
-                          `}
+                          <div class="flex items-center gap-2 mt-1">
+                            <p class="text-xs text-slate-500">${cand.job || 'Bénévole'} • Dispo : <strong class="text-pc-blue">${(cand.dispoJours || ['Samedi', 'Dimanche']).join(', ')}</strong></p>
+                            ${this.getVolunteerSkillsPopoverHTML(cand)}
+                          </div>
+
+                          ${cand.skills && cand.skills.length > 0 ? `
+                            <div class="flex flex-wrap gap-1 mt-1.5">
+                              ${cand.skills.map(s => `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${this.formatSkillName(s)}</span>`).join('')}
+                            </div>
+                          ` : ''}
                         </div>
+                      </div>
 
-                        <p class="text-xs text-slate-500 mt-1">${cand.job || 'Bénévole'} • Dispo : <strong class="text-pc-blue">${(cand.dispoJours || ['Samedi', 'Dimanche']).join(', ')}</strong></p>
+                      <div class="p-3 rounded-xl bg-white/70 text-xs text-slate-700 italic border border-slate-100">
+                        « ${cand.motivationText || cand.motivation || 'Très motivé pour intégrer l’antenne et apporter son aide.'} »
+                      </div>
 
-                        ${cand.skills && cand.skills.length > 0 ? `
-                          <div class="flex flex-wrap gap-1 mt-1.5">
-                            ${cand.skills.map(s => `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${this.formatSkillName(s)}</span>`).join('')}
-                          </div>
-                        ` : ''}
+                      <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+                        <div class="text-[11px] text-slate-400 font-semibold">
+                          ${isLate ? '<span class="text-amber-700 font-bold">⚠️ Répondez rapidement avant désistement du candidat !</span>' : (cand.interviewPassed ? 'Entretien réalisé • Bilan disponible' : 'Faites passer l’entretien pour valider la motivation')}
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <button onclick="window.game.rejectCandidature('${cand.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold glass-button text-slate-500 hover:text-rose-600 transition">
+                            Décliner
+                          </button>
+                          <button onclick="window.ProtecPersonnel.openInterviewModal(window.game, '${cand.id}')" class="px-4 py-2 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light text-white shadow-md transition flex items-center gap-1.5">
+                            <i data-lucide="mic" class="w-3.5 h-3.5"></i>
+                            ${cand.interviewPassed ? 'Voir Compte-Rendu & Décider' : 'Faire Passer l’Entretien'}
+                          </button>
+                        </div>
                       </div>
                     </div>
-
-                    <div class="p-3 rounded-xl bg-white/70 text-xs text-slate-700 italic border border-slate-100">
-                      « ${cand.motivation} »
-                    </div>
-
-                    <div class="flex items-center justify-between pt-2 border-t border-slate-100">
-                      <div class="text-[11px] text-slate-400 font-semibold">
-                        ${cand.interviewPassed ? 'Entretien réalisé • Bilan disponible' : 'Faites passer l’entretien pour valider la motivation'}
-                      </div>
-                      <div class="flex items-center gap-2">
-                        <button onclick="window.game.rejectCandidature('${cand.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold glass-button text-slate-500 hover:text-rose-600 transition">
-                          Décliner
-                        </button>
-                        <button onclick="window.ProtecPersonnel.openInterviewModal(window.game, '${cand.id}')" class="px-4 py-2 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light text-white shadow-md transition flex items-center gap-1.5">
-                          <i data-lucide="mic" class="w-3.5 h-3.5"></i>
-                          ${cand.interviewPassed ? 'Voir Compte-Rendu & Décider' : 'Faire Passer l’Entretien'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
+                  `;}).join('')}
+                </div>
+              ` : ''}
             </div>
 
             <!-- 2. CANDIDATURES SALARIÉES ET SERVICES CIVIQUES -->
@@ -5300,10 +5467,11 @@ class ProtecGame {
                     <div class="p-3 rounded-2xl glass-card text-xs space-y-2 ${v.isBurnout ? 'border-2 border-red-400 bg-red-50/40' : ''}">
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                          <span class="text-xl">${v.avatar || '⛑️'}</span>
+                          ${this.getVolunteerAvatarHTML(v, 'w-8 h-8')}
                           <div>
                             <div class="font-black text-slate-900 leading-tight">${v.name}</div>
                             <div class="text-[10px] text-slate-500 font-semibold">${v.rank} • ${contractLabel}</div>
+                            ${this.getVolunteerSkillsPopoverHTML(v)}
                           </div>
                         </div>
                         <span class="px-2 py-0.5 rounded text-[10px] font-black ${v.isBurnout ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-100 text-slate-700'}">
@@ -5880,6 +6048,9 @@ class ProtecGame {
       title.textContent = 'Récompenses Quotidiennes & Défis';
       subtitle.textContent = 'Série de connexions, dotations fédérales et objectifs de l’antenne';
       icon.setAttribute('data-lucide', 'gift');
+      if (window.ProtecAdvanced && window.ProtecAdvanced.updateTasksProgress) {
+        window.ProtecAdvanced.updateTasksProgress(this);
+      }
       if (window.ProtecAdvancedModals) {
         body.innerHTML = window.ProtecAdvancedModals.renderRewards(this);
       }
@@ -6399,6 +6570,17 @@ class ProtecGame {
             }
           }
         });
+
+        // Contrôles périodiques CUMP, Subventions et Communication
+        if (window.ProtecCump && typeof window.ProtecCump.checkComplianceTimer === 'function') {
+          window.ProtecCump.checkComplianceTimer(this);
+        }
+        if (window.ProtecSocial && typeof window.ProtecSocial.checkDailyDeadlines === 'function') {
+          window.ProtecSocial.checkDailyDeadlines(this);
+        }
+        if (window.ProtecCommunication && typeof window.ProtecCommunication.processDailyTick === 'function') {
+          window.ProtecCommunication.processDailyTick(this);
+        }
       }
 
       // 1c. GESTION DES PRÉALERTES ÉVOLUTIVES (Météo / SNCF / Préfecture)
@@ -6534,25 +6716,48 @@ class ProtecGame {
       }
 
       // 5. Arrivée de nouvelles candidatures spontanées
-      // RÈGLE : Sans communication active ni activité opérationnelle sur le terrain -> 0 CANDIDATURE
-      if (this.clock.second === 0 && this.clock.minute % 5 === 0) {
+      // RÈGLE RÉALISTE : Arrivée mesurée (1 fois par heure in-game maximum si campagne active)
+      if (this.clock.second === 0 && this.clock.minute === 0) {
         if (this.stations.length > 0) {
           const hasActiveCampaign = !!(this.resources.campaigns?.social || this.resources.campaigns?.posters);
-          const completedDpsCount = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
           const repScore = this.resources.reputationScore || 0;
+          const pendingCount = (this.candidatures || []).filter(c => c.status !== 'rejected').length;
 
-          const isAntennaVisible = hasActiveCampaign || completedDpsCount > 0 || repScore >= 60;
+          // Maximum 3 candidatures en attente simultanées
+          if (pendingCount < 3) {
+            let candChance = 0;
+            if (this.resources.campaigns?.social) candChance += 0.20;
+            if (this.resources.campaigns?.posters) candChance += 0.12;
+            if (!hasActiveCampaign && repScore >= 80) candChance = 0.03; // Très rare sans pub
 
-          if (isAntennaVisible) {
-            let candChance = 0.08;
-            if (completedDpsCount >= 1) candChance += 0.15;
-            if (this.resources.campaigns?.social) candChance += 0.35; // Réseaux sociaux = fort levier de recrutement
-            if (this.resources.campaigns?.posters) candChance += 0.25; // Affichage local
-            candChance += Math.min(0.20, repScore / 1500);
-
-            if (Math.random() < candChance) {
+            if (candChance > 0 && Math.random() < candChance) {
               this.generateRandomCandidature();
             }
+          }
+        }
+      }
+
+      // Suivi quotidien de la motivation des candidats et expiration après plusieurs jours
+      if (this.clock.second === 0 && this.clock.minute === 0 && this.clock.hour === 8) {
+        if (this.candidatures && this.candidatures.length > 0) {
+          const currentDay = this.clock.day || 1;
+          this.candidatures.forEach(cand => {
+            const ageDays = currentDay - (cand.createdDay || currentDay);
+            if (ageDays >= 2 && !cand.isImpatient) {
+              cand.isImpatient = true;
+              cand.motivation = Math.max(20, (cand.motivation || 85) - 25);
+              this.showToast('Candidat Impatient', `${cand.name} attend une réponse depuis 2 jours et commence à se démotiver.`, 'orange');
+            }
+          });
+
+          // Après 4 jours sans réponse, le candidat retire sa candidature
+          const expired = this.candidatures.filter(cand => (currentDay - (cand.createdDay || currentDay)) >= 4);
+          if (expired.length > 0) {
+            expired.forEach(cand => {
+              this.showToast('Candidature Annulée', `Faute de réponse sous 4 jours, ${cand.name} a retiré sa candidature bénévole.`, 'red');
+            });
+            this.candidatures = this.candidatures.filter(cand => (currentDay - (cand.createdDay || currentDay)) < 4);
+            this.updateStatsUI();
           }
         }
       }
@@ -7206,9 +7411,13 @@ class ProtecGame {
       dispoType: p.t,
       avatar: p.av,
       rank: p.rank,
-      role: p.role,
+      role: p.rank === 'PSE2' ? 'Équipier-Secouriste' : p.role,
       skills: p.skills,
       isTrainer: p.isTrainer,
+      createdDay: this.clock?.day || 1,
+      createdAt: Date.now(),
+      motivation: 85,
+      isImpatient: false
     });
 
     if (window.ProtecNotifications) {
@@ -7349,11 +7558,12 @@ class ProtecGame {
     // Actualisation du masquage/déblocage automatique
     this.updateDockAndFiltersVisibility();
 
-    // Gestion de la notification cadeau : UNIQUEMENT s'il y a quelque chose de prêt à être réclamé
+    // Gestion de la notification cadeau : UNIQUEMENT s'il y a une antenne configurée et quelque chose de prêt à être réclamé
     const r = this.rewards;
+    const hasAntenna = this.stations && this.stations.length > 0;
     const today = this.clock ? this.clock.day : new Date().getDate();
     let hasSomethingToClaim = false;
-    if (r) {
+    if (r && hasAntenna) {
       // 1. Récompense quotidienne non encore réclamée aujourd'hui
       if (r.lastDailyClaimDay !== today) {
         hasSomethingToClaim = true;
