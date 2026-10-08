@@ -625,6 +625,7 @@ class ProtecGame {
           this.stations = (parsed.stations || []).filter(s => s && s.id && !s.id.startsWith('station-allie') && !s.isFictive);
           this.vehicles = parsed.vehicles || [];
           this.volunteers = (parsed.volunteers || []).map(v => {
+            if (v.name) v.name = this.cleanVolunteerName(v.name);
             if (!v.skills || !Array.isArray(v.skills) || v.skills.length === 0) {
               const detected = this.getVolunteerAllSkills(v);
               v.skills = detected.map(s => s.id);
@@ -633,7 +634,10 @@ class ProtecGame {
           });
           this.devis = parsed.devis || [];
           this.missions = parsed.missions || [];
-          this.candidatures = parsed.candidatures || [];
+          this.candidatures = (parsed.candidatures || []).map(c => {
+            if (c.name) c.name = this.cleanVolunteerName(c.name);
+            return c;
+          });
           this.jobOffers = parsed.jobOffers || [];
           this.formations = parsed.formations || [];
           this.logistics = parsed.logistics || this.logistics;
@@ -2745,42 +2749,54 @@ class ProtecGame {
     this.saveGame();
   }
 
+  // Nettoyage de sécurité pour garantir qu'aucune mention de genre ne persiste dans les noms ou tooltips
+  cleanVolunteerName(name) {
+    if (!name) return 'Secouriste';
+    return String(name).replace(/\s*\((femme|homme|f|h)\)/gi, '').trim();
+  }
+
   // Rendu moderne et professionnel de l'icône de bénévole (icônes vectorielles distinctes homme / femme sans distinction de couleur)
   getVolunteerAvatarHTML(v, sizeClass = 'w-7 h-7') {
     if (!v) return '';
-    const nameLower = (v.name || '').toLowerCase();
+    if (v.name) v.name = this.cleanVolunteerName(v.name);
+    const cleanName = v.name || 'Secouriste';
+    const nameLower = cleanName.toLowerCase();
     const isFemale = (
       v.gender === 'f' ||
+      v.gender === 'F' ||
       v.sexe === 'f' ||
-      ['sarah', 'élodie', 'elodie', 'léa', 'lea', 'manon', 'jade', 'chloé', 'chloe', 'inès', 'ines', 'pauline', 'océane', 'oceane', 'camille', 'stéphanie', 'stephanie', 'sophie', 'marie', 'clara', 'valérie', 'valerie', 'emma', 'charlotte', 'juliette', 'audrey', 'céline', 'celine', 'laura', 'marion'].some(fn => nameLower.startsWith(fn))
+      v.sexe === 'F' ||
+      ['sarah', 'élodie', 'elodie', 'léa', 'lea', 'manon', 'jade', 'chloé', 'chloe', 'inès', 'ines', 'pauline', 'océane', 'oceane', 'camille', 'stéphanie', 'stephanie', 'sophie', 'marie', 'clara', 'valérie', 'valerie', 'emma', 'charlotte', 'juliette', 'audrey', 'céline', 'celine', 'laura', 'marion', 'clémentine', 'clementine', 'aurélie', 'aurelie', 'nathalie'].some(fn => nameLower.startsWith(fn))
     );
 
+    // Icône Homme fidèle (raie/décroché à gauche, col rond U, épaules)
     const maleSvg = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
-        <!-- Tête Homme avec raie et découpe -->
-        <path d="M8.5 12.5 V7.2 H10.2 V3.8 C10.2 3.8 15.5 3.5 15.5 7.2 V12.5 C15.5 14.8 8.5 14.8 8.5 12.5 Z" />
-        <!-- Col rond -->
-        <path d="M10 16.3 C10.4 17.8 13.6 17.8 14 16.3" />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
+        <!-- Tête avec raie/décroché à gauche et menton arrondi -->
+        <path d="M 5.8 3.2 H 14.5 C 16.2 3.2 17.2 4.4 17.2 6.2 V 11 C 17.2 14.8 6.8 14.8 6.8 11 V 6.2 H 5.8 Z" />
+        <!-- Col rond U -->
+        <path d="M 9.8 14.2 C 9.8 16.8 14.2 16.8 14.2 14.2" />
         <!-- Épaules -->
-        <path d="M4 21.5 V18.2 C4 15.4 7 14.8 9.5 14.8" />
-        <path d="M14.5 14.8 C17 14.8 20 15.4 20 18.2 V21.5" />
+        <path d="M 4 21.5 V 18 C 4 15.5 7.2 14.5 9.2 14.2" />
+        <path d="M 14.8 14.2 C 16.8 14.5 20 15.5 20 18 V 21.5" />
       </svg>
     `;
 
+    // Icône Femme fidèle (coupe au carré en cloche, col V, épaules connectées)
     const femaleSvg = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
-        <!-- Tête Femme coupe au carré et menton -->
-        <path d="M7.2 12.5 V7.5 C7.2 3.8 16.8 3.8 16.8 7.5 V12.5 H14.6 L12 14.8 L9.4 12.5 Z" />
-        <!-- Col V -->
-        <path d="M10 16.2 L12 18.6 L14 16.2" />
-        <!-- Épaules -->
-        <path d="M4 21.5 V18.2 C4 15.4 7 14.8 9.5 14.8" />
-        <path d="M14.5 14.8 C17 14.8 20 15.4 20 18.2 V21.5" />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
+        <!-- Chevelure au carré dôme et retours horizontaux -->
+        <path d="M 9.5 12.5 H 6.5 V 7.5 C 6.5 3.4 17.5 3.4 17.5 7.5 V 12.5 H 14.5" />
+        <!-- Col V distinctif -->
+        <path d="M 9.6 14.5 L 12 17.5 L 14.4 14.5" />
+        <!-- Épaules connectées à la coupe de cheveux -->
+        <path d="M 9.5 12.5 C 7.2 14 4 15.5 4 18 V 21.5" />
+        <path d="M 14.5 12.5 C 16.8 14 20 15.5 20 18 V 21.5" />
       </svg>
     `;
 
     return `
-      <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 text-slate-700 border border-slate-200/90 shadow-2xs transition" title="${v.name || 'Secouriste'}">
+      <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 text-slate-700 border border-slate-200/90 shadow-2xs transition" title="${cleanName}">
         ${isFemale ? femaleSvg : maleSvg}
       </div>
     `;

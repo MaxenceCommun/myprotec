@@ -662,7 +662,12 @@ window.ProtecAuth = {
     try {
       if (savedData.stations) game.stations = savedData.stations;
       if (savedData.vehicles) game.vehicles = savedData.vehicles;
-      if (savedData.volunteers) game.volunteers = savedData.volunteers;
+      if (savedData.volunteers) {
+        game.volunteers = savedData.volunteers.map(v => {
+          if (v.name && game.cleanVolunteerName) v.name = game.cleanVolunteerName(v.name);
+          return v;
+        });
+      }
       if (savedData.missions) game.missions = savedData.missions;
       if (savedData.resources) game.resources = savedData.resources;
       if (savedData.clock) game.clock = savedData.clock;
