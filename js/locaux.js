@@ -3681,28 +3681,33 @@ window.ProtecLocaux = {
                 <span>📦</span> Lots Opérationnels & Secourisme
               </span>
               <button onclick="window.game.openModule('logistique')" class="text-xs font-bold text-pc-blue hover:underline">
-                Pôle Logistique ➜
+                🛒 Boutique & Commandes ➜
               </button>
             </div>
 
             <div class="space-y-2 text-xs">
               <div class="flex justify-between p-2 rounded-xl bg-slate-50">
                 <span>🫁 Bouteilles Oxygène B5 :</span>
-                <strong class="text-slate-800">${log.oxygenB5 || 12} bouteilles</strong>
+                <strong class="text-slate-800">${log.oxygenBottles || log.oxygenB5 || 12} bouteilles</strong>
               </div>
               <div class="flex justify-between p-2 rounded-xl bg-slate-50">
                 <span>🩹 Trousses PSE & Pansements :</span>
-                <strong class="text-slate-800">${log.firstAidKits || 20} sacs</strong>
+                <strong class="text-slate-800">${log.woundKits || log.firstAidKits || 20} trousses</strong>
               </div>
               <div class="flex justify-between p-2 rounded-xl bg-slate-50">
-                <span>⛺ Tentes PMA & Barnums :</span>
-                <strong class="text-slate-800">${log.tents || 3} tentes</strong>
+                <span>⚡ Électrodes DAE :</span>
+                <strong class="text-slate-800">${log.aedPads || 8} paires</strong>
               </div>
               <div class="flex justify-between p-2 rounded-xl bg-slate-50">
-                <span>🛏️ Lits de Camp Réserve :</span>
-                <strong class="text-slate-800">${log.cots || 15} lits</strong>
+                <span>🩻 Colliers Cervicaux :</span>
+                <strong class="text-slate-800">${log.cervicalCollars || 6} unités</strong>
               </div>
             </div>
+            
+            <button onclick="window.game.openModule('logistique')" class="w-full py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center justify-center gap-2">
+              <span>🛒</span>
+              <span>Accéder à la Centrale d'Achats (Boutique en Ligne)</span>
+            </button>
           </div>
 
         </div>

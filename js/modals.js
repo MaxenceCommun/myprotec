@@ -90,6 +90,10 @@ window.ProtecModals = {
 
   // --- MODAL LOGISTIQUE & PHARMACIE ---
   renderLogistique(game) {
+    if (window.ProtecLogistique) {
+      window.ProtecLogistique.renderModal(game);
+      return '';
+    }
     const s = game.logistics || { oxygenBottles: 10, aedPads: 8, woundKits: 14, cervicalCollars: 6 };
     return `
       <div class="space-y-6">

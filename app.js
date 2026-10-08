@@ -3828,6 +3828,11 @@ class ProtecGame {
 
     const stationVehicles = this.vehicles.filter(v => station.vehicles.includes(v.id));
     const stationVolunteers = this.volunteers.filter(v => v.stationId === station.id);
+    if (window.ProtecLogistique) {
+      window.ProtecLogistique.ensureStationStock(station, this);
+    }
+
+    const totalStockItems = Object.values(station.stock || {}).reduce((a, b) => a + b, 0);
 
     body.innerHTML = `
       <div class="space-y-4">
@@ -3837,6 +3842,24 @@ class ProtecGame {
             <span class="px-2.5 py-0.5 rounded font-black bg-pc-blue text-white shadow-2xs">Niveau ${station.level}</span>
           </div>
           <p class="text-xs text-slate-600 font-medium">Standard radio et armoire de secours opérationnels.</p>
+        </div>
+
+        <!-- Stock & Réserve de l'Antenne -->
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-300 shadow-xs space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-extrabold text-slate-800 flex items-center gap-1.5">
+              <span>📦</span> Réserve & Stocks de l'Antenne
+            </span>
+            <button onclick="window.ProtecLogistique.selectedStationId='${station.id}'; window.ProtecLogistique.activeTab='boutique'; window.game.openModule('logistique');" class="text-xs font-extrabold text-pc-blue hover:underline">
+              🛒 Boutique / Acheter
+            </button>
+          </div>
+          <div class="flex items-center justify-between text-xs text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-200">
+            <span>Matériel en réserve : <strong class="text-slate-900">${totalStockItems} articles</strong></span>
+            <button onclick="window.ProtecLogistique.selectedStationId='${station.id}'; window.ProtecLogistique.activeTab='stock'; window.game.openModule('logistique');" class="px-2.5 py-1 rounded-lg bg-blue-100 text-pc-blue font-bold text-[10px] hover:bg-blue-200 transition">
+              Inventaire Réserve →
+            </button>
+          </div>
         </div>
 
         <div class="space-y-2">
@@ -6083,10 +6106,12 @@ class ProtecGame {
         body.innerHTML = window.ProtecModals.renderRadio(this);
       }
     } else if (moduleKey === 'logistique') {
-      title.textContent = 'Pôle Logistique, Pharmacie & Garage';
-      subtitle.textContent = 'Gestion des stocks médicaux d’urgence et maintenance de la flotte';
-      icon.setAttribute('data-lucide', 'package-check');
-      if (window.ProtecModals) {
+      if (window.ProtecLogistique) {
+        window.ProtecLogistique.renderModal(this);
+      } else if (window.ProtecModals) {
+        title.textContent = 'Pôle Logistique, Pharmacie & Garage';
+        subtitle.textContent = 'Gestion des stocks médicaux d’urgence et maintenance de la flotte';
+        icon.setAttribute('data-lucide', 'package-check');
         body.innerHTML = window.ProtecModals.renderLogistique(this);
       }
     } else if (moduleKey === 'meteo') {
