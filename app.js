@@ -578,7 +578,11 @@ class ProtecGame {
     }
 
     if (this.stations.length === 0) {
-      this.showOnboardingModal();
+      if (window.ProtecOnboarding) {
+        window.ProtecOnboarding.showWizard(this);
+      } else {
+        this.showOnboardingModal();
+      }
     } else {
       this.showToast('Partie chargée', `Bienvenue ! Votre antenne compte ${this.volunteers.length} secouristes.`, 'blue');
       // Si l'antenne n'a pas encore validé son aménagement d'ouverture, ouvrir automatiquement le plan 2D pour lancer la partie
@@ -784,8 +788,12 @@ class ProtecGame {
   }
 
   showOnboardingModal() {
-    const modal = document.getElementById('onboarding-modal');
-    if (modal) modal.classList.remove('hidden');
+    if (window.ProtecOnboarding) {
+      window.ProtecOnboarding.showWizard(this);
+    } else {
+      const modal = document.getElementById('onboarding-modal');
+      if (modal) modal.classList.remove('hidden');
+    }
   }
 
   startFirstStationOnboarding() {
