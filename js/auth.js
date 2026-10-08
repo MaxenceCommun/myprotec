@@ -326,14 +326,12 @@ window.ProtecAuth = {
               </div>
               <div>
                 <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">N° Département</label>
-                <select id="auth-reg-department" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue">
-                  ${(window.ProtecDepartements?.list || [
-                    { code: '75', name: 'Paris' },
-                    { code: '69', name: 'Rhône' },
-                    { code: '13', name: 'Bouches-du-Rhône' },
-                    { code: '33', name: 'Gironde' },
-                    { code: '59', name: 'Nord' }
-                  ]).map(d => `<option value="${d.code}" ${d.code === '75' ? 'selected' : ''}>${d.code} - ${d.name}</option>`).join('')}
+                <select id="auth-reg-department" onchange="localStorage.setItem('protec_last_reg_dept', this.value)" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue">
+                  ${(() => {
+                    const depts = (window.ProtecDepartements && window.ProtecDepartements.list) ? window.ProtecDepartements.list : [];
+                    const savedDept = localStorage.getItem('protec_last_reg_dept') || '54';
+                    return depts.map(d => `<option value="${d.code}" ${d.code === savedDept ? 'selected' : ''}>${d.code} - ${d.name}</option>`).join('');
+                  })()}
                 </select>
               </div>
             </div>
