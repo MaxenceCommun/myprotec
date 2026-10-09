@@ -29,77 +29,110 @@ window.ProtecAuth = {
 
   async checkSession(game) {
     try {
-      const res = await fetch('/api/auth/me', {
-        headers: { 'Authorization': `Bearer ${this.token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        this.currentUser = data.user;
-        localStorage.setItem('protec_user', JSON.stringify(data.user));
-
-        // Met à jour l'identité du joueur dans le jeu
-        game.player.id = data.user.id;
-        game.player.name = data.user.username;
-        game.player.role = data.user.role || 'user';
-
-        this.updateHeaderUI();
-        this.closeAuthModal();
-
-        // Récupérer la progression multijoueur sur le serveur
-        await this.checkCloudSaveOnLogin(game);
-
-        // Synchroniser immédiatement le joueur sur le serveur multijoueur
-        if (game.syncPlayerToServer) {
-          game.syncPlayerToServer();
-        }
-      } else {
-        // Token expiré ou serveur redémarré : tenter une reconnexion transparente si identifiants mémorisés
-        const savedUser = localStorage.getItem('protec_last_login_username');
-        const savedPass = localStorage.getItem('protec_last_login_password');
-        if (savedUser && savedPass) {
-          try {
-            const reloginRes = await fetch('/api/auth/login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username: savedUser, password: savedPass })
-            });
-            const reloginData = await reloginRes.json();
-            if (reloginRes.ok && reloginData.success && reloginData.token) {
-              this.token = reloginData.token;
-              this.currentUser = reloginData.user;
-              localStorage.setItem('protec_auth_token', reloginData.token);
-              localStorage.setItem('protec_user', JSON.stringify(reloginData.user));
-              game.player.id = reloginData.user.id;
-              game.player.name = reloginData.user.username;
-              game.player.role = reloginData.user.role || 'user';
-              this.updateHeaderUI();
-              this.closeAuthModal();
-              return;
-            }
-          } catch (reloginErr) {
-            console.warn('Auto-reconnexion échouée:', reloginErr);
+      // 1. Validation prioritaire via Supabase Cloud (si compte déjà connecté ou client Supabase actif)
+      if (window.ProtecSupabase && window.ProtecSupabase.client && this.currentUser) {
+        try {
+          let supaUser = null;
+          const isUUID = typeof this.currentUser.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(this.currentUser.id);
+          
+          if (isUUID) {
+            const { data, error } = await window.ProtecSupabase.client
+              .from('players')
+              .select('*')
+              .eq('id', this.currentUser.id)
+              .maybeSingle();
+            if (!error && data) supaUser = data;
           }
-        }
 
-        // Si compte local présent, maintenir actif en local sans forcer la fermeture
-        if (this.currentUser) {
-          game.player.id = this.currentUser.id;
-          game.player.name = this.currentUser.username;
-          this.updateHeaderUI(true);
-          this.closeAuthModal();
-        } else {
-          this.clearSession();
-          this.openAuthModal(true);
+          if (!supaUser && this.currentUser.username) {
+            const { data: byName, error: errName } = await window.ProtecSupabase.client
+              .from('players')
+              .select('*')
+              .eq('username', this.currentUser.username)
+              .maybeSingle();
+            if (!errName && byName) supaUser = byName;
+          }
+
+          if (supaUser) {
+            this.currentUser = {
+              id: supaUser.id,
+              username: supaUser.username,
+              role: supaUser.role || 'directeur',
+              stationName: supaUser.station_name,
+              city: supaUser.city
+            };
+            this.token = this.token || `supa-${supaUser.id}`;
+            localStorage.setItem('protec_auth_token', this.token);
+            localStorage.setItem('protec_user', JSON.stringify(this.currentUser));
+
+            game.player.id = supaUser.id;
+            game.player.name = supaUser.username;
+            game.player.role = supaUser.role || 'user';
+
+            this.updateHeaderUI(false);
+            this.closeAuthModal();
+
+            // Charger directement la progression depuis Supabase
+            await this.checkCloudSaveOnLogin(game);
+
+            if (game.syncPlayerToServer) {
+              game.syncPlayerToServer();
+            }
+            return;
+          }
+        } catch (supaErr) {
+          console.warn('Vérification Supabase différée:', supaErr);
         }
       }
-    } catch (e) {
-      console.warn('Erreur vérification session multijoueur:', e);
-      // Serveur temporairement hors-ligne : préserver impérativement le compte local actif
+
+      // 2. Si non validé par Supabase et token local présent (serveur Node.js local)
+      if (this.token && !this.token.startsWith('supa-')) {
+        const res = await fetch('/api/auth/me', {
+          headers: { 'Authorization': `Bearer ${this.token}` }
+        }).catch(() => null);
+
+        if (res && res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data && data.user) {
+            this.currentUser = data.user;
+            localStorage.setItem('protec_user', JSON.stringify(data.user));
+
+            game.player.id = data.user.id;
+            game.player.name = data.user.username;
+            game.player.role = data.user.role || 'user';
+
+            this.updateHeaderUI(false);
+            this.closeAuthModal();
+
+            await this.checkCloudSaveOnLogin(game);
+
+            if (game.syncPlayerToServer) {
+              game.syncPlayerToServer();
+            }
+            return;
+          }
+        }
+      }
+
+      // 3. Si compte local présent en mémoire (mode PWA / Cloud actif)
       if (this.currentUser) {
         game.player.id = this.currentUser.id;
         game.player.name = this.currentUser.username;
-        this.updateHeaderUI(true);
+        this.updateHeaderUI(false);
         this.closeAuthModal();
+        await this.checkCloudSaveOnLogin(game);
+      } else {
+        this.clearSession();
+        this.openAuthModal(true);
+      }
+    } catch (e) {
+      console.warn('Erreur vérification session multijoueur:', e);
+      if (this.currentUser) {
+        game.player.id = this.currentUser.id;
+        game.player.name = this.currentUser.username;
+        this.updateHeaderUI(false);
+        this.closeAuthModal();
+        await this.checkCloudSaveOnLogin(game);
       } else {
         this.openAuthModal(true);
       }
@@ -648,7 +681,7 @@ window.ProtecAuth = {
     // 1. Chargement prioritaire depuis Supabase Cloud
     if (window.ProtecSupabase && window.ProtecSupabase.client) {
       try {
-        const supaSave = await window.ProtecSupabase.loadGameState(this.currentUser.id);
+        const supaSave = await window.ProtecSupabase.loadGameState(this.currentUser.id, this.currentUser.username);
         if (supaSave && supaSave.save_data && supaSave.save_data.stations && supaSave.save_data.stations.length > 0) {
           this.applyCloudSave(game, supaSave.save_data);
           this.lastSyncTime = new Date(supaSave.updated_at || Date.now());
@@ -776,7 +809,27 @@ window.ProtecAuth = {
   },
 
   async manualLoadFromDatabase(game) {
-    if (!this.token) return;
+    // 1. Restauration prioritaire depuis Supabase Cloud
+    if (window.ProtecSupabase && window.ProtecSupabase.client && this.currentUser) {
+      try {
+        const supaSave = await window.ProtecSupabase.loadGameState(this.currentUser.id, this.currentUser.username);
+        if (supaSave && supaSave.save_data) {
+          this.applyCloudSave(game, supaSave.save_data);
+          game.showToast('Progression Restaurée', 'Données restaurées depuis la base Supabase Cloud.', 'green');
+          this.closeAuthModal();
+          return;
+        }
+      } catch (e) {
+        console.warn('Erreur chargement Supabase manuel:', e);
+      }
+    }
+
+    // 2. Restauration depuis serveur local
+    if (!this.token || this.token.startsWith('supa-')) {
+      game.showToast('Information', 'Votre profil est synchronisé avec Supabase Cloud.', 'blue');
+      return;
+    }
+
     try {
       const res = await fetch('/api/game/load', {
         headers: { 'Authorization': `Bearer ${this.token}` }
@@ -785,14 +838,14 @@ window.ProtecAuth = {
         const result = await res.json();
         if (result.save) {
           this.applyCloudSave(game, result.save);
-          game.showToast('Progression Restaurée', 'Données restaurées depuis le serveur multijoueur.', 'green');
+          game.showToast('Progression Restaurée', 'Données restaurées depuis le serveur local.', 'green');
           this.closeAuthModal();
         } else {
           game.showToast('Aucune sauvegarde', 'Aucune sauvegarde antérieure trouvée en BDD.', 'orange');
         }
       }
     } catch (e) {
-      game.showToast('Erreur', 'Impossible de charger les données du serveur.', 'orange');
+      game.showToast('Erreur', 'Impossible de contacter le serveur local.', 'orange');
     }
   },
 

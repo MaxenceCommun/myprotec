@@ -20,17 +20,23 @@ class ProtecGame {
     this.isPlacingAntenna = false;
 
     // Profil Joueur Réseau
-    let savedPlayerId = localStorage.getItem('protec_player_id');
+    let supaUser = null;
+    try {
+      supaUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
+    } catch (e) {}
+
+    let savedPlayerId = (supaUser && supaUser.id) || localStorage.getItem('protec_player_id');
     if (!savedPlayerId) {
       savedPlayerId = `p-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`;
       localStorage.setItem('protec_player_id', savedPlayerId);
     }
     this.player = {
       id: savedPlayerId,
-      name: localStorage.getItem('protec_player_name') || 'Directeur d’Antenne',
-      allianceId: localStorage.getItem('protec_alliance_id') || 'alliance-fnpc',
-      departmentCode: localStorage.getItem('protec_department_code') || '75',
-      deptRole: localStorage.getItem('protec_dept_role') || 'antenne_principale'
+      name: (supaUser && supaUser.username) || localStorage.getItem('protec_player_name') || 'Directeur d’Antenne',
+      allianceId: (supaUser && supaUser.allianceId) || localStorage.getItem('protec_alliance_id') || 'alliance-fnpc',
+      departmentCode: (supaUser && (supaUser.departmentCode || supaUser.department_code)) || localStorage.getItem('protec_department_code') || '54',
+      deptRole: localStorage.getItem('protec_dept_role') || 'antenne_principale',
+      role: (supaUser && supaUser.role) || 'directeur'
     };
 
     // Calendrier et Horloge Opérationnelle (Lundi 5 Octobre 2026 à 08:00)

@@ -215,17 +215,34 @@ window.ProtecSupabase = {
   },
 
   // 4. Chargement de la Partie Cloud depuis game_saves
-  async loadGameState(userId) {
-    if (!this.client || !userId) return null;
+  async loadGameState(userId, username = null) {
+    if (!this.client || (!userId && !username)) return null;
 
     try {
-      const { data, error } = await this.client
-        .from('game_saves')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
+      const isUUID = typeof userId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+      let data = null;
 
-      if (error || !data) return null;
+      // 1. Recherche par UUID si valide
+      if (isUUID) {
+        const { data: byId, error } = await this.client
+          .from('game_saves')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (!error && byId) data = byId;
+      }
+
+      // 2. Repli par username si non trouvé ou si userId n'est pas un UUID
+      const targetUser = username || (!isUUID ? userId : null);
+      if (!data && targetUser) {
+        const { data: byName, error: errName } = await this.client
+          .from('game_saves')
+          .select('*')
+          .eq('username', targetUser)
+          .maybeSingle();
+        if (!errName && byName) data = byName;
+      }
+
       return data;
     } catch (e) {
       console.warn('Erreur lecture sauvegarde Supabase:', e);
@@ -238,10 +255,10 @@ window.ProtecSupabase = {
     if (!this.client || !player || !station) return;
 
     try {
-      const numericPlayerId = typeof player.id === 'number' ? player.id : (parseInt(player.id, 10) || null);
+      const isUUID = typeof player.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(player.id);
       const payload = {
         id: String(station.id),
-        player_id: numericPlayerId,
+        player_id: isUUID ? player.id : null,
         player_name: player.name || 'Directeur d’Antenne',
         station_name: station.name,
         city: station.city || 'Paris',
@@ -259,7 +276,7 @@ window.ProtecSupabase = {
         .upsert(payload, { onConflict: 'id' });
 
       if (error) {
-        // En cas de conflit 409 sur la contrainte d'unicité, repli direct
+        // En cas de conflit, mise à jour directe
         const { error: updErr } = await this.client
           .from('alliance_stations')
           .update(payload)
@@ -269,7 +286,7 @@ window.ProtecSupabase = {
         }
       }
     } catch (e) {
-      // Éviter de polluer la console en cas de micro-coupure réseau
+      // Ignorer silencieusement pour éviter de polluer la console
     }
   },
 
@@ -284,13 +301,21 @@ window.ProtecSupabase = {
         .order('last_sync', { ascending: false })
         .limit(50);
 
-      if (excludePlayerId) {
+      // N'appliquer le filtre SQL que si excludePlayerId est un UUID valide pour éviter l'erreur 22P02
+      const isUUID = typeof excludePlayerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(excludePlayerId);
+      if (isUUID) {
         query = query.neq('player_id', excludePlayerId);
       }
 
       const { data, error } = await query;
       if (error || !data) return [];
-      return data;
+
+      // Filtrage complémentaire sécurisé côté client
+      return data.filter(st => {
+        if (!excludePlayerId) return true;
+        if (st.player_id && String(st.player_id) === String(excludePlayerId)) return false;
+        return true;
+      });
     } catch (e) {
       console.warn('Erreur lecture stations Supabase:', e);
       return [];
