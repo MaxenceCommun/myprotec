@@ -622,18 +622,6 @@ class ProtecGame {
       }
     } else {
       this.showToast('Partie chargée', `Bienvenue ! Votre antenne compte ${this.volunteers.length} secouristes.`, 'blue');
-      // Si l'antenne n'a pas encore validé son aménagement d'ouverture, ouvrir automatiquement le plan 2D pour lancer la partie
-      const firstSt = this.stations[0];
-      if (firstSt && (!firstSt.premises || !firstSt.premises.architecture)) {
-        setTimeout(() => {
-          if (window.ProtecLocaux && typeof window.ProtecLocaux.openInitialSetupModal === 'function') {
-            window.ProtecLocaux.openInitialSetupModal(this, firstSt.id);
-          }
-        }, 500);
-      }
-      if (window.ProtecTutorial) {
-        window.ProtecTutorial.init(this);
-      }
     }
   }
 

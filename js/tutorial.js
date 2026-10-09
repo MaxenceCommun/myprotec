@@ -8,24 +8,14 @@
 
 window.ProtecTutorial = {
   init(game) {
-    if (!game.tutorialState) {
-      game.tutorialState = {
-        step: 1,
-        completed: false,
-        dismissed: false
-      };
-    }
-    this.renderBanner(game);
+    // Les défis et missions guident désormais le joueur après le lancement officiel
+    const container = document.getElementById('tutorial-banner-container');
+    if (container) container.innerHTML = '';
   },
 
   start(game) {
-    if (!game.tutorialState) {
-      game.tutorialState = { step: 1, completed: false, dismissed: false };
-    }
-    game.tutorialState.step = 1;
-    game.tutorialState.completed = false;
-    game.tutorialState.dismissed = false;
-    this.renderBanner(game);
+    const container = document.getElementById('tutorial-banner-container');
+    if (container) container.innerHTML = '';
   },
 
   renderBanner(game) {
