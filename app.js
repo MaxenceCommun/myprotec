@@ -4491,9 +4491,11 @@ class ProtecGame {
       case 'specialites':
         return totalVols >= 8 && repScore >= 60;
 
-      // Alliances : Nécessite au moins 5 secouristes et 20 pts de réputation
+      // Alliances & Événements : Débloqué pour tous en multijoueur
       case 'alliance':
-        return totalVols >= 5 && repScore >= 20;
+      case 'evenements':
+      case 'ecussons':
+        return true;
 
       // Radio & Météo
       case 'radio':
@@ -4678,7 +4680,11 @@ class ProtecGame {
       'devis_dps': 'devis',
       'dps': 'planning'
     };
-    if (moduleKey && aliases[moduleKey]) {
+
+    if (moduleKey === 'evenements' || moduleKey === 'ecussons') {
+      this.activeAllianceTab = 'evenements';
+      moduleKey = 'alliance';
+    } else if (moduleKey && aliases[moduleKey]) {
       moduleKey = aliases[moduleKey];
     }
 

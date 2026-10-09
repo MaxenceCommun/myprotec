@@ -35,8 +35,22 @@ window.ProtecOnboarding = {
   step2Map: null,
   step2Marker: null,
 
-  // 3. Mobilier acheté et placé dans le bâtiment (initialement VIDE)
+  // 3. Mobilier acheté et typage des pièces du bâtiment (initialement VIDE)
   placedFurniture: [],
+  selectedRoomId: 'room_1',
+  roomsConfig: [
+    { id: 'room_1', name: 'Salle 1', type: 'bureau', label: 'Bureau & Direction', area: 19.3, icon: '💼', color: '#131b2e' },
+    { id: 'room_2', name: 'Salle 2', type: 'formation', label: 'Salle de Formation', area: 20.2, icon: '🎓', color: '#131b2e' },
+    { id: 'room_3', name: 'Salle 3', type: 'stockage', label: 'Stockage & Logistique', area: 45.1, icon: '📦', color: '#131b2e' }
+  ],
+  roomTypesList: [
+    { id: 'bureau', label: 'Bureau & Direction', icon: '💼', desc: 'Gestion administrative & planification', color: '#1e3a8a' },
+    { id: 'formation', label: 'Salle de Formation', icon: '🎓', desc: 'Sessions PSC, SST et recyclages', color: '#1e40af' },
+    { id: 'stockage', label: 'Stockage & Logistique', icon: '📦', desc: 'Réserve matériel, lots de secours', color: '#334155' },
+    { id: 'detente', label: 'Foyer & Repos', icon: '☕', desc: 'Convivialité et récupération secouristes', color: '#065f46' },
+    { id: 'vestiaires', label: 'Vestiaires & Sanitaires', icon: '👕', desc: 'Casiers et tenues d’intervention', color: '#4c1d95' },
+    { id: 'pc_radio', label: 'PC Radio & Opérations', icon: '📡', desc: 'Poste de commandement opérationnel', color: '#701a75' }
+  ],
   furnitureCatalog: [
     { id: 'f_bureau', name: 'Bureau & Fauteuil de Direction', cost: 180, icon: '🪑', defaultRoom: 'room_1', desc: 'Gestion administrative & planification des postes' },
     { id: 'f_pharmacie', name: 'Armoire à Pharmacie Sécurisée', cost: 350, icon: '🗄️', defaultRoom: 'room_3', desc: 'Stockage sécurisé des consommables médicaux' },
@@ -71,8 +85,14 @@ window.ProtecOnboarding = {
     this.placementData.city = deptInfo ? deptInfo.chefLieu : 'Antenne Centrale';
     this.placementData.citycode = this.deptCode;
 
-    // Le bâtiment démarre TOTALEMENT VIDE
+    // Le bâtiment démarre TOTALEMENT VIDE avec les pièces de base prêtes à être configurées
     this.placedFurniture = [];
+    this.selectedRoomId = 'room_1';
+    this.roomsConfig = [
+      { id: 'room_1', name: 'Salle 1', type: 'bureau', label: 'Bureau & Direction', area: 19.3, icon: '💼', color: '#131b2e' },
+      { id: 'room_2', name: 'Salle 2', type: 'formation', label: 'Salle de Formation', area: 20.2, icon: '🎓', color: '#131b2e' },
+      { id: 'room_3', name: 'Salle 3', type: 'stockage', label: 'Stockage & Logistique', area: 45.1, icon: '📦', color: '#131b2e' }
+    ];
 
     const modal = document.getElementById('onboarding-modal');
     if (!modal) return;
@@ -424,10 +444,12 @@ window.ProtecOnboarding = {
   },
 
   // -------------------------------------------------------------
-  // ÉTAPE 3 : AMÉNAGEMENT DU BÂTIMENT (FOURNI MAIS VIDE, ACHAT DE MEUBLES)
+  // ÉTAPE 3 : AMÉNAGEMENT DU BÂTIMENT (GESTION DES SALLES & PLACEMENT DU MOBILIER)
   // -------------------------------------------------------------
   renderStep3() {
     const currentMoney = 15000 - this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
+    const activeRoom = this.roomsConfig.find(r => r.id === this.selectedRoomId) || this.roomsConfig[0];
+    const activeRoomFurniture = this.placedFurniture.filter(f => f.room === activeRoom.id);
 
     return `
       <div class="space-y-4">
@@ -435,58 +457,135 @@ window.ProtecOnboarding = {
           <span class="text-2xl">🛋️</span>
           <h2 class="text-xl sm:text-2xl font-black text-slate-900">3. Aménagement de votre Bâtiment d'Antenne</h2>
           <p class="text-xs text-slate-600 max-w-lg mx-auto">
-            Le local de base est mis à disposition, mais <strong>il est actuellement vide</strong>. Utilisez votre dotation municipale initiale pour équiper vos pièces en mobilier indispensable.
+            Le bâtiment est fourni vide. <strong>Définissez le type de chaque pièce</strong> et <strong>placez votre mobilier</strong> selon vos priorités opérationnelles !
           </p>
         </div>
 
         <!-- Dotation & Compteur d'équipement -->
-        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-300 flex items-center justify-between text-xs">
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border border-emerald-300 flex items-center justify-between text-xs">
           <div>
             <span class="text-[10px] font-black uppercase text-emerald-800 tracking-wider block">Dotation Municipale Disponible</span>
             <div class="text-lg font-black text-emerald-950 font-mono">${currentMoney.toLocaleString('fr-FR')} €</div>
           </div>
           <span class="px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-900 font-bold text-xs shadow-2xs">
-            ${this.placedFurniture.length} meuble(s) installé(s)
+            ${this.placedFurniture.length} meuble(s) installé(s) au total
           </span>
         </div>
 
-        <!-- PLAN 2D DU BÂTIMENT VIDE / MEUBLÉ -->
+        <!-- PLAN 2D DU BÂTIMENT INTERACTIF (CLIQUABLE) -->
         ${this.renderStep3Plan2D()}
 
-        <!-- Boutique d'aménagement du bâtiment -->
+        <!-- GESTION DE LA SALLE SÉLECTIONNÉE (TYPE ET MEUBLES INSTALLÉS) -->
+        <div class="p-4 rounded-2xl bg-slate-900 border-2 border-amber-400/80 shadow-md text-white space-y-3">
+          <div class="flex items-center justify-between flex-wrap gap-2 border-b border-slate-800 pb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-black uppercase text-amber-400 flex items-center gap-1">
+                <span>📍 Salle Active :</span>
+              </span>
+              <div class="flex gap-1.5">
+                ${this.roomsConfig.map(r => `
+                  <button type="button" onclick="window.ProtecOnboarding.selectRoom('${r.id}')" class="px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${this.selectedRoomId === r.id ? 'bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300 scale-105' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+                    <span>${r.icon}</span>
+                    <span>${r.name}</span>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-300 font-semibold">
+              Surface : <strong class="text-white">${activeRoom.area} m²</strong> • <strong class="text-amber-300">${activeRoomFurniture.length} meuble(s)</strong> dans cette pièce
+            </div>
+          </div>
+
+          <!-- Choix du Type de Salle -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                1. Affectation / Type de la ${activeRoom.name} :
+              </label>
+              <span class="text-[10px] text-amber-400 font-bold">Actuel : ${activeRoom.icon} ${activeRoom.label}</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              ${this.roomTypesList.map(t => {
+                const isSelected = activeRoom.type === t.id;
+                return `
+                  <button type="button" onclick="window.ProtecOnboarding.setRoomType('${activeRoom.id}', '${t.id}')" class="p-2 rounded-xl text-left border transition cursor-pointer flex items-center gap-2 ${isSelected ? 'bg-amber-400/20 border-amber-400 text-white ring-1 ring-amber-400' : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-500'}">
+                    <span class="text-lg">${t.icon}</span>
+                    <div class="min-w-0 flex-1">
+                      <div class="text-xs font-black truncate ${isSelected ? 'text-amber-300' : 'text-white'}">${t.label}</div>
+                      <div class="text-[9px] text-slate-400 truncate">${t.desc}</div>
+                    </div>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- Meubles actuellement installés dans cette salle -->
+          <div class="pt-2 border-t border-slate-800 space-y-2">
+            <span class="text-[11px] font-black uppercase tracking-wider text-slate-400 block">
+              2. Mobilier en place dans la ${activeRoom.name} (${activeRoomFurniture.length}) :
+            </span>
+            ${activeRoomFurniture.length === 0 ? `
+              <p class="text-xs text-slate-500 italic p-2.5 rounded-xl bg-slate-800/50 border border-slate-800 text-center">
+                Cette salle est actuellement vide. Choisissez ci-dessous le mobilier à y installer !
+              </p>
+            ` : `
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                ${activeRoomFurniture.map(f => `
+                  <div class="p-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-between gap-2 text-xs">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-lg">${f.icon}</span>
+                      <span class="font-bold text-white truncate">${f.name}</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                      <!-- Déplacer vers une autre salle -->
+                      <select onchange="window.ProtecOnboarding.moveFurniture('${f.id}', this.value)" class="text-[10px] py-1 px-1.5 rounded-lg bg-slate-900 border border-slate-600 text-slate-300 font-semibold cursor-pointer" title="Déplacer vers une autre salle">
+                        <option value="room_1" ${f.room === 'room_1' ? 'selected' : ''}>Salle 1</option>
+                        <option value="room_2" ${f.room === 'room_2' ? 'selected' : ''}>Salle 2</option>
+                        <option value="room_3" ${f.room === 'room_3' ? 'selected' : ''}>Salle 3</option>
+                      </select>
+                      <!-- Retirer -->
+                      <button type="button" onclick="window.ProtecOnboarding.removeFurniture('${f.id}')" class="px-2 py-1 rounded-lg bg-rose-900/40 hover:bg-rose-900 text-rose-300 text-[10px] font-bold border border-rose-700/50 transition cursor-pointer" title="Retirer et rembourser">
+                        ✕ Retirer
+                      </button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        </div>
+
+        <!-- CATALOGUE D'ACHAT DE MOBILIER OPÉRATIONNEL -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black uppercase text-slate-800 tracking-wider">Catalogue de Mobilier Opérationnel</span>
-            <span class="text-[11px] text-slate-500 font-semibold">Sélectionnez et placez les meubles dans vos salles</span>
+            <span class="text-xs font-black uppercase text-slate-800 tracking-wider">3. Catalogue de Mobilier • Ajouter à la ${activeRoom.name}</span>
+            <span class="text-[11px] text-slate-500 font-semibold">Les meubles s'installent dans la pièce active</span>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             ${this.furnitureCatalog.map(item => {
-              const count = this.placedFurniture.filter(f => f.typeId === item.id).length;
+              const totalCount = this.placedFurniture.filter(f => f.typeId === item.id).length;
               return `
-                <div class="p-3 rounded-2xl glass-card bg-white border border-slate-200/90 shadow-2xs flex items-center justify-between gap-2.5">
+                <div class="p-3 rounded-2xl glass-card bg-white border border-slate-200/90 shadow-2xs flex items-center justify-between gap-2.5 hover:border-amber-300 transition">
                   <div class="flex items-center gap-2.5">
                     <span class="text-2xl">${item.icon}</span>
                     <div>
                       <h4 class="text-xs font-black text-slate-900">${item.name}</h4>
                       <p class="text-[10px] text-slate-500">${item.desc}</p>
-                      <span class="text-[10px] font-mono font-black text-emerald-700 bg-emerald-100/70 px-1.5 py-0.2 rounded">${item.cost} €</span>
+                      <div class="flex items-center gap-2 mt-0.5">
+                        <span class="text-[10px] font-mono font-black text-emerald-700 bg-emerald-100/70 px-1.5 py-0.2 rounded">${item.cost} €</span>
+                        ${totalCount > 0 ? `<span class="text-[9px] font-bold text-slate-500">${totalCount} acheté(s)</span>` : ''}
+                      </div>
                     </div>
                   </div>
 
-                  <div class="flex items-center gap-1.5">
-                    ${count > 0 ? `
-                      <button type="button" onclick="window.ProtecOnboarding.removeFurniture('${item.id}')" class="w-7 h-7 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs border border-rose-200 transition flex items-center justify-center cursor-pointer" title="Retirer un exemplaire">
-                        −
-                      </button>
-                      <span class="text-xs font-black px-1.5 text-slate-800">${count}</span>
-                    ` : ''}
-
+                  <div class="flex items-center gap-1.5 flex-shrink-0">
                     <button 
                       type="button" 
-                      onclick="window.ProtecOnboarding.buyAndPlaceFurniture('${item.id}')"
-                      class="px-3 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-bold text-xs transition cursor-pointer shadow-xs active:scale-95 flex items-center gap-1">
-                      <span>+ Acheter</span>
+                      onclick="window.ProtecOnboarding.buyAndPlaceFurniture('${item.id}', '${activeRoom.id}')"
+                      class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs transition cursor-pointer shadow-xs active:scale-95 flex items-center gap-1">
+                      <span>+ Placer dans ${activeRoom.name}</span>
                     </button>
                   </div>
                 </div>
@@ -515,9 +614,34 @@ window.ProtecOnboarding = {
     `;
   },
 
-  buyAndPlaceFurniture(typeId) {
+  selectRoom(roomId) {
+    this.selectedRoomId = roomId;
+    this.renderWizard();
+  },
+
+  setRoomType(roomId, newTypeId) {
+    const r = this.roomsConfig.find(x => x.id === roomId);
+    const t = this.roomTypesList.find(x => x.id === newTypeId);
+    if (r && t) {
+      r.type = t.id;
+      r.label = t.label;
+      r.icon = t.icon;
+      r.color = t.color;
+      this.renderWizard();
+    }
+  },
+
+  buyAndPlaceFurniture(typeId, targetRoomId = null) {
     const item = this.furnitureCatalog.find(x => x.id === typeId);
     if (!item) return;
+
+    const currentMoney = 15000 - this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
+    if (currentMoney < item.cost) {
+      alert("Dotation municipale insuffisante pour acheter ce meuble !");
+      return;
+    }
+
+    const roomId = targetRoomId || this.selectedRoomId || 'room_1';
 
     this.placedFurniture.push({
       id: `furn-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -525,14 +649,22 @@ window.ProtecOnboarding = {
       name: item.name,
       cost: item.cost,
       icon: item.icon,
-      room: item.defaultRoom
+      room: roomId
     });
 
     this.renderWizard();
   },
 
-  removeFurniture(typeId) {
-    const idx = this.placedFurniture.findIndex(x => x.typeId === typeId);
+  moveFurniture(furnId, newRoomId) {
+    const f = this.placedFurniture.find(x => x.id === furnId);
+    if (f) {
+      f.room = newRoomId;
+      this.renderWizard();
+    }
+  },
+
+  removeFurniture(furnId) {
+    const idx = this.placedFurniture.findIndex(x => x.id === furnId || x.typeId === furnId);
     if (idx !== -1) {
       this.placedFurniture.splice(idx, 1);
       this.renderWizard();
@@ -540,20 +672,28 @@ window.ProtecOnboarding = {
   },
 
   renderStep3Plan2D() {
+    const r1 = this.roomsConfig.find(r => r.id === 'room_1') || this.roomsConfig[0];
+    const r2 = this.roomsConfig.find(r => r.id === 'room_2') || this.roomsConfig[1];
+    const r3 = this.roomsConfig.find(r => r.id === 'room_3') || this.roomsConfig[2];
+
     const r1Furn = this.placedFurniture.filter(f => f.room === 'room_1');
     const r2Furn = this.placedFurniture.filter(f => f.room === 'room_2');
     const r3Furn = this.placedFurniture.filter(f => f.room === 'room_3');
 
+    const isR1Active = this.selectedRoomId === 'room_1';
+    const isR2Active = this.selectedRoomId === 'room_2';
+    const isR3Active = this.selectedRoomId === 'room_3';
+
     return `
       <div class="relative w-full rounded-2xl bg-[#0a0e17] border-2 border-slate-800 p-2.5 shadow-xl select-none">
         <div class="flex items-center justify-between pb-1.5 px-1 text-slate-300 text-xs">
-          <span class="font-black text-white uppercase tracking-wider text-[11px]">Plan 2D du Bâtiment • Vue Aménagement Intérieur</span>
+          <span class="font-black text-white uppercase tracking-wider text-[11px]">Plan 2D du Bâtiment • Cliquez sur une salle pour l'aménager</span>
           <span class="text-[10px] text-amber-400 font-bold">
-            ${this.placedFurniture.length === 0 ? '⚠️ Bâtiment vide (achetez vos meubles)' : `✓ ${this.placedFurniture.length} meuble(s) en place`}
+            ${this.placedFurniture.length === 0 ? '⚠️ Bâtiment vide (cliquez sur une salle pour la meubler)' : `✓ ${this.placedFurniture.length} meuble(s) en place`}
           </span>
         </div>
 
-        <svg viewBox="0 0 740 330" class="w-full h-auto max-h-[250px] block rounded-xl font-sans">
+        <svg viewBox="0 0 740 330" class="w-full h-auto max-h-[260px] block rounded-xl font-sans">
           <rect width="740" height="330" fill="#0a0e17" />
 
           <!-- PARKING EXTÉRIEUR -->
@@ -570,29 +710,59 @@ window.ProtecOnboarding = {
           <!-- BÂTIMENT DE L'ANTENNE -->
           <rect x="260" y="20" width="460" height="290" fill="#0f172a" stroke="#1e293b" stroke-width="6" rx="4" />
 
-          <!-- SALLE 1 : 19.3 m² -->
-          <rect x="264" y="24" width="222" height="126" fill="#131b2e" stroke="#3b82f6" stroke-width="1.5" rx="3" />
-          <text x="375" y="45" fill="#ffffff" font-size="11" font-weight="900" text-anchor="middle">SALLE 1 (ACCUEIL & DIRECTION) • 19.3 m²</text>
-          <text x="375" y="75" fill="#94a3b8" font-size="16" text-anchor="middle">
-            ${r1Furn.map(f => f.icon).join(' ') || '<tspan fill="#64748b" font-size="10">(Pièce vide)</tspan>'}
-          </text>
-          <text x="375" y="130" fill="#38bdf8" font-size="9" font-weight="700" text-anchor="middle">${r1Furn.length} meuble(s)</text>
+          <!-- SALLE 1 : 19.3 m² (Cliquable) -->
+          <g onclick="window.ProtecOnboarding.selectRoom('room_1')" style="cursor: pointer;">
+            <rect x="264" y="24" width="222" height="126" 
+              fill="${isR1Active ? '#1e293b' : '#131b2e'}" 
+              stroke="${isR1Active ? '#f59e0b' : '#3b82f6'}" 
+              stroke-width="${isR1Active ? '3.5' : '1.5'}" 
+              rx="4" />
+            <text x="375" y="45" fill="#ffffff" font-size="10.5" font-weight="900" text-anchor="middle">
+              SALLE 1 (${r1.icon} ${r1.label.toUpperCase()}) • ${r1.area} m²
+            </text>
+            <text x="375" y="80" fill="#94a3b8" font-size="18" text-anchor="middle">
+              ${r1Furn.map(f => f.icon).join(' ') || '<tspan fill="#64748b" font-size="10">(Pièce vide)</tspan>'}
+            </text>
+            <text x="375" y="130" fill="${isR1Active ? '#fbbf24' : '#38bdf8'}" font-size="9" font-weight="800" text-anchor="middle">
+              ${isR1Active ? '📍 SALLE ACTIVE • ' : ''}${r1Furn.length} meuble(s) [Cliquez pour configurer]
+            </text>
+          </g>
 
-          <!-- SALLE 2 : 20.2 m² -->
-          <rect x="496" y="24" width="220" height="126" fill="#131b2e" stroke="#3b82f6" stroke-width="1.5" rx="3" />
-          <text x="606" y="45" fill="#ffffff" font-size="11" font-weight="900" text-anchor="middle">SALLE 2 (FORMATION) • 20.2 m²</text>
-          <text x="606" y="75" fill="#94a3b8" font-size="16" text-anchor="middle">
-            ${r2Furn.map(f => f.icon).join(' ') || '<tspan fill="#64748b" font-size="10">(Pièce vide)</tspan>'}
-          </text>
-          <text x="606" y="130" fill="#38bdf8" font-size="9" font-weight="700" text-anchor="middle">${r2Furn.length} meuble(s)</text>
+          <!-- SALLE 2 : 20.2 m² (Cliquable) -->
+          <g onclick="window.ProtecOnboarding.selectRoom('room_2')" style="cursor: pointer;">
+            <rect x="496" y="24" width="220" height="126" 
+              fill="${isR2Active ? '#1e293b' : '#131b2e'}" 
+              stroke="${isR2Active ? '#f59e0b' : '#3b82f6'}" 
+              stroke-width="${isR2Active ? '3.5' : '1.5'}" 
+              rx="4" />
+            <text x="606" y="45" fill="#ffffff" font-size="10.5" font-weight="900" text-anchor="middle">
+              SALLE 2 (${r2.icon} ${r2.label.toUpperCase()}) • ${r2.area} m²
+            </text>
+            <text x="606" y="80" fill="#94a3b8" font-size="18" text-anchor="middle">
+              ${r2Furn.map(f => f.icon).join(' ') || '<tspan fill="#64748b" font-size="10">(Pièce vide)</tspan>'}
+            </text>
+            <text x="606" y="130" fill="${isR2Active ? '#fbbf24' : '#38bdf8'}" font-size="9" font-weight="800" text-anchor="middle">
+              ${isR2Active ? '📍 SALLE ACTIVE • ' : ''}${r2Furn.length} meuble(s) [Cliquez pour configurer]
+            </text>
+          </g>
 
-          <!-- SALLE 3 : 45.1 m² -->
-          <rect x="264" y="158" width="452" height="148" fill="#131b2e" stroke="#3b82f6" stroke-width="1.5" rx="3" />
-          <text x="490" y="180" fill="#ffffff" font-size="12" font-weight="900" text-anchor="middle">SALLE 3 (GRANDE SALLE & LOGISTIQUE) • 45.1 m²</text>
-          <text x="490" y="225" fill="#94a3b8" font-size="18" text-anchor="middle">
-            ${r3Furn.map(f => f.icon).join(' ') || '<tspan fill="#64748b" font-size="10">(Pièce vide)</tspan>'}
-          </text>
-          <text x="490" y="285" fill="#38bdf8" font-size="9" font-weight="700" text-anchor="middle">${r3Furn.length} meuble(s)</text>
+          <!-- SALLE 3 : 45.1 m² (Cliquable) -->
+          <g onclick="window.ProtecOnboarding.selectRoom('room_3')" style="cursor: pointer;">
+            <rect x="264" y="158" width="452" height="148" 
+              fill="${isR3Active ? '#1e293b' : '#131b2e'}" 
+              stroke="${isR3Active ? '#f59e0b' : '#3b82f6'}" 
+              stroke-width="${isR3Active ? '3.5' : '1.5'}" 
+              rx="4" />
+            <text x="490" y="180" fill="#ffffff" font-size="11" font-weight="900" text-anchor="middle">
+              SALLE 3 (${r3.icon} ${r3.label.toUpperCase()}) • ${r3.area} m²
+            </text>
+            <text x="490" y="230" fill="#94a3b8" font-size="20" text-anchor="middle">
+              ${r3Furn.map(f => f.icon).join(' ') || '<tspan fill="#64748b" font-size="11">(Pièce vide)</tspan>'}
+            </text>
+            <text x="490" y="285" fill="${isR3Active ? '#fbbf24' : '#38bdf8'}" font-size="9.5" font-weight="800" text-anchor="middle">
+              ${isR3Active ? '📍 SALLE ACTIVE • ' : ''}${r3Furn.length} meuble(s) [Cliquez pour configurer]
+            </text>
+          </g>
 
           <!-- Cloisons -->
           <line x1="490" y1="20" x2="490" y2="154" stroke="#334155" stroke-width="5" />
@@ -718,7 +888,20 @@ window.ProtecOnboarding = {
     if (window.ProtecLocaux) {
       archModel = JSON.parse(JSON.stringify(window.ProtecLocaux.getArchitectModel()));
       if (archModel) {
-        // Le bâtiment démarre avec les meubles achetés par le joueur
+        // Enregistrement des types de pièces personnalisés par le joueur
+        if (archModel.rooms) {
+          archModel.rooms.forEach(r => {
+            const userRoom = (this.roomsConfig || []).find(ur => ur.id === r.id);
+            if (userRoom) {
+              r.type = userRoom.type;
+              r.name = `${userRoom.name} (${userRoom.label})`;
+              r.icon = userRoom.icon;
+              r.color = userRoom.color || '#121722';
+            }
+          });
+        }
+
+        // Le bâtiment démarre avec les meubles achetés et placés par le joueur
         archModel.furniture = this.placedFurniture.map(f => {
           let rx = 7.0, ry = 2.5;
           if (f.room === 'room_2') { rx = 11.5; ry = 2.5; }
