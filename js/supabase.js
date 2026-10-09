@@ -112,17 +112,12 @@ window.ProtecSupabase = {
         return { error: 'Ce nom de directeur est déjà utilisé. Veuillez en choisir un autre.' };
       }
 
-      // Déduction précise de la ville d'implantation (priorité à la ville passée, puis chef-lieu du département)
-      let detectedCity = extraData.city;
-      if (!detectedCity && window.ProtecDepartements && extraData.departmentCode) {
-        const dept = window.ProtecDepartements.getByCode(extraData.departmentCode);
-        if (dept) detectedCity = dept.chefLieu;
-      }
+      // La ville correspond strictement à l'implantation réelle du bâtiment
+      let detectedCity = extraData.city || null;
       if (!detectedCity && extraData.stationName) {
         const cleanSt = extraData.stationName.replace(/^antenne\s+(de\s+)?/i, '').trim();
         if (cleanSt.length > 2) detectedCity = cleanSt;
       }
-      if (!detectedCity) detectedCity = 'Nancy';
 
       // Hachage du mot de passe
       const pwdHash = await this.hashPassword(password);
@@ -284,13 +279,13 @@ window.ProtecSupabase = {
 
       console.log('☁️ Partie sauvegardée dans Supabase avec succès.');
 
-      // Synchronisation silencieuse de la ville et de l'antenne dans la table players
+      // Synchronisation de la commune exacte du bâtiment dans la table players
       const currentStation = (game.stations && game.stations[0]) || null;
-      const playerCity = game.player?.city || currentStation?.city;
-      const playerStation = game.player?.stationName || currentStation?.name;
-      const playerDept = game.player?.departmentCode || currentStation?.departmentCode;
-      if (playerCity && userId) {
-        this.updatePlayerCityAndStation(userId, playerCity, playerStation, playerDept).catch(() => {});
+      const buildingCity = currentStation?.city || game.player?.city;
+      const playerStation = currentStation?.name || game.player?.stationName;
+      const playerDept = currentStation?.departmentCode || game.player?.departmentCode;
+      if (buildingCity && userId) {
+        this.updatePlayerCityAndStation(userId, buildingCity, playerStation, playerDept).catch(() => {});
       }
 
       return true;

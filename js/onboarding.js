@@ -78,12 +78,13 @@ window.ProtecOnboarding = {
       this.deptCode = this.game.currentDepartmentCode || this.game.player.departmentCode;
     }
 
-    // Centrer initialement l'emplacement sur le chef-lieu du département
+    // Position initiale sur la carte (centre géographique du département)
     const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.deptCode) : null;
     this.placementData.lat = deptInfo ? deptInfo.lat : 48.8566;
     this.placementData.lng = deptInfo ? deptInfo.lng : 2.3522;
-    this.placementData.city = deptInfo ? deptInfo.chefLieu : 'Antenne Centrale';
+    this.placementData.city = '';
     this.placementData.citycode = this.deptCode;
+    this.updatePlacementCoords(this.placementData.lat, this.placementData.lng);
 
     // Le bâtiment démarre TOTALEMENT VIDE avec les pièces de base prêtes à être configurées
     this.placedFurniture = [];
@@ -334,9 +335,9 @@ window.ProtecOnboarding = {
 
           <button 
             type="button" 
-            onclick="window.ProtecOnboarding.resetToChefLieu()"
+            onclick="window.ProtecOnboarding.resetMapPosition()"
             class="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs transition cursor-pointer shadow-2xs whitespace-nowrap">
-            🎯 Recentrer sur ${deptInfo?.chefLieu || 'le chef-lieu'}
+            🎯 Recentrer la carte
           </button>
         </div>
 
@@ -420,37 +421,52 @@ window.ProtecOnboarding = {
     if (coordsEl) coordsEl.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
     try {
+      // 1. API officielle Adresse Gouv (France)
       const res = await fetch(`https://api-adresse.data.gouv.fr/reverse/?lon=${lng}&lat=${lat}`);
       const data = await res.json();
       if (data.features && data.features.length > 0) {
         const props = data.features[0].properties;
-        const detectedCity = props.district || props.city || `Secteur ${this.deptCode}`;
-        this.placementData.city = detectedCity;
-        this.placementData.citycode = props.citycode || this.deptCode;
-        const cityEl = document.getElementById('step2-city-label');
-        if (cityEl) cityEl.textContent = detectedCity;
+        const detectedCity = props.city || props.town || props.village || props.municipality || props.district || props.name;
+        if (detectedCity) {
+          this.placementData.city = detectedCity;
+          this.placementData.citycode = props.citycode || this.deptCode;
+          const cityEl = document.getElementById('step2-city-label');
+          if (cityEl) cityEl.textContent = detectedCity;
+          return;
+        }
       }
     } catch (e) {
       // Ignorer si hors-ligne
     }
+
+    try {
+      // 2. Fallback OpenStreetMap / Nominatim
+      const res2 = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`);
+      const data2 = await res2.json();
+      const addr = data2.address || {};
+      const detectedCity2 = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.county;
+      if (detectedCity2) {
+        this.placementData.city = detectedCity2;
+        const cityEl = document.getElementById('step2-city-label');
+        if (cityEl) cityEl.textContent = detectedCity2;
+      }
+    } catch (e) {}
   },
 
-  resetToChefLieu() {
+  resetMapPosition() {
     const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.deptCode) : null;
     if (!deptInfo) return;
 
     this.placementData.lat = deptInfo.lat;
     this.placementData.lng = deptInfo.lng;
-    this.placementData.city = deptInfo.chefLieu;
 
     if (this.step2Map && this.step2Marker) {
       this.step2Map.setView([deptInfo.lat, deptInfo.lng], deptInfo.zoom || 11);
       this.step2Marker.setLatLng([deptInfo.lat, deptInfo.lng]);
     }
-    const cityEl = document.getElementById('step2-city-label');
-    if (cityEl) cityEl.textContent = deptInfo.chefLieu;
     const coordsEl = document.getElementById('step2-coords-label');
     if (coordsEl) coordsEl.textContent = `${deptInfo.lat.toFixed(4)}, ${deptInfo.lng.toFixed(4)}`;
+    this.updatePlacementCoords(deptInfo.lat, deptInfo.lng);
   },
 
   // -------------------------------------------------------------
@@ -916,10 +932,14 @@ window.ProtecOnboarding = {
     const stationId = `station-${Date.now()}`;
     const stationName = this.teamName || 'Antenne Protection Civile';
     const deptCode = this.deptCode || '75';
-    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
-    const lat = this.placementData.lat || (deptInfo ? deptInfo.lat : 48.8566);
-    const lng = this.placementData.lng || (deptInfo ? deptInfo.lng : 2.3522);
-    const city = this.placementData.city || (deptInfo ? deptInfo.chefLieu : 'Antenne Centrale');
+    const lat = this.placementData.lat || 48.8566;
+    const lng = this.placementData.lng || 2.3522;
+    // La ville correspond impérativement à la commune où le bâtiment est implanté
+    let city = (this.placementData && this.placementData.city) ? this.placementData.city.trim() : '';
+    if (!city && stationName) {
+      city = stationName.replace(/^antenne\s+(de\s+)?/i, '').trim();
+    }
+    if (!city) city = 'Commune Locale';
 
     // 1. Modèle d'architecture avec les meubles achetés
     let archModel = null;
