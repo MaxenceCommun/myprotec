@@ -25,11 +25,7 @@ class ProtecGame {
       supaUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
     } catch (e) {}
 
-    let savedPlayerId = (supaUser && supaUser.id) || localStorage.getItem('protec_player_id');
-    if (!savedPlayerId) {
-      savedPlayerId = `p-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`;
-      localStorage.setItem('protec_player_id', savedPlayerId);
-    }
+    let savedPlayerId = (supaUser && supaUser.id) || null;
 
     let initialAllianceId = (supaUser && supaUser.allianceId) || localStorage.getItem('protec_alliance_id') || null;
     if (initialAllianceId === 'alliance-fnpc') {
@@ -332,7 +328,7 @@ class ProtecGame {
             }
           }).catch(() => {});
         }
-        if (window.ProtecSupabase) {
+        if (window.ProtecSupabase && window.ProtecAuth?.currentUser) {
           window.ProtecSupabase.startAccountWatchdog(this);
           window.ProtecSupabase.initMultiplayerRealtime(this);
         }
@@ -345,6 +341,9 @@ class ProtecGame {
   }
 
   syncPlayerToServer() {
+    // Si le joueur n'est pas connecté au multijoueur, ne pas synchroniser
+    if (!this.player?.id || !window.ProtecAuth?.currentUser) return;
+
     const payload = {
       id: this.player.id,
       name: this.player.name,
@@ -371,22 +370,39 @@ class ProtecGame {
       }).catch(() => {});
     }
 
-    // Synchronisation Cloud Supabase
-    if (window.ProtecSupabase) {
-      if (this.player?.id) {
-        window.ProtecSupabase.checkPlayerExists(this.player.id).then(exists => {
-          if (!exists && window.ProtecAuth) {
-            console.warn('⚠️ Compte joueur supprimé en base lors de syncPlayerToServer : déconnexion.');
-            window.ProtecAuth.handleAccountDeleted(this);
-          }
-        }).catch(() => {});
-      }
+    // Synchronisation Cloud Supabase (uniquement si utilisateur connecté)
+    if (window.ProtecSupabase && window.ProtecAuth?.currentUser && this.player?.id === window.ProtecAuth.currentUser.id) {
+      window.ProtecSupabase.checkPlayerExists(this.player.id).then(exists => {
+        if (!exists && window.ProtecAuth) {
+          console.warn('⚠️ Compte joueur supprimé en base lors de syncPlayerToServer : déconnexion.');
+          window.ProtecAuth.handleAccountDeleted(this);
+        }
+      }).catch(() => {});
 
       if (this.stations && this.stations.length > 0) {
         this.stations.forEach(st => {
           window.ProtecSupabase.syncStationToMap(this.player, st);
         });
       }
+
+      // Synchronisation du Monde Persistant Côté Serveur (résolution des missions et formations expirées)
+      window.ProtecSupabase.syncServerWorld(this.player.id).then(res => {
+        if (!res) return;
+        if (res.server_time) {
+          const serverMs = new Date(res.server_time).getTime();
+          this.serverTimeOffset = serverMs - Date.now();
+        }
+        if (res.events && res.events.length > 0) {
+          res.events.forEach(evt => {
+            this.showToast(evt.title, evt.message, 'blue');
+          });
+          if (res.save && res.save.resources) {
+            this.resources = Object.assign(this.resources, res.save.resources);
+          }
+          this.updateStatsUI();
+          this.renderMissions();
+        }
+      }).catch(() => {});
     }
   }
 
@@ -630,11 +646,6 @@ class ProtecGame {
 
     if (window.lucide) {
       window.lucide.createIcons();
-    }
-
-    // Initialisation du moteur d'évolution hors-ligne et de rattrapage
-    if (window.ProtecOfflineEngine) {
-      window.ProtecOfflineEngine.init(this);
     }
 
     // Demande des notifications d'urgence pour incidents & SAMU (PC & Mobile)
@@ -3082,7 +3093,8 @@ class ProtecGame {
     }
 
     mission.status = 'ongoing';
-    mission.startedAt = Date.now();
+    const serverNow = Date.now() + (this.serverTimeOffset || 0);
+    mission.startedAt = serverNow;
     if (!mission.durationSeconds) {
       if (mission.type === 'samu') mission.durationSeconds = 25 * 60; // 25 min réelles
       else if (mission.type === 'social') mission.durationSeconds = 2 * 3600; // 2h réelles
@@ -3095,6 +3107,11 @@ class ProtecGame {
       volunteers: crew,
       vehicles: assignedVehicles
     };
+
+    // Synchronisation de la mission dans la BDD Supabase du monde persistant
+    if (window.ProtecSupabase && this.player?.id) {
+      window.ProtecSupabase.registerMissionOnServer(mission, this.player.id);
+    }
 
     // Trajets routiers animés avec gyrophares pour tous les véhicules affectés
     if (assignedVehicles.length > 0 && window.ProtecSystems) {
@@ -8483,7 +8500,8 @@ class ProtecGame {
   // --- GESTIONNAIRE DE TEMPS RÉEL (1 SECONDE = 1 SECONDE RÉELLE) ---
   startSimulationClock() {
     setInterval(() => {
-      const now = new Date();
+      const serverOffset = this.serverTimeOffset || 0;
+      const now = new Date(Date.now() + serverOffset);
       this.clock.hour = now.getHours();
       this.clock.minute = now.getMinutes();
       this.clock.second = now.getSeconds();
@@ -8491,7 +8509,7 @@ class ProtecGame {
       this.clock.month = now.getMonth();
       this.clock.year = now.getFullYear();
 
-      const currentTime = Date.now();
+      const currentTime = now.getTime();
 
       // 1. Progression des missions en cours (Vraie durée & Main Courante de Crise)
       this.missions.forEach(m => {
@@ -8540,6 +8558,11 @@ class ProtecGame {
       // 1e. GESTION DES LOCAUX, CHANTIERS DE TRAVAUX & SÉCURITÉ DU BÂTIMENT
       if (window.ProtecLocaux && typeof window.ProtecLocaux.updateClock === 'function') {
         window.ProtecLocaux.updateClock(this);
+      }
+
+      // 1f. GESTION DES RÉSEAUX SOCIAUX & VISIBILITÉ NUMÉRIQUE (Actions régulières ou Salarié Community Manager)
+      if (window.ProtecCommunication && typeof window.ProtecCommunication.updateSocialMediaClock === 'function') {
+        window.ProtecCommunication.updateSocialMediaClock(this);
       }
 
       // 1b. DÉPART AUTOMATIQUE DES DPS À L'HEURE DU POSTE
@@ -8700,6 +8723,12 @@ class ProtecGame {
             if (this.resources.campaigns?.social) devisChance += 0.30; // Fort impact pub réseaux
             if (this.resources.campaigns?.posters) devisChance += 0.25; // Fort impact affichage mairie
             
+            // Impact direct des Réseaux Sociaux & Visibilité (0 € mais régularité requise)
+            const socialVis = this.socialMedia?.visibilityScore ?? 75;
+            if (socialVis >= 75) devisChance += 0.20; // Antenne active et visible : devis fréquents
+            else if (socialVis >= 50) devisChance += 0.08;
+            else if (socialVis < 30) devisChance = Math.max(0.02, devisChance - 0.08); // Silence radio : baisse d'activité
+
             const pendingDevisCount = this.devis.filter(d => d.status === 'pending').length;
             if (pendingDevisCount < 4 && Math.random() < devisChance) {
               this.generateRandomDevisOpportunity();
@@ -8709,7 +8738,7 @@ class ProtecGame {
       }
 
       // 5. Arrivée de nouvelles candidatures spontanées
-      // RÈGLE RÉALISTE : Arrivée mesurée (1 fois par heure in-game maximum si campagne active)
+      // RÈGLE RÉALISTE : Arrivée mesurée (1 fois par heure in-game maximum si campagne active ou bonne visibilité)
       if (this.clock.second === 0 && this.clock.minute === 0) {
         if (this.stations.length > 0) {
           const hasActiveCampaign = !!(this.resources.campaigns?.social || this.resources.campaigns?.posters);
@@ -8722,6 +8751,11 @@ class ProtecGame {
             if (this.resources.campaigns?.social) candChance += 0.20;
             if (this.resources.campaigns?.posters) candChance += 0.12;
             if (!hasActiveCampaign && repScore >= 80) candChance = 0.03; // Très rare sans pub
+
+            // Bonus apporté par la visibilité des réseaux sociaux
+            const socialVis = this.socialMedia?.visibilityScore ?? 75;
+            if (socialVis >= 80) candChance += 0.15;
+            else if (socialVis >= 50) candChance += 0.06;
 
             if (candChance > 0 && Math.random() < candChance) {
               this.generateRandomCandidature();

@@ -71,10 +71,10 @@ window.ProtecSupabase = {
     if (badge) {
       if (connected) {
         badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 border border-emerald-300';
-        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Réseau Connecté';
+        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Connecté (Serveur)';
       } else {
-        badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 border border-amber-300';
-        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Mode Hors-ligne';
+        badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-700 border border-rose-300';
+        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Déconnecté';
       }
     }
   },
@@ -103,30 +103,57 @@ window.ProtecSupabase = {
 
   // Surveillance périodique et écoute temps réel pour déconnexion si compte supprimé
   startAccountWatchdog(game) {
-    if (this.watchdogTimer) clearInterval(this.watchdogTimer);
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
 
     const checkNow = async () => {
-      const g = game || window.game;
-      const pid = g?.player?.id || window.ProtecAuth?.currentUser?.id;
-      if (!pid) return;
+      // SÉCURITÉ ABSOLUE : Vérifier UNIQUEMENT si le joueur est activement connecté avec une session valide
+      const currentUser = window.ProtecAuth?.currentUser;
+      const token = window.ProtecAuth?.token;
+      if (!currentUser || !currentUser.id || !token) {
+        // Le joueur n'est pas connecté : aucun contrôle de suppression de compte
+        if (this.watchdogTimer) {
+          clearInterval(this.watchdogTimer);
+          this.watchdogTimer = null;
+        }
+        return;
+      }
 
+      const pid = currentUser.id;
       const exists = await this.checkPlayerExists(pid);
       if (!exists) {
         console.warn('⚠️ Compte joueur supprimé de la BDD : déconnexion immédiate !');
         if (window.ProtecAuth && window.ProtecAuth.handleAccountDeleted) {
-          window.ProtecAuth.handleAccountDeleted(g);
+          window.ProtecAuth.handleAccountDeleted(game || window.game);
         }
       }
     };
 
-    // Vérification toutes les 8 secondes
-    this.watchdogTimer = setInterval(checkNow, 8000);
+    // Vérification périodique toutes les 12 secondes uniquement si connecté
+    this.watchdogTimer = setInterval(checkNow, 12000);
 
-    // Vérification immédiate au retour sur l'onglet
-    window.addEventListener('focus', checkNow);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') checkNow();
-    });
+    // Vérification au retour sur l'onglet uniquement si connecté
+    if (!this._watchdogListenersAttached) {
+      this._watchdogListenersAttached = true;
+      window.addEventListener('focus', () => {
+        if (window.ProtecAuth?.currentUser?.id) checkNow();
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && window.ProtecAuth?.currentUser?.id) {
+          checkNow();
+        }
+      });
+    }
+  },
+
+  // Arrêt du watchdog lors d'une déconnexion ou fermeture
+  stopAccountWatchdog() {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
   },
 
   // Initialisation du canal temps réel WebSockets Supabase pour tous les joueurs
@@ -146,12 +173,15 @@ window.ProtecSupabase = {
 
     // Écoute 1 : Détection temps réel de suppression de joueur dans la table players
     this.realtimeChannel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'players' }, (payload) => {
-      const g = game || window.game;
-      const pid = g?.player?.id || window.ProtecAuth?.currentUser?.id;
-      if (payload.old && (payload.old.id === pid || payload.old.username === pid)) {
+      const currentUser = window.ProtecAuth?.currentUser;
+      if (!currentUser || !currentUser.id) return; // Non connecté : ignorer strictement
+
+      const pid = currentUser.id;
+      const pname = currentUser.username;
+      if (payload.old && (payload.old.id === pid || (pname && payload.old.username === pname))) {
         console.warn('⚠️ Événement Supabase DELETE reçu sur notre compte joueur !');
         if (window.ProtecAuth && window.ProtecAuth.handleAccountDeleted) {
-          window.ProtecAuth.handleAccountDeleted(g);
+          window.ProtecAuth.handleAccountDeleted(game || window.game);
         }
       }
     });
@@ -608,6 +638,100 @@ window.ProtecSupabase = {
     } catch (e) {
       console.warn('Erreur lecture tchat Supabase:', e);
       return [];
+    }
+  },
+
+  // ============================================================================
+  // MONDE PERSISTANT SERVEUR : SYNCHRONISATION TEMPORELLE ET RÉSOLUTION RPC
+  // ============================================================================
+
+  // Récupération de l'horodatage officiel du serveur Postgres
+  async fetchServerTime() {
+    if (!this.client) return Date.now();
+    try {
+      const { data, error } = await this.client.rpc('sync_server_world', { p_player_id: 'ping' });
+      if (!error && data && data.server_time) {
+        return new Date(data.server_time).getTime();
+      }
+    } catch (e) {
+      // Fallback
+    }
+    return Date.now();
+  },
+
+  // Synchronisation du monde côté serveur (résolution des missions et formations expirées)
+  async syncServerWorld(playerId) {
+    if (!this.client || !playerId) return null;
+    try {
+      const { data, error } = await this.client.rpc('sync_server_world', { p_player_id: String(playerId) });
+      if (error) {
+        console.warn('Avertissement sync_server_world RPC:', error.message);
+        return null;
+      }
+      return data;
+    } catch (e) {
+      console.warn('Erreur appel RPC sync_server_world:', e);
+      return null;
+    }
+  },
+
+  // Déclaration d'une mission active avec durée réelle sur le serveur
+  async registerMissionOnServer(mission, playerId) {
+    if (!this.client || !mission || !playerId) return;
+    try {
+      const now = new Date();
+      const startsAt = mission.startedAt ? new Date(mission.startedAt).toISOString() : now.toISOString();
+      const duration = mission.durationSeconds || (mission.durationHours ? Math.round(mission.durationHours * 3600) : 1800);
+      const endsAt = mission.endsAt ? new Date(mission.endsAt).toISOString() : new Date(Date.now() + duration * 1000).toISOString();
+
+      await this.client
+        .from('active_missions')
+        .upsert({
+          id: String(mission.id),
+          player_id: String(playerId),
+          mission_type: mission.type || 'dps',
+          title: mission.title || 'Mission Dispositif',
+          status: 'ongoing',
+          starts_at: startsAt,
+          ends_at: endsAt,
+          duration_seconds: duration,
+          reward_money: mission.reward || mission.budget || 0,
+          reward_xp: mission.xpReward || 0,
+          assigned_volunteers: mission.assignedVolunteers || [],
+          assigned_vehicles: mission.assignedVehicles || [],
+          details: { category: mission.category, commune: mission.commune },
+          created_at: now.toISOString()
+        }, { onConflict: 'id' });
+    } catch (e) {
+      console.warn('Erreur enregistrement mission serveur:', e);
+    }
+  },
+
+  // Déclaration d'une formation active sur le serveur
+  async registerFormationOnServer(formation, playerId) {
+    if (!this.client || !formation || !playerId) return;
+    try {
+      const now = new Date();
+      const startsAt = formation.startedAt ? new Date(formation.startedAt).toISOString() : now.toISOString();
+      const duration = (formation.durationHours || 4) * 3600;
+      const endsAt = formation.endsAt ? new Date(formation.endsAt).toISOString() : new Date(Date.now() + duration * 1000).toISOString();
+
+      await this.client
+        .from('active_formations')
+        .upsert({
+          id: String(formation.id),
+          player_id: String(playerId),
+          diploma: formation.diploma || 'PSC1',
+          station_id: formation.stationId || null,
+          status: 'ongoing',
+          starts_at: startsAt,
+          ends_at: endsAt,
+          trainee_ids: formation.traineeIds || [],
+          cost: formation.cost || 0,
+          created_at: now.toISOString()
+        }, { onConflict: 'id' });
+    } catch (e) {
+      console.warn('Erreur enregistrement formation serveur:', e);
     }
   }
 };

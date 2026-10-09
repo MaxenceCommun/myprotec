@@ -98,47 +98,129 @@ window.ProtecPWA = {
     });
   },
 
-  // 5. Surveillance de l'état de connexion réseau
+  // 5. Surveillance de l'état de connexion réseau (Jeu 100% en ligne connecté)
   setupNetworkListeners() {
-    window.addEventListener('online', () => {
+    window.addEventListener('online', async () => {
       this.isOnline = true;
-      this.removeOfflineBadge();
-      if (window.game && typeof window.game.showToast === 'function') {
-        window.game.showToast('🌐 Connexion rétablie : mode en ligne synchronisé', 'success');
+      const isConnected = await this.verifySupabaseConnectivity();
+      if (isConnected) {
+        this.hideOfflineBlockingModal();
+        if (window.game && typeof window.game.showToast === 'function') {
+          window.game.showToast('Connexion Rétablie 🌐', 'Liaison avec les serveurs Supabase restaurée. Partie synchronisée.', 'green');
+        }
+        if (window.game && typeof window.game.syncPlayerToServer === 'function') {
+          window.game.syncPlayerToServer();
+        }
+      } else {
+        this.showOfflineBlockingModal('Serveurs Supabase Inaccessibles');
       }
     });
 
     window.addEventListener('offline', () => {
       this.isOnline = false;
-      this.showOfflineBadge();
-      if (window.game && typeof window.game.showToast === 'function') {
-        window.game.showToast('⚠️ Connexion perdue : bascule automatique en mode hors-ligne PWA', 'warning');
-      }
+      this.showOfflineBlockingModal('Connexion Internet Interrompue');
     });
 
+    // Contrôle initial
     if (!navigator.onLine) {
-      this.showOfflineBadge();
+      this.showOfflineBlockingModal('Connexion Internet Requise');
+    } else {
+      setTimeout(() => {
+        this.verifySupabaseConnectivity().then(ok => {
+          if (!ok) this.showOfflineBlockingModal('Serveurs Supabase Injoignables');
+        });
+      }, 1500);
     }
   },
 
-  // Affiche un badge discret hors-ligne
-  showOfflineBadge() {
-    let badge = document.getElementById('pwa-offline-indicator');
-    if (!badge) {
-      badge = document.createElement('div');
-      badge.id = 'pwa-offline-indicator';
-      badge.className = 'fixed bottom-4 left-4 z-50 px-3.5 py-1.5 rounded-full bg-amber-500/95 text-white font-extrabold text-xs shadow-xl backdrop-blur-md flex items-center gap-2 animate-bounce';
-      badge.innerHTML = `
-        <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
-        <span>Mode Hors-Ligne (Données & Cartes en Cache)</span>
-      `;
-      document.body.appendChild(badge);
+  async verifySupabaseConnectivity() {
+    if (!navigator.onLine) return false;
+    if (window.ProtecSupabase && window.ProtecSupabase.client) {
+      try {
+        const { error } = await window.ProtecSupabase.client
+          .from('players')
+          .select('id')
+          .limit(1);
+        return !error;
+      } catch (e) {
+        return false;
+      }
     }
+    return navigator.onLine;
   },
 
-  removeOfflineBadge() {
-    const badge = document.getElementById('pwa-offline-indicator');
-    if (badge) badge.remove();
+  // Affiche un écran de blocage plein écran infranchissable
+  showOfflineBlockingModal(reason = 'Connexion Internet Requise') {
+    let modal = document.getElementById('pwa-offline-blocking-screen');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'pwa-offline-blocking-screen';
+      modal.className = 'fixed inset-0 z-[9999999] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4 select-none';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="max-w-md w-full p-6 sm:p-8 rounded-3xl bg-slate-900 border-2 border-rose-500/80 shadow-2xl text-center space-y-5 animate-in fade-in zoom-in duration-300">
+        <div class="w-16 h-16 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto text-3xl">
+          📡
+        </div>
+
+        <div class="space-y-2">
+          <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/40">
+            Jeu 100% En Ligne Connecté
+          </span>
+          <h2 class="text-xl sm:text-2xl font-black text-white">
+            ${reason}
+          </h2>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            MyProtec est un univers opérationnel persistant en temps réel, synchronisé avec la base de données centrale Supabase. 
+            <strong>Aucune partie ne peut se dérouler hors-ligne</strong> pour garantir l'équité multijoueur et l'intégrité de vos données.
+          </p>
+        </div>
+
+        <div class="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-[11px] text-slate-400 space-y-1">
+          <div class="flex items-center justify-center gap-2 text-rose-400 font-bold">
+            <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+            <span>Tentative de reconnexion automatique en cours...</span>
+          </div>
+          <span class="text-[10px] text-slate-500 block">Vérifiez votre réseau Wi-Fi ou vos données mobiles.</span>
+        </div>
+
+        <button 
+          onclick="window.ProtecPWA.retryConnection()"
+          class="w-full py-3.5 rounded-2xl text-xs font-black bg-gradient-to-r from-rose-600 to-pc-orange hover:brightness-110 active:scale-95 text-white shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
+          <span>🔄 Réessayer la connexion maintenant</span>
+        </button>
+      </div>
+    `;
+
+    // Boucle de tentative automatique toutes les 4 secondes
+    if (this._retryTimer) clearInterval(this._retryTimer);
+    this._retryTimer = setInterval(() => {
+      this.retryConnection();
+    }, 4000);
+  },
+
+  hideOfflineBlockingModal() {
+    if (this._retryTimer) {
+      clearInterval(this._retryTimer);
+      this._retryTimer = null;
+    }
+    const modal = document.getElementById('pwa-offline-blocking-screen');
+    if (modal) modal.remove();
+  },
+
+  async retryConnection() {
+    const isConnected = await this.verifySupabaseConnectivity();
+    if (isConnected) {
+      this.hideOfflineBlockingModal();
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast('Connecté aux serveurs 🌐', 'Accès multijoueur rétabli avec succès.', 'green');
+      }
+      if (window.game && typeof window.game.syncPlayerToServer === 'function') {
+        window.game.syncPlayerToServer();
+      }
+    }
   },
 
   // Bannière discrète lors d'une mise à jour disponible

@@ -86,9 +86,15 @@ window.ProtecAuth = {
             }
             return;
           } else {
-            // La ligne n'existe plus dans la table players : compte supprimé de la BDD !
-            console.warn('⚠️ Compte joueur absent de Supabase : compte supprimé en base.');
-            this.handleAccountDeleted(game);
+            // Si le compte avait un id UUID valide (compte Supabase créé précédemment) qui a disparu de la table :
+            if (isUUID) {
+              console.warn('⚠️ Compte joueur absent de Supabase : compte supprimé en base.');
+              this.handleAccountDeleted(game);
+            } else {
+              // C'était un identifiant local temporaire non inscrit en base : réinitialisation silencieuse vers la création
+              this.clearSession();
+              this.openAuthModal(true);
+            }
             return;
           }
         } catch (supaErr) {
@@ -945,15 +951,28 @@ window.ProtecAuth = {
 
   // Prise en compte de la suppression du compte dans la base de données
   handleAccountDeleted(game = null) {
-    const g = game || window.game;
+    // Verrou anti-spam : éviter les exécutions multiples en rafale
+    if (this._isHandlingAccountDeleted) return;
+    this._isHandlingAccountDeleted = true;
+    setTimeout(() => { this._isHandlingAccountDeleted = false; }, 4000);
+
+    // Arrêt immédiat du watchdog de surveillance
+    if (window.ProtecSupabase && window.ProtecSupabase.stopAccountWatchdog) {
+      window.ProtecSupabase.stopAccountWatchdog();
+    }
+
+    const wasLoggedIn = Boolean(this.currentUser && this.currentUser.id);
     this.clearSession();
     localStorage.removeItem('protec_last_login_username');
     localStorage.removeItem('protec_last_login_password');
     localStorage.removeItem('protec_live_save_v4');
     localStorage.removeItem('protec_department_code');
+    localStorage.removeItem('protec_player_id');
 
+    const g = game || window.game;
     // Purge totale de l'antenne locale pour éviter toute persistance orpheline
     if (g) {
+      if (g.player) g.player.id = null;
       g.stations = [];
       g.vehicles = [];
       g.volunteers = [];
@@ -964,16 +983,24 @@ window.ProtecAuth = {
       if (g.renderStations) g.renderStations();
       if (g.renderMissions) g.renderMissions();
       if (g.updateStatsUI) g.updateStatsUI();
-      g.showToast('Compte Supprimé', 'Votre compte a été supprimé de la base de données. Vous avez été déconnecté.', 'red');
+      
+      // Afficher l'alerte UNIQUEMENT si l'utilisateur était réellement connecté auparavant
+      if (wasLoggedIn) {
+        g.showToast('Compte Supprimé', 'Votre compte a été supprimé de la base de données. Vous avez été déconnecté.', 'red');
+      }
     }
 
-    // Réaffiche immédiatement le modal de connexion obligatoire
+    // Réaffiche le modal de connexion obligatoire
     this.openAuthModal(true);
 
     const errorEl = document.getElementById('auth-error-msg');
     if (errorEl) {
-      errorEl.textContent = 'Votre compte n’existe plus dans la base de données (supprimé). Veuillez créer un nouveau compte ou vous reconnecter.';
-      errorEl.classList.remove('hidden');
+      if (wasLoggedIn) {
+        errorEl.textContent = 'Votre compte n’existe plus dans la base de données (supprimé). Veuillez créer un nouveau compte ou vous reconnecter.';
+        errorEl.classList.remove('hidden');
+      } else {
+        errorEl.classList.add('hidden');
+      }
     }
   }
 };

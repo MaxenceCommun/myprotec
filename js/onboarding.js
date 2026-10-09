@@ -18,11 +18,11 @@ window.ProtecOnboarding = {
 
   // 1. Équipe fondatrice personnalisable (5 bénévoles constitutifs)
   volunteersList: [
-    { id: 'vol_1', name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', avatar: '👨‍💼', skills: ['ce', 'pse2', 'pse1', 'permis_b'], exp: 30, motivation: 85, dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'] },
-    { id: 'vol_2', name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', avatar: '👩‍🚒', skills: ['pse2', 'pse1', 'permis_b'], exp: 25, motivation: 80, dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'] },
-    { id: 'vol_3', name: 'Thomas Girard', role: 'Équipier Secouriste', rank: 'PSE2', avatar: '🧑‍🚒', skills: ['pse2', 'pse1'], exp: 20, motivation: 80, dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'] },
-    { id: 'vol_4', name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', avatar: '🙋‍♂️', skills: ['pse1', 'permis_b'], exp: 15, motivation: 75, dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'] },
-    { id: 'vol_5', name: 'Élodie Leroy', role: 'Secouriste', rank: 'PSE1', avatar: '👩', skills: ['pse1'], exp: 10, motivation: 85, dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'] }
+    { id: 'vol_1', name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', gender: 'h', avatar: '👨‍💼', skills: ['ce', 'pse2', 'pse1', 'permis_b'], exp: 30, motivation: 85, dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'] },
+    { id: 'vol_2', name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', gender: 'f', avatar: '👩‍🚒', skills: ['pse2', 'pse1', 'permis_b'], exp: 25, motivation: 80, dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'] },
+    { id: 'vol_3', name: 'Thomas Girard', role: 'Équipier Secouriste', rank: 'PSE2', gender: 'h', avatar: '🧑‍🚒', skills: ['pse2', 'pse1'], exp: 20, motivation: 80, dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'] },
+    { id: 'vol_4', name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', gender: 'h', avatar: '🙋‍♂️', skills: ['pse1', 'permis_b'], exp: 15, motivation: 75, dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'] },
+    { id: 'vol_5', name: 'Élodie Leroy', role: 'Secouriste', rank: 'PSE1', gender: 'f', avatar: '👩', skills: ['pse1'], exp: 10, motivation: 85, dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'] }
   ],
 
   // 2. Coordonnées de placement sur la carte
@@ -215,17 +215,18 @@ window.ProtecOnboarding = {
           ${this.volunteersList.map((vol, idx) => `
             <div class="p-3.5 rounded-2xl glass-card bg-white/95 border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div class="flex items-center gap-3">
-                <!-- Avatar avec menu de sélection -->
+                <!-- Avatar Bénévole Tenue Officielle Protection Civile (Orange #f78d20, Blanc, Bleu #024589) -->
                 <div class="relative group">
-                  <button type="button" class="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-300 text-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition cursor-pointer shadow-xs" title="Changer l'avatar">
-                    ${vol.avatar}
+                  <button type="button" onclick="window.ProtecOnboarding.toggleVolunteerGender('${vol.id}')" class="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-300 flex items-center justify-center hover:scale-105 active:scale-95 transition cursor-pointer shadow-xs overflow-hidden" title="Changer le modèle (Homme / Femme)">
+                    ${this.renderVolunteerUniformAvatar(vol, 'w-11 h-11')}
                   </button>
-                  <div class="hidden group-hover:flex absolute left-0 top-full mt-1 z-30 p-1.5 rounded-xl bg-white shadow-xl border border-slate-200 gap-1 flex-wrap w-44">
-                    ${avatarChoices.map(av => `
-                      <button type="button" onclick="window.ProtecOnboarding.updateVolunteerAvatar('${vol.id}', '${av}')" class="w-7 h-7 rounded-lg hover:bg-blue-50 text-base flex items-center justify-center transition cursor-pointer">
-                        ${av}
-                      </button>
-                    `).join('')}
+                  <div class="hidden group-hover:flex absolute left-0 top-full mt-1 z-30 p-1 rounded-xl bg-white shadow-xl border border-slate-200 gap-1 items-center whitespace-nowrap">
+                    <button type="button" onclick="window.ProtecOnboarding.setVolunteerGender('${vol.id}', 'h')" class="px-2 py-1 rounded-lg text-[10px] font-black ${vol.gender === 'h' ? 'bg-pc-blue text-white' : 'hover:bg-slate-100 text-slate-700'} transition cursor-pointer">
+                      Modèle Homme
+                    </button>
+                    <button type="button" onclick="window.ProtecOnboarding.setVolunteerGender('${vol.id}', 'f')" class="px-2 py-1 rounded-lg text-[10px] font-black ${vol.gender === 'f' ? 'bg-pc-blue text-white' : 'hover:bg-slate-100 text-slate-700'} transition cursor-pointer">
+                      Modèle Femme
+                    </button>
                   </div>
                 </div>
 
@@ -288,6 +289,85 @@ window.ProtecOnboarding = {
     const v = this.volunteersList.find(x => x.id === volId);
     if (v) {
       v.avatar = newAvatar;
+      this.renderWizard();
+    }
+  },
+
+  // Rendu de l'avatar avec la tenue officielle Protection Civile (Orange #f78d20, Blanc, Bleu #024589)
+  renderVolunteerUniformAvatar(vol, sizeClass = 'w-11 h-11') {
+    if (window.game && typeof window.game.getVolunteerAvatarHTML === 'function') {
+      return window.game.getVolunteerAvatarHTML(vol, sizeClass, true);
+    }
+
+    const cleanName = vol.name || 'Secouriste';
+    const nameLower = cleanName.toLowerCase();
+    const isFemale = (
+      vol.gender === 'f' ||
+      vol.gender === 'F' ||
+      ['sarah', 'élodie', 'elodie', 'léa', 'lea', 'manon', 'chloé', 'chloe', 'inès', 'ines', 'pauline', 'océane', 'camille', 'sophie', 'marie', 'clara', 'emma'].some(fn => nameLower.includes(fn))
+    );
+    const clipId = 'onb-torso-' + Math.random().toString(36).slice(2, 9);
+
+    if (isFemale) {
+      return `
+        <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 border border-slate-200/90 shadow-2xs transition overflow-hidden" title="${cleanName} (Protection Civile)">
+          <svg viewBox="0 0 24 24" class="w-full h-full p-0.5" fill="none">
+            <defs>
+              <clipPath id="${clipId}">
+                <path d="M 4 22 V 18 C 4 15.5 7.2 14 9.5 12.5 C 10 13.8 11 16.5 12 16.5 C 13 16.5 14 13.8 14.5 12.5 C 16.8 14 20 15.5 20 18 V 22 Z" />
+              </clipPath>
+            </defs>
+            <!-- Torse Protection Civile triptyque officiel -->
+            <g clip-path="url(#${clipId})">
+              <rect x="2" y="12" width="20" height="5.8" fill="#f78d20" />
+              <rect x="2" y="17.8" width="20" height="1.6" fill="#ffffff" />
+              <rect x="2" y="19.4" width="20" height="3.6" fill="#024589" />
+            </g>
+            <path d="M 9.6 14.5 L 12 17.5 L 14.4 14.5" stroke="#334155" stroke-width="1.8" fill="#ffffff" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M 9.5 12.5 C 7.2 14 4 15.5 4 18 V 22" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M 14.5 12.5 C 16.8 14 20 15.5 20 18 V 22" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M 9.5 12.5 H 6.5 V 7.5 C 6.5 3.4 17.5 3.4 17.5 7.5 V 12.5 H 14.5" fill="#ffffff" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+      `;
+    } else {
+      return `
+        <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 border border-slate-200/90 shadow-2xs transition overflow-hidden" title="${cleanName} (Protection Civile)">
+          <svg viewBox="0 0 24 24" class="w-full h-full p-0.5" fill="none">
+            <defs>
+              <clipPath id="${clipId}">
+                <path d="M 4 22 V 18 C 4 15.5 7.2 14.5 9.2 14.2 C 9.8 14.2 10.2 15.8 12 15.8 C 13.8 15.8 14.2 14.2 14.8 14.2 C 16.8 14.5 20 15.5 20 18 V 22 Z" />
+              </clipPath>
+            </defs>
+            <!-- Torse Protection Civile triptyque officiel -->
+            <g clip-path="url(#${clipId})">
+              <rect x="2" y="13" width="20" height="4.8" fill="#f78d20" />
+              <rect x="2" y="17.8" width="20" height="1.6" fill="#ffffff" />
+              <rect x="2" y="19.4" width="20" height="3.6" fill="#024589" />
+            </g>
+            <path d="M 9.8 14.2 C 9.8 16.4 14.2 16.4 14.2 14.2" stroke="#334155" stroke-width="1.8" fill="#ffffff" stroke-linecap="round" />
+            <path d="M 4 22 V 18 C 4 15.5 7.2 14.5 9.2 14.2" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M 14.8 14.2 C 16.8 14.5 20 15.5 20 18 V 22" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M 5.8 3.2 H 14.5 C 16.2 3.2 17.2 4.4 17.2 6.2 V 11 C 17.2 14.8 6.8 14.8 6.8 11 V 6.2 H 5.8 Z" fill="#ffffff" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+      `;
+    }
+  },
+
+  setVolunteerGender(volId, gender) {
+    const v = this.volunteersList.find(x => x.id === volId);
+    if (v) {
+      v.gender = gender;
+      this.renderWizard();
+    }
+  },
+
+  toggleVolunteerGender(volId) {
+    const v = this.volunteersList.find(x => x.id === volId);
+    if (v) {
+      const isFemale = v.gender === 'f' || (v.gender !== 'h' && ['sarah', 'élodie', 'elodie'].some(fn => v.name.toLowerCase().includes(fn)));
+      v.gender = isFemale ? 'h' : 'f';
       this.renderWizard();
     }
   },
@@ -1035,6 +1115,7 @@ window.ProtecOnboarding = {
       status: 'dispo',
       stationId: stationId,
       avatar: v.avatar,
+      gender: v.gender || (v.dispoType === 'étudiante' ? 'f' : 'h'),
       dispoType: v.dispoType,
       dispoJours: v.dispoJours,
       skills: v.skills || []
