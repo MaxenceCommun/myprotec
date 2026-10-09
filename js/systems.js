@@ -226,9 +226,9 @@ window.ProtecSystems = {
 
     // Bip radio et message de départ
     this.playRadioChirp();
-    const statusLabel = isEmergency ? (statusTarget === 4 ? 'STATUT 4 : Transport CHU (Urgence)' : 'STATUT 2 : Départ Urgence (Gyrophare)') : (statusTarget === 6 ? 'STATUT 6 : Retour Antenne' : 'STATUT 2 : Départ en route (Allure normale)');
-    this.addRadioLog(game, vehicle.name, statusTarget, `${statusLabel} vers ${mission ? mission.title : 'Destination'} (${distKm.toFixed(1)} km, ~${realisticSpeedKmh} km/h).`);
-    game.showToast(statusLabel, `${vehicle.name} est en route (${isEmergency ? 'Urgence +50% rapidité' : 'Allure normale'}, ~${realisticSpeedKmh} km/h, ${distKm.toFixed(1)} km).`, isEmergency ? 'orange' : 'blue');
+    const statusLabel = isEmergency ? (statusTarget === 4 ? 'STATUT 4 : Transport CHU' : 'STATUT 2 : Départ Urgent') : (statusTarget === 6 ? 'STATUT 6 : Retour Antenne' : 'STATUT 2 : En route');
+    this.addRadioLog(game, vehicle.name, statusTarget, `${statusLabel} vers ${mission ? mission.title : 'Destination'} (${distKm.toFixed(1)} km).`);
+    game.showToast(statusLabel, `${vehicle.name} est en route vers les lieux (~${distKm.toFixed(1)} km).`, isEmergency ? 'orange' : 'blue');
   },
 
   updateTransits(game) {

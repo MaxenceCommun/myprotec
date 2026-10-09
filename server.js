@@ -48,7 +48,10 @@ const gameState = {
   },
   get renforts() { return db.data.renforts; },
   get formationsSpeciales() { return db.data.formationsSpeciales; },
-  get chatMessages() { return db.data.chatMessages; }
+  get chatMessages() { return db.data.chatMessages; },
+  get marketplace() { return db.data.marketplace || []; },
+  get communityEvents() { return db.data.communityEvents || []; },
+  get badgesCollection() { return db.data.badgesCollection || []; }
 };
 
 // Abonnés SSE pour le push en temps réel
@@ -628,6 +631,106 @@ const server = http.createServer((req, res) => {
         db.save();
         broadcastSSE('chat_message', msg);
         sendJson(res, 200, { success: true, message: msg });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 11. Bourse Fédérale : Créer une offre (Vente, Don, Échange)
+  if (url === '/api/alliances/marketplace/create' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const offer = JSON.parse(body);
+        offer.id = offer.id || `mkt-${Date.now()}`;
+        db.data.marketplace = db.data.marketplace || [];
+        db.data.marketplace.unshift(offer);
+        if (db.data.marketplace.length > 50) db.data.marketplace.pop();
+        db.save();
+        broadcastSSE('marketplace_created', offer);
+        sendJson(res, 200, { success: true, offer });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 12. Bourse Fédérale : Supprimer / Retirer une offre
+  if (url === '/api/alliances/marketplace/delete' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { offerId } = JSON.parse(body);
+        db.data.marketplace = (db.data.marketplace || []).filter(o => o.id !== offerId);
+        db.save();
+        broadcastSSE('marketplace_deleted', { offerId });
+        sendJson(res, 200, { success: true });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 13. Événements Communautaires : Proposer un Événement
+  if (url === '/api/alliances/events/create' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const event = JSON.parse(body);
+        event.id = event.id || `evt-comm-${Date.now()}`;
+        db.data.communityEvents = db.data.communityEvents || [];
+        db.data.communityEvents.unshift(event);
+        if (db.data.communityEvents.length > 30) db.data.communityEvents.pop();
+        db.save();
+        broadcastSSE('community_event_created', event);
+        sendJson(res, 200, { success: true, event });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 14. Événements Communautaires : Participer à un Événement
+  if (url === '/api/alliances/events/participate' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { eventId, playerId } = JSON.parse(body);
+        const event = (db.data.communityEvents || []).find(e => e.id === eventId);
+        if (event) {
+          event.registeredAntennas = event.registeredAntennas || [];
+          if (!event.registeredAntennas.some(a => a.playerId === playerId)) {
+            event.registeredAntennas.push({ playerId, at: new Date().toISOString() });
+            db.save();
+            broadcastSSE('community_event_participated', { eventId, playerId });
+          }
+        }
+        sendJson(res, 200, { success: true, event });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 15. Transfert / Don d'Écusson
+  if (url === '/api/alliances/badges/transfer' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { badge, fromPlayerId, toStationId } = JSON.parse(body);
+        broadcastSSE('badge_transferred', { badge, fromPlayerId, toStationId });
+        sendJson(res, 200, { success: true });
       } catch (err) {
         sendJson(res, 400, { error: err.message });
       }

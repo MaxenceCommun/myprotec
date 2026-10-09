@@ -148,7 +148,7 @@ window.ProtecAdvancedModals = {
       { key: 'garage', title: 'Hangar & Garage Opérationnel', icon: '🚒' },
       { key: 'pharmacie', title: 'Pharmacie Centrale & Réserve', icon: '💊' },
       { key: 'foyer', title: 'Foyer des Bénévoles & Espace Détente', icon: '☕' },
-      { key: 'formation', title: 'Salle Pédagogique & Formations PSC1', icon: '🎓' },
+      { key: 'formation', title: 'Salle Pédagogique & Formations PSC', icon: '🎓' },
       { key: 'radio', title: 'Baie Radio & Transmissions', icon: '📡' }
     ];
 

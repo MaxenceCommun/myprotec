@@ -63,7 +63,7 @@ window.ProtecLocaux = {
       textClass: 'text-amber-950',
       blueprintClass: 'bg-blue-950/80 border-blue-400 text-blue-200',
       lightBg: 'bg-blue-50 text-pc-blue border-blue-200',
-      desc: 'Accueille les sessions grand public (PSC1, SST, GQS) et les recyclages des bénévoles.',
+      desc: 'Accueille les sessions grand public (PSC, SST, GQS) et les recyclages des bénévoles.',
       costPerTile: 750,
       workDurationSec: 180, // 3 min
       perTileStats: { studentCapacity: 6 }
@@ -168,7 +168,7 @@ window.ProtecLocaux = {
       name: 'Le Polyvalent Républicain',
       badge: 'Recommandé Débutant',
       badgeColor: 'bg-pc-blue text-white',
-      desc: 'Équilibre parfait pour débuter : un bureau d’accueil, une salle de formation PSC1, une réserve pour les collectes, un foyer chaleureux et un garage 2 places.',
+      desc: 'Équilibre parfait pour débuter : un bureau d’accueil, une salle de formation PSC, une réserve pour les collectes, un foyer chaleureux et un garage 2 places.',
       icon: '⚖️',
       width: 4,
       height: 4,
@@ -204,7 +204,7 @@ window.ProtecLocaux = {
       name: 'L’Institut Pédagogique & Citoyen',
       badge: 'Focus Formations & Revenus',
       badgeColor: 'bg-emerald-600 text-white',
-      desc: 'Optimisé pour les cours grand public payants (PSC1, SST, GQS) : deux grandes salles de formation, vastes bureaux et accueil, foyer convivial.',
+      desc: 'Optimisé pour les cours grand public payants (PSC, SST, GQS) : deux grandes salles de formation, vastes bureaux et accueil, foyer convivial.',
       icon: '🎓',
       width: 4,
       height: 4,
@@ -1401,7 +1401,7 @@ window.ProtecLocaux = {
               <span class="text-pc-blue font-black">${stats.studentCapacity} places</span>
             </div>
             <p class="text-[10px] ${stats.hasFormation ? 'text-slate-500' : 'text-slate-400'}">
-              ${stats.hasFormation ? `${stats.counts.formation || 0} salle(s) • PSC1/SST` : `Aucune salle`}
+              ${stats.hasFormation ? `${stats.counts.formation || 0} salle(s) • PSC/SST` : `Aucune salle`}
             </p>
           </div>
 
@@ -1869,7 +1869,7 @@ window.ProtecLocaux = {
           <select onclick="event.stopPropagation()" onchange="window.ProtecLocaux.assignRoomRole('${rm.id}', this.value)" class="w-full px-2 py-1 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue">
             <option value="libre" ${rm.type === 'libre' ? 'selected' : ''}>⚪ Salle Libre (Non affectée)</option>
             <option value="bureau" ${rm.type === 'bureau' ? 'selected' : ''}>💼 Accueil & Direction</option>
-            <option value="formation" ${rm.type === 'formation' ? 'selected' : ''}>🎓 Formation PSC1 & DPS</option>
+            <option value="formation" ${rm.type === 'formation' ? 'selected' : ''}>🎓 Formation PSC & DPS</option>
             <option value="stockage" ${rm.type === 'stockage' ? 'selected' : ''}>📦 Réserve Lots A/B & Vestiaires</option>
             <option value="detente" ${rm.type === 'detente' ? 'selected' : ''}>☕ Foyer & Détente</option>
             <option value="dortoir" ${rm.type === 'dortoir' ? 'selected' : ''}>🛏️ Dortoir de Garde</option>
@@ -2361,7 +2361,7 @@ window.ProtecLocaux = {
               <span>🎓 Salle de Formation</span>
               <span class="text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">20.2 m²</span>
             </div>
-            <p class="text-[10px] text-slate-400 leading-tight">4.8m × 4.2m • Formations secouristes PSC1, SST et recyclages PSE.</p>
+            <p class="text-[10px] text-slate-400 leading-tight">4.8m × 4.2m • Formations secouristes PSC, SST et recyclages PSE.</p>
           </div>
 
           <div class="p-3 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-1">
@@ -3472,9 +3472,9 @@ window.ProtecLocaux = {
             <strong class="block font-black text-white">💚 Armoire DAE Murale</strong>
             <span class="text-[10px] text-slate-400">Accès d'urgence 24/7</span>
           </button>
-          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Tableau blanc interactif installé dans la salle PSC1.', 'amber')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
+          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Tableau blanc interactif installé dans la salle PSC.', 'amber')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
             <strong class="block font-black text-white">🎓 Écran Vidéoprojection</strong>
-            <span class="text-[10px] text-slate-400">Pour formations PSC1/SST</span>
+            <span class="text-[10px] text-slate-400">Pour formations PSC/SST</span>
           </button>
           <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Rack Bouteilles B5 Oxygène sécurisé.', 'emerald')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
             <strong class="block font-black text-white">🫁 Rack Bouteilles Oxygène</strong>

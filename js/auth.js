@@ -196,6 +196,12 @@ window.ProtecAuth = {
       if (subTitleEl) subTitleEl.textContent = 'Réseau Opérationnel Multijoueur';
 
       const syncDate = this.lastSyncTime ? this.lastSyncTime.toLocaleString('fr-FR') : 'Synchronisé';
+      const station = window.game?.stations?.[0];
+      const actualCity = (station?.city) || 
+                         (station?.name ? station.name.replace(/^Antenne\s+(de\s+|d')?/i, '') : '') || 
+                         (this.currentUser.city && this.currentUser.city !== 'Paris' ? this.currentUser.city : (window.game?.selectedDept?.name || 'France'));
+      const actualStationName = (station?.name) || this.currentUser.stationName || 'Antenne Protection Civile';
+
       container.innerHTML = `
         <div class="space-y-4">
           <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center gap-3.5">
@@ -205,10 +211,10 @@ window.ProtecAuth = {
             <div class="flex-1">
               <div class="flex items-center gap-2">
                 <span class="font-extrabold text-slate-900 text-base">${this.currentUser.username}</span>
-                <span class="text-[9px] font-black uppercase tracking-wider bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded-full">Connecté Multi</span>
+                <span class="text-[9px] font-black uppercase tracking-wider bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded-full">Multijoueur</span>
               </div>
               <div class="text-xs text-slate-600 mt-0.5">
-                ${this.currentUser.stationName} • Ville : <strong class="capitalize">${this.currentUser.city || 'Paris'}</strong>
+                ${actualStationName} • Ville : <strong class="capitalize">${actualCity}</strong>
               </div>
             </div>
           </div>
@@ -217,29 +223,17 @@ window.ProtecAuth = {
             <div class="flex justify-between items-center py-1 border-b border-slate-100">
               <span class="text-slate-500 font-medium">Mode de Jeu</span>
               <span class="font-bold text-pc-blue flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-pc-blue animate-ping"></span> Multijoueur Serveur
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Multijoueur
               </span>
             </div>
-            <div class="flex justify-between items-center py-1 border-b border-slate-100">
-              <span class="text-slate-500 font-medium">Dernière synchronisation</span>
-              <span class="font-mono font-bold text-slate-800" id="auth-sync-date">${syncDate}</span>
-            </div>
             <div class="flex justify-between items-center py-1">
-              <span class="text-slate-500 font-medium">Identifiant Joueur</span>
-              <span class="font-mono text-[10px] text-slate-400">${this.currentUser.id}</span>
+              <span class="text-slate-500 font-medium">Synchronisation Réseau</span>
+              <span class="font-mono font-bold text-slate-800" id="auth-sync-date">${syncDate}</span>
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-2 pt-2">
-            <button onclick="window.ProtecAuth.manualSaveToDatabase(window.game)" class="py-2.5 px-3 rounded-xl text-xs font-bold bg-pc-blue text-white hover:bg-pc-blue-light transition flex items-center justify-center gap-1.5 shadow-sm">
-              <i data-lucide="cloud-upload" class="w-4 h-4"></i>
-              Synchroniser
-            </button>
-            <button onclick="window.ProtecAuth.manualLoadFromDatabase(window.game)" class="py-2.5 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center justify-center gap-1.5">
-              <i data-lucide="cloud-download" class="w-4 h-4"></i>
-              Recharger
-            </button>
-          </div>
+          <!-- Collection d'Écussons Commémoratifs & Rareté -->
+          ${window.ProtecMultiplayer ? window.ProtecMultiplayer.renderBadgesCollectionHTML(window.game) : ''}
 
           <div class="pt-2">
             <button onclick="window.ProtecAuth.logout(window.game)" class="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition flex items-center justify-center gap-1.5 border border-rose-200/60">

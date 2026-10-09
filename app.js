@@ -115,6 +115,9 @@ class ProtecGame {
     this.renforts = [];
     this.formationsSpeciales = [];
     this.chatMessages = [];
+    this.marketplace = [];
+    this.communityEvents = [];
+    this.badgesCollection = [];
     this.activeAllianceTab = 'membres';
     this.activePlanningTab = 'calendar';
     this.modalHistory = [];
@@ -162,6 +165,12 @@ class ProtecGame {
     }
   }
 
+  openPlayerProfileModal() {
+    if (window.ProtecAuth) {
+      window.ProtecAuth.openAuthModal();
+    }
+  }
+
   // --- DATES & CALENDRIER ---
   getDayOfWeek(year, month, day) {
     const d = new Date(year, month, day);
@@ -178,6 +187,15 @@ class ProtecGame {
     const dayName = this.getDayOfWeek(dateObj.year, dateObj.month, dateObj.day);
     const monthShort = this.clock.monthsShort[dateObj.month];
     return `${dayName} ${dateObj.day} ${monthShort}`;
+  }
+
+  formatHoursAndMinutes(val, isSeconds = false) {
+    if (val === undefined || val === null) return '0h 00min';
+    let totalSec = isSeconds ? Math.round(Number(val) || 0) : Math.round((Number(val) || 0) * 3600);
+    if (totalSec <= 0) return '0h 00min';
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    return `${hrs}h ${mins.toString().padStart(2, '0')}min`;
   }
 
   createDateOffset(daysAhead, hour = 14) {
@@ -218,6 +236,13 @@ class ProtecGame {
         if (data.renforts) this.renforts = data.renforts;
         if (data.formationsSpeciales) this.formationsSpeciales = data.formationsSpeciales;
         if (data.chatMessages) this.chatMessages = data.chatMessages;
+        if (data.marketplace) this.marketplace = data.marketplace;
+        if (data.communityEvents) this.communityEvents = data.communityEvents;
+        if (data.badgesCollection) this.badgesCollection = data.badgesCollection;
+
+        if (window.ProtecMultiplayer) {
+          window.ProtecMultiplayer.injectState(this);
+        }
 
         this.renderAllianceStations();
         this.updateStatsUI();
@@ -1247,10 +1272,10 @@ class ProtecGame {
 
       // 4. EXACTEMENT 5 BÉNÉVOLES AVEC COMPÉTENCES DE BASE (1 CE, 2 PSE2, 2 PSE1)
       const starters = [
-        { name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', exp: 30, isTrainer: false, avatar: '👨‍💼', dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'], motivation: 85, skills: ['ce', 'pse2', 'pse1', 'permis_b'] },
-        { name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', exp: 25, isTrainer: false, avatar: '👩‍🚒', dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b'] },
-        { name: 'Thomas Girard', role: 'Équipier Secouriste', rank: 'PSE2', exp: 20, isTrainer: false, avatar: '🧑‍🚒', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1'] },
-        { name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', exp: 15, isTrainer: false, avatar: '🙋‍♂️', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 75, skills: ['pse1', 'permis_b'] },
+        { name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', exp: 30, isTrainer: false, avatar: '👨‍💼', dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'], motivation: 85, skills: ['ce', 'pse2', 'pse1', 'permis_b', 'permis_vpsp'] },
+        { name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', exp: 25, isTrainer: false, avatar: '👩‍🚒', dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b', 'permis_vpsp'] },
+        { name: 'Thomas Girard', role: 'Équipier Secouriste', rank: 'PSE2', exp: 20, isTrainer: false, avatar: '🧑‍🚒', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b'] },
+        { name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', exp: 15, isTrainer: false, avatar: '🙋‍♂️', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 75, skills: ['pse1', 'permis_b', 'communication_1'] },
         { name: 'Élodie Leroy', role: 'Secouriste', rank: 'PSE1', exp: 10, isTrainer: false, avatar: '🧑', dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'], motivation: 85, skills: ['pse1'] }
       ];
 
@@ -1643,7 +1668,7 @@ class ProtecGame {
       hiddenRequiredSkills: pick.hiddenSkills || pick.ranks || [],
       consumableCost: pick.matCost || 30,
       status: 'pending',
-      secondsLeft: 240 // 4 minutes pour répondre avant expiration face aux autres associations
+      secondsLeft: 6 * 3600 // 6 heures pour répondre avant expiration face aux autres associations
     };
 
     d.bareme = this.calculateBareme(d);
@@ -1817,6 +1842,9 @@ class ProtecGame {
   submitCustomDevis(devisId) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
+    if (devis.status === 'sent' || devis.status === 'signed' || devis.isSubmitting) {
+      return; // Empêche strictement tout envoi multiple
+    }
 
     const input = document.getElementById(`devis-price-input-${devisId}`);
     const price = input ? parseFloat(input.value) : (devis.proposedPrice || 250);
@@ -1826,8 +1854,18 @@ class ProtecGame {
       return;
     }
 
+    // Verrouillage immédiat
+    devis.isSubmitting = true;
     devis.proposedPrice = price;
     devis.status = 'sent';
+
+    // Désactivation immédiate de l'élément bouton dans le DOM si présent
+    const btn = document.querySelector(`button[onclick*="submitCustomDevis('${devisId}')"]`);
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+      btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Transmission...';
+    }
 
     this.showToast('Devis transmis', `Offre de ${price} € envoyée à l’organisateur. Commission de sécurité et étude des offres concurrentes...`, 'blue');
     this.openModule('devis', true);
@@ -1945,31 +1983,40 @@ class ProtecGame {
 
     this.missions.push(newMission);
     this.renderMissions();
+    this.missions.push(newMission);
+    this.renderMissions();
     this.updateStatsUI();
     this.saveGame();
-    this.checkVolunteerRegistrations(newMission);
+    // Ne pas inscrire immédiatement en 1 seconde : le poste s'ouvre avec effectif à mobiliser
   }
 
   checkVolunteerRegistrations(mission) {
     if (mission.status !== 'planifie') return;
+    if (mission.registeredVolunteers.length >= mission.requiredVolunteers) return;
 
-    this.volunteers.forEach(vol => {
-      if (mission.registeredVolunteers.includes(vol.id)) return;
-      if (mission.registeredVolunteers.length >= mission.requiredVolunteers) return;
+    const totalVols = (this.volunteers || []).length;
+    // Avec peu de bénévoles (ex: <= 5), la mobilisation spontanée est plus difficile et rare
+    const smallTeamPenalty = totalVols <= 5 ? 0.35 : 0.75;
+
+    for (const vol of this.volunteers) {
+      if (mission.registeredVolunteers.includes(vol.id)) continue;
+      if (mission.registeredVolunteers.length >= mission.requiredVolunteers) break;
 
       if (window.ProtecPersonnel) {
         const dispoCheck = window.ProtecPersonnel.calculateAvailability(vol, this, mission);
-        if (!dispoCheck.available) return;
+        if (!dispoCheck.available) continue;
       } else {
         const isAvailableThisDay = vol.dispoJours?.includes(mission.eventDate?.dayName);
-        if (!isAvailableThisDay && Math.random() > 0.15) return;
+        if (!isAvailableThisDay && Math.random() > 0.15) continue;
       }
 
-      const chance = (vol.motivation || 70) / 100;
+      // Taux d'inscription spontanée mesuré et réaliste
+      const chance = ((vol.motivation || 70) / 100) * smallTeamPenalty * 0.40;
       if (Math.random() < chance) {
         mission.registeredVolunteers.push(vol.id);
+        break; // Au maximum 1 bénévole à la fois pour étaler dans le temps
       }
-    });
+    }
 
     this.renderMissions();
     this.updateStatsUI();
@@ -2673,8 +2720,30 @@ class ProtecGame {
     // Contrôle des compétences exigées (CE / PSE2)
     const requiredRanks = mission.requiredRanks || [];
     const crewVols = mission.registeredVolunteers.map(vid => this.volunteers.find(v => v.id === vid)).filter(Boolean);
-    const hasRequiredSkills = requiredRanks.every(rankReq => crewVols.some(v => v.rank === rankReq || (rankReq === 'PSE1' && ['PSE2', 'CE', 'CD', 'Cadre'].includes(v.rank))));
-    
+    // Contrôle de l'habilitation Conducteur VPSP (prise en charge avec victime)
+    if (mission.requiredVehicles && mission.requiredVehicles.includes('VPSP')) {
+      const hasVpspDriver = crewVols.some(v => v.skills && (v.skills.includes('permis_vpsp') || v.skills.includes('pilotage')));
+      if (!hasVpspDriver) {
+        this.showToast(
+          'Conducteur VPSP Requis ! 🚑',
+          'La conduite du VPSP lors d’une prise en charge de victime nécessite obligatoirement l’habilitation interne « Permis VPSP (P. VPSP) ». Assignez un conducteur qualifié à l’équipage !',
+          'orange'
+        );
+        return;
+      }
+    } else if (mission.requiredVehicles && mission.requiredVehicles.length > 0) {
+      // Pour les autres véhicules légers (VL, VTU, VTP...) : Permis B requis
+      const hasDriver = crewVols.some(v => v.skills && (v.skills.includes('permis_b') || v.skills.includes('permis_vpsp') || v.skills.includes('pilotage')));
+      if (!hasDriver) {
+        this.showToast(
+          'Conducteur Permis B Requis ! 🚗',
+          'Au moins un équipier doit détenir le Permis B pour conduire le véhicule de mission.',
+          'orange'
+        );
+        return;
+      }
+    }
+
     if (!hasRequiredSkills && mission.type === 'pompiers') {
       this.applyPrefectureSanction('Équipage déployé sans les qualifications obligatoires (Absence de Chef d’Équipe ou PSE)', 12);
     }
@@ -2836,29 +2905,41 @@ class ProtecGame {
       window.ProtecSocial.onMaraudeCompleted(this, 4);
     }
 
-    // 2b. COUVERTURE COMMUNICATION & PRESSE (Photographe / Vidéaste d'antenne avec compétence 'communication')
-    const comSpecialist = crew.find(v => v.skills && v.skills.includes('communication'));
+    // 2b. COUVERTURE COMMUNICATION & PRESSE (Compétence Communication Niveaux 1, 2 et 3)
+    const comSpecialist = crew.find(v => v.skills && (v.skills.includes('communication_3') || v.skills.includes('communication_2') || v.skills.includes('communication_1') || v.skills.includes('communication')));
     if (comSpecialist) {
-      const donBonus = 180 + Math.floor(Math.random() * 150);
-      const repBonus = 25 + Math.floor(Math.random() * 15);
-      this.resources.money += donBonus;
-      this.resources.reputationScore += repBonus;
+      let comLevel = 1;
+      let comRoleLabel = 'Reporter d’antenne';
+      if (comSpecialist.skills.includes('communication_3')) {
+        comLevel = 3;
+        comRoleLabel = 'Responsable Communication';
+      } else if (comSpecialist.skills.includes('communication_2')) {
+        comLevel = 2;
+        comRoleLabel = 'Chargé de Communication';
+      }
+
+      const baseDon = comLevel === 3 ? (450 + Math.floor(Math.random() * 200)) : (comLevel === 2 ? (250 + Math.floor(Math.random() * 150)) : (140 + Math.floor(Math.random() * 80)));
+      const baseRep = comLevel === 3 ? 45 : (comLevel === 2 ? 25 : 15);
+      const recruitChance = comLevel === 3 ? 0.85 : (comLevel === 2 ? 0.55 : 0.35);
+
+      this.resources.money += baseDon;
+      this.resources.reputationScore += baseRep;
 
       if (window.ProtecFinances) {
-        window.ProtecFinances.recordTransaction(this, donBonus, `Dons Publics Réseaux Sociaux (Reportage de ${comSpecialist.name})`, 'communication');
+        window.ProtecFinances.recordTransaction(this, baseDon, `Dons Publics & Mécénat (Reportage de ${comSpecialist.name} - ${comRoleLabel})`, 'communication');
       }
 
       this.showToast(
-        '📸 Couverture Réseaux Réussie !',
-        `${comSpecialist.name} (chargé de com' / photographe) a publié le reportage de l'intervention : +${donBonus} € de dons citoyens en ligne et +${repBonus} pts de notoriété !`,
+        `📸 Couverture Com' [Niveau ${comLevel}]`,
+        `${comSpecialist.name} (${comRoleLabel}) a valorisé la mission : +${baseDon} € de dons citoyens en ligne et +${baseRep} pts de notoriété !`,
         'purple'
       );
 
-      // 40% de chance d'inspirer une candidature spontanée
-      if (Math.random() < 0.40 && typeof this.generateRandomCandidature === 'function') {
+      // Chance d'inspirer une candidature spontanée selon la qualité de la com
+      if (Math.random() < recruitChance && typeof this.generateRandomCandidature === 'function') {
         setTimeout(() => {
           this.generateRandomCandidature();
-          this.showToast('Nouvelle Recrue Sensibilisée !', 'Un citoyen a découvert votre antenne grâce aux photos sur les réseaux sociaux et a postulé comme bénévole !', 'blue');
+          this.showToast('Nouvelle Recrue Sensibilisée !', `Un citoyen a découvert votre antenne grâce aux photos et vidéos de ${comSpecialist.name} et a postulé !`, 'blue');
         }, 1500);
       }
     }
@@ -3643,6 +3724,7 @@ class ProtecGame {
             </span>
             <span class="text-[10px] font-bold text-slate-500">
               ${mission.eventDate ? this.formatFullDate(mission.eventDate) + ' à ' + mission.eventDate.hour + 'h00' : 'Aujourd’hui'}
+              • Durée : <strong>${this.formatHoursAndMinutes(mission.durationSeconds || (mission.durationHours ? mission.durationHours * 3600 : 14400), true)}</strong>
             </span>
           </div>
 
@@ -3674,7 +3756,15 @@ class ProtecGame {
           <div class="grid grid-cols-2 gap-2 text-[10px]">
             <div class="p-2.5 rounded-2xl bg-white/90 border border-slate-200 space-y-0.5">
               <span class="text-slate-400 font-bold block text-[9px] uppercase">Personnel Nécessaire</span>
-              <strong class="text-slate-900 text-xs">${mission.requiredVolunteers} secouristes min.</strong>
+              <div class="flex items-center justify-between">
+                <strong class="text-slate-900 text-xs">${mission.requiredVolunteers} secouristes min.</strong>
+                ${mission.status === 'planifie' ? `
+                  <div class="flex items-center gap-1">
+                    <button onclick="window.game.adjustMissionRequiredVolunteers('${mission.id}', -1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black flex items-center justify-center border border-slate-300 text-xs cursor-pointer" title="Réduire l'effectif requis (min. 2)">-</button>
+                    <button onclick="window.game.adjustMissionRequiredVolunteers('${mission.id}', 1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black flex items-center justify-center border border-slate-300 text-xs cursor-pointer" title="Augmenter l'effectif requis">+</button>
+                  </div>
+                ` : ''}
+              </div>
               <span class="text-slate-500 block text-[9px]">Effectif conseillé : ${mission.requiredVolunteers + 2}</span>
             </div>
             <div class="p-2.5 rounded-2xl bg-white/90 border border-slate-200 space-y-0.5">
@@ -3761,9 +3851,8 @@ class ProtecGame {
           `}
         ` : `
           <div class="space-y-3">
-            <!-- Contrôles Logistique : Transit en 2 étapes & Places Véhicules / Réarmement -->
+            <!-- Contrôles Logistique : Places Véhicules / Réarmement -->
             ${window.ProtecCriseLogistique ? `
-              ${window.ProtecCriseLogistique.renderConvergenceTimeHTML(this, mission)}
               ${window.ProtecCriseLogistique.renderVehiclesCapacityAndRearmAlertHTML(this, mission)}
             ` : ''}
 
@@ -3814,12 +3903,15 @@ class ProtecGame {
                       ${this.getVolunteerSkillsPopoverHTML(v)}
                     </div>
                   </div>
-                  <div class="flex-shrink-0">
-                    <select onchange="window.game.setVolunteerMissionRole('${mission.id}', '${v.id}', this.value)" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-800 cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[130px] sm:max-w-[150px]">
+                  <div class="flex-shrink-0 flex items-center gap-1.5">
+                    <select onchange="window.game.setVolunteerMissionRole('${mission.id}', '${v.id}', this.value)" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-800 cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[110px] sm:max-w-[140px]">
                       ${rolesList.map(r => `
                         <option value="${r.id}" ${r.id === currentRole ? 'selected' : ''}>${r.label}</option>
                       `).join('')}
                     </select>
+                    ${mission.status === 'planifie' ? `
+                      <button onclick="window.game.unregisterVolunteerFromMission('${mission.id}', '${v.id}')" class="w-6 h-6 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold flex items-center justify-center text-xs transition cursor-pointer" title="Désinscrire ce bénévole">✕</button>
+                    ` : ''}
                   </div>
                 </div>
               `;}).join('')}
@@ -3946,7 +4038,7 @@ class ProtecGame {
         ${isComplete ? `
           <button onclick="window.game.launchScheduledMission('${mission.id}')" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-lg shadow-pc-blue/20 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5">
             <i data-lucide="play" class="w-3.5 h-3.5"></i>
-            Départ Anticipé
+            Engager l'Équipe
           </button>
         ` : `
           <div class="flex-1 px-3 py-2 rounded-xl text-center text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200">
@@ -3964,6 +4056,36 @@ class ProtecGame {
     drawer.classList.add('flex', 'drawer-slide-in');
     this.updateToastContainerPosition();
     if (window.lucide) window.lucide.createIcons();
+  }
+
+  // Ajustement des modalités d'effectif requis pour une mission planifiée
+  adjustMissionRequiredVolunteers(missionId, delta) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const current = mission.requiredVolunteers || 2;
+    const newVal = Math.max(2, Math.min(20, current + delta));
+    if (newVal === current) return;
+    mission.requiredVolunteers = newVal;
+    this.showToast('Effectif ajusté', `Modalité d'inscription modifiée : ${newVal} secouristes requis pour ce dispositif.`, 'blue');
+    this.save();
+    this.openMissionDetails(missionId);
+  }
+
+  // Désinscription manuelle d'un bénévole d'un dispositif planifié
+  unregisterVolunteerFromMission(missionId, volunteerId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    mission.registeredVolunteers = (mission.registeredVolunteers || []).filter(id => id !== volunteerId);
+    if (mission.volunteerRoles && mission.volunteerRoles[volunteerId]) {
+      delete mission.volunteerRoles[volunteerId];
+    }
+    const volunteer = this.volunteers.find(v => v.id === volunteerId);
+    if (volunteer && volunteer.status !== 'indispo') {
+      volunteer.status = 'dispo';
+    }
+    this.showToast('Désinscription', `${volunteer ? volunteer.name : 'Le bénévole'} a été libéré de ce poste.`, 'blue');
+    this.save();
+    this.openMissionDetails(missionId);
   }
 
   // Évacuation sanitaire directe vers les urgences de secteur (sans fiches bilans fastidieuses)
@@ -4073,6 +4195,10 @@ class ProtecGame {
   }
 
   requestAllianceRenfortForMission(missionId) {
+    if (window.ProtecMultiplayer) {
+      window.ProtecMultiplayer.openRenfortZoneModal(this, missionId);
+      return;
+    }
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
 
@@ -4273,6 +4399,10 @@ class ProtecGame {
   }
 
   registerVolunteerToSpecialFormation(formationId) {
+    if (window.ProtecMultiplayer) {
+      window.ProtecMultiplayer.openRegisterVolunteerModal(this, formationId);
+      return;
+    }
     const form = this.formationsSpeciales.find(f => f.id === formationId);
     if (!form) return;
 
@@ -4720,6 +4850,14 @@ class ProtecGame {
             <button onclick="window.game.setAllianceTab('formations')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'formations' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
               Stages Mutualisés (${this.formationsSpeciales.length})
             </button>
+            <button onclick="window.game.setAllianceTab('evenements')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'evenements' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-300"></i>
+              Événements (${this.communityEvents?.length || 0})
+            </button>
+            <button onclick="window.game.setAllianceTab('bourse')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'bourse' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+              <i data-lucide="repeat" class="w-3.5 h-3.5"></i>
+              Bourse & Matériel (${this.marketplace?.length || 0})
+            </button>
             <button onclick="window.game.setAllianceTab('manoeuvres')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'manoeuvres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
               <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
               Manœuvres Fédérales
@@ -4795,6 +4933,15 @@ class ProtecGame {
                           <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${r.status === 'fulfilled' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
                             ${r.status === 'fulfilled' ? 'RENFORT ASSURÉ' : 'URGENT'}
                           </span>
+                          ${r.zone ? `
+                            <span class="px-2 py-0.5 rounded text-[10px] font-black ${
+                              r.zone === 'national' ? 'bg-purple-100 text-purple-900 border border-purple-300' :
+                              r.zone === 'regional' ? 'bg-indigo-100 text-indigo-900 border border-indigo-300' :
+                              'bg-sky-100 text-sky-900 border border-sky-300'
+                            }">
+                              ${r.zoneLabel ? r.zoneLabel.toUpperCase() : r.zone.toUpperCase()}
+                            </span>
+                          ` : ''}
                           <span class="text-xs font-bold text-slate-700">Demandé par <strong>${r.requesterName}</strong></span>
                         </div>
                         <h5 class="text-sm font-extrabold text-slate-900">${r.title}</h5>
@@ -4833,7 +4980,9 @@ class ProtecGame {
                       <div class="space-y-1.5">
                         <div class="flex items-center justify-between">
                           <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white">${f.type}</span>
-                          <span class="text-xs font-extrabold mono-num text-slate-800">${f.costPerCandidate} € / candidat</span>
+                          <span class="text-xs font-extrabold mono-num ${f.costPerCandidate === 0 ? 'text-emerald-700 font-black' : 'text-slate-800'}">
+                            ${f.costPerCandidate === 0 ? '🎁 GRATUIT (0 €)' : f.costPerCandidate + ' € / candidat'}
+                          </span>
                         </div>
                         <h5 class="text-sm font-extrabold text-slate-900">${f.title}</h5>
                         <p class="text-xs text-slate-500">${f.desc}</p>
@@ -4851,6 +5000,10 @@ class ProtecGame {
                 </div>
               </div>
             ` : ''}
+
+            ${currentTab === 'evenements' && window.ProtecMultiplayer ? window.ProtecMultiplayer.renderCommunityEventsTabHTML(this) : ''}
+
+            ${currentTab === 'bourse' && window.ProtecMultiplayer ? window.ProtecMultiplayer.renderMarketplaceTabHTML(this) : ''}
 
             ${currentTab === 'manoeuvres' && window.ProtecAdvancedModals ? window.ProtecAdvancedModals.renderManoeuvres(this) : ''}
 
@@ -4922,9 +5075,15 @@ class ProtecGame {
                 Vue Liste Chronologique (${allScheduled.length})
               </button>
             </div>
-            <div class="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Aujourd'hui : <strong class="text-slate-800">${this.formatFullDate(this.clock)}</strong>
+            <div class="flex items-center gap-2">
+              <button onclick="window.ProtecMultiplayer.openCreateCommunityEventModal(window.game)" class="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="sparkles" class="w-4 h-4 text-amber-300"></i>
+                + Proposer un Événement
+              </button>
+              <div class="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Aujourd'hui : <strong class="text-slate-800">${this.formatFullDate(this.clock)}</strong>
+              </div>
             </div>
           </div>
 
@@ -5030,7 +5189,7 @@ class ProtecGame {
                               <span class="text-xs font-bold text-emerald-700 mono-num">+${m.rewardMoney} €</span>
                             </div>
                             <h5 class="text-xs font-extrabold text-slate-900 mt-1">${m.title}</h5>
-                            <p class="text-[11px] text-slate-500">${m.scale || 'DPS'} • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                            <p class="text-[11px] text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
                           </div>
 
                           <div class="pt-2 border-t border-slate-100 space-y-1.5">
@@ -5089,7 +5248,7 @@ class ProtecGame {
                           <span class="text-xs font-bold mono-num text-emerald-600">+${m.rewardMoney} €</span>
                         </div>
                         <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
-                        <p class="text-xs text-slate-500">${m.scale || 'DPS'} • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                        <p class="text-xs text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
                       </div>
 
                       <div class="space-y-1.5 pt-2 border-t border-slate-100/70">
@@ -5236,12 +5395,11 @@ class ProtecGame {
                     <div>
                       <div class="flex items-center gap-2">
                         <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${d.eventName}</span>
-                        <span class="text-xs font-bold text-slate-500">${d.clientName} (${d.clientType})</span>
-                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">⏳ Expire dans ${Math.floor((d.secondsLeft !== undefined ? d.secondsLeft : 240) / 60)}m ${((d.secondsLeft !== undefined ? d.secondsLeft : 240) % 60).toString().padStart(2, '0')}s</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">⏳ Expire dans ${Math.floor((d.secondsLeft !== undefined ? d.secondsLeft : 6 * 3600) / 3600)}h ${Math.floor(((d.secondsLeft !== undefined ? d.secondsLeft : 6 * 3600) % 3600) / 60).toString().padStart(2, '0')}min</span>
                       </div>
                       <h4 class="text-base font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
                       <p class="text-xs text-slate-500">
-                        Date : <strong>${dateStr}</strong> • Durée : <strong>${d.durationHours}h</strong> • Affluence attendue : <strong class="text-slate-800">${d.publicCount}</strong>
+                        Date : <strong>${dateStr}</strong> • Durée du poste : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Affluence attendue : <strong class="text-slate-800">${d.publicCount}</strong>
                       </p>
                     </div>
                     <div class="text-right">
@@ -5676,7 +5834,7 @@ class ProtecGame {
                 </div>
                 <button onclick="window.ProtecPersonnel.openSalarieManagementModal(window.game)" class="w-full py-1.5 rounded-xl text-xs font-black bg-indigo-100/80 hover:bg-indigo-200 text-indigo-900 border border-indigo-300/70 transition flex items-center justify-center gap-1.5 shadow-sm">
                   <i data-lucide="clock" class="w-3.5 h-3.5 text-indigo-700"></i>
-                  Gérer Heures & Repos (Code du Travail)
+                  Gérer Heures & Repos des Salariés
                 </button>
               </div>
             </div>
@@ -5740,7 +5898,7 @@ class ProtecGame {
               <div class="flex flex-wrap gap-2">
                 <button onclick="window.ProtecPersonnel.openSalarieManagementModal(window.game)" class="px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:brightness-110 shadow transition flex items-center gap-1">
                   <i data-lucide="briefcase" class="w-3.5 h-3.5"></i>
-                  Salariés & Code du Travail
+                  Gestion des Salariés
                 </button>
                 <button onclick="window.game.openModule('competences')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-purple-600 text-white hover:bg-purple-700 shadow transition flex items-center gap-1">
                   <i data-lucide="award" class="w-3.5 h-3.5"></i>
@@ -6654,6 +6812,10 @@ class ProtecGame {
   }
 
   proposeSpecialFormationModal() {
+    if (window.ProtecMultiplayer) {
+      window.ProtecMultiplayer.openCreateSpecialFormationModal(this);
+      return;
+    }
     const titles = [
       { t: 'Stage Chef de Dispositif (CD) & Commandement', type: 'CD', cost: 250, desc: 'Coordination de grands rassemblements et cellule de crise.' },
       { t: 'Stage Pilotage & Conduite d’Urgence VPSP', type: 'PILOTAGE', cost: 130, desc: 'Techniques de franchissement et sécurité convoi.' },
@@ -6983,12 +7145,12 @@ class ProtecGame {
         }
       });
 
-      // 1d. GESTION DE L'EXPIRATION DES DEVIS (expiration automatique sous 4 minutes si non traités)
+      // 1d. GESTION DE L'EXPIRATION DES DEVIS (expiration au bout de plusieurs heures si non traités)
       if (this.devis && this.devis.length > 0) {
         this.devis.forEach(d => {
           if (d.status === 'pending') {
             if (typeof d.secondsLeft !== 'number') {
-              d.secondsLeft = 240;
+              d.secondsLeft = 6 * 3600;
             }
             d.secondsLeft--;
             if (d.secondsLeft <= 0) {

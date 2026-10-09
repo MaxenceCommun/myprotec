@@ -1,16 +1,25 @@
 /**
  * PROTEC LIVE - SYSTÈME COMPLET DE FORMATIONS SECOURISTES & GRAND PUBLIC
- * 1. Formations Grand Public : GQS (Gestes Qui Sauvent), PSC1 (Secourisme de base), SST (Sauveteur Secouriste du Travail).
- * 2. Formations Professionnelles : PSE1, PSE2, Chef d’Équipe (CE), Chef de Dispositif (CP/CD).
- * 3. Formateurs : Les formateurs doivent posséder la compétence "formateur" (mise à jour/recyclée).
- *    Le joueur peut programmer des dates de formation et assigner des salariés formateurs ou laisser les bénévoles formateurs s'inscrire.
- * 4. Tarification & Remises : Prix fixe de base mais le joueur peut offrir une réduction ou la gratuité (ex. pour une mairie) pour faire grimper les relations et la réputation.
- * 5. Formations internes : Le joueur peut décider de financer la formation de ses bénévoles ou de la leur faire payer. Si les bénévoles payent eux-mêmes une formation coûteuse, leur moral et motivation baissent (risque de démission).
+ * 
+ * 1. Formations Grand Public & Entreprises : GQS, PSC (Secourisme de base), SST (Sauveteur Secouriste du Travail), Manipulation Extincteurs (EPI).
+ * 2. Formations Opérationnelles : PSE1 (Rôle Secouriste), PSE2 (Rôle Équipier Secouriste), CE (Compétence & Rôle Chef d’Équipe), CD (Chef de Dispositif).
+ * 3. Recyclages & Formation Continue : Recyclage FC PSE (PSE 1 & 2), Recyclage MAC SST.
+ * 4. Pédagogie & Filière Formateurs :
+ *    - "PIC F" (Pédagogie Initiale et Commune de Formateur - 21h) : préalable obligatoire distinct.
+ *    - Formateur PSC (14h - requiert la PIC F).
+ *    - Formateur PS (PSE1/PSE2), Formateur SST, Formateur AEP, CEF, Formateur de Formateurs (FdF).
+ * 5. Kits Pédagogiques : 1 kit requis par type de formation (Kit PSC, Kit SST, Kit PSE1, Kit PSE2, Kit Manip Extincteurs, Kit PIC F, Kit SSA).
+ * 6. Modes de déroulement des formations :
+ *    - EN INTERNE avec nos formateurs : GRATUIT pour les bénévoles de l'antenne (0 €).
+ *      Possibilité d'accueillir des candidats extérieurs payants (génération de trésorerie nette pour l'antenne).
+ *    - EN EXTERNE (stage délocalisé) :
+ *      * Prise en charge 100% par l'antenne (coût payé par l'asso, boost moral/motivation du bénévole).
+ *      * Ou financé par le bénévole lui-même (coût 0 € pour l'asso, mais baisse significative du moral/motivation).
  */
 
 window.ProtecFormations = {
   catalog: [
-    // Grand Public
+    // --- GRAND PUBLIC & ENTREPRISES ---
     {
       id: 'GQS',
       category: 'grand_public',
@@ -18,152 +27,251 @@ window.ProtecFormations = {
       desc: 'Sensibilisation de 2 heures aux arrêts cardiaques (massage cardiaque + DAE) et hémorragies.',
       durationHours: 2,
       basePricePublic: 20,
-      costOrganization: 15,
+      costOrganization: 10,
       capacity: 10,
-      reqTrainerRank: 'PSE1',
+      kitRequired: 'kit_pedago_psc',
+      kitName: 'Kit Pédagogique PSC',
       unlocks: null
     },
     {
       id: 'PSC',
       category: 'grand_public',
-      title: 'PSC1 - Prévention et Secours Civiques de niveau 1',
-      desc: 'Formation certifiante grand public de 7 heures aux gestes d’urgence de base.',
+      title: 'PSC - Prévention et Secours Civiques',
+      desc: 'Formation certifiante grand public de 7 heures aux gestes d’urgence de base face aux situations de détresse.',
       durationHours: 7,
       basePricePublic: 60,
-      costOrganization: 40,
+      costOrganization: 30,
       capacity: 8,
-      reqTrainerRank: 'PSE1',
+      kitRequired: 'kit_pedago_psc',
+      kitName: 'Kit Pédagogique PSC',
       unlocks: null
     },
     {
       id: 'SST',
       category: 'grand_public',
       title: 'SST - Sauveteur Secouriste du Travail (Entreprises)',
-      desc: 'Formation de 14 heures en milieu professionnel. Très demandée par les entreprises locales.',
+      desc: 'Formation certifiante INRS de 14 heures en milieu professionnel. Très demandée par les entreprises locales.',
       durationHours: 14,
       basePricePublic: 180,
-      costOrganization: 90,
+      costOrganization: 70,
       capacity: 8,
-      reqTrainerRank: 'PSE2',
+      kitRequired: 'kit_pedago_sst',
+      kitName: 'Kit Pédagogique SST',
+      unlocksSkill: 'sst',
       unlocks: null
     },
-    // Professionnelles / Opérationnelles
+    {
+      id: 'EXTINCTEUR',
+      category: 'grand_public',
+      title: 'Manipulation Extincteurs - Équipier de 1ère Intervention (EPI)',
+      desc: 'Formation pratique de 3 heures sur bac à feu : manipulation des extincteurs (Eau pulvérisée, CO2, Poudre) et sécurité incendie.',
+      durationHours: 3,
+      basePricePublic: 65,
+      costOrganization: 25,
+      capacity: 8,
+      kitRequired: 'kit_pedago_extincteur',
+      kitName: 'Kit Manipulation Extincteurs',
+      unlocksSkill: 'epi_incendie',
+      unlocks: 'Équipier Prévention Incendie'
+    },
+
+    // --- SECOURISME OPÉRATIONNEL ---
     {
       id: 'PSE1',
       category: 'professionnelle',
       title: 'PSE1 - Premiers Secours en Équipe de niveau 1',
-      desc: 'Formation de 35 heures réparties sur 5 jours pour devenir secouriste opérationnel.',
+      desc: 'Formation initiale de 35 heures (5 jours) pour intervenir en équipe. Confère la compétence PSE1 et le rôle opérationnel de Secouriste.',
       durationHours: 35,
       durationDays: 5,
       basePricePublic: 250,
-      costOrganization: 140,
+      costOrganization: 110,
       capacity: 6,
-      reqTrainerRank: 'CE',
-      unlocks: 'Secouriste Opérationnel'
+      kitRequired: 'kit_pedago_pse1',
+      kitName: 'Kit Pédagogique PSE1',
+      unlocksSkill: 'pse1',
+      unlocks: 'Secouriste'
     },
     {
       id: 'PSE2',
       category: 'professionnelle',
       title: 'PSE2 - Premiers Secours en Équipe de niveau 2',
-      desc: 'Formation de 28 heures réparties sur 4 jours : immobilisations, brancardage, matériel VPSP et relevage complexe.',
+      desc: 'Formation d’approfondissement de 28 heures (4 jours) : immobilisations, brancardage complexe, oxygénothérapie et matériel VPSP.',
       durationHours: 28,
       durationDays: 4,
       basePricePublic: 280,
-      costOrganization: 160,
+      costOrganization: 130,
       capacity: 6,
-      reqTrainerRank: 'CE',
-      unlocks: 'Équipier-Secouriste'
+      kitRequired: 'kit_pedago_pse2',
+      kitName: 'Kit Pédagogique PSE2',
+      prereqSkill: 'pse1',
+      unlocksSkill: 'pse2',
+      unlocks: 'Équipier Secouriste'
+    },
+    {
+      id: 'FC_PSE',
+      category: 'professionnelle',
+      title: 'Formation Continue FC PSE (Recyclage PSE 1 & 2)',
+      desc: 'Recyclage annuel obligatoire de 6 heures pour maintenir la validité opérationnelle et les réflexes d’équipier.',
+      durationHours: 6,
+      durationDays: 1,
+      basePricePublic: 60,
+      costOrganization: 20,
+      capacity: 8,
+      kitRequired: 'kit_pedago_pse1',
+      kitName: 'Kit Pédagogique PSE1',
+      isRecycling: true,
+      unlocks: null
+    },
+    {
+      id: 'MAC_SST',
+      category: 'professionnelle',
+      title: 'MAC SST - Maintien & Actualisation des Compétences',
+      desc: 'Recyclage certifiant de 7 heures pour prolonger la validité de 24 mois du certificat SST.',
+      durationHours: 7,
+      durationDays: 1,
+      basePricePublic: 90,
+      costOrganization: 30,
+      capacity: 8,
+      kitRequired: 'kit_pedago_sst',
+      kitName: 'Kit Pédagogique SST',
+      isRecycling: true,
+      unlocks: null
     },
     {
       id: 'CE',
       category: 'professionnelle',
-      title: 'Chef d’Équipe (CE) - Pédagogie & Commandement',
-      desc: 'Gestion d’un binôme/équipage, relation régulation SAMU/CODIS et bilans d’urgence.',
+      title: 'Chef d’Équipe (CE) - Commandement & Régulation',
+      desc: 'Formation de 21 heures (3 jours). Donne la compétence Chef d’Équipe et permet d’occuper le rôle opérationnel de Chef d’Équipe en mission.',
       durationHours: 21,
+      durationDays: 3,
       basePricePublic: 350,
-      costOrganization: 220,
+      costOrganization: 160,
       capacity: 4,
-      reqTrainerRank: 'CD',
-      unlocks: 'Chef d’Équipe VPSP'
+      kitRequired: 'kit_pedago_pse2',
+      kitName: 'Kit Pédagogique PSE2',
+      prereqSkill: 'pse2',
+      unlocksSkill: 'ce',
+      unlocks: 'Chef d’équipe'
     },
     {
       id: 'CD',
       category: 'professionnelle',
       title: 'Chef de Dispositif (CD / CP) - Grands Rassemblements',
-      desc: 'Commandement de postes majeurs, coordination inter-services et cellule de crise.',
+      desc: 'Formation de 24 heures (3 jours) : commandement de postes de grande envergure, coordination inter-services et cellule de crise.',
       durationHours: 24,
+      durationDays: 3,
       basePricePublic: 450,
-      costOrganization: 300,
+      costOrganization: 220,
       capacity: 4,
-      reqTrainerRank: 'Cadre',
-      unlocks: 'Commandement Grands Dispositifs'
+      prereqSkill: 'ce',
+      unlocksSkill: 'cd',
+      unlocks: 'Chef de Dispositif'
+    },
+    {
+      id: 'SSA',
+      category: 'professionnelle',
+      title: 'SSA - Surveillance & Sauvetage Aquatique (Eaux Intérieures)',
+      desc: 'Formation de 28 heures en sauvetage nautique, techniques d’embarcation et filins de secours.',
+      durationHours: 28,
+      durationDays: 4,
+      basePricePublic: 310,
+      costOrganization: 140,
+      capacity: 6,
+      kitRequired: 'kit_pedago_ssa',
+      kitName: 'Kit Pédagogique SSA',
+      prereqSkill: 'pse1',
+      unlocksSkill: 'ssa',
+      unlocks: 'Nageur Sauveteur Aquatique'
     },
 
-    // Soutien Psychologique & Humanitaire (AEP)
+    // --- SOUTIEN PSYCHOLOGIQUE & HUMANITAIRE (AEP) ---
     {
       id: 'AEP1',
       category: 'psychologique',
-      title: 'AEP1 - Aide & Écoute Psychologique (Niveau 1 : Sensibilisation)',
-      desc: 'Sensibilisation à l’AEP : accueil de la parole, écoute active bienveillante et premiers secours émotionnels immédiats.',
+      title: 'AEP1 - Aide & Écoute Psychologique (Sensibilisation)',
+      desc: 'Sensibilisation de 7 heures : accueil de la parole, écoute active bienveillante et premiers secours émotionnels immédiats.',
       durationHours: 7,
       basePricePublic: 95,
-      costOrganization: 45,
+      costOrganization: 35,
       capacity: 10,
-      reqTrainerSkill: 'formateur_aep',
       unlocksSkill: 'aep1',
       unlocks: 'Écoutant Secouriste AEP1'
     },
     {
       id: 'AEP2',
       category: 'psychologique',
-      title: 'AEP2 - Aide & Écoute Psychologique (Niveau 2 : Approfondissement & CAI)',
-      desc: 'Prise en charge approfondie du trauma psychique, deuil d’urgence, defusing post-mission (réduit de 50% la fatigue équipage) et CAI en crise NOVI.',
+      title: 'AEP2 - Aide & Écoute Psychologique (Approfondissement & CAI)',
+      desc: 'Formation de 14 heures : prise en charge du trauma psychique, deuil d’urgence, defusing post-mission et CAI en crise NOVI.',
       durationHours: 14,
       basePricePublic: 175,
-      costOrganization: 80,
+      costOrganization: 65,
       capacity: 8,
-      reqTrainerSkill: 'formateur_aep',
+      prereqSkill: 'aep1',
       unlocksSkill: 'aep2',
       unlocks: 'Intervenant Psycho-Social AEP2'
     },
 
-    // Cursus Pédagogique Officiel & Formateurs (formations.protection-civile.org)
+    // --- CURSUS PÉDAGOGIQUE & FORMATEURS (FILIÈRE OFFICIELLE) ---
     {
-      id: 'PICF_PSC',
+      id: 'PICF',
       category: 'pedagogique',
-      title: 'PIC F & Formateur PSC (Pédagogie Initiale & PSC)',
-      desc: 'Formation certifiante de formateur aux Gestes Qui Sauvent (GQS) et à la Prévention et Secours Civiques (PSC1).',
-      durationHours: 28,
-      basePricePublic: 290,
-      costOrganization: 140,
+      title: 'PIC F - Pédagogie Initiale et Commune de Formateur',
+      desc: 'Formation initiale de 21 heures (3 jours). Tronc commun obligatoire préalable à tout brevet de formateur.',
+      durationHours: 21,
+      durationDays: 3,
+      basePricePublic: 220,
+      costOrganization: 90,
       capacity: 6,
-      reqTrainerSkill: 'formateur_de_formateur',
+      kitRequired: 'kit_pedago_picf',
+      kitName: 'Kit Pédagogique PIC F',
+      unlocksSkill: 'picf',
+      unlocks: 'Pédagogue Stagiaire'
+    },
+    {
+      id: 'FORM_PSC',
+      category: 'pedagogique',
+      title: 'Formateur PSC - Pédagogie Appliquée au Secourisme Citoyen',
+      desc: 'Formation de 14 heures (2 jours). Habilite à certifier le public aux GQS et PSC. Prérequis obligatoire : être titulaire de la PIC F.',
+      durationHours: 14,
+      durationDays: 2,
+      basePricePublic: 180,
+      costOrganization: 80,
+      capacity: 6,
+      kitRequired: 'kit_pedago_psc',
+      kitName: 'Kit Pédagogique PSC',
+      prereqSkill: 'picf',
       unlocksSkill: 'formateur_psc',
-      unlocks: 'Formateur PSC Certifié'
+      unlocks: 'Formateur PSC'
     },
     {
       id: 'FORM_PS',
       category: 'pedagogique',
       title: 'Formateur PS - Premiers Secours Opérationnels (PSE1 & PSE2)',
-      desc: 'Pédagogie appliquée aux gestes d’urgence en équipe, brancardage, matériel VPSP et réanimation avancée.',
+      desc: 'Formation de 28 heures pour enseigner les techniques de relevage, brancardage et réanimation en équipe. Prérequis : PSE2 & Formateur PSC.',
       durationHours: 28,
+      durationDays: 4,
       basePricePublic: 340,
-      costOrganization: 160,
+      costOrganization: 140,
       capacity: 6,
-      reqTrainerSkill: 'formateur_de_formateur',
+      kitRequired: 'kit_pedago_pse2',
+      kitName: 'Kit Pédagogique PSE2',
+      prereqSkill: 'formateur_psc',
       unlocksSkill: 'formateur_ps',
-      unlocks: 'Formateur Premiers Secours (PS)'
+      unlocks: 'Formateur Premiers Secours'
     },
     {
       id: 'FORM_SST',
       category: 'pedagogique',
       title: 'Formateur SST - Sauveteur Secouriste du Travail (INRS)',
-      desc: 'Habilitation officielle pour former les salariés d’entreprises et générer des recettes régulières.',
+      desc: 'Habilitation officielle de 21 heures pour animer les cursus SST en entreprise et générer des recettes régulières.',
       durationHours: 21,
+      durationDays: 3,
       basePricePublic: 380,
-      costOrganization: 180,
+      costOrganization: 160,
       capacity: 6,
-      reqTrainerSkill: 'formateur_de_formateur',
+      kitRequired: 'kit_pedago_sst',
+      kitName: 'Kit Pédagogique SST',
+      prereqSkill: 'picf',
       unlocksSkill: 'formateur_sst',
       unlocks: 'Formateur SST Entreprises'
     },
@@ -171,73 +279,94 @@ window.ProtecFormations = {
       id: 'FORM_AEP',
       category: 'pedagogique',
       title: 'Formateur AEP - Aide & Écoute Psychologique',
-      desc: 'Habilitation fédérale pour former les bénévoles et partenaires aux cursus d’Aide et Écoute Psychologique (AEP1 & AEP2).',
+      desc: 'Habilitation fédérale de 21 heures pour former les bénévoles aux modules de soutien psychologique AEP1 & AEP2.',
       durationHours: 21,
+      durationDays: 3,
       basePricePublic: 320,
-      costOrganization: 150,
+      costOrganization: 130,
       capacity: 6,
-      reqTrainerSkill: 'formateur_de_formateur',
+      prereqSkill: 'aep2',
       unlocksSkill: 'formateur_aep',
-      unlocks: 'Formateur AEP National'
+      unlocks: 'Formateur AEP'
     },
     {
       id: 'CEF',
       category: 'pedagogique',
       title: 'CEF - Concepteur / Encadrant de Formation',
-      desc: 'Ingénierie de formation, pilotage des stages départementaux et coordination de l’équipe pédagogique.',
+      desc: 'Formation de 35 heures : pilotage des stages départementaux, ingénierie et encadrement des équipes de formateurs.',
       durationHours: 35,
+      durationDays: 5,
       basePricePublic: 450,
-      costOrganization: 220,
+      costOrganization: 200,
       capacity: 4,
-      reqTrainerSkill: 'formateur_de_formateur',
       unlocksSkill: 'cef',
-      unlocks: 'Concepteur Encadrant Formation'
+      unlocks: 'Concepteur Encadrant'
     },
     {
       id: 'FDF',
       category: 'pedagogique',
-      title: 'Formateur de Formateurs (FdF) - Échelon Fédéral National',
-      desc: 'Grade suprême d’expertise pédagogique : forme et certifie tous les formateurs de l’association (PSC, PS, SST, AEP, EPI).',
+      title: 'Formateur de Formateurs (FdF) - Échelon Fédéral',
+      desc: 'Niveau suprême d’expertise pédagogique (42h) : certifie et recycle l’ensemble des formateurs de l’association.',
       durationHours: 42,
+      durationDays: 6,
       basePricePublic: 550,
-      costOrganization: 280,
+      costOrganization: 250,
       capacity: 4,
-      reqTrainerSkill: 'cadre_federal',
       unlocksSkill: 'formateur_de_formateur',
-      unlocks: 'Formateur de Formateurs (FdF)'
+      unlocks: 'Formateur de Formateurs'
     }
   ],
 
-  // Initialisation de la liste des sessions planifiées
+  // Initialisation de l'état
   injectState(game) {
     if (!game.sessionsFormation) {
       game.sessionsFormation = [];
     }
   },
 
-  // Créer une nouvelle session de formation planifiée par le joueur
-  createSession(game, courseId, discountType, isInternal, targetAudience, locationType = 'antenne') {
+  // Vérifier si l'antenne possède le kit pédagogique requis
+  hasTrainingKit(game, kitId) {
+    if (!kitId) return true;
+    const stations = game.stations || [];
+    const inStationStock = stations.some(st => st.stock && (Number(st.stock[kitId]) || 0) > 0);
+    if (inStationStock) return true;
+    if (game.logistics && (Number(game.logistics[kitId]) || 0) > 0) return true;
+    return false;
+  },
+
+  // Créer une nouvelle session de formation planifiée à l'antenne ou chez un partenaire
+  createSession(game, courseId, discountType, isInternal, targetAudience, locationType = 'antenne', externalAttendeesCount = 0) {
     const course = this.catalog.find(c => c.id === courseId);
     if (!course) return;
 
-    // Vérification de la salle de formation pour l'accueil à l'antenne
+    // 1. Vérification de la salle de formation si hébergée à l'antenne
     if (locationType === 'antenne') {
       if (window.ProtecLocaux && !window.ProtecLocaux.hasFormationRoom(game)) {
         game.showToast(
           'Salle de Formation Requise !',
-          'Votre antenne ne possède aucune salle de formation pour accueillir le grand public. Aménagez une zone de formation dans vos locaux ou choisissez « Délocalisée chez l’entreprise demanderesse » !',
+          'Votre antenne ne possède aucune salle pédagogique. Aménagez une salle de formation dans vos locaux ou organisez-la délocalisée chez l’entreprise partenaire.',
           'orange'
         );
         return;
       }
     }
 
-    // Calcul du tarif appliqué
+    // 2. Vérification du kit pédagogique si dispensé par l'antenne
+    if (course.kitRequired && !this.hasTrainingKit(game, course.kitRequired)) {
+      game.showToast(
+        'Kit Pédagogique Manquant !',
+        `Pour dispenser la formation « ${course.title} », l’antenne doit posséder le « ${course.kitName || course.kitRequired} ». Vous pouvez l'acquérir dans la boutique Logistique ou envoyer vos bénévoles en formation externe !`,
+        'orange'
+      );
+      return;
+    }
+
+    // 3. Calcul du tarif public appliqué
     let finalPrice = course.basePricePublic;
     let relationshipBonus = 0;
     if (discountType === 'free_mairie') {
       finalPrice = 0;
-      relationshipBonus = 35; // Gros boost relation mairie
+      relationshipBonus = 35;
     } else if (discountType === 'discount_25') {
       finalPrice = Math.round(course.basePricePublic * 0.75);
       relationshipBonus = 15;
@@ -246,14 +375,16 @@ window.ProtecFormations = {
       relationshipBonus = 25;
     }
 
-    // Si formation interne, est-elle payée par l'asso ou par le bénévole ?
+    // Formation interne : gratuite pour les bénévoles de l'antenne
     let volunteerPayment = false;
     if (isInternal) {
-      volunteerPayment = (discountType === 'volunteer_pays');
-      finalPrice = volunteerPayment ? course.costOrganization : 0;
+      volunteerPayment = false; // Toujours gratuit en interne si animé par l'antenne
+      finalPrice = 0;
     }
 
     const sessionId = `sess-${Date.now()}`;
+    const extCount = Math.max(0, Math.min(course.capacity - 1, Number(externalAttendeesCount) || 0));
+
     const newSession = {
       id: sessionId,
       courseId: course.id,
@@ -261,101 +392,143 @@ window.ProtecFormations = {
       category: course.category,
       isInternal: !!isInternal,
       locationType: locationType,
-      locationLabel: locationType === 'antenne' ? 'À l’Antenne (Salle Pédagogique)' : 'Délocalisée (Entreprise Demanderesse)',
-      targetAudience: targetAudience || 'Grand Public',
+      locationLabel: locationType === 'antenne' ? 'À l’Antenne (Salle Pédagogique)' : 'Délocalisée (Entreprise Partenaire)',
+      targetAudience: isInternal ? 'Bénévoles de l’Antenne' : (targetAudience || 'Grand Public'),
       finalPrice: finalPrice,
+      publicPriceForExternals: course.basePricePublic,
       costOrganization: course.costOrganization,
       discountType: discountType,
       relationshipBonus: relationshipBonus,
       volunteerPayment: volunteerPayment,
+      externalAttendeesCount: isInternal ? extCount : 0, // Personnes extérieures accueillies payantes
       trainerId: null,
       maxCandidates: course.capacity,
       registeredCandidates: [],
       dateDesc: `Prévue au calendrier (Durée : ${course.durationHours}h)`,
-      status: 'open', // 'open', 'ongoing', 'completed'
+      status: 'open',
       createdAt: Date.now()
     };
 
     game.sessionsFormation.unshift(newSession);
     game.saveGame();
-    game.showToast('Session Programmée', `La session « ${course.id} » (${newSession.locationLabel}) est ouverte aux inscriptions.`, 'green');
+    game.showToast('Session Programmée', `La session « ${course.id} » est ouverte au planning. Affectez un formateur habilité.`, 'green');
+    this.renderModal(game);
+  },
+
+  // Former un bénévole en EXTERNE (Stage dans un organisme tiers ou Union Départementale)
+  registerVolunteerExternal(game, volunteerId, courseId, payMode = 'asso') {
+    const vol = game.volunteers.find(v => v.id === volunteerId);
+    const course = this.catalog.find(c => c.id === courseId);
+    if (!vol || !course) return;
+
+    // Vérification des prérequis de compétences
+    if (course.prereqSkill && (!vol.skills || !vol.skills.includes(course.prereqSkill))) {
+      const prereqCourse = this.catalog.find(c => c.unlocksSkill === course.prereqSkill || c.id === course.prereqSkill.toUpperCase());
+      game.showToast('Prérequis Manquant', `${vol.name} doit d'abord détenir la qualification « ${prereqCourse?.title || course.prereqSkill} ».`, 'orange');
+      return;
+    }
+
+    const cost = course.basePricePublic;
+    if (payMode === 'asso') {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous manque ${(cost - game.resources.money)} € pour prendre en charge ce stage externe.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      vol.motivation = Math.min(100, (vol.motivation || 80) + 20);
+      vol.humeur = Math.min(100, (vol.humeur || 80) + 15);
+      game.showToast('Stage Pris en Charge !', `L’antenne a réglé les ${cost} € de formation pour ${vol.name}. Moral au zénith !`, 'green');
+    } else {
+      // Bénévole paye lui-même
+      vol.motivation = Math.max(15, (vol.motivation || 80) - 25);
+      vol.humeur = Math.max(15, (vol.humeur || 80) - 20);
+      game.showToast('Baisse de Moral !', `${vol.name} a dû payer lui-même son stage (${cost} €). Motivation en berne !`, 'orange');
+    }
+
+    // Attribution immédiate des compétences et rôles
+    this.grantCourseQualifications(vol, course);
+
+    game.updateStatsUI();
+    game.saveGame();
     this.renderModal(game);
   },
 
   // Vérifier si un formateur possède l'habilitation requise pour animer un cursus
   isEligibleTrainer(trainer, course) {
     if (!trainer || !course) return { eligible: false, reason: 'Formateur introuvable' };
-    const skills = trainer.skills || [];
+    const skills = (trainer.skills || []).map(s => String(s).toLowerCase());
 
-    // Formateur de Formateurs (FdF) : Le niveau suprême qui habilite à TOUT enseigner !
+    // 1. Formateur de Formateurs (FdF) : anime TOUT !
     if (skills.includes('formateur_de_formateur')) {
       return { eligible: true, badge: '👑 Formateur de Formateurs (FdF)' };
     }
 
-    // Cadre fédéral
-    if (trainer.rank === 'Cadre') {
+    // 2. Cadre Pédagogique
+    if (trainer.role === 'Cadre' || trainer.rank === 'Cadre') {
       return { eligible: true, badge: '🏛️ Cadre Pédagogique' };
     }
 
-    // Cursus AEP (Aide et Écoute Psychologique)
+    // 3. Cursus AEP
     if (course.id === 'AEP1' || course.id === 'AEP2') {
-      if (skills.includes('formateur_aep')) {
-        return { eligible: true, badge: '🗣️ Formateur AEP' };
-      }
-      return { eligible: false, reason: 'Nécessite la qualification « Formateur AEP » (ou Formateur de formateurs).' };
+      if (skills.includes('formateur_aep')) return { eligible: true, badge: '🗣️ Formateur AEP' };
+      return { eligible: false, reason: 'Nécessite la qualification « Formateur AEP » (ou FdF).' };
     }
 
-    // Cursus de Formation de Formateurs
-    if (['PICF_PSC', 'FORM_PS', 'FORM_SST', 'FORM_AEP', 'CEF', 'FDF'].includes(course.id)) {
-      if (skills.includes('formateur_de_formateur')) {
-        return { eligible: true, badge: '👑 Formateur de Formateurs' };
-      }
-      return { eligible: false, reason: 'Seul un « Formateur de Formateurs (FdF) » est habilité à former les formateurs.' };
+    // 4. Formateurs de Formateurs et CEF
+    if (['PICF', 'FORM_PS', 'FORM_SST', 'FORM_AEP', 'CEF', 'FDF'].includes(course.id)) {
+      if (skills.includes('formateur_de_formateur')) return { eligible: true, badge: '👑 Formateur de Formateurs' };
+      return { eligible: false, reason: 'Seul un « Formateur de Formateurs (FdF) » est habilité à animer cette formation.' };
     }
 
-    // Premiers Secours Opérationnels (PSE1, PSE2, CE)
-    if (course.id === 'PSE1' || course.id === 'PSE2' || course.id === 'CE') {
-      if (skills.includes('formateur_ps')) {
-        return { eligible: true, badge: '🚑 Formateur PS' };
-      }
-      if (skills.includes('formateur') && ['CE', 'CD'].includes(trainer.rank)) {
+    // 5. Premiers Secours Opérationnels (PSE1, PSE2, FC_PSE, CE)
+    if (['PSE1', 'PSE2', 'FC_PSE', 'CE'].includes(course.id)) {
+      if (skills.includes('formateur_ps')) return { eligible: true, badge: '🚑 Formateur PS' };
+      if (skills.includes('formateur') && (skills.includes('ce') || ['CE', 'CD'].includes(trainer.rank))) {
         return { eligible: true, badge: '🎓 Formateur PSE' };
       }
-      return { eligible: false, reason: 'Nécessite la qualification « Formateur PS » (ou Formateur de formateurs).' };
+      return { eligible: false, reason: 'Nécessite la qualification « Formateur PS » (ou FdF).' };
     }
 
-    // SST en Entreprise
-    if (course.id === 'SST') {
-      if (skills.includes('formateur_sst')) {
-        return { eligible: true, badge: '💼 Formateur SST' };
-      }
-      if (skills.includes('formateur')) {
-        return { eligible: true, badge: '🎓 Formateur' };
-      }
-      return { eligible: false, reason: 'Nécessite la qualification « Formateur SST » (ou Formateur de formateurs).' };
+    // 6. SST & MAC SST
+    if (course.id === 'SST' || course.id === 'MAC_SST') {
+      if (skills.includes('formateur_sst')) return { eligible: true, badge: '💼 Formateur SST' };
+      if (skills.includes('formateur')) return { eligible: true, badge: '🎓 Formateur' };
+      return { eligible: false, reason: 'Nécessite la qualification « Formateur SST » (ou FdF).' };
     }
 
-    // GQS & PSC1 Grand Public
+    // 7. Manipulation Extincteurs (EPI)
+    if (course.id === 'EXTINCTEUR') {
+      if (skills.includes('formateur_sst') || skills.includes('formateur_ps') || skills.includes('formateur') || skills.includes('epi_incendie')) {
+        return { eligible: true, badge: '🧯 Formateur Incendie' };
+      }
+      return { eligible: false, reason: 'Nécessite un formateur d’antenne qualifié (SST, PS ou EPI).' };
+    }
+
+    // 8. Surveillance et Sauvetage Aquatique
+    if (course.id === 'SSA') {
+      if (skills.includes('formateur_ps') || skills.includes('ssa')) return { eligible: true, badge: '🏊 Formateur SSA' };
+      return { eligible: false, reason: 'Nécessite la qualification Sauvetage Aquatique (SSA).' };
+    }
+
+    // 9. GQS & PSC Grand Public & Formateur PSC
     if (course.id === 'GQS' || course.id === 'PSC') {
-      if (skills.includes('formateur_psc') || skills.includes('formateur') || trainer.isTrainer) {
+      if (skills.includes('formateur_psc') || skills.includes('formateur_ps') || skills.includes('formateur') || trainer.isTrainer) {
         return { eligible: true, badge: '🎓 Formateur PSC' };
       }
-      return { eligible: false, reason: 'Nécessite la qualification « Formateur PSC » (ou Formateur de formateurs).' };
+      return { eligible: false, reason: 'Nécessite la qualification « Formateur PSC ».' };
     }
 
-    // Chef de Dispositif
+    // 10. Chef de Dispositif
     if (course.id === 'CD') {
-      if (skills.includes('cef') || trainer.rank === 'Cadre') {
-        return { eligible: true, badge: '📋 CEF / Cadre' };
-      }
-      return { eligible: false, reason: 'Nécessite la qualification « CEF » (Concepteur Encadrant) ou Cadre.' };
+      if (skills.includes('cef')) return { eligible: true, badge: '📋 CEF' };
+      return { eligible: false, reason: 'Nécessite la qualification « CEF » (Concepteur Encadrant).' };
     }
 
     const isBasicTrainer = trainer.isTrainer || skills.includes('formateur');
-    return isBasicTrainer ? { eligible: true, badge: 'Formateur' } : { eligible: false, reason: 'Non habilité comme Formateur.' };
+    return isBasicTrainer ? { eligible: true, badge: 'Formateur' } : { eligible: false, reason: 'Bénévole non habilité comme formateur.' };
   },
 
-  // Affecter un formateur (Salarié en priorité ou bénévole qualifié)
+  // Affecter un formateur à une session
   assignTrainer(game, sessionId, trainerId) {
     const session = game.sessionsFormation.find(s => s.id === sessionId);
     if (!session) return;
@@ -363,7 +536,6 @@ window.ProtecFormations = {
     if (!trainer) return;
     const course = this.catalog.find(c => c.id === session.courseId);
 
-    // Vérification stricte des qualifications requises pour ce cursus
     const check = this.isEligibleTrainer(trainer, course);
     if (!check.eligible) {
       game.showToast('Non Qualifié pour ce Cursus', `${trainer.name} ne peut pas animer « ${course?.title || session.courseId} » : ${check.reason}`, 'orange');
@@ -372,107 +544,127 @@ window.ProtecFormations = {
 
     session.trainerId = trainer.id;
     game.saveGame();
-    game.showToast('Formateur Affecté', `${trainer.name} (${check.badge} • ${trainer.dispoType === 'salarié' ? 'Salarié' : 'Bénévole'}) animera la formation.`, 'green');
+    game.showToast('Formateur Affecté', `${trainer.name} (${check.badge}) animera la session.`, 'green');
     this.renderModal(game);
   },
 
-  // Inscrire un bénévole à une formation interne
+  // Inscrire un bénévole de l'antenne à une formation interne (GRATUIT)
   registerVolunteerToInternal(game, sessionId, volunteerId) {
     const session = game.sessionsFormation.find(s => s.id === sessionId);
     const vol = game.volunteers.find(v => v.id === volunteerId);
     if (!session || !vol) return;
 
     if (session.registeredCandidates.includes(volunteerId)) return;
-    if (session.registeredCandidates.length >= session.maxCandidates) {
+    const currentTotal = session.registeredCandidates.length + (session.externalAttendeesCount || 0);
+    if (currentTotal >= session.maxCandidates) {
       game.showToast('Session Complète', 'La jauge maximale de stagiaires est atteinte.', 'orange');
       return;
     }
 
-    // Vérification des prérequis de formation pour le stagiaire
+    // Vérification des prérequis de compétences
     const course = this.catalog.find(c => c.id === session.courseId);
-    if (course && course.id === 'AEP2' && (!vol.skills || !vol.skills.includes('aep1'))) {
-      game.showToast('Prérequis Manquant', `${vol.name} doit d’abord valider la formation AEP1 (Sensibilisation) avant d’accéder à l’AEP2.`, 'orange');
-      return;
-    }
-    if (course && course.id === 'FORM_PS' && (!vol.skills || !vol.skills.includes('formateur_psc'))) {
-      game.showToast('Prérequis Manquant', `${vol.name} doit d’abord être titulaire du PIC F & Formateur PSC avant de devenir Formateur PS.`, 'orange');
+    if (course && course.prereqSkill && (!vol.skills || !vol.skills.includes(course.prereqSkill))) {
+      game.showToast('Prérequis Manquant', `${vol.name} doit d'abord détenir la compétence « ${course.prereqSkill.toUpperCase()} ».`, 'orange');
       return;
     }
 
-    // Conséquence psychologique si le bénévole doit payer lui-même
-    if (session.volunteerPayment) {
-      vol.motivation = Math.max(15, (vol.motivation || 80) - 25);
-      vol.humeur = Math.max(15, (vol.humeur || 80) - 20);
-      game.showToast('Baisse de Moral', `${vol.name} a dû financer lui-même sa formation (${session.finalPrice} €). Sa motivation a baissé !`, 'orange');
-    } else {
-      vol.motivation = Math.min(100, (vol.motivation || 80) + 10);
-      game.showToast('Bénévole Inscrit', `L'antenne prend en charge la formation de ${vol.name} ! Moral boosté.`, 'green');
-    }
+    // Formation interne dispensée gratuitement par l'antenne
+    vol.motivation = Math.min(100, (vol.motivation || 80) + 12);
+    vol.humeur = Math.min(100, (vol.humeur || 80) + 10);
+    game.showToast('Bénévole Inscrit (Gratuit)', `${vol.name} est inscrit à la formation interne gratuite. Moral boosté !`, 'green');
 
     session.registeredCandidates.push(volunteerId);
     game.saveGame();
     this.renderModal(game);
   },
 
-  // Clôturer et valider la session de formation
+  // Définir le nombre de candidats extérieurs payants sur une session interne
+  setExternalAttendeesCount(game, sessionId, count) {
+    const session = game.sessionsFormation.find(s => s.id === sessionId);
+    if (!session) return;
+    const course = this.catalog.find(c => c.id === session.courseId);
+    const max = course ? course.capacity : 8;
+    const internalCount = session.registeredCandidates.length;
+    const clamped = Math.max(0, Math.min(max - internalCount, Number(count) || 0));
+
+    session.externalAttendeesCount = clamped;
+    game.saveGame();
+    this.renderModal(game);
+  },
+
+  // Attribuer les qualifications obtenues par une formation
+  grantCourseQualifications(vol, course) {
+    if (!vol.skills) vol.skills = [];
+    vol.exp = (vol.exp || 0) + 40;
+
+    // Rôles opérationnels de Sécurité Civile (Secouriste, Équipier Secouriste, Chef d'équipe...)
+    if (course.unlocks) {
+      vol.role = course.unlocks;
+    }
+    if (['PSE1', 'PSE2', 'CE', 'CD'].includes(course.id)) {
+      vol.rank = course.id;
+    }
+
+    // Compétences techniques
+    if (course.unlocksSkill && !vol.skills.includes(course.unlocksSkill)) {
+      vol.skills.push(course.unlocksSkill);
+    }
+    if (course.id === 'CE' && !vol.skills.includes('ce')) {
+      vol.skills.push('ce');
+    }
+    if (course.id === 'EXTINCTEUR' && !vol.skills.includes('epi_incendie')) {
+      vol.skills.push('epi_incendie');
+    }
+
+    // Filière formateurs
+    if (course.unlocksSkill && (course.unlocksSkill.startsWith('formateur_') || course.unlocksSkill === 'formateur_de_formateur' || course.unlocksSkill === 'cef')) {
+      vol.isTrainer = true;
+    }
+
+    // Recyclage / FC
+    if (course.isRecycling) {
+      vol.recycledYear = new Date().getFullYear();
+    }
+  },
+
+  // Clôturer et certifier une session de formation
   completeSession(game, sessionId) {
     const session = game.sessionsFormation.find(s => s.id === sessionId);
     if (!session) return;
 
     if (!session.trainerId) {
-      game.showToast('Formateur Manquant', 'Vous devez assigner un formateur qualifié avant de valider la formation.', 'orange');
+      game.showToast('Formateur Requis', 'Vous devez affecter un formateur qualifié avant de valider la session.', 'orange');
       return;
     }
 
     const course = this.catalog.find(c => c.id === session.courseId);
-    const count = session.registeredCandidates.length || Math.min(session.maxCandidates, 6);
+    const internalCount = session.registeredCandidates.length;
+    const externalCount = session.externalAttendeesCount || 0;
+    const totalCount = session.isInternal ? (internalCount + externalCount) : (internalCount || Math.min(session.maxCandidates, 6));
 
-    // Calcul des gains financiers et relationnels
     let totalRevenue = 0;
-    let totalCost = (session.costOrganization || 30) * count;
+    let netGain = 0;
 
     if (session.isInternal) {
-      if (!session.volunteerPayment) {
-        if (game.resources.money < totalCost) {
-          game.showToast('Fonds insuffisants', `Il vous faut ${totalCost} € pour régler les frais pédagogiques.`, 'orange');
-          return;
-        }
-        game.resources.money -= totalCost;
-      }
-      // Attribution des compétences et rôles aux stagiaires certifiés
+      // Les externes accueillis paient le tarif public de la formation
+      const revFromExternals = externalCount * (session.publicPriceForExternals || course?.basePricePublic || 60);
+      totalRevenue = revFromExternals;
+      game.resources.money += totalRevenue;
+      netGain = totalRevenue;
+
+      // Attribution des compétences aux bénévoles internes certifiés
       session.registeredCandidates.forEach(vid => {
         const v = game.volunteers.find(vol => vol.id === vid);
-        if (v) {
-          if (!v.skills) v.skills = [];
-          v.exp = (v.exp || 0) + 40;
-
-          // Mise à jour rôle et grade
-          if (course.unlocks) {
-            v.role = course.unlocks;
-          }
-          if (['PSE1', 'PSE2', 'CE', 'CD'].includes(course.id)) {
-            v.rank = course.id;
-          }
-
-          // Déblocage de la compétence spécifique (AEP1, AEP2, Formateur PSC, PS, SST, AEP, CEF, FdF)
-          if (course.unlocksSkill && !v.skills.includes(course.unlocksSkill)) {
-            v.skills.push(course.unlocksSkill);
-          }
-          if (course.unlocksSkill && (course.unlocksSkill.startsWith('formateur_') || course.unlocksSkill === 'formateur_de_formateur' || course.unlocksSkill === 'cef')) {
-            v.isTrainer = true;
-          }
-
-          // Rétrocompatibilité formateur général
-          if (course.id === 'CE' && !v.skills.includes('formateur_ps')) {
-            v.skills.push('formateur_psc');
-            v.isTrainer = true;
-          }
+        if (v && course) {
+          this.grantCourseQualifications(v, course);
         }
       });
     } else {
-      // Formation grand public : encaissement des recettes
-      totalRevenue = session.finalPrice * count;
-      game.resources.money += (totalRevenue - totalCost);
+      // Formation Grand Public
+      totalRevenue = session.finalPrice * totalCount;
+      const totalCost = (session.costOrganization || 25) * totalCount;
+      netGain = totalRevenue - totalCost;
+      game.resources.money += netGain;
       game.resources.reputationScore += (25 + (session.relationshipBonus || 0));
     }
 
@@ -480,15 +672,15 @@ window.ProtecFormations = {
     game.saveGame();
     game.updateStatsUI();
 
-    const bilanMsg = session.isInternal 
-      ? `Formation interne validée : ${session.registeredCandidates.length} bénévole(s) certifié(s) « ${course?.title || session.courseId} » !`
-      : `Session validée : +${totalRevenue} € encaissés (+${session.relationshipBonus || 15} relation mairie) !`;
+    const msg = session.isInternal
+      ? `Session interne validée : ${internalCount} bénévole(s) certifié(s) « ${course?.title || session.courseId} » ! ${externalCount > 0 ? `+${totalRevenue} € encaissés via ${externalCount} stagiaire(s) extérieur(s).` : ''}`
+      : `Formation grand public validée : +${netGain} € de solde net et +${session.relationshipBonus || 15} relation publique !`;
 
-    game.showToast('Formation Validée !', bilanMsg, 'green');
+    game.showToast('Formation Validée ! 🎓', msg, 'green');
     this.renderModal(game);
   },
 
-  // Interface utilisateur modale
+  // Rendu de l'interface modale
   renderModal(game) {
     this.injectState(game);
     const body = document.getElementById('modal-body');
@@ -499,24 +691,42 @@ window.ProtecFormations = {
     if (!body || !title) return;
 
     title.textContent = 'Pôle Formations & Pédagogie de Sécurité Civile';
-    subtitle.textContent = 'Cursus Grand Public, Secourisme Opérationnel, Soutien Psycho (AEP) et Filière Formateurs';
+    subtitle.textContent = 'Cursus Grand Public, Secourisme Opérationnel, Recyclages FC, Soutien Psycho et Filière Formateurs';
     icon.setAttribute('data-lucide', 'graduation-cap');
 
-    const trainers = game.volunteers.filter(v => v.isTrainer || (v.skills && v.skills.some(s => s.startsWith('formateur') || s === 'cef')));
+    const trainers = (game.volunteers || []).filter(v => v.isTrainer || (v.skills && v.skills.some(s => s.startsWith('formateur') || s === 'cef' || s === 'picf')));
 
     const activeFilter = this.trainerFilter || 'all';
     const filteredTrainers = trainers.filter(v => {
       const skills = (v.skills || []).map(s => String(s).toLowerCase());
       if (activeFilter === 'psc') return v.isTrainer || skills.includes('formateur_psc') || skills.includes('formateur');
-      if (activeFilter === 'ps') return skills.includes('formateur_ps') || (skills.includes('formateur') && ['CE', 'CD'].includes(v.rank));
+      if (activeFilter === 'ps') return skills.includes('formateur_ps') || (skills.includes('formateur') && (skills.includes('ce') || ['CE', 'CD'].includes(v.rank)));
       if (activeFilter === 'sst') return skills.includes('formateur_sst');
       if (activeFilter === 'fdf') return skills.includes('formateur_de_formateur');
       return true;
     });
 
+    const activeSessions = (game.sessionsFormation || []).filter(s => s.status !== 'completed');
+
     body.innerHTML = `
       <div class="space-y-6">
-        <!-- Bannière Pédagogique & Liste filtrable des formateurs -->
+
+        <!-- Bandeau d'information Doctrine Protec Civile -->
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-pc-blue text-white shadow-md flex items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">🎓</span>
+            <div>
+              <h4 class="font-black text-sm">Doctrine des Qualifications & Rôles de Sécurité Civile</h4>
+              <p class="text-blue-100 text-[11px]">Pas de grade militaire : des rôles opérationnels (Secouriste, Équipier Secouriste, Chef d’équipe) conférés par des compétences certifiées.</p>
+            </div>
+          </div>
+          <div class="hidden sm:flex flex-col text-right text-[11px] text-blue-200">
+            <span>Sessions internes gratuites</span>
+            <strong class="text-emerald-300 font-bold">Accueil extérieurs payants ✓</strong>
+          </div>
+        </div>
+
+        <!-- Section 1 : Formateurs de l'antenne -->
         <div class="p-4 rounded-2xl glass-card space-y-3 border border-emerald-200">
           <div class="flex items-center justify-between flex-wrap gap-2">
             <span class="text-xs font-black uppercase text-emerald-800 flex items-center gap-1.5">
@@ -531,25 +741,24 @@ window.ProtecFormations = {
             </div>
           </div>
 
-          <!-- Cartes des Formateurs filtrés -->
           ${filteredTrainers.length === 0 ? `
-            <p class="text-xs text-slate-500 italic py-1">Aucun formateur trouvé pour ce filtre de formation.</p>
+            <p class="text-xs text-slate-500 italic py-1">Aucun formateur trouvé pour ce filtre. Formez vos bénévoles via le parcours PIC F puis Formateur PSC / PS !</p>
           ` : `
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
               ${filteredTrainers.map(t => {
                 const qualifs = [];
                 const s = (t.skills || []).map(x => String(x).toLowerCase());
                 if (t.isTrainer || s.includes('formateur_psc') || s.includes('formateur')) qualifs.push('PSC');
-                if (s.includes('formateur_ps') || (s.includes('formateur') && ['CE', 'CD'].includes(t.rank))) qualifs.push('PS (PSE)');
+                if (s.includes('formateur_ps') || (s.includes('formateur') && (s.includes('ce') || ['CE', 'CD'].includes(t.rank)))) qualifs.push('PS (PSE)');
                 if (s.includes('formateur_sst')) qualifs.push('SST');
                 if (s.includes('formateur_de_formateur')) qualifs.push('FdF');
                 return `
                   <div class="p-2.5 rounded-xl bg-white border border-emerald-200 flex items-center justify-between text-xs">
                     <div class="flex items-center gap-2">
-                      ${game.getVolunteerAvatarHTML(t, 'w-7 h-7 text-[10px]')}
+                      ${game.getVolunteerAvatarHTML ? game.getVolunteerAvatarHTML(t, 'w-7 h-7 text-[10px]') : '<span>👤</span>'}
                       <div>
                         <strong class="text-slate-800 block text-xs leading-tight">${t.name}</strong>
-                        <span class="text-[9px] text-slate-400">${t.rank || 'Secouriste'}</span>
+                        <span class="text-[9px] text-slate-400">${t.role || t.rank || 'Secouriste'}</span>
                       </div>
                     </div>
                     <div class="flex flex-wrap gap-1 justify-end max-w-[110px]">
@@ -562,31 +771,40 @@ window.ProtecFormations = {
           `}
         </div>
 
-        <!-- Programmateur de nouvelle session -->
+        <!-- Section 2 : Programmer une Session (Interne ou Grand Public) -->
         <div class="p-4 rounded-2xl glass-card space-y-3 border border-slate-200">
-          <h4 class="text-xs font-black uppercase text-slate-800">Ouvrir une nouvelle session au calendrier</h4>
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-black uppercase text-slate-800">Ouvrir une nouvelle session au calendrier</h4>
+            <span class="text-[10px] text-slate-400">Interne (Gratuit bénévoles) ou Grand Public</span>
+          </div>
+
           <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
             <div>
               <label class="text-[10px] font-bold uppercase text-slate-400">Cursus Référentiel :</label>
               <select id="new-course-id" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800">
                 <optgroup label="Grand Public & Entreprises">
                   <option value="GQS">GQS (2h - Sensibilisation)</option>
-                  <option value="PSC" selected>PSC1 (7h - Certifiant 1 jour)</option>
-                  <option value="SST">SST (14h - Salariés Entreprises 2 jours)</option>
+                  <option value="PSC" selected>PSC (7h - Certifiant)</option>
+                  <option value="SST">SST (14h - Salariés Entreprises)</option>
+                  <option value="EXTINCTEUR">Manipulation Extincteurs (3h - EPI)</option>
                 </optgroup>
                 <optgroup label="Secourisme Opérationnel">
-                  <option value="PSE1">PSE1 (35h sur 5 jours - Secouriste)</option>
-                  <option value="PSE2">PSE2 (28h sur 4 jours - Équipier-Secouriste)</option>
-                  <option value="CE">Chef d’Équipe (21h sur 3 jours)</option>
-                  <option value="CD">Chef de Dispositif (24h sur 3 jours)</option>
+                  <option value="PSE1">PSE1 (35h - Rôle Secouriste)</option>
+                  <option value="PSE2">PSE2 (28h - Rôle Équipier Secouriste)</option>
+                  <option value="FC_PSE">Recyclage FC PSE (6h - Maintien PSE 1 & 2)</option>
+                  <option value="MAC_SST">Recyclage MAC SST (7h - Actualisation)</option>
+                  <option value="CE">Chef d’Équipe (21h - Rôle & Compétence CE)</option>
+                  <option value="CD">Chef de Dispositif (24h - Commandement CD)</option>
+                  <option value="SSA">SSA (28h - Sauvetage Aquatique)</option>
                 </optgroup>
                 <optgroup label="Soutien Psychologique (AEP)">
                   <option value="AEP1">AEP1 - Sensibilisation Écoute (7h)</option>
                   <option value="AEP2">AEP2 - Prise en charge & CAI (14h)</option>
                 </optgroup>
                 <optgroup label="Filière Pédagogique (Formateurs)">
-                  <option value="PICF_PSC">PIC F & Formateur PSC (28h)</option>
-                  <option value="FORM_PS">Formateur Premiers Secours (28h)</option>
+                  <option value="PICF">PIC F - Pédagogie Initiale de Formateur (21h)</option>
+                  <option value="FORM_PSC">Formateur PSC (14h - Req: PIC F)</option>
+                  <option value="FORM_PS">Formateur PS - Premiers Secours (28h)</option>
                   <option value="FORM_SST">Formateur SST Entreprises (21h)</option>
                   <option value="FORM_AEP">Formateur AEP Psycho (21h)</option>
                   <option value="CEF">CEF - Encadrant Formation (35h)</option>
@@ -594,96 +812,113 @@ window.ProtecFormations = {
                 </optgroup>
               </select>
             </div>
+
+            <div>
+              <label class="text-[10px] font-bold uppercase text-slate-400">Modalité & Public :</label>
+              <select id="new-course-tariff" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800" onchange="
+                const isInt = this.value.startsWith('internal');
+                document.getElementById('external-attendees-wrap').style.display = isInt ? 'block' : 'none';
+              ">
+                <option value="internal_free" selected>Interne Antenne (Gratuit bénévoles)</option>
+                <option value="standard">Grand Public / Entreprises (Tarif normal)</option>
+                <option value="discount_25">Partenaire Associatif (-25%)</option>
+                <option value="discount_50">Mairie Partenaire (-50%)</option>
+                <option value="free_mairie">Gratuité Mairie (+35 Relation)</option>
+              </select>
+            </div>
+
             <div>
               <label class="text-[10px] font-bold uppercase text-slate-400">Lieu d'accueil :</label>
               <select id="new-course-loc" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-pc-blue">
                 <option value="antenne">🏛️ À l’Antenne (Salle requise)</option>
-                <option value="entreprise">🏢 Chez l’Entreprise demanderesse</option>
+                <option value="entreprise">🏢 Chez le Partenaire / Entreprise</option>
               </select>
             </div>
-            <div>
-              <label class="text-[10px] font-bold uppercase text-slate-400">Public & Tarification :</label>
-              <select id="new-course-tariff" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-semibold text-slate-800">
-                <option value="standard">Tarif Standard Normal</option>
-                <option value="discount_25">Remise Partenaire (-25%)</option>
-                <option value="discount_50">Remise Mairie (-50%)</option>
-                <option value="free_mairie">Gratuité Mairie (+35 Relation)</option>
-                <option value="internal_free">Interne (Prise en charge Asso)</option>
-                <option value="volunteer_pays">Interne (Bénévole paye lui-même)</option>
+
+            <div id="external-attendees-wrap">
+              <label class="text-[10px] font-bold uppercase text-slate-400">Extérieurs payants accueillis :</label>
+              <select id="new-external-count" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-emerald-700">
+                <option value="0">0 externe (100% équipe)</option>
+                <option value="2">2 candidats extérieurs payants</option>
+                <option value="4">4 candidats extérieurs payants</option>
+                <option value="6">6 candidats extérieurs payants</option>
               </select>
             </div>
-            <div class="flex items-end">
+
+            <div class="sm:col-span-4 flex justify-end pt-1">
               <button onclick="
                 const cId = document.getElementById('new-course-id').value;
                 const cLoc = document.getElementById('new-course-loc').value;
                 const tTar = document.getElementById('new-course-tariff').value;
-                const isInt = (tTar === 'internal_free' || tTar === 'volunteer_pays');
-                window.ProtecFormations.createSession(window.game, cId, tTar, isInt, isInt ? 'Interne Antenne' : (cLoc === 'entreprise' ? 'Salariés Entreprise' : 'Mairie & Citoyens'), cLoc);
-              " class="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
+                const extCnt = document.getElementById('new-external-count').value;
+                const isInt = tTar.startsWith('internal');
+                window.ProtecFormations.createSession(window.game, cId, tTar, isInt, isInt ? 'Bénévoles de l’Antenne' : (cLoc === 'entreprise' ? 'Salariés Entreprise' : 'Grand Public'), cLoc, extCnt);
+              " class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
                 <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                Programmer
+                Programmer la Session
               </button>
             </div>
           </div>
         </div>
 
-        <!-- Sessions en cours & Planifiées -->
+        <!-- Section 3 : Sessions au Calendrier -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
-            <h4 class="text-xs font-black uppercase text-slate-800">Sessions Planifiées (${game.sessionsFormation.filter(s => s.status !== 'completed').length})</h4>
-            <span class="text-[10px] text-slate-400">Gestion des formateurs et des inscrits</span>
+            <h4 class="text-xs font-black uppercase text-slate-800">Sessions Ouvertes (${activeSessions.length})</h4>
+            <span class="text-[10px] text-slate-400">Affectation du formateur et gestion des candidats</span>
           </div>
 
-          ${game.sessionsFormation.filter(s => s.status !== 'completed').length === 0 ? `
+          ${activeSessions.length === 0 ? `
             <div class="p-6 rounded-2xl glass-card text-center text-xs text-slate-500">
-              Aucune session de formation n'est actuellement ouverte. Programmez une session ci-dessus.
+              Aucune session de formation n'est actuellement planifiée. Programmez une session ci-dessus.
             </div>
           ` : ''}
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            ${game.sessionsFormation.filter(s => s.status !== 'completed').map(sess => {
+            ${activeSessions.map(sess => {
               const assignedTrainer = game.volunteers.find(v => v.id === sess.trainerId);
               const isInternal = sess.isInternal;
+              const course = this.catalog.find(c => c.id === sess.courseId);
+              const extCount = sess.externalAttendeesCount || 0;
+              const extRevenue = extCount * (sess.publicPriceForExternals || course?.basePricePublic || 60);
 
               return `
                 <div class="p-4 rounded-2xl glass-card border border-white/80 shadow-sm space-y-3 flex flex-col justify-between">
                   <div class="space-y-2">
                     <div class="flex items-center justify-between">
                       <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${isInternal ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'}">
-                        ${isInternal ? 'Session Interne' : 'Grand Public'}
+                        ${isInternal ? 'Session Interne (Gratuit Bénévoles)' : 'Grand Public / Partenaire'}
                       </span>
                       <span class="text-xs font-bold font-mono text-slate-700">
-                        ${sess.finalPrice === 0 ? '<span class=\"text-emerald-600 font-black\">GRATUIT (Offert)</span>' : `${sess.finalPrice} € / pers.`}
+                        ${isInternal ? (extCount > 0 ? `<span class="text-emerald-600 font-black">+${extRevenue} € (via ${extCount} ext.)</span>` : '<span class="text-indigo-600 font-bold">Gratuit antenne</span>') : `${sess.finalPrice} € / pers.`}
                       </span>
                     </div>
 
                     <h5 class="text-xs font-black text-slate-900">${sess.title}</h5>
-                    <p class="text-[11px] text-slate-500">${sess.targetAudience} • Jauge : <strong>${sess.registeredCandidates.length} / ${sess.maxCandidates}</strong> stagiaires</p>
+                    <p class="text-[11px] text-slate-500">
+                      ${sess.targetAudience} • Jauge : <strong>${sess.registeredCandidates.length} bénévoles + ${extCount} ext. / ${sess.maxCandidates}</strong> stagiaires
+                    </p>
+
+                    ${course?.kitRequired ? `
+                      <div class="text-[10px] ${this.hasTrainingKit(game, course.kitRequired) ? 'text-emerald-700' : 'text-amber-700'} font-bold flex items-center gap-1">
+                        <span>${this.hasTrainingKit(game, course.kitRequired) ? '✓ Kit en stock :' : '⚠️ Kit requis :'}</span>
+                        <span>${course.kitName || course.kitRequired}</span>
+                      </div>
+                    ` : ''}
 
                     <!-- Formateur affecté -->
                     <div class="p-2.5 rounded-xl bg-slate-50 space-y-1">
                       <span class="text-[9px] font-bold uppercase text-slate-400">Formateur responsable :</span>
                       <div class="flex items-center justify-between text-xs">
-                        <span class="font-black text-slate-800">${assignedTrainer ? `${assignedTrainer.name} (${assignedTrainer.dispoType === 'salarié' ? 'Salarié' : 'Bénévole'})` : '<span class="text-amber-600 font-bold">Aucun formateur</span>'}</span>
+                        <span class="font-black text-slate-800">${assignedTrainer ? `${assignedTrainer.name} (${assignedTrainer.role || assignedTrainer.rank})` : '<span class="text-amber-600 font-bold">Aucun formateur affecté</span>'}</span>
                       </div>
                       <select onchange="window.ProtecFormations.assignTrainer(window.game, '${sess.id}', this.value)" class="w-full text-[11px] p-1.5 rounded-lg border border-slate-200 glass-input font-medium mt-1">
-                        <option value="">Sélectionner un formateur qualifié...</option>
+                        <option value="">Affecter un formateur qualifié...</option>
                         ${trainers.map(t => {
-                          const sessCourse = this.courses[sess.courseId];
-                          const isEligible = sessCourse ? this.isEligibleTrainer(t, sessCourse) : true;
-                          let trainerBadge = '';
-                          if (t.skills?.includes('formateur_de_formateur')) trainerBadge = '★ FdF ';
-                          else if (t.skills?.includes('formateur_aep')) trainerBadge = '✓ Formateur AEP ';
-                          else if (t.skills?.includes('formateur_ps')) trainerBadge = '✓ Formateur PS ';
-                          else if (t.skills?.includes('formateur_sst')) trainerBadge = '✓ Formateur SST ';
-                          else if (t.skills?.includes('formateur_psc')) trainerBadge = '✓ Formateur PSC ';
-                          else if (t.skills?.includes('cef')) trainerBadge = '✓ CEF ';
-                          else if (t.isTrainer) trainerBadge = '✓ Formateur ';
-
-                          const prefix = isEligible ? `${trainerBadge ? '[' + trainerBadge.trim() + '] ' : '[Éligible] '}` : '[Inéligible ⚠️] ';
+                          const isEligible = course ? this.isEligibleTrainer(t, course) : { eligible: true };
                           return `
-                            <option value="${t.id}" ${sess.trainerId === t.id ? 'selected' : ''} class="${isEligible ? 'text-slate-800 font-bold' : 'text-slate-400 italic'}">
-                              ${prefix}${t.name} (${t.role || t.rank} • ${t.dispoType === 'salarié' ? 'Salarié' : 'Bénévole'})
+                            <option value="${t.id}" ${sess.trainerId === t.id ? 'selected' : ''} class="${isEligible.eligible ? 'text-slate-800 font-bold' : 'text-slate-400 italic'}">
+                              ${isEligible.eligible ? '[✓ Qualifié] ' : '[⚠️ Non qualifié] '} ${t.name} (${t.role || t.rank})
                             </option>
                           `;
                         }).join('')}
@@ -691,22 +926,28 @@ window.ProtecFormations = {
                     </div>
 
                     ${isInternal ? `
-                      <!-- Inscription des bénévoles internes -->
-                      <div class="pt-2 border-t border-slate-100">
-                        <span class="text-[9px] font-bold uppercase text-slate-400 block mb-1">Inscrire un bénévole de l'antenne :</span>
+                      <!-- Inscription des bénévoles internes (Gratuit) -->
+                      <div class="pt-2 border-t border-slate-100 space-y-1.5">
+                        <span class="text-[9px] font-bold uppercase text-slate-400 block">Inscrire un bénévole de l'antenne (Gratuit 0 €) :</span>
                         <select onchange="if(this.value) window.ProtecFormations.registerVolunteerToInternal(window.game, '${sess.id}', this.value); this.value='';" class="w-full text-xs p-1.5 rounded-lg border border-slate-200 glass-input font-bold text-pc-blue">
-                          <option value="">+ Inscrire un candidat bénévole...</option>
-                          ${game.volunteers.filter(v => !sess.registeredCandidates.includes(v.id)).map(v => `
-                            <option value="${v.id}">${v.name} (${v.rank} • Moral : ${v.motivation || 80}%)</option>
+                          <option value="">+ Sélectionner un bénévole...</option>
+                          ${(game.volunteers || []).filter(v => !sess.registeredCandidates.includes(v.id)).map(v => `
+                            <option value="${v.id}">${v.name} (${v.role || v.rank} • Moral : ${v.motivation || 80}%)</option>
                           `).join('')}
                         </select>
+                        <div class="flex flex-wrap gap-1 pt-1">
+                          ${sess.registeredCandidates.map(vid => {
+                            const vol = game.volunteers.find(v => v.id === vid);
+                            return `<span class="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-800 text-[10px] font-bold">${vol?.name || 'Bénévole'}</span>`;
+                          }).join('')}
+                        </div>
                       </div>
                     ` : ''}
                   </div>
 
-                  <!-- Bouton de validation -->
+                  <!-- Validation de la session -->
                   <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                    <span class="text-[10px] text-slate-400">${sess.relationshipBonus ? `+${sess.relationshipBonus} Relation mairie` : 'Attribution des attestations'}</span>
+                    <span class="text-[10px] text-slate-400">${sess.relationshipBonus ? `+${sess.relationshipBonus} Relation mairie` : 'Délivrance des attestations'}</span>
                     <button onclick="window.ProtecFormations.completeSession(window.game, '${sess.id}')" class="px-3.5 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white text-xs font-black shadow transition flex items-center gap-1 cursor-pointer">
                       <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
                       Valider & Certifier
@@ -717,9 +958,62 @@ window.ProtecFormations = {
             }).join('')}
           </div>
         </div>
+
+        <!-- Section 4 : Formations Individuelles en Stage Externe -->
+        <div class="p-4 rounded-2xl glass-card space-y-3 border border-indigo-100 bg-indigo-50/20">
+          <div>
+            <h4 class="text-xs font-black uppercase text-indigo-950">Inscrire un bénévole en stage externe</h4>
+            <p class="text-[11px] text-slate-500">Si l'antenne ne dispose pas du formateur ou du kit requis, le bénévole peut être envoyé en organisme extérieur. L'antenne peut financer à 100% ou laisser le bénévole régler de sa poche.</p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+            <div>
+              <label class="text-[10px] font-bold uppercase text-slate-400">Bénévole :</label>
+              <select id="ext-vol-id" class="w-full p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800">
+                ${(game.volunteers || []).map(v => `<option value="${v.id}">${v.name} (${v.role || v.rank})</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-bold uppercase text-slate-400">Stage externe :</label>
+              <select id="ext-course-id" class="w-full p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800">
+                <option value="PSC">PSC (60 €)</option>
+                <option value="SST">SST (180 €)</option>
+                <option value="PSE1">PSE1 (250 €)</option>
+                <option value="PSE2">PSE2 (280 €)</option>
+                <option value="CE">Chef d’Équipe - CE (350 €)</option>
+                <option value="SSA">SSA Sauvetage Aquatique (310 €)</option>
+                <option value="PICF">PIC F Formateur (220 €)</option>
+                <option value="FORM_PSC">Formateur PSC (180 €)</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-bold uppercase text-slate-400">Prise en charge :</label>
+              <select id="ext-pay-mode" class="w-full p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800">
+                <option value="asso">100% Antenne (Moral boosté)</option>
+                <option value="vol">Bénévole finance lui-même (Moral -25%)</option>
+              </select>
+            </div>
+            <div class="flex items-end">
+              <button onclick="
+                const vId = document.getElementById('ext-vol-id').value;
+                const cId = document.getElementById('ext-course-id').value;
+                const pMd = document.getElementById('ext-pay-mode').value;
+                window.ProtecFormations.registerVolunteerExternal(window.game, vId, cId, pMd);
+              " class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow transition cursor-pointer">
+                Inscrire en Stage Externe
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     `;
 
     if (window.lucide) window.lucide.createIcons();
+  },
+
+  setTrainerFilter(f) {
+    this.trainerFilter = f;
+    if (window.game) this.renderModal(window.game);
   }
 };

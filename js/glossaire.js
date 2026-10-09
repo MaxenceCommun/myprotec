@@ -116,16 +116,26 @@
       category: 'Habilitation Véhicule',
       desc: 'Habilitation de conduite d’ambulance de premiers secours en intervention avec victime transportée.'
     },
+    'P. VPSP': {
+      fullName: 'Permis & Habilitation Conduite VPSP',
+      category: 'Habilitation Véhicule',
+      desc: 'Habilitation interne obligatoire pour conduire le VPSP lors d’une prise en charge de victime.'
+    },
     'PERMIS B': {
       fullName: 'Permis B (Véhicules Légers)',
       category: 'Permis de Conduire',
       desc: 'Permis officiel autorisant la conduite des véhicules légers de liaison (VL) et utilitaires (VTU).'
     },
+    'EPI': {
+      fullName: 'Équipier de Première Intervention',
+      category: 'Sécurité Incendie',
+      desc: 'Secouriste formé à l’utilisation rapide des extincteurs et à l’extinction des départs de feux.'
+    },
 
-    // --- QUALIFICATIONS, RANGS & COMPÉTENCES ---
+    // --- QUALIFICATIONS, RÔLES & COMPÉTENCES ---
     'CE': {
       fullName: 'Chef d’Équipe',
-      category: 'Grade Opérationnel',
+      category: 'Rôle & Compétence Opérationnelle',
       desc: 'Encadrant de proximité dirigeant un binôme ou une équipe de secours sur le terrain.'
     },
     'CI': {

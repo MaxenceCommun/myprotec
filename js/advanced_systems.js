@@ -250,8 +250,8 @@ window.ProtecAdvanced = {
     ],
     formation: [
       { level: 1, name: 'Salle de Réunion', desc: 'Réunions d’antenne et briefings.', cost: 0, bonus: 'Standard' },
-      { level: 2, name: 'Espace Pédagogique PSC1', desc: 'Mannequins connectés QCPR et projecteur. Génère des cours grand public payants.', cost: 950, bonus: '+250 € / semaine (cours PSC1)' },
-      { level: 3, name: 'Centre Pédagogique Agréé', desc: 'Agrément préfectoral pour formations entreprises SST & PSC1.', cost: 2100, bonus: '+650 € / semaine automatique' }
+      { level: 2, name: 'Espace Pédagogique PSC', desc: 'Mannequins connectés QCPR et projecteur. Permet d’accueillir les sessions PSC à l’antenne.', cost: 950, bonus: '+250 € / semaine (cours PSC)' },
+      { level: 3, name: 'Centre Pédagogique Agréé', desc: 'Agrément préfectoral pour formations entreprises SST & PSC.', cost: 2100, bonus: '+650 € / semaine automatique' }
     ],
     radio: [
       { level: 1, name: 'Poste Radio VHF', desc: 'Talkies-walkies analogiques.', cost: 0, bonus: 'Standard' },
@@ -261,29 +261,62 @@ window.ProtecAdvanced = {
 
   // --- CATALOGUE DES COMPÉTENCES INDIVIDUELLES DES BÉNÉVOLES ---
   skillsList: [
-    { id: 'pilotage', name: 'Conduite Urgence & Gyrophares', icon: '🚑', xpRequired: 30, desc: 'Permet de conduire le VPSP et VPC en intervention prioritaire.' },
+    // Conduite & Permis opérationnels
+    { id: 'permis_vpsp', name: 'Conducteur VPSP (Permis VPSP)', icon: '🚑', xpRequired: 30, desc: 'Habilitation interne obligatoire autorisant la conduite du VPSP lors d’une prise en charge ou transport de victime.' },
+    { id: 'permis_b', name: 'Permis B (Véhicules Légers)', icon: '🚗', xpRequired: 15, desc: 'Autorise la conduite des véhicules légers (VL, VTU, VTP) et VPSP hors prise en charge de victime.' },
     { id: 'radio', name: 'Opérateur Radio & PC', icon: '📻', xpRequired: 20, desc: 'Maîtrise parfaite des procédures SAMU 15 et transmissions CODIS.' },
-    { id: 'nautique', name: 'Sauvetage Aquatique & Fleuve', icon: '🏊', xpRequired: 40, desc: 'Habilitation pour embarcation BLS sur fleuve et zones inondées.' },
-    { id: 'communication', name: 'Communication & Médias (Photo/Vidéo)', icon: '📸', xpRequired: 25, desc: 'Photographe / Vidéaste d’antenne valorisant les interventions (+dons et candidatures).' },
-    
-    // Filière Spécialités Opérationnelles (Nautique, USAR, Cyno)
+
+    // Rôles & Compétences Opérationnelles
+    { id: 'ce', name: 'Chef d’Équipe (CE)', icon: '🎖️', xpRequired: 40, desc: 'Compétence de gestion d’équipage permettant d’occuper le rôle opérationnel de Chef d’Équipe en mission.' },
+    { id: 'epi_incendie', name: 'Manipulation Extincteurs (EPI Incendie)', icon: '🧯', xpRequired: 20, desc: 'Compétence pratique d’extinction sur feux naissants et sécurité incendie.' },
+
+    // Spécialités Nautique, USAR, Cyno
     { id: 'ssa', name: 'Surveillance & Sauvetage Aquatique (SSA)', icon: '🏊', xpRequired: 40, desc: 'Habilitation officielle SSA pour le sauvetage en eaux intérieures et zones inondées.' },
     { id: 'permis_bateau', name: 'Permis Bateau & Conduite ERS', icon: '🚤', xpRequired: 35, desc: 'Habilitation de pilotage et conduite de l’embarcation de reconnaissance et sauvetage (ERS).' },
     { id: 'usar', name: 'Sauvetage Déblaiement (USAR)', icon: '⛏️', xpRequired: 45, desc: 'Intervention sur effondrements, sécurisation, étaiement et recherche de victimes.' },
     { id: 'cyno', name: 'Conducteur Cynotechnique USAR', icon: '🐕', xpRequired: 50, reqSkill: 'usar', desc: 'Maître-chien de recherche et sauvetage en décombres et quête de disparus.' },
-    
+
+    // Filière Communication & Médias (Photos/Vidéos à 3 Niveaux d'Impact)
+    { id: 'communication_1', name: 'Com N1 : Reporter d’Antenne', icon: '📸', xpRequired: 20, desc: 'Photos et vidéos de terrain valorisant les interventions (+10% dons et visibilité).' },
+    { id: 'communication_2', name: 'Com N2 : Chargé de Communication', icon: '📱', xpRequired: 35, reqSkill: 'communication_1', desc: 'Gestion des réseaux sociaux et couverture médiatique (+25% candidatures et +20% dons).' },
+    { id: 'communication_3', name: 'Com N3 : Responsable Communication', icon: '📢', xpRequired: 50, reqSkill: 'communication_2', desc: 'Campagnes d’appel aux dons et relations presse (+50% dons, +50% candidatures, boost réputation).' },
+
     // Filière Aide & Écoute Psychologique (AEP)
     { id: 'aep1', name: 'Aide & Écoute Psychologique 1 (AEP1)', icon: '🧠', xpRequired: 25, desc: 'Sensibilisation à l’AEP : posture d’écoute active, réconfort immédiat des impliqués et premiers secours émotionnels.' },
-    { id: 'aep2', name: 'Aide & Écoute Psychologique 2 (AEP2)', icon: '🫂', xpRequired: 45, reqSkill: 'aep1', desc: 'Prise en charge approfondie : deuil traumatique, defusing post-mission (réduit la fatigue équipage de 50%) et CAI en crise NOVI.' },
-    
-    // Filière Pédagogique & Formateurs Officiels (formations.protection-civile.org)
-    { id: 'formateur_psc', name: 'Formateur PSC (avec PIC F)', icon: '🎓', xpRequired: 35, desc: 'Pédagogie Initiale & Commune de Formateur. Habilité à certifier le grand public aux Gestes Qui Sauvent (GQS) et PSC1.' },
+    { id: 'aep2', name: 'Aide & Écoute Psychologique 2 (AEP2)', icon: '🫂', xpRequired: 45, reqSkill: 'aep1', desc: 'Prise en charge approfondie : deuil traumatique, defusing post-mission et CAI en crise NOVI.' },
+
+    // Filière Pédagogique & Formateurs (PIC F préalable distinct de Formateur PSC)
+    { id: 'picf', name: 'PIC F (Pédagogie Initiale de Formateur)', icon: '📘', xpRequired: 30, desc: 'Tronc commun pédagogique obligatoire préalable aux brevets de formateur de sécurité civile.' },
+    { id: 'formateur_psc', name: 'Formateur PSC (Secourisme Citoyen)', icon: '🎓', xpRequired: 35, reqSkill: 'picf', desc: 'Habilité à animer et certifier le grand public aux Gestes Qui Sauvent (GQS) et au PSC.' },
     { id: 'formateur_ps', name: 'Formateur PS (Premiers Secours)', icon: '🚑', xpRequired: 45, reqSkill: 'formateur_psc', desc: 'Habilité à former les équipiers secouristes opérationnels aux diplômes PSE1 et PSE2.' },
-    { id: 'formateur_sst', name: 'Formateur SST (Secourisme Travail)', icon: '💼', xpRequired: 40, desc: 'Habilitation INRS pour animer les formations de Sauveteur Secouriste du Travail en entreprises.' },
+    { id: 'formateur_sst', name: 'Formateur SST (Secourisme Travail)', icon: '💼', xpRequired: 40, reqSkill: 'picf', desc: 'Habilitation INRS pour animer les formations de Sauveteur Secouriste du Travail en entreprises.' },
     { id: 'formateur_aep', name: 'Formateur AEP (Écoute Psycho)', icon: '🗣️', xpRequired: 45, reqSkill: 'aep2', desc: 'Habilité à former les bénévoles et partenaires aux modules d’Aide et Écoute Psychologique (AEP1 & AEP2).' },
-    { id: 'cef', name: 'CEF - Concepteur / Encadrant Formation', icon: '📋', xpRequired: 50, desc: 'Ingénierie pédagogique, conception des référentiels et coordination des équipes de formateurs d’antenne.' },
-    { id: 'formateur_de_formateur', name: 'Formateur de Formateurs (FdF)', icon: '👑', xpRequired: 65, desc: 'Grade pédagogique suprême de la Protection Civile : forme et certifie tous les formateurs de l’association (PSC, PS, SST, AEP).' }
+    { id: 'cef', name: 'CEF - Concepteur / Encadrant Formation', icon: '📋', xpRequired: 50, desc: 'Ingénierie pédagogique, conception des référentiels et coordination des formateurs d’antenne.' },
+    { id: 'formateur_de_formateur', name: 'Formateur de Formateurs (FdF)', icon: '👑', xpRequired: 65, desc: 'Niveau pédagogique suprême de la Protection Civile : forme et certifie tous les formateurs de l’association.' }
   ],
+
+  // Calcul dynamique de l'impact de communication de l'antenne
+  getCommunicationBonus(game) {
+    if (!game || !game.volunteers) return { level: 0, donBonusPct: 0, candidateBonusPct: 0, repBonus: 0, label: 'Aucune com' };
+    let maxLevel = 0;
+    game.volunteers.forEach(v => {
+      const skills = v.skills || [];
+      if (skills.includes('communication_3')) maxLevel = Math.max(maxLevel, 3);
+      else if (skills.includes('communication_2')) maxLevel = Math.max(maxLevel, 2);
+      else if (skills.includes('communication_1') || skills.includes('communication')) maxLevel = Math.max(maxLevel, 1);
+    });
+
+    if (maxLevel === 3) {
+      return { level: 3, donBonusPct: 50, candidateBonusPct: 50, repBonus: 20, label: 'Responsable Communication (Impact Maximum +50%)' };
+    }
+    if (maxLevel === 2) {
+      return { level: 2, donBonusPct: 20, candidateBonusPct: 25, repBonus: 10, label: 'Chargé de Communication (+25% Candidatures / +20% Dons)' };
+    }
+    if (maxLevel === 1) {
+      return { level: 1, donBonusPct: 10, candidateBonusPct: 10, repBonus: 5, label: 'Reporter d’Antenne (+10% Visibilité & Dons)' };
+    }
+    return { level: 0, donBonusPct: 0, candidateBonusPct: 0, repBonus: 0, label: 'Aucun bénévole en communication' };
+  },
 
   // 1. Initialisation de l'état étendu avec tâches progressives selon le stade de l'antenne
   injectAdvancedState(game) {
@@ -297,7 +330,6 @@ window.ProtecAdvanced = {
       };
     } else {
       if (!game.rewards.tier) game.rewards.tier = this.detectAntennaTier(game);
-      // Nettoyage et assainissement des sauvegardes avec données résiduelles antérieures
       const hasAntenna = game.stations && game.stations.length > 0;
       if (!hasAntenna) {
         game.rewards.tier = 1;
@@ -322,12 +354,27 @@ window.ProtecAdvanced = {
       });
     }
 
-    // Assurer les compétences sur les bénévoles existants
+    // Rétrocompatibilité et assainissement des compétences sur les bénévoles existants
     if (game.volunteers) {
       game.volunteers.forEach(v => {
         if (!v.skills) v.skills = ['radio'];
+        // Remplacement de l'ancien 'pilotage' par 'permis_vpsp' et 'permis_b'
+        if (v.skills.includes('pilotage')) {
+          v.skills = v.skills.filter(s => s !== 'pilotage');
+          if (!v.skills.includes('permis_vpsp')) v.skills.push('permis_vpsp');
+          if (!v.skills.includes('permis_b')) v.skills.push('permis_b');
+        }
+        // Migration communication vers communication_1
+        if (v.skills.includes('communication') && !v.skills.some(s => s.startsWith('communication_'))) {
+          v.skills.push('communication_1');
+        }
+        // Compétence Chef d'équipe si CE
+        if ((v.rank === 'CE' || v.role === 'Chef d\'équipe') && !v.skills.includes('ce')) {
+          v.skills.push('ce');
+        }
+        // Habilitation Permis VPSP pour les cadres opérationnels historiques
         if (v.rank === 'PSE2' || v.rank === 'CE' || v.rank === 'CD') {
-          if (!v.skills.includes('pilotage')) v.skills.push('pilotage');
+          if (!v.skills.includes('permis_b')) v.skills.push('permis_b');
         }
       });
     }

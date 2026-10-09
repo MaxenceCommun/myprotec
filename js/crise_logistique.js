@@ -533,36 +533,9 @@ window.ProtecCriseLogistique = {
     `;
   },
 
-  // Affichage du transit en 2 étapes (Domicile -> Local -> Mission)
+  // Affichage du transit des bénévoles (masqué pour éviter les détails de configuration superflus)
   renderConvergenceTimeHTML(game, mission) {
-    this.injectState(game);
-    const vols = game.volunteers.filter(v => (mission.registeredVolunteers || []).includes(v.id));
-    if (vols.length === 0) return '';
-
-    const maxTransitToStation = this.calculateConvergenceTimeMin(vols, 30);
-    const transitToMissionUrgent = Math.max(8, Math.round((mission.durationSeconds || 120) * 0.08));
-
-    return `
-      <div class="p-3 rounded-2xl glass-card border border-blue-200/60 text-xs space-y-1.5">
-        <div class="flex items-center justify-between">
-          <span class="font-bold text-pc-blue flex items-center gap-1.5">
-            <i data-lucide="navigation" class="w-3.5 h-3.5 text-pc-blue"></i>
-            Délai d'acheminement réaliste (2 étapes)
-          </span>
-          <span class="font-extrabold text-slate-700 mono-num">~${maxTransitToStation + transitToMissionUrgent} min total</span>
-        </div>
-        <div class="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-200/50">
-          <div>
-            <span class="text-slate-400 block font-semibold">1. Domicile ➔ Local Protec :</span>
-            <span class="font-bold text-slate-700">~${maxTransitToStation} min (allure normale)</span>
-          </div>
-          <div>
-            <span class="text-slate-400 block font-semibold">2. Local ➔ Sinistre :</span>
-            <span class="font-bold text-slate-700">~${transitToMissionUrgent} min (urgence +50%)</span>
-          </div>
-        </div>
-      </div>
-    `;
+    return '';
   },
 
   // Rendu complet de la Main Courante et du pilotage de crise pour openMissionDetails

@@ -833,7 +833,7 @@ window.ProtecPersonnel = {
     if (!modal || !body) return;
 
     modal.classList.remove('hidden');
-    title.textContent = 'Direction RH : Salariés & Code du Travail';
+    title.textContent = 'Direction RH : Gestion des Salariés';
     subtitle.textContent = 'Forfait 151h mensuelles, heures supplémentaires, vacations et repos obligatoire de 11h';
     icon.setAttribute('data-lucide', 'briefcase');
 
@@ -851,7 +851,7 @@ window.ProtecPersonnel = {
           <div class="flex items-center justify-between">
             <span class="text-xs font-black uppercase text-indigo-950 flex items-center gap-1.5">
               <i data-lucide="scale" class="w-4 h-4 text-indigo-600"></i>
-              Réglementation Code du Travail vs Bénévolat
+              Statut des Salariés vs Bénévolat
             </span>
             <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800">
               ${salaries.length} cadre(s) salarié(s) permanent(s)

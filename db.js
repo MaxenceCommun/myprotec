@@ -38,7 +38,10 @@ const defaultDb = {
   allianceStations: [],
   renforts: [],
   formationsSpeciales: [],
-  chatMessages: []
+  chatMessages: [],
+  marketplace: [],
+  communityEvents: [],
+  badgesCollection: []
 };
 
 class Database {
@@ -69,7 +72,10 @@ class Database {
           alliances: parsed.alliances && parsed.alliances.length ? parsed.alliances : defaultDb.alliances,
           allianceStations: cleanedStations,
           formationsSpeciales: (parsed.formationsSpeciales || []).filter(f => !(f.organizerPlayerId && f.organizerPlayerId.startsWith('system'))),
-          chatMessages: parsed.chatMessages || []
+          chatMessages: parsed.chatMessages || [],
+          marketplace: parsed.marketplace || [],
+          communityEvents: parsed.communityEvents || [],
+          badgesCollection: parsed.badgesCollection || []
         };
       } catch (e) {
         console.error('Erreur lecture BDD, utilisation état par défaut:', e);

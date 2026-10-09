@@ -26,7 +26,8 @@ window.ProtecLogistique = {
     { id: 'technique_crise', label: 'Technique & Crise', icon: '🛠️' },
     { id: 'tenues_epi', label: 'Tenues & Équipements EPI', icon: '🦺' },
     { id: 'social_hebergement', label: 'Ravitaillement & Social', icon: '🥫' },
-    { id: 'transmissions', label: 'Transmissions & Radio', icon: '📻' }
+    { id: 'transmissions', label: 'Transmissions & Radio', icon: '📻' },
+    { id: 'kits_formation', label: 'Kits Pédagogiques (Formations)', icon: '🎓' }
   ],
 
   CATALOG: [
@@ -400,6 +401,92 @@ window.ProtecLogistique = {
       badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
       desc: 'Station de recharge rapide simultanée pour 6 talkies-walkies au local d’antenne.',
       usage: 'Garantit que toutes les radios sont chargées à 100% au départ des équipages.'
+    },
+
+    // --- 7. KITS PÉDAGOGIQUES OFFICIELS (FORMATIONS) ---
+    {
+      id: 'kit_pedago_psc',
+      category: 'kits_formation',
+      name: 'Kit Pédagogique PSC (Prévention et Secours Civiques)',
+      icon: '🎓',
+      price: 1200,
+      unit: 'kit complet',
+      badge: 'Filière Citoyenne',
+      badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+      desc: 'Mannequins QCPR adulte/enfant/nourrisson connectés, défibrillateur DAE de formation avec télécommande, tapis de sol et masques d’exercice.',
+      usage: 'Matériel obligatoire pour ouvrir et dispenser les formations grand public GQS et PSC.'
+    },
+    {
+      id: 'kit_pedago_sst',
+      category: 'kits_formation',
+      name: 'Kit Pédagogique SST (Sauveteur Secouriste du Travail)',
+      icon: '💼',
+      price: 1100,
+      unit: 'kit complet',
+      badge: 'Santé Travail INRS',
+      badgeColor: 'bg-blue-50 text-blue-800 border-blue-300',
+      desc: 'Plan d’intervention SST officiel INRS, mannequins, aides visuelles et accessoires de simulation des risques professionnels.',
+      usage: 'Indispensable pour organiser les formations SST et recyclages MAC SST auprès des entreprises.'
+    },
+    {
+      id: 'kit_pedago_pse1',
+      category: 'kits_formation',
+      name: 'Kit Pédagogique PSE1 (Secouriste)',
+      icon: '🎒',
+      price: 1600,
+      unit: 'kit complet',
+      badge: 'Filière Opérationnelle',
+      badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-300',
+      desc: 'Sac d’intervention d’exercice, insufflateurs BAVU, colliers cervicaux, aspirateur de mucosités simulé et oxymètre d’entraînement.',
+      usage: 'Requis pour former et certifier les bénévoles au rôle de Secouriste (PSE1).'
+    },
+    {
+      id: 'kit_pedago_pse2',
+      category: 'kits_formation',
+      name: 'Kit Pédagogique PSE2 (Équipier Secouriste)',
+      icon: '🩼',
+      price: 2200,
+      unit: 'kit complet',
+      badge: 'Traumatologie & VPSP',
+      badgeColor: 'bg-purple-50 text-purple-800 border-purple-300',
+      desc: 'Matelas à dépression d’entraînement avec pompe, plan dur, brancard pliant, attelles de traction et matériel de relevage complexe.',
+      usage: 'Requis pour former les Équipiers Secouristes (PSE2) et organiser le recyclage FC PSE.'
+    },
+    {
+      id: 'kit_pedago_extincteur',
+      category: 'kits_formation',
+      name: 'Kit Manipulation Extincteurs (EPI Incendie)',
+      icon: '🧯',
+      price: 1400,
+      unit: 'kit complet',
+      badge: 'Sécurité Incendie',
+      badgeColor: 'bg-orange-50 text-orange-800 border-orange-300',
+      desc: 'Générateur de flammes à gaz écologique (bac à feu), extincteurs rechargeables à eau pulvérisée et CO2, couvertures anti-feu.',
+      usage: 'Obligatoire pour animer les formations pratiques de Manipulation Extincteurs en entreprise et ERP.'
+    },
+    {
+      id: 'kit_pedago_picf',
+      category: 'kits_formation',
+      name: 'Kit Pédagogique PIC F (Pédagogie de Formateur)',
+      icon: '📋',
+      price: 850,
+      unit: 'kit complet',
+      badge: 'Filière Cadres Formateurs',
+      badgeColor: 'bg-teal-50 text-teal-800 border-teal-300',
+      desc: 'Supports didactiques officiels, paperboard portable de formation, vidéoprojecteur nomade et jeux de cartes de dynamique de groupe.',
+      usage: 'Nécessaire pour animer le stage initial PIC F (Pédagogie Initiale et Commune de Formateur).'
+    },
+    {
+      id: 'kit_pedago_ssa',
+      category: 'kits_formation',
+      name: 'Kit Pédagogique SSA (Sauvetage Aquatique)',
+      icon: '🏊',
+      price: 1300,
+      unit: 'kit complet',
+      badge: 'Spécialité Aquatique',
+      badgeColor: 'bg-cyan-50 text-cyan-800 border-cyan-300',
+      desc: 'Mannequins d’immersion lestés, bouées tubes de sauvetage, filins de jet, palmes d’entraînement et matériel de flottabilité.',
+      usage: 'Matériel requis pour les entraînements et certifications de Surveillance et Sauvetage Aquatique (SSA).'
     }
   ],
 
