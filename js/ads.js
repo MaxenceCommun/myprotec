@@ -1,5 +1,8 @@
 // js/ads.js - Système de Mécénat Vidéo & Publicités Récompensées
 window.ProtecAds = {
+  // MODULE DE PUBLICITÉS DÉSACTIVÉ (Passer à true ou appeler enableAds() pour réactiver)
+  enabled: false,
+
   maxAds: 5,
   rewardAmount: 500, // 500 € virtuels par visionnage
   cooldownPeriodMs: 2 * 60 * 60 * 1000, // 2 heures pour recharger le pack complet de 5 pubs (ou 24 min par pub)
@@ -9,6 +12,54 @@ window.ProtecAds = {
   isPlaying: false,
   timerInterval: null,
   currentRemainingSeconds: 15,
+
+  // Méthodes d'activation / désactivation propres
+  enableAds(game = null) {
+    this.enabled = true;
+    this.showAllAdElements();
+    this.init(game || window.game);
+  },
+
+  disableAds() {
+    this.enabled = false;
+    this.hideAllAdElements();
+  },
+
+  hideAllAdElements() {
+    if (typeof document === 'undefined') return;
+    const ids = ['ad-reward-widget', 'ad-reward-separator', 'ad-btn-mobile', 'ad-modal'];
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.add('hidden');
+        el.style.display = 'none';
+      }
+    });
+    const mobileBtn = document.getElementById('ad-btn-mobile') || document.getElementById('ad-count-badge-mobile')?.closest?.('button');
+    if (mobileBtn) {
+      mobileBtn.classList.add('hidden');
+      mobileBtn.style.display = 'none';
+    }
+  },
+
+  showAllAdElements() {
+    if (typeof document === 'undefined') return;
+    const widget = document.getElementById('ad-reward-widget');
+    if (widget) {
+      widget.classList.remove('hidden');
+      widget.style.display = '';
+    }
+    const separator = document.getElementById('ad-reward-separator');
+    if (separator) {
+      separator.classList.remove('hidden');
+      separator.style.display = '';
+    }
+    const mobileBtn = document.getElementById('ad-btn-mobile') || document.getElementById('ad-count-badge-mobile')?.closest?.('button');
+    if (mobileBtn) {
+      mobileBtn.classList.remove('hidden');
+      mobileBtn.style.display = '';
+    }
+  },
 
   // Liste de spots publicitaires immersifs et réalistes
   adSpots: [
@@ -65,6 +116,11 @@ window.ProtecAds = {
   ],
 
   init(game) {
+    if (!this.enabled) {
+      this.hideAllAdElements();
+      return;
+    }
+
     // Initialise l'état des pubs dans l'objet jeu
     if (!game.adRewards) {
       game.adRewards = {
@@ -78,6 +134,7 @@ window.ProtecAds = {
 
     // Mettre à jour l'affichage régulièrement (pour le compte à rebours)
     setInterval(() => {
+      if (!this.enabled) return;
       this.checkRegen(game);
       this.updateUI(game);
     }, 1000);
@@ -113,6 +170,11 @@ window.ProtecAds = {
   },
 
   updateUI(game) {
+    if (!this.enabled) {
+      this.hideAllAdElements();
+      return;
+    }
+
     const badgeCount = document.getElementById('ad-count-badge');
     const timerText = document.getElementById('ad-timer-text');
     const widgetBtn = document.getElementById('ad-reward-widget');
@@ -162,6 +224,9 @@ window.ProtecAds = {
   },
 
   openAdModal(game) {
+    if (!this.enabled) {
+      return;
+    }
     this.checkRegen(game);
     const modal = document.getElementById('ad-modal');
     if (!modal) return;
@@ -364,3 +429,13 @@ window.ProtecAds = {
     this.closeAdModal();
   }
 };
+
+// Exécution immédiate au chargement du script pour garantir le masquage
+if (typeof window !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => window.ProtecAds?.hideAllAdElements());
+  } else {
+    window.ProtecAds?.hideAllAdElements();
+  }
+}
+

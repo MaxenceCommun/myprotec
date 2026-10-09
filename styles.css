@@ -57,6 +57,13 @@ html, body {
   box-shadow: 0 20px 48px -12px rgba(0, 46, 109, 0.2), 0 0 0 1px rgba(15, 23, 42, 0.08) !important;
 }
 
+/* Désactivation stricte du module de publicité pour les joueurs */
+#ad-reward-widget, #ad-reward-separator, #ad-btn-mobile, #ad-modal {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .glass-card {
   background: #ffffff !important;
   backdrop-filter: blur(14px) saturate(160%) !important;

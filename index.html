@@ -183,10 +183,10 @@
           <span id="badge-rewards-dot" class="hidden w-2 h-2 rounded-full bg-rose-500 absolute -top-0.5 -right-0.5 animate-ping"></span>
         </div>
 
-        <div class="h-6 w-px bg-slate-200/80 flex-shrink-0"></div>
+        <!-- Publicité Récompensée Partenaire (Désactivée temporairement) -->
+        <div id="ad-reward-separator" class="hidden h-6 w-px bg-slate-200/80 flex-shrink-0" style="display: none !important;"></div>
 
-        <!-- Publicité Récompensée Partenaire (Visionnage récompensé optionnel) -->
-        <div id="ad-reward-widget" class="flex items-center gap-2 cursor-pointer group relative flex-shrink-0" onclick="window.ProtecAds.openAdModal(window.game)" title="Annonce récompensée (+500 € virtuels)">
+        <div id="ad-reward-widget" class="hidden items-center gap-2 cursor-pointer group relative flex-shrink-0" onclick="window.ProtecAds?.openAdModal(window.game)" title="Annonce récompensée (+500 € virtuels)" style="display: none !important;">
           <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-100 transition">
             <i data-lucide="tv" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
           </div>
@@ -327,7 +327,8 @@
       </button>
 
       <!-- Raccourcis utiles sur mobile avec icônes SVG propres -->
-      <button onclick="window.ProtecAds.openAdModal(window.game)" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-700 items-center gap-1 flex-shrink-0" title="Publicité (+500 €)">
+      <!-- Bouton Publicité mobile (Désactivé temporairement) -->
+      <button id="ad-btn-mobile" onclick="window.ProtecAds?.openAdModal(window.game)" class="hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-700 items-center gap-1 flex-shrink-0" title="Publicité (+500 €)" style="display: none !important;">
         <i data-lucide="tv" class="w-3.5 h-3.5 text-amber-600"></i>
         <span>Pub</span>
         <span id="ad-count-badge-mobile" class="text-[9px] font-black bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded">5/5</span>

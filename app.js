@@ -1961,6 +1961,39 @@ class ProtecGame {
     this.openModule('planning', true);
   }
 
+  changePlanningMonth(delta) {
+    if (this.calendarViewingMonth === undefined || this.calendarViewingMonth === null) {
+      this.calendarViewingMonth = this.clock.month;
+      this.calendarViewingYear = this.clock.year;
+    }
+    this.calendarViewingMonth += delta;
+    if (this.calendarViewingMonth > 11) {
+      this.calendarViewingMonth = 0;
+      this.calendarViewingYear = (this.calendarViewingYear || this.clock.year) + 1;
+    } else if (this.calendarViewingMonth < 0) {
+      this.calendarViewingMonth = 11;
+      this.calendarViewingYear = (this.calendarViewingYear || this.clock.year) - 1;
+    }
+
+    const daysInNewMonth = new Date(this.calendarViewingYear, this.calendarViewingMonth + 1, 0).getDate();
+    const isCurrent = (this.calendarViewingMonth === this.clock.month && this.calendarViewingYear === this.clock.year);
+    if (isCurrent) {
+      this.selectedPlanningDay = this.clock.day || 1;
+    } else {
+      if (!this.selectedPlanningDay || this.selectedPlanningDay > daysInNewMonth) {
+        this.selectedPlanningDay = 1;
+      }
+    }
+    this.openModule('planning', true);
+  }
+
+  resetPlanningMonthToCurrent() {
+    this.calendarViewingMonth = this.clock.month;
+    this.calendarViewingYear = this.clock.year;
+    this.selectedPlanningDay = this.clock.day || 1;
+    this.openModule('planning', true);
+  }
+
   calculateDynamicBareme(devis) {
     const ratePerHour = 18;
     const vols = devis.configuredVolunteers || devis.requiredVolunteers || 4;
@@ -6783,17 +6816,25 @@ class ProtecGame {
       const pendingAndPrevDevis = (this.devis || []).filter(d => ['pending', 'previsionnel', 'sent'].includes(d.status));
       
       const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-      const curMonthName = monthNames[this.clock.month] || 'Mois';
-      const curYear = this.clock.year || 2026;
-      const todayDay = this.clock.day || 1;
-      const selectedDay = this.selectedPlanningDay || todayDay;
+      if (this.calendarViewingMonth === undefined || this.calendarViewingMonth === null) {
+        this.calendarViewingMonth = this.clock.month;
+        this.calendarViewingYear = this.clock.year;
+      }
+      const curViewingMonth = this.calendarViewingMonth;
+      const curViewingYear = this.calendarViewingYear || this.clock.year || 2026;
+      const curMonthName = monthNames[curViewingMonth] || 'Mois';
+      const curYear = curViewingYear;
+
+      const isViewingCurrentMonth = (curViewingMonth === this.clock.month && curYear === this.clock.year);
+      const todayDay = isViewingCurrentMonth ? (this.clock.day || 1) : null;
+      const selectedDay = this.selectedPlanningDay || (isViewingCurrentMonth ? (this.clock.day || 1) : 1);
 
       // Calcul du calendrier mensuel
-      const daysInMonth = new Date(curYear, this.clock.month + 1, 0).getDate();
-      const firstDayIndex = (new Date(curYear, this.clock.month, 1).getDay() + 6) % 7; // 0 = Lundi, 6 = Dimanche
+      const daysInMonth = new Date(curYear, curViewingMonth + 1, 0).getDate();
+      const firstDayIndex = (new Date(curYear, curViewingMonth, 1).getDay() + 6) % 7; // 0 = Lundi, 6 = Dimanche
 
-      const selectedDayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === selectedDay && m.eventDate.month === this.clock.month);
-      const selectedDayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === selectedDay && d.eventDate.month === this.clock.month);
+      const selectedDayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === selectedDay && m.eventDate.month === curViewingMonth && (m.eventDate.year == null || m.eventDate.year === curYear));
+      const selectedDayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === selectedDay && d.eventDate.month === curViewingMonth && (d.eventDate.year == null || d.eventDate.year === curYear));
 
       body.innerHTML = `
         <div class="space-y-5">
@@ -6831,12 +6872,47 @@ class ProtecGame {
           ${currentTab === 'calendar' ? `
             <!-- VUE CALENDRIER -->
             <div class="space-y-4">
-              <div class="flex items-center justify-between px-1">
-                <div>
-                  <h4 class="text-base font-extrabold text-slate-900">${curMonthName} ${curYear}</h4>
-                  <p class="text-[11px] text-slate-500">Sélectionnez un jour pour consulter ou gérer les dispositifs programmés et options prévisionnelles</p>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+                <div class="flex flex-wrap items-center gap-2.5">
+                  <!-- Navigation Mois : ◀ Précédent / Mois Année / Suivant ▶ -->
+                  <div class="flex items-center bg-white border border-slate-200/90 rounded-2xl p-1 shadow-xs">
+                    <button 
+                      onclick="window.game.changePlanningMonth(-1)" 
+                      class="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer"
+                      title="Mois précédent"
+                    >
+                      <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    </button>
+                    <div class="px-3 py-0.5 text-center min-w-[130px]">
+                      <span class="text-sm font-black text-slate-900 block leading-tight">${curMonthName} ${curYear}</span>
+                      ${!isViewingCurrentMonth ? `
+                        <span class="text-[9px] font-bold text-amber-600 uppercase tracking-wider block">Mois décalé</span>
+                      ` : `
+                        <span class="text-[9px] font-bold text-emerald-600 uppercase tracking-wider block">Mois en cours</span>
+                      `}
+                    </div>
+                    <button 
+                      onclick="window.game.changePlanningMonth(1)" 
+                      class="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer"
+                      title="Mois suivant"
+                    >
+                      <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+
+                  ${!isViewingCurrentMonth ? `
+                    <button 
+                      onclick="window.game.resetPlanningMonthToCurrent()" 
+                      class="px-3 py-1.5 rounded-xl text-xs font-black bg-pc-blue text-white hover:brightness-110 active:scale-95 transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      title="Revenir au mois en cours"
+                    >
+                      <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                      <span>Mois en cours</span>
+                    </button>
+                  ` : ''}
                 </div>
-                <div class="flex items-center gap-3 text-[11px] text-slate-600">
+
+                <div class="flex flex-wrap items-center gap-2.5 text-[11px] text-slate-600">
                   <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-pc-blue"></span> DPS Validé</span>
                   <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> ⏳ Prévisionnel</span>
                   <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span> 📋 Devis Reçu</span>
@@ -6865,11 +6941,11 @@ class ProtecGame {
                     const day = i + 1;
                     const isToday = day === todayDay;
                     const isSelected = day === selectedDay;
-                    const dayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === day && m.eventDate.month === this.clock.month);
+                    const dayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === day && m.eventDate.month === curViewingMonth && (m.eventDate.year == null || m.eventDate.year === curYear));
                     const dpsCount = dayMissions.filter(m => m.type === 'dps').length;
                     const otherCount = dayMissions.filter(m => m.type !== 'dps').length;
 
-                    const dayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === day && d.eventDate.month === this.clock.month);
+                    const dayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === day && d.eventDate.month === curViewingMonth && (d.eventDate.year == null || d.eventDate.year === curYear));
                     const prevCount = dayDevis.filter(d => d.status === 'previsionnel').length;
                     const pendingCount = dayDevis.filter(d => d.status === 'pending' || d.status === 'sent').length;
 
@@ -6925,7 +7001,7 @@ class ProtecGame {
                         <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue"></i>
                         Planning du ${selectedDay} ${curMonthName} ${curYear}
                       </h4>
-                      ${selectedDay === todayDay ? `<span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">Aujourd'hui sur la carte</span>` : ''}
+                      ${isViewingCurrentMonth && selectedDay === todayDay ? `<span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">Aujourd'hui sur la carte</span>` : ''}
                     </div>
                     <span class="text-[11px] font-bold text-slate-500 text-right">${selectedDayMissions.length} mission(s)<br/>${selectedDayDevis.length} devis/option(s)</span>
                   </div>
