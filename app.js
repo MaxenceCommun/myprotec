@@ -6445,6 +6445,17 @@ class ProtecGame {
 
     modal.classList.remove('hidden');
 
+    const modalDialog = modal.querySelector('.glass-panel-heavy');
+    if (modalDialog) {
+      if (moduleKey === 'planning') {
+        modalDialog.classList.remove('max-w-4xl');
+        modalDialog.classList.add('max-w-6xl', 'xl:max-w-7xl');
+      } else {
+        modalDialog.classList.remove('max-w-6xl', 'xl:max-w-7xl');
+        modalDialog.classList.add('max-w-4xl');
+      }
+    }
+
     if (moduleKey === 'ecussons') {
       title.textContent = "Collection & Troc d'Écussons";
       subtitle.textContent = "Tableau en liège d'antenne et bourse aux échanges inter-antennes en ligne";
@@ -6833,8 +6844,10 @@ class ProtecGame {
                 </div>
               </div>
 
-              <!-- Grille du calendrier -->
-              <div class="glass-card rounded-2xl p-4 shadow-sm">
+              <!-- Grille principale : Calendrier à gauche (lg:col-span-7) + Détails journée à droite (lg:col-span-5) -->
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                <!-- Grille du calendrier -->
+                <div class="lg:col-span-7 xl:col-span-7 glass-card rounded-2xl p-3.5 sm:p-4 shadow-sm">
                 <!-- En-têtes des jours de la semaine -->
                 <div class="grid grid-cols-7 gap-1 text-center text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
                   <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
@@ -6904,16 +6917,18 @@ class ProtecGame {
                 </div>
               </div>
 
-              <!-- Détail de la journée sélectionnée -->
-              <div class="p-4 rounded-2xl glass-card space-y-4">
-                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <h4 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                    <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue"></i>
-                    Planning du ${selectedDay} ${curMonthName} ${curYear}
-                    ${selectedDay === todayDay ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">Aujourd'hui sur la carte</span>` : ''}
-                  </h4>
-                  <span class="text-xs font-bold text-slate-500">${selectedDayMissions.length} mission(s) • ${selectedDayDevis.length} devis/option(s)</span>
-                </div>
+                <!-- Colonne Droite : Détail de la journée sélectionnée -->
+                <div class="lg:col-span-5 xl:col-span-5 p-4 rounded-2xl glass-card space-y-4 shadow-sm lg:sticky lg:top-2 max-h-[75vh] overflow-y-auto">
+                  <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div>
+                      <h4 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                        <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue"></i>
+                        Planning du ${selectedDay} ${curMonthName} ${curYear}
+                      </h4>
+                      ${selectedDay === todayDay ? `<span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">Aujourd'hui sur la carte</span>` : ''}
+                    </div>
+                    <span class="text-[11px] font-bold text-slate-500 text-right">${selectedDayMissions.length} mission(s)<br/>${selectedDayDevis.length} devis/option(s)</span>
+                  </div>
 
                 ${(selectedDayMissions.length === 0 && selectedDayDevis.length === 0) ? `
                   <p class="text-xs text-slate-500 py-6 text-center italic">
@@ -6928,7 +6943,7 @@ class ProtecGame {
                           <i data-lucide="clipboard-list" class="w-3.5 h-3.5 text-amber-600"></i>
                           <span>Devis & Options Prévisionnelles pour cette date (${selectedDayDevis.length})</span>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="flex flex-col space-y-3">
                           ${selectedDayDevis.map(d => {
                             const isPrev = d.status === 'previsionnel';
                             const isSent = d.status === 'sent';
@@ -7016,7 +7031,7 @@ class ProtecGame {
                           <i data-lucide="shield-check" class="w-3.5 h-3.5 text-pc-blue"></i>
                           <span>Dispositifs Confirmés & Validés (${selectedDayMissions.length})</span>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="flex flex-col space-y-3">
                           ${selectedDayMissions.map(m => {
                             const regCount = m.registeredVolunteers?.length || 0;
                             const isFull = regCount >= m.requiredVolunteers;
@@ -7065,7 +7080,8 @@ class ProtecGame {
                 `}
               </div>
             </div>
-          ` : `
+          </div>
+        ` : `
             <!-- VUE LISTE CHRONOLOGIQUE -->
             <div class="space-y-4">
               <div class="p-4 rounded-2xl glass-card-blue flex items-center justify-between text-xs text-pc-blue">
@@ -9580,7 +9596,14 @@ class ProtecGame {
 
   closeModal() {
     const modal = document.getElementById('main-modal');
-    if (modal) modal.classList.add('hidden');
+    if (modal) {
+      modal.classList.add('hidden');
+      const modalDialog = modal.querySelector('.glass-panel-heavy');
+      if (modalDialog) {
+        modalDialog.classList.remove('max-w-6xl', 'xl:max-w-7xl');
+        modalDialog.classList.add('max-w-4xl');
+      }
+    }
     const subnav = document.getElementById('modal-category-subnav');
     if (subnav) subnav.classList.add('hidden');
     this.modalHistory = [];
