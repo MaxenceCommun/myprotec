@@ -205,6 +205,22 @@ window.ProtecAdvancedModals = {
   // --- 3. COMMANDE DE VÉHICULES SPÉCIALISÉS ---
   vehicleFilter: 'all',
   vehicleSort: 'price_asc',
+  vehicleSearch: '',
+
+  setVehicleSearch(searchKey, stationId) {
+    this.vehicleSearch = searchKey;
+    if (window.game) {
+      const body = document.getElementById('modal-body');
+      if (body) {
+        body.innerHTML = this.renderVehicleShop(window.game, stationId);
+        const input = document.getElementById('vehicle-search-input');
+        if (input) {
+          input.focus();
+          input.setSelectionRange(input.value.length, input.value.length);
+        }
+      }
+    }
+  },
 
   setVehicleFilter(filterKey, stationId) {
     this.vehicleFilter = filterKey;
@@ -230,8 +246,21 @@ window.ProtecAdvancedModals = {
 
     const activeFilter = this.vehicleFilter || 'all';
     const activeSort = this.vehicleSort || 'price_asc';
+    const activeSearch = (this.vehicleSearch || '').toLowerCase().trim();
 
     let list = [...(window.ProtecAdvanced.vehicleCatalog || [])];
+
+    // 0. Recherche textuelle par nom, type, spécialité, catégorie ou description
+    if (activeSearch) {
+      list = list.filter(v => {
+        const name = (v.name || '').toLowerCase();
+        const type = (v.type || '').toLowerCase();
+        const spec = (v.specialty || '').toLowerCase();
+        const cat = (v.category || '').toLowerCase();
+        const desc = (v.desc || '').toLowerCase();
+        return name.includes(activeSearch) || type.includes(activeSearch) || spec.includes(activeSearch) || cat.includes(activeSearch) || desc.includes(activeSearch);
+      });
+    }
 
     // 1. Filtrage par type de mission / véhicule
     if (activeFilter !== 'all') {
@@ -269,6 +298,21 @@ window.ProtecAdvancedModals = {
           <div class="flex items-center gap-3">
             <span class="font-bold text-slate-600">Trésorerie disponible : <strong class="text-pc-blue font-mono text-sm">${game.resources.money.toLocaleString('fr-FR')} €</strong></span>
           </div>
+        </div>
+
+        <!-- Barre de Recherche Véhicules -->
+        <div class="relative">
+          <input 
+            type="text" 
+            id="vehicle-search-input"
+            value="${this.vehicleSearch || ''}" 
+            oninput="window.ProtecAdvancedModals.setVehicleSearch(this.value, '${st?.id}')" 
+            placeholder="🔍 Rechercher un véhicule (ex: VPSP, VTU, VL, Master, Bateau, Quad, Équipage...)" 
+            class="w-full pl-4 pr-10 py-2.5 rounded-2xl bg-white border border-slate-300 shadow-sm font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
+          />
+          ${this.vehicleSearch ? `
+            <button onclick="window.ProtecAdvancedModals.setVehicleSearch('', '${st?.id}')" class="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
+          ` : ''}
         </div>
 
         <!-- Barre de Filtres par Type de Mission & Tri par Prix -->

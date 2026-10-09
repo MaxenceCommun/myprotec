@@ -706,7 +706,18 @@ window.ProtecFormations = {
       return true;
     });
 
-    const activeSessions = (game.sessionsFormation || []).filter(s => s.status !== 'completed');
+    const fsq = (this.sessionSearchQuery || '').toLowerCase().trim();
+    const activeSessions = (game.sessionsFormation || []).filter(s => {
+      if (s.status === 'completed') return false;
+      if (!fsq) return true;
+      const trainer = game.volunteers.find(v => v.id === s.trainerId);
+      const registeredVols = (s.registeredCandidates || []).map(vid => {
+        const v = game.volunteers.find(vol => vol.id === vid);
+        return v ? v.name : '';
+      }).join(' ');
+      const str = `${s.title} ${s.courseId} ${s.targetAudience} ${s.locationLabel || ''} ${trainer ? trainer.name : ''} ${registeredVols}`.toLowerCase();
+      return str.includes(fsq);
+    });
 
     body.innerHTML = `
       <div class="space-y-6">
@@ -863,9 +874,24 @@ window.ProtecFormations = {
 
         <!-- Section 3 : Sessions au Calendrier -->
         <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <h4 class="text-xs font-black uppercase text-slate-800">Sessions Ouvertes (${activeSessions.length})</h4>
-            <span class="text-[10px] text-slate-400">Affectation du formateur et gestion des candidats</span>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h4 class="text-xs font-black uppercase text-slate-800">Sessions Ouvertes (${activeSessions.length})</h4>
+              <span class="text-[10px] text-slate-400">Affectation du formateur et gestion des candidats</span>
+            </div>
+            <div class="relative w-full sm:w-64">
+              <input 
+                type="text" 
+                id="formation-search-input" 
+                value="${this.sessionSearchQuery || ''}" 
+                placeholder="🔍 Rechercher une session..." 
+                oninput="window.ProtecFormations.setSessionSearch(this.value, window.game)" 
+                class="w-full pl-3 pr-8 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
+              />
+              ${this.sessionSearchQuery ? `
+                <button onclick="window.ProtecFormations.setSessionSearch('', window.game)" class="absolute right-2.5 top-1.5 text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
+              ` : ''}
+            </div>
           </div>
 
           ${activeSessions.length === 0 ? `
@@ -1010,6 +1036,20 @@ window.ProtecFormations = {
     `;
 
     if (window.lucide) window.lucide.createIcons();
+  },
+
+  sessionSearchQuery: '',
+
+  setSessionSearch(query, game) {
+    this.sessionSearchQuery = query;
+    if (game) {
+      this.renderModal(game);
+      const input = document.getElementById('formation-search-input');
+      if (input) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    }
   },
 
   setTrainerFilter(f) {

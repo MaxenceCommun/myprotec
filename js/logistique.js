@@ -664,6 +664,11 @@ window.ProtecLogistique = {
   setSearch(val) {
     this.searchQuery = (val || '').toLowerCase().trim();
     this.renderModal(window.game);
+    const input = document.getElementById('logistique-search-input');
+    if (input) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
   },
 
   // =========================================================================
@@ -789,7 +794,7 @@ window.ProtecLogistique = {
 
           <!-- Recherche rapide -->
           <div class="relative w-full sm:w-64">
-            <input type="text" value="${this.searchQuery}" oninput="window.ProtecLogistique.setSearch(this.value)" placeholder="Rechercher du matériel..." class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-pc-blue" />
+            <input type="text" id="logistique-search-input" value="${this.searchQuery}" oninput="window.ProtecLogistique.setSearch(this.value)" placeholder="Rechercher du matériel..." class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-pc-blue" />
             <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
           </div>
         </div>

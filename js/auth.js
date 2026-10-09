@@ -235,6 +235,26 @@ window.ProtecAuth = {
           <!-- Collection d'Écussons Commémoratifs & Rareté -->
           ${window.ProtecMultiplayer ? window.ProtecMultiplayer.renderBadgesCollectionHTML(window.game) : ''}
 
+          <!-- Initiative d'Événement Fédéral Exceptionnel -->
+          <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 border border-indigo-500/30 text-white shadow-lg space-y-2.5">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-xl bg-amber-400 text-slate-900 flex items-center justify-center font-black shadow-sm">
+                <i data-lucide="crown" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h5 class="text-xs font-black text-amber-200 uppercase tracking-wide">Initiative Fédérale Exceptionnelle</h5>
+                <p class="text-[10px] text-slate-300">Organisation de Grand Rassemblement & DPS National</p>
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-relaxed">
+              En tant que Directeur d'Antenne, vous pouvez soumettre un dossier à caractère exceptionnel pour créer un événement public d'envergure nationale ou inter-départementale doté d'un écusson officiel. Tout dossier est rigoureusement audité et validé par l'administration fédérale avant déploiement.
+            </p>
+            <button onclick="window.ProtecAuth.closeAuthModal(); window.ProtecMultiplayer.openCreateCommunityEventModal(window.game);" class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+              <i data-lucide="sparkles" class="w-4 h-4 text-slate-950"></i>
+              Proposer un Événement Fédéral (Dossier Exceptionnel)
+            </button>
+          </div>
+
           <div class="pt-2">
             <button onclick="window.ProtecAuth.logout(window.game)" class="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition flex items-center justify-center gap-1.5 border border-rose-200/60">
               <i data-lucide="log-out" class="w-4 h-4"></i>

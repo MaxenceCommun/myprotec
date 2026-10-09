@@ -582,6 +582,7 @@ class ProtecGame {
       this.markers.allianceStations = {};
     }
     this.renderStations();
+    this.ensureMissionAddresses();
     this.disperseOverlappingMissions();
     this.renderMissions();
     this.updateStatsUI();
@@ -997,6 +998,10 @@ class ProtecGame {
 
       const marker = L.marker([mission.lat, mission.lng], { icon }).addTo(this.map);
       marker.on('click', () => this.openMissionDetails(mission.id));
+      const tooltipText = (mission.type === 'social' || mission.isSector)
+        ? `<b>${mission.title}</b><br/><span style="color:#7c3aed;">🗺️ ${mission.sector || mission.address || 'Secteur de Maraude'}</span>`
+        : `<b>${mission.title}</b><br/><span>📍 ${mission.address || 'Point cartographique'}</span>`;
+      marker.bindTooltip(tooltipText, { direction: 'top', offset: [0, -15] });
       this.markers.missions[mission.id] = marker;
     });
 
@@ -1408,9 +1413,38 @@ class ProtecGame {
     return bestCoord;
   }
 
-  // Enrichissement automatique du nom de la commune hôte par reverse-géocodage
+  // Générateur d'adresse réaliste par défaut pour chaque mission
+  generateRealisticStreetAddress(city = 'Paris', lat = null, lng = null) {
+    const thoroughfares = [
+      'Rue de la République', 'Avenue Jean Jaurès', 'Boulevard Victor Hugo', 'Rue Pasteur',
+      'Rue Nationale', 'Boulevard Gambetta', 'Place de la Mairie', 'Rue des Fleurs',
+      'Avenue de la Gare', 'Rue Saint-Jean', 'Boulevard de la Liberté', 'Rue des Écoles',
+      'Avenue du Général de Gaulle', 'Quai de la Marne', 'Rue de la Paix', 'Place du Marché',
+      'Rue du Moulin', 'Boulevard Maréchal Foch', 'Allée du Parc', 'Esplanade des Droits de l’Homme'
+    ];
+    let seed = 0;
+    if (lat && lng) seed = Math.abs(Math.round((lat + lng) * 1000));
+    const num = (seed % 140) + 1 || Math.floor(Math.random() * 140) + 1;
+    const street = thoroughfares[(seed % thoroughfares.length) || Math.floor(Math.random() * thoroughfares.length)];
+    return `${num} ${street}, ${city}`;
+  }
+
+  // Enrichissement automatique du nom de la commune hôte et adresse par reverse-géocodage
   enrichMissionLocationWithCity(item) {
-    if (!item || !item.lat || !item.lng) return;
+    if (!item) return;
+    const isMaraude = item.type === 'social' || item.category === 'Social' || (item.title && item.title.toLowerCase().includes('maraude'));
+    if (isMaraude) {
+      item.isSector = true;
+      if (!item.sector) {
+        item.sector = item.commune ? `Secteur : Quartiers & Gares (${item.commune})` : 'Secteur Urbain & Maraude';
+      }
+      item.address = item.sector;
+    } else if (!item.address && (item.lat || item.lng)) {
+      item.address = this.generateRealisticStreetAddress(item.commune || this.stations[0]?.city || 'Paris', item.lat, item.lng);
+    }
+
+    if (!item.lat || !item.lng) return;
+
     try {
       fetch(`https://api-adresse.data.gouv.fr/reverse/?lon=${item.lng}&lat=${item.lat}`)
         .then(res => res.json())
@@ -1424,10 +1458,43 @@ class ProtecGame {
                 item.eventLocationDetail = `Lieu : ${city} (${item.commune})`;
               }
             }
+            if (isMaraude) {
+              item.isSector = true;
+              item.sector = `Secteur Maraude : Quartiers Centre & Gares (${city || 'Agglomération'})`;
+              item.address = item.sector;
+            } else if (props.label) {
+              item.address = props.label;
+              item.postcode = props.postcode;
+              item.street = props.name || props.street;
+            }
           }
         })
         .catch(() => {});
     } catch (e) {}
+  }
+
+  // Garantie que chaque mission en cours ou planifiée a une adresse (hors maraudes qui opèrent par secteur)
+  ensureMissionAddresses() {
+    const cityName = this.stations[0]?.city || 'Paris';
+    const allItems = [...(this.missions || []), ...(this.devis || [])];
+    allItems.forEach(item => {
+      const isMaraude = item.type === 'social' || item.category === 'Social' || (item.title && item.title.toLowerCase().includes('maraude'));
+      if (isMaraude) {
+        item.isSector = true;
+        if (!item.sector) {
+          item.sector = item.commune ? `Secteur : Quartiers & Gares (${item.commune})` : 'Secteur Urbain & Maraude';
+        }
+        item.address = item.sector;
+      } else {
+        item.isSector = false;
+        if (!item.address) {
+          item.address = this.generateRealisticStreetAddress(item.commune || cityName, item.lat, item.lng);
+        }
+      }
+      if (item.lat && item.lng) {
+        this.enrichMissionLocationWithCity(item);
+      }
+    });
   }
 
   // Dispersion des missions existantes si elles sont trop agglutinées dans un rayon étroit
@@ -1485,7 +1552,9 @@ class ProtecGame {
       requiredVolunteers: 2,
       requiredRanks: ['PSE2', 'PSE1'],
       requiredVehicles: [],
-      status: 'pending'
+      status: 'pending',
+      address: this.generateRealisticStreetAddress('Bourg', coords.lat, coords.lng),
+      isSector: false
     };
 
     d.bareme = this.calculateBareme(d);
@@ -1605,11 +1674,14 @@ class ProtecGame {
       hiddenRequiredSkills: pick.hiddenSkills || pick.ranks || [],
       consumableCost: pick.matCost || 30,
       status: 'pending',
-      secondsLeft: 6 * 3600 // 6 heures pour répondre avant expiration face aux autres associations
+      secondsLeft: 6 * 3600, // 6 heures pour répondre avant expiration face aux autres associations
+      address: this.generateRealisticStreetAddress(base?.city || 'Paris', missionCoords.lat, missionCoords.lng),
+      isSector: false
     };
 
     d.bareme = this.calculateBareme(d);
     d.proposedPrice = d.bareme.totalBareme;
+    this.enrichMissionLocationWithCity(d);
 
     this.devis.push(d);
     this.updateStatsUI();
@@ -1915,11 +1987,12 @@ class ProtecGame {
       progress: 0,
       status: 'planifie',
       registeredVolunteers: [],
-      assignedCrew: { volunteers: [], vehicles: [] }
+      assignedCrew: { volunteers: [], vehicles: [] },
+      address: devis.address || devis.locationAddress || this.generateRealisticStreetAddress(devis.commune || 'Ville', devis.lat, devis.lng),
+      isSector: false
     };
 
-    this.missions.push(newMission);
-    this.renderMissions();
+    this.enrichMissionLocationWithCity(newMission);
     this.missions.push(newMission);
     this.renderMissions();
     this.updateStatsUI();
@@ -2439,7 +2512,9 @@ class ProtecGame {
       prealertTotalSec: 60,
       evolutionResolved: false,
       registeredVolunteers: [],
-      assignedCrew: { volunteers: [], vehicles: [] }
+      assignedCrew: { volunteers: [], vehicles: [] },
+      address: this.generateRealisticStreetAddress('Gare SNCF', sncfCoords.lat, sncfCoords.lng),
+      isSector: false
     };
 
     this.enrichMissionLocationWithCity(newSncfMission);
@@ -3075,6 +3150,46 @@ class ProtecGame {
     }
   }
 
+  // Filtrage réactif de la liste des bénévoles
+  filterVolunteersList(query) {
+    const q = (query || '').toLowerCase().trim();
+    const cards = document.querySelectorAll('.volunteer-card');
+    let visibleCount = 0;
+    cards.forEach(card => {
+      const text = card.getAttribute('data-search-text') || '';
+      if (!q || text.includes(q)) {
+        card.style.display = '';
+        visibleCount++;
+      } else {
+        card.style.display = 'none';
+      }
+    });
+    const emptyMsg = document.getElementById('volunteer-search-empty-msg');
+    if (emptyMsg) {
+      emptyMsg.style.display = (visibleCount === 0 && q) ? 'block' : 'none';
+    }
+  }
+
+  // Filtrage réactif de la liste des missions du planning
+  filterPlanningList(query) {
+    const q = (query || '').toLowerCase().trim();
+    const cards = document.querySelectorAll('.planning-mission-card');
+    let visibleCount = 0;
+    cards.forEach(card => {
+      const text = card.getAttribute('data-search-text') || '';
+      if (!q || text.includes(q)) {
+        card.style.display = '';
+        visibleCount++;
+      } else {
+        card.style.display = 'none';
+      }
+    });
+    const emptyMsg = document.getElementById('planning-search-empty-msg');
+    if (emptyMsg) {
+      emptyMsg.style.display = (visibleCount === 0 && q) ? 'block' : 'none';
+    }
+  }
+
   // Nettoyage de sécurité pour garantir qu'aucune mention de genre ne persiste dans les noms ou tooltips
   cleanVolunteerName(name) {
     if (!name) return 'Secouriste';
@@ -3665,11 +3780,21 @@ class ProtecGame {
             </span>
           </div>
 
-          <!-- Type d'événement -->
-          <div>
+          <!-- Type d'événement & Adresse / Secteur -->
+          <div class="space-y-1">
             <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Type d'Événement & Intitulé</span>
             <h4 class="text-xs font-black text-slate-900 leading-snug">${mission.title}</h4>
-            <span class="text-[10px] text-slate-500 font-semibold">${mission.locationName || mission.city || 'Secteur d\'intervention territorial'}</span>
+            ${(mission.type === 'social' || mission.isSector) ? `
+              <div class="flex items-center gap-1.5 text-xs text-purple-700 font-bold bg-purple-50 p-2 rounded-xl border border-purple-200">
+                <i data-lucide="map" class="w-3.5 h-3.5 text-purple-600 flex-shrink-0"></i>
+                <span>${mission.sector || mission.address || 'Secteur de Maraude (Itinérance Urbaine)'}</span>
+              </div>
+            ` : `
+              <div class="flex items-center gap-1.5 text-xs text-slate-700 font-bold bg-slate-100 p-2 rounded-xl border border-slate-200">
+                <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
+                <span>Adresse : <strong class="text-slate-900">${mission.address || (mission.lat && mission.lng ? `Point GPS: ${mission.lat.toFixed(4)}, ${mission.lng.toFixed(4)}` : 'Adresse en cours')}</strong></span>
+              </div>
+            `}
           </div>
 
           <!-- Situation terrain -->
@@ -5019,9 +5144,9 @@ class ProtecGame {
               </button>
             </div>
             <div class="flex items-center gap-2">
-              <button onclick="window.ProtecMultiplayer.openCreateCommunityEventModal(window.game)" class="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center gap-1.5 cursor-pointer">
-                <i data-lucide="sparkles" class="w-4 h-4 text-amber-300"></i>
-                + Proposer un Événement
+              <button onclick="window.ProtecAuth.openAuthModal();" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition flex items-center gap-1.5 cursor-pointer" title="Proposer un événement exceptionnel depuis le profil directeur">
+                <i data-lucide="award" class="w-4 h-4 text-amber-500"></i>
+                Événements & Écussons (Profil)
               </button>
               <div class="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -5132,6 +5257,10 @@ class ProtecGame {
                               <span class="text-xs font-bold text-emerald-700 mono-num">+${m.rewardMoney} €</span>
                             </div>
                             <h5 class="text-xs font-extrabold text-slate-900 mt-1">${m.title}</h5>
+                            <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
+                              <i data-lucide="${m.isSector || m.type === 'social' ? 'map' : 'map-pin'}" class="w-3 h-3 ${m.isSector || m.type === 'social' ? 'text-purple-600' : 'text-pc-blue'} flex-shrink-0"></i>
+                              <span>${m.isSector || m.type === 'social' ? (m.sector || m.address || 'Secteur de Maraude') : (m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site'))}</span>
+                            </p>
                             <p class="text-[11px] text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
                           </div>
 
@@ -5173,6 +5302,22 @@ class ProtecGame {
                 </div>
               </div>
 
+              <!-- Barre de Recherche des Dispositifs Planifiés -->
+              <div class="relative">
+                <input 
+                  type="text" 
+                  id="planning-search-input" 
+                  placeholder="🔍 Rechercher un dispositif (ex: nom, adresse, ville, DPS, Maraude, SAMU...)" 
+                  oninput="window.game.filterPlanningList(this.value)"
+                  class="w-full pl-4 pr-10 py-2 rounded-2xl bg-white border border-slate-300 shadow-sm font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
+                />
+                <button type="button" onclick="const inp=document.getElementById('planning-search-input'); if(inp){inp.value=''; window.game.filterPlanningList('');}" class="absolute right-3 top-2 text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
+              </div>
+
+              <div id="planning-search-empty-msg" class="hidden p-6 rounded-2xl glass-card text-center text-xs text-slate-500 italic">
+                Aucun dispositif ne correspond à votre recherche.
+              </div>
+
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 ${allScheduled.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour l’instant. Établissez des devis dans le module Devis pour remplir votre planning.</p>' : ''}
                 ${allScheduled.map(m => {
@@ -5180,9 +5325,10 @@ class ProtecGame {
                   const isFull = regCount >= m.requiredVolunteers;
                   const dateStr = m.eventDate ? this.formatFullDate(m.eventDate) + ' à ' + (m.startHour || m.eventDate.hour || 14) + 'h00' : 'Date à confirmer';
                   const isToday = m.eventDate ? (m.eventDate.day === this.clock.day && m.eventDate.month === this.clock.month) : false;
+                  const searchText = `${m.title || ''} ${m.type || ''} ${m.scale || ''} ${m.address || ''} ${m.sector || ''} ${m.city || ''}`.toLowerCase();
 
                   return `
-                    <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${isToday ? 'border-amber-300 ring-2 ring-amber-200' : 'border-slate-200/80'}">
+                    <div class="planning-mission-card p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${isToday ? 'border-amber-300 ring-2 ring-amber-200' : 'border-slate-200/80'}" data-search-text="${searchText}">
                       <div class="space-y-1.5">
                         <div class="flex items-center justify-between">
                           <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${isToday ? 'bg-amber-500 text-white' : 'bg-pc-blue text-white'}">
@@ -5191,6 +5337,10 @@ class ProtecGame {
                           <span class="text-xs font-bold mono-num text-emerald-600">+${m.rewardMoney} €</span>
                         </div>
                         <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
+                        <p class="text-xs text-slate-700 font-semibold flex items-center gap-1">
+                          <i data-lucide="${m.isSector || m.type === 'social' ? 'map' : 'map-pin'}" class="w-3.5 h-3.5 ${m.isSector || m.type === 'social' ? 'text-purple-600' : 'text-pc-blue'} flex-shrink-0"></i>
+                          <span>${m.isSector || m.type === 'social' ? (m.sector || m.address || 'Secteur de Maraude') : (m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site'))}</span>
+                        </p>
                         <p class="text-xs text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
                       </div>
 
@@ -5343,6 +5493,10 @@ class ProtecGame {
                       <h4 class="text-base font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
                       <p class="text-xs text-slate-500">
                         Date : <strong>${dateStr}</strong> • Durée du poste : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Affluence attendue : <strong class="text-slate-800">${d.publicCount}</strong>
+                      </p>
+                      <p class="text-xs text-slate-700 font-semibold flex items-center gap-1 mt-1">
+                        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
+                        <span>Lieu & Adresse : <strong class="text-slate-900">${d.address || (d.lat && d.lng ? `Point GPS: ${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}` : 'Adresse sur site')}</strong></span>
                       </p>
                     </div>
                     <div class="text-right">
@@ -5858,8 +6012,25 @@ class ProtecGame {
 
             <!-- Liste détaillée des secouristes en activité -->
             <div class="space-y-2 pt-2 border-t border-indigo-100/70">
-              <span class="text-[10px] font-black uppercase text-indigo-900 tracking-wider">Effectif Détaillé de l'Antenne (${this.volunteers.length})</span>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span class="text-[10px] font-black uppercase text-indigo-900 tracking-wider">Effectif Détaillé de l'Antenne (${this.volunteers.length})</span>
+                <div class="relative w-full sm:w-64">
+                  <input 
+                    type="text" 
+                    id="volunteer-search-input" 
+                    placeholder="🔍 Rechercher un bénévole (nom, rôle, PSE1...)" 
+                    oninput="window.game.filterVolunteersList(this.value)"
+                    class="w-full pl-3 pr-8 py-1.5 rounded-xl border border-indigo-200/90 bg-white/95 text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
+                  />
+                  <button type="button" onclick="const inp=document.getElementById('volunteer-search-input'); if(inp){inp.value=''; window.game.filterVolunteersList('');}" class="absolute right-2.5 top-1.5 text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
+                </div>
+              </div>
+
+              <div id="volunteer-search-empty-msg" class="hidden p-4 rounded-xl glass-card text-center text-xs text-slate-500 italic">
+                Aucun secouriste ne correspond à cette recherche.
+              </div>
+
+              <div id="volunteers-cards-container" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
                 ${this.volunteers.map(v => {
                   const energy = v.energy !== undefined ? v.energy : 85;
                   const motivation = v.motivation !== undefined ? v.motivation : 80;
@@ -5867,9 +6038,10 @@ class ProtecGame {
                   const humeur = window.ProtecPersonnel ? window.ProtecPersonnel.getHumeurLabel(humeurScore) : { label: 'Neutre', icon: '🙂' };
                   const contractLabel = v.contractType === 'salarie' ? 'Salarié Permanent' : (v.contractType === 'service_civique' ? 'Service Civique' : 'Bénévole');
                   const trait = window.ProtecPersonnel?.traits[v.trait] || { name: 'Secouriste standard' };
+                  const searchText = `${v.name} ${v.rank || ''} ${v.role || ''} ${contractLabel} ${v.dispoType || ''} ${trait.name || ''} ${(v.skills || []).join(' ')}`.toLowerCase();
 
                   return `
-                    <div class="p-3 rounded-2xl glass-card text-xs space-y-2 ${v.isBurnout ? 'border-2 border-red-400 bg-red-50/40' : ''}">
+                    <div class="volunteer-card p-3 rounded-2xl glass-card text-xs space-y-2 ${v.isBurnout ? 'border-2 border-red-400 bg-red-50/40' : ''}" data-search-text="${searchText}">
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
                           ${this.getVolunteerAvatarHTML(v, 'w-8 h-8')}
@@ -7380,7 +7552,9 @@ class ProtecGame {
       progress: 0,
       status: 'planifie',
       registeredVolunteers: [],
-      assignedCrew: { volunteers: [], vehicles: [] }
+      assignedCrew: { volunteers: [], vehicles: [] },
+      address: this.generateRealisticStreetAddress(this.stations[0]?.city || 'Paris', samuCoords.lat, samuCoords.lng),
+      isSector: false
     };
 
     this.enrichMissionLocationWithCity(newSamu);
@@ -7803,7 +7977,9 @@ class ProtecGame {
       progress: 0,
       status: 'planifie',
       registeredVolunteers: [],
-      assignedCrew: { volunteers: [], vehicles: [] }
+      assignedCrew: { volunteers: [], vehicles: [] },
+      address: this.generateRealisticStreetAddress(this.stations[0]?.city || 'Paris', sdisCoords.lat, sdisCoords.lng),
+      isSector: false
     };
 
     this.enrichMissionLocationWithCity(newSdis);

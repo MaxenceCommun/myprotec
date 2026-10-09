@@ -190,7 +190,10 @@ window.ProtecSocial = {
       progress: 0,
       status: 'planifie',
       registeredVolunteers: [],
-      assignedCrew: { volunteers: [], vehicles: [] }
+      assignedCrew: { volunteers: [], vehicles: [] },
+      isSector: true,
+      sector: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${game.stations?.[0]?.city || 'Agglomération'})`,
+      address: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${game.stations?.[0]?.city || 'Agglomération'})`
     };
 
     if (typeof game.enrichMissionLocationWithCity === 'function') {

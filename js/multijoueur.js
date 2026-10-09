@@ -735,16 +735,29 @@ window.ProtecMultiplayer = {
           </button>
         </div>
 
-        <!-- Filtres de la bourse -->
-        <div class="flex items-center justify-between text-xs border-b border-slate-200 pb-2">
-          <div class="flex items-center gap-2 font-bold text-slate-600">
-            <span>Filtres :</span>
-            <button onclick="window.ProtecMultiplayer.filterMarketplace('all')" id="mkt-btn-all" class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-black">Tous (${offers.length})</button>
-            <button onclick="window.ProtecMultiplayer.filterMarketplace('vehicule')" id="mkt-btn-veh" class="px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-700">Véhicules</button>
-            <button onclick="window.ProtecMultiplayer.filterMarketplace('materiel')" id="mkt-btn-mat" class="px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-700">Matériel</button>
-            <button onclick="window.ProtecMultiplayer.filterMarketplace('don')" id="mkt-btn-don" class="px-2.5 py-1 rounded-lg hover:bg-purple-100 text-purple-700 font-extrabold">Dons Solidaires (0 €)</button>
+        <!-- Barre de recherche et Filtres de la bourse -->
+        <div class="space-y-2 border-b border-slate-200 pb-2">
+          <div class="relative">
+            <input 
+              type="text" 
+              id="mkt-search-input" 
+              placeholder="🔍 Rechercher dans les annonces (titre, VPSP, matériel, don, vendeur...)" 
+              oninput="window.ProtecMultiplayer.searchMarketplace(this.value)"
+              class="w-full pl-3 pr-8 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+            />
+            <button type="button" onclick="const inp=document.getElementById('mkt-search-input'); if(inp){inp.value=''; window.ProtecMultiplayer.searchMarketplace('');}" class="absolute right-2.5 top-2 text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
           </div>
-          <span class="text-slate-400 font-semibold text-[11px]">${offers.length} offre(s) en ligne</span>
+
+          <div class="flex flex-wrap items-center justify-between text-xs gap-2">
+            <div class="flex items-center gap-2 font-bold text-slate-600">
+              <span>Filtres :</span>
+              <button onclick="window.ProtecMultiplayer.filterMarketplace('all')" id="mkt-btn-all" class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-black">Tous (${offers.length})</button>
+              <button onclick="window.ProtecMultiplayer.filterMarketplace('vehicule')" id="mkt-btn-veh" class="px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-700">Véhicules</button>
+              <button onclick="window.ProtecMultiplayer.filterMarketplace('materiel')" id="mkt-btn-mat" class="px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-700">Matériel</button>
+              <button onclick="window.ProtecMultiplayer.filterMarketplace('don')" id="mkt-btn-don" class="px-2.5 py-1 rounded-lg hover:bg-purple-100 text-purple-700 font-extrabold">Dons Solidaires (0 €)</button>
+            </div>
+            <span class="text-slate-400 font-semibold text-[11px]">${offers.length} offre(s) en ligne</span>
+          </div>
         </div>
 
         <!-- Grille des offres -->
@@ -756,9 +769,10 @@ window.ProtecMultiplayer = {
           ` : offers.map(o => {
             const isMine = o.sellerPlayerId === myPlayerId;
             const isVehicle = o.category === 'vehicule';
+            const searchText = `${o.title || ''} ${o.desc || ''} ${o.sellerPlayerName || ''} ${o.stationName || ''} ${o.category || ''} ${o.dealType || ''} ${o.tradeWanted || ''}`.toLowerCase();
 
             return `
-              <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border border-slate-200/80 shadow-xs hover:border-emerald-300 transition" data-cat="${o.category}" data-deal="${o.dealType}">
+              <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border border-slate-200/80 shadow-xs hover:border-emerald-300 transition" data-cat="${o.category}" data-deal="${o.dealType}" data-search-text="${searchText}">
                 <div class="space-y-2">
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-1.5">
@@ -824,10 +838,25 @@ window.ProtecMultiplayer = {
     `;
   },
 
+  currentMarketplaceFilter: 'all',
+  currentMarketplaceSearch: '',
+
   filterMarketplace(filterType) {
+    this.currentMarketplaceFilter = filterType;
+    this.applyMarketplaceFilters();
+  },
+
+  searchMarketplace(query) {
+    this.currentMarketplaceSearch = (query || '').toLowerCase().trim();
+    this.applyMarketplaceFilters();
+  },
+
+  applyMarketplaceFilters() {
     const grid = document.getElementById('mkt-offers-grid');
     if (!grid) return;
     const cards = grid.querySelectorAll('[data-cat]');
+    const filterType = this.currentMarketplaceFilter || 'all';
+    const q = this.currentMarketplaceSearch || '';
 
     ['all', 'veh', 'mat', 'don'].forEach(k => {
       const btn = document.getElementById(`mkt-btn-${k}`);
@@ -839,13 +868,12 @@ window.ProtecMultiplayer = {
     cards.forEach(card => {
       const cat = card.getAttribute('data-cat');
       const deal = card.getAttribute('data-deal');
-      if (filterType === 'all') {
-        card.style.display = '';
-      } else if (filterType === 'don') {
-        card.style.display = deal === 'don' ? '' : 'none';
-      } else {
-        card.style.display = cat === filterType ? '' : 'none';
-      }
+      const text = card.getAttribute('data-search-text') || '';
+
+      const matchCategory = (filterType === 'all') || (filterType === 'don' && deal === 'don') || (cat === filterType);
+      const matchSearch = !q || text.includes(q);
+
+      card.style.display = (matchCategory && matchSearch) ? '' : 'none';
     });
   },
 
@@ -1418,37 +1446,86 @@ window.ProtecMultiplayer = {
     ];
   },
 
-  calculateRarityScore(publicCount, reqVol, durationHours, isCrisis = false) {
-    let score = 20;
-    if (publicCount >= 20000) score += 35;
-    else if (publicCount >= 10000) score += 28;
-    else if (publicCount >= 5000) score += 20;
-    else if (publicCount >= 2000) score += 12;
-    else if (publicCount >= 500) score += 6;
-
-    score += Math.min(25, Math.floor((reqVol || 4) * 2));
-    score += Math.min(15, Math.floor((durationHours || 4) * 1.5));
-    if (isCrisis) score += 10;
-
-    score = Math.max(15, Math.min(100, Math.round(score)));
-
-    let tier = 'Commun';
-    let color = 'text-slate-700 bg-slate-100 border-slate-300';
-    if (score >= 86) {
-      tier = 'Légendaire';
-      color = 'text-amber-800 bg-amber-100 border-amber-300 shadow-sm font-black';
-    } else if (score >= 66) {
-      tier = 'Épique';
-      color = 'text-purple-700 bg-purple-100 border-purple-300 font-extrabold';
-    } else if (score >= 41) {
-      tier = 'Rare';
-      color = 'text-sky-700 bg-sky-100 border-sky-300 font-bold';
+  // Calcul strict de la Rareté de l'Écusson selon les critères réglementaires :
+  // Déterminé UNIQUEMENT par le moyen d'obtention et le nombre d'unités disponibles
+  calculateBadgeRarity(accessType = 'evenement_special', availableUnits = 4) {
+    if (accessType === 'mission_ouverte') {
+      return {
+        score: 25,
+        tier: 'Commun',
+        color: 'text-slate-800 bg-slate-100 border-slate-300 font-bold',
+        desc: 'Récupérable par tous dans une mission ordinaire (Accès Libre)'
+      };
     }
 
-    return { score, tier, color };
+    const units = parseInt(availableUnits, 10) || 4;
+    if (units <= 3) {
+      return {
+        score: 95,
+        tier: 'Très Rare',
+        color: 'text-purple-900 bg-purple-100 border-purple-400 font-black shadow-sm ring-1 ring-purple-300',
+        desc: `Événement d'exception restreint à ${units} antenne(s) participante(s)`
+      };
+    } else if (units <= 7) {
+      return {
+        score: 85,
+        tier: 'Très Rare',
+        color: 'text-purple-800 bg-purple-100 border-purple-300 font-black',
+        desc: `Événement très sélectif limité à ${units} antennes`
+      };
+    } else if (units <= 15) {
+      return {
+        score: 60,
+        tier: 'Rare',
+        color: 'text-sky-800 bg-sky-100 border-sky-300 font-extrabold',
+        desc: `Événement spécial limité à ${units} antennes`
+      };
+    } else {
+      return {
+        score: 40,
+        tier: 'Peu Commun',
+        color: 'text-emerald-800 bg-emerald-100 border-emerald-300 font-bold',
+        desc: `Événement ouvert à un large contingent (${units} antennes)`
+      };
+    }
   },
 
-  // Rendu visuel d'un Écusson brodé
+  // Alias rétro-compatible
+  calculateRarityScore(publicCount, reqVol, durationHours, isCrisis = false, accessType = 'evenement_special', availableUnits = 4) {
+    return this.calculateBadgeRarity(accessType, availableUnits);
+  },
+
+  // Calcul réglementaire de l'Indemnisation d'un Événement (personnel × durée + moyens engagés)
+  calculateEventIndemnisation(volunteers = 8, durationHours = 6, vehiclesList = ['1 VPSP']) {
+    const hourlyRate = 15; // 15 € / heure / secouriste
+    const volNum = parseInt(volunteers, 10) || 0;
+    const durNum = parseInt(durationHours, 10) || 0;
+    const basePersonnel = volNum * durNum * hourlyRate;
+
+    let totalMoyens = 0;
+    const vehArray = Array.isArray(vehiclesList) ? vehiclesList : [vehiclesList];
+    vehArray.forEach(v => {
+      const str = String(v).toLowerCase();
+      if (str.includes('vpsp')) totalMoyens += 120;
+      else if (str.includes('vtu')) totalMoyens += 55;
+      else if (str.includes('vl')) totalMoyens += 35;
+      else if (str.includes('pma') || str.includes('tente')) totalMoyens += 150;
+      else if (str.includes('bateau') || str.includes('nautique') || str.includes('quad')) totalMoyens += 90;
+      else if (str.trim().length > 0) totalMoyens += 40;
+    });
+
+    const total = basePersonnel + totalMoyens;
+    return {
+      volunteers: volNum,
+      durationHours: durNum,
+      hourlyRate,
+      basePersonnel,
+      totalMoyens,
+      total
+    };
+  },
+
+  // Rendu visuel d'un Écusson brodé (Supporte les images fournies sous forme de lien)
   renderBadgeCardHTML(badge, isInteractive = true) {
     const themeGradients = {
       blue: 'from-blue-700 via-indigo-800 to-slate-900 border-blue-400 text-blue-200',
@@ -1461,9 +1538,10 @@ window.ProtecMultiplayer = {
     };
 
     const gradientClass = themeGradients[badge.colorTheme] || themeGradients.blue;
+    const hasImage = Boolean(badge.imageUrl && badge.imageUrl.trim().length > 5);
 
     return `
-      <div class="relative group p-3 rounded-2xl bg-gradient-to-br ${gradientClass} border-2 border-dashed shadow-md flex flex-col items-center justify-between text-center transition-all duration-200 hover:scale-105 select-none" style="min-height: 140px;">
+      <div class="relative group p-3 rounded-2xl bg-gradient-to-br ${gradientClass} border-2 border-dashed shadow-md flex flex-col items-center justify-between text-center transition-all duration-200 hover:scale-105 select-none" style="min-height: 155px;">
         <!-- Badge Rareté -->
         <div class="w-full flex items-center justify-between text-[9px] mb-1">
           <span class="px-1.5 py-0.2 rounded-full font-black ${badge.rarityColor || 'bg-white/20 text-white'}">
@@ -1474,15 +1552,23 @@ window.ProtecMultiplayer = {
           </span>
         </div>
 
-        <!-- Emblème central -->
-        <div class="w-12 h-12 rounded-full bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center my-1 shadow-inner group-hover:rotate-6 transition-transform">
-          <i data-lucide="${badge.icon || 'shield'}" class="w-6 h-6 text-white drop-shadow"></i>
+        <!-- Emblème central : Image du lien ou icône vectorielle -->
+        <div class="w-14 h-14 rounded-full bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center my-1 shadow-inner overflow-hidden group-hover:scale-105 transition-transform flex-shrink-0">
+          ${hasImage ? `
+            <img src="${badge.imageUrl}" alt="${badge.name}" class="w-full h-full object-cover rounded-full" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+            <div class="hidden w-full h-full items-center justify-center">
+              <i data-lucide="${badge.icon || 'shield'}" class="w-6 h-6 text-white drop-shadow"></i>
+            </div>
+          ` : `
+            <i data-lucide="${badge.icon || 'shield'}" class="w-6 h-6 text-white drop-shadow"></i>
+          `}
         </div>
 
         <!-- Titre & Info -->
         <div class="w-full mt-1">
           <span class="block text-[11px] font-black text-white leading-tight truncate" title="${badge.name}">${badge.name}</span>
           <span class="block text-[9px] text-white/70 truncate mt-0.5">${badge.eventName || 'Mission Spéciale'}</span>
+          <span class="block text-[8px] text-white/80 font-bold mt-0.5">${badge.accessType === 'mission_ouverte' ? 'Mission Ouverte' : (badge.availableUnits ? `${badge.availableUnits} antenne(s) max` : 'Événement Spécial')}</span>
         </div>
 
         ${isInteractive ? `
@@ -1551,9 +1637,11 @@ window.ProtecMultiplayer = {
     const curYear = game.clock?.year || 2026;
     const myStation = game.stations?.[0];
     const defaultCity = myStation?.city || 'Paris';
+    const defaultLat = myStation?.lat || 48.8566;
+    const defaultLng = myStation?.lng || 2.3522;
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
+      <div class="glass-panel w-full max-w-2xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
@@ -1561,7 +1649,7 @@ window.ProtecMultiplayer = {
             </div>
             <div>
               <h3 class="text-base font-black text-slate-900 leading-tight">Proposer un Événement Multijoueur</h3>
-              <p class="text-xs text-slate-500 font-semibold">Créez un grand DPS communautaire avec écusson exclusif</p>
+              <p class="text-xs text-slate-500 font-semibold">Créez un grand DPS communautaire avec écusson exclusif (Validation par un Admin)</p>
             </div>
           </div>
           <button onclick="document.getElementById('create-community-event-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm">✕</button>
@@ -1586,106 +1674,144 @@ window.ProtecMultiplayer = {
             </div>
           </div>
 
-          <!-- Localisation & Date -->
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Lieu d'Intervention :</label>
-              <input type="text" id="evt-input-location" placeholder="Ex: Berges du Parc" value="Esplanade Municipale" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" />
+          <!-- ADRESSE & LOCALISATION PRÉCISE (OBLIGATOIRE COMME TOUTES LES MISSIONS) -->
+          <div class="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-sky-950 flex items-center gap-1.5">
+                <i data-lucide="map-pin" class="w-4 h-4 text-sky-600"></i>
+                Adresse du Dispositif & Coordonnées Cartographiques
+              </span>
+              <span class="text-[10px] text-sky-700 font-semibold">Requis pour l'intervention</span>
             </div>
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Ville :</label>
-              <input type="text" id="evt-input-city" value="${defaultCity}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" />
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="sm:col-span-2">
+                <label class="block font-bold text-slate-700 text-[11px] mb-1">Adresse postale précise :</label>
+                <div class="flex gap-1.5">
+                  <input type="text" id="evt-input-address" placeholder="Ex: 15 Place de l'Hôtel de Ville" value="15 Place de la Mairie" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" />
+                  <button type="button" onclick="window.ProtecMultiplayer.geocodeAddressInModal()" class="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] whitespace-nowrap shadow-xs cursor-pointer" title="Rechercher les coordonnées cartographiques via l'adresse">
+                    🔍 Géocoder
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-1">Ville & Commune :</label>
+                <input type="text" id="evt-input-city" value="${defaultCity}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" />
+              </div>
             </div>
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Date & Heure :</label>
-              <input type="text" id="evt-input-date" value="${curDay}/${curMonth}/${curYear} à 14h00" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" />
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+              <div>
+                <label class="block font-semibold text-slate-600 mb-0.5">Latitude (GPS) :</label>
+                <input type="number" step="0.0001" id="evt-input-lat" value="${defaultLat.toFixed(4)}" class="w-full px-2.5 py-1 rounded-lg border border-slate-300 font-mono text-slate-800 bg-white text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-0.5">Longitude (GPS) :</label>
+                <input type="number" step="0.0001" id="evt-input-lng" value="${defaultLng.toFixed(4)}" class="w-full px-2.5 py-1 rounded-lg border border-slate-300 font-mono text-slate-800 bg-white text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-0.5">Date & Heure :</label>
+                <input type="text" id="evt-input-date" value="${curDay}/${curMonth}/${curYear} à 14h00" class="w-full px-2.5 py-1 rounded-lg border border-slate-300 font-bold text-slate-800 bg-white text-xs" />
+              </div>
             </div>
+            <p class="text-[10px] text-sky-800 font-medium italic">
+              ℹ️ Comme toutes les missions (hors maraudes qui opèrent par secteur), une adresse ou un point repéré sur la carte est impératif. L'administrateur peut affiner l'emplacement.
+            </p>
           </div>
 
-          <!-- Affluence, Secouristes, Durée -->
+          <!-- Effectif, Durée, Moyens Véhicules -->
           <div class="grid grid-cols-3 gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Public Attendu :</label>
-              <input type="number" id="evt-input-public" min="100" max="100000" step="500" value="6000" oninput="window.ProtecMultiplayer.updateRarityPreviewInModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 text-xs bg-white" />
+              <input type="number" id="evt-input-public" min="100" max="100000" step="500" value="6000" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 text-xs bg-white" />
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Secouristes Requis :</label>
-              <input type="number" id="evt-input-volunteers" min="2" max="30" value="8" oninput="window.ProtecMultiplayer.updateRarityPreviewInModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 text-xs bg-white" />
+              <input type="number" id="evt-input-volunteers" min="2" max="30" value="8" oninput="window.ProtecMultiplayer.updateIndemnisationPreviewInModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 text-xs bg-white" />
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Durée (Heures) :</label>
-              <input type="number" id="evt-input-duration" min="2" max="24" value="6" oninput="window.ProtecMultiplayer.updateRarityPreviewInModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 text-xs bg-white" />
+              <input type="number" id="evt-input-duration" min="2" max="24" value="6" oninput="window.ProtecMultiplayer.updateIndemnisationPreviewInModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 text-xs bg-white" />
             </div>
           </div>
 
-          <!-- Indemnisation & Moyens -->
-          <div class="grid grid-cols-2 gap-2.5">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Indemnisation Équipes (€) :</label>
-              <input type="number" id="evt-input-reward" min="200" max="10000" step="100" value="1500" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-emerald-700 text-xs bg-white" />
+          <!-- INDEMNISATION BASÉE SUR PERSONNEL × DURÉE + MOYENS ENGAGÉS -->
+          <div class="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-emerald-950 flex items-center gap-1.5">
+                <i data-lucide="badge-euro" class="w-4 h-4 text-emerald-700"></i>
+                Indemnisation Opérationnelle de l'Événement
+              </span>
+              <span id="evt-indemnisation-breakdown" class="text-[10px] font-bold text-emerald-800">
+                8 sec. × 6h (720 €) + Moyens (120 €) = 840 €
+              </span>
             </div>
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Véhicules Conseillés :</label>
-              <input type="text" id="evt-input-vehicles" value="1 VPSP, 1 VTU Logistique" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 text-xs bg-white" />
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Moyens Véhicules / Matériel :</label>
+                <input type="text" id="evt-input-vehicles" value="1 VPSP, 1 VTU" oninput="window.ProtecMultiplayer.updateIndemnisationPreviewInModal()" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 text-xs bg-white" />
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Indemnisation Totale (€) :</label>
+                <input type="number" id="evt-input-reward" min="100" max="15000" step="50" value="840" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-emerald-700 text-xs bg-white" />
+              </div>
             </div>
+            <p class="text-[10px] text-emerald-900 font-medium">
+              ⚖️ <em>Calcul réglementaire :</em> Taux horaire de 15 €/h par secouriste + Forfait d'engagement des véhicules et matériels logistiques. L'administrateur a le plein pouvoir de réajuster l'indemnisation lors de la validation.
+            </p>
           </div>
 
-          <!-- Section Écusson Exclusif -->
+          <!-- SECTION ÉCUSSON : LIEN D'IMAGE ET RARETÉ STRICTE -->
           <div class="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/80 space-y-3">
             <div class="flex items-center justify-between">
               <span class="font-black text-indigo-950 flex items-center gap-1.5">
                 <i data-lucide="award" class="w-4 h-4 text-indigo-600"></i>
-                Création de l'Écusson Exclusif (Patch commémoratif)
+                Proposition de l'Écusson (Lien d'image & Rareté)
               </span>
-              <span id="evt-rarity-preview-badge" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-700 border border-purple-200">
-                Score estimé : 68/100 (Épique)
+              <span id="evt-rarity-preview-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-700 border border-purple-200">
+                Rareté : Très Rare (⭐ 85/100)
               </span>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="sm:col-span-2">
+                <label class="block font-bold text-slate-700 text-[11px] mb-1">Lien / URL de l'image de l'écusson :</label>
+                <div class="flex gap-2 items-center">
+                  <input type="url" id="badge-input-image-url" placeholder="https://exemple.fr/mon_ecusson.png" value="" oninput="window.ProtecMultiplayer.previewBadgeImageInModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-medium text-slate-800 text-xs bg-white" />
+                  <div id="badge-modal-preview-thumb" class="w-9 h-9 rounded-xl bg-purple-100 border border-purple-300 flex items-center justify-center flex-shrink-0 overflow-hidden text-purple-700 font-bold text-[9px]">
+                    Aperçu
+                  </div>
+                </div>
+              </div>
               <div>
                 <label class="block font-bold text-slate-700 text-[11px] mb-1">Nom de l'Écusson :</label>
                 <input type="text" id="badge-input-name" placeholder="Ex: Écusson Fête 2026" value="Écusson Rassemblement 2026" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 text-xs bg-white" />
               </div>
+            </div>
+
+            <!-- RÈGLE STRICTE DE RARETÉ : MOYEN D'OBTENTION ET UNITÉS DISPONIBLES -->
+            <div class="p-3 rounded-xl bg-white/90 border border-indigo-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div>
-                <label class="block font-bold text-slate-700 text-[11px] mb-1">Symbole / Emblème :</label>
-                <select id="badge-select-icon" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 text-xs bg-white">
-                  <option value="shield">Bouclier de Secours</option>
-                  <option value="sparkles">Étoile / Festivités</option>
-                  <option value="flame">Flamme Triomphale</option>
-                  <option value="waves">Vagues / Nautique</option>
-                  <option value="zap">Éclair Rapide</option>
-                  <option value="heart">Cœur Solidaire</option>
-                  <option value="crown">Couronne d'Honneur</option>
-                  <option value="cross">Croix de Secours</option>
+                <label class="block font-bold text-slate-700 text-[11px] mb-1">Moyen d'obtention de l'écusson :</label>
+                <select id="badge-select-access-type" onchange="window.ProtecMultiplayer.updateRarityPreviewInModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 text-xs bg-slate-50">
+                  <option value="evenement_special" selected>Événement spécial (places d'antennes restreintes)</option>
+                  <option value="mission_ouverte">Récupérable par tous dans une mission ordinaire (Commun)</option>
                 </select>
               </div>
               <div>
-                <label class="block font-bold text-slate-700 text-[11px] mb-1">Thème Couleur :</label>
-                <select id="badge-select-theme" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 text-xs bg-white">
-                  <option value="blue">Bleu Fédéral</option>
-                  <option value="cyan">Cyan Côtier</option>
-                  <option value="purple" selected>Violet Royal</option>
-                  <option value="gold">Or Doré</option>
-                  <option value="green">Vert Émeraude</option>
-                  <option value="orange">Orange Protection Civile</option>
-                  <option value="red">Rouge Secours</option>
-                </select>
+                <label class="block font-bold text-slate-700 text-[11px] mb-1">Nombre d'unités / Antennes participantes :</label>
+                <input type="number" id="badge-input-units" min="1" max="50" value="4" oninput="window.ProtecMultiplayer.updateRarityPreviewInModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 text-xs bg-white" />
               </div>
             </div>
+
             <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] flex items-center gap-2">
               <i data-lucide="shield-check" class="w-4 h-4 text-amber-700 flex-shrink-0"></i>
-              <span><strong>Validation Fédérale Requise :</strong> Votre proposition sera soumise aux administrateurs pour approbation. Une fois validée, l'événement apparaîtra publiquement et l'écusson sera débloqué.</span>
+              <span><strong>Implémentation Administrative :</strong> Vous proposez l'écusson sous forme de lien. L'administrateur valide l'image, ajuste la rareté (selon le nombre d'unités et le mode d'obtention) et publie l'événement.</span>
             </div>
-            <p class="text-[10px] text-indigo-800 font-medium italic">
-              Tous les joueurs qui déploieront une équipe sur votre événement remporteront automatiquement cet écusson dans leur profil !
-            </p>
           </div>
 
         </div>
 
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-          <button onclick="document.getElementById('create-community-event-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+          <button onclick="document.getElementById('create-community-event-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">
             Annuler
           </button>
           <button onclick="window.ProtecMultiplayer.submitCommunityEvent(window.game)" class="px-5 py-2.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
@@ -1698,29 +1824,91 @@ window.ProtecMultiplayer = {
 
     modal.classList.remove('hidden');
     if (window.lucide) window.lucide.createIcons();
+    this.updateIndemnisationPreviewInModal();
     this.updateRarityPreviewInModal();
   },
 
-  updateRarityPreviewInModal() {
-    const pubInput = document.getElementById('evt-input-public');
+  geocodeAddressInModal() {
+    const addrInput = document.getElementById('evt-input-address');
+    const cityInput = document.getElementById('evt-input-city');
+    const latInput = document.getElementById('evt-input-lat');
+    const lngInput = document.getElementById('evt-input-lng');
+
+    const query = `${addrInput?.value || ''} ${cityInput?.value || ''}`.trim();
+    if (!query) return;
+
+    fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=1`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.features && data.features.length > 0) {
+          const feat = data.features[0];
+          const coords = feat.geometry.coordinates;
+          if (lngInput) lngInput.value = coords[0].toFixed(4);
+          if (latInput) latInput.value = coords[1].toFixed(4);
+          if (feat.properties.label && addrInput) addrInput.value = feat.properties.name || feat.properties.label;
+          if (feat.properties.city && cityInput) cityInput.value = feat.properties.city;
+          if (window.game) window.game.showToast('Adresse Localisée', `Coordonnées GPS synchronisées : ${coords[1].toFixed(4)}, ${coords[0].toFixed(4)}`, 'green');
+        } else {
+          if (window.game) window.game.showToast('Adresse Introuvable', 'Conservez les coordonnées GPS manuelles ou ajustez l’adresse.', 'orange');
+        }
+      })
+      .catch(() => {});
+  },
+
+  previewBadgeImageInModal() {
+    const urlInput = document.getElementById('badge-input-image-url');
+    const thumb = document.getElementById('badge-modal-preview-thumb');
+    if (!thumb) return;
+
+    const val = urlInput?.value.trim() || '';
+    if (val.length > 5) {
+      thumb.innerHTML = `<img src="${val}" alt="Écusson" class="w-full h-full object-cover" onerror="this.parentElement.textContent='Erreur';" />`;
+    } else {
+      thumb.textContent = 'Aperçu';
+    }
+  },
+
+  updateIndemnisationPreviewInModal() {
     const volInput = document.getElementById('evt-input-volunteers');
     const durInput = document.getElementById('evt-input-duration');
+    const vehInput = document.getElementById('evt-input-vehicles');
+    const rewInput = document.getElementById('evt-input-reward');
+    const breakdown = document.getElementById('evt-indemnisation-breakdown');
+
+    const vol = parseInt(volInput?.value || '8', 10);
+    const dur = parseInt(durInput?.value || '6', 10);
+    const veh = (vehInput?.value || '1 VPSP').split(',');
+
+    const calc = this.calculateEventIndemnisation(vol, dur, veh);
+    if (breakdown) {
+      breakdown.textContent = `${vol} sec. × ${dur}h (${calc.basePersonnel} €) + Moyens (${calc.totalMoyens} €) = ${calc.total} €`;
+    }
+    if (rewInput && (!rewInput.dataset.manuallyEdited || rewInput.dataset.manuallyEdited === 'false')) {
+      rewInput.value = calc.total;
+    }
+  },
+
+  updateRarityPreviewInModal() {
+    const accessSelect = document.getElementById('badge-select-access-type');
+    const unitsInput = document.getElementById('badge-input-units');
     const badgeEl = document.getElementById('evt-rarity-preview-badge');
     if (!badgeEl) return;
 
-    const pub = parseInt(pubInput?.value || '6000', 10);
-    const vol = parseInt(volInput?.value || '8', 10);
-    const dur = parseInt(durInput?.value || '6', 10);
+    const access = accessSelect?.value || 'evenement_special';
+    const units = parseInt(unitsInput?.value || '4', 10);
 
-    const { score, tier } = this.calculateRarityScore(pub, vol, dur);
-    badgeEl.textContent = `Score estimé : ${score}/100 (${tier})`;
+    const rarity = this.calculateBadgeRarity(access, units);
+    badgeEl.textContent = `Rareté : ${rarity.tier} (⭐ ${rarity.score}/100)`;
+    badgeEl.className = `px-2.5 py-0.5 rounded-full text-[10px] font-black border ${rarity.color}`;
   },
 
   submitCommunityEvent(game) {
     const titleInput = document.getElementById('evt-input-title');
     const catSelect = document.getElementById('evt-select-category');
-    const locInput = document.getElementById('evt-input-location');
+    const addrInput = document.getElementById('evt-input-address');
     const cityInput = document.getElementById('evt-input-city');
+    const latInput = document.getElementById('evt-input-lat');
+    const lngInput = document.getElementById('evt-input-lng');
     const pubInput = document.getElementById('evt-input-public');
     const volInput = document.getElementById('evt-input-volunteers');
     const durInput = document.getElementById('evt-input-duration');
@@ -1728,30 +1916,41 @@ window.ProtecMultiplayer = {
     const vehInput = document.getElementById('evt-input-vehicles');
 
     const badgeNameInput = document.getElementById('badge-input-name');
-    const badgeIconSelect = document.getElementById('badge-select-icon');
-    const badgeThemeSelect = document.getElementById('badge-select-theme');
+    const badgeUrlInput = document.getElementById('badge-input-image-url');
+    const badgeAccessSelect = document.getElementById('badge-select-access-type');
+    const badgeUnitsInput = document.getElementById('badge-input-units');
 
     const title = titleInput?.value.trim() || 'Grand DPS Fédéral';
     const category = catSelect?.value || 'Festival & Concert';
-    const locationName = locInput?.value.trim() || 'Centre Urbain';
     const city = cityInput?.value.trim() || (game.stations?.[0]?.city || 'Paris');
+    const address = addrInput?.value.trim() || `Place Centrale, ${city}`;
+    const lat = parseFloat(latInput?.value || game.stations?.[0]?.lat || 48.8566);
+    const lng = parseFloat(lngInput?.value || game.stations?.[0]?.lng || 2.3522);
+
     const pub = parseInt(pubInput?.value || '6000', 10);
     const reqVol = parseInt(volInput?.value || '8', 10);
     const durationHours = parseInt(durInput?.value || '6', 10);
-    const rewardMoney = parseInt(rewInput?.value || '1500', 10);
     const vehText = vehInput?.value.trim() || '1 VPSP';
 
-    const { score, tier, color } = this.calculateRarityScore(pub, reqVol, durationHours);
+    const accessType = badgeAccessSelect?.value || 'evenement_special';
+    const availableUnits = parseInt(badgeUnitsInput?.value || '4', 10);
+    const rarity = this.calculateBadgeRarity(accessType, availableUnits);
+
+    const indemnisation = this.calculateEventIndemnisation(reqVol, durationHours, vehText);
+    const rewardMoney = parseInt(rewInput?.value || indemnisation.total, 10);
 
     const badge = {
       id: `badge-${Date.now()}`,
       name: badgeNameInput?.value.trim() || `Écusson ${title}`,
-      icon: badgeIconSelect?.value || 'shield',
-      colorTheme: badgeThemeSelect?.value || 'purple',
-      rarityScore: score,
-      rarityTier: tier,
-      rarityColor: color,
-      desc: `Écusson exclusif commémorant le dispositif « ${title} » à ${city}.`,
+      imageUrl: badgeUrlInput?.value.trim() || '',
+      accessType: accessType,
+      availableUnits: availableUnits,
+      icon: 'shield',
+      colorTheme: 'purple',
+      rarityScore: rarity.score,
+      rarityTier: rarity.tier,
+      rarityColor: rarity.color,
+      desc: rarity.desc,
       eventName: title,
       obtainedAt: new Date().toLocaleDateString('fr-FR'),
       originalOrganizer: game.player?.name || 'Directeur d’Antenne'
@@ -1764,8 +1963,11 @@ window.ProtecMultiplayer = {
       stationName: game.stations?.[0]?.name || 'Antenne Locale',
       title: title,
       category: category,
-      locationName: locationName,
+      address: address,
+      locationName: address.split(',')[0] || 'Lieu Central',
       city: city,
+      lat: lat,
+      lng: lng,
       departmentCode: game.stations?.[0]?.departmentCode || '75',
       eventDate: { day: (game.clock?.day || 1) + 2, month: (game.clock?.month || 0) + 1, year: game.clock?.year || 2026, hour: 14 },
       durationHours: durationHours,
@@ -1773,8 +1975,9 @@ window.ProtecMultiplayer = {
       requiredVolunteers: reqVol,
       requiredVehicles: [vehText],
       rewardMoney: rewardMoney,
-      rewardReputation: Math.round(score / 2),
-      desc: `Dispositif d’envergure : ${category} à ${locationName} (${city}). Affluence prévue de ${pub.toLocaleString('fr-FR')} personnes.`,
+      indemnisationDetails: indemnisation,
+      rewardReputation: Math.round(rarity.score / 2),
+      desc: `Dispositif d’envergure : ${category} à l'adresse « ${address} » (${city}). Affluence prévue de ${pub.toLocaleString('fr-FR')} personnes.`,
       badge: badge,
       registeredAntennas: [
         {
@@ -1801,15 +2004,19 @@ window.ProtecMultiplayer = {
     const modal = document.getElementById('create-community-event-modal');
     if (modal) modal.classList.add('hidden');
 
-    game.showToast('Proposition Soumise aux Administrateurs !', `« ${title} » a été soumis pour validation. L'écusson (⭐ ${score}/100) sera débloqué dès l'approbation d'un admin !`, 'blue');
+    game.showToast('Proposition Soumise aux Administrateurs !', `« ${title} » a été soumis pour validation avec l'écusson proposé (${rarity.tier}).`, 'blue');
     game.save();
     game.openModule('alliance');
   },
 
-  // Validation d'un événement par un Administrateur
-  approveCommunityEvent(game, eventId) {
+  // Validation d'un événement par un Administrateur (supporte les modifications préalables)
+  approveCommunityEvent(game, eventId, updatedData = null) {
     const event = (game.communityEvents || []).find(e => e.id === eventId);
     if (!event) return;
+
+    if (updatedData) {
+      Object.assign(event, updatedData);
+    }
 
     event.status = 'open';
     event.approvedAt = new Date().toISOString();
@@ -1826,16 +2033,36 @@ window.ProtecMultiplayer = {
         'Authorization': `Bearer ${localStorage.getItem('protec_auth_token') || ''}`,
         'x-admin-key': 'protec_admin_secret_2026'
       },
-      body: JSON.stringify({ eventId })
+      body: JSON.stringify({ eventId, updatedData: event })
     }).catch(() => {});
 
-    game.showToast('Événement Validé & Publié !', `« ${event.title} » est maintenant ouvert à toutes les antennes alliées !`, 'green');
+    game.showToast('Événement Validé & Publié !', `« ${event.title} » est maintenant ouvert à toutes les antennes alliées avec son écusson (${event.badge?.rarityTier || 'Badge'}) !`, 'green');
     game.save();
     if (window.ProtecAdmin && window.ProtecAdmin.activeTab === 'events') {
       window.ProtecAdmin.renderEventsTable();
     } else {
       game.openModule('alliance');
     }
+  },
+
+  // Mise à jour complète d'un événement par l'administrateur
+  updateCommunityEvent(game, eventId, updatedData) {
+    const event = (game.communityEvents || []).find(e => e.id === eventId);
+    if (event) {
+      Object.assign(event, updatedData);
+    }
+
+    fetch('/api/admin/events/update', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('protec_auth_token') || ''}`,
+        'x-admin-key': 'protec_admin_secret_2026'
+      },
+      body: JSON.stringify({ eventId, updatedData })
+    }).catch(() => {});
+
+    game.save();
   },
 
   // Rejet d'un événement par un Administrateur
@@ -1948,9 +2175,9 @@ window.ProtecMultiplayer = {
                 Modération Admin
               </button>
             ` : ''}
-            <button onclick="window.ProtecMultiplayer.openCreateCommunityEventModal(window.game)" class="px-4 py-2.5 rounded-xl text-xs font-black bg-white text-indigo-950 hover:bg-indigo-50 transition shadow-sm flex items-center gap-1.5 cursor-pointer flex-shrink-0">
-              <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-700"></i>
-              + Proposer un Événement
+            <button onclick="window.ProtecAuth.openAuthModal();" class="px-3.5 py-2 rounded-xl text-[11px] font-bold bg-white/20 hover:bg-white/30 text-white transition flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Les projets d'événements exceptionnels se déposent depuis votre Profil Directeur">
+              <i data-lucide="user" class="w-3.5 h-3.5 text-amber-300"></i>
+              Profil Directeur (Dossiers)
             </button>
           </div>
         </div>
@@ -1980,17 +2207,26 @@ window.ProtecMultiplayer = {
                     </div>
                     <div>
                       <h5 class="text-xs font-black text-slate-900">${e.title}</h5>
-                      <p class="text-[11px] text-slate-500">${e.locationName} (${e.city}) • Affluence : ${Number(e.publicCount || 0).toLocaleString('fr-FR')} pers.</p>
+                      <div class="text-[11px] text-slate-600 font-semibold flex items-center gap-1 mt-0.5">
+                        <i data-lucide="map-pin" class="w-3 h-3 text-sky-600 flex-shrink-0"></i>
+                        <span>Adresse : <strong class="text-slate-800">${e.address || (e.lat && e.lng ? `Point GPS: ${e.lat.toFixed(4)}, ${e.lng.toFixed(4)}` : `${e.locationName}, ${e.city}`)}</strong></span>
+                      </div>
+                      <p class="text-[10px] text-slate-500 mt-0.5">Affluence : ${Number(e.publicCount || 0).toLocaleString('fr-FR')} pers.</p>
                     </div>
                     ${b.name ? `
-                      <div class="p-2 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-between text-xs">
-                        <span class="font-bold text-purple-900">Écusson : ${b.name}</span>
-                        <span class="text-[10px] font-black text-purple-700">⭐ ${b.rarityScore}/100 (${b.rarityTier})</span>
+                      <div class="p-2 rounded-xl bg-purple-50/80 border border-purple-200 flex items-center gap-2 text-xs">
+                        <div class="w-8 h-8 rounded-lg bg-purple-100 border border-purple-300 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          ${b.imageUrl ? `<img src="${b.imageUrl}" alt="${b.name}" class="w-full h-full object-cover" onerror="this.parentElement.textContent='🏅';" />` : `<i data-lucide="award" class="w-4 h-4 text-purple-700"></i>`}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                          <span class="font-black text-purple-900 block truncate">${b.name}</span>
+                          <span class="text-[10px] font-black text-purple-700">Rareté : ${b.rarityTier || 'Badge'} (⭐ ${b.rarityScore}/100) ${b.availableUnits ? `• ${b.availableUnits} max` : ''}</span>
+                        </div>
                       </div>
                     ` : ''}
-                    <div class="text-[10px] text-slate-500 flex justify-between pt-1 border-t border-slate-100">
-                      <span>Effectif : ${e.requiredVolunteers} secouristes</span>
-                      <span>Durée : ${e.durationHours}h</span>
+                    <div class="text-[10px] text-slate-600 flex justify-between pt-1 border-t border-slate-100">
+                      <span>Effectif : <strong>${e.requiredVolunteers} secouristes (${e.durationHours}h)</strong></span>
+                      <span class="text-emerald-700 font-bold">Indemnisation : <strong>+${e.rewardMoney} €</strong></span>
                     </div>
                     ${isAdmin ? `
                       <div class="pt-2 flex gap-2">
@@ -2041,13 +2277,18 @@ window.ProtecMultiplayer = {
 
                   <div>
                     <h5 class="text-sm font-black text-slate-900 leading-snug">${e.title}</h5>
-                    <p class="text-xs text-slate-500 font-medium">${e.locationName} (${e.city}) • Affluence : <strong class="text-slate-700">${(e.publicCount || 0).toLocaleString('fr-FR')} pers.</strong></p>
+                    <div class="text-[11px] text-slate-700 font-semibold flex items-center gap-1.5 mt-1">
+                      <i data-lucide="map-pin" class="w-3.5 h-3.5 text-sky-600 flex-shrink-0"></i>
+                      <span>Adresse : <strong class="text-slate-900">${e.address || (e.lat && e.lng ? `Point GPS: ${e.lat.toFixed(4)}, ${e.lng.toFixed(4)}` : `${e.locationName}, ${e.city}`)}</strong></span>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Affluence attendue : <strong class="text-slate-700">${(e.publicCount || 0).toLocaleString('fr-FR')} pers.</strong></p>
                   </div>
 
                   <div class="text-[11px] text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 space-y-1">
                     <div class="flex justify-between">
-                      <span>Effectif requis : <strong>${e.requiredVolunteers} secouristes</strong></span>
+                      <span>Effectif : <strong>${e.requiredVolunteers} secouristes</strong></span>
                       <span>Durée : <strong>${e.durationHours}h</strong></span>
+                      <span class="text-emerald-700 font-bold">Taux : 15 €/h/sec.</span>
                     </div>
                     <div class="text-slate-500 truncate">Véhicules : <strong>${e.requiredVehicles?.join(', ')}</strong></div>
                   </div>
@@ -2056,15 +2297,22 @@ window.ProtecMultiplayer = {
                   ${b.name ? `
                     <div class="p-2.5 rounded-xl bg-purple-50/70 border border-purple-200 flex items-center justify-between gap-2.5">
                       <div class="flex items-center gap-2.5 min-w-0">
-                        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-700 to-indigo-900 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                          <i data-lucide="${b.icon || 'award'}" class="w-5 h-5"></i>
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-700 to-indigo-900 text-white flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden">
+                          ${b.imageUrl ? `
+                            <img src="${b.imageUrl}" alt="${b.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                            <div class="hidden w-full h-full items-center justify-center">
+                              <i data-lucide="${b.icon || 'award'}" class="w-5 h-5"></i>
+                            </div>
+                          ` : `
+                            <i data-lucide="${b.icon || 'award'}" class="w-5 h-5"></i>
+                          `}
                         </div>
                         <div class="min-w-0 flex-1">
                           <div class="flex items-center gap-1.5">
                             <span class="text-xs font-black text-purple-950 truncate">${b.name}</span>
                             <span class="text-[9px] font-black px-1.5 py-0.2 rounded-full ${b.rarityColor || 'bg-purple-100 text-purple-800'}">${b.rarityTier}</span>
                           </div>
-                          <span class="text-[10px] text-purple-700 font-semibold block">Score de rareté : ⭐ ${b.rarityScore}/100</span>
+                          <span class="text-[10px] text-purple-700 font-semibold block">⭐ ${b.rarityScore}/100 • ${b.availableUnits ? `${b.availableUnits} antenne(s) max` : (b.accessType === 'mission_ouverte' ? 'Mission Ouverte' : 'Événement Spécial')}</span>
                         </div>
                       </div>
                     </div>

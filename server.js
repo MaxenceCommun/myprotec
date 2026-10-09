@@ -738,21 +738,22 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 16. Admin : Valider un Événement Proposé
+  // 16. Admin : Valider un Événement Proposé (avec modifications éventuelles)
   if (url === '/api/admin/events/approve' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       try {
-        const { eventId } = JSON.parse(body);
+        const { eventId, updatedData } = JSON.parse(body);
         db.data.communityEvents = db.data.communityEvents || [];
-        const event = db.data.communityEvents.find(e => e.id === eventId);
-        if (event) {
-          event.status = 'open';
-          event.approvedAt = new Date().toISOString();
+        const index = db.data.communityEvents.findIndex(e => e.id === eventId);
+        if (index !== -1) {
+          const current = db.data.communityEvents[index];
+          const merged = { ...current, ...(updatedData || {}), status: 'open', approvedAt: new Date().toISOString() };
+          db.data.communityEvents[index] = merged;
           db.save();
-          broadcastSSE('community_event_approved', { event });
-          sendJson(res, 200, { success: true, event });
+          broadcastSSE('community_event_approved', { event: merged });
+          sendJson(res, 200, { success: true, event: merged });
         } else {
           sendJson(res, 404, { error: 'Événement introuvable' });
         }
@@ -763,7 +764,33 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 17. Admin : Refuser un Événement Proposé
+  // 17. Admin : Modifier toutes les informations d'un Événement (Adresse, Indemnisation, Écusson, Moyens...)
+  if (url === '/api/admin/events/update' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { eventId, updatedData } = JSON.parse(body);
+        db.data.communityEvents = db.data.communityEvents || [];
+        const index = db.data.communityEvents.findIndex(e => e.id === eventId);
+        if (index !== -1) {
+          const current = db.data.communityEvents[index];
+          const merged = { ...current, ...(updatedData || {}), id: eventId, updatedAt: new Date().toISOString() };
+          db.data.communityEvents[index] = merged;
+          db.save();
+          broadcastSSE('community_event_updated', { event: merged });
+          sendJson(res, 200, { success: true, event: merged });
+        } else {
+          sendJson(res, 404, { error: 'Événement introuvable' });
+        }
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 18. Admin : Refuser un Événement Proposé
   if (url === '/api/admin/events/reject' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => body += chunk);

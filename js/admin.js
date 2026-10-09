@@ -213,7 +213,7 @@ window.ProtecAdmin = {
         : `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">✕ Refusé</span>`;
 
       return `
-        <div class="p-4 rounded-2xl bg-white border ${isPending ? 'border-amber-300 ring-2 ring-amber-100' : 'border-slate-200'} shadow-sm space-y-3">
+        <div class="p-4 rounded-2xl bg-white border ${isPending ? 'border-amber-300 ring-2 ring-amber-100' : 'border-slate-200'} shadow-sm space-y-3" id="admin-event-row-${ev.id}">
           <div class="flex items-start justify-between gap-3">
             <div>
               <div class="flex items-center gap-2 mb-1">
@@ -231,25 +231,48 @@ window.ProtecAdmin = {
             </div>
           </div>
 
+          <!-- LOCALISATION & ADRESSE OBLIGATOIRE -->
+          <div class="p-2.5 rounded-xl bg-sky-50/70 border border-sky-200 text-xs text-sky-950 flex items-center justify-between">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <i data-lucide="map-pin" class="w-4 h-4 text-sky-600 flex-shrink-0"></i>
+              <span class="truncate">Adresse : <strong class="text-slate-900">${ev.address || (ev.lat && ev.lng ? `Point GPS: ${ev.lat.toFixed(4)}, ${ev.lng.toFixed(4)}` : `${ev.locationName}, ${ev.city}`)}</strong></span>
+            </div>
+            <span class="text-[10px] font-mono font-bold text-sky-700 flex-shrink-0 ml-2">GPS : ${Number(ev.lat || 0).toFixed(4)}, ${Number(ev.lng || 0).toFixed(4)}</span>
+          </div>
+
+          <!-- EFFECTIF, DURÉE, INDEMNISATION BASÉE SUR PERSONNEL & MOYENS -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-600">
-            <div>Lieu : <strong class="text-slate-800">${ev.locationName}</strong></div>
             <div>Public : <strong class="text-slate-800">${Number(ev.publicCount || 0).toLocaleString('fr-FR')} pers.</strong></div>
             <div>Effectif : <strong class="text-slate-800">${ev.requiredVolunteers} secouristes</strong></div>
             <div>Durée : <strong class="text-slate-800">${ev.durationHours}h</strong></div>
+            <div>Indemnité : <strong class="text-emerald-700">${ev.rewardMoney} € (15€/h + moyens)</strong></div>
           </div>
 
+          <!-- ÉCUSSON : LIEN D'IMAGE, UNITÉS ET RARETÉ STRICTE -->
           ${b.name ? `
             <div class="p-3 rounded-xl bg-purple-50/70 border border-purple-200 flex items-center justify-between gap-3">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-700 to-indigo-900 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <i data-lucide="${b.icon || 'award'}" class="w-5 h-5"></i>
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-700 to-indigo-900 text-white flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden">
+                  ${b.imageUrl ? `
+                    <img src="${b.imageUrl}" alt="${b.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                    <div class="hidden w-full h-full items-center justify-center">
+                      <i data-lucide="${b.icon || 'award'}" class="w-5 h-5 text-white"></i>
+                    </div>
+                  ` : `
+                    <i data-lucide="${b.icon || 'award'}" class="w-5 h-5"></i>
+                  `}
                 </div>
-                <div>
-                  <div class="flex items-center gap-1.5">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="text-xs font-black text-purple-950">${b.name}</span>
                     <span class="text-[9px] font-black px-1.5 py-0.2 rounded-full ${b.rarityColor || 'bg-purple-100 text-purple-800'}">${b.rarityTier}</span>
+                    <span class="text-[9px] font-bold text-purple-700 bg-white/80 px-1.5 py-0.2 rounded border border-purple-200">
+                      ${b.accessType === 'mission_ouverte' ? 'Mission Ouverte (Commun)' : `${b.availableUnits || 4} antenne(s) max`}
+                    </span>
                   </div>
-                  <p class="text-[10px] text-purple-700">${b.desc || 'Écusson commémoratif'}</p>
+                  <div class="text-[10px] text-purple-700 truncate mt-0.5">
+                    ${b.imageUrl ? `Lien image : <a href="${b.imageUrl}" target="_blank" class="underline text-indigo-700 font-bold">${b.imageUrl}</a>` : 'Aucun lien d\'image fourni (icône vectorielle)'}
+                  </div>
                 </div>
               </div>
               <div class="text-right flex-shrink-0">
@@ -265,9 +288,15 @@ window.ProtecAdmin = {
             </div>
           ` : ''}
 
-          <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
             <span class="text-[10px] text-slate-400">Date prévue : ${ev.eventDate?.day}/${ev.eventDate?.month}/${ev.eventDate?.year || 2026} à ${ev.eventDate?.hour || 14}h</span>
             <div class="flex items-center gap-2">
+              <!-- POUVOIR DE L'ADMIN : MODIFIER TOUTES LES INFORMATIONS -->
+              <button onclick="window.ProtecAdmin.openEditEventModal('${ev.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition flex items-center gap-1 cursor-pointer" title="Modifier l'adresse, l'indemnisation, l'écusson et l'effectif">
+                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                Modifier Tout
+              </button>
+
               ${isPending ? `
                 <button onclick="window.ProtecAdmin.promptRejectEvent('${ev.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-700 hover:bg-rose-50 border border-rose-200 transition cursor-pointer">
                   ✕ Refuser
@@ -291,6 +320,309 @@ window.ProtecAdmin = {
     }).join('');
 
     if (window.lucide) window.lucide.createIcons();
+  },
+
+  // MODALE D'ÉDITION ADMINISTRATIVE COMPLÈTE D'UN ÉVÉNEMENT
+  openEditEventModal(eventId) {
+    const ev = (this.eventsCache || []).find(e => e.id === eventId);
+    if (!ev) return;
+
+    let modal = document.getElementById('admin-edit-event-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'admin-edit-event-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modal);
+    }
+
+    const b = ev.badge || {};
+    const bImg = b.imageUrl || '';
+    const accessType = b.accessType || 'evenement_special';
+    const units = b.availableUnits || 4;
+
+    modal.innerHTML = `
+      <div class="glass-panel w-full max-w-2xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-md">
+              <i data-lucide="edit-3" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Modifier l'Événement (Pouvoir Administrateur)</h3>
+              <p class="text-xs text-slate-500 font-semibold">Ajustez l'adresse, l'indemnisation, les moyens et l'écusson avant ou après validation</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('admin-edit-event-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+        </div>
+
+        <form id="admin-edit-event-form" onsubmit="event.preventDefault(); window.ProtecAdmin.saveEventEdit('${ev.id}');" class="space-y-3.5 text-xs">
+          <!-- Titre & Catégorie -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Intitulé de l'Événement :</label>
+              <input type="text" id="adm-evt-title" value="${ev.title}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Catégorie :</label>
+              <input type="text" id="adm-evt-category" value="${ev.category || 'Festival & Concert'}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <!-- ADRESSE & LOCALISATION -->
+          <div class="p-3.5 rounded-2xl bg-sky-50/80 border border-sky-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-sky-950 flex items-center gap-1.5">
+                <i data-lucide="map-pin" class="w-4 h-4 text-sky-600"></i>
+                Adresse & Point sur la Carte (Obligatoire)
+              </span>
+              <button type="button" onclick="window.ProtecAdmin.geocodeAddressInEditModal()" class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[10px] cursor-pointer">
+                🔍 Rechercher / Géocoder
+              </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="sm:col-span-2">
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Adresse postale :</label>
+                <input type="text" id="adm-evt-address" value="${ev.address || ev.locationName || ''}" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Ville :</label>
+                <input type="text" id="adm-evt-city" value="${ev.city || 'Paris'}" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <label class="block font-semibold text-slate-600 mb-0.5">Latitude (GPS) :</label>
+                <input type="number" step="0.0001" id="adm-evt-lat" value="${ev.lat || 48.8566}" class="w-full px-2.5 py-1 rounded-lg border border-slate-300 font-mono text-slate-800 bg-white text-xs" required />
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-0.5">Longitude (GPS) :</label>
+                <input type="number" step="0.0001" id="adm-evt-lng" value="${ev.lng || 2.3522}" class="w-full px-2.5 py-1 rounded-lg border border-slate-300 font-mono text-slate-800 bg-white text-xs" required />
+              </div>
+            </div>
+          </div>
+
+          <!-- EFFECTIF, DURÉE, MOYENS ET INDEMNISATION -->
+          <div class="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-emerald-950 flex items-center gap-1.5">
+                <i data-lucide="badge-euro" class="w-4 h-4 text-emerald-700"></i>
+                Indemnisation & Moyens Engagés (Modifiable par l'Admin)
+              </span>
+              <button type="button" onclick="window.ProtecAdmin.recalcIndemnisationInEditModal()" class="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10px] cursor-pointer">
+                ⚖️ Recalculer selon Barème
+              </button>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Secouristes Requis :</label>
+                <input type="number" id="adm-evt-volunteers" value="${ev.requiredVolunteers}" min="2" max="40" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Durée (Heures) :</label>
+                <input type="number" id="adm-evt-duration" value="${ev.durationHours}" min="1" max="48" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Indemnisation Totale (€) :</label>
+                <input type="number" id="adm-evt-reward" value="${ev.rewardMoney}" min="50" max="25000" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-emerald-700 bg-white" required />
+              </div>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Véhicules & Moyens Engagés :</label>
+              <input type="text" id="adm-evt-vehicles" value="${(ev.requiredVehicles || []).join(', ')}" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-medium text-slate-800 bg-white" />
+            </div>
+          </div>
+
+          <!-- ÉCUSSON : LIEN D'IMAGE ET RARETÉ STRICTE -->
+          <div class="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-2">
+            <span class="font-black text-purple-950 flex items-center gap-1.5">
+              <i data-lucide="award" class="w-4 h-4 text-purple-700"></i>
+              Écusson : Lien d'image, Unités Disponibles & Rareté
+            </span>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="sm:col-span-2">
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Lien / URL de l'image de l'écusson :</label>
+                <div class="flex gap-2 items-center">
+                  <input type="url" id="adm-badge-url" value="${bImg}" placeholder="https://..." oninput="window.ProtecAdmin.previewBadgeInEditModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-medium text-slate-800 bg-white" />
+                  <div id="adm-badge-preview-thumb" class="w-9 h-9 rounded-xl bg-purple-100 border border-purple-300 flex items-center justify-center flex-shrink-0 overflow-hidden text-[9px] font-bold text-purple-700">
+                    ${bImg ? `<img src="${bImg}" class="w-full h-full object-cover" onerror="this.parentElement.textContent='Erreur';" />` : 'Aperçu'}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Nom de l'Écusson :</label>
+                <input type="text" id="adm-badge-name" value="${b.name || `Écusson ${ev.title}`}" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Mode d'obtention de l'écusson :</label>
+                <select id="adm-badge-access-type" onchange="window.ProtecAdmin.updateRarityInEditModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
+                  <option value="evenement_special" ${accessType === 'evenement_special' ? 'selected' : ''}>Événement spécial (places d'antennes restreintes)</option>
+                  <option value="mission_ouverte" ${accessType === 'mission_ouverte' ? 'selected' : ''}>Récupérable par tous dans une mission ordinaire (Commun)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Unités disponibles / Antennes autorisées :</label>
+                <input type="number" id="adm-badge-units" value="${units}" min="1" max="50" oninput="window.ProtecAdmin.updateRarityInEditModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between p-2 rounded-xl bg-white border border-purple-200">
+              <span class="text-[11px] text-purple-900 font-bold">Rareté finale calculée :</span>
+              <span id="adm-badge-rarity-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${b.rarityColor || 'bg-purple-100 text-purple-800'}">
+                ${b.rarityTier || 'Très Rare'} (⭐ ${b.rarityScore || 85}/100)
+              </span>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+            <select id="adm-evt-status" class="px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-xs bg-slate-50">
+              <option value="pending_approval" ${ev.status === 'pending_approval' ? 'selected' : ''}>⏳ En Attente de Validation</option>
+              <option value="open" ${ev.status === 'open' ? 'selected' : ''}>✓ Validé & En Ligne</option>
+              <option value="rejected" ${ev.status === 'rejected' ? 'selected' : ''}>✕ Refusé</option>
+            </select>
+
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="document.getElementById('admin-edit-event-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">
+                Annuler
+              </button>
+              <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="check" class="w-4 h-4"></i>
+                Enregistrer les Modifications
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
+    this.updateRarityInEditModal();
+  },
+
+  geocodeAddressInEditModal() {
+    const addr = document.getElementById('adm-evt-address')?.value || '';
+    const city = document.getElementById('adm-evt-city')?.value || '';
+    const query = `${addr} ${city}`.trim();
+    if (!query) return;
+
+    fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=1`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.features && data.features.length > 0) {
+          const feat = data.features[0];
+          const coords = feat.geometry.coordinates;
+          const latInput = document.getElementById('adm-evt-lat');
+          const lngInput = document.getElementById('adm-evt-lng');
+          const addrInput = document.getElementById('adm-evt-address');
+          const cityInput = document.getElementById('adm-evt-city');
+          if (latInput) latInput.value = coords[1].toFixed(4);
+          if (lngInput) lngInput.value = coords[0].toFixed(4);
+          if (addrInput && feat.properties.name) addrInput.value = feat.properties.name;
+          if (cityInput && feat.properties.city) cityInput.value = feat.properties.city;
+          if (window.game) window.game.showToast('Adresse Localisée', `GPS : ${coords[1].toFixed(4)}, ${coords[0].toFixed(4)}`, 'green');
+        }
+      })
+      .catch(() => {});
+  },
+
+  recalcIndemnisationInEditModal() {
+    const vol = parseInt(document.getElementById('adm-evt-volunteers')?.value || '8', 10);
+    const dur = parseInt(document.getElementById('adm-evt-duration')?.value || '6', 10);
+    const veh = (document.getElementById('adm-evt-vehicles')?.value || '').split(',');
+    if (window.ProtecMultiplayer) {
+      const calc = window.ProtecMultiplayer.calculateEventIndemnisation(vol, dur, veh);
+      const rewInput = document.getElementById('adm-evt-reward');
+      if (rewInput) rewInput.value = calc.total;
+      if (window.game) window.game.showToast('Indemnisation Recalculée', `Total : ${calc.total} € (${vol} sec. × ${dur}h × 15€ + moyens)`, 'blue');
+    }
+  },
+
+  previewBadgeInEditModal() {
+    const url = document.getElementById('adm-badge-url')?.value.trim() || '';
+    const thumb = document.getElementById('adm-badge-preview-thumb');
+    if (!thumb) return;
+    if (url.length > 5) {
+      thumb.innerHTML = `<img src="${url}" class="w-full h-full object-cover" onerror="this.parentElement.textContent='Erreur';" />`;
+    } else {
+      thumb.textContent = 'Aperçu';
+    }
+  },
+
+  updateRarityInEditModal() {
+    const access = document.getElementById('adm-badge-access-type')?.value || 'evenement_special';
+    const units = parseInt(document.getElementById('adm-badge-units')?.value || '4', 10);
+    const badgeEl = document.getElementById('adm-badge-rarity-badge');
+    if (!badgeEl || !window.ProtecMultiplayer) return;
+
+    const rarity = window.ProtecMultiplayer.calculateBadgeRarity(access, units);
+    badgeEl.textContent = `${rarity.tier} (⭐ ${rarity.score}/100)`;
+    badgeEl.className = `px-2.5 py-0.5 rounded-full text-[10px] font-black border ${rarity.color}`;
+  },
+
+  saveEventEdit(eventId) {
+    const ev = (this.eventsCache || []).find(e => e.id === eventId);
+    if (!ev) return;
+
+    const title = document.getElementById('adm-evt-title')?.value.trim() || ev.title;
+    const category = document.getElementById('adm-evt-category')?.value.trim() || ev.category;
+    const address = document.getElementById('adm-evt-address')?.value.trim() || ev.address;
+    const city = document.getElementById('adm-evt-city')?.value.trim() || ev.city;
+    const lat = parseFloat(document.getElementById('adm-evt-lat')?.value || ev.lat || 48.8566);
+    const lng = parseFloat(document.getElementById('adm-evt-lng')?.value || ev.lng || 2.3522);
+    const volunteers = parseInt(document.getElementById('adm-evt-volunteers')?.value || ev.requiredVolunteers, 10);
+    const duration = parseInt(document.getElementById('adm-evt-duration')?.value || ev.durationHours, 10);
+    const reward = parseInt(document.getElementById('adm-evt-reward')?.value || ev.rewardMoney, 10);
+    const vehicles = (document.getElementById('adm-evt-vehicles')?.value || '').split(',').map(v => v.trim()).filter(Boolean);
+    const status = document.getElementById('adm-evt-status')?.value || ev.status;
+
+    const badgeName = document.getElementById('adm-badge-name')?.value.trim() || ev.badge?.name;
+    const badgeUrl = document.getElementById('adm-badge-url')?.value.trim() || '';
+    const badgeAccess = document.getElementById('adm-badge-access-type')?.value || 'evenement_special';
+    const badgeUnits = parseInt(document.getElementById('adm-badge-units')?.value || '4', 10);
+
+    const rarity = window.ProtecMultiplayer ? window.ProtecMultiplayer.calculateBadgeRarity(badgeAccess, badgeUnits) : { score: 85, tier: 'Très Rare', color: 'bg-purple-100 text-purple-800' };
+
+    const updatedBadge = {
+      ...(ev.badge || {}),
+      name: badgeName,
+      imageUrl: badgeUrl,
+      accessType: badgeAccess,
+      availableUnits: badgeUnits,
+      rarityScore: rarity.score,
+      rarityTier: rarity.tier,
+      rarityColor: rarity.color,
+      desc: rarity.desc
+    };
+
+    const updatedData = {
+      title,
+      category,
+      address,
+      locationName: address.split(',')[0] || address,
+      city,
+      lat,
+      lng,
+      requiredVolunteers: volunteers,
+      durationHours: duration,
+      rewardMoney: reward,
+      requiredVehicles: vehicles.length > 0 ? vehicles : ev.requiredVehicles,
+      status,
+      badge: updatedBadge
+    };
+
+    if (window.ProtecMultiplayer && window.game) {
+      window.ProtecMultiplayer.updateCommunityEvent(window.game, eventId, updatedData);
+    }
+
+    Object.assign(ev, updatedData);
+    const modal = document.getElementById('admin-edit-event-modal');
+    if (modal) modal.classList.add('hidden');
+
+    if (window.game) window.game.showToast('Événement Mis à Jour !', `Toutes les informations de « ${title} » ont été enregistrées avec succès.`, 'green');
+    this.renderEventsTable();
   },
 
   approveEvent(eventId) {
@@ -1318,6 +1650,14 @@ window.ProtecAdmin = {
     }
 
     if (m) {
+      if (m.type === 'social') {
+        m.isSector = true;
+        m.sector = 'Secteur Maraude : Centre Urbain & Gares';
+        m.address = m.sector;
+      } else if (!m.address) {
+        m.address = game.generateRealisticStreetAddress ? game.generateRealisticStreetAddress(base?.city || 'Paris', m.lat, m.lng) : '10 Place de la République, Paris';
+        m.isSector = false;
+      }
       if (game.enrichMissionLocationWithCity) game.enrichMissionLocationWithCity(m);
       game.missions.push(m);
       game.renderMissions();

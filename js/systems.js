@@ -908,7 +908,9 @@ window.ProtecSystems = {
       prealertTotalSec: 180,
       evolutionResolved: false,
       registeredVolunteers: [],
-      assignedCrew: { volunteers: [], vehicles: [] }
+      assignedCrew: { volunteers: [], vehicles: [] },
+      address: (game.generateRealisticStreetAddress ? game.generateRealisticStreetAddress(game.stations?.[0]?.city || 'Centre Urbain', newWeatherMission.lat, newWeatherMission.lng) : 'Poste de Commandement Météo'),
+      isSector: false
     };
 
     if (game.enrichMissionLocationWithCity) {

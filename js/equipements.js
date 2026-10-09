@@ -308,6 +308,18 @@ window.ProtecEquipements = {
     this.renderModal(game);
   },
 
+  searchQuery: '',
+
+  setSearchQuery(query, game) {
+    this.searchQuery = query;
+    this.renderModal(game);
+    const input = document.getElementById('equipment-search-input');
+    if (input) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  },
+
   // Changement d'onglet
   setTab(tabName, game) {
     this.activeTab = tabName;
@@ -420,6 +432,21 @@ window.ProtecEquipements = {
       usedStorage = window.ProtecLocaux.getCurrentStorageUsed(game);
     }
     const storagePercent = maxStorage > 0 ? Math.min(100, Math.round((usedStorage / maxStorage) * 100)) : 0;
+    const sq = (this.searchQuery || '').toLowerCase().trim();
+
+    const filteredLots = sq ? this.LOTS_CATALOG.filter(l => 
+      (l.name && l.name.toLowerCase().includes(sq)) ||
+      (l.desc && l.desc.toLowerCase().includes(sq)) ||
+      (l.badge && l.badge.toLowerCase().includes(sq)) ||
+      (l.bonus && l.bonus.toLowerCase().includes(sq))
+    ) : this.LOTS_CATALOG;
+
+    const filteredWorkplace = sq ? this.WORKPLACE_CATALOG.filter(w => 
+      (w.name && w.name.toLowerCase().includes(sq)) ||
+      (w.desc && w.desc.toLowerCase().includes(sq)) ||
+      (w.badge && w.badge.toLowerCase().includes(sq)) ||
+      (w.bonus && w.bonus.toLowerCase().includes(sq))
+    ) : this.WORKPLACE_CATALOG;
 
     body.innerHTML = `
       <div class="space-y-6">
@@ -480,6 +507,21 @@ window.ProtecEquipements = {
           </button>
         </div>
 
+        <!-- Barre de Recherche Matériel & Équipements -->
+        <div class="relative max-w-xl mx-auto w-full">
+          <input 
+            type="text" 
+            id="equipment-search-input"
+            value="${this.searchQuery || ''}" 
+            oninput="window.ProtecEquipements.setSearchQuery(this.value, window.game)" 
+            placeholder="🔍 Rechercher du matériel (ex: pompe, tronçonneuse, radio, sac, tente, café...)" 
+            class="w-full pl-4 pr-10 py-2.5 rounded-2xl bg-white border border-slate-300 shadow-sm font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
+          />
+          ${this.searchQuery ? `
+            <button onclick="window.ProtecEquipements.setSearchQuery('', window.game)" class="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
+          ` : ''}
+        </div>
+
         ${activeTab === 'lots' ? `
           <!-- ONGLET 1 : LOTS D'INTERVENTION & MATÉRIEL DE CRISE -->
           <div class="space-y-4">
@@ -491,7 +533,11 @@ window.ProtecEquipements = {
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              ${this.LOTS_CATALOG.map(lot => {
+              ${filteredLots.length === 0 ? `
+                <div class="col-span-full p-8 text-center glass-card rounded-2xl text-slate-500 italic">
+                  Aucun lot matériel ne correspond à votre recherche « ${sq} ».
+                </div>
+              ` : filteredLots.map(lot => {
                 const count = equipState[lot.id] || 0;
                 const isOwned = count > 0;
                 const canAfford = game.resources.money >= lot.price;
@@ -560,7 +606,11 @@ window.ProtecEquipements = {
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              ${this.WORKPLACE_CATALOG.map(item => {
+              ${filteredWorkplace.length === 0 ? `
+                <div class="col-span-full p-8 text-center glass-card rounded-2xl text-slate-500 italic">
+                  Aucun équipement de confort ne correspond à votre recherche « ${sq} ».
+                </div>
+              ` : filteredWorkplace.map(item => {
                 const count = equipState[item.id] || 0;
                 const isOwned = count > 0;
                 const canAfford = game.resources.money >= item.price;
