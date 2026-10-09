@@ -159,3 +159,6 @@ window.ProtecDepartements = {
     return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
   }
 };
+
+// Alias de rétrocompatibilité pour accéder directement aux 101 départements
+window.ProtecDepartements.DEPARTEMENTS_DATA = window.ProtecDepartements.list;

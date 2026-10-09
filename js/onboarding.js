@@ -19,35 +19,11 @@ window.ProtecOnboarding = {
     room_3: 'libre'
   },
 
-  PREFIXES: [
-    'Antenne Territoriale',
-    'Unité Opérationnelle',
-    'Détachement de Secours',
-    'Section d’Intervention',
-    'Équipe de Premiers Secours',
-    'Poste Opérationnel',
-    'Antenne Locale',
-    'Compagnie de Sécurité Civile'
-  ],
-
-  NAMES: [
-    'Alpha', 'Phénix', 'Horizon', 'Concorde', 'Aurore', 'Sentinelle',
-    'Solidarité', 'Vanguard', 'Saint-Martin', 'Étoile', 'Littoral',
-    'Fraternité', 'Secours 15', 'Vigilance', 'Bouclier', 'Espoir',
-    'Alliance', 'Éclair', 'Saphir', 'Dauphin'
-  ],
-
-  generateRandomTeamName(deptCode = '75') {
-    const p = this.PREFIXES[Math.floor(Math.random() * this.PREFIXES.length)];
-    const n = this.NAMES[Math.floor(Math.random() * this.NAMES.length)];
-    return `${p} ${n} (${deptCode})`;
-  },
-
   showWizard(game) {
     this.game = game;
     this.currentStep = 1;
     this.deptCode = game.currentDepartmentCode || game.player?.departmentCode || '75';
-    this.teamName = this.generateRandomTeamName(this.deptCode);
+    this.teamName = this.teamName || '';
 
     // Initialiser les pièces par défaut
     this.roomsConfig = {
@@ -66,20 +42,65 @@ window.ProtecOnboarding = {
     this.renderWizard();
   },
 
-  rerollTeamName() {
-    this.teamName = this.generateRandomTeamName(this.deptCode);
-    const input = document.getElementById('onboarding-team-name-input');
-    if (input) input.value = this.teamName;
+  onTeamNameInput(val) {
+    this.teamName = val;
   },
 
-  onTeamNameInput(val) {
-    this.teamName = val.trim() || `Antenne de Secours (${this.deptCode})`;
+  onDeptSearchInput(val) {
+    if (!val) return;
+    const depts = (window.ProtecDepartements?.list) || (window.ProtecDepartements?.DEPARTEMENTS_DATA) || [];
+    const clean = val.trim().toLowerCase();
+
+    // 1. Chercher par code exact (ex: "75", "974", "2A", "01")
+    let matched = depts.find(d => d.code.toLowerCase() === clean);
+
+    // 2. Chercher code au début si sélectionné depuis datalist "974 - La Réunion (La Réunion)"
+    if (!matched) {
+      const codeMatch = clean.match(/^([0-9]{2,3}|2a|2b)\b/i);
+      if (codeMatch) {
+        const extractedCode = codeMatch[1].toUpperCase();
+        matched = depts.find(d => d.code.toUpperCase() === extractedCode);
+      }
+    }
+
+    // 3. Chercher par nom exact ou début de nom
+    if (!matched) {
+      matched = depts.find(d => d.name.toLowerCase() === clean || d.name.toLowerCase().startsWith(clean));
+    }
+
+    // 4. Chercher nom contenant la saisie (min 3 caractères)
+    if (!matched && clean.length >= 3) {
+      matched = depts.find(d => d.name.toLowerCase().includes(clean));
+    }
+
+    if (matched) {
+      this.deptCode = matched.code;
+      const select = document.getElementById('onboarding-dept-select');
+      if (select) select.value = matched.code;
+
+      const badge = document.getElementById('onboarding-dept-badge');
+      if (badge) {
+        badge.innerHTML = `<span>✓</span><span>${matched.code} · ${matched.name}</span>`;
+        badge.className = 'px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-black flex items-center gap-1 shadow-xs';
+      }
+    }
   },
 
   onDeptChange(val) {
     this.deptCode = val;
-    this.teamName = this.generateRandomTeamName(this.deptCode);
-    this.renderWizard();
+    const depts = (window.ProtecDepartements?.list) || (window.ProtecDepartements?.DEPARTEMENTS_DATA) || [];
+    const matched = depts.find(d => d.code === val);
+
+    const searchInput = document.getElementById('onboarding-dept-search');
+    if (searchInput && matched) {
+      searchInput.value = `${matched.code} - ${matched.name}`;
+    }
+
+    const badge = document.getElementById('onboarding-dept-badge');
+    if (badge && matched) {
+      badge.innerHTML = `<span>✓</span><span>${matched.code} · ${matched.name}</span>`;
+      badge.className = 'px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-black flex items-center gap-1 shadow-xs';
+    }
   },
 
   onRoomChange(roomId, type) {
@@ -158,64 +179,88 @@ window.ProtecOnboarding = {
     if (window.lucide) window.lucide.createIcons();
   },
 
-  // --- ÉTAPE 1 : CHOIX DU NOM DE L'ÉQUIPE DE BASE ---
+  // --- ÉTAPE 1 : CHOIX DU NOM DE L'ANTENNE ---
   renderStep1() {
-    const depts = window.ProtecDepartements?.DEPARTEMENTS_DATA || [
-      { code: '75', name: 'Paris', region: 'Île-de-France' },
-      { code: '69', name: 'Rhône', region: 'Auvergne-Rhône-Alpes' },
-      { code: '13', name: 'Bouches-du-Rhône', region: 'PACA' },
-      { code: '33', name: 'Gironde', region: 'Nouvelle-Aquitaine' },
-      { code: '59', name: 'Nord', region: 'Hauts-de-France' },
-      { code: '31', name: 'Haute-Garonne', region: 'Occitanie' }
-    ];
+    const depts = (window.ProtecDepartements && window.ProtecDepartements.list && window.ProtecDepartements.list.length > 0)
+      ? window.ProtecDepartements.list
+      : ((window.ProtecDepartements && window.ProtecDepartements.DEPARTEMENTS_DATA) || []);
+    const currentDept = depts.find(d => d.code === this.deptCode) || depts.find(d => d.code === '75') || depts[0];
 
     return `
       <div class="space-y-4">
         <div class="text-center space-y-1">
           <img src="logo_myprotec.png" alt="MyProtec" class="h-14 sm:h-16 object-contain drop-shadow-md mx-auto" />
-          <h2 class="text-xl sm:text-2xl font-black text-slate-900">1. Fondez votre Équipe Opérationnelle</h2>
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900">1. Fondez votre Antenne Opérationnelle</h2>
           <p class="text-xs text-slate-600 max-w-md mx-auto">
-            Choisissez l'appellation de votre antenne locale. Vous pouvez utiliser le nom généré automatiquement ou le modifier à votre guise.
+            Indiquez le nom de votre antenne locale et sélectionnez son département d'implantation.
           </p>
         </div>
 
-        <!-- Champ du nom de l'équipe avec bouton de tirage aléatoire -->
+        <!-- Saisie du nom de l'antenne -->
         <div class="p-4 rounded-2xl glass-card space-y-3 bg-white/90">
-          <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">
-            Nom officiel de l'antenne / équipe :
-          </label>
-
-          <div class="flex items-center gap-2">
+          <div>
+            <label class="block text-xs font-black text-slate-800 uppercase tracking-wider mb-1.5">
+              NOM DE L'ANTENNE
+            </label>
             <input 
               id="onboarding-team-name-input"
               type="text" 
-              value="${this.teamName.replace(/"/g, '&quot;')}"
+              value="${(this.teamName || '').replace(/"/g, '&quot;')}"
               oninput="window.ProtecOnboarding.onTeamNameInput(this.value)"
-              placeholder="Ex: Antenne Territoriale Phénix (75)"
-              class="flex-1 px-4 py-3 rounded-xl border border-slate-300 focus:border-pc-blue focus:ring-2 focus:ring-pc-blue/30 text-sm font-black text-slate-900 bg-white"
+              placeholder="Ex: Antenne de Bordeaux, Antenne Paris 15..."
+              class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-pc-blue focus:ring-2 focus:ring-pc-blue/30 text-sm font-black text-slate-900 bg-white"
             />
-            <button 
-              type="button" 
-              onclick="window.ProtecOnboarding.rerollTeamName()" 
-              class="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 font-bold text-xs border border-slate-300 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Générer un autre nom aléatoire">
-              <span>🎲</span>
-              <span class="hidden sm:inline">Autre nom</span>
-            </button>
           </div>
 
-          <!-- Choix du département -->
-          <div class="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-            <span class="font-bold text-slate-600">Département d'implantation :</span>
-            <select 
-              onchange="window.ProtecOnboarding.onDeptChange(this.value)"
-              class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-black text-slate-900 bg-white">
-              ${depts.map(d => `
-                <option value="${d.code}" ${this.deptCode === d.code ? 'selected' : ''}>
-                  ${d.code} - ${d.name} (${d.region})
-                </option>
-              `).join('')}
-            </select>
+          <!-- Choix du département avec recherche rapide / préremplissage -->
+          <div class="pt-3 border-t border-slate-100 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">
+                DÉPARTEMENT D'IMPLANTATION (101 DÉPARTEMENTS & OUTRE-MER)
+              </label>
+              <span class="text-[10px] font-bold text-pc-blue bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                Préremplissage rapide
+              </span>
+            </div>
+
+            <!-- Champ de recherche / préremplissage rapide instantané -->
+            <div class="relative">
+              <input 
+                id="onboarding-dept-search"
+                type="text" 
+                list="onboarding-depts-datalist"
+                value="${currentDept ? `${currentDept.code} - ${currentDept.name}` : ''}"
+                oninput="window.ProtecOnboarding.onDeptSearchInput(this.value)"
+                placeholder="🔎 Tapez un n° (ex: 974, 33, 75, 2A) ou un nom (ex: Réunion, Gironde, Nord...)"
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-pc-blue focus:ring-2 focus:ring-pc-blue/30 text-xs font-bold text-slate-900 bg-white"
+              />
+              <datalist id="onboarding-depts-datalist">
+                ${depts.map(d => `<option value="${d.code} - ${d.name} (${d.region})"></option>`).join('')}
+              </datalist>
+            </div>
+
+            <!-- Sélecteur synchronisé + Badge actif -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 text-xs">
+              <div class="flex items-center gap-1.5 flex-1">
+                <span class="text-slate-500 text-[11px] font-medium whitespace-nowrap">Ou dans la liste :</span>
+                <select 
+                  id="onboarding-dept-select"
+                  onchange="window.ProtecOnboarding.onDeptChange(this.value)"
+                  class="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white truncate">
+                  ${depts.map(d => `
+                    <option value="${d.code}" ${this.deptCode === d.code ? 'selected' : ''}>
+                      ${d.code} - ${d.name} (${d.region})
+                    </option>
+                  `).join('')}
+                </select>
+              </div>
+
+              <!-- Badge du département actuellement sélectionné -->
+              <div id="onboarding-dept-badge" class="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-black flex items-center gap-1 shadow-xs whitespace-nowrap">
+                <span>✓</span>
+                <span>${currentDept ? `${currentDept.code} · ${currentDept.name}` : this.deptCode}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -437,7 +482,7 @@ window.ProtecOnboarding = {
     const lat = deptInfo ? deptInfo.lat : 48.8566;
     const lng = deptInfo ? deptInfo.lng : 2.3522;
     const stationId = `station-${Date.now()}`;
-    const stationName = this.teamName || `Antenne Territoriale (${deptCode})`;
+    const stationName = (this.teamName && this.teamName.trim()) ? this.teamName.trim() : (deptInfo ? `Antenne ${deptInfo.name} (${deptCode})` : `Antenne Protection Civile (${deptCode})`);
 
     const newStation = {
       id: stationId,
