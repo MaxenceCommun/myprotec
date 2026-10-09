@@ -738,6 +738,56 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 16. Admin : Valider un Événement Proposé
+  if (url === '/api/admin/events/approve' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { eventId } = JSON.parse(body);
+        db.data.communityEvents = db.data.communityEvents || [];
+        const event = db.data.communityEvents.find(e => e.id === eventId);
+        if (event) {
+          event.status = 'open';
+          event.approvedAt = new Date().toISOString();
+          db.save();
+          broadcastSSE('community_event_approved', { event });
+          sendJson(res, 200, { success: true, event });
+        } else {
+          sendJson(res, 404, { error: 'Événement introuvable' });
+        }
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 17. Admin : Refuser un Événement Proposé
+  if (url === '/api/admin/events/reject' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { eventId, reason } = JSON.parse(body);
+        db.data.communityEvents = db.data.communityEvents || [];
+        const event = db.data.communityEvents.find(e => e.id === eventId);
+        if (event) {
+          event.status = 'rejected';
+          event.rejectionReason = reason || 'Non conforme aux critères opérationnels';
+          db.save();
+          broadcastSSE('community_event_rejected', { eventId, reason: event.rejectionReason });
+          sendJson(res, 200, { success: true, event });
+        } else {
+          sendJson(res, 404, { error: 'Événement introuvable' });
+        }
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
   // --- SERVEUR DE FICHIERS STATIQUES ---
   let targetFile = url === '/' ? 'index.html' : url;
   if (url === '/privacy' || url === '/politique-confidentialite' || url === '/mentions-legales') {

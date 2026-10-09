@@ -1673,6 +1673,10 @@ window.ProtecMultiplayer = {
                 </select>
               </div>
             </div>
+            <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] flex items-center gap-2">
+              <i data-lucide="shield-check" class="w-4 h-4 text-amber-700 flex-shrink-0"></i>
+              <span><strong>Validation Fédérale Requise :</strong> Votre proposition sera soumise aux administrateurs pour approbation. Une fois validée, l'événement apparaîtra publiquement et l'écusson sera débloqué.</span>
+            </div>
             <p class="text-[10px] text-indigo-800 font-medium italic">
               Tous les joueurs qui déploieront une équipe sur votre événement remporteront automatiquement cet écusson dans leur profil !
             </p>
@@ -1684,9 +1688,9 @@ window.ProtecMultiplayer = {
           <button onclick="document.getElementById('create-community-event-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
             Annuler
           </button>
-          <button onclick="window.ProtecMultiplayer.submitCommunityEvent(window.game)" class="px-5 py-2.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5">
-            <i data-lucide="check" class="w-4 h-4"></i>
-            Publier l'Événement & Débloquer l'Écusson
+          <button onclick="window.ProtecMultiplayer.submitCommunityEvent(window.game)" class="px-5 py-2.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="send" class="w-4 h-4"></i>
+            Soumettre à Validation Administrative
           </button>
         </div>
       </div>
@@ -1779,15 +1783,13 @@ window.ProtecMultiplayer = {
           volunteersCount: Math.min(4, reqVol)
         }
       ],
-      status: 'open',
+      status: 'pending_approval',
+      submittedAt: new Date().toISOString(),
       createdAt: new Date().toISOString()
     };
 
     game.communityEvents = game.communityEvents || [];
     game.communityEvents.unshift(newEvent);
-
-    // L'organisateur reçoit immédiatement son exemplaire de l'écusson !
-    this.awardBadgeToPlayer(game, badge);
 
     // API push
     fetch('/api/alliances/events/create', {
@@ -1799,9 +1801,68 @@ window.ProtecMultiplayer = {
     const modal = document.getElementById('create-community-event-modal');
     if (modal) modal.classList.add('hidden');
 
-    game.showToast('Événement Publié & Écusson Débloqué !', `« ${title} » est ouvert aux inscriptions des alliés ! Vous recevez l’écusson créateur (Rareté : ${score}/100) !`, 'green');
+    game.showToast('Proposition Soumise aux Administrateurs !', `« ${title} » a été soumis pour validation. L'écusson (⭐ ${score}/100) sera débloqué dès l'approbation d'un admin !`, 'blue');
     game.save();
     game.openModule('alliance');
+  },
+
+  // Validation d'un événement par un Administrateur
+  approveCommunityEvent(game, eventId) {
+    const event = (game.communityEvents || []).find(e => e.id === eventId);
+    if (!event) return;
+
+    event.status = 'open';
+    event.approvedAt = new Date().toISOString();
+
+    // Si le joueur local est l'organisateur, lui décerner l'écusson
+    if (event.organizerPlayerId === (game.player?.id || 'directeur-local') && event.badge) {
+      this.awardBadgeToPlayer(game, event.badge);
+    }
+
+    fetch('/api/admin/events/approve', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('protec_auth_token') || ''}`,
+        'x-admin-key': 'protec_admin_secret_2026'
+      },
+      body: JSON.stringify({ eventId })
+    }).catch(() => {});
+
+    game.showToast('Événement Validé & Publié !', `« ${event.title} » est maintenant ouvert à toutes les antennes alliées !`, 'green');
+    game.save();
+    if (window.ProtecAdmin && window.ProtecAdmin.activeTab === 'events') {
+      window.ProtecAdmin.renderEventsTable();
+    } else {
+      game.openModule('alliance');
+    }
+  },
+
+  // Rejet d'un événement par un Administrateur
+  rejectCommunityEvent(game, eventId, reason) {
+    const event = (game.communityEvents || []).find(e => e.id === eventId);
+    if (!event) return;
+
+    event.status = 'rejected';
+    event.rejectionReason = reason || 'Non conforme aux critères opérationnels';
+
+    fetch('/api/admin/events/reject', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('protec_auth_token') || ''}`,
+        'x-admin-key': 'protec_admin_secret_2026'
+      },
+      body: JSON.stringify({ eventId, reason: event.rejectionReason })
+    }).catch(() => {});
+
+    game.showToast('Événement Rejeté', `La proposition « ${event.title} » a été refusée (${event.rejectionReason}).`, 'red');
+    game.save();
+    if (window.ProtecAdmin && window.ProtecAdmin.activeTab === 'events') {
+      window.ProtecAdmin.renderEventsTable();
+    } else {
+      game.openModule('alliance');
+    }
   },
 
   // Inscription / Participation à un événement communautaire
@@ -1860,8 +1921,13 @@ window.ProtecMultiplayer = {
   // Rendu de l'onglet Événements Communautaires dans le module Alliance
   renderCommunityEventsTabHTML(game) {
     this.injectState(game);
-    const events = game.communityEvents || [];
+    const allEvents = game.communityEvents || [];
     const myPlayerId = game.player?.id || 'directeur-local';
+    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
+
+    const openEvents = allEvents.filter(e => e.status === 'open' || !e.status);
+    const myPendingEvents = allEvents.filter(e => e.organizerPlayerId === myPlayerId && e.status === 'pending_approval');
+    const myRejectedEvents = allEvents.filter(e => e.organizerPlayerId === myPlayerId && e.status === 'rejected');
 
     return `
       <div class="space-y-4">
@@ -1872,21 +1938,93 @@ window.ProtecMultiplayer = {
               Grands Événements Communautaires & Écussons
             </h4>
             <p class="text-xs text-white/90">
-              Dispositifs créés par les directeurs d’antennes : participez avec vos secouristes pour remporter des écussons commémoratifs uniques pour votre profil !
+              Dispositifs créés par les directeurs d’antennes : soumis à validation des administrateurs puis ouverts aux alliés pour remporter des écussons commémoratifs uniques !
             </p>
           </div>
-          <button onclick="window.ProtecMultiplayer.openCreateCommunityEventModal(window.game)" class="px-4 py-2.5 rounded-xl text-xs font-black bg-white text-indigo-950 hover:bg-indigo-50 transition shadow-sm flex items-center gap-1.5 cursor-pointer flex-shrink-0">
-            <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-700"></i>
-            + Proposer un Événement
-          </button>
+          <div class="flex items-center gap-2">
+            ${isAdmin ? `
+              <button onclick="window.ProtecAdmin.openAdminModal(window.game); window.ProtecAdmin.switchTab('events');" class="px-3 py-2 rounded-xl text-xs font-black bg-amber-400 hover:bg-amber-300 text-slate-900 transition shadow-sm flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="shield" class="w-4 h-4"></i>
+                Modération Admin
+              </button>
+            ` : ''}
+            <button onclick="window.ProtecMultiplayer.openCreateCommunityEventModal(window.game)" class="px-4 py-2.5 rounded-xl text-xs font-black bg-white text-indigo-950 hover:bg-indigo-50 transition shadow-sm flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+              <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-700"></i>
+              + Proposer un Événement
+            </button>
+          </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          ${events.length === 0 ? `
-            <div class="col-span-2 p-8 rounded-2xl glass-card text-center text-slate-500 text-xs italic">
-              Aucun événement proposé pour le moment. Soyez le premier directeur à lancer un grand événement fédéral !
+        <!-- Section des événements soumis par le joueur en attente de validation admin -->
+        ${myPendingEvents.length > 0 ? `
+          <div class="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-300/80 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-black text-amber-950 flex items-center gap-1.5">
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                ⏳ Vos Propositions en Attente de Validation Administrative (${myPendingEvents.length})
+              </span>
+              <span class="text-[10px] text-amber-700 font-bold">Examen en cours par l'administration fédérale</span>
             </div>
-          ` : events.map(e => {
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              ${myPendingEvents.map(e => {
+                const b = e.badge || {};
+                return `
+                  <div class="p-3.5 rounded-xl bg-white border border-amber-200 shadow-2xs space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-800">
+                        ${e.category}
+                      </span>
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-200/70 text-amber-900">
+                        ⏳ En cours d'examen
+                      </span>
+                    </div>
+                    <div>
+                      <h5 class="text-xs font-black text-slate-900">${e.title}</h5>
+                      <p class="text-[11px] text-slate-500">${e.locationName} (${e.city}) • Affluence : ${Number(e.publicCount || 0).toLocaleString('fr-FR')} pers.</p>
+                    </div>
+                    ${b.name ? `
+                      <div class="p-2 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-between text-xs">
+                        <span class="font-bold text-purple-900">Écusson : ${b.name}</span>
+                        <span class="text-[10px] font-black text-purple-700">⭐ ${b.rarityScore}/100 (${b.rarityTier})</span>
+                      </div>
+                    ` : ''}
+                    <div class="text-[10px] text-slate-500 flex justify-between pt-1 border-t border-slate-100">
+                      <span>Effectif : ${e.requiredVolunteers} secouristes</span>
+                      <span>Durée : ${e.durationHours}h</span>
+                    </div>
+                    ${isAdmin ? `
+                      <div class="pt-2 flex gap-2">
+                        <button onclick="window.ProtecMultiplayer.approveCommunityEvent(window.game, '${e.id}')" class="flex-1 py-1.5 rounded-lg text-[11px] font-black bg-emerald-600 hover:bg-emerald-700 text-white transition">
+                          ✓ Valider maintenant (Admin)
+                        </button>
+                      </div>
+                    ` : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Section des propositions refusées -->
+        ${myRejectedEvents.length > 0 ? `
+          <div class="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-xs space-y-2">
+            <span class="font-black text-rose-950 block">❌ Propositions non retenues :</span>
+            ${myRejectedEvents.map(e => `
+              <div class="flex items-center justify-between text-[11px] text-rose-800">
+                <span>« ${e.title} » — <em>${e.rejectionReason || 'Non conforme'}</em></span>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        <!-- Liste des Événements Officiels Ouverts -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          ${openEvents.length === 0 ? `
+            <div class="col-span-2 p-8 rounded-2xl glass-card text-center text-slate-500 text-xs italic">
+              Aucun événement validé pour le moment. Proposez le premier événement fédéral pour votre région !
+            </div>
+          ` : openEvents.map(e => {
             const isRegistered = (e.registeredAntennas || []).some(a => a.playerId === myPlayerId);
             const isOrganizer = e.organizerPlayerId === myPlayerId;
             const b = e.badge || {};

@@ -8,6 +8,7 @@
 window.ProtecAdmin = {
   usersCache: [],
   archivesCache: [],
+  eventsCache: [],
   activeTab: 'joueurs',
   searchFilter: '',
 
@@ -39,9 +40,11 @@ window.ProtecAdmin = {
     const tabPlayersBtn = document.getElementById('admin-tab-players-btn');
     const tabArchivesBtn = document.getElementById('admin-tab-archives-btn');
     const tabMissionsBtn = document.getElementById('admin-tab-missions-btn');
+    const tabEventsBtn = document.getElementById('admin-tab-events-btn');
     const viewPlayers = document.getElementById('admin-view-players');
     const viewArchives = document.getElementById('admin-view-archives');
     const viewMissions = document.getElementById('admin-view-missions');
+    const viewEvents = document.getElementById('admin-view-events');
 
     const defaultClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition';
     const activeClass = 'px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition';
@@ -49,13 +52,17 @@ window.ProtecAdmin = {
     if (tabPlayersBtn) tabPlayersBtn.className = (tab === 'joueurs' ? activeClass : defaultClass);
     if (tabArchivesBtn) tabArchivesBtn.className = (tab === 'archives' ? activeClass : defaultClass);
     if (tabMissionsBtn) tabMissionsBtn.className = (tab === 'missions' ? activeClass : defaultClass);
+    if (tabEventsBtn) tabEventsBtn.className = (tab === 'events' ? activeClass : defaultClass);
 
     if (viewPlayers) viewPlayers.classList.toggle('hidden', tab !== 'joueurs');
     if (viewArchives) viewArchives.classList.toggle('hidden', tab !== 'archives');
     if (viewMissions) viewMissions.classList.toggle('hidden', tab !== 'missions');
+    if (viewEvents) viewEvents.classList.toggle('hidden', tab !== 'events');
 
     if (tab === 'archives') {
       this.loadResetArchives();
+    } else if (tab === 'events') {
+      this.loadEventsData();
     }
   },
 
@@ -142,6 +149,171 @@ window.ProtecAdmin = {
       }
     } catch (e) {
       alert('Erreur réseau lors de la restauration.');
+    }
+  },
+
+  async loadEventsData() {
+    const container = document.getElementById('admin-events-list-container');
+    if (container) {
+      container.innerHTML = `<div class="p-6 text-center text-xs text-slate-500 font-semibold animate-pulse">Chargement des événements proposés...</div>`;
+    }
+
+    try {
+      const res = await fetch('/api/events');
+      if (res.ok) {
+        const data = await res.json();
+        this.eventsCache = data.communityEvents || [];
+      } else {
+        this.eventsCache = (window.game && window.game.communityEvents) || [];
+      }
+    } catch (e) {
+      this.eventsCache = (window.game && window.game.communityEvents) || [];
+    }
+
+    if (window.game && window.game.communityEvents) {
+      window.game.communityEvents.forEach(ge => {
+        if (!this.eventsCache.some(ce => ce.id === ge.id)) {
+          this.eventsCache.push(ge);
+        }
+      });
+    }
+
+    this.renderEventsTable();
+  },
+
+  renderEventsTable() {
+    const container = document.getElementById('admin-events-list-container');
+    if (!container) return;
+
+    if (!this.eventsCache || this.eventsCache.length === 0) {
+      container.innerHTML = `
+        <div class="p-8 rounded-2xl glass-card text-center text-slate-400 text-xs italic">
+          Aucun événement proposé par les directeurs dans la base de données.
+        </div>
+      `;
+      return;
+    }
+
+    const sorted = [...this.eventsCache].sort((a, b) => {
+      if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
+      if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
+      return (new Date(b.createdAt || 0)) - (new Date(a.createdAt || 0));
+    });
+
+    container.innerHTML = sorted.map(ev => {
+      const b = ev.badge || {};
+      const isPending = ev.status === 'pending_approval';
+      const isOpen = ev.status === 'open' || !ev.status;
+      const isRejected = ev.status === 'rejected';
+
+      const statusBadge = isPending 
+        ? `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> En Attente de Validation</span>`
+        : isOpen
+        ? `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">✓ Validé & En Ligne</span>`
+        : `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">✕ Refusé</span>`;
+
+      return `
+        <div class="p-4 rounded-2xl bg-white border ${isPending ? 'border-amber-300 ring-2 ring-amber-100' : 'border-slate-200'} shadow-sm space-y-3">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-800 uppercase">${ev.category || 'Événement'}</span>
+                ${statusBadge}
+              </div>
+              <h4 class="text-sm font-black text-slate-900">${ev.title}</h4>
+              <p class="text-xs text-slate-500 font-medium">
+                Organisateur : <strong class="text-slate-700">${ev.organizerPlayerName}</strong> (${ev.stationName || 'Antenne'} • ${ev.city || 'Ville'})
+              </p>
+            </div>
+            <div class="text-right">
+              <span class="text-xs font-black text-emerald-700 mono-num">+${ev.rewardMoney} €</span>
+              <div class="text-[10px] text-slate-400">ID: ${ev.id}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-600">
+            <div>Lieu : <strong class="text-slate-800">${ev.locationName}</strong></div>
+            <div>Public : <strong class="text-slate-800">${Number(ev.publicCount || 0).toLocaleString('fr-FR')} pers.</strong></div>
+            <div>Effectif : <strong class="text-slate-800">${ev.requiredVolunteers} secouristes</strong></div>
+            <div>Durée : <strong class="text-slate-800">${ev.durationHours}h</strong></div>
+          </div>
+
+          ${b.name ? `
+            <div class="p-3 rounded-xl bg-purple-50/70 border border-purple-200 flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-700 to-indigo-900 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <i data-lucide="${b.icon || 'award'}" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-xs font-black text-purple-950">${b.name}</span>
+                    <span class="text-[9px] font-black px-1.5 py-0.2 rounded-full ${b.rarityColor || 'bg-purple-100 text-purple-800'}">${b.rarityTier}</span>
+                  </div>
+                  <p class="text-[10px] text-purple-700">${b.desc || 'Écusson commémoratif'}</p>
+                </div>
+              </div>
+              <div class="text-right flex-shrink-0">
+                <div class="text-xs font-black text-purple-950">⭐ ${b.rarityScore}/100</div>
+                <div class="text-[9px] text-purple-600 uppercase font-bold">Rareté</div>
+              </div>
+            </div>
+          ` : ''}
+
+          ${isRejected ? `
+            <div class="text-[11px] text-rose-700 font-semibold p-2 rounded-lg bg-rose-50 border border-rose-200">
+              Motif du refus : <em>${ev.rejectionReason || 'Non conforme aux critères'}</em>
+            </div>
+          ` : ''}
+
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+            <span class="text-[10px] text-slate-400">Date prévue : ${ev.eventDate?.day}/${ev.eventDate?.month}/${ev.eventDate?.year || 2026} à ${ev.eventDate?.hour || 14}h</span>
+            <div class="flex items-center gap-2">
+              ${isPending ? `
+                <button onclick="window.ProtecAdmin.promptRejectEvent('${ev.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-700 hover:bg-rose-50 border border-rose-200 transition cursor-pointer">
+                  ✕ Refuser
+                </button>
+                <button onclick="window.ProtecAdmin.approveEvent('${ev.id}')" class="px-4 py-1.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center gap-1 cursor-pointer">
+                  ✓ Valider & Publier
+                </button>
+              ` : isOpen ? `
+                <button onclick="window.ProtecAdmin.promptRejectEvent('${ev.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer">
+                  Suspendre / Retirer
+                </button>
+              ` : `
+                <button onclick="window.ProtecAdmin.approveEvent('${ev.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50 cursor-pointer">
+                  Réexaminer & Valider
+                </button>
+              `}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (window.lucide) window.lucide.createIcons();
+  },
+
+  approveEvent(eventId) {
+    if (window.ProtecMultiplayer && window.game) {
+      window.ProtecMultiplayer.approveCommunityEvent(window.game, eventId);
+      const ev = this.eventsCache.find(e => e.id === eventId);
+      if (ev) ev.status = 'open';
+      this.renderEventsTable();
+    }
+  },
+
+  promptRejectEvent(eventId) {
+    const reason = prompt("Précisez le motif du refus (ex: effectif irréaliste, intitulé non conforme...) :", "Critères de sécurité non respectés");
+    if (reason !== null && reason.trim()) {
+      if (window.ProtecMultiplayer && window.game) {
+        window.ProtecMultiplayer.rejectCommunityEvent(window.game, eventId, reason.trim());
+        const ev = this.eventsCache.find(e => e.id === eventId);
+        if (ev) {
+          ev.status = 'rejected';
+          ev.rejectionReason = reason.trim();
+        }
+        this.renderEventsTable();
+      }
     }
   },
 
@@ -458,10 +630,13 @@ window.ProtecAdmin = {
           </div>
         </div>
 
-        <!-- Onglets Directeurs / Archives / Déclencheur Missions -->
-        <div class="flex items-center gap-2 mb-3 border-b border-slate-200/80 pb-2 flex-shrink-0">
+        <!-- Onglets Directeurs / Archives / Déclencheur Missions / Événements & Écussons -->
+        <div class="flex items-center gap-2 mb-3 border-b border-slate-200/80 pb-2 flex-shrink-0 flex-wrap">
           <button id="admin-tab-players-btn" onclick="window.ProtecAdmin.switchTab('joueurs')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition">
             👥 Directeurs & Comptes
+          </button>
+          <button id="admin-tab-events-btn" onclick="window.ProtecAdmin.switchTab('events')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5">
+            🏅 Événements & Écussons
           </button>
           <button id="admin-tab-archives-btn" onclick="window.ProtecAdmin.switchTab('archives')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5">
             📦 Archives & Remises à Zéro
@@ -843,6 +1018,27 @@ window.ProtecAdmin = {
                 Déclencher Grand Froid (2 VPSP)
               </button>
             </div>
+          </div>
+        </div>
+
+        <!-- Vue 4 : Modération des Événements & Écussons Proposés -->
+        <div id="admin-view-events" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-3">
+          <div class="p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-xs text-purple-900 flex items-center justify-between">
+            <div>
+              <span class="font-extrabold block flex items-center gap-1.5">
+                <i data-lucide="award" class="w-4 h-4 text-purple-700"></i>
+                Modération Fédérale des Grands Événements & Écussons
+              </span>
+              <span class="text-[11px] text-purple-700">Examinez les propositions soumises par les directeurs d'antennes. Validez pour publier sur le réseau et débloquer les écussons, ou refusez les demandes incohérentes.</span>
+            </div>
+            <button onclick="window.ProtecAdmin.loadEventsData()" class="px-3 py-1.5 rounded-xl bg-purple-600 text-white font-bold text-xs hover:bg-purple-700 transition cursor-pointer">
+              🔄 Actualiser
+            </button>
+          </div>
+
+          <!-- Liste des Événements Proposés -->
+          <div id="admin-events-list-container" class="space-y-3 flex-1">
+            <!-- Rempli dynamiquement -->
           </div>
         </div>
 
