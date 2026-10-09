@@ -904,7 +904,7 @@ window.ProtecPersonnel = {
                   <!-- Header salarié -->
                   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div class="flex items-center gap-3">
-                      <span class="text-3xl">${sal.avatar || '👔'}</span>
+                      ${game.getVolunteerAvatarHTML ? game.getVolunteerAvatarHTML(sal, 'w-10 h-10', true) : `<span class="text-3xl">${sal.avatar || '👔'}</span>`}
                       <div>
                         <div class="flex items-center gap-2">
                           <h4 class="text-sm font-black text-slate-900">${sal.name}</h4>
@@ -1593,7 +1593,7 @@ window.ProtecPersonnel = {
       <div class="space-y-6">
         <!-- Présentation du candidat -->
         <div class="p-4 rounded-2xl glass-card flex items-start gap-4 border ${isSC ? 'border-amber-200' : 'border-indigo-100'}">
-          <span class="text-4xl">${cand.avatar || '🙋'}</span>
+          ${game.getVolunteerAvatarHTML ? game.getVolunteerAvatarHTML(cand, 'w-12 h-12', false) : `<span class="text-4xl">${cand.avatar || '🙋'}</span>`}
           <div class="flex-1 space-y-1">
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-black text-slate-900">${cand.name} (${cand.age} ans)</h4>

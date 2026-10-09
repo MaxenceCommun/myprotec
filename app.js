@@ -585,6 +585,7 @@ class ProtecGame {
     this.ensureMissionAddresses();
     this.disperseOverlappingMissions();
     this.renderMissions();
+    this.ensureExtraDeptRenforts();
     this.updateStatsUI();
     this.updateDockAndFiltersVisibility();
     this.startSimulationClock();
@@ -3280,8 +3281,9 @@ class ProtecGame {
     return String(name).replace(/\s*\((femme|homme|f|h)\)/gi, '').trim();
   }
 
-  // Rendu moderne et professionnel de l'icône de bénévole (icônes vectorielles distinctes homme / femme sans distinction de couleur)
-  getVolunteerAvatarHTML(v, sizeClass = 'w-7 h-7') {
+  // Rendu moderne et officiel de l'icône de bénévole aux couleurs Protection Civile (Orange #f78d20, Blanc, Bleu #024589)
+  // RÈGLE STRICTE : La tenue officielle s'applique UNIQUEMENT aux membres dans les effectifs de l'antenne, pas avant recrutement
+  getVolunteerAvatarHTML(v, sizeClass = 'w-7 h-7', isRecruited = null) {
     if (!v) return '';
     if (v.name) v.name = this.cleanVolunteerName(v.name);
     const cleanName = v.name || 'Secouriste';
@@ -3294,37 +3296,104 @@ class ProtecGame {
       ['sarah', 'élodie', 'elodie', 'léa', 'lea', 'manon', 'jade', 'chloé', 'chloe', 'inès', 'ines', 'pauline', 'océane', 'oceane', 'camille', 'stéphanie', 'stephanie', 'sophie', 'marie', 'clara', 'valérie', 'valerie', 'emma', 'charlotte', 'juliette', 'audrey', 'céline', 'celine', 'laura', 'marion', 'clémentine', 'clementine', 'aurélie', 'aurelie', 'nathalie'].some(fn => nameLower.startsWith(fn))
     );
 
-    // Icône Homme fidèle (raie/décroché à gauche, col rond U, épaules)
-    const maleSvg = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
-        <!-- Tête avec raie/décroché à gauche et menton arrondi -->
-        <path d="M 5.8 3.2 H 14.5 C 16.2 3.2 17.2 4.4 17.2 6.2 V 11 C 17.2 14.8 6.8 14.8 6.8 11 V 6.2 H 5.8 Z" />
-        <!-- Col rond U -->
-        <path d="M 9.8 14.2 C 9.8 16.8 14.2 16.8 14.2 14.2" />
-        <!-- Épaules -->
-        <path d="M 4 21.5 V 18 C 4 15.5 7.2 14.5 9.2 14.2" />
-        <path d="M 14.8 14.2 C 16.8 14.5 20 15.5 20 18 V 21.5" />
-      </svg>
-    `;
+    // Détection stricte : uniquement lorsqu'il est dans les effectifs de l'antenne
+    let isInTeam = isRecruited;
+    if (isInTeam === null) {
+      if (v.isCandidate === true || v.interviewPassed !== undefined || v.motivationGrade !== undefined || v.jobOfferTitle !== undefined) {
+        isInTeam = false;
+      } else if (this.candidatures && this.candidatures.some(c => c.id === v.id)) {
+        isInTeam = false;
+      } else if (this.volunteers && this.volunteers.some(vol => vol.id === v.id)) {
+        isInTeam = true;
+      } else if (v.stationId || (v.status && v.status !== 'candidat' && v.status !== 'pending')) {
+        isInTeam = true;
+      } else {
+        isInTeam = true;
+      }
+    }
 
-    // Icône Femme fidèle (coupe au carré en cloche, col V, épaules connectées)
-    const femaleSvg = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
-        <!-- Chevelure au carré dôme et retours horizontaux -->
-        <path d="M 9.5 12.5 H 6.5 V 7.5 C 6.5 3.4 17.5 3.4 17.5 7.5 V 12.5 H 14.5" />
-        <!-- Col V distinctif -->
-        <path d="M 9.6 14.5 L 12 17.5 L 14.4 14.5" />
-        <!-- Épaules connectées à la coupe de cheveux -->
-        <path d="M 9.5 12.5 C 7.2 14 4 15.5 4 18 V 21.5" />
-        <path d="M 14.5 12.5 C 16.8 14 20 15.5 20 18 V 21.5" />
-      </svg>
-    `;
+    const clipId = 'pc-torso-' + Math.random().toString(36).slice(2, 9);
 
-    return `
-      <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 text-slate-700 border border-slate-200/90 shadow-2xs transition" title="${cleanName}">
-        ${isFemale ? femaleSvg : maleSvg}
-      </div>
-    `;
+    if (isInTeam) {
+      // --- MEMBRE DES EFFECTIFS DE L'ANTENNE : TENUE OFFICIELLE PROTECTION CIVILE ---
+      // Orange (#f78d20), Bande blanche (#ffffff), Bleu marine (#024589)
+      if (isFemale) {
+        return `
+          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 border border-slate-200/90 shadow-2xs transition overflow-hidden" title="${cleanName} (Protection Civile)">
+            <svg viewBox="0 0 24 24" class="w-full h-full p-0.5" fill="none">
+              <defs>
+                <clipPath id="${clipId}">
+                  <path d="M 4 22 V 18 C 4 15.5 7.2 14 9.5 12.5 C 10 13.8 11 16.5 12 16.5 C 13 16.5 14 13.8 14.5 12.5 C 16.8 14 20 15.5 20 18 V 22 Z" />
+                </clipPath>
+              </defs>
+              <!-- Torse Protection Civile triptyque -->
+              <g clip-path="url(#${clipId})">
+                <rect x="2" y="12" width="20" height="5.8" fill="#f78d20" />
+                <rect x="2" y="17.8" width="20" height="1.6" fill="#ffffff" />
+                <rect x="2" y="19.4" width="20" height="3.6" fill="#024589" />
+              </g>
+              <!-- Col V blanc -->
+              <path d="M 9.6 14.5 L 12 17.5 L 14.4 14.5" stroke="#334155" stroke-width="1.8" fill="#ffffff" stroke-linecap="round" stroke-linejoin="round" />
+              <!-- Épaules -->
+              <path d="M 9.5 12.5 C 7.2 14 4 15.5 4 18 V 22" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M 14.5 12.5 C 16.8 14 20 15.5 20 18 V 22" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
+              <!-- Chevelure & visage -->
+              <path d="M 9.5 12.5 H 6.5 V 7.5 C 6.5 3.4 17.5 3.4 17.5 7.5 V 12.5 H 14.5" fill="#ffffff" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </div>
+        `;
+      } else {
+        return `
+          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 border border-slate-200/90 shadow-2xs transition overflow-hidden" title="${cleanName} (Protection Civile)">
+            <svg viewBox="0 0 24 24" class="w-full h-full p-0.5" fill="none">
+              <defs>
+                <clipPath id="${clipId}">
+                  <path d="M 4 22 V 18 C 4 15.5 7.2 14.5 9.2 14.2 C 9.8 14.2 10.2 15.8 12 15.8 C 13.8 15.8 14.2 14.2 14.8 14.2 C 16.8 14.5 20 15.5 20 18 V 22 Z" />
+                </clipPath>
+              </defs>
+              <!-- Torse Protection Civile triptyque -->
+              <g clip-path="url(#${clipId})">
+                <rect x="2" y="13" width="20" height="4.8" fill="#f78d20" />
+                <rect x="2" y="17.8" width="20" height="1.6" fill="#ffffff" />
+                <rect x="2" y="19.4" width="20" height="3.6" fill="#024589" />
+              </g>
+              <!-- Col rond U blanc -->
+              <path d="M 9.8 14.2 C 9.8 16.4 14.2 16.4 14.2 14.2" stroke="#334155" stroke-width="1.8" fill="#ffffff" stroke-linecap="round" />
+              <!-- Épaules -->
+              <path d="M 4 22 V 18 C 4 15.5 7.2 14.5 9.2 14.2" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M 14.8 14.2 C 16.8 14.5 20 15.5 20 18 V 22" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
+              <!-- Tête stylisée (décroché à gauche) -->
+              <path d="M 5.8 3.2 H 14.5 C 16.2 3.2 17.2 4.4 17.2 6.2 V 11 C 17.2 14.8 6.8 14.8 6.8 11 V 6.2 H 5.8 Z" fill="#ffffff" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </div>
+        `;
+      }
+    } else {
+      // --- CANDIDAT AVANT RECRUTEMENT : TENUE CIVILE / NEUTRE ---
+      if (isFemale) {
+        return `
+          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 text-slate-500 border border-slate-200/90 shadow-2xs transition" title="${cleanName} (Candidat)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
+              <path d="M 9.5 12.5 H 6.5 V 7.5 C 6.5 3.4 17.5 3.4 17.5 7.5 V 12.5 H 14.5" fill="#ffffff" />
+              <path d="M 9.6 14.5 L 12 17.5 L 14.4 14.5" />
+              <path d="M 9.5 12.5 C 7.2 14 4 15.5 4 18 V 21.5" />
+              <path d="M 14.5 12.5 C 16.8 14 20 15.5 20 18 V 21.5" />
+            </svg>
+          </div>
+        `;
+      } else {
+        return `
+          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 text-slate-500 border border-slate-200/90 shadow-2xs transition" title="${cleanName} (Candidat)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
+              <path d="M 5.8 3.2 H 14.5 C 16.2 3.2 17.2 4.4 17.2 6.2 V 11 C 17.2 14.8 6.8 14.8 6.8 11 V 6.2 H 5.8 Z" fill="#ffffff" />
+              <path d="M 9.8 14.2 C 9.8 16.8 14.2 16.8 14.2 14.2" />
+              <path d="M 4 21.5 V 18 C 4 15.5 7.2 14.5 9.2 14.2" />
+              <path d="M 14.8 14.2 C 16.8 14.5 20 15.5 20 18 V 21.5" />
+            </svg>
+          </div>
+        `;
+      }
+    }
   }
 
   // Récupère l'ensemble exhaustif des compétences et qualifications d'un bénévole
@@ -4544,6 +4613,608 @@ class ProtecGame {
     });
   }
 
+  // --- RENFORTS EXTRA-DÉPARTEMENTAUX (MAQUETTE OFFICIELLE FNPC) ---
+  getExtraDeptTemplates() {
+    return [
+      {
+        id: 'renf-extra-suap-23',
+        isExtraDept: true,
+        typeCategory: 'suap',
+        typeTitle: 'SUAP',
+        iconEmoji: '🔥',
+        colorClass: 'text-red-600',
+        address: '23110 Évaux-les-Bains 23110 Évaux-les-Bains',
+        addressDisplay: '23110 Évaux-les-Bains 23110 Évaux-les-Bains',
+        deptCode: '23',
+        lat: 46.175,
+        lng: 2.485,
+        needLabel: '1 AMB_MED',
+        demandeur: 'CIS Boussac',
+        requiredVehType: 'VPSP',
+        requiredVolsCount: 2,
+        indemnite: 520,
+        alliancePoints: 60,
+        status: 'open',
+        description: 'Carence ambulancière et soutien au SDIS 23 pour urgences pré-hospitalières et secours d’urgence aux personnes.'
+      },
+      {
+        id: 'renf-extra-incendie-83',
+        isExtraDept: true,
+        typeCategory: 'incendie',
+        typeTitle: 'INCENDIE / FEUX DE FORÊT',
+        iconEmoji: '🚒',
+        colorClass: 'text-orange-600',
+        address: '83390 Cuers, Var (83)',
+        addressDisplay: '83390 Cuers, Massif des Maures',
+        deptCode: '83',
+        lat: 43.237,
+        lng: 6.071,
+        needLabel: '1 VTU Logistique + 4 Secouristes',
+        demandeur: 'SDIS 83 - CODIS',
+        requiredVehType: 'VTU',
+        requiredVolsCount: 4,
+        indemnite: 680,
+        alliancePoints: 85,
+        status: 'open',
+        description: 'Mobilisation de la colonne Sud pour ravitaillement, soutien sanitaire et logistique des sapeurs-pompiers en ligne de feu.'
+      },
+      {
+        id: 'renf-extra-inondation-62',
+        isExtraDept: true,
+        typeCategory: 'inondation',
+        typeTitle: 'PLAN ORSEC / INONDATION',
+        iconEmoji: '🌊',
+        colorClass: 'text-cyan-700',
+        address: '62500 Saint-Omer, Pas-de-Calais (62)',
+        addressDisplay: '62500 Saint-Omer, Bassin de l’Aa',
+        deptCode: '62',
+        lat: 50.750,
+        lng: 2.256,
+        needLabel: '1 Lot Sauvetage Aquatique (Barque)',
+        demandeur: 'Préfecture 62 & Zone Nord',
+        requiredVehType: 'VTU',
+        requiredVolsCount: 2,
+        indemnite: 750,
+        alliancePoints: 95,
+        status: 'open',
+        description: 'Crue majeure et évacuation de riverains. Mise en place et armement d’un Centre d’Accueil des Impliqués (CAI).'
+      },
+      {
+        id: 'renf-extra-dps-29',
+        isExtraDept: true,
+        typeCategory: 'dps',
+        typeTitle: 'DPS RENFORT',
+        iconEmoji: '🎪',
+        colorClass: 'text-indigo-600',
+        address: '29270 Carhaix-Plouguer, Finistère (29)',
+        addressDisplay: '29270 Carhaix-Plouguer, Site de Kerampuilh',
+        deptCode: '29',
+        lat: 48.276,
+        lng: -3.574,
+        needLabel: '2 VPSP + 6 Secouristes PSE2',
+        demandeur: 'Protection Civile 29 / FNPC',
+        requiredVehType: 'VPSP',
+        requiredVolsCount: 4,
+        indemnite: 620,
+        alliancePoints: 70,
+        status: 'open',
+        description: 'Grand rassemblement musical national. Renfort interdépartemental pour armer les postes de secours de nuit.'
+      },
+      {
+        id: 'renf-extra-novi-21',
+        isExtraDept: true,
+        typeCategory: 'novi',
+        typeTitle: 'PLAN NOVI / CATASTROPHE',
+        iconEmoji: '🚨',
+        colorClass: 'text-rose-700',
+        address: '21000 Dijon, Côte-d’Or (21)',
+        addressDisplay: '21000 Dijon, Rocade Est A31',
+        deptCode: '21',
+        lat: 47.322,
+        lng: 5.041,
+        needLabel: '1 VPSP + 1 PMA Mobile',
+        demandeur: 'SAMU 21 & Cellule Zonale de Crise',
+        requiredVehType: 'VPSP',
+        requiredVolsCount: 3,
+        indemnite: 850,
+        alliancePoints: 110,
+        status: 'open',
+        description: 'Accident routier collectif à nombreuses victimes. Déploiement urgent d’un Poste Médical Avancé et évacuations sanitaires.'
+      },
+      {
+        id: 'renf-extra-maraude-59',
+        isExtraDept: true,
+        typeCategory: 'maraude',
+        typeTitle: 'GRAND FROID / MARAUDE',
+        iconEmoji: '❄️',
+        colorClass: 'text-sky-600',
+        address: '59000 Lille, Nord (59)',
+        addressDisplay: '59000 Lille, Secteur Flandres',
+        deptCode: '59',
+        lat: 50.629,
+        lng: 3.057,
+        needLabel: '1 VTU Maraude Sociale + 3 Équipiers',
+        demandeur: 'SIAO 115 & DDETS',
+        requiredVehType: 'VTU',
+        requiredVolsCount: 3,
+        indemnite: 480,
+        alliancePoints: 55,
+        status: 'open',
+        description: 'Plan Grand Froid niveau 2 activé. Maraude sociale de nuit et orientation d’urgence vers les centres d’hébergement temporaires.'
+      }
+    ];
+  }
+
+  ensureExtraDeptRenforts() {
+    if (!this.renforts) this.renforts = [];
+    const openExtra = this.renforts.filter(r => r.isExtraDept && r.status === 'open');
+    if (openExtra.length === 0) {
+      const templates = this.getExtraDeptTemplates();
+      // On injecte en premier la demande SUAP d'Évaux-les-Bains (modèle officiel de la capture)
+      const starter = templates[0];
+      const copy = { ...starter, createdAt: new Date().toISOString() };
+      this.renforts.unshift(copy);
+    }
+  }
+
+  calculateRouteInfo(destLat, destLng) {
+    const base = this.stations && this.stations.length > 0 ? this.stations[0] : { lat: 48.8566, lng: 2.3522 };
+    const fromLat = base.lat || 48.8566;
+    const fromLng = base.lng || 2.3522;
+
+    if (!destLat || !destLng) {
+      return { distanceKm: 400, durationText: '5h00' };
+    }
+
+    const R = 6371;
+    const dLat = (destLat - fromLat) * Math.PI / 180;
+    const dLon = (destLng - fromLng) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(fromLat * Math.PI / 180) * Math.cos(destLat * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    
+    // Facteur routier ~1.25x la distance orthodromique
+    const distanceKm = Math.max(30, Math.round(R * c * 1.25));
+    
+    // Vitesse moyenne convoi d'urgence routier ~80 km/h
+    const totalMinutes = Math.round((distanceKm / 80) * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const durationText = `${hours}h${String(minutes).padStart(2, '0')}`;
+
+    return { distanceKm, durationText };
+  }
+
+  renderExtraDeptRenfortCardHTML(r) {
+    const route = this.calculateRouteInfo(r.lat, r.lng);
+    const distanceKm = route.distanceKm;
+    const durationText = route.durationText;
+
+    return `
+      <div class="bg-white rounded-xl border border-orange-200/80 p-3.5 shadow-xs space-y-1.5 transition hover:shadow-sm">
+        <!-- Type d'intervention avec icône personnalisée selon type -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5 text-xs font-black ${r.colorClass || 'text-red-600'} uppercase tracking-wide">
+            <span class="text-sm">${r.iconEmoji || '🔥'}</span>
+            <span>${r.typeTitle || r.title || 'SUAP'}</span>
+          </div>
+          <span class="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/80 mono-num">
+            +${r.indemnite || 520} €
+          </span>
+        </div>
+
+        <!-- Adresse complète -->
+        <div class="text-xs font-semibold text-slate-800 leading-snug">
+          ${r.addressDisplay || r.address || '23110 Évaux-les-Bains 23110 Évaux-les-Bains'}
+        </div>
+
+        <!-- Besoin -->
+        <div class="text-xs text-slate-700">
+          <span class="font-normal text-slate-600">Besoin :</span> <strong class="text-slate-900">${r.needLabel || r.unitRequested || '1 AMB_MED'}</strong>
+        </div>
+
+        <!-- Demandeur -->
+        <div class="text-xs text-slate-700">
+          <span class="font-normal text-slate-600">Demandeur :</span> <strong class="text-slate-900">${r.demandeur || r.requesterName || 'CIS Boussac'}</strong>
+        </div>
+
+        <!-- Distance et durée + Bouton Engager -->
+        <div class="pt-2 flex items-center justify-between gap-3 border-t border-slate-100">
+          <div class="flex items-center gap-1.5 text-xs font-extrabold text-slate-800">
+            <span class="text-sm">🚙</span>
+            <span>≈ ${distanceKm} km</span>
+            <span class="text-slate-400 font-normal">•</span>
+            <span>~ ${durationText}</span>
+          </div>
+
+          <button 
+            onclick="window.game.openEngageRenfortModal('${r.id}')" 
+            class="px-4 py-2 rounded-xl text-xs font-black bg-[#ff6a28] hover:bg-[#ea5b1b] active:scale-95 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+            title="Détacher un équipage en renfort extra-départemental"
+          >
+            <span class="text-[11px]">➤</span>
+            <span>Engager</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  renderExtraDeptRenfortsBlockHTML(onlyIfActive = false) {
+    this.ensureExtraDeptRenforts();
+    const openExtra = (this.renforts || []).filter(r => r.isExtraDept && r.status === 'open');
+
+    if (onlyIfActive && openExtra.length === 0) {
+      return '';
+    }
+
+    const count = openExtra.length;
+
+    return `
+      <!-- Encart teinté orange style officiel -->
+      <div class="rounded-2xl p-4 bg-[#fef6ee] border border-[#fbd3b6] shadow-xs space-y-3">
+        <!-- En-tête de section -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 text-xs font-black text-[#873800]">
+            <span class="text-base">🌐</span>
+            <span>${count} demande${count > 1 ? 's' : ''} extra-départementale${count > 1 ? 's' : ''} en cours</span>
+          </div>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#fed8b8] text-[#873800]">
+            Réseau National FNPC
+          </span>
+        </div>
+
+        <!-- Liste des demandes de renfort extra-départementales -->
+        <div class="space-y-3">
+          ${openExtra.length === 0 ? `
+            <div class="bg-white/80 rounded-xl p-4 text-center text-xs text-slate-500 border border-orange-200/50">
+              Aucune demande extra-départementale active pour le moment.
+            </div>
+          ` : openExtra.map(r => this.renderExtraDeptRenfortCardHTML(r)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  openEngageRenfortModal(renfortId) {
+    const renfort = (this.renforts || []).find(r => r.id === renfortId);
+    if (!renfort) {
+      this.showToast('Erreur', 'Demande de renfort introuvable.', 'red');
+      return;
+    }
+
+    const route = this.calculateRouteInfo(renfort.lat, renfort.lng);
+    const dispoVehicles = (this.vehicles || []).filter(v => v.status === 'dispo');
+    const dispoVolunteers = (this.volunteers || []).filter(v => v.status === 'dispo');
+    const requiredVols = renfort.requiredVolsCount || 2;
+
+    let modal = document.getElementById('engage-renfort-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'engage-renfort-modal';
+      modal.className = 'fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="bg-white rounded-3xl max-w-lg w-full p-5 space-y-4 shadow-2xl border border-orange-200 animate-in fade-in zoom-in duration-150 max-h-[92vh] overflow-y-auto">
+        <!-- En-tête -->
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center text-xl shadow-xs">
+              ${renfort.iconEmoji || '🌐'}
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[9px] font-black bg-orange-100 text-orange-800 uppercase">Ordre de Mission</span>
+                <span class="text-[10px] font-bold text-slate-500">Zonale / Extra-Dép.</span>
+              </div>
+              <h3 class="text-sm font-black text-slate-900 leading-tight mt-0.5">Renfort « ${renfort.typeTitle || renfort.title} »</h3>
+            </div>
+          </div>
+          <button onclick="document.getElementById('engage-renfort-modal')?.remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-black text-xs cursor-pointer">✕</button>
+        </div>
+
+        <!-- Détail de la demande -->
+        <div class="bg-[#fef6ee] border border-[#fbd3b6] rounded-2xl p-3.5 space-y-2 text-xs">
+          <div class="flex items-center justify-between">
+            <span class="font-extrabold text-slate-700">📍 Destination :</span>
+            <span class="font-black text-slate-900">${renfort.addressDisplay || renfort.address}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="font-extrabold text-slate-700">🏢 Demandeur officiel :</span>
+            <span class="font-black text-slate-900">${renfort.demandeur || 'CODIS'}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="font-extrabold text-slate-700">🚙 Trajet estimé :</span>
+            <span class="font-black text-slate-900">≈ ${route.distanceKm} km (trajet convoi ~ ${route.durationText})</span>
+          </div>
+          <div class="flex items-center justify-between pt-1 border-t border-orange-200/60">
+            <span class="font-extrabold text-emerald-800">💰 Indemnisation conventionnelle :</span>
+            <span class="font-black text-emerald-700 text-sm mono-num">+${renfort.indemnite || 520} € & +${renfort.alliancePoints || 60} pts alliance</span>
+          </div>
+        </div>
+
+        <!-- Description contexte -->
+        <p class="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200/80 leading-relaxed">
+          ${renfort.description || 'Mobilisation officielle de la Protection Civile pour prêter main forte aux services de secours locaux.'}
+        </p>
+
+        <!-- Sélection du Véhicule -->
+        <div class="space-y-1.5">
+          <label class="text-xs font-black text-slate-800 flex items-center justify-between">
+            <span>1. Sélectionner le véhicule à dépêcher :</span>
+            <span class="text-[10px] text-slate-500 font-semibold">Attendu : ${renfort.needLabel}</span>
+          </label>
+          ${dispoVehicles.length === 0 ? `
+            <div class="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+              <span>⚠️</span>
+              <span>Aucun véhicule disponible au garage actuellement. Attendez le retour d'une unité.</span>
+            </div>
+          ` : `
+            <select id="engage-renfort-vehicle-select" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500">
+              ${dispoVehicles.map(v => `
+                <option value="${v.id}">${v.name} (${v.type}) - ${v.plate || 'Opérationnel'}</option>
+              `).join('')}
+            </select>
+          `}
+        </div>
+
+        <!-- Sélection de l'équipage -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-black text-slate-800">2. Sélectionner l'équipage (${requiredVols} secouristes requis) :</label>
+            <button 
+              type="button" 
+              onclick="window.game.autoSelectRenfortVolunteers(${requiredVols})" 
+              class="text-[11px] font-bold text-orange-600 hover:text-orange-700 underline cursor-pointer"
+            >
+              ⚡ Auto-affectation
+            </button>
+          </div>
+          ${dispoVolunteers.length < requiredVols ? `
+            <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-center gap-2">
+              <span>⚠️</span>
+              <span>Effectif restreint (${dispoVolunteers.length} secouriste(s) disponible(s)). Le départ reste possible en équipage réduit.</span>
+            </div>
+          ` : ''}
+
+          <div id="engage-renfort-volunteers-list" class="max-h-36 overflow-y-auto space-y-1 p-2 rounded-xl border border-slate-200 bg-slate-50/50">
+            ${dispoVolunteers.length === 0 ? `
+              <p class="text-xs text-slate-500 text-center py-2">Aucun secouriste disponible à la base.</p>
+            ` : dispoVolunteers.map((vol, idx) => `
+              <label class="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:bg-orange-50/50 cursor-pointer text-xs font-bold transition">
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" name="renfort-volunteer-checkbox" value="${vol.id}" ${idx < requiredVols ? 'checked' : ''} class="rounded text-orange-600 focus:ring-orange-500">
+                  <span class="text-slate-800">${vol.name}</span>
+                </div>
+                <span class="text-[10px] text-slate-500 font-semibold">${vol.rank || 'Secouriste'}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Simulation de Signature de l'Ordre de Mission -->
+        <div class="space-y-1.5 pt-2 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black text-slate-800">3. Signature du Directeur d'Antenne :</span>
+            <button 
+              type="button" 
+              onclick="window.game.clearRenfortSignatureCanvas()" 
+              class="text-[10px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+            >
+              Effacer
+            </button>
+          </div>
+          <div class="relative w-full h-20 bg-slate-50 rounded-xl border-2 border-dashed border-orange-200 flex items-center justify-center overflow-hidden">
+            <canvas id="renfort-signature-canvas" width="450" height="80" class="w-full h-full cursor-crosshair"></canvas>
+            <span id="renfort-signature-placeholder" class="absolute pointer-events-none text-xs text-slate-400 italic">Signez ici pour valider l'ordre de mission...</span>
+          </div>
+          <div class="flex justify-end">
+            <button 
+              type="button" 
+              onclick="window.game.autoSignRenfortOrder()" 
+              class="text-[10px] font-bold text-slate-500 hover:text-orange-600 transition cursor-pointer"
+            >
+              ✍️ Signer automatiquement « ${this.player.name || 'Directeur'} »
+            </button>
+          </div>
+        </div>
+
+        <!-- Boutons d'action -->
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button 
+            type="button" 
+            onclick="document.getElementById('engage-renfort-modal')?.remove()" 
+            class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+          >
+            Annuler
+          </button>
+          <button 
+            type="button" 
+            onclick="window.game.submitEngageRenfort('${renfort.id}')" 
+            ${dispoVehicles.length === 0 ? 'disabled' : ''} 
+            class="px-5 py-2.5 rounded-xl text-xs font-black bg-[#ff6a28] hover:bg-[#ea5b1b] active:scale-95 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+          >
+            <span>➤</span>
+            <span>Confirmer le Départ du Renfort</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+    this.initRenfortSignatureCanvas();
+  }
+
+  initRenfortSignatureCanvas() {
+    const canvas = document.getElementById('renfort-signature-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let hasDrawn = false;
+    const placeholder = document.getElementById('renfort-signature-placeholder');
+
+    const startDraw = (e) => {
+      isDrawing = true;
+      hasDrawn = true;
+      if (placeholder) placeholder.style.display = 'none';
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      ctx.beginPath();
+      ctx.moveTo((clientX - rect.left) * (canvas.width / rect.width), (clientY - rect.top) * (canvas.height / rect.height));
+    };
+
+    const draw = (e) => {
+      if (!isDrawing) return;
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#1e3a8a';
+      ctx.lineTo((clientX - rect.left) * (canvas.width / rect.width), (clientY - rect.top) * (canvas.height / rect.height));
+      ctx.stroke();
+    };
+
+    const stopDraw = () => {
+      isDrawing = false;
+    };
+
+    canvas.onmousedown = startDraw;
+    canvas.onmousemove = draw;
+    window.addEventListener('mouseup', stopDraw);
+
+    canvas.ontouchstart = startDraw;
+    canvas.ontouchmove = draw;
+    window.addEventListener('touchend', stopDraw);
+  }
+
+  clearRenfortSignatureCanvas() {
+    const canvas = document.getElementById('renfort-signature-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const placeholder = document.getElementById('renfort-signature-placeholder');
+    if (placeholder) placeholder.style.display = 'block';
+  }
+
+  autoSignRenfortOrder() {
+    const canvas = document.getElementById('renfort-signature-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    this.clearRenfortSignatureCanvas();
+    const placeholder = document.getElementById('renfort-signature-placeholder');
+    if (placeholder) placeholder.style.display = 'none';
+
+    ctx.font = 'italic 28px "Caveat", "Brush Script MT", cursive, sans-serif';
+    ctx.fillStyle = '#1e3a8a';
+    ctx.fillText(this.player?.name || 'Directeur Protection Civile', 40, 50);
+
+    ctx.beginPath();
+    ctx.moveTo(35, 58);
+    ctx.bezierCurveTo(120, 65, 240, 50, 320, 62);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#1e3a8a';
+    ctx.stroke();
+  }
+
+  autoSelectRenfortVolunteers(count) {
+    const checkboxes = document.querySelectorAll('input[name="renfort-volunteer-checkbox"]');
+    checkboxes.forEach((cb, idx) => {
+      cb.checked = idx < count;
+    });
+  }
+
+  submitEngageRenfort(renfortId) {
+    const renfort = (this.renforts || []).find(r => r.id === renfortId);
+    if (!renfort) return;
+
+    const vehSelect = document.getElementById('engage-renfort-vehicle-select');
+    const vehId = vehSelect ? vehSelect.value : null;
+    const veh = (this.vehicles || []).find(v => v.id === vehId);
+
+    if (!veh) {
+      this.showToast('Véhicule Requis', 'Veuillez sélectionner un véhicule disponible.', 'orange');
+      return;
+    }
+
+    const selectedVolCheckboxes = Array.from(document.querySelectorAll('input[name="renfort-volunteer-checkbox"]:checked'));
+    const volIds = selectedVolCheckboxes.map(cb => cb.value);
+
+    // Engagement du véhicule
+    veh.status = 'renfort';
+    veh.currentMissionTitle = `Renfort ${renfort.typeTitle} - ${renfort.addressDisplay || renfort.address}`;
+
+    // Engagement des secouristes
+    volIds.forEach(volId => {
+      const vol = this.volunteers.find(v => v.id === volId);
+      if (vol) {
+        vol.status = 'renfort';
+        vol.missionId = renfort.id;
+      }
+    });
+
+    // Indemnités & points
+    const rewardMoney = renfort.indemnite || 520;
+    const rewardPoints = renfort.alliancePoints || 60;
+    this.resources.money += rewardMoney;
+    this.resources.alliancePoints = (this.resources.alliancePoints || 0) + rewardPoints;
+
+    // Statut renfort
+    renfort.status = 'fulfilled';
+    renfort.fulfilledAt = new Date().toISOString();
+    renfort.fulfilledBy = {
+      playerId: this.player.id,
+      playerName: this.player.name,
+      vehicleName: veh.name,
+      volunteersCount: volIds.length
+    };
+
+    // Fermeture modale
+    document.getElementById('engage-renfort-modal')?.remove();
+
+    this.showToast(
+      'Départ de Renfort Validé !',
+      `${veh.name} et l’équipage ont pris la route vers ${renfort.addressDisplay || renfort.address} ! (+${rewardMoney} € et +${rewardPoints} pts d’alliance)`,
+      'green'
+    );
+
+    // Retour automatique de la colonne après 3 minutes in-game
+    setTimeout(() => {
+      if (veh.status === 'renfort') {
+        veh.status = 'dispo';
+      }
+      volIds.forEach(volId => {
+        const vol = this.volunteers.find(v => v.id === volId);
+        if (vol && vol.status === 'renfort') {
+          vol.status = 'dispo';
+        }
+      });
+      this.showToast('Retour de Colonne', `${veh.name} et les secouristes sont rentrés à la base après leur mission en renfort !`, 'blue');
+      this.updateStatsUI();
+      this.saveGame();
+    }, 180000);
+
+    // Génération automatique d'une nouvelle opportunité de renfort dans la liste
+    const templates = this.getExtraDeptTemplates();
+    const nextTemplate = templates.find(t => t.id !== renfort.id) || templates[1];
+    if (nextTemplate && !this.renforts.some(r => r.id === nextTemplate.id && r.status === 'open')) {
+      const nextRenfort = { ...nextTemplate, id: `renf-extra-${Date.now()}`, createdAt: new Date().toISOString() };
+      this.renforts.unshift(nextRenfort);
+    }
+
+    this.updateStatsUI();
+    this.saveGame();
+
+    // Actualisation des modules s'ils sont ouverts
+    if (this.currentModalKey === 'alliance') this.openModule('alliance');
+    if (this.currentModalKey === 'planning') this.openModule('planning');
+  }
+
   registerVolunteerToSpecialFormation(formationId) {
     if (window.ProtecMultiplayer) {
       window.ProtecMultiplayer.openRegisterVolunteerModal(this, formationId);
@@ -4732,10 +5403,16 @@ class ProtecGame {
       'communication': 'rh',
       'competences': 'rh',
 
-      'base': 'materiel',
-      'locaux': 'materiel',
-      'logistique': 'materiel',
-      'specialites': 'materiel',
+      'base': 'antenne',
+      'flotte': 'antenne',
+      'vehicules': 'antenne',
+      'antenne': 'antenne',
+      'antennes': 'antenne',
+      'locaux': 'antenne',
+      'batiment': 'antenne',
+      'batiments': 'antenne',
+      'logistique': 'antenne',
+      'specialites': 'antenne',
 
       'radio': 'liaisons',
       'tchat': 'liaisons',
@@ -4751,6 +5428,7 @@ class ProtecGame {
 
   toggleDockSubmenu(menuKey, event) {
     if (event) event.stopPropagation();
+    if (menuKey === 'materiel') menuKey = 'antenne';
     const submenu = document.getElementById(`dock-submenu-${menuKey}`);
     if (!submenu) return;
     const isCurrentlyActive = submenu.classList.contains('active');
@@ -4804,25 +5482,31 @@ class ProtecGame {
 
     const categoryDefs = {
       missions: [
-        { key: 'planning', label: 'Planning & DPS', icon: 'calendar', count: planCount },
-        { key: 'conventions', label: 'Conventions Officielles', icon: 'file-text' },
-        { key: 'devis', label: 'Devis & Contrats', icon: 'file-check', count: devisCount },
+        { key: 'planning', label: 'Postes DPS & Planning', icon: 'calendar', count: planCount },
+        { key: 'devis', label: 'Devis DPS (Demandes)', icon: 'file-check', count: devisCount },
         { key: 'samu', label: 'SAMU 15', icon: 'activity', count: samuCount },
         { key: 'pompiers', label: 'Garde SDIS', icon: 'flame', count: sdisCount },
         { key: 'social', label: 'Action Sociale', icon: 'heart-handshake', count: socialCount },
+        { key: 'conventions', label: 'Conventions', icon: 'award' },
         { key: 'crise', label: 'Crise NOVI', icon: 'siren', count: criseCount }
+      ],
+      antenne: [
+        { key: 'locaux', label: 'Bâtiment (Plan 2D)', icon: 'layout-grid' },
+        { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
+        { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
+        { key: 'specialites', label: 'Spécialités', icon: 'crosshair' }
+      ],
+      materiel: [
+        { key: 'locaux', label: 'Bâtiment (Plan 2D)', icon: 'layout-grid' },
+        { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
+        { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
+        { key: 'specialites', label: 'Spécialités', icon: 'crosshair' }
       ],
       rh: [
         { key: 'recrutement', label: 'Bénévoles & Équipe', icon: 'users', count: this.volunteers?.length || 0 },
         { key: 'formation', label: 'Formations', icon: 'graduation-cap' },
         { key: 'poles', label: 'Pôles d\'Antenne', icon: 'layers' },
         { key: 'communication', label: 'Communication & Médias', icon: 'megaphone' }
-      ],
-      materiel: [
-        { key: 'base', label: 'Antenne & Flotte', icon: 'truck', count: this.vehicles?.length || 0 },
-        { key: 'locaux', label: 'Locaux & Plan 2D', icon: 'layout-grid' },
-        { key: 'logistique', label: 'Logistique & Lots', icon: 'package-check' },
-        { key: 'specialites', label: 'Spécialités', icon: 'crosshair' }
       ],
       liaisons: [
         { key: 'radio', label: 'Radio PC', icon: 'radio' },
@@ -4833,7 +5517,6 @@ class ProtecGame {
       finances: [
         { key: 'finances', label: 'Trésorerie & Bilan', icon: 'wallet' },
         { key: 'subventions', label: 'Subventions Publiques', icon: 'landmark' },
-        { key: 'devis', label: 'Devis DPS', icon: 'file-check', count: devisCount },
         { key: 'conventions', label: 'Conventions Officielles', icon: 'file-text' }
       ]
     };
@@ -4883,9 +5566,14 @@ class ProtecGame {
       'mission': 'planning',
       'benevoles': 'recrutement',
       'personnel': 'recrutement',
-      'flotte': 'base',
-      'vehicules': 'base',
-      'antennes': 'base',
+      'flotte': 'flotte',
+      'vehicules': 'flotte',
+      'base': 'flotte',
+      'antenne': 'flotte',
+      'antennes': 'flotte',
+      'batiment': 'locaux',
+      'batiments': 'locaux',
+      'locaux': 'locaux',
       'devis_dps': 'devis',
       'dps': 'planning'
     };
@@ -5069,16 +5757,25 @@ class ProtecGame {
 
             ${currentTab === 'renforts' ? `
               <div class="space-y-4">
+                <!-- Encart Officiel Demandes Extra-Départementales -->
+                ${this.renderExtraDeptRenfortsBlockHTML()}
+
                 <div class="p-3.5 rounded-2xl glass-card-amber text-xs text-amber-900 flex items-center justify-between">
                   <span>Dépêchez vos véhicules en renfort auprès d’antennes alliées pour toucher des indemnités et de la réputation !</span>
-                  <button onclick="window.game.openModule('planning')" class="px-3 py-1.5 rounded-xl font-bold bg-amber-600 text-white hover:bg-amber-700 transition">
+                  <button onclick="window.game.openModule('planning')" class="px-3 py-1.5 rounded-xl font-bold bg-amber-600 text-white hover:bg-amber-700 transition cursor-pointer">
                     + Émettre un Appel depuis mon Planning
                   </button>
                 </div>
 
-                <div class="space-y-3">
-                  ${this.renforts.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center">Aucune demande de renfort active actuellement.</p>' : ''}
-                  ${this.renforts.map(r => `
+                <!-- Autres demandes d'alliances locales -->
+                <div class="space-y-3 pt-1">
+                  <div class="flex items-center justify-between px-1">
+                    <h5 class="text-xs font-black text-slate-700 uppercase tracking-wider">Appels Locaux & Inter-Antennes</h5>
+                    <span class="text-[11px] text-slate-500 font-bold">${this.renforts.filter(r => !r.isExtraDept).length} appel(s)</span>
+                  </div>
+
+                  ${this.renforts.filter(r => !r.isExtraDept).length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center">Aucun autre appel de renfort local actuellement.</p>' : ''}
+                  ${this.renforts.filter(r => !r.isExtraDept).map(r => `
                     <div class="p-4 rounded-2xl glass-card flex items-center justify-between">
                       <div class="space-y-1">
                         <div class="flex items-center gap-2">
@@ -5103,7 +5800,7 @@ class ProtecGame {
                       <div class="text-right space-y-2">
                         <div class="text-xs font-bold text-emerald-700 mono-num">+${r.indemnite || 180} €</div>
                         ${r.status === 'open' && r.requesterPlayerId !== this.player.id ? `
-                          <button onclick="window.game.fulfillRenfort('${r.id}')" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5">
+                          <button onclick="window.game.fulfillRenfort('${r.id}')" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
                             <i data-lucide="send" class="w-3.5 h-3.5"></i>
                             Dépêcher Renfort
                           </button>
@@ -5215,16 +5912,20 @@ class ProtecGame {
 
       body.innerHTML = `
         <div class="space-y-5">
-          <!-- Barre d'onglets Vue Calendrier / Vue Liste -->
+          <!-- Barre d'onglets Vue Calendrier / Vue Liste / Devis DPS -->
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
             <div class="flex items-center gap-2">
-              <button onclick="window.game.setPlanningTab('calendar')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'calendar' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}">
+              <button onclick="window.game.setPlanningTab('calendar')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'calendar' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
                 <i data-lucide="calendar" class="w-4 h-4"></i>
                 Vue Calendrier
               </button>
-              <button onclick="window.game.setPlanningTab('list')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'list' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}">
+              <button onclick="window.game.setPlanningTab('list')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'list' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
                 <i data-lucide="list" class="w-4 h-4"></i>
-                Vue Liste Chronologique (${allScheduled.length})
+                Dispositifs Validés (${allScheduled.length})
+              </button>
+              <button onclick="window.game.openModule('devis')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer">
+                <i data-lucide="file-check" class="w-4 h-4 text-amber-500"></i>
+                Devis DPS (${this.devis.filter(d => d.status === 'pending').length})
               </button>
             </div>
             <div class="flex items-center gap-2">
@@ -5238,6 +5939,9 @@ class ProtecGame {
               </div>
             </div>
           </div>
+
+          <!-- Alerte Prioritaire Demande Extra-Départementale -->
+          ${this.renderExtraDeptRenfortsBlockHTML(true)}
 
           ${currentTab === 'calendar' ? `
             <!-- VUE CALENDRIER -->
@@ -5469,6 +6173,27 @@ class ProtecGame {
 
       body.innerHTML = `
         <div class="space-y-6">
+          <!-- Barre de bascule DPS : Planning vs Devis -->
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div class="flex items-center gap-2">
+              <button onclick="window.game.openModule('planning')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer">
+                <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
+                Vue Calendrier DPS
+              </button>
+              <button onclick="window.game.setPlanningTab('list'); window.game.openModule('planning');" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer">
+                <i data-lucide="list" class="w-4 h-4 text-pc-blue"></i>
+                Dispositifs Validés
+              </button>
+              <button class="px-4 py-2 rounded-xl text-xs font-black bg-amber-600 text-white shadow-md flex items-center gap-1.5">
+                <i data-lucide="file-check" class="w-4 h-4 text-white"></i>
+                Devis & Dimensionnement DPS (${pendingDevis.length})
+              </button>
+            </div>
+            <div class="text-xs text-slate-500 font-bold">
+              <span>${pendingDevis.length} devis en attente</span>
+            </div>
+          </div>
+
           <div class="p-4 rounded-2xl glass-card-amber text-xs text-amber-950 space-y-2">
             <div class="flex items-center justify-between">
               <span class="font-extrabold flex items-center gap-1.5 text-amber-900">
@@ -6680,76 +7405,114 @@ class ProtecGame {
           </div>
         `;
       }
-    } else if (moduleKey === 'base') {
-      title.textContent = 'Antennes & Flotte';
-      subtitle.textContent = 'Gestion des locaux et des véhicules';
-      icon.setAttribute('data-lucide', 'building-2');
+    } else if (moduleKey === 'flotte' || moduleKey === 'base') {
+      title.textContent = 'Flotte Automobile & Véhicules Opérationnels';
+      subtitle.textContent = 'Gestion du parc roulant, armement, statuts opérationnels et acquisition de véhicules';
+      icon.setAttribute('data-lucide', 'truck');
 
       const isLeader = this.player.deptRole === 'antenne_principale';
       const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
       const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
+      const primaryStation = this.stations[0] || { id: 'station-1', name: 'Antenne Locale' };
+      const totalVeh = this.vehicles ? this.vehicles.length : 0;
+      const dispoVeh = this.vehicles ? this.vehicles.filter(v => v.status === 'dispo').length : 0;
+      const busyVeh = totalVeh - dispoVeh;
 
       body.innerHTML = `
-        <div class="space-y-4">
-          <!-- Carte d'affiliation départementale -->
-          <div class="p-4 rounded-2xl ${isLeader ? 'bg-gradient-to-r from-pc-blue/15 to-indigo-100/60 border border-pc-blue/30' : 'bg-slate-50 border border-slate-200'} space-y-2">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="text-xl">${isLeader ? '🏛️' : '🏢'}</span>
-                <div>
-                  <h4 class="text-xs font-black uppercase text-slate-900 tracking-wider">
-                    Département ${deptInfo?.name || deptCode} (${deptCode})
-                  </h4>
-                  <p class="text-[11px] text-slate-500 font-semibold">
-                    Statut : <strong class="${isLeader ? 'text-pc-blue' : 'text-slate-700'}">${isLeader ? 'Antenne Principale du Département (Fondateur)' : 'Antenne Départementale Rattachée'}</strong>
-                  </p>
-                </div>
+        <div class="space-y-5">
+          <!-- Barre d'état & Actions Flotte -->
+          <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-pc-blue/90 to-slate-800 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center text-2xl shadow-inner">
+                🚑
               </div>
-              <span class="px-2.5 py-1 rounded-xl text-[10px] font-black ${isLeader ? 'bg-pc-blue text-white shadow-sm' : 'bg-slate-200 text-slate-700'}">
-                ${isLeader ? 'PRINCIPALE' : 'TERRITORIALE'}
-              </span>
+              <div>
+                <h4 class="text-sm sm:text-base font-black">Flotte Opérationnelle d'Antenne</h4>
+                <p class="text-xs text-white/80">
+                  Total : <strong>${totalVeh}</strong> • Disponibles : <strong class="text-emerald-400">${dispoVeh}</strong> • Engagés : <strong class="text-amber-300">${busyVeh}</strong>
+                </p>
+              </div>
             </div>
+            <div class="flex items-center gap-2">
+              <button onclick="window.game.openBuyVehicleModal('${primaryStation.id}')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-pc-orange to-amber-500 hover:brightness-110 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <span>➕</span>
+                <span>Commander un Véhicule</span>
+              </button>
+            </div>
+          </div>
 
-            ${isLeader ? `
-              <div class="pt-2 border-t border-pc-blue/20 flex items-center justify-between text-xs">
-                <span class="text-[11px] text-slate-600">Vous détenez l'antenne principale. Vous pouvez la léguer à un collègue du département.</span>
-                <button onclick="window.game.openTransferAntennaModal()" class="px-3 py-1.5 rounded-xl text-xs font-black bg-white hover:bg-slate-100 text-pc-blue border border-pc-blue/30 shadow-sm transition">
-                  Léguer l'Antenne ➜
+          <!-- Barre de Recherche et Filtres Flotte -->
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-slate-50 p-2.5 rounded-2xl border border-slate-200">
+            <div class="relative flex-1">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs">🔍</span>
+              <input type="text" id="fleet-search-input" oninput="window.game.filterFleetList(this.value)" placeholder="Rechercher par indicatif, type (VPSP, VTU, VL, bateau...)" class="w-full pl-8 pr-3 py-2 rounded-xl text-xs bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pc-blue font-medium" />
+            </div>
+            <div class="flex items-center gap-1 overflow-x-auto text-xs font-bold text-slate-600">
+              <button onclick="window.game.filterFleetCategory('all')" id="btn-fleet-cat-all" class="px-3 py-1.5 rounded-xl bg-pc-blue text-white shadow-xs cursor-pointer">Tous (${totalVeh})</button>
+              <button onclick="window.game.filterFleetCategory('vpsp')" id="btn-fleet-cat-vpsp" class="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer">VPSP</button>
+              <button onclick="window.game.filterFleetCategory('vtu')" id="btn-fleet-cat-vtu" class="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer">VTU / Appui</button>
+              <button onclick="window.game.filterFleetCategory('vl')" id="btn-fleet-cat-vl" class="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer">VL / Chefs</button>
+            </div>
+          </div>
+
+          <!-- Liste des Véhicules -->
+          <div id="fleet-vehicles-grid" class="space-y-2.5">
+            ${totalVeh === 0 ? `
+              <div class="p-8 rounded-3xl bg-slate-50 border-2 border-dashed border-slate-300 text-center space-y-3">
+                <div class="text-4xl">🚐</div>
+                <h5 class="text-sm font-black text-slate-800">Aucun véhicule pour l'instant dans votre garage</h5>
+                <p class="text-xs text-slate-500 max-w-md mx-auto">
+                  Votre antenne a été inaugurée ! Commandez votre premier véhicule opérationnel pour pouvoir partir en mission ou assurer des gardes.
+                </p>
+                <button onclick="window.game.openBuyVehicleModal('${primaryStation.id}')" class="px-5 py-2.5 rounded-xl bg-pc-blue text-white font-black text-xs hover:brightness-110 shadow-md transition cursor-pointer">
+                  🛒 Consulter le catalogue des véhicules
                 </button>
               </div>
-            ` : `
-              <p class="text-[11px] text-slate-500">
-                Vous intervenez en coordination avec l'Antenne Principale de votre département.
-              </p>
-            `}
+            ` : (this.vehicles || []).map(v => {
+              const isDispo = v.status === 'dispo';
+              const statusLabel = isDispo ? 'DISPONIBLE AU GARAGE' : (v.status === 'ongoing' || v.status === 'engaged' ? 'ENGAGÉ EN MISSION (DPS)' : (v.status === 'samu_garde' ? 'GARDE SAMU 15' : (v.status && v.status.startsWith('sdis') ? 'GARDE SDIS POMPIERS' : 'INDISPONIBLE')));
+              const statusBadgeClass = isDispo ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300';
+              const dotClass = isDispo ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse';
+              return `
+                <div class="fleet-vehicle-card p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm transition flex flex-col sm:flex-row sm:items-center justify-between gap-3" data-name="${(v.name || '').toLowerCase()}" data-type="${(v.type || '').toLowerCase()}">
+                  <div class="flex items-center gap-3">
+                    <div class="w-16 h-12 bg-slate-50 rounded-xl border border-slate-200 p-1 flex items-center justify-center flex-shrink-0">
+                      <img src="${v.image || window.game.getVehicleImage(v.type)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='🚑'" />
+                    </div>
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <h5 class="text-xs sm:text-sm font-black text-slate-900">${v.name}</h5>
+                        <button onclick="window.game.openRenameVehicleModal('${v.id}')" class="text-slate-400 hover:text-pc-blue text-xs p-0.5 rounded transition cursor-pointer" title="Renommer l'indicatif">✏️</button>
+                      </div>
+                      <p class="text-[11px] font-semibold text-slate-500">${v.label || v.type} • Capacité : <strong>${v.capacity || 4} équipiers</strong></p>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between sm:justify-end gap-2.5">
+                    <span class="px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusBadgeClass} flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full ${dotClass}"></span>
+                      ${statusLabel}
+                    </span>
+                    <button onclick="window.ProtecLogistique.selectedStationId='${v.stationId || primaryStation.id}'; window.ProtecLogistique.activeTab='stock'; window.game.openModule('logistique');" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer" title="Armement du véhicule">
+                      <span>📦</span>
+                      <span class="hidden sm:inline">Armement</span>
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
           </div>
 
-          <div class="flex items-center justify-between">
-            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Votre Antenne Opérationnelle (${this.stations.length})</h4>
-            <span class="text-[11px] font-bold text-slate-500">Antenne Unique de Direction</span>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            ${this.stations.map(st => `
-              <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <h5 class="text-sm font-extrabold text-slate-900">${st.name}</h5>
-                    <span class="text-[10px] font-bold text-slate-400">Dépt ${st.departmentCode || deptCode}</span>
-                  </div>
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue text-white">Niveau ${st.level}</span>
-                </div>
-                <div class="text-xs text-slate-600">Véhicules : <strong>${st.vehicles.length}</strong></div>
-                <div class="grid grid-cols-2 gap-2">
-                  <button onclick="window.game.closeModal(); window.game.openStationDetails('${st.id}')" class="py-2 rounded-xl text-xs font-bold glass-button text-slate-700 transition">
-                    Gérer l’antenne
-                  </button>
-                  <button onclick="window.game.openModule('locaux')" class="py-2 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center justify-center gap-1.5 shadow-sm" title="Gestion des locaux, capacité de stockage, salles de formation et éditeur 2D">
-                    <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
-                    Locaux & Plan 2D
-                  </button>
-                </div>
-              </div>
-            `).join('')}
+          <!-- Renseignement de l'Antenne et Locaux -->
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <span class="font-extrabold text-slate-800">Antenne : ${primaryStation.name}</span>
+              <span class="text-slate-500 ml-1">(Département ${deptCode})</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="window.game.openModule('locaux')" class="text-pc-blue font-extrabold hover:underline cursor-pointer">
+                🏛️ Gérer le Bâtiment & Plan 2D →
+              </button>
+            </div>
           </div>
         </div>
       `;
@@ -7155,6 +7918,55 @@ class ProtecGame {
       'REM': 'images/vehicles/REM.png'
     };
     return map[clean] || `images/vehicles/${type}.png`;
+  }
+
+  filterFleetList(query) {
+    const q = (query || '').toLowerCase().trim();
+    document.querySelectorAll('.fleet-vehicle-card').forEach(card => {
+      const name = card.getAttribute('data-name') || '';
+      const type = card.getAttribute('data-type') || '';
+      if (!q || name.includes(q) || type.includes(q)) {
+        card.classList.remove('hidden');
+      } else {
+        card.classList.add('hidden');
+      }
+    });
+  }
+
+  filterFleetCategory(cat) {
+    document.querySelectorAll('[id^="btn-fleet-cat-"]').forEach(b => {
+      b.className = 'px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer';
+    });
+    const activeBtn = document.getElementById(`btn-fleet-cat-${cat}`);
+    if (activeBtn) {
+      activeBtn.className = 'px-3 py-1.5 rounded-xl bg-pc-blue text-white shadow-xs cursor-pointer';
+    }
+    document.querySelectorAll('.fleet-vehicle-card').forEach(card => {
+      const type = (card.getAttribute('data-type') || '').toLowerCase();
+      if (cat === 'all') {
+        card.classList.remove('hidden');
+      } else if (cat === 'vpsp' && type.includes('vpsp')) {
+        card.classList.remove('hidden');
+      } else if (cat === 'vtu' && (type.includes('vtu') || type.includes('fourgon') || type.includes('appui') || type.includes('rem'))) {
+        card.classList.remove('hidden');
+      } else if (cat === 'vl' && (type.includes('vl') || type.includes('pc') || type.includes('vlm') || type.includes('vlhr'))) {
+        card.classList.remove('hidden');
+      } else {
+        card.classList.add('hidden');
+      }
+    });
+  }
+
+  openRenameVehicleModal(vehicleId) {
+    const v = this.vehicles ? this.vehicles.find(veh => veh.id === vehicleId) : null;
+    if (!v) return;
+    const newName = prompt(`Modifier l'indicatif ou nom du véhicule :`, v.name);
+    if (newName && newName.trim()) {
+      v.name = newName.trim();
+      this.saveGame();
+      this.showToast('Véhicule renommé', `Nouvel indicatif : ${v.name}`, 'blue');
+      this.openModule('flotte', true);
+    }
   }
 
   closeModal() {
@@ -8315,13 +9127,21 @@ class ProtecGame {
         : 'hidden';
     }
 
-    // Rétrocompatibilité anciens badges
+    // Rétrocompatibilité anciens badges et badges finances / antenne
     const bPlan = document.getElementById('badge-planning-dock');
     if (bPlan) bPlan.textContent = planCount;
     const bDev = document.getElementById('badge-devis-dock');
     if (bDev) bDev.textContent = devisCount;
     const bCand = document.getElementById('badge-recrutement-dock');
     if (bCand) bCand.textContent = candCount;
+
+    const bFinancesDock = document.getElementById('badge-finances-dock');
+    if (bFinancesDock) {
+      const hasSubv = this.subventions && this.subventions.some(s => s.status === 'eligible');
+      bFinancesDock.className = hasSubv
+        ? 'absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-emerald-600 text-white shadow-sm'
+        : 'hidden';
+    }
 
     // Actualisation du masquage/déblocage automatique
     this.updateDockAndFiltersVisibility();
