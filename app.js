@@ -825,6 +825,8 @@ class ProtecGame {
     this.map.on('click', (e) => {
       if (this.isPlacingAntenna) {
         this.confirmAntennaPlacement(e.latlng);
+      } else if (this.isPickingLocation && this.onLocationPickedCallback) {
+        this.onLocationPickedCallback(e.latlng);
       } else {
         this.closeDrawer();
       }
@@ -1269,7 +1271,168 @@ class ProtecGame {
     }
   }
 
-  // --- BARÈME ET DEVIS ---
+  // --- SÉLECTION D'UN POINT DIRECTEMENT SUR LA CARTE (ÉVÉNEMENTS & MISSIONS) ---
+  startLocationPicker(options = {}) {
+    this.isPickingLocation = true;
+    this.locationPickerOptions = options;
+    this.lastPickedLatLng = null;
+    this.lastPickedDetails = null;
+
+    // Masquage temporaire des modales actives
+    const openedModals = Array.from(document.querySelectorAll('.fixed.z-50:not(.hidden)'));
+    this.hiddenModalsForPicker = openedModals;
+    openedModals.forEach(m => m.classList.add('hidden'));
+
+    // Curseur cible sur la carte
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.style.cursor = 'crosshair';
+
+    // Bandeau flottant supérieur interactif
+    let banner = document.getElementById('location-picker-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'location-picker-banner';
+      banner.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-[60] bg-slate-900/95 text-white backdrop-blur-md px-5 py-3 rounded-2xl shadow-2xl border border-sky-400/40 flex flex-wrap items-center gap-4 animate-in slide-in-from-top duration-200';
+      document.body.appendChild(banner);
+    }
+
+    banner.innerHTML = `
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-pc-blue to-indigo-600 flex items-center justify-center text-lg shadow-md animate-bounce">
+          📍
+        </div>
+        <div>
+          <h4 class="text-xs font-black text-white">${options.title || 'Cliquez sur la carte pour placer le point'}</h4>
+          <p id="location-picker-details" class="text-[11px] text-sky-200 font-semibold">${options.subtitle || 'Placez le repère à l’endroit où se déroulera la mission ou l’événement'}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="location-picker-validate-btn" onclick="window.game.confirmLocationPicker()" class="hidden px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+          <span>✓</span>
+          <span>Valider cet emplacement</span>
+        </button>
+        <button onclick="window.game.cancelLocationPicker()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer">
+          Annuler
+        </button>
+      </div>
+    `;
+    banner.classList.remove('hidden');
+
+    this.showToast('Mode Sélection Carte Actif', 'Cliquez n’importe où sur la carte pour déposer le repère.', 'blue');
+
+    // Callback déclenché au clic sur la carte
+    this.onLocationPickedCallback = async (latlng) => {
+      this.lastPickedLatLng = latlng;
+
+      if (this.tempPickerMarker) {
+        this.map.removeLayer(this.tempPickerMarker);
+      }
+
+      if (window.L) {
+        const pinIcon = window.L.divIcon({
+          className: 'picker-pin-icon',
+          html: `
+            <div class="relative flex flex-col items-center justify-center">
+              <div class="w-9 h-9 rounded-full bg-pc-orange text-white flex items-center justify-center font-bold text-lg shadow-2xl border-2 border-white ring-4 ring-orange-400/40 animate-pulse">
+                📍
+              </div>
+              <div class="w-2.5 h-2.5 bg-pc-orange rotate-45 -mt-1 shadow-sm"></div>
+            </div>
+          `,
+          iconSize: [36, 44],
+          iconAnchor: [18, 40]
+        });
+
+        this.tempPickerMarker = window.L.marker([latlng.lat, latlng.lng], { icon: pinIcon }).addTo(this.map);
+      }
+
+      const detailsEl = document.getElementById('location-picker-details');
+      const valBtn = document.getElementById('location-picker-validate-btn');
+      if (detailsEl) {
+        detailsEl.textContent = `Coordonnées : ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)} • Résolution de l'adresse...`;
+      }
+
+      let detectedAddress = '';
+      let detectedCity = '';
+
+      try {
+        const res = await fetch(`https://api-adresse.data.gouv.fr/reverse/?lon=${latlng.lng}&lat=${latlng.lat}`);
+        const data = await res.json();
+        if (data && data.features && data.features.length > 0) {
+          const p = data.features[0].properties;
+          detectedAddress = p.name || p.label || '';
+          detectedCity = p.city || '';
+        }
+      } catch (e) {}
+
+      this.lastPickedDetails = {
+        lat: latlng.lat,
+        lng: latlng.lng,
+        address: detectedAddress,
+        city: detectedCity
+      };
+
+      if (detailsEl) {
+        const locLabel = detectedAddress ? `${detectedAddress}, ${detectedCity}` : `Point GPS (${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)})`;
+        detailsEl.innerHTML = `<span class="text-white font-extrabold">${locLabel}</span> <span class="text-sky-300 font-mono text-[10px]">(${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)})</span>`;
+      }
+
+      if (valBtn) {
+        valBtn.classList.remove('hidden');
+      }
+    };
+  }
+
+  confirmLocationPicker() {
+    if (!this.lastPickedDetails && this.lastPickedLatLng) {
+      this.lastPickedDetails = {
+        lat: this.lastPickedLatLng.lat,
+        lng: this.lastPickedLatLng.lng,
+        address: '',
+        city: ''
+      };
+    }
+
+    const picked = this.lastPickedDetails;
+    const onConfirm = this.locationPickerOptions?.onConfirm;
+
+    this.cleanupLocationPicker();
+
+    if (onConfirm && picked) {
+      onConfirm(picked);
+    }
+  }
+
+  cancelLocationPicker() {
+    const onCancel = this.locationPickerOptions?.onCancel;
+    this.cleanupLocationPicker();
+    if (onCancel) {
+      onCancel();
+    }
+  }
+
+  cleanupLocationPicker() {
+    this.isPickingLocation = false;
+    this.onLocationPickedCallback = null;
+    this.locationPickerOptions = null;
+
+    if (this.tempPickerMarker) {
+      this.map.removeLayer(this.tempPickerMarker);
+      this.tempPickerMarker = null;
+    }
+
+    const banner = document.getElementById('location-picker-banner');
+    if (banner) banner.classList.add('hidden');
+
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.style.cursor = '';
+
+    // Réafficher les modales masquées
+    if (this.hiddenModalsForPicker) {
+      this.hiddenModalsForPicker.forEach(m => m.classList.remove('hidden'));
+      this.hiddenModalsForPicker = null;
+    }
+  }
   calculateBareme(devis) {
     const ratePerHour = 18;
     const personnelCost = devis.requiredVolunteers * devis.durationHours * ratePerHour;

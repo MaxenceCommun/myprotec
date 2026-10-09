@@ -337,7 +337,7 @@ window.ProtecAdmin = {
 
     const b = ev.badge || {};
     const bImg = b.imageUrl || '';
-    const accessType = b.accessType || 'evenement_special';
+    const accessType = (b.accessType && b.accessType !== 'en_attente') ? b.accessType : 'dps_departemental';
     const units = b.availableUnits || 4;
 
     modal.innerHTML = `
@@ -375,8 +375,9 @@ window.ProtecAdmin = {
                 <i data-lucide="map-pin" class="w-4 h-4 text-sky-600"></i>
                 Adresse & Point sur la Carte (Obligatoire)
               </span>
-              <button type="button" onclick="window.ProtecAdmin.geocodeAddressInEditModal()" class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[10px] cursor-pointer">
-                🔍 Rechercher / Géocoder
+              <button type="button" onclick="window.ProtecAdmin.pickEventLocationOnMap()" class="px-3 py-1.5 rounded-xl bg-pc-blue hover:bg-blue-700 text-white font-extrabold text-[11px] shadow-sm flex items-center gap-1.5 cursor-pointer" title="Cliquer directement sur la carte pour définir la position de l'événement">
+                <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-300"></i>
+                <span>Placer un point sur la map</span>
               </button>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -436,7 +437,7 @@ window.ProtecAdmin = {
           <div class="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-2">
             <span class="font-black text-purple-950 flex items-center gap-1.5">
               <i data-lucide="award" class="w-4 h-4 text-purple-700"></i>
-              Écusson : Lien d'image, Unités Disponibles & Rareté
+              Écusson : Obtention, Quotas & Rareté Administrative
             </span>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div class="sm:col-span-2">
@@ -458,8 +459,11 @@ window.ProtecAdmin = {
               <div>
                 <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Mode d'obtention de l'écusson :</label>
                 <select id="adm-badge-access-type" onchange="window.ProtecAdmin.updateRarityInEditModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
-                  <option value="evenement_special" ${accessType === 'evenement_special' ? 'selected' : ''}>Événement spécial (places d'antennes restreintes)</option>
-                  <option value="mission_ouverte" ${accessType === 'mission_ouverte' ? 'selected' : ''}>Récupérable par tous dans une mission ordinaire (Commun)</option>
+                  <option value="mission_ouverte" ${accessType === 'mission_ouverte' ? 'selected' : ''}>Accès libre ordinaire (Commun - Tous participants)</option>
+                  <option value="dps_departemental" ${accessType === 'dps_departemental' ? 'selected' : ''}>DPS départemental standard (Peu Commun)</option>
+                  <option value="evenement_regional" ${accessType === 'evenement_regional' ? 'selected' : ''}>Événement régional (Rare)</option>
+                  <option value="evenement_special" ${accessType === 'evenement_special' ? 'selected' : ''}>Événement spécial (Très Rare - Quota d'antennes)</option>
+                  <option value="evenement_unique" ${accessType === 'evenement_unique' ? 'selected' : ''}>Événement unique / historique (Légendaire)</option>
                 </select>
               </div>
               <div>
@@ -500,6 +504,27 @@ window.ProtecAdmin = {
     modal.classList.remove('hidden');
     if (window.lucide) window.lucide.createIcons();
     this.updateRarityInEditModal();
+  },
+
+  pickEventLocationOnMap() {
+    if (!window.game) return;
+
+    const latInput = document.getElementById('adm-evt-lat');
+    const lngInput = document.getElementById('adm-evt-lng');
+    const addrInput = document.getElementById('adm-evt-address');
+    const cityInput = document.getElementById('adm-evt-city');
+
+    window.game.startLocationPicker({
+      title: "Positionnement de l'Événement (Admin)",
+      subtitle: "Cliquez sur la carte à l'emplacement exact où déployer l'événement",
+      onConfirm: (loc) => {
+        if (latInput) latInput.value = loc.lat.toFixed(4);
+        if (lngInput) lngInput.value = loc.lng.toFixed(4);
+        if (loc.address && addrInput) addrInput.value = loc.address;
+        if (loc.city && cityInput) cityInput.value = loc.city;
+        window.game.showToast('Emplacement Enregistré', `Position GPS validée : ${loc.address ? loc.address + ', ' : ''}${loc.city || ''} (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`, 'green');
+      }
+    });
   },
 
   geocodeAddressInEditModal() {

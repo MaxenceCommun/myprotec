@@ -1447,7 +1447,80 @@ window.ProtecMultiplayer = {
   },
 
   // Calcul strict de la Rareté de l'Écusson selon les critères réglementaires :
-  // Déterminé UNIQUEMENT par le moyen d'obtention et le nombre d'unités disponibles
+  // Catalogue officiel exhaustif des types d'événements de la Protection Civile
+  OFFICIAL_EVENT_CATEGORIES: [
+    {
+      key: 'Festival & Concert',
+      label: '🎪 Festival, Concert & Scène Musicale',
+      keywords: ['festival', 'festiv', 'concert', 'musique', 'scene', 'dj', 'techno', 'rock', 'rap', 'son', 'chanson', 'orchestre', 'live']
+    },
+    {
+      key: 'Course & Événement Sportif',
+      label: '🏃 Course & Événement Sportif (Marathon, Trail, Cyclisme, Tournoi...)',
+      keywords: ['sport', 'marathon', 'course', 'trail', 'velo', 'cyclisme', 'foot', 'football', 'rugby', 'natation', 'triathlon', 'athletisme', 'tournoi', 'match', 'stade', 'combat', 'judo', 'boxe']
+    },
+    {
+      key: 'Fête Municipale & Rassemblement Populaire',
+      label: '🎉 Fête Municipale & Rassemblement Populaire (Fête de ville, Carnaval, Feux d’artifice...)',
+      keywords: ['fete', 'carnaval', 'kermesse', 'artifice', 'populaire', 'village', 'commune', 'foire', 'ducasse', 'parade', 'boulodrome', 'brocante', 'vide grenier']
+    },
+    {
+      key: 'Foire, Salon & Exposition',
+      label: '🏛️ Foire, Salon & Congrès d’Exposition (Parc des expos, Salons...)',
+      keywords: ['salon', 'foire', 'expo', 'exposition', 'congres', 'convention', 'stand', 'comptoir', 'foire expo']
+    },
+    {
+      key: 'Grand Événement International',
+      label: '🌐 Grand Événement International (JO, Sommet d’État, Mondial...)',
+      keywords: ['international', 'jo', 'olympique', 'sommet', 'otan', 'mondial', 'coupe du monde', 'chef detat', 'g7', 'g20']
+    },
+    {
+      key: 'Culture, Spectacle & Théâtre',
+      label: '🎭 Culture, Spectacle & Arts de Rue (Son & Lumière, Danse...)',
+      keywords: ['culture', 'spectacle', 'theatre', 'danse', 'lumiere', 'medieval', 'historique', 'opera', 'musee', 'art']
+    },
+    {
+      key: 'Exercice de Sécurité Civile & Plan NOVI',
+      label: '🚨 Exercice de Sécurité Civile & Plan NOVI (Sinistre simulé, Manœuvre zonale...)',
+      keywords: ['exercice', 'novi', 'manoeuvre', 'crise', 'catastrophe', 'sinistre', 'attentat', 'simulation', 'sdis', 'pompiers', 'samu', 'orsec']
+    },
+    {
+      key: 'Soutien aux Populations & Sinistres',
+      label: '⛺ Soutien aux Populations & Accueil de Sinistrés (CAI, Hébergement...)',
+      keywords: ['soutien', 'population', 'sinistre', 'accueil', 'cai', 'chu', 'hebergement', 'inondation', 'evacuation', 'tempete', 'ravitaillement']
+    },
+    {
+      key: 'Maraude Sociale d’Urgence',
+      label: '❄️ Maraude Sociale d’Urgence & Plan Grand Froid / Canicule',
+      keywords: ['maraude', 'social', 'grand froid', 'canicule', 'sdf', 'precarite', 'soupe', 'samu social', '115']
+    },
+    {
+      key: 'Cérémonie & Commémoration Officielle',
+      label: '🎖️ Cérémonie & Commémoration Officielle (14 Juillet, Défilés...)',
+      keywords: ['ceremonie', 'commemoration', '14 juillet', 'defile', '8 mai', '11 novembre', 'monument', 'patriotique']
+    }
+  ],
+
+  // Recherche de similarité (fuzzy matching) entre la saisie personnalisée et les types officiels
+  findSimilarCategory(input) {
+    if (!input || input.trim().length < 3) return null;
+    const clean = input.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    for (const cat of this.OFFICIAL_EVENT_CATEGORIES) {
+      for (const kw of cat.keywords) {
+        const cleanKw = kw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (clean.includes(cleanKw) || cleanKw.includes(clean)) {
+          return cat.key;
+        }
+        if (clean.length >= 4 && cleanKw.length >= 4 && (clean.startsWith(cleanKw.slice(0, 4)) || cleanKw.startsWith(clean.slice(0, 4)))) {
+          return cat.key;
+        }
+      }
+    }
+    return null;
+  },
+
+  // Calcul réglementaire de la rareté d'un écusson (déterminé par l'accessibilité et les unités disponibles)
   calculateBadgeRarity(accessType = 'evenement_special', availableUnits = 4) {
     if (accessType === 'mission_ouverte') {
       return {
@@ -1457,14 +1530,39 @@ window.ProtecMultiplayer = {
         desc: 'Récupérable par tous dans une mission ordinaire (Accès Libre)'
       };
     }
+    if (accessType === 'dps_departemental') {
+      return {
+        score: 45,
+        tier: 'Peu Commun',
+        color: 'text-emerald-800 bg-emerald-100 border-emerald-300 font-bold',
+        desc: 'Participation à un DPS ou rassemblement ordinaire'
+      };
+    }
+    if (accessType === 'evenement_regional') {
+      return {
+        score: 65,
+        tier: 'Rare',
+        color: 'text-sky-800 bg-sky-100 border-sky-300 font-extrabold',
+        desc: 'Événement régional ouvert aux antennes participantes'
+      };
+    }
+    if (accessType === 'evenement_unique') {
+      return {
+        score: 100,
+        tier: 'Légendaire',
+        color: 'text-amber-900 bg-gradient-to-r from-amber-100 to-yellow-200 border-amber-400 font-black shadow-md ring-1 ring-amber-400',
+        desc: 'Événement unique ou historique (Écusson d’exception légendaire)'
+      };
+    }
 
+    // evenement_special : calcul selon le quota d'unités / antennes participantes
     const units = parseInt(availableUnits, 10) || 4;
     if (units <= 3) {
       return {
         score: 95,
         tier: 'Très Rare',
         color: 'text-purple-900 bg-purple-100 border-purple-400 font-black shadow-sm ring-1 ring-purple-300',
-        desc: `Événement d'exception restreint à ${units} antenne(s) participante(s)`
+        desc: `Événement d'exception restreint à seulement ${units} antenne(s) participante(s)`
       };
     } else if (units <= 7) {
       return {
@@ -1475,14 +1573,14 @@ window.ProtecMultiplayer = {
       };
     } else if (units <= 15) {
       return {
-        score: 60,
+        score: 65,
         tier: 'Rare',
         color: 'text-sky-800 bg-sky-100 border-sky-300 font-extrabold',
         desc: `Événement spécial limité à ${units} antennes`
       };
     } else {
       return {
-        score: 40,
+        score: 45,
         tier: 'Peu Commun',
         color: 'text-emerald-800 bg-emerald-100 border-emerald-300 font-bold',
         desc: `Événement ouvert à un large contingent (${units} antennes)`
@@ -1493,6 +1591,64 @@ window.ProtecMultiplayer = {
   // Alias rétro-compatible
   calculateRarityScore(publicCount, reqVol, durationHours, isCrisis = false, accessType = 'evenement_special', availableUnits = 4) {
     return this.calculateBadgeRarity(accessType, availableUnits);
+  },
+
+  // Gestion interactive de la sélection de catégorie et suggestions en direct
+  onEventCategoryChange(val) {
+    const customBox = document.getElementById('evt-custom-category-box');
+    const customInput = document.getElementById('evt-input-custom-category');
+    const suggBox = document.getElementById('evt-category-suggestion-box');
+    if (!customBox) return;
+
+    if (val === 'custom') {
+      customBox.classList.remove('hidden');
+      if (customInput) customInput.focus();
+    } else {
+      customBox.classList.add('hidden');
+      if (suggBox) suggBox.classList.add('hidden');
+    }
+  },
+
+  onCustomCategoryInput(val) {
+    const suggBox = document.getElementById('evt-category-suggestion-box');
+    if (!suggBox) return;
+
+    const matchedKey = this.findSimilarCategory(val);
+    if (matchedKey) {
+      const catObj = this.OFFICIAL_EVENT_CATEGORIES.find(c => c.key === matchedKey);
+      suggBox.innerHTML = `
+        <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex flex-wrap items-center justify-between gap-2 shadow-xs animate-in fade-in">
+          <div class="flex items-center gap-1.5">
+            <span class="text-base">💡</span>
+            <span>Votre saisie ressemble au type officiel : <strong class="text-amber-900">${catObj ? catObj.label : matchedKey}</strong></span>
+          </div>
+          <button type="button" onclick="window.ProtecMultiplayer.applySuggestedCategory('${matchedKey}')" class="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-extrabold text-[11px] shadow-xs cursor-pointer whitespace-nowrap">
+            Sélectionner ce type
+          </button>
+        </div>
+      `;
+      suggBox.classList.remove('hidden');
+    } else {
+      suggBox.classList.add('hidden');
+      suggBox.innerHTML = '';
+    }
+  },
+
+  applySuggestedCategory(catKey) {
+    const catSelect = document.getElementById('evt-select-category');
+    const customBox = document.getElementById('evt-custom-category-box');
+    const suggBox = document.getElementById('evt-category-suggestion-box');
+    if (catSelect) {
+      catSelect.value = catKey;
+    }
+    if (customBox) customBox.classList.add('hidden');
+    if (suggBox) {
+      suggBox.classList.add('hidden');
+      suggBox.innerHTML = '';
+    }
+    if (window.game) {
+      window.game.showToast('Type Appliqué', `Catégorie officielle alignée sur « ${catKey} ».`, 'blue');
+    }
   },
 
   // Calcul réglementaire de l'Indemnisation d'un Événement (personnel × durée + moyens engagés)
@@ -1657,20 +1813,42 @@ window.ProtecMultiplayer = {
 
         <div class="space-y-3.5 text-xs">
           
-          <!-- Titre & Catégorie -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Intitulé de l'Événement :</label>
-              <input type="text" id="evt-input-title" placeholder="Ex: Marathon de la Métropole" value="Grand Rassemblement Festif" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-black text-slate-800 bg-slate-50" />
+          <!-- Titre & Catégorie Développée -->
+          <div class="space-y-2.5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Intitulé de l'Événement :</label>
+                <input type="text" id="evt-input-title" placeholder="Ex: Marathon de la Métropole" value="Grand Rassemblement Festif" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-black text-slate-800 bg-slate-50" />
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Type d'Événement :</label>
+                <select id="evt-select-category" onchange="window.ProtecMultiplayer.onEventCategoryChange(this.value)" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 bg-slate-50">
+                  <option value="Festival & Concert" selected>🎪 Festival, Concert & Scène Musicale</option>
+                  <option value="Course & Événement Sportif">🏃 Course & Événement Sportif (Marathon, Trail, Tournoi...)</option>
+                  <option value="Fête Municipale & Rassemblement Populaire">🎉 Fête Municipale & Rassemblement Populaire (Fête de ville, Feux d’artifice...)</option>
+                  <option value="Foire, Salon & Exposition">🏛️ Foire, Salon & Congrès d’Exposition (Parc des expos...)</option>
+                  <option value="Grand Événement International">🌐 Grand Événement International (JO, Sommet d’État, Mondial...)</option>
+                  <option value="Culture, Spectacle & Théâtre">🎭 Culture, Spectacle & Arts de Rue (Son & Lumière...)</option>
+                  <option value="Exercice de Sécurité Civile & Plan NOVI">🚨 Exercice de Sécurité Civile & Plan NOVI (Sinistre simulé...)</option>
+                  <option value="Soutien aux Populations & Sinistres">⛺ Soutien aux Populations & Sinistres (CAI, Hébergement...)</option>
+                  <option value="Maraude Sociale d’Urgence">❄️ Maraude Sociale d’Urgence & Plan Grand Froid</option>
+                  <option value="Cérémonie & Commémoration Officielle">🎖️ Cérémonie & Commémoration Officielle (14 Juillet, Défilés...)</option>
+                  <option value="custom">✍️ Autre / Type personnalisé...</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Type d'Événement :</label>
-              <select id="evt-select-category" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 bg-slate-50">
-                <option value="Sportif & Plein Air">Sportif & Plein Air (Course, Tournoi)</option>
-                <option value="Festival & Concert" selected>Festival, Concert & Culture</option>
-                <option value="Fête & Rassemblement">Fête Municipale & Rassemblement Populaire</option>
-                <option value="Exercice Crise & NOVI">Exercice Majeur NOVI / Sinistre Simulé</option>
-              </select>
+
+            <!-- Bloc Saisie Valeur Personnalisée avec suggestions intelligentes -->
+            <div id="evt-custom-category-box" class="hidden p-3 rounded-2xl bg-amber-50/70 border border-amber-200/90 space-y-2">
+              <label class="block font-bold text-amber-950 text-[11px]">Saisissez votre type d'événement personnalisé :</label>
+              <input 
+                type="text" 
+                id="evt-input-custom-category" 
+                placeholder="Ex: Course de caisses à savon, Gala caritatif, Régate nautique..." 
+                oninput="window.ProtecMultiplayer.onCustomCategoryInput(this.value)" 
+                class="w-full px-3 py-1.5 rounded-xl border border-amber-300 font-bold text-slate-800 bg-white" 
+              />
+              <div id="evt-category-suggestion-box" class="hidden"></div>
             </div>
           </div>
 
@@ -1686,10 +1864,11 @@ window.ProtecMultiplayer = {
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div class="sm:col-span-2">
                 <label class="block font-bold text-slate-700 text-[11px] mb-1">Adresse postale précise :</label>
-                <div class="flex gap-1.5">
+                <div class="flex flex-col sm:flex-row gap-1.5">
                   <input type="text" id="evt-input-address" placeholder="Ex: 15 Place de l'Hôtel de Ville" value="15 Place de la Mairie" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" />
-                  <button type="button" onclick="window.ProtecMultiplayer.geocodeAddressInModal()" class="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] whitespace-nowrap shadow-xs cursor-pointer" title="Rechercher les coordonnées cartographiques via l'adresse">
-                    🔍 Géocoder
+                  <button type="button" onclick="window.ProtecMultiplayer.pickEventLocationOnMap()" class="px-3.5 py-1.5 rounded-xl bg-pc-blue hover:bg-blue-700 active:scale-95 text-white font-extrabold text-[11px] whitespace-nowrap shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer" title="Cliquer directement sur la carte pour définir l'emplacement précis du dispositif">
+                    <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-300"></i>
+                    <span>Placer un point sur la map</span>
                   </button>
                 </div>
               </div>
@@ -1759,15 +1938,15 @@ window.ProtecMultiplayer = {
             </p>
           </div>
 
-          <!-- SECTION ÉCUSSON : LIEN D'IMAGE ET RARETÉ STRICTE -->
+          <!-- SECTION ÉCUSSON : LIEN D'IMAGE ET INTITULÉ (RARETÉ ATTRIBUÉE À LA VALIDATION ADMIN) -->
           <div class="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/80 space-y-3">
             <div class="flex items-center justify-between">
               <span class="font-black text-indigo-950 flex items-center gap-1.5">
                 <i data-lucide="award" class="w-4 h-4 text-indigo-600"></i>
-                Proposition de l'Écusson (Lien d'image & Rareté)
+                Proposition de l'Écusson Fédéral (Lien d'image & Intitulé)
               </span>
-              <span id="evt-rarity-preview-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-700 border border-purple-200">
-                Rareté : Très Rare (⭐ 85/100)
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200">
+                ⏳ Rareté définie par l'Admin à la validation
               </span>
             </div>
 
@@ -1787,24 +1966,12 @@ window.ProtecMultiplayer = {
               </div>
             </div>
 
-            <!-- RÈGLE STRICTE DE RARETÉ : MOYEN D'OBTENTION ET UNITÉS DISPONIBLES -->
-            <div class="p-3 rounded-xl bg-white/90 border border-indigo-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div class="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-950 text-[11px] flex items-start gap-2 leading-relaxed">
+              <i data-lucide="info" class="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5"></i>
               <div>
-                <label class="block font-bold text-slate-700 text-[11px] mb-1">Moyen d'obtention de l'écusson :</label>
-                <select id="badge-select-access-type" onchange="window.ProtecMultiplayer.updateRarityPreviewInModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 text-xs bg-slate-50">
-                  <option value="evenement_special" selected>Événement spécial (places d'antennes restreintes)</option>
-                  <option value="mission_ouverte">Récupérable par tous dans une mission ordinaire (Commun)</option>
-                </select>
+                <strong class="font-bold">Réglementation de la Rareté :</strong>
+                La rareté n'est pas choisie par le joueur lors de la proposition. Elle est calculée et fixée par l'administrateur une fois l'événement validé, en fonction de son accessibilité réelle (mission ouverte en accès libre = Commun, événement spécial ou régional = Rare/Très Rare, événement unique = Légendaire).
               </div>
-              <div>
-                <label class="block font-bold text-slate-700 text-[11px] mb-1">Nombre d'unités / Antennes participantes :</label>
-                <input type="number" id="badge-input-units" min="1" max="50" value="4" oninput="window.ProtecMultiplayer.updateRarityPreviewInModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 text-xs bg-white" />
-              </div>
-            </div>
-
-            <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] flex items-center gap-2">
-              <i data-lucide="shield-check" class="w-4 h-4 text-amber-700 flex-shrink-0"></i>
-              <span><strong>Implémentation Administrative :</strong> Vous proposez l'écusson sous forme de lien. L'administrateur valide l'image, ajuste la rareté (selon le nombre d'unités et le mode d'obtention) et publie l'événement.</span>
             </div>
           </div>
 
@@ -1825,7 +1992,27 @@ window.ProtecMultiplayer = {
     modal.classList.remove('hidden');
     if (window.lucide) window.lucide.createIcons();
     this.updateIndemnisationPreviewInModal();
-    this.updateRarityPreviewInModal();
+  },
+
+  pickEventLocationOnMap() {
+    if (!window.game) return;
+
+    const latInput = document.getElementById('evt-input-lat');
+    const lngInput = document.getElementById('evt-input-lng');
+    const addrInput = document.getElementById('evt-input-address');
+    const cityInput = document.getElementById('evt-input-city');
+
+    window.game.startLocationPicker({
+      title: "Emplacement de l'Événement",
+      subtitle: "Cliquez sur la carte à l'endroit précis où se déroulera la manifestation",
+      onConfirm: (loc) => {
+        if (latInput) latInput.value = loc.lat.toFixed(4);
+        if (lngInput) lngInput.value = loc.lng.toFixed(4);
+        if (loc.address && addrInput) addrInput.value = loc.address;
+        if (loc.city && cityInput) cityInput.value = loc.city;
+        window.game.showToast('Emplacement Enregistré', `Point placé sur la carte : ${loc.address ? loc.address + ', ' : ''}${loc.city || ''} (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`, 'green');
+      }
+    });
   },
 
   geocodeAddressInModal() {
@@ -1915,13 +2102,13 @@ window.ProtecMultiplayer = {
     const rewInput = document.getElementById('evt-input-reward');
     const vehInput = document.getElementById('evt-input-vehicles');
 
-    const badgeNameInput = document.getElementById('badge-input-name');
-    const badgeUrlInput = document.getElementById('badge-input-image-url');
-    const badgeAccessSelect = document.getElementById('badge-select-access-type');
-    const badgeUnitsInput = document.getElementById('badge-input-units');
-
     const title = titleInput?.value.trim() || 'Grand DPS Fédéral';
-    const category = catSelect?.value || 'Festival & Concert';
+    let category = catSelect?.value || 'DPS Grande Envergure';
+    if (category === 'custom') {
+      const customVal = document.getElementById('evt-input-custom-category')?.value.trim();
+      category = customVal || 'Événement Personnalisé';
+    }
+
     const city = cityInput?.value.trim() || (game.stations?.[0]?.city || 'Paris');
     const address = addrInput?.value.trim() || `Place Centrale, ${city}`;
     const lat = parseFloat(latInput?.value || game.stations?.[0]?.lat || 48.8566);
@@ -1932,25 +2119,22 @@ window.ProtecMultiplayer = {
     const durationHours = parseInt(durInput?.value || '6', 10);
     const vehText = vehInput?.value.trim() || '1 VPSP';
 
-    const accessType = badgeAccessSelect?.value || 'evenement_special';
-    const availableUnits = parseInt(badgeUnitsInput?.value || '4', 10);
-    const rarity = this.calculateBadgeRarity(accessType, availableUnits);
-
     const indemnisation = this.calculateEventIndemnisation(reqVol, durationHours, vehText);
     const rewardMoney = parseInt(rewInput?.value || indemnisation.total, 10);
 
+    // La rareté et les quotas d'unités sont déterminés par l'administration lors de la validation
     const badge = {
       id: `badge-${Date.now()}`,
       name: badgeNameInput?.value.trim() || `Écusson ${title}`,
       imageUrl: badgeUrlInput?.value.trim() || '',
-      accessType: accessType,
-      availableUnits: availableUnits,
+      accessType: 'en_attente',
+      availableUnits: null,
       icon: 'shield',
       colorTheme: 'purple',
-      rarityScore: rarity.score,
-      rarityTier: rarity.tier,
-      rarityColor: rarity.color,
-      desc: rarity.desc,
+      rarityScore: null,
+      rarityTier: 'En attente de validation',
+      rarityColor: 'bg-slate-100 text-slate-700 border-slate-300',
+      desc: 'Rareté et modalité d’obtention fixées par l’administration lors de la validation.',
       eventName: title,
       obtainedAt: new Date().toLocaleDateString('fr-FR'),
       originalOrganizer: game.player?.name || 'Directeur d’Antenne'
@@ -1976,7 +2160,7 @@ window.ProtecMultiplayer = {
       requiredVehicles: [vehText],
       rewardMoney: rewardMoney,
       indemnisationDetails: indemnisation,
-      rewardReputation: Math.round(rarity.score / 2),
+      rewardReputation: 30,
       desc: `Dispositif d’envergure : ${category} à l'adresse « ${address} » (${city}). Affluence prévue de ${pub.toLocaleString('fr-FR')} personnes.`,
       badge: badge,
       registeredAntennas: [
