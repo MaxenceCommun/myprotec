@@ -637,6 +637,11 @@ class ProtecGame {
     this.updateDockAndFiltersVisibility();
     this.startSimulationClock();
 
+    // Initialisation du tableau d'écussons et synchronisation cloud Supabase
+    if (window.ProtecEcussons) {
+      window.ProtecEcussons.initEcussons(this).catch(e => console.warn('Erreur init écussons:', e));
+    }
+
     // Fermeture automatique des sous-menus au clic en dehors du dock
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.dock-menu-wrapper')) {
@@ -2822,6 +2827,12 @@ class ProtecGame {
     this.resources.money += 400; // Dotation initiale de conventionnement
     this.resources.reputationScore += 25;
     this.showToast('Convention SNCF Signée !', 'Partenariat d’assistance voyageurs et CHU en gare activé (+400 € de dotation de conventionnement).', 'green');
+    
+    // Attribution de l'écusson commémoratif officiel SNCF
+    if (window.ProtecEcussons) {
+      window.ProtecEcussons.attribuerEcusson('miss_sncf');
+    }
+
     this.saveGame();
     this.updateStatsUI();
     this.openModule('devis', true);
@@ -4964,6 +4975,9 @@ class ProtecGame {
       renfort.status = 'fulfilled';
       this.resources.money += renfort.indemnite || 200;
       this.resources.alliancePoints += 35;
+      if (window.ProtecEcussons) {
+        window.ProtecEcussons.attribuerEcusson('renf_zonal');
+      }
       this.showToast('Renfort Dépêché !', `Votre ${dispoVeh.name} part épauler ${renfort.requesterName} ! (+${renfort.indemnite} € d’indemnité et +35 pts d’alliance)`, 'green');
       this.updateStatsUI();
       this.openModule('alliance');
@@ -4971,6 +4985,9 @@ class ProtecGame {
       renfort.status = 'fulfilled';
       this.resources.money += renfort.indemnite || 200;
       this.resources.alliancePoints += 35;
+      if (window.ProtecEcussons) {
+        window.ProtecEcussons.attribuerEcusson('renf_zonal');
+      }
       this.showToast('Renfort Dépêché !', `Unité partie en renfort inter-antennes !`, 'green');
       this.updateStatsUI();
       this.openModule('alliance');
@@ -5645,6 +5662,19 @@ class ProtecGame {
     // Fermeture modale
     document.getElementById('engage-renfort-modal')?.remove();
 
+    // Attribution de l'écusson commémoratif d'antenne selon la nature du renfort
+    if (window.ProtecEcussons) {
+      if (renfort.typeCategory === 'inondation') {
+        window.ProtecEcussons.attribuerEcusson('renf_colonne_crue');
+      } else if (renfort.typeCategory === 'maraude') {
+        window.ProtecEcussons.attribuerEcusson('miss_grand_froid');
+      } else if (renfort.typeCategory === 'dps' || (renfort.typeTitle && renfort.typeTitle.includes('DPS'))) {
+        window.ProtecEcussons.attribuerEcusson('renf_dps_ge');
+      } else {
+        window.ProtecEcussons.attribuerEcusson('renf_zonal');
+      }
+    }
+
     // Notification utilisateur avec explication claire de l'arbitrage
     if (wasCapped) {
       this.showToast(
@@ -6159,7 +6189,7 @@ class ProtecGame {
       'dps': 'planning'
     };
 
-    if (moduleKey === 'evenements' || moduleKey === 'ecussons') {
+    if (moduleKey === 'evenements') {
       this.activeAllianceTab = 'evenements';
       moduleKey = 'alliance';
     } else if (moduleKey && aliases[moduleKey]) {
@@ -6192,7 +6222,16 @@ class ProtecGame {
 
     modal.classList.remove('hidden');
 
-    if (moduleKey === 'finances') {
+    if (moduleKey === 'ecussons') {
+      title.textContent = "Collection & Troc d'Écussons";
+      subtitle.textContent = "Tableau en liège d'antenne et bourse aux échanges inter-antennes en ligne";
+      icon.setAttribute('data-lucide', 'shield');
+      if (window.ProtecEcussons) {
+        window.ProtecEcussons.renderTableauEcussons(this, body);
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'finances') {
       if (window.ProtecFinances) {
         window.ProtecFinances.renderFinancesModal(this);
         return;

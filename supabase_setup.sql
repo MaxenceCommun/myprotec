@@ -358,3 +358,287 @@ ALTER TABLE chat_messages DISABLE ROW LEVEL SECURITY;
 -- Autorisations d'exécution des fonctions publiques
 GRANT EXECUTE ON FUNCTION process_world_heartbeat() TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION sync_server_world(TEXT) TO anon, authenticated, service_role;
+
+-- ==============================================================================
+-- 8. SYSTÈME D'ÉCUSSONS DE COLLECTION & BOURSE AUX ÉCHANGES (TROC INTER-ANTENNES)
+-- ==============================================================================
+
+-- A. Table du catalogue officiel des écussons
+CREATE TABLE IF NOT EXISTS ecussons (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL,
+  nom TEXT NOT NULL,
+  description TEXT,
+  categorie TEXT NOT NULL CHECK (categorie IN ('specialite', 'mission', 'departement', 'renfort')),
+  badge_url TEXT,
+  rarete TEXT NOT NULL CHECK (rarete IN ('commun', 'rare', 'epique', 'historique')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ecussons_categorie ON ecussons(categorie);
+CREATE INDEX IF NOT EXISTS idx_ecussons_code ON ecussons(code);
+
+-- B. Table d'association : écussons possédés par chaque antenne (avec gestion des doublons)
+CREATE TABLE IF NOT EXISTS antenne_ecussons (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  antenne_id TEXT NOT NULL,
+  ecusson_id UUID NOT NULL REFERENCES ecussons(id) ON DELETE CASCADE,
+  quantite INT NOT NULL DEFAULT 1 CHECK (quantite >= 0),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_antenne_ecusson UNIQUE (antenne_id, ecusson_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_antenne_ecussons_antenne ON antenne_ecussons(antenne_id);
+CREATE INDEX IF NOT EXISTS idx_antenne_ecussons_ecusson ON antenne_ecussons(ecusson_id);
+
+-- C. Table des offres de troc / bourse d'échanges
+CREATE TABLE IF NOT EXISTS ecusson_echanges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  antenne_offreur_id TEXT NOT NULL,
+  ecusson_offert_id UUID NOT NULL REFERENCES ecussons(id) ON DELETE CASCADE,
+  ecusson_demande_id UUID NOT NULL REFERENCES ecussons(id) ON DELETE CASCADE,
+  statut TEXT NOT NULL DEFAULT 'ouvert' CHECK (statut IN ('ouvert', 'complete', 'annule')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ecusson_echanges_statut ON ecusson_echanges(statut);
+CREATE INDEX IF NOT EXISTS idx_ecusson_echanges_offreur ON ecusson_echanges(antenne_offreur_id);
+
+-- ==============================================================================
+-- FONCTIONS RPC SÉCURISÉES POUR LE TROC D'ÉCUSSONS
+-- ==============================================================================
+
+-- 1. Créer une offre de troc (exige au moins 2 exemplaires, c-à-d un doublon)
+CREATE OR REPLACE FUNCTION creer_offre_echange(
+  p_ecusson_offert_id UUID,
+  p_ecusson_demande_id UUID,
+  p_antenne_id TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_antenne TEXT;
+  v_dispo INT;
+  v_offre_id UUID;
+BEGIN
+  v_antenne := COALESCE(p_antenne_id, auth.uid()::text);
+  IF v_antenne IS NULL THEN
+    RAISE EXCEPTION 'Antenne non authentifiée.';
+  END IF;
+
+  IF p_ecusson_offert_id = p_ecusson_demande_id THEN
+    RAISE EXCEPTION 'L’écusson offert et l’écusson demandé doivent être distincts.';
+  END IF;
+
+  -- Vérifier la présence d'au moins 2 exemplaires (1 gardé dans le tableau + 1 mis en troc)
+  SELECT quantite INTO v_dispo
+  FROM antenne_ecussons
+  WHERE antenne_id = v_antenne AND ecusson_id = p_ecusson_offert_id
+  FOR UPDATE;
+
+  IF v_dispo IS NULL OR v_dispo < 2 THEN
+    RAISE EXCEPTION 'Vous devez posséder au moins 2 exemplaires de cet écusson (un doublon) pour le proposer à l’échange (actuel: %)', COALESCE(v_dispo, 0);
+  END IF;
+
+  -- Décrémenter la quantité pour l'offreur
+  UPDATE antenne_ecussons
+  SET quantite = quantite - 1, updated_at = NOW()
+  WHERE antenne_id = v_antenne AND ecusson_id = p_ecusson_offert_id;
+
+  -- Créer l'offre ouverte
+  INSERT INTO ecusson_echanges (antenne_offreur_id, ecusson_offert_id, ecusson_demande_id, statut)
+  VALUES (v_antenne, p_ecusson_offert_id, p_ecusson_demande_id, 'ouvert')
+  RETURNING id INTO v_offre_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'offre_id', v_offre_id,
+    'message', 'Offre de troc publiée sur la bourse aux écussons.'
+  );
+END;
+$$;
+
+-- 2. Annuler une offre de troc (réintègre l'écusson dans l'antenne offreuse)
+CREATE OR REPLACE FUNCTION annuler_offre_echange(
+  p_offre_id UUID,
+  p_antenne_id TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_antenne TEXT;
+  v_offre RECORD;
+BEGIN
+  v_antenne := COALESCE(p_antenne_id, auth.uid()::text);
+  IF v_antenne IS NULL THEN
+    RAISE EXCEPTION 'Antenne non authentifiée.';
+  END IF;
+
+  SELECT * INTO v_offre
+  FROM ecusson_echanges
+  WHERE id = p_offre_id AND statut = 'ouvert'
+  FOR UPDATE;
+
+  IF v_offre IS NULL THEN
+    RAISE EXCEPTION 'Offre introuvable ou déjà clôturée.';
+  END IF;
+
+  IF v_offre.antenne_offreur_id <> v_antenne THEN
+    RAISE EXCEPTION 'Seul le propriétaire de l’offre peut l’annuler.';
+  END IF;
+
+  -- Clôturer l'offre
+  UPDATE ecusson_echanges
+  SET statut = 'annule'
+  WHERE id = p_offre_id;
+
+  -- Réincrémenter le patch chez l'offreur
+  UPDATE antenne_ecussons
+  SET quantite = quantite + 1, updated_at = NOW()
+  WHERE antenne_id = v_antenne AND ecusson_id = v_offre.ecusson_offert_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'Offre de troc annulée. Votre écusson a été réintégré à votre collection.'
+  );
+END;
+$$;
+
+-- 3. Accepter une offre de troc (transaction atomique : échange bilatéral des patchs)
+CREATE OR REPLACE FUNCTION accepter_offre_echange(
+  p_offre_id UUID,
+  p_antenne_demandeur_id TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_demandeur TEXT;
+  v_offre RECORD;
+  v_dispo_demandeur INT;
+BEGIN
+  v_demandeur := COALESCE(p_antenne_demandeur_id, auth.uid()::text);
+  IF v_demandeur IS NULL THEN
+    RAISE EXCEPTION 'Antenne non authentifiée.';
+  END IF;
+
+  -- Verrouillage de l'offre
+  SELECT * INTO v_offre
+  FROM ecusson_echanges
+  WHERE id = p_offre_id AND statut = 'ouvert'
+  FOR UPDATE;
+
+  IF v_offre IS NULL THEN
+    RAISE EXCEPTION 'Cette offre d’échange n’est plus disponible (déjà conclue ou annulée).';
+  END IF;
+
+  IF v_offre.antenne_offreur_id = v_demandeur THEN
+    RAISE EXCEPTION 'Vous ne pouvez pas accepter votre propre offre.';
+  END IF;
+
+  -- Vérifier que le demandeur possède bien l'écusson demandé (au moins 1 exemplaire)
+  SELECT quantite INTO v_dispo_demandeur
+  FROM antenne_ecussons
+  WHERE antenne_id = v_demandeur AND ecusson_id = v_offre.ecusson_demande_id
+  FOR UPDATE;
+
+  IF v_dispo_demandeur IS NULL OR v_dispo_demandeur < 1 THEN
+    RAISE EXCEPTION 'Vous ne possédez pas l’écusson requis pour conclure cet échange.';
+  END IF;
+
+  -- 1. Décrémenter l'écusson demandé chez le demandeur
+  UPDATE antenne_ecussons
+  SET quantite = quantite - 1, updated_at = NOW()
+  WHERE antenne_id = v_demandeur AND ecusson_id = v_offre.ecusson_demande_id;
+
+  -- 2. Ajouter l'écusson demandé chez l'offreur (UPSERT)
+  INSERT INTO antenne_ecussons (antenne_id, ecusson_id, quantite, updated_at)
+  VALUES (v_offre.antenne_offreur_id, v_offre.ecusson_demande_id, 1, NOW())
+  ON CONFLICT (antenne_id, ecusson_id)
+  DO UPDATE SET quantite = antenne_ecussons.quantite + 1, updated_at = NOW();
+
+  -- 3. Ajouter l'écusson offert chez le demandeur (UPSERT)
+  INSERT INTO antenne_ecussons (antenne_id, ecusson_id, quantite, updated_at)
+  VALUES (v_demandeur, v_offre.ecusson_offert_id, 1, NOW())
+  ON CONFLICT (antenne_id, ecusson_id)
+  DO UPDATE SET quantite = antenne_ecussons.quantite + 1, updated_at = NOW();
+
+  -- 4. Clôturer l'offre
+  UPDATE ecusson_echanges
+  SET statut = 'complete'
+  WHERE id = p_offre_id;
+
+  -- 5. Notification serveur pour l'offreur
+  INSERT INTO server_events_log (player_id, event_type, title, message)
+  VALUES (
+    v_offre.antenne_offreur_id,
+    'ecusson_trade',
+    'Échange d’Écusson Conclu ! 🤝',
+    'Une antenne alliée a accepté votre offre de troc. Votre nouvel écusson est accroché à votre tableau !'
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'Échange réussi ! Le nouvel écusson a été ajouté à votre collection.'
+  );
+END;
+$$;
+
+-- ==============================================================================
+-- DÉBLOCAGE RLS ET DROITS POUR LES TABLES D'ÉCUSSONS
+-- ==============================================================================
+ALTER TABLE ecussons DISABLE ROW LEVEL SECURITY;
+ALTER TABLE antenne_ecussons DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ecusson_echanges DISABLE ROW LEVEL SECURITY;
+
+GRANT ALL ON TABLE ecussons TO anon, authenticated, service_role;
+GRANT ALL ON TABLE antenne_ecussons TO anon, authenticated, service_role;
+GRANT ALL ON TABLE ecusson_echanges TO anon, authenticated, service_role;
+
+GRANT EXECUTE ON FUNCTION creer_offre_echange(UUID, UUID, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION annuler_offre_echange(UUID, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION accepter_offre_echange(UUID, TEXT) TO anon, authenticated, service_role;
+
+-- ==============================================================================
+-- CATALOGUE INITIAL IDEMPOTENT D'ÉCUSSONS OFFICIELS DE LA PROTECTION CIVILE
+-- ==============================================================================
+INSERT INTO ecussons (code, nom, description, categorie, badge_url, rarete) VALUES
+  -- 1. SPÉCIALITÉS
+  ('spec_pse', 'Équipier Secouriste Opérationnel', 'Délivré aux antennes maintenant un équipage PSE complet prêt à intervenir.', 'specialite', 'images/badges/badge_pse.png', 'commun'),
+  ('spec_aqua', 'Sauvetage Aquatique & Inondations', 'Reconnaissance des unités de sauvetage côtier, fleuves et zones inondées.', 'specialite', 'images/badges/badge_aquatique.png', 'rare'),
+  ('spec_cyno', 'Unité Cynotechnique de Recherche', 'Dédié aux équipes cynotechniques de recherche de personnes disparues.', 'specialite', 'images/badges/badge_cyno.png', 'rare'),
+  ('spec_pma', 'Poste Médical Avancé (PMA)', 'Attribué pour la capacité de déploiement d’une chaîne médicale complète de tri.', 'specialite', 'images/badges/badge_pma.png', 'epique'),
+  ('spec_formateur', 'Corps National des Formateurs', 'Distinction des antennes disposant d’au moins deux formateurs de sécurité civile certifiés.', 'specialite', 'images/badges/badge_formateur.png', 'rare'),
+  ('spec_aep', 'Soutien Psychologique & Urgence Médico-Sociale', 'Délivré aux équipes formées à la prise en charge des chocs émotionnels.', 'specialite', 'images/badges/badge_aep.png', 'rare'),
+
+  -- 2. MISSIONS MAJEURES
+  ('miss_grand_froid', 'Plan Grand Froid & Maraudes', 'Remis pour l’engagement solidaire de nuit auprès des personnes sans-abri en période hivernale.', 'mission', 'images/badges/badge_froid.png', 'rare'),
+  ('miss_14_juillet', 'Dispositif Fête Nationale 14 Juillet', 'Écusson commémoratif des grands rassemblements républicains et feux d’artifice.', 'mission', 'images/badges/badge_14juillet.png', 'epique'),
+  ('miss_marathon', 'Sécurisation Grands Événements Sportifs', 'Délivré lors de la couverture médicale complète de marathons et trails majeurs.', 'mission', 'images/badges/badge_marathon.png', 'commun'),
+  ('miss_festival', 'Sécurité Événements Musicaux & Festivals', 'Reconnaît l’encadrement de dispositifs de moyenne et grande envergure.', 'mission', 'images/badges/badge_festival.png', 'rare'),
+  ('miss_sncf', 'Convention Catastrophe Ferroviaire & SNCF', 'Attribué lors de la signature et des interventions d’urgence sur réseau ferré.', 'mission', 'images/badges/badge_sncf.png', 'historique'),
+
+  -- 3. DÉPARTEMENTS & ANCRAGE TERRITORIAL
+  ('dept_54', 'Protection Civile 54 • Meurthe-et-Moselle', 'Écusson territorial des secouristes lorrains du 54.', 'departement', 'images/badges/badge_54.png', 'commun'),
+  ('dept_75', 'Protection Civile de Paris (75)', 'Écusson historique de la capitale et des brigades d’intervention parisiennes.', 'departement', 'images/badges/badge_75.png', 'rare'),
+  ('dept_69', 'Protection Civile du Rhône (69)', 'Insigne officiel des unités de secours de la métropole lyonnaise.', 'departement', 'images/badges/badge_69.png', 'commun'),
+  ('dept_13', 'Protection Civile des Bouches-du-Rhône (13)', 'Écusson des secouristes méditerranéens et feux de forêt du 13.', 'departement', 'images/badges/badge_13.png', 'rare'),
+  ('dept_33', 'Protection Civile de Gironde (33)', 'Distinction territoriale des secouristes du Sud-Ouest.', 'departement', 'images/badges/badge_33.png', 'commun'),
+  ('dept_59', 'Protection Civile du Nord (59)', 'Écusson des équipes engagées sur le littoral et les Flandres.', 'departement', 'images/badges/badge_59.png', 'commun'),
+
+  -- 4. RENFORTS & SOLIDARITÉ
+  ('renf_dps_ge', 'Grande Envergure • Renfort Inter-Antennes', 'Décerné à toute antenne ayant dépêché un équipage ou VPSP en renfort sur un DPS-GE.', 'renfort', 'images/badges/badge_renfort_ge.png', 'epique'),
+  ('renf_colonne_crue', 'Colonne Nationale de Secours Crues', 'Écusson de prestige remis lors des déploiements zonaux de crise hydraulique.', 'renfort', 'images/badges/badge_crue.png', 'historique'),
+  ('renf_zonal', 'Solidarité Zonale de Sécurité Civile', 'Attribué pour l’appui logistique ou opérationnel rapide entre départements limitrophes.', 'renfort', 'images/badges/badge_zonal.png', 'rare'),
+  ('renf_fondateur', 'Pionnier FNPC • Fondation d’Antenne', 'Écusson commémoratif remis aux directeurs ayant inauguré leur bâtiment d’antenne.', 'renfort', 'images/badges/badge_fondateur.png', 'historique')
+ON CONFLICT (code) DO UPDATE SET
+  nom = EXCLUDED.nom,
+  description = EXCLUDED.description,
+  categorie = EXCLUDED.categorie,
+  badge_url = EXCLUDED.badge_url,
+  rarete = EXCLUDED.rarete;

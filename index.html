@@ -571,10 +571,17 @@
             </div>
             <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-black">Astreintes</span>
           </button>
+          <button onclick="window.game.openModule('ecussons'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="shield" class="w-4 h-4 text-amber-500"></i>
+              <span>Écussons & Troc en Ligne</span>
+            </div>
+            <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">Tableau Liège</span>
+          </button>
           <button onclick="window.game.activeAllianceTab = 'evenements'; window.game.openModule('alliance'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="award" class="w-4 h-4 text-purple-600"></i>
-              <span>Événements & Écussons</span>
+              <span>Grands Événements Fédéraux</span>
             </div>
             <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-700 font-black">DPS</span>
           </button>
@@ -773,10 +780,10 @@
         </div>
       </div>
 
-      <!-- Section 3 : Antenne (Bâtiment, Flotte, Logistique) -->
+      <!-- Section 3 : Antenne (Bâtiment, Flotte, Logistique, Écussons) -->
       <div class="space-y-1.5">
         <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Antenne</span>
-        <div class="grid grid-cols-4 gap-2 text-center">
+        <div class="grid grid-cols-5 gap-1.5 text-center">
           <button onclick="window.game.closeMobileMenu(); window.game.openModule('locaux')" class="mobile-grid-btn group">
             <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
               <i data-lucide="layout-grid" class="w-4.5 h-4.5"></i>
@@ -805,13 +812,20 @@
             <span class="text-xs font-bold text-slate-700">Spés</span>
             <span class="text-[9px] text-slate-400">Drones/Cyno</span>
           </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('ecussons')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="shield" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-amber-800">Écussons</span>
+            <span class="text-[9px] text-amber-600">Tableau/Troc</span>
+          </button>
         </div>
       </div>
 
       <!-- Section 4 : Liaisons & Réseau -->
       <div class="space-y-1.5">
         <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Liaisons & Réseau</span>
-        <div class="grid grid-cols-5 gap-1.5 text-center">
+        <div class="grid grid-cols-6 gap-1 text-center">
           <button onclick="window.game.closeMobileMenu(); window.game.openModule('radio')" class="mobile-grid-btn group">
             <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
               <i data-lucide="radio" class="w-4.5 h-4.5"></i>
@@ -845,7 +859,7 @@
               <i data-lucide="award" class="w-4.5 h-4.5"></i>
             </div>
             <span class="text-[11px] font-bold text-slate-700">Événements</span>
-            <span class="text-[8px] text-purple-600">Écussons</span>
+            <span class="text-[8px] text-purple-600">Fédéraux</span>
           </button>
           <button onclick="window.game.closeMobileMenu(); window.game.openModule('meteo')" class="mobile-grid-btn group">
             <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
@@ -1166,6 +1180,7 @@
   <script src="js/tutorial.js"></script>
   <script src="js/veille_operationnelle.js"></script>
   <script src="js/multijoueur.js"></script>
+  <script src="js/ecussons.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
