@@ -30,10 +30,17 @@ class ProtecGame {
       savedPlayerId = `p-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`;
       localStorage.setItem('protec_player_id', savedPlayerId);
     }
+
+    let initialAllianceId = (supaUser && supaUser.allianceId) || localStorage.getItem('protec_alliance_id') || null;
+    if (initialAllianceId === 'alliance-fnpc') {
+      initialAllianceId = null;
+      localStorage.removeItem('protec_alliance_id');
+    }
+
     this.player = {
       id: savedPlayerId,
       name: (supaUser && supaUser.username) || localStorage.getItem('protec_player_name') || 'Directeur d’Antenne',
-      allianceId: (supaUser && supaUser.allianceId) || localStorage.getItem('protec_alliance_id') || 'alliance-fnpc',
+      allianceId: initialAllianceId,
       departmentCode: (supaUser && (supaUser.departmentCode || supaUser.department_code)) || localStorage.getItem('protec_department_code') || '54',
       deptRole: localStorage.getItem('protec_dept_role') || 'antenne_principale',
       role: (supaUser && supaUser.role) || 'directeur'
@@ -167,6 +174,9 @@ class ProtecGame {
     }
     if (window.ProtecNotifications) {
       window.ProtecNotifications.init(this);
+    }
+    if (window.ProtecVeille) {
+      window.ProtecVeille.init(this);
     }
   }
 
@@ -669,6 +679,7 @@ class ProtecGame {
       this.missions = [];
       this.candidatures = [];
       this.formations = [];
+      this.renforts = [];
     } catch (e) {
       console.warn('Erreur réinitialisation état local:', e);
     }
@@ -4916,14 +4927,6 @@ class ProtecGame {
 
   ensureExtraDeptRenforts() {
     if (!this.renforts) this.renforts = [];
-    const openExtra = this.renforts.filter(r => r.isExtraDept && r.status === 'open');
-    if (openExtra.length === 0) {
-      const templates = this.getExtraDeptTemplates();
-      // On injecte en premier la demande SUAP d'Évaux-les-Bains (modèle officiel de la capture)
-      const starter = templates[0];
-      const copy = { ...starter, createdAt: new Date().toISOString() };
-      this.renforts.unshift(copy);
-    }
   }
 
   calculateRouteInfo(destLat, destLng) {
@@ -5818,60 +5821,89 @@ class ProtecGame {
     }
 
     if (moduleKey === 'alliance') {
-      title.textContent = 'Fédération & Alliances Multijoueur';
-      subtitle.textContent = 'Entraide inter-antennes, détachements de renforts, stages mutualisés et radio';
+      title.textContent = 'Fédération, Alliances & Veille Opérationnelle';
+      subtitle.textContent = 'Entraide inter-antennes, détachements de renforts, astreintes et réseau fédéral';
       icon.setAttribute('data-lucide', 'handshake');
 
-      const alliance = this.alliances[0] || { name: 'Union Fédérale de Sécurité Civile', tag: 'UFSC', treasury: 8500 };
+      // Purge des renforts offline résiduels
+      this.renforts = (this.renforts || []).filter(r => !r.id || !r.id.startsWith('renf-offline-'));
+
+      const userAllianceId = this.player?.allianceId;
+      const alliance = (this.alliances || []).find(a => a.id === userAllianceId);
+      const hasAlliance = Boolean(userAllianceId && alliance);
       const currentTab = this.activeAllianceTab || 'membres';
 
       body.innerHTML = `
         <div class="space-y-5">
           
-          <!-- En-tête de l'Alliance -->
-          <div class="p-4 rounded-2xl bg-gradient-to-r from-indigo-700 to-pc-blue text-white flex items-center justify-between shadow-lg">
-            <div class="flex items-center gap-3">
-              <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white font-black text-lg">
-                ${alliance.tag || 'PC'}
+          <!-- En-tête de l'Alliance ou du Réseau Fédéral -->
+          ${hasAlliance ? `
+            <div class="p-4 rounded-2xl bg-gradient-to-r from-indigo-700 to-pc-blue text-white flex items-center justify-between shadow-lg">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white font-black text-lg">
+                  ${alliance.tag || 'PC'}
+                </div>
+                <div>
+                  <h4 class="text-base font-extrabold leading-tight">${alliance.name}</h4>
+                  <p class="text-xs text-white/80">Caisse de solidarité fédérale : <strong>${(alliance.treasury || 0).toLocaleString('fr-FR')} €</strong> • Vos points d’alliance : <strong>${this.resources.alliancePoints || 0} pts</strong></p>
+                </div>
               </div>
-              <div>
-                <h4 class="text-base font-extrabold leading-tight">${alliance.name}</h4>
-                <p class="text-xs text-white/80">Caisse de solidarité fédérale : <strong>${(alliance.treasury || 8500).toLocaleString('fr-FR')} €</strong> • Vos points d’alliance : <strong>${this.resources.alliancePoints} pts</strong></p>
+              <div class="flex items-center gap-2">
+                <span class="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Alliance Active
+                </span>
               </div>
             </div>
-            <div class="flex items-center gap-2">
-              <span class="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                Réseau Connecté
-              </span>
+          ` : `
+            <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-800 to-pc-blue text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-amber-300 font-black text-xl">
+                  <i data-lucide="network" class="w-6 h-6"></i>
+                </div>
+                <div>
+                  <h4 class="text-base font-extrabold leading-tight">Réseau Fédéral Inter-Antennes</h4>
+                  <p class="text-xs text-white/80">Vous ne faites actuellement partie d’aucune Alliance locale ou entente inter-antennes.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="window.ProtecVeille.renderModal(window.game);" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow transition flex items-center gap-1.5 cursor-pointer">
+                  <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                  Astreintes (3 Échelons)
+                </button>
+              </div>
             </div>
-          </div>
+          `}
 
           <!-- Onglets du module Alliance -->
-          <div class="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold">
-            <button onclick="window.game.setAllianceTab('membres')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'membres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
+          <div class="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold overflow-x-auto">
+            <button onclick="window.game.setAllianceTab('membres')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'membres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
               Antennes & Membres (${this.allianceStations.length + this.stations.length})
             </button>
-            <button onclick="window.game.setAllianceTab('renforts')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'renforts' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1.5">
+            <button onclick="window.ProtecVeille.renderModal(window.game);" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-black flex items-center gap-1.5 border border-emerald-300 shadow-xs cursor-pointer">
+              <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-emerald-600"></i>
+              Veille Opérationnelle
+            </button>
+            <button onclick="window.game.setAllianceTab('renforts')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'renforts' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1.5">
               Appels à Renforts
-              <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-white">${this.renforts.filter(r => r.status === 'open').length}</span>
+              <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700 font-black">${(this.renforts || []).filter(r => r.status === 'open' && (!r.id || !r.id.startsWith('renf-offline-'))).length}</span>
             </button>
-            <button onclick="window.game.setAllianceTab('formations')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'formations' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
-              Stages Mutualisés (${this.formationsSpeciales.length})
+            <button onclick="window.game.setAllianceTab('formations')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'formations' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
+              Stages Mutualisés (${(this.formationsSpeciales || []).length})
             </button>
-            <button onclick="window.game.setAllianceTab('evenements')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'evenements' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+            <button onclick="window.game.setAllianceTab('evenements')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'evenements' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
               <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-300"></i>
               Événements (${this.communityEvents?.length || 0})
             </button>
-            <button onclick="window.game.setAllianceTab('bourse')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'bourse' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+            <button onclick="window.game.setAllianceTab('bourse')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'bourse' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
               <i data-lucide="repeat" class="w-3.5 h-3.5"></i>
               Bourse & Matériel (${this.marketplace?.length || 0})
             </button>
-            <button onclick="window.game.setAllianceTab('manoeuvres')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'manoeuvres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+            <button onclick="window.game.setAllianceTab('manoeuvres')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'manoeuvres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
               <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
               Manœuvres Fédérales
             </button>
-            <button onclick="window.game.setAllianceTab('radio')" class="px-3.5 py-1.5 rounded-xl transition ${currentTab === 'radio' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+            <button onclick="window.game.setAllianceTab('radio')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'radio' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
               <i data-lucide="radio" class="w-3.5 h-3.5"></i>
               Radio Alliance
             </button>

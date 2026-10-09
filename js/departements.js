@@ -157,6 +157,92 @@ window.ProtecDepartements = {
     if (!d || !d.bbox) return true; // tolérance si manquant
     const [minLat, minLng, maxLat, maxLng] = d.bbox;
     return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+  },
+
+  // Récupère la Zone de Défense et de Sécurité officielle du département
+  getZoneDefense(deptCode) {
+    const d = this.getByCode(deptCode);
+    const code = d ? d.code : '75';
+    const reg = d ? d.region : 'Île-de-France';
+
+    if (['75', '77', '78', '91', '92', '93', '94', '95'].includes(code) || reg === 'Île-de-France') {
+      return {
+        id: 'idf',
+        code: 'IDF',
+        name: 'Zone de Défense et de Sécurité de Paris',
+        shortName: 'Zone Île-de-France',
+        siege: 'Préfecture de Police de Paris',
+        regions: ['Île-de-France']
+      };
+    }
+    if (['08', '10', '21', '25', '39', '51', '52', '54', '55', '57', '58', '67', '68', '70', '71', '88', '89', '90'].includes(code) || ['Grand Est', 'Bourgogne-Franche-Comté'].includes(reg)) {
+      return {
+        id: 'est',
+        code: 'EST',
+        name: 'Zone de Défense et de Sécurité Est',
+        shortName: 'Zone Est',
+        siege: 'Metz / Strasbourg',
+        regions: ['Grand Est', 'Bourgogne-Franche-Comté']
+      };
+    }
+    if (['02', '59', '60', '62', '80'].includes(code) || reg === 'Hauts-de-France') {
+      return {
+        id: 'nord',
+        code: 'NORD',
+        name: 'Zone de Défense et de Sécurité Nord',
+        shortName: 'Zone Nord',
+        siege: 'Lille',
+        regions: ['Hauts-de-France']
+      };
+    }
+    if (['14', '18', '22', '27', '28', '29', '35', '36', '37', '41', '44', '45', '49', '50', '53', '56', '61', '72', '76', '85'].includes(code) || ['Bretagne', 'Normandie', 'Pays de la Loire', 'Centre-Val de Loire'].includes(reg)) {
+      return {
+        id: 'ouest',
+        code: 'OUEST',
+        name: 'Zone de Défense et de Sécurité Ouest',
+        shortName: 'Zone Ouest',
+        siege: 'Rennes',
+        regions: ['Bretagne', 'Normandie', 'Pays de la Loire', 'Centre-Val de Loire']
+      };
+    }
+    if (['16', '17', '19', '23', '24', '33', '40', '47', '64', '79', '86', '87'].includes(code) || reg === 'Nouvelle-Aquitaine') {
+      return {
+        id: 'sud-ouest',
+        code: 'SO',
+        name: 'Zone de Défense et de Sécurité Sud-Ouest',
+        shortName: 'Zone Sud-Ouest',
+        siege: 'Bordeaux',
+        regions: ['Nouvelle-Aquitaine']
+      };
+    }
+    if (['04', '05', '06', '09', '11', '12', '13', '2A', '2B', '30', '31', '32', '34', '46', '48', '65', '66', '81', '82', '83', '84'].includes(code) || ['Occitanie', 'Provence-Alpes-Côte d’Azur', 'Corse'].includes(reg)) {
+      return {
+        id: 'sud',
+        code: 'SUD',
+        name: 'Zone de Défense et de Sécurité Sud',
+        shortName: 'Zone Sud',
+        siege: 'Marseille',
+        regions: ['Occitanie', 'Provence-Alpes-Côte d’Azur', 'Corse']
+      };
+    }
+    if (['01', '03', '07', '15', '26', '38', '42', '43', '63', '69', '73', '74'].includes(code) || reg === 'Auvergne-Rhône-Alpes') {
+      return {
+        id: 'sud-est',
+        code: 'SE',
+        name: 'Zone de Défense et de Sécurité Sud-Est',
+        shortName: 'Zone Sud-Est',
+        siege: 'Lyon',
+        regions: ['Auvergne-Rhône-Alpes']
+      };
+    }
+    return {
+      id: 'outre-mer',
+      code: 'OM',
+      name: `Zone de Défense et de Sécurité ${reg}`,
+      shortName: reg,
+      siege: d ? d.chefLieu : 'Chef-lieu',
+      regions: [reg]
+    };
   }
 };
 

@@ -21,20 +21,7 @@ const defaultDb = {
   savedGames: {},    // userId -> { savedAt, data }
   resetArchives: [], // [{ id, userId, username, timestamp, reason, snapshotData }]
   departments: {},   // deptCode -> { code, name, chefLieu, leaderPlayerId, leaderPlayerName, mainStationId, mainStationName, antennas: [{ playerId, playerName, stationId, stationName, role, joinedAt }] }
-  alliances: [
-    {
-      id: 'alliance-fnpc',
-      name: 'Union Fédérale de Sécurité Civile',
-      tag: 'UFSC',
-      description: 'Alliance fondatrice pour l’entraide opérationnelle, les renforts NOVI et les stages de cadres.',
-      leaderId: 'system',
-      leaderName: 'Direction Nationale',
-      treasury: 8500,
-      members: [],
-      color: '#002E6D',
-      createdAt: '2026-10-01'
-    }
-  ],
+  alliances: [],
   allianceStations: [],
   renforts: [],
   formationsSpeciales: [],

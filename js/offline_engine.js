@@ -317,22 +317,6 @@ window.ProtecOfflineEngine = {
       }
     }
 
-    // - Appel à renfort d'Alliance (si absent plus de 20 min)
-    if (elapsedSec >= 1200 && game.renforts && Math.random() < 0.7) {
-      const allStations = ['Antenne Paris 15', 'Antenne Lyon Centre', 'Antenne Marseille Littoral', 'Antenne Bordeaux Nord', 'Antenne Lille Flandres'];
-      const stName = allStations[Math.floor(Math.random() * allStations.length)];
-      game.renforts.unshift({
-        id: `renf-offline-${Date.now()}`,
-        title: `Alerte Renfort Événementiel`,
-        desc: `Demande de 1 ambulance VPSP émise pendant votre absence par ${stName}.`,
-        targetStationName: stName,
-        unitRequested: '1 VPSP ou équipage',
-        indemnite: 220,
-        status: 'pending'
-      });
-      report.newRenfortsCount++;
-    }
-
     // Sauvegarde immédiate des résultats du calcul hors-ligne
     game.saveGame();
     game.updateStatsUI();
