@@ -198,35 +198,67 @@ window.ProtecCump = {
       return;
     }
 
+    const executeSigning = () => {
+      const now = Date.now();
+      game.cumpConvention.signed = true;
+      game.cumpConvention.signedAt = now;
+      // 48h virtuelles de jeu (ou 48 heures de compte à rebours in-game)
+      game.cumpConvention.normComplianceDeadline = now + (48 * 3600 * 1000);
+      game.cumpConvention.normCompliant = false;
+
+      // Dotation d'accueil de la convention (1 200 €)
+      const dotation = 1200;
+      game.resources.money += dotation;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 20;
+
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(game, dotation, 'Dotation Initiale Conventionnement CUMP / SAMU (Mise aux normes 48h)', 'subvention');
+      }
+
+      game.showToast(
+        'Convention CUMP Signée !',
+        `Convention CUMP paraphée (+${dotation} €). Vous avez 48 heures pour conditionner toutes vos malles aux normes du SAMU !`,
+        'green'
+      );
+
+      game.saveGame();
+      game.updateStatsUI();
+      this.renderCumpTab(game);
+    };
+
+    if (window.ProtecSignature && typeof window.ProtecSignature.openSignatureModal === 'function') {
+      window.ProtecSignature.openSignatureModal({
+        title: 'Convention CUMP / SAMU 15',
+        subtitle: 'Cellule d\'Urgence Médico-Psychologique Départementale',
+        reference: `CONV-CUMP-${(game.city || 'DEP').toUpperCase().slice(0, 4)}-${new Date().getFullYear()}`,
+        typeBadge: 'Partenariat Hospitalier & CUMP',
+        partyA: {
+          label: 'Établissement Hospitalier Siège SAMU 15 / CUMP',
+          rep: 'Dr. Coordinateur Médical & Praticien Psychiatre Référent'
+        },
+        partyB: {
+          label: `Protection Civile - Antenne de ${game.city || 'Secours'}`,
+          rep: `Le Chef de Centre / Président d'Antenne`
+        },
+        clauses: [
+          'Astreinte H24 & activation immédiate en cas d\'événement traumatisant ou accident collectif.',
+          'Délai impératif de 48 heures pour acquérir et conditionner l\'ensemble des malles et kits aux normes du SAMU.',
+          'Mise à disposition du Centre d\'Accueil des Impliqués (CAI) et secouristes formés au soutien psychologique.',
+          'Dotation d\'installation et d\'équipement allouée immédiatement à la ratification : 1 200 €.'
+        ],
+        bonusText: 'Dotation d\'installation immédiate : +1 200 € & +20 Réputation',
+        stampText: 'VALIDÉ & CONVENTIONNÉ SAMU 15 / CUMP',
+        stampColor: '#805ad5',
+        onSign: () => executeSigning()
+      });
+      return;
+    }
+
     if (!confirm('Confirmez-vous la signature de la Convention CUMP avec le SAMU 15 ?\n\n⚠️ RÈGLE OFFICIELLE : Vous disposez de 48 HEURES pour acquérir et conditionner les malles et lots d\'accueil aux normes de la CUMP.\nSi tout n\'est pas prêt sous 48h, le SAMU annulera immédiatement la convention.')) {
       return;
     }
 
-    const now = Date.now();
-    game.cumpConvention.signed = true;
-    game.cumpConvention.signedAt = now;
-    // 48h virtuelles de jeu (ou 48 heures de compte à rebours in-game)
-    game.cumpConvention.normComplianceDeadline = now + (48 * 3600 * 1000);
-    game.cumpConvention.normCompliant = false;
-
-    // Dotation d'accueil de la convention (1 200 €)
-    const dotation = 1200;
-    game.resources.money += dotation;
-    game.resources.reputationScore = (game.resources.reputationScore || 0) + 20;
-
-    if (window.ProtecFinances) {
-      window.ProtecFinances.recordTransaction(game, dotation, 'Dotation Initiale Conventionnement CUMP / SAMU (Mise aux normes 48h)', 'subvention');
-    }
-
-    game.showToast(
-      'Convention CUMP Signée !',
-      `Convention CUMP paraphée (+${dotation} €). Vous avez 48 heures pour conditionner toutes vos malles aux normes du SAMU !`,
-      'green'
-    );
-
-    game.saveGame();
-    game.updateStatsUI();
-    this.renderCumpTab(game);
+    executeSigning();
   },
 
   // Conditionner / acheter une malle aux normes

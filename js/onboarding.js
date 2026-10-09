@@ -113,6 +113,10 @@ window.ProtecOnboarding = {
       setTimeout(() => {
         this.initStep2Map();
       }, 150);
+    } else if (this.currentStep === 4) {
+      setTimeout(() => {
+        this.initStep4Signature();
+      }, 120);
     }
   },
 
@@ -181,6 +185,12 @@ window.ProtecOnboarding = {
     `;
 
     if (window.lucide) window.lucide.createIcons();
+
+    if (this.currentStep === 4 && !this.fnpcSigned) {
+      setTimeout(() => {
+        this.initStep4Signature();
+      }, 80);
+    }
   },
 
   // -------------------------------------------------------------
@@ -809,25 +819,28 @@ window.ProtecOnboarding = {
             </p>
           </div>
 
-          <!-- Sceau officiel certifié -->
-          <div class="flex justify-center py-2">
+          <!-- Zone officielle de signature ou Sceau de validation -->
+          <div class="py-2">
             ${this.fnpcSigned ? `
-              <div class="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-500 shadow-md flex items-center gap-3 text-left animate-bounce">
-                <div class="w-12 h-12 rounded-xl bg-emerald-600 text-white font-black text-xl flex items-center justify-center shadow">
-                  ✓
+              <div class="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-500 shadow-md flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+                <div class="flex items-center gap-3">
+                  <div class="w-12 h-12 rounded-xl bg-emerald-600 text-white font-black text-xl flex items-center justify-center shadow-md flex-shrink-0">
+                    ✓
+                  </div>
+                  <div>
+                    <strong class="block text-xs font-black text-emerald-950 uppercase tracking-wider">AFFILIATION OFFICIELLEMENT HOMOLOGUÉE</strong>
+                    <span class="text-[11px] text-emerald-700 font-semibold">Agrément AASC actif • Autorisation préfectorale d’opérer délivrée</span>
+                  </div>
                 </div>
-                <div>
-                  <strong class="block text-xs font-black text-emerald-950 uppercase tracking-wider">AFFILIATION OFFICIELLEMENT VALIDÉE</strong>
-                  <span class="text-[11px] text-emerald-700 font-semibold">Agrément AASC actif • Autorisation d'opérer délivrée</span>
-                </div>
+                ${this.fnpcSignatureDataUrl ? `
+                  <div class="h-14 w-32 bg-white/90 rounded-xl p-1.5 border border-emerald-300 flex flex-col items-center justify-center shadow-xs">
+                    <img src="${this.fnpcSignatureDataUrl}" alt="Signature Directeur" class="max-h-full max-w-full object-contain" />
+                    <span class="text-[7.5px] font-mono text-slate-400 font-bold uppercase mt-0.5">Paraphe Directeur</span>
+                  </div>
+                ` : ''}
               </div>
             ` : `
-              <button 
-                type="button" 
-                onclick="window.ProtecOnboarding.signFnpcAgreement()"
-                class="px-6 py-4 rounded-2xl bg-gradient-to-r from-pc-orange to-amber-600 hover:brightness-110 text-white font-black text-sm shadow-xl transition flex items-center gap-2 cursor-pointer active:scale-95">
-                <span>✍️ Signer l'Affiliation FNPC & Obtenir l'Agrément AASC</span>
-              </button>
+              <div id="onboarding-fnpc-signature-container" class="w-full max-w-xl mx-auto"></div>
             `}
           </div>
 
@@ -848,7 +861,7 @@ window.ProtecOnboarding = {
           
           <button 
             type="button" 
-            ${!this.fnpcSigned ? 'disabled title="Veuillez d’abord signer l’affiliation FNPC ci-dessus"' : ''}
+            ${!this.fnpcSigned ? 'disabled title="Veuillez d’abord signer l’affiliation FNPC ci-dessus avec la souris ou le doigt"' : ''}
             onclick="window.ProtecOnboarding.finalizeOfficialLaunch()"
             class="flex-1 py-4 rounded-2xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 cursor-pointer ${
               this.fnpcSigned 
@@ -863,8 +876,33 @@ window.ProtecOnboarding = {
     `;
   },
 
-  signFnpcAgreement() {
+  initStep4Signature() {
+    if (this.currentStep !== 4 || this.fnpcSigned) return;
+    const container = document.getElementById('onboarding-fnpc-signature-container');
+    if (!container || !window.ProtecSignature) return;
+
+    window.ProtecSignature.attachPad(container, {
+      title: 'Paraphe & Signature Officielle du Directeur d’Antenne :',
+      subtitle: '✍️ Tracez votre signature avec votre souris ou votre doigt : elle valide automatiquement l’affiliation',
+      placeholder: '✍️ Signez ici de votre main ou avec la souris...',
+      height: 125,
+      stampText: 'AFFILIATION RATIFIÉE',
+      stampSubtext: 'FÉDÉRATION NATIONALE DE SÉCURITÉ CIVILE',
+      onSigned: (signatureDataUrl) => {
+        this.fnpcSigned = true;
+        this.fnpcSignatureDataUrl = signatureDataUrl;
+        this.renderWizard();
+        const g = this.game || window.game;
+        if (g) {
+          g.showToast('Affiliation FNPC Validée ! 📜', 'Votre signature a été enregistrée. L’Agrément AASC officiel est délivré !', 'green');
+        }
+      }
+    });
+  },
+
+  signFnpcAgreement(signatureDataUrl = null) {
     this.fnpcSigned = true;
+    if (signatureDataUrl) this.fnpcSignatureDataUrl = signatureDataUrl;
     this.renderWizard();
   },
 

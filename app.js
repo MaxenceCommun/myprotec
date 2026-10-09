@@ -2292,10 +2292,31 @@ class ProtecGame {
   }
 
   // --- CONVENTION PRÉFECTORALE D'AASC (BASE LÉGALE FONDATRICE) ---
-  signAascConvention() {
+  signAascConvention(bypassSimulator = false) {
     const cost = 800;
     if (this.resources.money < cost) {
       this.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour régler les frais d’enregistrement préfectoral de la Convention d'AASC.`, 'red');
+      return;
+    }
+
+    if (!bypassSimulator && window.ProtecSignature) {
+      window.ProtecSignature.openSignatureModal({
+        type: 'aasc',
+        title: 'Convention Préfectorale d’AASC',
+        subtitle: 'République Française • Direction des Sécurités et de la Protection Civile (Préfecture)',
+        institution: 'PRÉFECTURE & MINISTÈRE DE L’INTÉRIEUR',
+        partnerName: 'Direction des Sécurités du Département',
+        cost: cost,
+        stampText: 'AASC HOMOLOGUÉ ✓',
+        clauses: [
+          'Délivrance officielle des Agréments de Sécurité Civile A, B, C et D.',
+          'Autorisation légale d’armer des Postes de Secours (DPS) et d’intervenir sur la voie publique.',
+          'Enregistrement de l’association au répertoire préfectoral officiel des AASC.'
+        ],
+        onSigned: (signatureDataUrl) => {
+          this.signAascConvention(true);
+        }
+      });
       return;
     }
 
@@ -2307,7 +2328,7 @@ class ProtecGame {
     };
     this.resources.reputationScore = (this.resources.reputationScore || 0) + 50;
 
-    this.showToast('Convention AASC Validée ! 📜', 'Votre antenne est désormais officiellement agréée de Sécurité Civile par la Préfecture ! Vous pouvez assurer vos missions.', 'green');
+    this.showToast('Convention AASC Ratifiée ! 📜', 'Votre antenne est désormais officiellement agréée de Sécurité Civile par la Préfecture ! Vous pouvez assurer vos missions.', 'green');
     this.saveGame();
     this.updateStatsUI();
 
@@ -2323,7 +2344,7 @@ class ProtecGame {
   }
 
   // --- CONVENTION CADRE SAMU 15 (URGENCES RÉFLEXES VPSP) ---
-  signSamuConvention() {
+  signSamuConvention(bypassSimulator = false) {
     if (!this.aascConvention || !this.aascConvention.signed) {
       this.showToast('Convention AASC Requise ⚠️', 'Votre antenne doit préalablement souscrire sa Convention d’AASC auprès de la Préfecture.', 'orange');
       this.openModule('conventions');
@@ -2333,6 +2354,27 @@ class ProtecGame {
     const qualified = this.volunteers.filter(v => ['CE', 'PSE2', 'PSE1'].includes(v.rank));
     if (vpsps.length < 1 || qualified.length < 3) {
       this.showToast('Critères Non Remplis', 'Pour conventionner avec le SAMU 15, votre antenne doit disposer d’au moins 1 ambulance VPSP et 3 secouristes qualifiés (CE, PSE2, PSE1).', 'orange');
+      return;
+    }
+
+    if (!bypassSimulator && window.ProtecSignature) {
+      window.ProtecSignature.openSignatureModal({
+        type: 'samu',
+        title: 'Convention Cadre SAMU 15 (Gardes & Permanence VPSP)',
+        subtitle: 'Centre Hospitalier Universitaire • Service d’Aide Médicale Urgente (SAMU 15)',
+        institution: 'ARS & DIRECTION DU SAMU DÉPARTEMENTAL',
+        partnerName: 'SAMU 15 (Centre de Régulation Médicale)',
+        dotation: 350,
+        stampText: 'CONVENTION SAMU 15 RATIFIÉE ✓',
+        clauses: [
+          'Mise à disposition d’ambulances VPSP armées sous régulation médicale 15.',
+          'Départs réflexes d’urgence et renforts sanitaires préfectoraux.',
+          'Indemnisation conventionnelle de 280 € à 480 € par intervention d’urgence (+350 € dotation de signature).'
+        ],
+        onSigned: (signatureDataUrl) => {
+          this.signSamuConvention(true);
+        }
+      });
       return;
     }
 
@@ -2367,7 +2409,7 @@ class ProtecGame {
   }
 
   // --- CONVENTION PARTENARIALE SDIS (GARDES CASERNE POMPIERS) ---
-  signSdisConvention() {
+  signSdisConvention(bypassSimulator = false) {
     if (!this.aascConvention || !this.aascConvention.signed) {
       this.showToast('Convention AASC Requise ⚠️', 'Votre antenne doit préalablement souscrire sa Convention d’AASC auprès de la Préfecture.', 'orange');
       this.openModule('conventions');
@@ -2377,6 +2419,27 @@ class ProtecGame {
     const qualified = this.volunteers.filter(v => ['CE', 'PSE2', 'PSE1'].includes(v.rank));
     if (vpsps.length < 1 || qualified.length < 3) {
       this.showToast('Critères Non Remplis', 'Pour conventionner avec le SDIS, votre antenne doit disposer d’au moins 1 ambulance VPSP et 3 secouristes qualifiés.', 'orange');
+      return;
+    }
+
+    if (!bypassSimulator && window.ProtecSignature) {
+      window.ProtecSignature.openSignatureModal({
+        type: 'sdis',
+        title: 'Convention Partenariale SDIS (Sapeurs-Pompiers)',
+        subtitle: 'Service Départemental d’Incendie et de Secours • Centre Opérationnel (CODIS)',
+        institution: 'SDIS & CORPS DÉPARTEMENTAL DES SAPEURS-POMPIERS',
+        partnerName: 'Direction Départementale des Pompiers (SDIS)',
+        dotation: 350,
+        stampText: 'CONVENTION SDIS RATIFIÉE ✓',
+        clauses: [
+          'Armement de dispositifs conjoints et gardes casernes avec équipage VPSP.',
+          'Intégration au dispositif opérationnel de secours d’urgence aux personnes (SUAP).',
+          'Indemnisation horaire de 45 €/h de garde VPSP (+350 € dotation de signature).'
+        ],
+        onSigned: (signatureDataUrl) => {
+          this.signSdisConvention(true);
+        }
+      });
       return;
     }
 
@@ -2411,9 +2474,30 @@ class ProtecGame {
   }
 
   // --- CONVENTION PARTENAIRE RÉSEAU FERRÉ SNCF (ASSISTANCE & CHU) ---
-  signSncfConvention() {
+  signSncfConvention(bypassSimulator = false) {
     if (this.volunteers.length < 3 || this.vehicles.length < 1) {
       this.showToast('Critères Non Atteints', 'Pour signer la Convention SNCF, votre antenne doit disposer d’au moins 3 secouristes et 1 véhicule (VPSP ou VTU/VL).', 'orange');
+      return;
+    }
+
+    if (!bypassSimulator && window.ProtecSignature) {
+      window.ProtecSignature.openSignatureModal({
+        type: 'sncf',
+        title: 'Convention Nationale SNCF - Naufragés du Rail',
+        subtitle: 'Direction Nationale de la Gestion de Crise SNCF Voyageurs',
+        institution: 'SNCF VOYAGEURS • PÔLE GESTION DE CRISE',
+        partnerName: 'Direction de Crise du Réseau Ferré',
+        dotation: 400,
+        stampText: 'CONVENTION SNCF RATIFIÉE ✓',
+        clauses: [
+          'Assistance et soutien aux voyageurs bloqués en gare ou pleine voie.',
+          'Mise en place de Centres d’Hébergement d’Urgence (CHU) en gare et distribution de ravitaillement.',
+          'Dotation de signature de 400 € et indemnisations de veille et d’intervention (120 € à 480 €).'
+        ],
+        onSigned: (signatureDataUrl) => {
+          this.signSncfConvention(true);
+        }
+      });
       return;
     }
 
