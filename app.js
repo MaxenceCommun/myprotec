@@ -6,6 +6,11 @@
 
 window.game = null;
 
+// Purge systématique de toute sauvegarde locale résiduelle : la BDD est la seule source de vérité
+try {
+  localStorage.removeItem('protec_live_save_v4');
+} catch (e) {}
+
 class ProtecGame {
   constructor() {
     this.speed = 1;
@@ -625,103 +630,39 @@ class ProtecGame {
     }
   }
 
+  save() {
+    this.saveGame();
+  }
+
   saveGame() {
     try {
-      const state = {
-        player: this.player,
-        clock: this.clock,
-        resources: this.resources,
-        currentCityKey: this.currentCityKey,
-        stations: this.stations,
-        vehicles: this.vehicles,
-        volunteers: this.volunteers,
-        devis: this.devis,
-        missions: this.missions,
-        candidatures: this.candidatures,
-        formations: this.formations,
-        logistics: this.logistics,
-        weather: this.weather,
-        grants: this.grants,
-        radioLogs: this.radioLogs,
-        rewards: this.rewards,
-        bureau: this.bureau,
-        samuGarde: this.samuGarde,
-        sdisGarde: this.sdisGarde,
-        prefectureState: this.prefectureState,
-        sncfConvention: this.sncfConvention,
-        cumpConvention: this.cumpConvention,
-        aascConvention: this.aascConvention,
-        samuConvention: this.samuConvention,
-        sdisConvention: this.sdisConvention,
-        tutorialState: this.tutorialState,
-        jobOffers: this.jobOffers,
-        adRewards: this.adRewards,
-        workplaceEquipment: this.workplaceEquipment
-      };
-      localStorage.setItem('protec_live_save_v4', JSON.stringify(state));
+      // Purge du stockage local obsolète pour éviter tout conflit avec la BDD
+      localStorage.removeItem('protec_live_save_v4');
+      
+      // La sauvegarde est transmise directement et uniquement à la BDD
+      if (window.ProtecAuth && window.ProtecAuth.saveToDatabase) {
+        window.ProtecAuth.debouncedSaveToDatabase(this);
+      }
     } catch (e) {
-      console.warn('Erreur sauvegarde:', e);
+      console.warn('Erreur sauvegarde BDD:', e);
     }
   }
 
   loadGame() {
     try {
-      const saved = localStorage.getItem('protec_live_save_v4');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.stations && parsed.stations.length > 0) {
-          this.clock = parsed.clock || this.clock;
-          this.resources = parsed.resources || this.resources;
-          this.currentCityKey = parsed.currentCityKey || this.currentCityKey;
-          this.stations = (parsed.stations || []).filter(s => s && s.id && !s.id.startsWith('station-allie') && !s.isFictive);
-          this.vehicles = parsed.vehicles || [];
-          this.volunteers = (parsed.volunteers || []).map(v => {
-            if (v.name) v.name = this.cleanVolunteerName(v.name);
-            if (!v.skills || !Array.isArray(v.skills) || v.skills.length === 0) {
-              const detected = this.getVolunteerAllSkills(v);
-              v.skills = detected.map(s => s.id);
-            }
-            return v;
-          });
-          this.devis = parsed.devis || [];
-          this.missions = parsed.missions || [];
-          this.candidatures = (parsed.candidatures || []).map(c => {
-            if (c.name) c.name = this.cleanVolunteerName(c.name);
-            return c;
-          });
-          this.jobOffers = parsed.jobOffers || [];
-          this.formations = parsed.formations || [];
-          this.logistics = parsed.logistics || this.logistics;
-          this.weather = parsed.weather || this.weather;
-          this.grants = parsed.grants || this.grants;
-          this.radioLogs = parsed.radioLogs || this.radioLogs;
-          this.rewards = parsed.rewards || this.rewards;
-          this.bureau = parsed.bureau || this.bureau;
-          this.manoeuvres = parsed.manoeuvres || this.manoeuvres;
-          this.samuGarde = parsed.samuGarde || this.samuGarde;
-          this.sdisGarde = parsed.sdisGarde || this.sdisGarde;
-          this.prefectureState = parsed.prefectureState || this.prefectureState;
-          this.sncfConvention = parsed.sncfConvention || this.sncfConvention;
-          this.cumpConvention = parsed.cumpConvention || this.cumpConvention;
-          this.aascConvention = parsed.aascConvention || this.aascConvention || { signed: false, signedAt: null, cost: 800 };
-          this.samuConvention = parsed.samuConvention || this.samuConvention || { signed: false, signedAt: null, totalInterventions: 0 };
-          this.sdisConvention = parsed.sdisConvention || this.sdisConvention || { signed: false, signedAt: null, totalInterventions: 0 };
-          this.tutorialState = parsed.tutorialState || this.tutorialState || null;
-          this.adRewards = parsed.adRewards || null;
-          if (parsed.player) this.player = parsed.player;
-
-          // Assainissement des objectifs et heures bénévoles si aucune antenne n'a encore été créée
-          if (!this.stations || this.stations.length === 0) {
-            if (this.grants) this.grants.totalVolunteerHours = 0;
-            if (this.rewards) {
-              (this.rewards.dailyTasks || []).forEach(t => { t.current = 0; t.done = false; });
-              (this.rewards.weeklyTasks || []).forEach(w => { w.current = 0; w.done = false; });
-            }
-          }
-        }
-      }
+      // Éradication du stockage local : la BDD est la seule source de vérité
+      localStorage.removeItem('protec_live_save_v4');
+      
+      // Initialisation propre : aucune antenne fantôme locale
+      this.stations = [];
+      this.vehicles = [];
+      this.volunteers = [];
+      this.devis = [];
+      this.missions = [];
+      this.candidatures = [];
+      this.formations = [];
     } catch (e) {
-      console.warn('Erreur chargement:', e);
+      console.warn('Erreur réinitialisation état local:', e);
     }
   }
 

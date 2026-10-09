@@ -629,7 +629,7 @@ window.ProtecAuth = {
     if (window.ProtecSupabase && window.ProtecSupabase.client) {
       try {
         const supaSave = await window.ProtecSupabase.loadGameState(this.currentUser.id);
-        if (supaSave && supaSave.save_data) {
+        if (supaSave && supaSave.save_data && supaSave.save_data.stations && supaSave.save_data.stations.length > 0) {
           this.applyCloudSave(game, supaSave.save_data);
           this.lastSyncTime = new Date(supaSave.updated_at || Date.now());
           this.updateHeaderUI();
@@ -640,7 +640,7 @@ window.ProtecAuth = {
       }
     }
 
-    // 2. Fallback serveur local si token disponible
+    // 2. Chargement depuis le serveur local (BDD de référence)
     if (!this.token) return;
     try {
       const res = await fetch('/api/game/load', {
@@ -648,22 +648,39 @@ window.ProtecAuth = {
       });
       if (res.ok) {
         const result = await res.json();
-        if (result.save) {
+        if (result.save && result.save.stations && result.save.stations.length > 0) {
+          // Une sauvegarde officielle avec antenne existe en BDD : l'appliquer à 100%
           this.applyCloudSave(game, result.save);
           this.lastSyncTime = new Date(result.savedAt || Date.now());
           this.updateHeaderUI();
         } else {
-          await this.saveToDatabase(game);
+          // L'antenne a été supprimée ou n'existe pas en BDD : PURGE TOTALE DE TOUTE PERSISTANCE LOCALE
+          game.stations = [];
+          game.vehicles = [];
+          game.volunteers = [];
+          game.missions = [];
+          game.devis = [];
+          game.candidatures = [];
+          game.formations = [];
+          localStorage.removeItem('protec_live_save_v4');
+
+          if (game.renderStations) game.renderStations();
+          if (game.renderMissions) game.renderMissions();
+          if (game.updateStatsUI) game.updateStatsUI();
+
+          // Surtout : NE PAS renvoyer d'ancienne sauvegarde locale vers la BDD !
         }
       }
     } catch (e) {
       console.warn('Erreur chargement cloud:', e);
     }
 
-    // Si aucune antenne n'existe après le chargement, inviter à implanter le bâtiment
+    // Si aucune antenne n'existe en BDD, lancer impérativement le wizard officiel d'implantation
     if (!game.stations || game.stations.length === 0) {
       setTimeout(() => {
-        if (game.showOnboardingModal) {
+        if (window.ProtecOnboarding) {
+          window.ProtecOnboarding.showWizard(game);
+        } else if (game.showOnboardingModal) {
           game.showOnboardingModal();
         }
       }, 500);
@@ -680,6 +697,9 @@ window.ProtecAuth = {
 
   async saveToDatabase(game) {
     if (!this.currentUser || this.isSyncing) return;
+    // Ne pas sauvegarder un état sans antenne pour ne pas créer d'anomalies
+    if (!game.stations || game.stations.length === 0) return;
+
     this.isSyncing = true;
     try {
       // 1. Sauvegarde instantanée dans Supabase Cloud (table game_saves)
@@ -699,6 +719,9 @@ window.ProtecAuth = {
           vehicles: game.vehicles,
           volunteers: game.volunteers,
           missions: game.missions,
+          devis: game.devis,
+          candidatures: game.candidatures,
+          formations: game.formations,
           history: game.history,
           grants: game.grants,
           baseUpgrades: game.baseUpgrades,
@@ -715,6 +738,8 @@ window.ProtecAuth = {
           },
           body: JSON.stringify(stateToSave)
         });
+        this.lastSyncTime = new Date();
+        this.updateHeaderUI();
       }
     } catch (e) {
       console.warn('Sauvegarde BDD différée:', e);
@@ -743,7 +768,7 @@ window.ProtecAuth = {
           game.showToast('Progression Restaurée', 'Données restaurées depuis le serveur multijoueur.', 'green');
           this.closeAuthModal();
         } else {
-          game.showToast('Aucune sauvegarde', 'Aucune sauvegarde antérieure trouvée.', 'orange');
+          game.showToast('Aucune sauvegarde', 'Aucune sauvegarde antérieure trouvée en BDD.', 'orange');
         }
       }
     } catch (e) {
@@ -753,24 +778,35 @@ window.ProtecAuth = {
 
   applyCloudSave(game, savedData) {
     try {
-      if (savedData.stations) game.stations = savedData.stations;
-      if (savedData.vehicles) game.vehicles = savedData.vehicles;
-      if (savedData.volunteers) {
-        game.volunteers = savedData.volunteers.map(v => {
-          if (v.name && game.cleanVolunteerName) v.name = game.cleanVolunteerName(v.name);
-          return v;
-        });
-      }
-      if (savedData.missions) game.missions = savedData.missions;
+      if (!savedData) return;
+
+      // La BDD est l'unique source de vérité
+      game.stations = Array.isArray(savedData.stations) ? savedData.stations : [];
+      game.vehicles = Array.isArray(savedData.vehicles) ? savedData.vehicles : [];
+      game.volunteers = Array.isArray(savedData.volunteers) ? savedData.volunteers.map(v => {
+        if (v.name && game.cleanVolunteerName) v.name = game.cleanVolunteerName(v.name);
+        return v;
+      }) : [];
+      game.missions = Array.isArray(savedData.missions) ? savedData.missions : [];
+      game.devis = Array.isArray(savedData.devis) ? savedData.devis : [];
+      game.candidatures = Array.isArray(savedData.candidatures) ? savedData.candidatures : [];
+      game.formations = Array.isArray(savedData.formations) ? savedData.formations : [];
+
       if (savedData.resources) game.resources = savedData.resources;
       if (savedData.clock) game.clock = savedData.clock;
       if (savedData.grants) game.grants = savedData.grants;
       if (savedData.baseUpgrades) game.baseUpgrades = savedData.baseUpgrades;
       if (savedData.skillsTree) game.skillsTree = savedData.skillsTree;
+      if (savedData.logistics) game.logistics = savedData.logistics;
+      if (savedData.weather) game.weather = savedData.weather;
+      if (savedData.prefectureState) game.prefectureState = savedData.prefectureState;
       if (savedData.adRewards) {
         game.adRewards = savedData.adRewards;
         if (window.ProtecAds) window.ProtecAds.updateUI(game);
       }
+
+      // Purger immédiatement tout résidu local
+      localStorage.removeItem('protec_live_save_v4');
 
       // Assainissement si aucune antenne n'est encore configurée
       if (!game.stations || game.stations.length === 0) {
@@ -782,8 +818,8 @@ window.ProtecAuth = {
       }
 
       game.updateStatsUI();
-      if (game.renderStationMarkers) game.renderStationMarkers();
-      if (game.renderMissionsOnMap) game.renderMissionsOnMap();
+      if (game.renderStations) game.renderStations();
+      if (game.renderMissions) game.renderMissions();
       if (window.ProtecSystems && window.ProtecSystems.updateWeatherAndDayNight) {
         window.ProtecSystems.updateWeatherAndDayNight(game);
       }
