@@ -11,6 +11,8 @@ window.ProtecSupabase = {
   client: null,
   isInitialized: false,
   isConnected: false,
+  realtimeChannel: null,
+  watchdogTimer: null,
 
   // Initialisation du client Supabase
   init() {
@@ -74,6 +76,136 @@ window.ProtecSupabase = {
         badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 border border-amber-300';
         badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Mode Hors-ligne';
       }
+    }
+  },
+
+  // 1. Vérification de l'existence du compte dans la table players (déconnexion si supprimé)
+  async checkPlayerExists(playerId) {
+    if (!this.client || !playerId) return true;
+    try {
+      const isUUID = typeof playerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerId);
+      let query = this.client.from('players').select('id');
+      if (isUUID) {
+        query = query.eq('id', playerId);
+      } else {
+        query = query.eq('username', playerId);
+      }
+      const { data, error } = await query.maybeSingle();
+      if (error) {
+        // En cas d'erreur de communication, ne pas déconnecter intempestivement
+        return true;
+      }
+      return data !== null;
+    } catch (e) {
+      return true;
+    }
+  },
+
+  // Surveillance périodique et écoute temps réel pour déconnexion si compte supprimé
+  startAccountWatchdog(game) {
+    if (this.watchdogTimer) clearInterval(this.watchdogTimer);
+
+    const checkNow = async () => {
+      const g = game || window.game;
+      const pid = g?.player?.id || window.ProtecAuth?.currentUser?.id;
+      if (!pid) return;
+
+      const exists = await this.checkPlayerExists(pid);
+      if (!exists) {
+        console.warn('⚠️ Compte joueur supprimé de la BDD : déconnexion immédiate !');
+        if (window.ProtecAuth && window.ProtecAuth.handleAccountDeleted) {
+          window.ProtecAuth.handleAccountDeleted(g);
+        }
+      }
+    };
+
+    // Vérification toutes les 8 secondes
+    this.watchdogTimer = setInterval(checkNow, 8000);
+
+    // Vérification immédiate au retour sur l'onglet
+    window.addEventListener('focus', checkNow);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkNow();
+    });
+  },
+
+  // Initialisation du canal temps réel WebSockets Supabase pour tous les joueurs
+  initMultiplayerRealtime(game) {
+    if (!this.client) return;
+
+    if (this.realtimeChannel) {
+      try { this.client.removeChannel(this.realtimeChannel); } catch (e) {}
+    }
+
+    const channelName = 'protec-live-global';
+    this.realtimeChannel = this.client.channel(channelName, {
+      config: {
+        broadcast: { self: false }
+      }
+    });
+
+    // Écoute 1 : Détection temps réel de suppression de joueur dans la table players
+    this.realtimeChannel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'players' }, (payload) => {
+      const g = game || window.game;
+      const pid = g?.player?.id || window.ProtecAuth?.currentUser?.id;
+      if (payload.old && (payload.old.id === pid || payload.old.username === pid)) {
+        console.warn('⚠️ Événement Supabase DELETE reçu sur notre compte joueur !');
+        if (window.ProtecAuth && window.ProtecAuth.handleAccountDeleted) {
+          window.ProtecAuth.handleAccountDeleted(g);
+        }
+      }
+    });
+
+    // Écoute 2 : Synchronisation temps réel des engagements de renforts (arbitrage sans conflit)
+    this.realtimeChannel.on('broadcast', { event: 'renfort_contribution' }, (evt) => {
+      const data = evt.payload;
+      const g = game || window.game;
+      if (g && g.handleRemoteRenfortContribution && data) {
+        g.handleRemoteRenfortContribution(data);
+      }
+    });
+
+    // Écoute 3 : Synchronisation temps réel de nouvelles demandes de renfort
+    this.realtimeChannel.on('broadcast', { event: 'renfort_created' }, (evt) => {
+      const data = evt.payload;
+      const g = game || window.game;
+      if (g && g.handleRemoteRenfortCreated && data) {
+        g.handleRemoteRenfortCreated(data);
+      }
+    });
+
+    this.realtimeChannel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('⚡ Canal Supabase Realtime actif : synchronisation en direct (< 50ms) connectée.');
+      }
+    });
+  },
+
+  // Diffusion d'un engagement de renfort en temps réel à tous les directeurs connectés
+  broadcastRenfortContribution(payload) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'renfort_contribution',
+        payload: payload
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast renfort:', e);
+    }
+  },
+
+  // Diffusion d'une nouvelle demande de renfort en temps réel
+  broadcastRenfortCreated(renfortData) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'renfort_created',
+        payload: renfortData
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast création renfort:', e);
     }
   },
 
@@ -225,6 +357,16 @@ window.ProtecSupabase = {
   // 3. Sauvegarde Cloud de la Partie dans la table game_saves
   async saveGameState(userId, username, game) {
     if (!this.client || !userId) return false;
+
+    // Détection de suppression : si le compte n'existe plus en BDD, déconnexion immédiate
+    const exists = await this.checkPlayerExists(userId);
+    if (!exists) {
+      console.warn('⚠️ Joueur non trouvé en BDD lors de la sauvegarde : compte supprimé.');
+      if (window.ProtecAuth && window.ProtecAuth.handleAccountDeleted) {
+        window.ProtecAuth.handleAccountDeleted(game);
+      }
+      return false;
+    }
 
     try {
       const stateToSave = {

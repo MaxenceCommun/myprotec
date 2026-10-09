@@ -72,12 +72,23 @@ window.ProtecAuth = {
             this.updateHeaderUI(false);
             this.closeAuthModal();
 
+            // Activer la surveillance de compte et la synchronisation multijoueur temps réel
+            if (window.ProtecSupabase) {
+              window.ProtecSupabase.startAccountWatchdog(game);
+              window.ProtecSupabase.initMultiplayerRealtime(game);
+            }
+
             // Charger directement la progression depuis Supabase
             await this.checkCloudSaveOnLogin(game);
 
             if (game.syncPlayerToServer) {
               game.syncPlayerToServer();
             }
+            return;
+          } else {
+            // La ligne n'existe plus dans la table players : compte supprimé de la BDD !
+            console.warn('⚠️ Compte joueur absent de Supabase : compte supprimé en base.');
+            this.handleAccountDeleted(game);
             return;
           }
         } catch (supaErr) {
@@ -504,6 +515,12 @@ window.ProtecAuth = {
       await this.checkCloudSaveOnLogin(game);
       this.closeAuthModal();
 
+      // Activer la surveillance de compte et la synchronisation multijoueur temps réel
+      if (window.ProtecSupabase) {
+        window.ProtecSupabase.startAccountWatchdog(game);
+        window.ProtecSupabase.initMultiplayerRealtime(game);
+      }
+
       // Synchroniser immédiatement la présence multijoueur
       if (game.syncPlayerToServer) {
         game.syncPlayerToServer();
@@ -659,6 +676,12 @@ window.ProtecAuth = {
       // Sauvegarde immédiate et synchronisation multijoueur
       await this.saveToDatabase(game);
       this.closeAuthModal();
+
+      // Activer la surveillance de compte et la synchronisation multijoueur temps réel
+      if (window.ProtecSupabase) {
+        window.ProtecSupabase.startAccountWatchdog(game);
+        window.ProtecSupabase.initMultiplayerRealtime(game);
+      }
 
       if (game.syncPlayerToServer) {
         game.syncPlayerToServer();
@@ -918,5 +941,39 @@ window.ProtecAuth = {
     game.showToast('Déconnexion', 'Vous avez quitté le serveur multijoueur.', 'blue');
     // Réaffiche immédiatement le sas de connexion obligatoire
     this.openAuthModal(true);
+  },
+
+  // Prise en compte de la suppression du compte dans la base de données
+  handleAccountDeleted(game = null) {
+    const g = game || window.game;
+    this.clearSession();
+    localStorage.removeItem('protec_last_login_username');
+    localStorage.removeItem('protec_last_login_password');
+    localStorage.removeItem('protec_live_save_v4');
+    localStorage.removeItem('protec_department_code');
+
+    // Purge totale de l'antenne locale pour éviter toute persistance orpheline
+    if (g) {
+      g.stations = [];
+      g.vehicles = [];
+      g.volunteers = [];
+      g.missions = [];
+      g.devis = [];
+      g.candidatures = [];
+      g.formations = [];
+      if (g.renderStations) g.renderStations();
+      if (g.renderMissions) g.renderMissions();
+      if (g.updateStatsUI) g.updateStatsUI();
+      g.showToast('Compte Supprimé', 'Votre compte a été supprimé de la base de données. Vous avez été déconnecté.', 'red');
+    }
+
+    // Réaffiche immédiatement le modal de connexion obligatoire
+    this.openAuthModal(true);
+
+    const errorEl = document.getElementById('auth-error-msg');
+    if (errorEl) {
+      errorEl.textContent = 'Votre compte n’existe plus dans la base de données (supprimé). Veuillez créer un nouveau compte ou vous reconnecter.';
+      errorEl.classList.remove('hidden');
+    }
   }
 };

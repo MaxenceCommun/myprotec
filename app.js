@@ -332,6 +332,10 @@ class ProtecGame {
             }
           }).catch(() => {});
         }
+        if (window.ProtecSupabase) {
+          window.ProtecSupabase.startAccountWatchdog(this);
+          window.ProtecSupabase.initMultiplayerRealtime(this);
+        }
       });
 
     // 3. Battement de coeur périodique pour diffuser nos antennes aux autres joueurs
@@ -368,10 +372,21 @@ class ProtecGame {
     }
 
     // Synchronisation Cloud Supabase
-    if (window.ProtecSupabase && this.stations && this.stations.length > 0) {
-      this.stations.forEach(st => {
-        window.ProtecSupabase.syncStationToMap(this.player, st);
-      });
+    if (window.ProtecSupabase) {
+      if (this.player?.id) {
+        window.ProtecSupabase.checkPlayerExists(this.player.id).then(exists => {
+          if (!exists && window.ProtecAuth) {
+            console.warn('⚠️ Compte joueur supprimé en base lors de syncPlayerToServer : déconnexion.');
+            window.ProtecAuth.handleAccountDeleted(this);
+          }
+        }).catch(() => {});
+      }
+
+      if (this.stations && this.stations.length > 0) {
+        this.stations.forEach(st => {
+          window.ProtecSupabase.syncStationToMap(this.player, st);
+        });
+      }
     }
   }
 
@@ -4794,6 +4809,7 @@ class ProtecGame {
   }
 
   // --- RENFORTS EXTRA-DÉPARTEMENTAUX (MAQUETTE OFFICIELLE FNPC) ---
+  // --- RENFORTS EXTRA-DÉPARTEMENTAUX (MAQUETTE OFFICIELLE FNPC) ---
   getExtraDeptTemplates() {
     return [
       {
@@ -4803,19 +4819,21 @@ class ProtecGame {
         typeTitle: 'SUAP',
         iconEmoji: '🔥',
         colorClass: 'text-red-600',
-        address: '23110 Évaux-les-Bains 23110 Évaux-les-Bains',
-        addressDisplay: '23110 Évaux-les-Bains 23110 Évaux-les-Bains',
+        address: '23110 Évaux-les-Bains, Creuse (23)',
+        addressDisplay: '23110 Évaux-les-Bains, Creuse (23)',
         deptCode: '23',
         lat: 46.175,
         lng: 2.485,
-        needLabel: '1 AMB_MED',
-        demandeur: 'CIS Boussac',
+        needLabel: 'Dispositif Renfort 6 Secouristes + VPSP',
+        demandeur: 'CIS Boussac & SDIS 23',
         requiredVehType: 'VPSP',
-        requiredVolsCount: 2,
-        indemnite: 520,
-        alliancePoints: 60,
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 650,
+        alliancePoints: 75,
         status: 'open',
-        description: 'Carence ambulancière et soutien au SDIS 23 pour urgences pré-hospitalières et secours d’urgence aux personnes.'
+        description: 'Carence ambulancière et soutien au SDIS 23 pour urgences pré-hospitalières et secours d’urgence aux personnes. Renfort inter-antennes ouvert à plusieurs équipages.'
       },
       {
         id: 'renf-extra-incendie-83',
@@ -4829,12 +4847,14 @@ class ProtecGame {
         deptCode: '83',
         lat: 43.237,
         lng: 6.071,
-        needLabel: '1 VTU Logistique + 4 Secouristes',
+        needLabel: '1 VTU Logistique + 6 Secouristes',
         demandeur: 'SDIS 83 - CODIS',
         requiredVehType: 'VTU',
-        requiredVolsCount: 4,
-        indemnite: 680,
-        alliancePoints: 85,
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 720,
+        alliancePoints: 90,
         status: 'open',
         description: 'Mobilisation de la colonne Sud pour ravitaillement, soutien sanitaire et logistique des sapeurs-pompiers en ligne de feu.'
       },
@@ -4850,12 +4870,14 @@ class ProtecGame {
         deptCode: '62',
         lat: 50.750,
         lng: 2.256,
-        needLabel: '1 Lot Sauvetage Aquatique (Barque)',
+        needLabel: '1 Lot Sauvetage Aquatique + 6 Secouristes',
         demandeur: 'Préfecture 62 & Zone Nord',
         requiredVehType: 'VTU',
-        requiredVolsCount: 2,
-        indemnite: 750,
-        alliancePoints: 95,
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 780,
+        alliancePoints: 100,
         status: 'open',
         description: 'Crue majeure et évacuation de riverains. Mise en place et armement d’un Centre d’Accueil des Impliqués (CAI).'
       },
@@ -4863,7 +4885,7 @@ class ProtecGame {
         id: 'renf-extra-dps-29',
         isExtraDept: true,
         typeCategory: 'dps',
-        typeTitle: 'DPS RENFORT',
+        typeTitle: 'DPS RENFORT FESTIVAL',
         iconEmoji: '🎪',
         colorClass: 'text-indigo-600',
         address: '29270 Carhaix-Plouguer, Finistère (29)',
@@ -4871,12 +4893,14 @@ class ProtecGame {
         deptCode: '29',
         lat: 48.276,
         lng: -3.574,
-        needLabel: '2 VPSP + 6 Secouristes PSE2',
+        needLabel: '2 VPSP + 8 Secouristes PSE2',
         demandeur: 'Protection Civile 29 / FNPC',
         requiredVehType: 'VPSP',
-        requiredVolsCount: 4,
-        indemnite: 620,
-        alliancePoints: 70,
+        requiredVolsCount: 8,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 840,
+        alliancePoints: 110,
         status: 'open',
         description: 'Grand rassemblement musical national. Renfort interdépartemental pour armer les postes de secours de nuit.'
       },
@@ -4892,12 +4916,14 @@ class ProtecGame {
         deptCode: '21',
         lat: 47.322,
         lng: 5.041,
-        needLabel: '1 VPSP + 1 PMA Mobile',
+        needLabel: '1 VPSP + 1 PMA Mobile + 6 Secouristes',
         demandeur: 'SAMU 21 & Cellule Zonale de Crise',
         requiredVehType: 'VPSP',
-        requiredVolsCount: 3,
-        indemnite: 850,
-        alliancePoints: 110,
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 920,
+        alliancePoints: 120,
         status: 'open',
         description: 'Accident routier collectif à nombreuses victimes. Déploiement urgent d’un Poste Médical Avancé et évacuations sanitaires.'
       },
@@ -4913,12 +4939,14 @@ class ProtecGame {
         deptCode: '59',
         lat: 50.629,
         lng: 3.057,
-        needLabel: '1 VTU Maraude Sociale + 3 Équipiers',
+        needLabel: '1 VTU Maraude Sociale + 6 Équipiers',
         demandeur: 'SIAO 115 & DDETS',
         requiredVehType: 'VTU',
-        requiredVolsCount: 3,
-        indemnite: 480,
-        alliancePoints: 55,
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 580,
+        alliancePoints: 70,
         status: 'open',
         description: 'Plan Grand Froid niveau 2 activé. Maraude sociale de nuit et orientation d’urgence vers les centres d’hébergement temporaires.'
       }
@@ -4927,6 +4955,17 @@ class ProtecGame {
 
   ensureExtraDeptRenforts() {
     if (!this.renforts) this.renforts = [];
+    if (!this.renforts.some(r => r.isExtraDept && r.status === 'open')) {
+      const templates = this.getExtraDeptTemplates();
+      this.renforts.unshift({ 
+        ...templates[0], 
+        id: `renf-extra-${Date.now()}`, 
+        slotsCommitted: 0, 
+        contributions: [], 
+        status: 'open',
+        createdAt: new Date().toISOString() 
+      });
+    }
   }
 
   calculateRouteInfo(destLat, destLng) {
@@ -4946,10 +4985,7 @@ class ProtecGame {
               Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     
-    // Facteur routier ~1.25x la distance orthodromique
     const distanceKm = Math.max(30, Math.round(R * c * 1.25));
-    
-    // Vitesse moyenne convoi d'urgence routier ~80 km/h
     const totalMinutes = Math.round((distanceKm / 80) * 60);
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
@@ -4962,9 +4998,12 @@ class ProtecGame {
     const route = this.calculateRouteInfo(r.lat, r.lng);
     const distanceKm = route.distanceKm;
     const durationText = route.durationText;
+    const totalRequired = r.requiredVolsCount || 6;
+    const committed = r.slotsCommitted || 0;
+    const remaining = Math.max(0, totalRequired - committed);
 
     return `
-      <div class="bg-white rounded-xl border border-orange-200/80 p-3.5 shadow-xs space-y-1.5 transition hover:shadow-sm">
+      <div class="bg-white rounded-xl border border-orange-200/80 p-3.5 shadow-xs space-y-2 transition hover:shadow-sm">
         <!-- Type d'intervention avec icône personnalisée selon type -->
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-1.5 text-xs font-black ${r.colorClass || 'text-red-600'} uppercase tracking-wide">
@@ -4978,13 +5017,34 @@ class ProtecGame {
 
         <!-- Adresse complète -->
         <div class="text-xs font-semibold text-slate-800 leading-snug">
-          ${r.addressDisplay || r.address || '23110 Évaux-les-Bains 23110 Évaux-les-Bains'}
+          ${r.addressDisplay || r.address || '23110 Évaux-les-Bains'}
         </div>
 
-        <!-- Besoin -->
-        <div class="text-xs text-slate-700">
-          <span class="font-normal text-slate-600">Besoin :</span> <strong class="text-slate-900">${r.needLabel || r.unitRequested || '1 AMB_MED'}</strong>
+        <!-- Besoin & Jauge en temps réel -->
+        <div class="p-2 rounded-lg bg-orange-50/80 border border-orange-200/70 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+          <div>
+            <span class="text-slate-600 font-medium">Besoin :</span> 
+            <strong class="text-slate-900">${r.needLabel || r.unitRequested || '1 VPSP + Secouristes'}</strong>
+          </div>
+          <div class="mono-num font-black text-xs">
+            ${remaining > 0 ? `
+              <span class="text-orange-900 bg-orange-200/70 px-2 py-0.5 rounded">
+                ⚡ ${committed}/${totalRequired} pourvus (${remaining} place${remaining > 1 ? 's' : ''} libre${remaining > 1 ? 's' : ''})
+              </span>
+            ` : `
+              <span class="text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                ✓ COMPLET (${totalRequired}/${totalRequired})
+              </span>
+            `}
+          </div>
         </div>
+
+        ${r.contributions && r.contributions.length > 0 ? `
+          <div class="text-[10px] text-slate-500 font-semibold flex items-center gap-1 flex-wrap">
+            <span>En route :</span>
+            ${r.contributions.map(c => `<span class="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">${c.playerName} (${c.volunteersCount} bénévole${c.volunteersCount > 1 ? 's' : ''})</span>`).join('')}
+          </div>
+        ` : ''}
 
         <!-- Demandeur -->
         <div class="text-xs text-slate-700">
@@ -5002,11 +5062,12 @@ class ProtecGame {
 
           <button 
             onclick="window.game.openEngageRenfortModal('${r.id}')" 
-            class="px-4 py-2 rounded-xl text-xs font-black bg-[#ff6a28] hover:bg-[#ea5b1b] active:scale-95 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+            ${remaining <= 0 ? 'disabled' : ''}
+            class="px-4 py-2 rounded-xl text-xs font-black ${remaining > 0 ? 'bg-[#ff6a28] hover:bg-[#ea5b1b] text-white shadow-sm cursor-pointer' : 'bg-slate-200 text-slate-400 cursor-not-allowed'} active:scale-95 transition flex items-center gap-1.5"
             title="Détacher un équipage en renfort extra-départemental"
           >
             <span class="text-[11px]">➤</span>
-            <span>Engager</span>
+            <span>${remaining > 0 ? 'Engager' : 'Complet'}</span>
           </button>
         </div>
       </div>
@@ -5032,8 +5093,9 @@ class ProtecGame {
             <span class="text-base">🌐</span>
             <span>${count} demande${count > 1 ? 's' : ''} extra-départementale${count > 1 ? 's' : ''} en cours</span>
           </div>
-          <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#fed8b8] text-[#873800]">
-            Réseau National FNPC
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#fed8b8] text-[#873800] flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Direct FNPC (< 50ms)
           </span>
         </div>
 
@@ -5059,7 +5121,9 @@ class ProtecGame {
     const route = this.calculateRouteInfo(renfort.lat, renfort.lng);
     const dispoVehicles = (this.vehicles || []).filter(v => v.status === 'dispo');
     const dispoVolunteers = (this.volunteers || []).filter(v => v.status === 'dispo');
-    const requiredVols = renfort.requiredVolsCount || 2;
+    const totalRequired = renfort.requiredVolsCount || 6;
+    const committed = renfort.slotsCommitted || 0;
+    const availableSlots = Math.max(0, totalRequired - committed);
 
     let modal = document.getElementById('engage-renfort-modal');
     if (!modal) {
@@ -5068,6 +5132,8 @@ class ProtecGame {
       modal.className = 'fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4';
       document.body.appendChild(modal);
     }
+
+    modal.setAttribute('data-current-renfort-id', renfort.id);
 
     modal.innerHTML = `
       <div class="bg-white rounded-3xl max-w-lg w-full p-5 space-y-4 shadow-2xl border border-orange-200 animate-in fade-in zoom-in duration-150 max-h-[92vh] overflow-y-auto">
@@ -5088,8 +5154,30 @@ class ProtecGame {
           <button onclick="document.getElementById('engage-renfort-modal')?.remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-black text-xs cursor-pointer">✕</button>
         </div>
 
+        <!-- Jauge d'arbitrage en direct -->
+        <div class="p-3 rounded-2xl bg-orange-50 border border-orange-200 space-y-1.5 text-xs">
+          <div class="flex items-center justify-between">
+            <span class="font-extrabold text-orange-950">👥 Effectifs demandés :</span>
+            <span class="font-black text-slate-900">${totalRequired} secouristes au total</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="font-extrabold text-orange-950">⚡ Places restantes en direct :</span>
+            <span id="engage-renfort-remaining-badge" class="px-2.5 py-0.5 rounded-lg ${availableSlots > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'} font-black">
+              ${availableSlots > 0 ? `${availableSlots} place(s) libre(s) (${committed}/${totalRequired} pourvus)` : `Complet (6/6 pourvus)`}
+            </span>
+          </div>
+          ${renfort.contributions && renfort.contributions.length > 0 ? `
+            <div class="pt-1.5 border-t border-orange-200/80 text-[11px] text-slate-600">
+              <span class="font-bold text-slate-800">Autres directeurs déjà engagés :</span>
+              <div class="mt-1 space-y-0.5 pl-2 border-l-2 border-orange-300">
+                ${renfort.contributions.map(c => `<div>• <strong>${c.playerName}</strong> : <strong>${c.volunteersCount}</strong> secouristes (${c.vehicleName || 'Véhicule'})</div>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+
         <!-- Détail de la demande -->
-        <div class="bg-[#fef6ee] border border-[#fbd3b6] rounded-2xl p-3.5 space-y-2 text-xs">
+        <div class="bg-[#fef6ee] border border-[#fbd3b6] rounded-2xl p-3 space-y-1.5 text-xs">
           <div class="flex items-center justify-between">
             <span class="font-extrabold text-slate-700">📍 Destination :</span>
             <span class="font-black text-slate-900">${renfort.addressDisplay || renfort.address}</span>
@@ -5100,18 +5188,13 @@ class ProtecGame {
           </div>
           <div class="flex items-center justify-between">
             <span class="font-extrabold text-slate-700">🚙 Trajet estimé :</span>
-            <span class="font-black text-slate-900">≈ ${route.distanceKm} km (trajet convoi ~ ${route.durationText})</span>
+            <span class="font-black text-slate-900">≈ ${route.distanceKm} km (~ ${route.durationText})</span>
           </div>
           <div class="flex items-center justify-between pt-1 border-t border-orange-200/60">
-            <span class="font-extrabold text-emerald-800">💰 Indemnisation conventionnelle :</span>
-            <span class="font-black text-emerald-700 text-sm mono-num">+${renfort.indemnite || 520} € & +${renfort.alliancePoints || 60} pts alliance</span>
+            <span class="font-extrabold text-emerald-800">💰 Indemnisation :</span>
+            <span class="font-black text-emerald-700 mono-num">+${renfort.indemnite || 520} € & +${renfort.alliancePoints || 60} pts alliance</span>
           </div>
         </div>
-
-        <!-- Description contexte -->
-        <p class="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200/80 leading-relaxed">
-          ${renfort.description || 'Mobilisation officielle de la Protection Civile pour prêter main forte aux services de secours locaux.'}
-        </p>
 
         <!-- Sélection du Véhicule -->
         <div class="space-y-1.5">
@@ -5136,19 +5219,21 @@ class ProtecGame {
         <!-- Sélection de l'équipage -->
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
-            <label class="text-xs font-black text-slate-800">2. Sélectionner l'équipage (${requiredVols} secouristes requis) :</label>
+            <label class="text-xs font-black text-slate-800">
+              2. Sélectionner l'équipage (<span id="engage-renfort-needed-label">${availableSlots} place(s) restante(s)</span>) :
+            </label>
             <button 
               type="button" 
-              onclick="window.game.autoSelectRenfortVolunteers(${requiredVols})" 
+              onclick="window.game.autoSelectRenfortVolunteers(${Math.min(4, availableSlots)})" 
               class="text-[11px] font-bold text-orange-600 hover:text-orange-700 underline cursor-pointer"
             >
-              ⚡ Auto-affectation
+              ⚡ Auto-affectation (${Math.min(4, availableSlots)})
             </button>
           </div>
-          ${dispoVolunteers.length < requiredVols ? `
-            <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-center gap-2">
+          ${dispoVolunteers.length < availableSlots ? `
+            <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-center gap-2">
               <span>⚠️</span>
-              <span>Effectif restreint (${dispoVolunteers.length} secouriste(s) disponible(s)). Le départ reste possible en équipage réduit.</span>
+              <span>Vous avez ${dispoVolunteers.length} secouriste(s) disponible(s). Les autres directeurs pourvoiront les places restantes.</span>
             </div>
           ` : ''}
 
@@ -5158,7 +5243,7 @@ class ProtecGame {
             ` : dispoVolunteers.map((vol, idx) => `
               <label class="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:bg-orange-50/50 cursor-pointer text-xs font-bold transition">
                 <div class="flex items-center gap-2">
-                  <input type="checkbox" name="renfort-volunteer-checkbox" value="${vol.id}" ${idx < requiredVols ? 'checked' : ''} class="rounded text-orange-600 focus:ring-orange-500">
+                  <input type="checkbox" name="renfort-volunteer-checkbox" value="${vol.id}" ${idx < Math.min(4, availableSlots) ? 'checked' : ''} class="rounded text-orange-600 focus:ring-orange-500">
                   <span class="text-slate-800">${vol.name}</span>
                 </div>
                 <span class="text-[10px] text-slate-500 font-semibold">${vol.rank || 'Secouriste'}</span>
@@ -5189,7 +5274,7 @@ class ProtecGame {
               onclick="window.game.autoSignRenfortOrder()" 
               class="text-[10px] font-bold text-slate-500 hover:text-orange-600 transition cursor-pointer"
             >
-              ✍️ Signer automatiquement « ${this.player.name || 'Directeur'} »
+              ✍️ Signer automatiquement « ${this.player?.name || 'Directeur'} »
             </button>
           </div>
         </div>
@@ -5204,9 +5289,10 @@ class ProtecGame {
             Annuler
           </button>
           <button 
+            id="engage-renfort-confirm-btn"
             type="button" 
             onclick="window.game.submitEngageRenfort('${renfort.id}')" 
-            ${dispoVehicles.length === 0 ? 'disabled' : ''} 
+            ${dispoVehicles.length === 0 || availableSlots <= 0 ? 'disabled' : ''} 
             class="px-5 py-2.5 rounded-xl text-xs font-black bg-[#ff6a28] hover:bg-[#ea5b1b] active:scale-95 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
           >
             <span>➤</span>
@@ -5301,9 +5387,26 @@ class ProtecGame {
     });
   }
 
+  // Soumission d'un renfort avec ARBITRAGE EN DIRECT SANS CONFLIT (Concurrency Control)
   submitEngageRenfort(renfortId) {
     const renfort = (this.renforts || []).find(r => r.id === renfortId);
     if (!renfort) return;
+
+    const totalRequired = renfort.requiredVolsCount || 6;
+    const currentCommitted = renfort.slotsCommitted || 0;
+    const availableSlots = Math.max(0, totalRequired - currentCommitted);
+
+    // 1. Si plus aucune place restante (complété par un autre joueur à l'instant même)
+    if (availableSlots <= 0) {
+      this.showToast(
+        'Renfort Déjà Complet',
+        `Ce renfort vient d'être entièrement pourvu en direct par d'autres antennes (6/6 effectifs). Vos secouristes et véhicules restent disponibles à la base.`,
+        'orange'
+      );
+      document.getElementById('engage-renfort-modal')?.remove();
+      this.updateStatsUI();
+      return;
+    }
 
     const vehSelect = document.getElementById('engage-renfort-vehicle-select');
     const vehId = vehSelect ? vehSelect.value : null;
@@ -5315,14 +5418,29 @@ class ProtecGame {
     }
 
     const selectedVolCheckboxes = Array.from(document.querySelectorAll('input[name="renfort-volunteer-checkbox"]:checked'));
-    const volIds = selectedVolCheckboxes.map(cb => cb.value);
+    const selectedVolIds = selectedVolCheckboxes.map(cb => cb.value);
+
+    if (selectedVolIds.length === 0) {
+      this.showToast('Équipage Requis', 'Veuillez cocher au moins 1 secouriste pour le renfort.', 'orange');
+      return;
+    }
+
+    // 2. ARBITRAGE EN DIRECT SANS CONFLIT (Concurrency Control)
+    // Exemple : 4 bénévoles sélectionnés sur un renfort à 6, mais un autre joueur vient d'en placer 4 (reste 2 places)
+    let actualVolIds = selectedVolIds;
+    let wasCapped = false;
+
+    if (selectedVolIds.length > availableSlots) {
+      actualVolIds = selectedVolIds.slice(0, availableSlots);
+      wasCapped = true;
+    }
 
     // Engagement du véhicule
     veh.status = 'renfort';
-    veh.currentMissionTitle = `Renfort ${renfort.typeTitle} - ${renfort.addressDisplay || renfort.address}`;
+    veh.currentMissionTitle = `Renfort ${renfort.typeTitle || renfort.title} - ${renfort.addressDisplay || renfort.address}`;
 
-    // Engagement des secouristes
-    volIds.forEach(volId => {
+    // Engagement STRICTEMENT des secouristes retenus par l'arbitrage
+    actualVolIds.forEach(volId => {
       const vol = this.volunteers.find(v => v.id === volId);
       if (vol) {
         vol.status = 'renfort';
@@ -5330,37 +5448,72 @@ class ProtecGame {
       }
     });
 
-    // Indemnités & points
-    const rewardMoney = renfort.indemnite || 520;
-    const rewardPoints = renfort.alliancePoints || 60;
-    this.resources.money += rewardMoney;
-    this.resources.alliancePoints = (this.resources.alliancePoints || 0) + rewardPoints;
-
-    // Statut renfort
-    renfort.status = 'fulfilled';
-    renfort.fulfilledAt = new Date().toISOString();
-    renfort.fulfilledBy = {
+    // Mise à jour de l'état du renfort
+    renfort.slotsCommitted = (renfort.slotsCommitted || 0) + actualVolIds.length;
+    if (!renfort.contributions) renfort.contributions = [];
+    renfort.contributions.push({
       playerId: this.player.id,
       playerName: this.player.name,
+      stationName: this.stations?.[0]?.name || 'Antenne Locale',
+      volunteersCount: actualVolIds.length,
       vehicleName: veh.name,
-      volunteersCount: volIds.length
-    };
+      timestamp: Date.now()
+    });
+
+    const isFullyFulfilled = renfort.slotsCommitted >= totalRequired;
+    if (isFullyFulfilled) {
+      renfort.status = 'fulfilled';
+      renfort.fulfilledAt = new Date().toISOString();
+    }
+
+    // Calcul de l'indemnité proportionnelle aux effectifs fournis
+    const ratio = actualVolIds.length / totalRequired;
+    const rewardMoney = Math.round((renfort.indemnite || 520) * (actualVolIds.length >= totalRequired ? 1 : Math.max(0.4, ratio)));
+    const rewardPoints = Math.round((renfort.alliancePoints || 60) * (actualVolIds.length >= totalRequired ? 1 : Math.max(0.4, ratio)));
+    this.resources.money += rewardMoney;
+    this.resources.alliancePoints = (this.resources.alliancePoints || 0) + rewardPoints;
 
     // Fermeture modale
     document.getElementById('engage-renfort-modal')?.remove();
 
-    this.showToast(
-      'Départ de Renfort Validé !',
-      `${veh.name} et l’équipage ont pris la route vers ${renfort.addressDisplay || renfort.address} ! (+${rewardMoney} € et +${rewardPoints} pts d’alliance)`,
-      'green'
-    );
+    // Notification utilisateur avec explication claire de l'arbitrage
+    if (wasCapped) {
+      this.showToast(
+        '⚡ Arbitrage en Direct Validé',
+        `${selectedVolIds.length} secouristes étaient cochés, mais une autre antenne a engagé des renforts au même instant ! Seuls vos ${actualVolIds.length} premiers secouristes ont été engagés pour compléter les ${totalRequired}/${totalRequired} places. Vos ${selectedVolIds.length - actualVolIds.length} autres bénévoles restent à la base (+${rewardMoney} €).`,
+        'blue'
+      );
+    } else {
+      this.showToast(
+        'Départ de Renfort Validé !',
+        `${veh.name} et ${actualVolIds.length} secouriste(s) ont pris la route vers ${renfort.addressDisplay || renfort.address} ! (${renfort.slotsCommitted}/${totalRequired} effectifs pourvus • +${rewardMoney} € et +${rewardPoints} pts d’alliance).`,
+        'green'
+      );
+    }
 
-    // Retour automatique de la colonne après 3 minutes in-game
+    // 3. DIFFUSION EN TEMPS RÉEL (< 50ms) À TOUS LES AUTRES DIRECTEURS CONNECTÉS
+    if (window.ProtecSupabase && window.ProtecSupabase.broadcastRenfortContribution) {
+      window.ProtecSupabase.broadcastRenfortContribution({
+        renfortId: renfort.id,
+        contributorId: this.player.id,
+        contributorName: this.player.name,
+        stationName: this.stations?.[0]?.name || 'Antenne Locale',
+        volunteersCount: actualVolIds.length,
+        vehicleName: veh.name,
+        slotsCommitted: renfort.slotsCommitted,
+        totalRequired: totalRequired,
+        remainingSlots: Math.max(0, totalRequired - renfort.slotsCommitted),
+        status: renfort.status,
+        timestamp: Date.now()
+      });
+    }
+
+    // Retour automatique de la colonne
     setTimeout(() => {
       if (veh.status === 'renfort') {
         veh.status = 'dispo';
       }
-      volIds.forEach(volId => {
+      actualVolIds.forEach(volId => {
         const vol = this.volunteers.find(v => v.id === volId);
         if (vol && vol.status === 'renfort') {
           vol.status = 'dispo';
@@ -5371,12 +5524,24 @@ class ProtecGame {
       this.saveGame();
     }, 180000);
 
-    // Génération automatique d'une nouvelle opportunité de renfort dans la liste
-    const templates = this.getExtraDeptTemplates();
-    const nextTemplate = templates.find(t => t.id !== renfort.id) || templates[1];
-    if (nextTemplate && !this.renforts.some(r => r.id === nextTemplate.id && r.status === 'open')) {
-      const nextRenfort = { ...nextTemplate, id: `renf-extra-${Date.now()}`, createdAt: new Date().toISOString() };
-      this.renforts.unshift(nextRenfort);
+    // Si renfort complété, générer la prochaine opportunité
+    if (isFullyFulfilled) {
+      const templates = this.getExtraDeptTemplates();
+      const nextTemplate = templates.find(t => t.id !== renfort.id) || templates[1];
+      if (nextTemplate && !this.renforts.some(r => r.id === nextTemplate.id && r.status === 'open')) {
+        const nextRenfort = { 
+          ...nextTemplate, 
+          id: `renf-extra-${Date.now()}`, 
+          slotsCommitted: 0, 
+          contributions: [], 
+          status: 'open',
+          createdAt: new Date().toISOString() 
+        };
+        this.renforts.unshift(nextRenfort);
+        if (window.ProtecSupabase && window.ProtecSupabase.broadcastRenfortCreated) {
+          window.ProtecSupabase.broadcastRenfortCreated(nextRenfort);
+        }
+      }
     }
 
     this.updateStatsUI();
@@ -5385,6 +5550,78 @@ class ProtecGame {
     // Actualisation des modules s'ils sont ouverts
     if (this.currentModalKey === 'alliance') this.openModule('alliance');
     if (this.currentModalKey === 'planning') this.openModule('planning');
+  }
+
+  // Traitement d'un engagement de renfort distant reçu en temps réel (< 50ms)
+  handleRemoteRenfortContribution(data) {
+    if (!data || !data.renfortId) return;
+    if (data.contributorId === this.player?.id) return;
+
+    const renfort = (this.renforts || []).find(r => r.id === data.renfortId);
+    if (!renfort) return;
+
+    renfort.slotsCommitted = data.slotsCommitted;
+    renfort.status = data.status || renfort.status;
+    if (!renfort.contributions) renfort.contributions = [];
+    renfort.contributions.push({
+      playerId: data.contributorId,
+      playerName: data.contributorName,
+      stationName: data.stationName,
+      volunteersCount: data.volunteersCount,
+      vehicleName: data.vehicleName,
+      timestamp: data.timestamp || Date.now()
+    });
+
+    // Si la modal d'engagement est actuellement ouverte sur cet écran pour ce renfort précis
+    const modal = document.getElementById('engage-renfort-modal');
+    if (modal && modal.getAttribute('data-current-renfort-id') === renfort.id) {
+      const badge = document.getElementById('engage-renfort-remaining-badge');
+      if (badge) {
+        badge.textContent = `${data.remainingSlots} place(s) libre(s) (${data.slotsCommitted}/${data.totalRequired} pourvus)`;
+        badge.className = data.remainingSlots > 0 
+          ? 'px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 font-black' 
+          : 'px-2.5 py-0.5 rounded-lg bg-rose-100 text-rose-800 font-black animate-pulse';
+      }
+      const neededLabel = document.getElementById('engage-renfort-needed-label');
+      if (neededLabel) {
+        neededLabel.textContent = `${data.remainingSlots} place(s) restante(s)`;
+      }
+      const confirmBtn = document.getElementById('engage-renfort-confirm-btn');
+      if (confirmBtn && data.remainingSlots <= 0) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Renfort Déjà Complet';
+      }
+      this.showToast(
+        '⚡ Activité Réseau en Direct',
+        `${data.contributorName} vient d'engager ${data.volunteersCount} secouriste(s) ! (${data.remainingSlots} place(s) restante(s)).`,
+        'blue'
+      );
+    } else {
+      this.showToast(
+        '⚡ Renfort Allié Partagé',
+        `${data.contributorName} (${data.stationName}) a envoyé ${data.volunteersCount} secouriste(s) en renfort (${data.remainingSlots}/${data.totalRequired} places restantes).`,
+        'blue'
+      );
+    }
+
+    this.updateStatsUI();
+    if (this.currentModalKey === 'alliance') this.openModule('alliance');
+  }
+
+  // Traitement d'un nouveau renfort créé à distance en temps réel
+  handleRemoteRenfortCreated(newRenfort) {
+    if (!newRenfort || !newRenfort.id) return;
+    if (!this.renforts) this.renforts = [];
+    if (!this.renforts.some(r => r.id === newRenfort.id)) {
+      this.renforts.unshift(newRenfort);
+      this.showToast(
+        '🌐 Nouvelle Demande de Renfort',
+        `Un nouvel appel à renfort vient d'être ouvert : « ${newRenfort.typeTitle || newRenfort.title} » (${newRenfort.requiredVolsCount || 6} places) !`,
+        'orange'
+      );
+      this.updateStatsUI();
+      if (this.currentModalKey === 'alliance') this.openModule('alliance');
+    }
   }
 
   registerVolunteerToSpecialFormation(formationId) {
