@@ -52,9 +52,31 @@ CREATE TABLE IF NOT EXISTS active_missions (
   assigned_volunteers JSONB DEFAULT '[]'::jsonb,
   assigned_vehicles JSONB DEFAULT '[]'::jsonb,
   details JSONB DEFAULT '{}'::jsonb,
+  t_alerte TIMESTAMPTZ,
+  t_arrivee_base TIMESTAMPTZ,
+  t_depart_base TIMESTAMPTZ,
+  t_arrivee_mission TIMESTAMPTZ,
+  t_fin_mission TIMESTAMPTZ,
+  t_retour_base TIMESTAMPTZ,
+  coords_domicile_max JSONB,
+  coords_base JSONB,
+  coords_mission JSONB,
+  timeline_phase TEXT DEFAULT 'alerte',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   resolved_at TIMESTAMPTZ
 );
+
+-- Mises à jour idempotentes pour tables active_missions existantes
+ALTER TABLE active_missions ADD COLUMN IF NOT EXISTS t_alerte TIMESTAMPTZ;
+ALTER TABLE active_missions ADD COLUMN IF NOT EXISTS t_arrivee_base TIMESTAMPTZ;
+ALTER TABLE active_missions ADD COLUMN IF NOT EXISTS t_depart_base TIMESTAMPTZ;
+ALTER TABLE active_missions ADD COLUMN IF NOT EXISTS t_arrivee_mission TIMESTAMPTZ;
+ALTER TABLE active_missions ADD COLUMN IF NOT EXISTS t_fin_mission TIMESTAMPTZ;
+ALTER TABLE active_missions ADD COLUMN IF NOT EXISTS t_retour_base TIMESTAMPTZ;
+ALTER TABLE active_missions ADD COLUMN IF NOT EXISTS coords_domicile_max JSONB;
+ALTER TABLE active_missions ADD COLUMN IF NOT EXISTS coords_base JSONB;
+ALTER TABLE active_missions ADD COLUMN IF NOT EXISTS coords_mission JSONB;
+ALTER TABLE active_missions ADD COLUMN IF NOT EXISTS timeline_phase TEXT DEFAULT 'alerte';
 
 CREATE INDEX IF NOT EXISTS idx_active_missions_status_ends ON active_missions(status, ends_at);
 CREATE INDEX IF NOT EXISTS idx_active_missions_player ON active_missions(player_id);
@@ -642,3 +664,60 @@ ON CONFLICT (code) DO UPDATE SET
   categorie = EXCLUDED.categorie,
   badge_url = EXCLUDED.badge_url,
   rarete = EXCLUDED.rarete;
+
+-- ==============================================================================
+-- 9. GÉOGRAPHIE, BASSIN D'ATTRACTIVITÉ & PERSISTANCE DES BÉNÉVOLES TERRITORIAUX
+-- ==============================================================================
+
+-- A. Ajout du code département sur les antennes si manquant
+ALTER TABLE alliance_stations ADD COLUMN IF NOT EXISTS department_code TEXT;
+
+-- B. Vue unifiée des antennes territoriales actives
+CREATE OR REPLACE VIEW antennes AS
+SELECT 
+  id,
+  player_id,
+  player_name,
+  station_name,
+  city,
+  COALESCE(department_code, (SELECT department_code FROM players WHERE players.id = alliance_stations.player_id), '54') AS department_code,
+  lat,
+  lng,
+  level,
+  TRUE AS is_active,
+  last_sync
+FROM alliance_stations;
+
+-- C. Table dédiée des bénévoles avec coordonnées domiciliaires et temps de ralliement
+CREATE TABLE IF NOT EXISTS volunteers (
+  id TEXT PRIMARY KEY,
+  player_id TEXT,
+  station_id TEXT,
+  name TEXT NOT NULL,
+  role TEXT,
+  rank TEXT,
+  contract_type TEXT DEFAULT 'benevole',
+  commune TEXT,
+  code_postal TEXT,
+  adresse TEXT,
+  coords_domicile JSONB DEFAULT '{"lat": 48.6921, "lng": 6.1844}'::jsonb,
+  distance_base_km NUMERIC DEFAULT 0,
+  temps_ralliement_minutes INT DEFAULT 10,
+  mode_transport TEXT DEFAULT 'voiture',
+  permis_b BOOLEAN DEFAULT TRUE,
+  permis_moto BOOLEAN DEFAULT FALSE,
+  status TEXT DEFAULT 'dispo',
+  motivation INT DEFAULT 85,
+  energy INT DEFAULT 100,
+  humeur INT DEFAULT 85,
+  skills JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_volunteers_player ON volunteers(player_id);
+CREATE INDEX IF NOT EXISTS idx_volunteers_station ON volunteers(station_id);
+CREATE INDEX IF NOT EXISTS idx_volunteers_commune ON volunteers(commune);
+ALTER TABLE volunteers DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE volunteers TO anon, authenticated, service_role;
+

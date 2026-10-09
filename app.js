@@ -1302,7 +1302,7 @@ class ProtecGame {
 
       this.volunteers = [];
       starters.forEach(s => {
-        this.volunteers.push({
+        const newVol = {
           id: `vol-${Date.now()}-${Math.random()}`,
           name: s.name,
           role: s.role,
@@ -1320,7 +1320,11 @@ class ProtecGame {
           dispoType: s.dispoType,
           dispoJours: s.dispoJours,
           skills: s.skills || []
-        });
+        };
+        if (window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
+          window.ProtecPersonnel.ensureVolunteerResidence(newVol, this);
+        }
+        this.volunteers.push(newVol);
       });
     }
 
@@ -3270,8 +3274,21 @@ class ProtecGame {
       motivation: Math.max(30, (cand.motivationGrade ? Math.min(100, parseInt(cand.motivationGrade) * 5) : (cand.motivationScore || 85)) - waitPenalty),
       skills: cand.skills || [initialRank],
       energy: Math.max(50, 90 - waitPenalty),
-      humeur: Math.max(30, 85 - waitPenalty)
+      humeur: Math.max(30, 85 - waitPenalty),
+      commune: cand.commune,
+      code_postal: cand.code_postal,
+      adresse: cand.adresse,
+      coords_domicile: cand.coords_domicile,
+      distance_base_km: cand.distance_base_km,
+      temps_ralliement_minutes: cand.temps_ralliement_minutes,
+      mode_transport: cand.mode_transport,
+      permis_b: cand.permis_b,
+      permis_moto: cand.permis_moto
     };
+
+    if (window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
+      window.ProtecPersonnel.ensureVolunteerResidence(newVol, this);
+    }
 
     this.volunteers.push(newVol);
     this.closeModal();
@@ -3438,6 +3455,19 @@ class ProtecGame {
       volunteers: crew,
       vehicles: assignedVehicles
     };
+
+    // Initialisation de la timeline multi-étapes pour missions d'urgence / non planifiées
+    const isEmergency = (
+      mission.type === 'samu' ||
+      mission.type === 'pompiers' ||
+      mission.type === 'crise' ||
+      mission.isEmergency === true ||
+      ['critique', 'haute'].includes(mission.urgency)
+    );
+    if (isEmergency && window.ProtecConventions) {
+      const station = this.stations.find(s => s.id === assignedVehicles[0]?.stationId) || this.stations[0];
+      window.ProtecConventions.creerTimelineUrgence(this, mission, crew, assignedVehicles[0], station);
+    }
 
     // Synchronisation de la mission dans la BDD Supabase du monde persistant
     if (window.ProtecSupabase && this.player?.id) {
@@ -4484,6 +4514,9 @@ class ProtecGame {
           </div>
         ` : ''}
 
+        <!-- WIDGET TIMELINE MULTI-ÉTAPES (6 JALONS STRICTS) -->
+        ${(mission.isTimelineUrgence || mission.timeline_milestones || mission.t_alerte) && window.ProtecConventions?.renderTimelineWidget ? window.ProtecConventions.renderTimelineWidget(mission, Date.now()) : ''}
+
         <!-- FICHE OPÉRATIONNELLE D'ALERTE / SITUATION DE TERRAIN -->
         <div class="p-4 rounded-3xl border ${
           mission.status === 'declenche' ? 'bg-red-50/80 border-red-300 text-red-950 shadow-sm' :
@@ -4724,19 +4757,35 @@ class ProtecGame {
               <div class="mt-2 space-y-1.5 max-h-44 overflow-y-auto pt-1 border-t border-slate-200/70">
                 ${this.volunteers.filter(v => !mission.registeredVolunteers.includes(v.id)).map(v => {
                   const otherMission = this.missions.find(m => m.id !== mission.id && (m.registeredVolunteers || []).includes(v.id) && ['planifie', 'prealerte', 'declenche'].includes(m.status));
+                  const isUrgentMission = ['samu', 'pompiers', 'crise', 'meteo'].includes(mission.type) || mission.status === 'prealerte' || mission.status === 'declenche' || mission.isCrisis || mission.urgency === 'critique';
+                  const maxRallyLimit = mission.maxRallyMinutes || 20;
+                  const eligibility = window.ProtecPersonnel ? window.ProtecPersonnel.isVolunteerEligibleForUrgentMission(v, maxRallyLimit) : { eligible: true, rallyMinutes: v.temps_ralliement_minutes || 10 };
+                  const isBlockedByDistance = isUrgentMission && !eligibility.eligible;
+
                   return `
-                    <div class="p-2 rounded-xl bg-white border border-slate-200 flex items-center justify-between text-xs hover:shadow-sm transition">
-                      <div class="flex items-center gap-2">
+                    <div class="p-2 rounded-xl border flex items-center justify-between text-xs transition ${isBlockedByDistance ? 'bg-slate-100/70 border-slate-300 opacity-60' : 'bg-white border-slate-200 hover:shadow-sm'}">
+                      <div class="flex items-center gap-2 min-w-0 flex-1">
                         ${this.getVolunteerAvatarHTML(v, 'w-6 h-6 text-[10px]')}
-                        <div>
-                          <span class="font-bold text-slate-800">${v.name}</span>
-                          <span class="text-[9px] text-slate-500 ml-1 font-semibold">${v.rank}</span>
-                          ${otherMission ? `<div class="text-[9px] text-amber-700 font-bold truncate max-w-[130px]">Sur : ${otherMission.title}</div>` : ''}
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="font-bold text-slate-800 truncate">${v.name}</span>
+                            <span class="text-[9px] text-slate-500 font-semibold">${v.rank}</span>
+                            <span class="text-[9px] font-bold ${v.temps_ralliement_minutes > 20 ? 'text-amber-700' : 'text-slate-500'}">⏱️ ${v.temps_ralliement_minutes || 10}m (${v.commune || 'Base'})</span>
+                          </div>
+                          ${isBlockedByDistance ? `
+                            <div class="text-[9px] text-rose-700 font-bold truncate">⚠️ Domicile trop éloigné (> ${maxRallyLimit} min limite réflexe)</div>
+                          ` : otherMission ? `
+                            <div class="text-[9px] text-amber-700 font-bold truncate max-w-[130px]">Sur : ${otherMission.title}</div>
+                          ` : ''}
                         </div>
                       </div>
-                      <div class="flex items-center gap-1">
+                      <div class="flex items-center gap-1 shrink-0">
                         ${v.status === 'mission' ? `
                           <span class="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">En mission</span>
+                        ` : isBlockedByDistance ? `
+                          <span class="px-2 py-1 rounded text-[10px] font-bold bg-slate-200 text-slate-400 cursor-not-allowed" title="Le bénévole habite trop loin (${v.temps_ralliement_minutes} min) pour rallier la base avant le départ de l'urgence réflexe">
+                            Hors délai
+                          </span>
                         ` : otherMission ? `
                           <button onclick="window.game.proposeVolunteerSwitch('${v.id}', '${mission.id}')" class="px-2 py-1 rounded text-[10px] font-extrabold bg-amber-100 hover:bg-amber-200 text-amber-900 transition flex items-center gap-1" title="Proposer au bénévole d'annuler sa participation sur l'autre mission pour venir ici">
                             <i data-lucide="arrow-left-right" class="w-3 h-3"></i>
@@ -7748,6 +7797,15 @@ class ProtecGame {
                             ${this.getVolunteerSkillsPopoverHTML(cand)}
                           </div>
 
+                          ${cand.commune ? `
+                            <div class="flex items-center gap-2 text-[11px] text-slate-600 mt-1">
+                              <span>🏠 Domicile : <strong class="text-slate-800">${cand.commune}</strong> (${cand.distance_base_km || 3} km)</span>
+                              <span>•</span>
+                              <span class="font-bold text-pc-blue">⏱️ Ralliement : ${cand.temps_ralliement_minutes || 10} min en ${cand.mode_transport === 'voiture' ? '🚗 Voiture' : (cand.mode_transport === 'moto' ? '🏍️ Moto' : '🚲 Vélo/Bus')}</span>
+                              ${cand.permis_b ? '<span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-emerald-100 text-emerald-800">Permis B</span>' : ''}
+                            </div>
+                          ` : ''}
+
                           ${cand.skills && cand.skills.length > 0 ? `
                             <div class="flex flex-wrap gap-1 mt-1.5">
                               ${cand.skills.map(s => `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${this.formatSkillName(s)}</span>`).join('')}
@@ -8038,6 +8096,22 @@ class ProtecGame {
                       <div class="text-[10px] text-slate-500 flex items-center justify-between">
                         <span>Profil : <strong>${v.dispoType || 'Disponible'}</strong></span>
                         <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-bold">${trait.name}</span>
+                      </div>
+
+                      <!-- Domicile, Bassin Territorial & Ralliement Opérationnel -->
+                      <div class="p-2 rounded-xl bg-slate-50/90 border border-slate-200/70 text-[10px] text-slate-700 space-y-1">
+                        <div class="flex items-center justify-between">
+                          <span class="truncate max-w-[170px]" title="${v.adresse || 'Centre-ville'}">🏠 <strong>${v.commune || 'Centre-ville'}</strong> <span class="text-slate-400">(${v.distance_base_km || 3} km)</span></span>
+                          <span class="font-extrabold ${v.temps_ralliement_minutes > 20 ? 'text-amber-700' : 'text-emerald-700'}">⏱️ ${v.temps_ralliement_minutes || 12} min</span>
+                        </div>
+                        <div class="flex items-center justify-between pt-0.5 border-t border-slate-200/50">
+                          <span class="text-slate-500">${v.mode_transport === 'voiture' ? '🚗 Voiture' : (v.mode_transport === 'moto' ? '🏍️ Moto' : '🚲 Vélo / Bus')}</span>
+                          <div class="flex items-center gap-1">
+                            ${v.permis_b ? '<span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">Permis B</span>' : ''}
+                            ${v.permis_moto ? '<span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-sky-100 text-sky-800 border border-sky-300">Permis Moto</span>' : ''}
+                            ${(!v.permis_b && !v.permis_moto) ? '<span class="px-1.5 py-0.2 rounded text-[8px] font-bold bg-slate-100 text-slate-500">Sans permis</span>' : ''}
+                          </div>
+                        </div>
                       </div>
 
                       <div class="grid grid-cols-3 gap-2 text-[10px] pt-1 border-t border-slate-100">
@@ -9594,6 +9668,11 @@ class ProtecGame {
       // 1. Progression des missions en cours (Vraie durée & Main Courante de Crise)
       this.missions.forEach(m => {
         if (m.status === 'ongoing') {
+          // Gestion des missions à timeline multi-étapes (Urgences, alertes non planifiées)
+          if ((m.isTimelineUrgence || m.timeline_milestones || m.t_alerte) && window.ProtecSystems) {
+            window.ProtecSystems.calculerPositionActuelle(m, currentTime);
+          }
+
           // Mission de Sinistre / Crise : Pas de fin arbitraire fixe, Main courante évolutive
           if ((m.isCrisis || ['crise', 'pompiers', 'samu', 'meteo'].includes(m.type)) && window.ProtecCriseLogistique) {
             window.ProtecCriseLogistique.progressCrisisMission(this, m);
@@ -10084,6 +10163,9 @@ class ProtecGame {
 
         // Transit routier prioritaire vers le lieu de la détresse
         const base = this.stations[0] || { lat: 48.8566, lng: 2.3522 };
+        if (window.ProtecConventions) {
+          window.ProtecConventions.creerTimelineUrgence(this, newSamu, this.samuGarde.crewVolunteerIds || [], vpsp, base);
+        }
         if (window.ProtecSystems) {
           window.ProtecSystems.startTransit(this, vpsp, { lat: base.lat, lng: base.lng }, { lat: newSamu.lat, lng: newSamu.lng }, newSamu, 2);
         }
@@ -10152,11 +10234,22 @@ class ProtecGame {
     }
 
     // Sélection d'un équipage complet : 1 CE ou PSE2 en chef de bord, + 2 PSE1/PSE2
-    const availableQualif = this.volunteers.filter(v => v.status === 'dispo' && ['CE', 'PSE2', 'PSE1'].includes(v.rank));
+    // Priorité aux secouristes ayant un temps de ralliement compatible (< 20 min)
+    let availableQualif = this.volunteers.filter(v => v.status === 'dispo' && ['CE', 'PSE2', 'PSE1'].includes(v.rank));
+    if (this.samuGarde?.mode !== 'poste') {
+      availableQualif = availableQualif.filter(v => (v.temps_ralliement_minutes || 10) <= 20);
+    }
+    if (availableQualif.length < 3) {
+      // Tolérance si effectif restreint mais alerte
+      availableQualif = this.volunteers.filter(v => v.status === 'dispo' && ['CE', 'PSE2', 'PSE1'].includes(v.rank));
+    }
     if (availableQualif.length < 3) {
       this.showToast('Équipage insuffisant', 'Une garde SAMU requiert au moins 3 secouristes qualifiés disponibles (CE, PSE2, PSE1).', 'orange');
       return;
     }
+
+    // Trier par temps de ralliement le plus rapide
+    availableQualif.sort((a, b) => (a.temps_ralliement_minutes || 10) - (b.temps_ralliement_minutes || 10));
 
     // Privilégier un CE ou PSE2
     const leader = availableQualif.find(v => v.rank === 'CE') || availableQualif.find(v => v.rank === 'PSE2') || availableQualif[0];
@@ -10509,6 +10602,9 @@ class ProtecGame {
         });
 
         const base = this.stations[0] || { lat: 48.8566, lng: 2.3522 };
+        if (window.ProtecConventions) {
+          window.ProtecConventions.creerTimelineUrgence(this, newSdis, crewIds, vpsp, base);
+        }
         if (window.ProtecSystems) {
           window.ProtecSystems.startTransit(this, vpsp, { lat: base.lat, lng: base.lng }, { lat: newSdis.lat, lng: newSdis.lng }, newSdis, 2);
         }
@@ -10588,6 +10684,29 @@ class ProtecGame {
       { n: 'Kévin Bouchard', a: 29, j: 'Ancien Pompier Volontaire', d: ['Vendredi', 'Samedi', 'Dimanche'], t: 'salarié', av: '👨‍🚒', rank: 'CE', role: 'Chef d’Équipe Opérationnel', skills: ['CE', 'PSE2', 'permis_vpsp', 'commandement'], isTrainer: false, exp: 80 }
     ];
     const p = pool[Math.floor(Math.random() * pool.length)];
+
+    // Génération réaliste du domicile et du temps de ralliement selon le bassin territorial
+    const baseStation = (this.stations && this.stations[0]) || null;
+    let geo = {
+      commune: baseStation?.city || 'Nancy',
+      code_postal: (baseStation?.departmentCode || '54') + '000',
+      adresse: `12 rue de la République, ${(baseStation?.departmentCode || '54')}000 ${baseStation?.city || 'Nancy'}`,
+      coords_domicile: { lat: baseStation?.lat || 48.6921, lng: baseStation?.lng || 6.1844 },
+      distance_base_km: 3.5,
+      temps_ralliement_minutes: 10,
+      mode_transport: 'voiture',
+      permis_b: true,
+      permis_moto: false
+    };
+
+    if (window.ProtecPersonnel && typeof window.ProtecPersonnel.generateVolunteerResidence === 'function') {
+      geo = window.ProtecPersonnel.generateVolunteerResidence(this, baseStation, { age: p.a, skills: p.skills });
+    }
+
+    const candidateSkills = [...p.skills];
+    if (geo.permis_b && !candidateSkills.includes('permis_b')) candidateSkills.push('permis_b');
+    if (geo.permis_moto && !candidateSkills.includes('permis_moto')) candidateSkills.push('permis_moto');
+
     this.candidatures.push({
       id: `cand-${Date.now()}`,
       name: p.n,
@@ -10599,24 +10718,33 @@ class ProtecGame {
       avatar: p.av,
       rank: p.rank,
       role: p.rank === 'PSE2' ? 'Équipier-Secouriste' : p.role,
-      skills: p.skills,
+      skills: candidateSkills,
       isTrainer: p.isTrainer,
       createdDay: this.clock?.day || 1,
       createdAt: Date.now(),
       motivation: 85,
-      isImpatient: false
+      isImpatient: false,
+      commune: geo.commune,
+      code_postal: geo.code_postal,
+      adresse: geo.adresse,
+      coords_domicile: geo.coords_domicile,
+      distance_base_km: geo.distance_base_km,
+      temps_ralliement_minutes: geo.temps_ralliement_minutes,
+      mode_transport: geo.mode_transport,
+      permis_b: geo.permis_b,
+      permis_moto: geo.permis_moto
     });
 
     if (window.ProtecNotifications) {
       window.ProtecNotifications.notifyCategory(
         'rh',
         '👥 Nouvelle Candidature Bénévole !',
-        `${p.n} (${p.rank} • ${p.j}) souhaite intégrer votre antenne. Planifiez son entretien d'intégration !`,
+        `${p.n} (${p.rank} • Réside à ${geo.commune}) souhaite intégrer votre antenne (${geo.temps_ralliement_minutes} min de ralliement). Planifiez son entretien !`,
         `cand-${Date.now()}`
       );
     }
 
-    this.showToast('Nouvelle Candidature', `${p.n} (${p.j} • ${p.rank}) souhaite intégrer votre antenne.`, 'blue');
+    this.showToast('Nouvelle Candidature', `${p.n} (${geo.commune} • ${p.rank}) souhaite intégrer votre antenne.`, 'blue');
     this.updateStatsUI();
   }
 

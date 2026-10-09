@@ -700,6 +700,16 @@ window.ProtecSupabase = {
           assigned_volunteers: mission.assignedVolunteers || [],
           assigned_vehicles: mission.assignedVehicles || [],
           details: { category: mission.category, commune: mission.commune },
+          t_alerte: mission.t_alerte || null,
+          t_arrivee_base: mission.t_arrivee_base || null,
+          t_depart_base: mission.t_depart_base || null,
+          t_arrivee_mission: mission.t_arrivee_mission || null,
+          t_fin_mission: mission.t_fin_mission || null,
+          t_retour_base: mission.t_retour_base || null,
+          coords_domicile_max: mission.coords_domicile_max || null,
+          coords_base: mission.coords_base || null,
+          coords_mission: mission.coords_mission || null,
+          timeline_phase: mission.timeline_phase ? String(mission.timeline_phase) : 'alerte',
           created_at: now.toISOString()
         }, { onConflict: 'id' });
     } catch (e) {

@@ -283,6 +283,358 @@ window.ProtecSystems = {
         }
       }
     }
+
+    // Mise à jour continue des missions gérées par la timeline multi-étapes
+    this.updateTimelineMissions(game);
+  },
+
+  // =========================================================================
+  // MOTEUR D'INTERPOLATION DE POSITION DYNAMIQUE ET TIMELINE MULTI-ÉTAPES
+  // =========================================================================
+
+  calculerPositionActuelle(mission, tempsActuel = null) {
+    if (!mission) return null;
+
+    const t = (tempsActuel instanceof Date) ? tempsActuel.getTime() :
+              (typeof tempsActuel === 'string' && isNaN(Number(tempsActuel))) ? new Date(tempsActuel).getTime() :
+              (tempsActuel !== null && tempsActuel !== undefined ? Number(tempsActuel) : Date.now());
+
+    // Récupération des jalons de la mission
+    const toMs = (v) => (typeof v === 'number' ? v : (v ? new Date(v).getTime() : 0));
+    let tAlerte = toMs(mission.timeline_milestones?.t_alerte || mission.t_alerte || mission.startedAt);
+    let tArrBase = toMs(mission.timeline_milestones?.t_arrivee_base || mission.t_arrivee_base);
+    let tDepBase = toMs(mission.timeline_milestones?.t_depart_base || mission.t_depart_base);
+    let tArrMiss = toMs(mission.timeline_milestones?.t_arrivee_mission || mission.t_arrivee_mission);
+    let tFinMiss = toMs(mission.timeline_milestones?.t_fin_mission || mission.t_fin_mission);
+    let tRetBase = toMs(mission.timeline_milestones?.t_retour_base || mission.t_retour_base || mission.endsAt);
+
+    // Initialisation automatique par défaut si les jalons ne sont pas encore calculés
+    if (!tArrBase || !tArrMiss) {
+      if (!tAlerte) tAlerte = t;
+      tArrBase = tAlerte + 8 * 60 * 1000;
+      tDepBase = tArrBase + 2 * 60 * 1000;
+      tArrMiss = tDepBase + 10 * 60 * 1000;
+      tFinMiss = tArrMiss + 20 * 60 * 1000;
+      tRetBase = tFinMiss + 12 * 60 * 1000;
+    }
+
+    const baseLat = Number(mission.coords_base?.lat || window.game?.stations?.[0]?.lat || 48.8566);
+    const baseLng = Number(mission.coords_base?.lng || window.game?.stations?.[0]?.lng || 2.3522);
+    const pBase = { lat: baseLat, lng: baseLng };
+
+    const pDom = (mission.coords_domicile_max && !isNaN(mission.coords_domicile_max.lat)) ? {
+      lat: Number(mission.coords_domicile_max.lat),
+      lng: Number(mission.coords_domicile_max.lng)
+    } : {
+      lat: baseLat + 0.025,
+      lng: baseLng + 0.02
+    };
+
+    const pMiss = (mission.coords_mission && !isNaN(mission.coords_mission.lat)) ? {
+      lat: Number(mission.coords_mission.lat),
+      lng: Number(mission.coords_mission.lng)
+    } : {
+      lat: Number(mission.lat || baseLat),
+      lng: Number(mission.lng || baseLng)
+    };
+
+    let phase = 1;
+    let phaseCode = 'ralliement_domicile';
+    let status = "Ralliement domicile -> base (Secouriste en transit)";
+    let ratio = 0;
+    let lat = pDom.lat;
+    let lng = pDom.lng;
+    let iconType = 'volunteer';
+    let isCompleted = false;
+
+    // Helper interpolation linéaire
+    const lerp = (start, end, p) => start + (end - start) * p;
+
+    if (t < tArrBase) {
+      // -------------------------------------------------------------
+      // Phase 1 : Ralliement domicile -> base (entre t_alerte et t_arrivee_base)
+      // Interpoler la position entre coords_domicile_max et coords_base.
+      // Icône de bénévole en transit.
+      // -------------------------------------------------------------
+      phase = 1;
+      phaseCode = 'ralliement_domicile';
+      status = "Ralliement domicile -> base (Secouriste en transit)";
+      iconType = 'volunteer';
+      const dur = Math.max(1000, tArrBase - tAlerte);
+      ratio = Math.max(0, Math.min(1, (t - tAlerte) / dur));
+      lat = lerp(pDom.lat, pBase.lat, ratio);
+      lng = lerp(pDom.lng, pBase.lng, ratio);
+
+    } else if (t < tDepBase) {
+      // -------------------------------------------------------------
+      // Phase 2 : Armement à la base (entre t_arrivee_base et t_depart_base)
+      // Position figée sur coords_base.
+      // Statut : « En cours d'armement / équipement ».
+      // -------------------------------------------------------------
+      phase = 2;
+      phaseCode = 'armement_base';
+      status = "En cours d'armement / équipement";
+      iconType = 'base';
+      const dur = Math.max(1000, tDepBase - tArrBase);
+      ratio = Math.max(0, Math.min(1, (t - tArrBase) / dur));
+      lat = pBase.lat;
+      lng = pBase.lng;
+
+    } else if (t < tArrMiss) {
+      // -------------------------------------------------------------
+      // Phase 3 : Trajet aller du vecteur (entre t_depart_base et t_arrivee_mission)
+      // Interpoler la position entre coords_base et coords_mission.
+      // Icône du véhicule en transit vers les lieux (Gyrophare).
+      // -------------------------------------------------------------
+      phase = 3;
+      phaseCode = 'trajet_aller';
+      status = "Départ urgent vers les lieux (Gyrophare)";
+      iconType = 'vehicle_emergency';
+      const dur = Math.max(1000, tArrMiss - tDepBase);
+      ratio = Math.max(0, Math.min(1, (t - tDepBase) / dur));
+      lat = lerp(pBase.lat, pMiss.lat, ratio);
+      lng = lerp(pBase.lng, pMiss.lng, ratio);
+
+    } else if (t < tFinMiss) {
+      // -------------------------------------------------------------
+      // Phase 4 : Intervention sur place (entre t_arrivee_mission et t_fin_mission)
+      // Position figée sur coords_mission.
+      // Statut : « Sur les lieux / En intervention ».
+      // -------------------------------------------------------------
+      phase = 4;
+      phaseCode = 'intervention_sur_place';
+      status = "Sur les lieux / En intervention";
+      iconType = 'intervention';
+      const dur = Math.max(1000, tFinMiss - tArrMiss);
+      ratio = Math.max(0, Math.min(1, (t - tArrMiss) / dur));
+      lat = pMiss.lat;
+      lng = pMiss.lng;
+
+    } else if (t < tRetBase) {
+      // -------------------------------------------------------------
+      // Phase 5 : Trajet retour du vecteur (entre t_fin_mission et t_retour_base)
+      // Interpoler la position entre coords_mission et coords_base.
+      // Icône du véhicule retournant au centre (Statut 6).
+      // -------------------------------------------------------------
+      phase = 5;
+      phaseCode = 'trajet_retour';
+      status = "Retour vers la base (Statut 6)";
+      iconType = 'vehicle_return';
+      const dur = Math.max(1000, tRetBase - tFinMiss);
+      ratio = Math.max(0, Math.min(1, (t - tFinMiss) / dur));
+      lat = lerp(pMiss.lat, pBase.lat, ratio);
+      lng = lerp(pMiss.lng, pBase.lng, ratio);
+
+    } else {
+      // -------------------------------------------------------------
+      // Phase 6 : Clôture (tempsActuel >= t_retour_base)
+      // Passer la mission en termine, libérer le personnel et le véhicule,
+      // créditer la trésorerie.
+      // -------------------------------------------------------------
+      phase = 6;
+      phaseCode = 'termine';
+      status = "Mission terminée / Clôturée";
+      iconType = 'completed';
+      ratio = 1;
+      lat = pBase.lat;
+      lng = pBase.lng;
+      isCompleted = true;
+
+      // Clôture automatique si la mission est toujours en cours
+      if (mission.status === 'ongoing' || mission.status === 'en_cours') {
+        this.cloturerMissionUrgence(mission, window.game);
+      }
+    }
+
+    mission.timeline_phase = phase;
+
+    // Calcul de la progression globale (0 à 1)
+    const totalDuration = Math.max(1000, tRetBase - tAlerte);
+    const totalElapsed = Math.max(0, Math.min(totalDuration, t - tAlerte));
+    const totalProgress = Math.min(1, totalElapsed / totalDuration);
+
+    // Construction HTML de l'icône Leaflet
+    const vehName = mission.assignedCrew?.vehicles?.[0]?.name || 'VPSP';
+    const volName = mission.slowest_volunteer?.name || 'Secouriste';
+
+    let iconHtml = '';
+    if (phase === 1) {
+      iconHtml = `
+        <div class="timeline-marker flex items-center gap-1.5 px-2 py-1 rounded-xl bg-blue-600 text-white border-2 border-white shadow-xl text-[10px] font-black cursor-pointer animate-pulse">
+          <span class="text-sm">🏃</span>
+          <span>${volName}</span>
+          <span class="text-[8px] bg-blue-800 px-1 py-0.5 rounded">➔ Base</span>
+        </div>
+      `;
+    } else if (phase === 2) {
+      iconHtml = `
+        <div class="timeline-marker flex items-center gap-1.5 px-2 py-1 rounded-xl bg-amber-500 text-slate-900 border-2 border-white shadow-xl text-[10px] font-black cursor-pointer">
+          <span class="text-xs animate-spin">⚙️</span>
+          <span>Armement ${vehName}</span>
+        </div>
+      `;
+    } else if (phase === 3) {
+      iconHtml = `
+        <div class="timeline-marker flex items-center gap-1.5 px-2 py-1 rounded-xl bg-red-600 text-white border-2 border-red-300 ring-2 ring-red-400/50 shadow-xl text-[10px] font-black cursor-pointer">
+          <div class="beacon-flash"></div>
+          <span>🚨 ${vehName}</span>
+          <span class="text-[8px] bg-red-900 px-1 py-0.5 rounded font-bold uppercase">Urgence</span>
+        </div>
+      `;
+    } else if (phase === 4) {
+      iconHtml = `
+        <div class="timeline-marker flex items-center gap-1.5 px-2 py-1 rounded-xl bg-emerald-600 text-white border-2 border-white shadow-xl text-[10px] font-black cursor-pointer">
+          <span class="text-xs">🏥</span>
+          <span>${vehName} sur place</span>
+        </div>
+      `;
+    } else if (phase === 5) {
+      iconHtml = `
+        <div class="timeline-marker flex items-center gap-1.5 px-2 py-1 rounded-xl bg-sky-700 text-white border-2 border-sky-300 shadow-xl text-[10px] font-black cursor-pointer">
+          <span class="text-xs">🚑</span>
+          <span>${vehName} (Statut 6)</span>
+          <span class="text-[8px] bg-sky-900 px-1 py-0.5 rounded">Retour</span>
+        </div>
+      `;
+    } else {
+      iconHtml = `
+        <div class="timeline-marker flex items-center gap-1.5 px-2 py-1 rounded-xl bg-emerald-700 text-white border-2 border-white shadow-xl text-[10px] font-black">
+          <span class="text-xs">🏁</span>
+          <span>Disponible</span>
+        </div>
+      `;
+    }
+
+    return {
+      lat: Math.round(lat * 100000) / 100000,
+      lng: Math.round(lng * 100000) / 100000,
+      phase,
+      phaseCode,
+      status,
+      ratio: Math.round(ratio * 1000) / 1000,
+      progressPercent: Math.round(ratio * 100),
+      totalProgress: Math.round(totalProgress * 1000) / 1000,
+      milestones: { tAlerte, tArrBase, tDepBase, tArrMiss, tFinMiss, tRetBase },
+      coords: { pDom, pBase, pMiss },
+      iconType,
+      iconHtml,
+      isCompleted
+    };
+  },
+
+  // Clôture d'une mission d'urgence en fin de timeline (Phase 6)
+  cloturerMissionUrgence(mission, game = null) {
+    const g = game || window.game;
+    if (!mission || mission.status === 'completed' || mission.status === 'termine') return;
+
+    mission.status = 'completed';
+    mission.resolved_at = new Date().toISOString();
+    mission.progress = mission.durationSeconds || 1800;
+
+    // Libération du personnel
+    const vols = mission.assignedCrew?.volunteers || mission.registeredVolunteers || [];
+    vols.forEach(v => {
+      const vid = typeof v === 'object' ? v.id : v;
+      const vol = g?.volunteers?.find(x => x.id === vid);
+      if (vol) {
+        vol.status = 'dispo';
+      }
+    });
+
+    // Libération des véhicules
+    const vehs = mission.assignedCrew?.vehicles || [];
+    vehs.forEach(v => {
+      const vid = typeof v === 'object' ? v.id : v;
+      const veh = g?.vehicles?.find(x => x.id === vid);
+      if (veh) {
+        veh.status = 'dispo';
+        veh.fuel = Math.max(15, (veh.fuel || 90) - 8);
+      }
+    });
+
+    // Crédit de la trésorerie et récompense
+    const reward = Number(mission.rewardMoney || mission.reward || 350);
+    if (g && g.resources) {
+      g.resources.money = (g.resources.money || 0) + reward;
+      g.resources.reputation = Math.min(100, (g.resources.reputation || 50) + 3);
+      g.saveGame?.();
+      g.updateStatsUI?.();
+      g.renderMissions?.();
+      g.renderStations?.();
+      g.showToast?.('Mission Terminée 🏁', `Dispositif « ${mission.title} » clôturé avec succès après retour base. +${reward} € perçus !`, 'green');
+    }
+
+    // Retrait du marqueur Leaflet
+    if (mission._timelineMarker && g?.map) {
+      g.map.removeLayer(mission._timelineMarker);
+      delete mission._timelineMarker;
+    }
+
+    // Main courante radio de fin
+    const firstVeh = vehs[0] ? (typeof vehs[0] === 'object' ? vehs[0].name : 'VPSP') : 'VPSP';
+    this.addRadioLog(g, firstVeh, 1, `STATUT 1 : Mission « ${mission.title} » clôturée. Véhicule et équipage réarmés et disponibles.`);
+
+    // Synchronisation serveur Supabase
+    if (window.ProtecSupabase && g?.player?.id) {
+      window.ProtecSupabase.resolveMissionOnServer?.(mission.id, g.player.id, reward);
+    }
+  },
+
+  // Mise à jour continue des marqueurs Leaflet sur la carte pour toutes les missions en timeline
+  updateTimelineMissions(game) {
+    if (!game || !game.missions || !game.map || !window.L) return;
+    const now = Date.now();
+
+    const timelineMissions = game.missions.filter(m => m.status === 'ongoing' && (m.isTimelineUrgence || m.timeline_milestones || m.t_alerte));
+    timelineMissions.forEach(m => {
+      const pos = this.calculerPositionActuelle(m, now);
+      if (!pos) return;
+
+      if (pos.isCompleted) {
+        if (m._timelineMarker && game.map) {
+          game.map.removeLayer(m._timelineMarker);
+          delete m._timelineMarker;
+        }
+        return;
+      }
+
+      // Création ou mise à jour du marqueur Leaflet
+      if (!m._timelineMarker) {
+        const icon = L.divIcon({
+          className: 'timeline-leaflet-icon',
+          html: pos.iconHtml,
+          iconSize: [140, 32],
+          iconAnchor: [70, 16]
+        });
+
+        const marker = L.marker([pos.lat, pos.lng], { icon, zIndexOffset: 1500 }).addTo(game.map);
+        marker.on('click', () => {
+          if (game.openMissionDetails) game.openMissionDetails(m.id);
+        });
+        marker.bindTooltip(`
+          <div class="text-xs space-y-1">
+            <strong class="text-pc-blue block">${m.title}</strong>
+            <div class="text-[10px] text-slate-700 font-bold">${pos.status}</div>
+            <div class="text-[9px] text-slate-500">Étape ${pos.phase}/6 • Progression : ${pos.progressPercent}%</div>
+          </div>
+        `, { direction: 'top', offset: [0, -18], className: 'glass-panel text-xs p-2' });
+
+        m._timelineMarker = marker;
+      } else {
+        m._timelineMarker.setLatLng([pos.lat, pos.lng]);
+        const iconEl = m._timelineMarker.getElement();
+        if (iconEl) {
+          iconEl.innerHTML = pos.iconHtml;
+        }
+        m._timelineMarker.setTooltipContent(`
+          <div class="text-xs space-y-1">
+            <strong class="text-pc-blue block">${m.title}</strong>
+            <div class="text-[10px] text-slate-700 font-bold">${pos.status}</div>
+            <div class="text-[9px] text-slate-500">Étape ${pos.phase}/6 • Étape : ${pos.progressPercent}% • Total : ${Math.round(pos.totalProgress * 100)}%</div>
+          </div>
+        `);
+      }
+    });
   },
 
   // Récupération dynamique et détection des Hôpitaux de secteur
@@ -404,8 +756,10 @@ window.ProtecSystems = {
 
   // --- 3. MAIN COURANTE RADIO & STATUTS ---
   addRadioLog(game, indicatif, statusNum, message) {
-    const hh = String(game.clock.hour).padStart(2, '0');
-    const mm = String(game.clock.minute).padStart(2, '0');
+    if (!game) return;
+    const now = new Date();
+    const hh = String(game.clock?.hour ?? now.getHours()).padStart(2, '0');
+    const mm = String(game.clock?.minute ?? now.getMinutes()).padStart(2, '0');
     const item = {
       id: `rad-${Date.now()}-${Math.random().toString(36).substr(2, 3)}`,
       time: `${hh}:${mm}`,
@@ -417,7 +771,7 @@ window.ProtecSystems = {
     game.radioLogs.unshift(item);
     if (game.radioLogs.length > 50) game.radioLogs.pop();
 
-    const badge = document.getElementById('badge-radio-dock');
+    const badge = typeof document !== 'undefined' ? document.getElementById('badge-radio-dock') : null;
     if (badge) badge.textContent = game.radioLogs.length;
   },
 
@@ -1115,3 +1469,12 @@ window.ProtecSystems = {
     game.openModule('devis');
   }
 };
+
+window.calculerPositionActuelle = function(mission, tempsActuel) {
+  return window.ProtecSystems?.calculerPositionActuelle(mission, tempsActuel);
+};
+
+window.creerTimelineUrgence = function(game, mission, crewVolunteers, vehicle, baseStation) {
+  return window.ProtecConventions?.creerTimelineUrgence(game, mission, crewVolunteers, vehicle, baseStation);
+};
+

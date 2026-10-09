@@ -620,6 +620,248 @@ window.ProtecRNMSC = {
       'green'
     );
     window.ProtecConventions.renderModal(game);
+  },
+
+  // =========================================================================
+  // MOTEUR DE TIMELINE MULTI-ÉTAPES (URGENCES / ALERTES NON PLANIFIÉES)
+  // =========================================================================
+
+  // Calcul de la distance routière avec facteur de détour (Haversine * 1.25)
+  calculateRoadDistanceKm(p1, p2, detourFactor = 1.25) {
+    if (!p1 || !p2) return 1.5;
+    const lat1 = Number(p1.lat || 0);
+    const lng1 = Number(p1.lng || 0);
+    const lat2 = Number(p2.lat || 0);
+    const lng2 = Number(p2.lng || 0);
+    const R = 6371; // Rayon de la Terre en km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const directKm = R * c;
+    return Math.max(0.6, Math.round(directKm * detourFactor * 10) / 10);
+  },
+
+  // 1. Initialiser et enregistrer les 6 jalons temporels stricts pour une mission d'urgence
+  creerTimelineUrgence(game, mission, crewVolunteers = [], vehicle = null, baseStation = null) {
+    if (!mission) return null;
+    const base = baseStation || game?.stations?.find(s => s.id === vehicle?.stationId) || game?.stations?.[0] || { lat: 48.8566, lng: 2.3522 };
+
+    // 1. Identifier l'équipage engagé et le bénévole au plus long délai de ralliement
+    let crew = Array.isArray(crewVolunteers) && crewVolunteers.length > 0 ? [...crewVolunteers] : [];
+    if (crew.length === 0 && Array.isArray(mission.registeredVolunteers) && mission.registeredVolunteers.length > 0) {
+      crew = mission.registeredVolunteers.map(vid => (game?.volunteers || []).find(v => v.id === vid)).filter(Boolean);
+    }
+    if (crew.length === 0 && Array.isArray(mission.assignedCrew?.volunteers) && mission.assignedCrew.volunteers.length > 0) {
+      crew = mission.assignedCrew.volunteers.map(v => typeof v === 'object' ? v : (game?.volunteers || []).find(x => x.id === v)).filter(Boolean);
+    }
+
+    // S'assurer de la présence des adresses et temps de ralliement des secouristes
+    if (window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
+      crew.forEach(v => window.ProtecPersonnel.ensureVolunteerResidence(v, game));
+    }
+
+    let slowestVolunteer = null;
+    let maxRallyMinutes = 0;
+
+    crew.forEach(v => {
+      // Si déjà en garde postée à la caserne/antenne : temps de ralliement nul
+      const isAlreadyOnBase = v.isOnBase === true || v.status === 'garde_caserne' || v.status === 'sdis_caserne';
+      const rally = isAlreadyOnBase ? 0 : (v.temps_ralliement_minutes !== undefined ? Number(v.temps_ralliement_minutes) : 10);
+      if (!slowestVolunteer || rally > maxRallyMinutes) {
+        maxRallyMinutes = rally;
+        slowestVolunteer = v;
+      }
+    });
+
+    if (maxRallyMinutes <= 0) {
+      maxRallyMinutes = crew.length === 0 ? 8 : 4; // Délai incompressible minimum
+    }
+
+    // Coordonnées géographiques strictes
+    const coords_domicile_max = (slowestVolunteer && slowestVolunteer.coords_domicile) ? {
+      lat: Number(slowestVolunteer.coords_domicile.lat),
+      lng: Number(slowestVolunteer.coords_domicile.lng)
+    } : {
+      lat: Number(base.lat) + 0.022,
+      lng: Number(base.lng) + 0.018
+    };
+
+    const coords_base = {
+      lat: Number(base.lat || 48.8566),
+      lng: Number(base.lng || 2.3522)
+    };
+
+    const coords_mission = {
+      lat: Number(mission.lat || base.lat),
+      lng: Number(mission.lng || base.lng)
+    };
+
+    // Calculs routiers selon vitesses réalistes
+    // Base -> Mission : véhicule d'urgence avec gyrophare à ~65 km/h
+    const distBaseMissionKm = this.calculateRoadDistanceKm(coords_base, coords_mission, 1.25);
+    const dureeAllerSec = Math.max(50, Math.round((distBaseMissionKm / 65) * 3600));
+
+    // Mission -> Base : retour en allure normale à ~58 km/h
+    const dureeRetourSec = Math.max(50, Math.round((distBaseMissionKm / 58) * 3600));
+
+    // Durée sur place de l'intervention opérationnelle
+    const dureeInterventionSec = mission.durationSeconds || Math.max(600, Math.round((mission.durationHours ? mission.durationHours * 3600 : 1200)));
+
+    // Durée de ralliement du bénévole le plus lent (en secondes)
+    const dureeRalliementSec = Math.max(90, Math.round(maxRallyMinutes * 60));
+
+    // Horodatages stricts des 6 jalons (timestamptz)
+    const t_alerte_ms = Number(mission.startedAt || Date.now());
+    const t_arrivee_base_ms = t_alerte_ms + (dureeRalliementSec * 1000);
+    const t_depart_base_ms = t_arrivee_base_ms + (2 * 60 * 1000); // 2 minutes fixes d'embarquement / armement
+    const t_arrivee_mission_ms = t_depart_base_ms + (dureeAllerSec * 1000);
+    const t_fin_mission_ms = t_arrivee_mission_ms + (dureeInterventionSec * 1000);
+    const t_retour_base_ms = t_fin_mission_ms + (dureeRetourSec * 1000);
+
+    // Enregistrement des jalons ISO timestamptz
+    mission.t_alerte = new Date(t_alerte_ms).toISOString();
+    mission.t_arrivee_base = new Date(t_arrivee_base_ms).toISOString();
+    mission.t_depart_base = new Date(t_depart_base_ms).toISOString();
+    mission.t_arrivee_mission = new Date(t_arrivee_mission_ms).toISOString();
+    mission.t_fin_mission = new Date(t_fin_mission_ms).toISOString();
+    mission.t_retour_base = new Date(t_retour_base_ms).toISOString();
+
+    // Cache numérique pour calculs d'interpolation rapides
+    mission.timeline_milestones = {
+      t_alerte: t_alerte_ms,
+      t_arrivee_base: t_arrivee_base_ms,
+      t_depart_base: t_depart_base_ms,
+      t_arrivee_mission: t_arrivee_mission_ms,
+      t_fin_mission: t_fin_mission_ms,
+      t_retour_base: t_retour_base_ms
+    };
+
+    mission.coords_domicile_max = coords_domicile_max;
+    mission.coords_base = coords_base;
+    mission.coords_mission = coords_mission;
+    mission.dist_base_mission_km = distBaseMissionKm;
+
+    mission.slowest_volunteer = {
+      id: slowestVolunteer?.id || null,
+      name: slowestVolunteer?.name || 'Secouriste',
+      rallyMinutes: maxRallyMinutes
+    };
+
+    mission.isTimelineUrgence = true;
+    mission.timeline_phase = 1;
+    mission.endsAt = t_retour_base_ms;
+    mission.durationSeconds = Math.round((t_retour_base_ms - t_alerte_ms) / 1000);
+
+    // Synchronisation vers Supabase si en ligne
+    if (window.ProtecSupabase && game?.player?.id) {
+      window.ProtecSupabase.registerMissionOnServer(mission, game.player.id);
+    }
+
+    return {
+      t_alerte: mission.t_alerte,
+      t_arrivee_base: mission.t_arrivee_base,
+      t_depart_base: mission.t_depart_base,
+      t_arrivee_mission: mission.t_arrivee_mission,
+      t_fin_mission: mission.t_fin_mission,
+      t_retour_base: mission.t_retour_base,
+      coords_domicile_max,
+      coords_base,
+      coords_mission,
+      distBaseMissionKm,
+      maxRallyMinutes
+    };
+  },
+
+  // Alias pour initialisation de timeline
+  initMissionTimeline(game, mission, crewVolunteers, vehicle, baseStation) {
+    return this.creerTimelineUrgence(game, mission, crewVolunteers, vehicle, baseStation);
+  },
+
+  // Widget visuel réactif de la timeline pour l'affichage dans les détails de mission
+  renderTimelineWidget(mission, tempsActuel = null) {
+    if (!mission || !mission.timeline_milestones) return '';
+    const now = tempsActuel ? Number(tempsActuel) : Date.now();
+    const pos = window.ProtecSystems?.calculerPositionActuelle ? window.ProtecSystems.calculerPositionActuelle(mission, now) : { phase: 1, ratio: 0, status: 'En cours' };
+    const m = mission.timeline_milestones;
+
+    const formatHour = (epochMs) => {
+      const d = new Date(epochMs);
+      return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    };
+
+    const steps = [
+      { id: 1, label: 'Alerte & Ralliement', sub: `${mission.slowest_volunteer?.name || 'Secouriste'} (${mission.slowest_volunteer?.rallyMinutes || 10} min)`, time: formatHour(m.t_alerte), icon: '🏃' },
+      { id: 2, label: 'Arrivée Base', sub: 'Équipage réuni', time: formatHour(m.t_arrivee_base), icon: '🏢' },
+      { id: 3, label: 'Départ Urgent', sub: 'Armement 2 min (Gyro)', time: formatHour(m.t_depart_base), icon: '🚨' },
+      { id: 4, label: 'Sur les lieux', sub: 'Intervention soins', time: formatHour(m.t_arrivee_mission), icon: '🏥' },
+      { id: 5, label: 'Fin Intervention', sub: 'Bilan & départ retour', time: formatHour(m.t_fin_mission), icon: '📋' },
+      { id: 6, label: 'Retour Base', sub: 'Statut 1 disponible', time: formatHour(m.t_retour_base), icon: '🏁' }
+    ];
+
+    return `
+      <div class="p-4 rounded-3xl bg-slate-900 text-white shadow-xl space-y-3.5 border border-slate-800">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full ${pos.phase === 6 ? 'bg-emerald-500' : 'bg-red-500 animate-ping'}"></span>
+            <span class="text-xs font-black uppercase tracking-wider text-slate-200">Timeline Temporelle Opérationnelle</span>
+          </div>
+          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+            pos.phase === 1 ? 'bg-blue-500/20 text-blue-300 border border-blue-400/30' :
+            pos.phase === 2 ? 'bg-amber-500/20 text-amber-300 border border-amber-400/30' :
+            pos.phase === 3 ? 'bg-red-500/20 text-red-300 border border-red-400/30 animate-pulse' :
+            pos.phase === 4 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30' :
+            pos.phase === 5 ? 'bg-sky-500/20 text-sky-300 border border-sky-400/30' :
+            'bg-emerald-600 text-white'
+          }">
+            Étape ${pos.phase}/6 : ${pos.status}
+          </span>
+        </div>
+
+        <!-- Jauge d'avancement globale -->
+        <div class="space-y-1">
+          <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-500 via-orange-500 to-emerald-500 h-full rounded-full transition-all duration-500" style="width: ${Math.round((pos.totalProgress || 0) * 100)}%"></div>
+          </div>
+          <div class="flex justify-between text-[10px] font-mono text-slate-400">
+            <span>Déclenchement : ${formatHour(m.t_alerte)}</span>
+            <span>Clôture estimée : ${formatHour(m.t_retour_base)}</span>
+          </div>
+        </div>
+
+        <!-- Grille des 6 jalons -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1 text-[10px]">
+          ${steps.map(s => {
+            const isCurrent = pos.phase === s.id;
+            const isDone = pos.phase > s.id;
+            return `
+              <div class="p-2.5 rounded-2xl border transition-all ${
+                isCurrent ? 'bg-pc-blue/30 border-pc-orange ring-1 ring-orange-400 shadow-md text-white' :
+                isDone ? 'bg-emerald-950/40 border-emerald-700/60 text-emerald-200' :
+                'bg-slate-800/60 border-slate-700 text-slate-400'
+              }">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs">${s.icon}</span>
+                  <span class="font-mono text-[9px] ${isCurrent ? 'text-orange-300 font-bold' : isDone ? 'text-emerald-400 font-semibold' : 'text-slate-400'}">${s.time}</span>
+                </div>
+                <div class="font-extrabold line-clamp-1 ${isCurrent ? 'text-white' : ''}">${s.label}</div>
+                <div class="text-[9px] text-slate-400 line-clamp-1">${s.sub}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
   }
 };
+
+// Export direct des méthodes de timeline sur window.ProtecConventions
+if (window.ProtecConventions) {
+  window.ProtecConventions.calculateRoadDistanceKm = window.ProtecRNMSC.calculateRoadDistanceKm.bind(window.ProtecRNMSC);
+  window.ProtecConventions.creerTimelineUrgence = window.ProtecRNMSC.creerTimelineUrgence.bind(window.ProtecRNMSC);
+  window.ProtecConventions.initMissionTimeline = window.ProtecRNMSC.initMissionTimeline.bind(window.ProtecRNMSC);
+  window.ProtecConventions.renderTimelineWidget = window.ProtecRNMSC.renderTimelineWidget.bind(window.ProtecRNMSC);
+}
 

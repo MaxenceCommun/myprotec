@@ -194,6 +194,9 @@ window.ProtecPersonnel = {
           if (v.currentVacation === undefined) v.currentVacation = null;
           if (!v.vacationHistory) v.vacationHistory = [];
         }
+
+        // Bassin d'attractivité territoriale, adresse et temps de ralliement
+        this.ensureVolunteerResidence(v, game);
       });
     }
   },
@@ -1519,6 +1522,11 @@ window.ProtecPersonnel = {
       interviewReport: null
     };
 
+    // Attribution réaliste de l'adresse et ralliement selon le bassin territorial
+    const baseSt = (game.stations && game.stations[0]) || null;
+    const geo = this.generateVolunteerResidence(game, baseSt, { age: pick.age, skills: newCand.skills });
+    Object.assign(newCand, geo);
+
     offer.applicantsCount = (offer.applicantsCount || 0) + 1;
     game.candidatures.unshift(newCand);
 
@@ -1623,6 +1631,11 @@ window.ProtecPersonnel = {
       interviewReport: null
     };
 
+    // Attribution réaliste de l'adresse et ralliement selon le bassin territorial
+    const baseSt = (game.stations && game.stations[0]) || null;
+    const geo = this.generateVolunteerResidence(game, baseSt, { age: pick.age, skills: newCand.skills });
+    Object.assign(newCand, geo);
+
     offer.applicantsCount = (offer.applicantsCount || 0) + 1;
     game.candidatures.unshift(newCand);
 
@@ -1704,6 +1717,12 @@ window.ProtecPersonnel = {
             <p class="text-xs text-slate-500 font-semibold">
               ${isSC ? `Mission visée : <strong>${cand.jobOfferTitle}</strong> (Indemnité antenne 115 €/mois)` : (isSalarie ? `Poste visé : <strong>${cand.jobOfferTitle}</strong> (${cand.monthlySalary} €/mois)` : `Activité civile : <strong>${cand.job || 'Étudiant'}</strong>`)}
             </p>
+            ${cand.adresse ? `
+              <div class="p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-700 flex flex-wrap items-center justify-between gap-1 mt-1">
+                <span>🏠 Domicile : <strong>${cand.adresse}</strong></span>
+                <span class="text-pc-blue font-bold">⏱️ Ralliement : ${cand.temps_ralliement_minutes || 10} min (${cand.distance_base_km || 3} km en ${cand.mode_transport === 'voiture' ? '🚗 Voiture' : (cand.mode_transport === 'moto' ? '🏍️ Moto' : '🚲 Vélo/Transports')})</span>
+              </div>
+            ` : ''}
             ${cand.background ? `<p class="text-[11px] text-slate-600 italic">Parcours : ${cand.background}</p>` : ''}
           </div>
         </div>
@@ -1942,11 +1961,21 @@ window.ProtecPersonnel = {
         dispoType: 'service_civique',
         dispoJours: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
         skills: cand.skills || ['pse1', 'permis_b'],
+        commune: cand.commune,
+        code_postal: cand.code_postal,
+        adresse: cand.adresse,
+        coords_domicile: cand.coords_domicile,
+        distance_base_km: cand.distance_base_km,
+        temps_ralliement_minutes: cand.temps_ralliement_minutes,
+        mode_transport: cand.mode_transport,
+        permis_b: cand.permis_b,
+        permis_moto: cand.permis_moto,
         missionsCount: 0,
         consecutiveMissions: 0,
         isBurnout: false
       };
 
+      this.ensureVolunteerResidence(newVol, game);
       game.volunteers.push(newVol);
       game.candidatures = game.candidatures.filter(c => c.id !== candId);
 
@@ -1983,6 +2012,16 @@ window.ProtecPersonnel = {
         avatar: cand.avatar || '👔',
         dispoType: 'salarie_permanent',
         dispoJours: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+        skills: cand.skills || ['CE', 'PSE2', 'permis_b'],
+        commune: cand.commune,
+        code_postal: cand.code_postal,
+        adresse: cand.adresse,
+        coords_domicile: cand.coords_domicile,
+        distance_base_km: cand.distance_base_km,
+        temps_ralliement_minutes: cand.temps_ralliement_minutes,
+        mode_transport: cand.mode_transport,
+        permis_b: cand.permis_b,
+        permis_moto: cand.permis_moto,
         contractMonthlyHours: 151,
         monthlyHoursWorked: 0,
         monthlyOvertimeHours: 0,
@@ -1992,6 +2031,7 @@ window.ProtecPersonnel = {
         vacationHistory: []
       };
 
+      this.ensureVolunteerResidence(newSalarie, game);
       game.volunteers.push(newSalarie);
       game.candidatures = game.candidatures.filter(c => c.id !== candId);
 
@@ -2016,5 +2056,267 @@ window.ProtecPersonnel = {
     game.saveGame();
     game.updateStatsUI();
     game.openModule('recrutement');
+  },
+
+  // ==============================================================================
+  // SYSTÈME DE RECRUTEMENT TERRITORIAL COHÉRENT (BASSIN D'ATTRACTIVITÉ & GÉOGRAPHIE)
+  // ==============================================================================
+
+  // Répertoire officiel de noms de voies typiquement françaises pour adresses crédibles en zone habitée
+  VOIES_FRANCAISES: [
+    'rue de la République', 'avenue de la Gare', 'rue Pasteur', 'boulevard Victor Hugo',
+    'rue Jean Jaurès', 'avenue du Général de Gaulle', 'rue de Verdun', 'rue Saint-Jean',
+    'rue de la Paix', 'avenue Jean Moulin', 'rue Gambetta', 'rue des Fleurs',
+    'place de la Mairie', 'rue Anatole France', 'rue Henri Barbusse', 'avenue de la Liberté',
+    'rue du Maréchal Foch', 'rue Voltaire', 'rue Émile Zola', 'rue de Lorraine',
+    'rue de Bretagne', 'rue Paul Bert', 'place de la République', 'rue des Écoles',
+    'rue Georges Clemenceau', 'rue Saint-Michel', 'avenue de France', 'rue du Commerce',
+    'rue des Lilas', 'rue des Tilleuls', 'boulevard Gambetta', 'rue de l’Église'
+  ],
+
+  // 1. Récupère toutes les antennes actives situées dans le même département
+  getAllActiveAntennasInDepartment(game, deptCode) {
+    if (!deptCode && game.stations && game.stations[0]) {
+      deptCode = game.stations[0].departmentCode || game.currentDepartmentCode || '54';
+    }
+    const cleanDept = String(deptCode || '54').trim().toUpperCase();
+
+    const antennasMap = new Map();
+
+    // A. Antennes locales du joueur
+    (game.stations || []).forEach(st => {
+      const stDept = String(st.departmentCode || game.currentDepartmentCode || '54').trim().toUpperCase();
+      if (stDept === cleanDept && st.lat && st.lng) {
+        antennasMap.set(st.id, {
+          id: st.id,
+          name: st.name || 'Mon Antenne',
+          departmentCode: stDept,
+          lat: st.lat,
+          lng: st.lng,
+          isPlayer: true
+        });
+      }
+    });
+
+    // B. Antennes alliées ou rivales des autres joueurs
+    (game.allianceStations || []).forEach(st => {
+      const stDept = String(st.department_code || st.departmentCode || '').trim().toUpperCase();
+      // Si le code département n'est pas renseigné directement, tenter de déduire via ProtecDepartements
+      let matchDept = (stDept === cleanDept);
+      if (!stDept && window.ProtecDepartements && st.lat && st.lng) {
+        matchDept = window.ProtecDepartements.isCoordinateInside(cleanDept, st.lat, st.lng);
+      }
+
+      if (matchDept && st.lat && st.lng && !antennasMap.has(st.id)) {
+        antennasMap.set(st.id, {
+          id: st.id,
+          name: st.station_name || st.name || 'Antenne Alliée',
+          departmentCode: cleanDept,
+          lat: st.lat,
+          lng: st.lng,
+          isPlayer: false
+        });
+      }
+    });
+
+    return Array.from(antennasMap.values());
+  },
+
+  // 2. Sélectionne les communes éligibles selon les règles du bassin d'attractivité :
+  // - Monopole départemental : si seule antenne du département -> 100% des communes du département éligibles
+  // - Proximité exclusive (Voronoi) : la commune doit être plus proche de l'antenne que de toute autre antenne rivale
+  getCatchmentCommunes(game, targetStation) {
+    const station = targetStation || (game.stations && game.stations[0]) || { lat: 48.6921, lng: 6.1844, departmentCode: '54' };
+    const deptCode = String(station.departmentCode || game.currentDepartmentCode || '54').trim().toUpperCase();
+
+    // Récupérer le catalogue des communes du département
+    let communes = [];
+    if (window.ProtecDepartements && typeof window.ProtecDepartements.getCommunesForDepartment === 'function') {
+      communes = window.ProtecDepartements.getCommunesForDepartment(deptCode);
+    }
+    if (!communes || communes.length === 0) {
+      // Fallback sécurisé
+      communes = [{
+        nom: station.city || 'Centre-Ville',
+        cp: `${deptCode.padStart(2, '0')}000`,
+        lat: station.lat || 48.6921,
+        lng: station.lng || 6.1844
+      }];
+    }
+
+    // Récupérer toutes les antennes actives du département
+    const allAntennas = this.getAllActiveAntennasInDepartment(game, deptCode);
+    const rivalAntennas = allAntennas.filter(a => a.id !== station.id);
+
+    // RÈGLE 1 : MONOPOLE DÉPARTEMENTAL
+    // Si le joueur possède la seule antenne du département, toutes les communes sont éligibles
+    if (rivalAntennas.length === 0) {
+      return communes;
+    }
+
+    // RÈGLE 2 : PROXIMITÉ EXCLUSIVE (VORONOI INTER-ANTENNES)
+    // Une commune est éligible si sa distance à l'antenne est STRICTEMENT inférieure à sa distance à toute antenne rivale
+    const eligibleCommunes = communes.filter(commune => {
+      const distToPlayer = window.ProtecDepartements.calculateDistance(commune.lat, commune.lng, station.lat, station.lng);
+      
+      for (const rival of rivalAntennas) {
+        const distToRival = window.ProtecDepartements.calculateDistance(commune.lat, commune.lng, rival.lat, rival.lng);
+        if (distToPlayer >= distToRival) {
+          return false; // Une antenne rivale est plus proche ou équidistante
+        }
+      }
+      return true;
+    });
+
+    // Si aucune commune n'est strictement plus proche (cas de frontières très proches), conserver au minimum la commune la plus proche
+    if (eligibleCommunes.length === 0) {
+      let nearest = communes[0];
+      let minDist = 999999;
+      communes.forEach(c => {
+        const d = window.ProtecDepartements.calculateDistance(c.lat, c.lng, station.lat, station.lng);
+        if (d < minDist) {
+          minDist = d;
+          nearest = c;
+        }
+      });
+      return [nearest];
+    }
+
+    return eligibleCommunes;
+  },
+
+  // 3. Génère une adresse résidentielle réaliste en zone habitée avec temps de ralliement et permis
+  generateVolunteerResidence(game, station, volunteerProfile = {}) {
+    const baseStation = station || (game.stations && game.stations[0]) || { lat: 48.6921, lng: 6.1844, departmentCode: '54', city: 'Nancy' };
+    
+    // 1. Piocher parmi les communes éligibles du bassin d'attractivité
+    const eligibleCommunes = this.getCatchmentCommunes(game, baseStation);
+    const commune = eligibleCommunes[Math.floor(Math.random() * eligibleCommunes.length)] || {
+      nom: baseStation.city || 'Centre-Ville',
+      cp: `${(baseStation.departmentCode || '54').padStart(2, '0')}000`,
+      lat: baseStation.lat,
+      lng: baseStation.lng
+    };
+
+    // 2. Décalage modéré autour du centre-ville/mairie (100 à 400 mètres pour rester en zone habitée)
+    const angle = Math.random() * 2 * Math.PI;
+    const distanceMeters = 100 + Math.random() * 300; // 100m à 400m
+    const earthRadius = 6371000; // Mètres
+    const deltaLat = (distanceMeters * Math.cos(angle)) / earthRadius * (180 / Math.PI);
+    const deltaLng = (distanceMeters * Math.sin(angle)) / (earthRadius * Math.cos(commune.lat * Math.PI / 180)) * (180 / Math.PI);
+
+    const coordsDomicile = {
+      lat: parseFloat((commune.lat + deltaLat).toFixed(5)),
+      lng: parseFloat((commune.lng + deltaLng).toFixed(5))
+    };
+
+    // 3. Composition d'une adresse crédible
+    const numVoie = Math.floor(Math.random() * 118) + 1;
+    const suffixe = Math.random() < 0.08 ? ' bis' : '';
+    const voie = this.VOIES_FRANCAISES[Math.floor(Math.random() * this.VOIES_FRANCAISES.length)];
+    const adresseComplete = `${numVoie}${suffixe} ${voie}, ${commune.cp} ${commune.nom}`;
+
+    // 4. Détermination des permis de conduire
+    const age = volunteerProfile.age || 25;
+    const hasExistingPermisB = volunteerProfile.skills?.includes('permis_b') || volunteerProfile.skills?.includes('permis_vpsp');
+    const hasPermisB = hasExistingPermisB !== undefined ? !!hasExistingPermisB : (age >= 24 ? Math.random() < 0.88 : (age >= 20 ? Math.random() < 0.76 : Math.random() < 0.45));
+    const hasPermisMoto = volunteerProfile.skills?.includes('permis_moto') ? true : (Math.random() < 0.16);
+
+    // 5. Mode de locomotion
+    let modeTransport = 'velo_transports';
+    if (hasPermisB) {
+      modeTransport = 'voiture';
+    } else if (hasPermisMoto) {
+      modeTransport = 'moto';
+    }
+
+    // 6. Calcul de la distance réelle Haversine vers la base de l'antenne
+    const distanceKm = window.ProtecDepartements
+      ? window.ProtecDepartements.calculateDistance(coordsDomicile.lat, coordsDomicile.lng, baseStation.lat, baseStation.lng)
+      : 3.5;
+
+    // 7. Calcul du temps de ralliement (Tralliement = temps départ + trajet)
+    // Vitesses moyennes urbaines/périurbaines réalistes :
+    // Voiture : ~38 km/h + 4 min départ/garage
+    // Moto : ~46 km/h + 3 min équipement casque/gants
+    // Vélo/Transports : ~16 km/h + 3 min départ
+    let speedKmh = 38;
+    let prepMinutes = 4;
+
+    if (modeTransport === 'moto') {
+      speedKmh = 46;
+      prepMinutes = 3;
+    } else if (modeTransport === 'velo_transports') {
+      speedKmh = 16;
+      prepMinutes = 3;
+    }
+
+    const transitMinutes = Math.round((distanceKm / speedKmh) * 60);
+    const tempsRalliementMinutes = Math.max(4, prepMinutes + transitMinutes);
+
+    return {
+      commune: commune.nom,
+      code_postal: commune.cp,
+      adresse: adresseComplete,
+      coords_domicile: coordsDomicile,
+      distance_base_km: distanceKm,
+      temps_ralliement_minutes: tempsRalliementMinutes,
+      mode_transport: modeTransport,
+      permis_b: hasPermisB,
+      permis_moto: hasPermisMoto
+    };
+  },
+
+  // 4. Vérification de l'éligibilité d'un bénévole pour une urgence réflexe non anticipée
+  // Règle : Grisé / indisponible si Tralliement > délai limite d'armement (ex: 20 min), sauf si déjà posté sur base
+  isVolunteerEligibleForUrgentMission(volunteer, maxRallyMinutes = 20) {
+    if (!volunteer) return { eligible: false, rallyMinutes: 99, reason: 'Inconnu' };
+
+    // Si déjà posté sur base ou en caserne : départ instantané 0 min !
+    if (volunteer.status === 'sdis_caserne' || volunteer.status === 'poste' || volunteer.onBase) {
+      return { eligible: true, rallyMinutes: 0, isOnBase: true };
+    }
+
+    const tRally = volunteer.temps_ralliement_minutes !== undefined ? volunteer.temps_ralliement_minutes : 12;
+
+    if (tRally <= maxRallyMinutes) {
+      return { eligible: true, rallyMinutes: tRally, isOnBase: false };
+    }
+
+    return {
+      eligible: false,
+      rallyMinutes: tRally,
+      isOnBase: false,
+      reason: `Domicile trop éloigné (${tRally} min > ${maxRallyMinutes} min max réflexe)`
+    };
+  },
+
+  // 5. Initialisation / Migration des données territoriales pour un bénévole existant
+  ensureVolunteerResidence(volunteer, game) {
+    if (!volunteer) return;
+    if (volunteer.commune && volunteer.temps_ralliement_minutes && volunteer.adresse) return;
+
+    const station = (game.stations || []).find(s => s.id === volunteer.stationId) || game.stations?.[0];
+    const geo = this.generateVolunteerResidence(game, station, volunteer);
+
+    volunteer.commune = volunteer.commune || geo.commune;
+    volunteer.code_postal = volunteer.code_postal || geo.code_postal;
+    volunteer.adresse = volunteer.adresse || geo.adresse;
+    volunteer.coords_domicile = volunteer.coords_domicile || geo.coords_domicile;
+    volunteer.distance_base_km = volunteer.distance_base_km !== undefined ? volunteer.distance_base_km : geo.distance_base_km;
+    volunteer.temps_ralliement_minutes = volunteer.temps_ralliement_minutes !== undefined ? volunteer.temps_ralliement_minutes : geo.temps_ralliement_minutes;
+    volunteer.mode_transport = volunteer.mode_transport || geo.mode_transport;
+    volunteer.permis_b = volunteer.permis_b !== undefined ? volunteer.permis_b : geo.permis_b;
+    volunteer.permis_moto = volunteer.permis_moto !== undefined ? volunteer.permis_moto : geo.permis_moto;
+
+    // Synchroniser avec la liste des compétences si permis
+    volunteer.skills = volunteer.skills || [];
+    if (volunteer.permis_b && !volunteer.skills.includes('permis_b')) {
+      volunteer.skills.push('permis_b');
+    }
+    if (volunteer.permis_moto && !volunteer.skills.includes('permis_moto')) {
+      volunteer.skills.push('permis_moto');
+    }
   }
 };
+
