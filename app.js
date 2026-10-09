@@ -632,7 +632,10 @@ class ProtecGame {
     this.ensureMissionAddresses();
     this.disperseOverlappingMissions();
     this.renderMissions();
-    this.ensureExtraDeptRenforts();
+    
+    // Purge de tout faux renfort SUAP Creuse ou mock issu de l'ancien système d'injection
+    this.renforts = (this.renforts || []).filter(r => r && r.id && !r.id.startsWith('renf-extra-suap') && r.id !== 'renf-extra-suap-23' && (r.isExtraDept ? r.isNationalAdmin : true));
+
     this.updateStatsUI();
     this.updateDockAndFiltersVisibility();
     this.startSimulationClock();
@@ -1885,7 +1888,12 @@ class ProtecGame {
 
     const pick = eventsList[Math.floor(Math.random() * eventsList.length)];
     const missionCoords = this.calculateRealisticMissionLocation(base, 'dps');
-    const daysAhead = 1 + Math.floor(Math.random() * 4);
+
+    // Réalisme IRL : La majorité des événements sont sollicités plusieurs semaines/mois à l'avance (2 à 10 semaines),
+    // et environ 20% sont des urgences de dernière minute (2 à 5 jours : annulation d'une autre AASC ou orga tardive).
+    const isLastMinute = Math.random() < 0.20;
+    const daysAhead = isLastMinute ? (2 + Math.floor(Math.random() * 4)) : (14 + Math.floor(Math.random() * 56));
+
     const startHour = (pick.name.includes('Nocturne') || pick.name.includes('Concert') || pick.name.includes('Gala') || pick.name.includes('Étudiants')) ? 19 : 14;
     const endHour = (startHour + pick.dur) % 24;
     const eventDate = this.createDateOffset(daysAhead, startHour);
@@ -1911,7 +1919,10 @@ class ProtecGame {
       hiddenRequiredSkills: pick.hiddenSkills || pick.ranks || [],
       consumableCost: pick.matCost || 30,
       status: 'pending',
-      secondsLeft: 6 * 3600, // 6 heures pour répondre avant expiration face aux autres associations
+      isLastMinute: isLastMinute,
+      daysAhead: daysAhead,
+      urgencyReason: isLastMinute ? 'Annulation de dernière minute d’une autre association agréée' : 'Planification anticipée d’événement',
+      secondsLeft: isLastMinute ? (3 * 3600) : (6 * 3600), // Délai pour répondre
       address: this.generateRealisticStreetAddress(base?.city || 'Paris', missionCoords.lat, missionCoords.lng),
       isSector: false
     };
@@ -2035,6 +2046,217 @@ class ProtecGame {
     this.openModule('devis', true);
   }
 
+  // Évaluation réaliste de la disponibilité d'un bénévole pour une date donnée (IRL)
+  // RÈGLE : Si le jour de l'événement correspond à ses disponibilités usuelles (ex: Samedi) -> ~80% de chance.
+  // Si le jour ne correspond pas (ex: Dimanche alors que dispo Mardi/Samedi) -> 10% à 20% de chance.
+  // Délais de réponse asynchrones étalés dans le temps (motivés répondent vite, d'autres prennent des heures).
+  evaluateVolunteerAvailability(volunteer, eventDate, missionOrDevis = null) {
+    let eventDayName = eventDate?.dayName;
+    if (!eventDayName && eventDate) {
+      const d = new Date(eventDate.year || this.clock.year, eventDate.month ?? this.clock.month, eventDate.day || this.clock.day);
+      eventDayName = this.clock.daysNames[d.getDay()];
+    }
+    if (!eventDayName) eventDayName = 'Samedi';
+
+    const volDays = volunteer.dispoJours || ['Samedi', 'Dimanche'];
+    const isMatchingDay = volDays.some(d => d.toLowerCase() === eventDayName.toLowerCase());
+
+    let proba = 0;
+    if (isMatchingDay) {
+      // Jour habituel de disponibilité : ~80% de chance
+      proba = 0.80;
+      if (volunteer.motivation) proba += (volunteer.motivation - 75) * 0.15 / 100;
+      if (volunteer.energy && volunteer.energy < 40) proba -= 0.18;
+      if (volunteer.trait === 'devoue') proba += 0.10;
+      if (volunteer.trait === 'casanier') proba -= 0.10;
+      if (volunteer.contractType === 'salarie' || volunteer.contractType === 'salarie_asso') proba += 0.12;
+      proba = Math.max(0.65, Math.min(0.95, proba));
+    } else {
+      // Jour non habituel : seulement 10% à 20% de chance d'être libre
+      proba = 0.15;
+      if (volunteer.motivation && volunteer.motivation >= 85) proba += 0.05;
+      if (volunteer.trait === 'devoue') proba += 0.05;
+      if (volunteer.energy && volunteer.energy < 40) proba -= 0.05;
+      proba = Math.max(0.08, Math.min(0.22, proba));
+    }
+
+    const isAvailable = Math.random() <= proba;
+
+    // Délais de réponse étalés et réalistes (secondes simulées, répercutées avec l'horloge)
+    let delaySec = 0;
+    if (isAvailable && (volunteer.motivation || 70) >= 80) {
+      delaySec = 6 + Math.random() * 16; // 6 à 22 secondes (très motivé et disponible)
+    } else if (isAvailable) {
+      delaySec = 16 + Math.random() * 32; // 16 à 48 secondes
+    } else {
+      delaySec = 22 + Math.random() * 55; // 22 à 77 secondes (délai de réflexion ou empêchement)
+    }
+
+    let rejectReason = '';
+    if (!isAvailable) {
+      const matchingReasons = ['Imprévu familial', 'Garde d’enfants', 'Besoin de repos', 'Rendez-vous personnel', 'Week-end chargé'];
+      const nonMatchingReasons = ['Jour non disponible (temps de travail)', 'Jour non disponible (cours/études)', 'Contrainte professionnelle', 'Indisponible ce jour'];
+      const list = isMatchingDay ? matchingReasons : nonMatchingReasons;
+      rejectReason = list[Math.floor(Math.random() * list.length)];
+    }
+
+    return {
+      isMatchingDay,
+      eventDayName,
+      probability: Math.round(proba * 100),
+      isAvailable,
+      delaySeconds: Math.round(delaySec),
+      delayMs: Math.round(delaySec * 1000 / Math.max(1, this.speed || 1)),
+      rejectReason
+    };
+  }
+
+  // Refuser une demande de devis organisateur (retrait propre du planning sans pénalité)
+  refuseDevis(devisId) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+
+    devis.status = 'declined';
+    devis.declinedAt = Date.now();
+    this.showToast('Devis Décliné ❌', `Vous avez refusé la prise en charge de « ${devis.eventName} ». L'organisateur a été notifié de votre indisponibilité.`, 'slate');
+
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.recordNotification({
+        title: '❌ Devis Décliné',
+        message: `Vous avez décliné la demande pour « ${devis.eventName} ». Le créneau a été libéré sur votre planning opérationnel.`,
+        category: 'dps',
+        level: 'info'
+      });
+    }
+
+    this.saveGame();
+    this.updateStatsUI();
+    if (this.currentModalKey === 'devis') {
+      this.openModule('devis', true);
+    } else if (this.currentModalKey === 'planning') {
+      this.openModule('planning', true);
+    }
+  }
+
+  // Mettre un devis en Prévisionnel (Option réservée : le joueur bloque la date et sonde ses bénévoles avant de signer)
+  setDevisPrevisionnel(devisId) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+
+    devis.status = 'previsionnel';
+    devis.previsionnelStartedAt = Date.now();
+    devis.previsionnelVolunteers = devis.previsionnelVolunteers || [];
+    devis.previsionnelResponses = devis.previsionnelResponses || {};
+    devis.secondsLeft = 12 * 3600; // L'option bloque la date pour 12 heures in-game
+
+    this.showToast('Option Prévisionnelle Posée ⏳', `« ${devis.eventName} » est mis en prévisionnel. La date est réservée à l'agenda pendant que vous vérifiez la disponibilité de vos bénévoles !`, 'blue');
+
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.recordNotification({
+        title: '⏳ DPS en Prévisionnel',
+        message: `« ${devis.eventName} » placé en prévisionnel. Consultez vos bénévoles avant de confirmer formellement la convention avec l'organisateur.`,
+        category: 'dps',
+        level: 'info'
+      });
+    }
+
+    this.saveGame();
+    this.updateStatsUI();
+    if (this.currentModalKey === 'devis') {
+      this.openModule('devis', true);
+    } else if (this.currentModalKey === 'planning') {
+      this.openModule('planning', true);
+    }
+  }
+
+  // Lancer le sondage de disponibilité auprès des bénévoles pour un devis en prévisionnel
+  sonderDisponibilitesPrevisionnel(devisId) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+
+    if (devis.sondageEnCours) {
+      this.showToast('Sondage déjà actif', 'Les réponses des bénévoles sont en cours de réception...', 'blue');
+      return;
+    }
+
+    const availableVols = (this.volunteers || []).filter(v => !v.isBurnout && v.status !== 'mission');
+    if (availableVols.length === 0) {
+      this.showToast('Aucun bénévole disponible', 'Tous vos bénévoles sont indisponibles ou en repos.', 'orange');
+      return;
+    }
+
+    devis.sondageEnCours = true;
+    devis.previsionnelResponses = devis.previsionnelResponses || {};
+
+    const dateStr = this.formatFullDate(devis.eventDate);
+    this.showToast('Sondage d’Équipe Lancé 📱', `Sondage envoyé à ${availableVols.length} bénévoles pour le ${dateStr} (« ${devis.eventName} »). Réponses progressives...`, 'blue');
+
+    let pendingCount = availableVols.length;
+
+    availableVols.forEach(vol => {
+      const evalResult = this.evaluateVolunteerAvailability(vol, devis.eventDate, devis);
+      devis.previsionnelResponses[vol.id] = {
+        volunteerId: vol.id,
+        volunteerName: vol.name,
+        rank: vol.rank,
+        status: 'pending',
+        matchingDay: evalResult.isMatchingDay,
+        probability: evalResult.probability
+      };
+
+      setTimeout(() => {
+        pendingCount--;
+        if (pendingCount <= 0) {
+          devis.sondageEnCours = false;
+        }
+
+        const curDevis = this.devis.find(d => d.id === devisId);
+        if (!curDevis || curDevis.status !== 'previsionnel') return;
+
+        if (evalResult.isAvailable) {
+          curDevis.previsionnelResponses[vol.id] = {
+            volunteerId: vol.id,
+            volunteerName: vol.name,
+            rank: vol.rank,
+            status: 'dispo',
+            matchingDay: evalResult.isMatchingDay
+          };
+          if (!curDevis.previsionnelVolunteers) curDevis.previsionnelVolunteers = [];
+          if (!curDevis.previsionnelVolunteers.includes(vol.id)) {
+            curDevis.previsionnelVolunteers.push(vol.id);
+          }
+          this.showToast('📱 Dispo Confirmée (Prévi)', `${vol.name} (${vol.rank}) : « Présent ! Je me rends disponible pour ce poste. »`, 'green');
+        } else {
+          curDevis.previsionnelResponses[vol.id] = {
+            volunteerId: vol.id,
+            volunteerName: vol.name,
+            rank: vol.rank,
+            status: 'indispo',
+            reason: evalResult.rejectReason,
+            matchingDay: evalResult.isMatchingDay
+          };
+          if (Math.random() < 0.35) {
+            this.showToast('📱 Indisponible (Prévi)', `${vol.name} : « Malheureusement pas disponible (${evalResult.rejectReason}) »`, 'slate');
+          }
+        }
+
+        this.saveGame();
+        this.updateStatsUI();
+        if (this.currentModalKey === 'devis') {
+          this.openModule('devis', true);
+        } else if (this.currentModalKey === 'planning') {
+          this.openModule('planning', true);
+        }
+      }, evalResult.delayMs);
+    });
+
+    this.saveGame();
+    this.updateStatsUI();
+    if (this.currentModalKey === 'devis') {
+      this.openModule('devis', true);
+    }
+  }
+
   previewDevisPrice(devisId, enteredValue) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
@@ -2045,6 +2267,7 @@ class ProtecGame {
     const dynamicBareme = this.calculateDynamicBareme(devis);
     const bareme = dynamicBareme.totalBareme;
     const ratio = bareme > 0 ? (price / bareme) : 1;
+    const isUrgent = devis.isLastMinute || (devis.daysAhead !== undefined && devis.daysAhead <= 5);
 
     const previewEl = document.getElementById(`devis-feedback-${devisId}`);
     if (!previewEl) return;
@@ -2053,22 +2276,44 @@ class ProtecGame {
     let text = '';
     let acceptRate = '';
 
-    if (ratio <= 0.85) {
-      badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
-      text = 'Tarif très compétitif';
-      acceptRate = 'Très forte chance de remporter face à la concurrence (~85%)';
-    } else if (ratio <= 1.05) {
-      badgeClass = 'bg-blue-100 text-pc-blue border-blue-200';
-      text = 'Tarif conforme au barème';
-      acceptRate = 'Concurrence active (associations concurrentes agréées) : gain modéré (~30-40% en début de jeu)';
-    } else if (ratio <= 1.25) {
-      badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
-      text = 'Tarif supérieur au barème';
-      acceptRate = 'Risque fort de perdre face aux offres concurrentes (~20%)';
+    // TOLÉRANCE RÉALISTE : Plus le délai est court (urgence 2-5 jours), plus l'organisateur tolère des prix élevés !
+    if (isUrgent) {
+      if (ratio <= 1.15) {
+        badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+        text = '🚨 Tarif d’Urgence Très Compétitif';
+        acceptRate = 'Acceptation immédiate garantie face à l’urgence de l’organisateur (~90%)';
+      } else if (ratio <= 1.40) {
+        badgeClass = 'bg-blue-100 text-pc-blue border-blue-200';
+        text = '🚨 Majoration d’Urgence Tolérée';
+        acceptRate = 'L’organisateur accepte le surcoût lié au préavis très court (~70-80%)';
+      } else if (ratio <= 1.60) {
+        badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
+        text = 'Tarif très élevé (limite tolérance urgence)';
+        acceptRate = 'Risque que l’organisateur annule ou sollicite une autre AASC (~40%)';
+      } else {
+        badgeClass = 'bg-rose-100 text-rose-800 border-rose-300';
+        text = 'Tarif abusif malgré l’urgence';
+        acceptRate = 'Rejet très probable par l’organisateur (<15%)';
+      }
     } else {
-      badgeClass = 'bg-rose-100 text-rose-800 border-rose-300';
-      text = 'Tarif excessif';
-      acceptRate = 'Rejet très probable par l’organisateur (<10%)';
+      // Planification à long terme : concurrence stricte des autres AASC
+      if (ratio <= 0.85) {
+        badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+        text = 'Tarif très compétitif';
+        acceptRate = 'Très forte chance de remporter face à la concurrence (~85%)';
+      } else if (ratio <= 1.05) {
+        badgeClass = 'bg-blue-100 text-pc-blue border-blue-200';
+        text = 'Tarif conforme au barème';
+        acceptRate = 'Concurrence active des AASC : chance moyenne à bonne (~45-55%)';
+      } else if (ratio <= 1.20) {
+        badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
+        text = 'Tarif supérieur au barème';
+        acceptRate = 'Risque fort de perdre face aux offres concurrentes (~25%)';
+      } else {
+        badgeClass = 'bg-rose-100 text-rose-800 border-rose-300';
+        text = 'Tarif excessif';
+        acceptRate = 'Rejet très probable par l’organisateur (<10%)';
+      }
     }
 
     const pctDiff = Math.round((ratio - 1) * 100);
@@ -2089,7 +2334,7 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     if (devis.status === 'sent' || devis.status === 'signed' || devis.isSubmitting) {
-      return; // Empêche strictement tout envoi multiple
+      return;
     }
 
     const input = document.getElementById(`devis-price-input-${devisId}`);
@@ -2100,20 +2345,23 @@ class ProtecGame {
       return;
     }
 
-    // Calcul réaliste du temps de délibération selon la typologie et taille de l'événement
     const scale = devis.configuredScale || devis.scale || 'DPS-PE';
-    let deliberationSeconds = 60; // Base par défaut
-    if (scale.includes('PAPS')) {
-      deliberationSeconds = 45 + Math.floor(Math.random() * 20); // 45 à 65 secondes
+    const isUrgent = devis.isLastMinute || (devis.daysAhead !== undefined && devis.daysAhead <= 5);
+
+    // Temps d'arbitrage réaliste IRL : plus long pour les grands événements, accéléré si urgence de dernière minute
+    let deliberationSeconds = 90;
+    if (isUrgent) {
+      deliberationSeconds = 50 + Math.floor(Math.random() * 30); // 50 à 80 secondes (arbitrage d'urgence)
+    } else if (scale.includes('PAPS')) {
+      deliberationSeconds = 75 + Math.floor(Math.random() * 35); // 75 à 110 secondes
     } else if (scale.includes('DPS-PE')) {
-      deliberationSeconds = 80 + Math.floor(Math.random() * 30); // 80 à 110 secondes (~1m30)
+      deliberationSeconds = 120 + Math.floor(Math.random() * 60); // 2 à 3 minutes
     } else if (scale.includes('DPS-ME')) {
-      deliberationSeconds = 120 + Math.floor(Math.random() * 40); // 120 à 160 secondes (~2m15)
+      deliberationSeconds = 180 + Math.floor(Math.random() * 80); // 3 à 4min20
     } else if (scale.includes('DPS-GE')) {
-      deliberationSeconds = 160 + Math.floor(Math.random() * 50); // 160 à 210 secondes (~3m)
+      deliberationSeconds = 240 + Math.floor(Math.random() * 100); // 4 à 5min40
     }
 
-    // Verrouillage et passage en statut délibération persistante
     devis.isSubmitting = false;
     devis.proposedPrice = price;
     devis.status = 'sent';
@@ -2127,15 +2375,15 @@ class ProtecGame {
     const timeText = minStr > 0 ? `${minStr} min ${secStr > 0 ? secStr + 's' : ''}` : `${secStr} secondes`;
 
     this.showToast(
-      'Offre transmise à l’organisateur',
-      `Devis de ${price} € transmis pour « ${devis.eventName} ». L’organisateur et la commission de sécurité délibèrent (délai réaliste estimé : ~${timeText}).`,
+      'Offre transmise à l’organisateur 📋',
+      `Devis de ${price} € transmis pour « ${devis.eventName} ». L’organisateur délibère (délai réaliste estimé : ~${timeText}).`,
       'blue'
     );
 
     if (window.ProtecNotifications) {
       window.ProtecNotifications.recordNotification({
         title: '📋 Devis en Délibération',
-        message: `Proposition de ${price} € transmise pour « ${devis.eventName} ». Délibération organisateur & commission de sécurité en cours (~${timeText}).`,
+        message: `Proposition de ${price} € transmise pour « ${devis.eventName} ». Arbitrage organisateur en cours (~${timeText}).`,
         category: 'dps',
         level: 'info'
       });
@@ -2153,6 +2401,7 @@ class ProtecGame {
     const dynamicBareme = this.calculateDynamicBareme(devis);
     const bareme = dynamicBareme.totalBareme;
     const ratio = price / bareme;
+    const isUrgent = devis.isLastMinute || (devis.daysAhead !== undefined && devis.daysAhead <= 5);
 
     // 1. CONTRÔLE DE SÉCURITÉ ET CONFORMITÉ (RNMSC)
     const numMatch = (devis.publicCount || '').match(/\d[\d\s]*/);
@@ -2164,14 +2413,6 @@ class ProtecGame {
     if (publicEst >= 3000 && vols < 4) {
       devis.status = 'rejected_security';
       this.showToast('Refus Préfectoral & Organisateur', `Offre rejetée : Dispositif très sous-dimensionné (${vols} secouristes pour ${devis.publicCount}). La commission de sécurité exige un dispositif renforcé.`, 'orange');
-      if (window.ProtecNotifications) {
-        window.ProtecNotifications.recordNotification({
-          title: '❌ Devis Rejeté (RNMSC)',
-          message: `Offre rejetée pour « ${devis.eventName} » : effectif insuffisant (${vols} secouristes pour ${devis.publicCount}).`,
-          category: 'dps',
-          level: 'warning'
-        });
-      }
       this.finishDevisResolution(devis);
       return;
     }
@@ -2179,14 +2420,6 @@ class ProtecGame {
     if (publicEst >= 1500 && vols < 3 && vehs.length === 0) {
       devis.status = 'rejected_security';
       this.showToast('Sous-dimensionnement', `Offre rejetée : Un simple PAPS à pied (${vols} secouristes) est insuffisant pour encadrer ${devis.publicCount}. Une ambulance VPSP est requise.`, 'orange');
-      if (window.ProtecNotifications) {
-        window.ProtecNotifications.recordNotification({
-          title: '❌ Devis Rejeté (Ambulance Requise)',
-          message: `Offre rejetée pour « ${devis.eventName} » : une ambulance VPSP était indispensable pour encadrer ${devis.publicCount}.`,
-          category: 'dps',
-          level: 'warning'
-        });
-      }
       this.finishDevisResolution(devis);
       return;
     }
@@ -2195,57 +2428,55 @@ class ProtecGame {
     if (publicEst <= 350 && vols >= 12 && price > 1200) {
       devis.status = 'rejected_budget';
       this.showToast('Offre Disproportionnée', `L'organisateur refuse l'offre : Dispositif sur-dimensionné (${vols} secouristes) et tarif hors budget pour un modeste rassemblement.`, 'orange');
-      if (window.ProtecNotifications) {
-        window.ProtecNotifications.recordNotification({
-          title: '❌ Devis Hors Budget',
-          message: `Offre refusée pour « ${devis.eventName} » : dimensionnement disproportionné et tarif excessif.`,
-          category: 'dps',
-          level: 'warning'
-        });
-      }
       this.finishDevisResolution(devis);
       return;
     }
 
-    // 2. CONCURRENCE DES AUTRES ASSOCIATIONS AGRÉÉES DE SÉCURITÉ CIVILE
-    // Au début (notoriété modeste et antenne peu connue), les organisateurs retiennent souvent les associations concurrentes établies !
+    // 2. CONCURRENCE & TOLÉRANCE DE L'ORGANISATEUR
     const completedDpsCount = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
     const repScore = this.resources.reputationScore || 30;
 
-    // Base : 25% de base seulement au démarrage du jeu
-    let winProb = 0.25;
+    let winProb = 0.30;
     if (repScore > 100) winProb += 0.12;
     if (repScore > 300) winProb += 0.15;
     if (completedDpsCount >= 3) winProb += 0.08;
     if (completedDpsCount >= 8) winProb += 0.10;
 
-    // Influence du tarif proposé
-    if (ratio <= 0.85) winProb += 0.32; // Offre très attractive : fort argument financier
-    else if (ratio <= 0.95) winProb += 0.15;
-    else if (ratio <= 1.05) winProb += 0.0; // Barème standard
-    else if (ratio <= 1.25) winProb -= 0.22; // Plus cher que la moyenne
-    else winProb -= 0.45; // Très cher
+    if (isUrgent) {
+      // Dans l'urgence (J-2 à J-5), les autres AASC sont complètes ! L'organisateur est très tolérant
+      winProb += 0.25;
+      if (ratio <= 1.20) winProb += 0.25;
+      else if (ratio <= 1.45) winProb += 0.10;
+      else if (ratio <= 1.65) winProb -= 0.15;
+      else winProb -= 0.45; // Abus manifeste au-delà de +65%
+    } else {
+      // Long terme : comparaison stricte des devis concurrents
+      if (ratio <= 0.85) winProb += 0.32;
+      else if (ratio <= 0.95) winProb += 0.15;
+      else if (ratio <= 1.05) winProb += 0.02;
+      else if (ratio <= 1.25) winProb -= 0.25;
+      else winProb -= 0.50;
+    }
 
-    winProb = Math.max(0.08, Math.min(0.88, winProb));
-
+    winProb = Math.max(0.10, Math.min(0.92, winProb));
     const isWon = Math.random() <= winProb;
 
     if (isWon) {
       devis.status = 'signed';
       this.convertDevisToScheduledMission(devis);
       this.resources.reputationScore = (this.resources.reputationScore || 50) + 12;
-      this.showToast('Convention Signée !', `L’organisateur de « ${devis.eventName} » a retenu votre proposition face aux associations concurrentes ! Dispositif ajouté à votre planning.`, 'green');
+      this.showToast('Convention Signée ! 🎉', `L’organisateur de « ${devis.eventName} » a retenu votre proposition (${price} €) ! Dispositif ajouté à votre planning.`, 'green');
       if (window.ProtecNotifications) {
         window.ProtecNotifications.recordNotification({
           title: '✅ Convention DPS Signée !',
-          message: `L'organisateur de « ${devis.eventName} » a retenu votre proposition (${price} €) face aux concurrents ! Dispositif validé au planning opérationnel.`,
+          message: `L'organisateur de « ${devis.eventName} » a retenu votre proposition (${price} €) ! Dispositif validé au planning opérationnel.`,
           category: 'dps',
           level: 'success'
         });
       }
     } else {
       devis.status = 'rejected_competition';
-      this.showToast('Offre Non Retenue', `L’organisateur a préféré l’offre d’une association concurrente agréée (notoriété établie ou meilleur compromis). Continuez la prospection !`, 'orange');
+      this.showToast('Offre Non Retenue', `L’organisateur a préféré l’offre d’une association concurrente agréée. Continuez la prospection !`, 'orange');
       if (window.ProtecNotifications) {
         window.ProtecNotifications.recordNotification({
           title: '⚠️ Offre Non Retenue',
@@ -2382,34 +2613,10 @@ class ProtecGame {
     let pendingResponses = unassignedVols.length;
 
     unassignedVols.forEach((vol) => {
-      // 1. CALCUL DU TAUX DE CHANCE DE RÉPONSE FAVORABLE (Motivation, Énergie/Fatigue, Humeur, Statut)
-      const motivation = vol.motivation !== undefined ? vol.motivation : 70;
-      const energy = vol.energy !== undefined ? vol.energy : 80;
-      const humeur = vol.humeur !== undefined ? vol.humeur : 70;
+      // Évaluation réaliste selon correspondance du jour (80% jour habituel vs 10-20% autre jour) et délais étalés
+      const evalResult = this.evaluateVolunteerAvailability(vol, mission.eventDate, mission);
 
-      let proba = 0.20 + (motivation * 0.35 / 100) + (humeur * 0.25 / 100);
-
-      // Pénalité importante si fatigue / manque d'énergie
-      if (energy < 35) proba -= 0.40;
-      else if (energy < 60) proba -= 0.15;
-
-      // Traits de caractère
-      if (vol.trait === 'devoue') proba += 0.20;
-      if (vol.trait === 'casanier') proba -= 0.20;
-      if (vol.trait === 'ambitieux') proba += 0.10;
-
-      // Les salariés permanents ont une disponibilité contractuelle plus forte
-      if (vol.contractType === 'salarie') proba += 0.30;
-
-      // Borne de probabilité réaliste (entre 8% et 94%)
-      proba = Math.max(0.08, Math.min(0.94, proba));
-
-      // 2. CALCUL DU DÉLAI DE RÉPONSE INDIVIDUEL (Temps réaliste entre 4 et 26 secondes)
-      const baseSec = 4 + Math.random() * 14;
-      const delaySec = Math.max(3, Math.min(30, baseSec + ((100 - motivation) * 0.12) + ((100 - energy) * 0.08)));
-      const delayMs = Math.round(delaySec * 1000 / Math.max(1, this.speed || 1));
-
-      // 3. PROGRAMMATION EN ARRIÈRE-PLAN DU RETOUR SMS
+      // PROGRAMMATION EN ARRIÈRE-PLAN DU RETOUR SMS
       setTimeout(() => {
         pendingResponses--;
         if (pendingResponses <= 0) {
@@ -2421,17 +2628,15 @@ class ProtecGame {
         if (['completed', 'canceled_favorable'].includes(currentMission.status)) return;
 
         const isFull = currentMission.registeredVolunteers.length >= currentMission.requiredVolunteers;
-        const willAccept = !isFull && (Math.random() <= proba);
+        const willAccept = !isFull && evalResult.isAvailable;
 
         if (willAccept) {
           currentMission.registeredVolunteers.push(vol.id);
-          this.showToast('📱 SMS Reçu : DISPO !', `${vol.name} (${vol.rank}) : « Présent ! Je me rends disponible. »`, 'green');
+          this.showToast('📱 SMS Reçu : DISPO !', `${vol.name} (${vol.rank}) : « Présent ! Je me rends disponible pour cette mission. »`, 'green');
           this.checkEnginProgressNotification(currentMission);
         } else if (!isFull) {
-          if (Math.random() < 0.45) {
-            const reasons = ['Obligation pro', 'Contrainte familiale', 'Pas dispo ce soir', 'Besoin de repos'];
-            const r = reasons[Math.floor(Math.random() * reasons.length)];
-            this.showToast('📱 SMS Reçu : Non dispo', `${vol.name} : « Désolé, impossible (${r}) »`, 'slate');
+          if (Math.random() < 0.50) {
+            this.showToast('📱 SMS Reçu : Non dispo', `${vol.name} : « Désolé, impossible (${evalResult.rejectReason}) »`, 'slate');
           }
         }
 
@@ -2442,7 +2647,7 @@ class ProtecGame {
         if (this.selectedMissionId === currentMission.id) {
           this.openMissionDetails(currentMission.id);
         }
-      }, delayMs);
+      }, evalResult.delayMs);
     });
 
     this.saveGame();
@@ -4355,7 +4560,7 @@ class ProtecGame {
                   </div>
                 ` : ''}
               </div>
-              <span class="text-slate-500 block text-[9px]">Effectif conseillé : ${mission.requiredVolunteers + 2}</span>
+              <span class="text-slate-500 block text-[9px]">Effectif conseillé (RNMSC) : ${mission.hiddenMinVolunteers || mission.requiredVolunteers} secouristes</span>
             </div>
             <div class="p-2.5 rounded-2xl bg-white/90 border border-slate-200 space-y-0.5">
               <span class="text-slate-400 font-bold block text-[9px] uppercase">Spécialités Attendues</span>
@@ -5140,18 +5345,7 @@ class ProtecGame {
   }
 
   ensureExtraDeptRenforts() {
-    if (!this.renforts) this.renforts = [];
-    if (!this.renforts.some(r => r.isExtraDept && r.status === 'open')) {
-      const templates = this.getExtraDeptTemplates();
-      this.renforts.unshift({ 
-        ...templates[0], 
-        id: `renf-extra-${Date.now()}`, 
-        slotsCommitted: 0, 
-        contributions: [], 
-        status: 'open',
-        createdAt: new Date().toISOString() 
-      });
-    }
+    // Les renforts nationaux / extra-départementaux sont désormais EXCLUSIVEMENT déclenchés par les administrateurs via le Panel Admin
   }
 
   calculateRouteInfo(destLat, destLng) {
@@ -5261,10 +5455,10 @@ class ProtecGame {
   }
 
   renderExtraDeptRenfortsBlockHTML(onlyIfActive = false) {
-    this.ensureExtraDeptRenforts();
-    const openExtra = (this.renforts || []).filter(r => r.isExtraDept && r.status === 'open');
+    // Seuls les renforts officiellement déclenchés par un administrateur sont affichés
+    const openExtra = (this.renforts || []).filter(r => (r.isExtraDept || r.zone === 'national') && r.status === 'open' && r.isNationalAdmin);
 
-    if (onlyIfActive && openExtra.length === 0) {
+    if (openExtra.length === 0) {
       return '';
     }
 
@@ -5725,26 +5919,6 @@ class ProtecGame {
       this.updateStatsUI();
       this.saveGame();
     }, 180000);
-
-    // Si renfort complété, générer la prochaine opportunité
-    if (isFullyFulfilled) {
-      const templates = this.getExtraDeptTemplates();
-      const nextTemplate = templates.find(t => t.id !== renfort.id) || templates[1];
-      if (nextTemplate && !this.renforts.some(r => r.id === nextTemplate.id && r.status === 'open')) {
-        const nextRenfort = { 
-          ...nextTemplate, 
-          id: `renf-extra-${Date.now()}`, 
-          slotsCommitted: 0, 
-          contributions: [], 
-          status: 'open',
-          createdAt: new Date().toISOString() 
-        };
-        this.renforts.unshift(nextRenfort);
-        if (window.ProtecSupabase && window.ProtecSupabase.broadcastRenfortCreated) {
-          window.ProtecSupabase.broadcastRenfortCreated(nextRenfort);
-        }
-      }
-    }
 
     this.updateStatsUI();
     this.saveGame();
@@ -6546,6 +6720,7 @@ class ProtecGame {
 
       const currentTab = this.activePlanningTab || 'calendar';
       const allScheduled = this.missions.filter(m => m.status === 'planifie' || m.status === 'ongoing' || m.type === 'dps');
+      const pendingAndPrevDevis = (this.devis || []).filter(d => ['pending', 'previsionnel', 'sent'].includes(d.status));
       
       const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
       const curMonthName = monthNames[this.clock.month] || 'Mois';
@@ -6558,6 +6733,7 @@ class ProtecGame {
       const firstDayIndex = (new Date(curYear, this.clock.month, 1).getDay() + 6) % 7; // 0 = Lundi, 6 = Dimanche
 
       const selectedDayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === selectedDay && m.eventDate.month === this.clock.month);
+      const selectedDayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === selectedDay && d.eventDate.month === this.clock.month);
 
       body.innerHTML = `
         <div class="space-y-5">
@@ -6574,7 +6750,7 @@ class ProtecGame {
               </button>
               <button onclick="window.game.openModule('devis')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer">
                 <i data-lucide="file-check" class="w-4 h-4 text-amber-500"></i>
-                Devis DPS (${this.devis.filter(d => d.status === 'pending').length})
+                Devis & Prévisionnels (${pendingAndPrevDevis.length})
               </button>
             </div>
             <div class="flex items-center gap-2">
@@ -6598,12 +6774,13 @@ class ProtecGame {
               <div class="flex items-center justify-between px-1">
                 <div>
                   <h4 class="text-base font-extrabold text-slate-900">${curMonthName} ${curYear}</h4>
-                  <p class="text-[11px] text-slate-500">Sélectionnez un jour pour consulter ou gérer les dispositifs programmés</p>
+                  <p class="text-[11px] text-slate-500">Sélectionnez un jour pour consulter ou gérer les dispositifs programmés et options prévisionnelles</p>
                 </div>
                 <div class="flex items-center gap-3 text-[11px] text-slate-600">
-                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-pc-blue"></span> DPS Événement</span>
-                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-pc-orange"></span> Garde SAMU/SDIS</span>
-                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Social</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-pc-blue"></span> DPS Validé</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> ⏳ Prévisionnel</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span> 📋 Devis Reçu</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-pc-orange"></span> Garde</span>
                 </div>
               </div>
 
@@ -6630,6 +6807,10 @@ class ProtecGame {
                     const dpsCount = dayMissions.filter(m => m.type === 'dps').length;
                     const otherCount = dayMissions.filter(m => m.type !== 'dps').length;
 
+                    const dayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === day && d.eventDate.month === this.clock.month);
+                    const prevCount = dayDevis.filter(d => d.status === 'previsionnel').length;
+                    const pendingCount = dayDevis.filter(d => d.status === 'pending' || d.status === 'sent').length;
+
                     let bgClass = 'bg-white hover:bg-slate-50 border-slate-200/80';
                     if (isSelected) bgClass = 'bg-pc-blue/10 border-pc-blue ring-2 ring-pc-blue/30';
                     else if (isToday) bgClass = 'bg-amber-50/80 border-amber-300';
@@ -6637,7 +6818,7 @@ class ProtecGame {
                     return `
                       <button 
                         onclick="window.game.selectPlanningDay(${day})" 
-                        class="h-16 rounded-xl p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
+                        class="min-h-16 rounded-xl p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
                       >
                         <div class="flex items-center justify-between w-full">
                           <span class="text-xs font-extrabold ${isToday ? 'text-amber-800 font-black' : isSelected ? 'text-pc-blue' : 'text-slate-800'}">
@@ -6646,14 +6827,24 @@ class ProtecGame {
                           ${isToday ? `<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-amber-950 uppercase">Auj.</span>` : ''}
                         </div>
 
-                        <div class="flex flex-col gap-0.5 w-full">
+                        <div class="flex flex-col gap-0.5 w-full mt-1">
                           ${dpsCount > 0 ? `
-                            <div class="px-1 py-0.2 rounded text-[9px] font-extrabold bg-pc-blue text-white truncate text-center">
+                            <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-blue text-white truncate text-center">
                               DPS (${dpsCount})
                             </div>
                           ` : ''}
+                          ${prevCount > 0 ? `
+                            <div class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-500 text-white truncate text-center border border-amber-600/30">
+                              ⏳ Prévi (${prevCount})
+                            </div>
+                          ` : ''}
+                          ${pendingCount > 0 ? `
+                            <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-sky-500 text-white truncate text-center">
+                              📋 Devis (${pendingCount})
+                            </div>
+                          ` : ''}
                           ${otherCount > 0 ? `
-                            <div class="px-1 py-0.2 rounded text-[9px] font-extrabold bg-pc-orange text-white truncate text-center">
+                            <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-orange text-white truncate text-center">
                               Garde (${otherCount})
                             </div>
                           ` : ''}
@@ -6665,63 +6856,162 @@ class ProtecGame {
               </div>
 
               <!-- Détail de la journée sélectionnée -->
-              <div class="p-4 rounded-2xl glass-card space-y-3">
+              <div class="p-4 rounded-2xl glass-card space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-2">
                   <h4 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
                     <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue"></i>
-                    Dispositifs & Missions du ${selectedDay} ${curMonthName} ${curYear}
+                    Planning du ${selectedDay} ${curMonthName} ${curYear}
                     ${selectedDay === todayDay ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">Aujourd'hui sur la carte</span>` : ''}
                   </h4>
-                  <span class="text-xs font-bold text-slate-500">${selectedDayMissions.length} mission(s) programmée(s)</span>
+                  <span class="text-xs font-bold text-slate-500">${selectedDayMissions.length} mission(s) • ${selectedDayDevis.length} devis/option(s)</span>
                 </div>
 
-                ${selectedDayMissions.length === 0 ? `
+                ${(selectedDayMissions.length === 0 && selectedDayDevis.length === 0) ? `
                   <p class="text-xs text-slate-500 py-6 text-center italic">
-                    Aucun dispositif programmé pour cette date. Consultez vos devis reçus ou activez la communication pour recevoir des sollicitations.
+                    Aucun dispositif ni option prévisionnelle pour cette date. Consultez vos devis reçus ou activez la communication pour recevoir des sollicitations.
                   </p>
                 ` : `
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                    ${selectedDayMissions.map(m => {
-                      const regCount = m.registeredVolunteers?.length || 0;
-                      const isFull = regCount >= m.requiredVolunteers;
-                      const timeStr = `${m.startHour || m.eventDate?.hour || 14}h00 à ${(m.endHour || ((m.eventDate?.hour || 14) + (m.durationHours || 4)) % 24)}h00`;
-
-                      return `
-                        <div class="p-3.5 rounded-xl glass-card border border-slate-200/80 flex flex-col justify-between space-y-2.5">
-                          <div>
-                            <div class="flex items-center justify-between">
-                              <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${timeStr}</span>
-                              <span class="text-xs font-bold text-emerald-700 mono-num">+${m.rewardMoney} €</span>
-                            </div>
-                            <h5 class="text-xs font-extrabold text-slate-900 mt-1">${m.title}</h5>
-                            <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
-                              <i data-lucide="${m.isSector || m.type === 'social' ? 'map' : 'map-pin'}" class="w-3 h-3 ${m.isSector || m.type === 'social' ? 'text-purple-600' : 'text-pc-blue'} flex-shrink-0"></i>
-                              <span>${m.isSector || m.type === 'social' ? (m.sector || m.address || 'Secteur de Maraude') : (m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site'))}</span>
-                            </p>
-                            <p class="text-[11px] text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
-                          </div>
-
-                          <div class="pt-2 border-t border-slate-100 space-y-1.5">
-                            <div class="flex items-center justify-between text-xs font-bold">
-                              <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
-                                ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
-                              </span>
-                              <div class="flex gap-2">
-                                <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold">Renfort</button>
-                                <button onclick="window.game.relanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold">Relancer</button>
-                              </div>
-                            </div>
-                            <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
-                              <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
-                            </div>
-                          </div>
-
-                          <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl text-xs font-bold glass-button text-slate-800 transition">
-                            Fiche détaillée & Inscriptions
-                          </button>
+                  <div class="space-y-4">
+                    <!-- SECTION 1 : DEMANDES EN ATTENTE & EN PRÉVISIONNEL -->
+                    ${selectedDayDevis.length > 0 ? `
+                      <div class="space-y-2.5">
+                        <div class="text-[11px] font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5">
+                          <i data-lucide="clipboard-list" class="w-3.5 h-3.5 text-amber-600"></i>
+                          <span>Devis & Options Prévisionnelles pour cette date (${selectedDayDevis.length})</span>
                         </div>
-                      `;
-                    }).join('')}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          ${selectedDayDevis.map(d => {
+                            const isPrev = d.status === 'previsionnel';
+                            const isSent = d.status === 'sent';
+                            const dynBareme = this.calculateDynamicBareme(d);
+                            const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
+                            const prevVolsCount = d.previsionnelVolunteers?.length || 0;
+
+                            return `
+                              <div class="p-3.5 rounded-2xl border-2 ${isPrev ? 'border-amber-400 bg-amber-50/50' : isSent ? 'border-indigo-300 bg-indigo-50/40' : 'border-dashed border-sky-300 bg-sky-50/40'} flex flex-col justify-between space-y-3">
+                                <div>
+                                  <div class="flex items-center justify-between gap-2">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-black ${isPrev ? 'bg-amber-500 text-white' : isSent ? 'bg-indigo-600 text-white' : 'bg-sky-600 text-white'} uppercase">
+                                      ${isPrev ? '⏳ En Prévisionnel' : isSent ? '⚖️ En Délibération' : '📋 Devis Reçu'}
+                                    </span>
+                                    ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
+                                    <span class="text-xs font-mono font-bold text-slate-700">${d.proposedPrice || dynBareme.totalBareme} €</span>
+                                  </div>
+                                  <h5 class="text-xs font-black text-slate-900 mt-1.5">${d.eventName}</h5>
+                                  <p class="text-[11px] text-slate-500">
+                                    ${d.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
+                                  </p>
+                                  <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
+                                    <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
+                                    <span>${d.address || 'Adresse sur site'}</span>
+                                  </p>
+                                </div>
+
+                                <!-- Bloc statut bénévoles si prévisionnel -->
+                                ${isPrev ? `
+                                  <div class="p-2.5 rounded-xl bg-white/80 border border-amber-200 text-xs space-y-1.5">
+                                    <div class="flex items-center justify-between">
+                                      <span class="font-bold text-slate-700">Disponibilités bénévoles :</span>
+                                      <span class="font-black ${prevVolsCount >= reqVols ? 'text-emerald-700' : 'text-amber-800'}">${prevVolsCount} / ${reqVols} confirmés</span>
+                                    </div>
+                                    <div class="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
+                                      <div class="h-full bg-amber-500 rounded-full transition-all" style="width: ${Math.min(100, (prevVolsCount / reqVols) * 100)}%"></div>
+                                    </div>
+                                    <div class="flex items-center justify-between text-[10px]">
+                                      <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="text-pc-blue font-extrabold hover:underline flex items-center gap-1">
+                                        <i data-lucide="phone-call" class="w-3 h-3"></i> Sonder l'équipe
+                                      </button>
+                                      <button onclick="window.game.openModule('devis')" class="text-amber-800 font-bold hover:underline">
+                                        Gérer dans Devis →
+                                      </button>
+                                    </div>
+                                  </div>
+                                ` : ''}
+
+                                <!-- Actions rapides -->
+                                <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-1.5">
+                                  ${isPrev ? `
+                                    <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-pc-blue to-pc-blue-light text-white text-[11px] font-black shadow-xs hover:brightness-110 transition">
+                                      Valider avec l'Orga
+                                    </button>
+                                    <button onclick="window.game.refuseDevis('${d.id}')" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition">
+                                      Refuser
+                                    </button>
+                                  ` : isSent ? `
+                                    <button onclick="window.game.openModule('devis')" class="w-full py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black transition">
+                                      Consulter l'arbitrage en cours
+                                    </button>
+                                  ` : `
+                                    <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="flex-1 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black shadow-xs transition" title="Mettre en prévisionnel pour sonder l'équipe">
+                                      ⏳ Mettre en Prévi
+                                    </button>
+                                    <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white text-[11px] font-black transition">
+                                      Chiffrer
+                                    </button>
+                                    <button onclick="window.game.refuseDevis('${d.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition" title="Décliner la demande">
+                                      ✕
+                                    </button>
+                                  `}
+                                </div>
+                              </div>
+                            `;
+                          }).join('')}
+                        </div>
+                      </div>
+                    ` : ''}
+
+                    <!-- SECTION 2 : DISPOSITIFS CONFIRMÉS AU PLANNING -->
+                    ${selectedDayMissions.length > 0 ? `
+                      <div class="space-y-2.5">
+                        <div class="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-pc-blue"></i>
+                          <span>Dispositifs Confirmés & Validés (${selectedDayMissions.length})</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          ${selectedDayMissions.map(m => {
+                            const regCount = m.registeredVolunteers?.length || 0;
+                            const isFull = regCount >= m.requiredVolunteers;
+                            const timeStr = `${m.startHour || m.eventDate?.hour || 14}h00 à ${(m.endHour || ((m.eventDate?.hour || 14) + (m.durationHours || 4)) % 24)}h00`;
+
+                            return `
+                              <div class="p-3.5 rounded-xl glass-card border border-slate-200/80 flex flex-col justify-between space-y-2.5">
+                                <div>
+                                  <div class="flex items-center justify-between">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${timeStr}</span>
+                                    <span class="text-xs font-bold text-emerald-700 mono-num">+${m.rewardMoney} €</span>
+                                  </div>
+                                  <h5 class="text-xs font-extrabold text-slate-900 mt-1">${m.title}</h5>
+                                  <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
+                                    <i data-lucide="${m.isSector || m.type === 'social' ? 'map' : 'map-pin'}" class="w-3 h-3 ${m.isSector || m.type === 'social' ? 'text-purple-600' : 'text-pc-blue'} flex-shrink-0"></i>
+                                    <span>${m.isSector || m.type === 'social' ? (m.sector || m.address || 'Secteur de Maraude') : (m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site'))}</span>
+                                  </p>
+                                  <p class="text-[11px] text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                                </div>
+
+                                <div class="pt-2 border-t border-slate-100 space-y-1.5">
+                                  <div class="flex items-center justify-between text-xs font-bold">
+                                    <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
+                                      ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
+                                    </span>
+                                    <div class="flex gap-2">
+                                      <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold">Renfort</button>
+                                      <button onclick="window.game.relanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold">Relancer</button>
+                                    </div>
+                                  </div>
+                                  <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                                    <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
+                                  </div>
+                                </div>
+
+                                <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl text-xs font-bold glass-button text-slate-800 transition">
+                                  Fiche détaillée & Inscriptions
+                                </button>
+                              </div>
+                            `;
+                          }).join('')}
+                        </div>
+                      </div>
+                    ` : ''}
                   </div>
                 `}
               </div>
@@ -6818,8 +7108,9 @@ class ProtecGame {
 
       const isAntennaVisible = this.resources.campaigns.social || this.resources.campaigns.posters || (this.stats?.dpsCompleted > 0) || (this.resources.reputationScore >= 60);
       const pendingDevis = this.devis.filter(d => d.status === 'pending');
+      const previsionnelDevis = this.devis.filter(d => d.status === 'previsionnel');
       const inReviewDevis = this.devis.filter(d => d.status === 'sent');
-      const treatedDevis = this.devis.filter(d => ['signed', 'rejected_competition', 'rejected_security', 'rejected_budget', 'expired'].includes(d.status));
+      const treatedDevis = this.devis.filter(d => ['signed', 'rejected_competition', 'rejected_security', 'rejected_budget', 'expired', 'declined'].includes(d.status));
 
       body.innerHTML = `
         <div class="space-y-6">
@@ -6836,12 +7127,13 @@ class ProtecGame {
               </button>
               <button class="px-4 py-2 rounded-xl text-xs font-black bg-amber-600 text-white shadow-md flex items-center gap-1.5">
                 <i data-lucide="file-check" class="w-4 h-4 text-white"></i>
-                Devis & Dimensionnement DPS (${pendingDevis.length + inReviewDevis.length})
+                Devis & Prévisionnels (${pendingDevis.length + previsionnelDevis.length + inReviewDevis.length})
               </button>
             </div>
-            <div class="text-xs text-slate-500 font-bold flex items-center gap-3">
-              <span><strong>${pendingDevis.length}</strong> à traiter</span>
-              ${inReviewDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 font-extrabold">⏳ ${inReviewDevis.length} en délibération</span>` : ''}
+            <div class="text-xs text-slate-500 font-bold flex items-center gap-2">
+              <span><strong>${pendingDevis.length}</strong> nouveau(x)</span>
+              ${previsionnelDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-extrabold">⏳ ${previsionnelDevis.length} prévisionnel(s)</span>` : ''}
+              ${inReviewDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 font-extrabold">⚖️ ${inReviewDevis.length} délibération</span>` : ''}
             </div>
           </div>
 
@@ -6849,7 +7141,7 @@ class ProtecGame {
             <div class="flex items-center justify-between">
               <span class="font-extrabold flex items-center gap-1.5 text-amber-900">
                 <i data-lucide="scale" class="w-4 h-4 text-amber-600"></i>
-                Barème Réglementaire & Mise en Concurrence (RNMSC)
+                Barème Réglementaire & Négociation DPS (RNMSC)
               </span>
               <span class="text-[11px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-lg">Mise en Concurrence Active</span>
             </div>
@@ -6860,7 +7152,7 @@ class ProtecGame {
               <div class="p-2 glass-card rounded-xl">Frais convention : <strong>40,00 €</strong></div>
             </div>
             <p class="text-[11px] text-amber-700 italic">
-              <strong>Règle :</strong> Vous définissez librement le type de DPS, le nombre de secouristes et les véhicules. L’organisateur évalue si votre dimensionnement respecte la sécurité, et compare votre tarif à ceux des associations concurrentes agréées.
+              <strong>💡 Nouveauté Gestion :</strong> Vous pouvez <strong>mettre en prévisionnel</strong> un événement pour bloquer la date et sonder vos bénévoles avant de vous engager. En cas de délai court (urgence J-2 à J-5), les organisateurs acceptent des tarifs supérieurs. Vous pouvez également <strong>décliner</strong> poliment une demande sans pénalité.
             </p>
           </div>
 
@@ -6970,6 +7262,104 @@ class ProtecGame {
             </div>
           ` : ''}
 
+          <!-- SECTION DES DEVIS EN PRÉVISIONNEL (OPTION RÉSERVÉE PAR LE JOUEUR) -->
+          ${previsionnelDevis.length > 0 ? `
+            <div class="space-y-3 p-4 rounded-2xl bg-amber-50/80 border-2 border-amber-300 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">⏳</span>
+                  <h4 class="text-xs font-black text-amber-950 uppercase tracking-wider">Dispositifs en Prévisionnel (${previsionnelDevis.length})</h4>
+                </div>
+                <span class="text-[10px] font-extrabold text-amber-900 bg-amber-200/80 px-2.5 py-0.5 rounded-lg border border-amber-400/40">
+                  Option Réservée • Date Bloquée à l'Agenda
+                </span>
+              </div>
+              <p class="text-[11px] text-amber-800 leading-relaxed">
+                Ces événements sont actuellement réservés à titre d'option. Sondez vos bénévoles pour vous assurer que l'effectif sera réuni avant de confirmer la convention officielle avec l'organisateur.
+              </p>
+
+              <div class="space-y-4 pt-1">
+                ${previsionnelDevis.map(d => {
+                  const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
+                  const confirmedVols = d.previsionnelVolunteers || [];
+                  const isFull = confirmedVols.length >= reqVols;
+                  const dateStr = this.formatFullDate(d.eventDate);
+                  const dynamicBareme = this.calculateDynamicBareme(d);
+                  const responses = d.previsionnelResponses || {};
+                  const responsesList = Object.values(responses);
+                  const dispoCount = responsesList.filter(r => r.status === 'dispo').length;
+                  const indispoCount = responsesList.filter(r => r.status === 'indispo').length;
+                  const pendingCount = responsesList.filter(r => r.status === 'pending').length;
+
+                  return `
+                    <div class="p-4 rounded-2xl bg-white border border-amber-300 shadow-sm space-y-3" id="devis-previ-${d.id}">
+                      <div class="flex items-start justify-between">
+                        <div>
+                          <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white">${d.eventName}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">⏳ En Prévisionnel</span>
+                            ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
+                          </div>
+                          <h4 class="text-sm font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
+                          <p class="text-xs text-slate-600">
+                            Date : <strong>${dateStr} (${d.eventDate?.dayName || 'Date'})</strong> • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
+                          </p>
+                          <p class="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
+                            <span>${d.address || 'Adresse sur site'}</span>
+                          </p>
+                        </div>
+                        <div class="text-right">
+                          <span class="text-[10px] text-slate-400 font-bold uppercase block">Barème Prévu</span>
+                          <span class="text-sm font-black mono-num text-slate-800">${d.proposedPrice || dynamicBareme.totalBareme} €</span>
+                        </div>
+                      </div>
+
+                      <!-- Sondage Bénévoles -->
+                      <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                        <div class="flex items-center justify-between text-xs font-bold">
+                          <span class="text-slate-700">Effectif confirmé par sondage :</span>
+                          <span class="${isFull ? 'text-emerald-700 font-black' : 'text-amber-800 font-black'}">
+                            ${confirmedVols.length} / ${reqVols} secouristes requis
+                          </span>
+                        </div>
+                        <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                          <div class="h-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full transition-all" style="width: ${Math.min(100, (confirmedVols.length / reqVols) * 100)}%"></div>
+                        </div>
+
+                        ${responsesList.length > 0 ? `
+                          <div class="flex items-center gap-3 text-[11px] text-slate-600 pt-1">
+                            <span class="text-emerald-700 font-bold">✓ ${dispoCount} disponible(s)</span>
+                            <span class="text-slate-500">✕ ${indispoCount} indisponible(s)</span>
+                            ${pendingCount > 0 ? `<span class="text-amber-700 font-bold animate-pulse">⏳ ${pendingCount} en attente...</span>` : ''}
+                          </div>
+                        ` : ''}
+                      </div>
+
+                      <!-- Actions du Prévisionnel -->
+                      <div class="pt-1 flex flex-wrap items-center justify-between gap-2">
+                        <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="px-4 py-2 rounded-xl text-xs font-black bg-white hover:bg-slate-100 text-pc-blue border border-pc-blue/30 shadow-xs flex items-center gap-1.5 transition">
+                          <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
+                          ${d.sondageEnCours ? 'Sondage en cours...' : '📱 Sonder les Bénévoles'}
+                        </button>
+
+                        <div class="flex items-center gap-2">
+                          <button onclick="window.game.submitCustomDevis('${d.id}')" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-emerald-500 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5">
+                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                            Valider la Présence & Envoyer Devis
+                          </button>
+                          <button onclick="window.game.refuseDevis('${d.id}')" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 transition">
+                            ✕ Annuler l'Option
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+
           <!-- Demandes reçues avec configurateur personnalisé -->
           <div class="space-y-4">
             <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Demandes Reçues des Organisateurs (${pendingDevis.length})</h4>
@@ -6986,10 +7376,9 @@ class ProtecGame {
               </div>
             ` : ''}
 
-            ${pendingDevis.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune demande reçue pour le moment. Développez la communication et la réputation de votre antenne pour recevoir des devis d’organisateurs.</p>' : ''}
+            ${pendingDevis.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune nouvelle demande en attente. Vos dossiers en cours et options sont affichés ci-dessus.</p>' : ''}
             
             ${pendingDevis.map(d => {
-              // Initialisation des valeurs configurées par le joueur
               if (!d.configuredScale) {
                 d.configuredScale = d.scale ? d.scale.split(' ')[0] : 'DPS-PE';
                 d.configuredVolunteers = d.requiredVolunteers || 4;
@@ -7007,10 +7396,6 @@ class ProtecGame {
               const dateStr = this.formatFullDate(d.eventDate);
               const defaultVal = d.proposedPrice || dynamicBareme.totalBareme;
 
-              const vehKey = (d.configuredVehicles.length === 0) ? 'none' : 
-                (d.configuredVehicles.length === 2 && d.configuredVehicles.includes('VTU')) ? 'vpsp_vtu' :
-                (d.configuredVehicles.length === 2) ? 'vpsp2' : 'vpsp1';
-
               return `
                 <div class="p-5 rounded-2xl glass-card space-y-4 border border-slate-200/80 shadow-sm" id="devis-card-${d.id}">
                   <!-- En-tête de la demande -->
@@ -7018,11 +7403,12 @@ class ProtecGame {
                     <div>
                       <div class="flex items-center gap-2">
                         <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${d.eventName}</span>
+                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3} (Annulation autre AASC)</span>` : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">📅 Planification J-${d.daysAhead || 30}</span>`}
                         <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">⏳ Expire dans ${Math.floor((d.secondsLeft !== undefined ? d.secondsLeft : 6 * 3600) / 3600)}h ${Math.floor(((d.secondsLeft !== undefined ? d.secondsLeft : 6 * 3600) % 3600) / 60).toString().padStart(2, '0')}min</span>
                       </div>
                       <h4 class="text-base font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
                       <p class="text-xs text-slate-500">
-                        Date : <strong>${dateStr}</strong> • Durée du poste : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Affluence attendue : <strong class="text-slate-800">${d.publicCount}</strong>
+                        Date : <strong>${dateStr} (${d.eventDate?.dayName || 'Date'})</strong> • Durée du poste : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Affluence attendue : <strong class="text-slate-800">${d.publicCount}</strong>
                       </p>
                       <p class="text-xs text-slate-700 font-semibold flex items-center gap-1 mt-1">
                         <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
@@ -7075,11 +7461,11 @@ class ProtecGame {
                         </div>
                       </div>
 
-                      <!-- Véhicules (Véhicules réels possédés par l'antenne) -->
+                      <!-- Véhicules -->
                       <div>
                         <label class="block text-[11px] font-bold text-slate-600 mb-1">Moyens Véhicules (Véhicules possédés) :</label>
                         <select onchange="window.game.updateDevisVehicles('${d.id}', this.value)" class="w-full py-2 px-3 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800">
-                          <option value="none" ${(!d.configuredVehicles || d.configuredVehicles.length === 0) ? 'selected' : ''}>Sans véhicule (Poste pédestre / Tente de secours)</option>
+                          <option value="none" ${(!d.configuredVehicles || d.configuredVehicles.length === 0) ? 'selected' : ''}>Sans véhicule (Poste pédestre / Tente)</option>
                           ${(this.vehicles || []).map(veh => {
                             const vehCost = veh.type === 'VPSP' ? 110 : (veh.type === 'VTU' ? 55 : (veh.type === 'VL' ? 35 : 45));
                             const isSel = d.configuredVehicleId === veh.id || (d.configuredVehicles || []).includes(veh.type);
@@ -7101,9 +7487,9 @@ class ProtecGame {
                     </div>
                   </div>
 
-                  <!-- SAISIE DU PRIX PROPOSÉ PAR LE JOUEUR & SOUMISSION -->
+                  <!-- SAISIE DU PRIX PROPOSÉ PAR LE JOUEUR & ACTIONS -->
                   <div class="p-4 rounded-xl glass-card space-y-3">
-                    <div class="flex items-center justify-between gap-4">
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-3">
                       <div class="flex-1">
                         <label class="block text-xs font-extrabold text-slate-800 mb-1">Votre Tarif Proposé (€) :</label>
                         <div class="relative rounded-xl shadow-sm">
@@ -7120,10 +7506,17 @@ class ProtecGame {
                           <span class="absolute right-3.5 top-2.5 text-slate-400 font-bold">€</span>
                         </div>
                       </div>
-                      <div class="flex items-end">
-                        <button onclick="window.game.submitCustomDevis('${d.id}')" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center gap-2">
+
+                      <div class="flex items-center gap-2 pt-1">
+                        <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="px-4 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95 transition flex items-center gap-1.5" title="Bloquer la date comme option et sonder les bénévoles avant de signer">
+                          <span>⏳ Mettre en Prévi</span>
+                        </button>
+                        <button onclick="window.game.submitCustomDevis('${d.id}')" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center gap-1.5">
                           <i data-lucide="send" class="w-4 h-4"></i>
-                          Soumettre l'Offre
+                          <span>Soumettre l'Offre</span>
+                        </button>
+                        <button onclick="window.game.refuseDevis('${d.id}')" class="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 transition" title="Refuser cette demande de devis">
+                          <span>✕ Refuser</span>
                         </button>
                       </div>
                     </div>
@@ -7132,7 +7525,7 @@ class ProtecGame {
                       <div class="p-2.5 rounded-xl border text-xs flex items-center justify-between glass-card-blue">
                         <div>
                           <span class="font-extrabold block text-pc-blue">Tarif calqué sur votre dimensionnement</span>
-                          <span class="text-[11px] text-slate-500">Mise en concurrence avec les autres associations agréées</span>
+                          <span class="text-[11px] text-slate-500">${d.isLastMinute ? 'L’organisateur est dans l’urgence et tolère des tarifs supérieurs (+30-50%)' : 'Mise en concurrence avec les autres associations agréées'}</span>
                         </div>
                         <span class="font-mono font-bold text-pc-blue">${defaultVal} €</span>
                       </div>
@@ -7160,6 +7553,9 @@ class ProtecGame {
                   if (d.status === 'signed') {
                     badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Convention Signée</span>';
                     motif = `Offre de ${d.proposedPrice || 250} € retenue face aux concurrents ! Dispositif ajouté à votre calendrier.`;
+                  } else if (d.status === 'declined') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300">✕ Décliné par l’Antenne</span>';
+                    motif = `Vous avez refusé la prise en charge de cet événement.`;
                   } else if (d.status === 'rejected_competition') {
                     badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">Offre Non Retenue</span>';
                     motif = `L’organisateur a préféré retenir une association concurrente pour cette édition.`;
@@ -9353,19 +9749,24 @@ class ProtecGame {
               this.resolveDevisDecision(d);
             }
           }
-          // Devis reçus en attente d'une proposition du joueur
-          else if (d.status === 'pending') {
+          // Devis reçus en attente ou option en prévisionnel
+          else if (d.status === 'pending' || d.status === 'previsionnel') {
             if (typeof d.secondsLeft !== 'number') {
-              d.secondsLeft = 6 * 3600;
+              d.secondsLeft = d.status === 'previsionnel' ? 12 * 3600 : 6 * 3600;
             }
             d.secondsLeft--;
             if (d.secondsLeft <= 0) {
+              const wasPrevi = d.status === 'previsionnel';
               d.status = 'expired';
-              this.showToast('Devis Expiré', `L’organisateur de « ${d.eventName} » a retenu une autre association agréée faute de réponse dans les délais.`, 'orange');
+              const expMsg = wasPrevi 
+                ? `L'option prévisionnelle pour « ${d.eventName} » a expiré. L'organisateur a sollicité une autre association faute de confirmation.`
+                : `L’organisateur de « ${d.eventName} » a retenu une autre association agréée faute de réponse dans les délais.`;
+
+              this.showToast(wasPrevi ? 'Option Prévisionnelle Expirée' : 'Devis Expiré', expMsg, 'orange');
               if (window.ProtecNotifications) {
                 window.ProtecNotifications.recordNotification({
-                  title: '⏱️ Demande de Devis Expirée',
-                  message: `La demande de devis pour « ${d.eventName} » a expiré sans réponse. L'organisateur s'est tourné vers une association concurrente.`,
+                  title: wasPrevi ? '⏱️ Option Prévisionnelle Expirée' : '⏱️ Demande de Devis Expirée',
+                  message: expMsg,
                   category: 'dps',
                   level: 'warning'
                 });

@@ -223,6 +223,10 @@ window.ProtecMultiplayer = {
       document.body.appendChild(modal);
     }
 
+    const myDept = game.player?.departmentCode || game.stations?.[0]?.departmentCode || '54';
+    const zoneDef = window.ProtecDepartements?.getZoneDefense(myDept) || { name: 'Zone de Défense et de Sécurité', shortName: 'Zone Zonale' };
+    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
+
     modal.innerHTML = `
       <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-5 bg-white border border-slate-200 text-slate-800">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -239,7 +243,7 @@ window.ProtecMultiplayer = {
         </div>
 
         <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
-          Sélectionnez la zone de mobilisation selon l'ampleur opérationnelle de la mission. Pour éviter les abus, les zones Régionale et Nationale sont réservées aux événements d'envergure.
+          Sélectionnez l'échelon de mobilisation. Les directeurs d'antenne peuvent mobiliser le <strong>Département</strong> ou la <strong>Zone de Défense et de Sécurité</strong>. Le niveau <strong>National</strong> est quant à lui réservé à la Direction Nationale FNPC (Admin).
         </div>
 
         <!-- Choix de la zone -->
@@ -249,22 +253,22 @@ window.ProtecMultiplayer = {
           <div class="p-4 rounded-2xl border ${eligibility.departemental.canRequest ? 'border-sky-300 bg-sky-50/60' : 'border-slate-200 bg-slate-50 opacity-70'} flex flex-col justify-between gap-2.5 transition">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-600 text-white uppercase tracking-wider">Zone Départementale</span>
-                <span class="text-xs font-bold text-slate-700">Antennes du département</span>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-600 text-white uppercase tracking-wider">Échelon Départemental</span>
+                <span class="text-xs font-bold text-slate-700">Antennes du département (${myDept})</span>
               </div>
               <span class="text-[11px] font-extrabold ${eligibility.departemental.canRequest ? 'text-sky-800' : 'text-rose-600'}">
                 ${eligibility.departemental.used} / ${eligibility.departemental.max} utilisés cette semaine
               </span>
             </div>
             <p class="text-[11px] text-slate-600">
-              Mobilise les directeurs d'antenne de votre département. Aucune restriction sur le type de mission.
+              Mobilise les directeurs d'antenne de votre département pour combler les effectifs d'un poste de secours ou d'une garde.
             </p>
             <div class="flex items-center justify-between pt-1">
               <span class="text-[10px] text-slate-500 font-semibold">${eligibility.departemental.reason}</span>
               ${eligibility.departemental.canRequest ? `
                 <button onclick="window.ProtecMultiplayer.submitRenfortRequest(window.game, '${mission.id}', 'departemental')" class="px-4 py-2 rounded-xl text-xs font-black bg-sky-600 hover:bg-sky-700 text-white transition shadow-sm flex items-center gap-1.5 cursor-pointer">
                   <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                  Mobiliser Département
+                  Mobiliser le Département
                 </button>
               ` : `
                 <button disabled class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed">
@@ -274,60 +278,60 @@ window.ProtecMultiplayer = {
             </div>
           </div>
 
-          <!-- 2. ZONE RÉGIONALE -->
+          <!-- 2. ZONE DE DÉFENSE ET DE SÉCURITÉ -->
           <div class="p-4 rounded-2xl border ${eligibility.regional.eligible ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 bg-slate-100 opacity-60'} flex flex-col justify-between gap-2.5 transition">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-600 text-white uppercase tracking-wider">Zone Régionale</span>
-                <span class="text-xs font-bold text-slate-700">Toute la région administrative</span>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-600 text-white uppercase tracking-wider">Zone de Défense & Sécurité</span>
+                <span class="text-xs font-bold text-slate-700">${zoneDef.name}</span>
               </div>
               <span class="text-[11px] font-bold ${eligibility.regional.eligible ? 'text-emerald-700' : 'text-slate-400'}">
-                ${eligibility.regional.eligible ? '✓ Éligible' : '🔒 Verrouillé'}
+                ${eligibility.regional.eligible ? '✓ Éligible' : '🔒 Requiert DPS-ME / DPS-GE'}
               </span>
             </div>
             <p class="text-[11px] text-slate-600">
-              Déclenche l'entraide régionale pour les grands rassemblements, festivals et sinistres météo de secteur.
+              Déclenche l'entraide inter-départementale au sein de votre Zone de Défense (${zoneDef.shortName}) pour les événements d'envergure, festivals ou sinistres météo.
             </p>
             <div class="flex items-center justify-between pt-1">
               <span class="text-[10px] text-slate-500 font-semibold max-w-xs">${eligibility.regional.reason}</span>
               ${eligibility.regional.eligible ? `
                 <button onclick="window.ProtecMultiplayer.submitRenfortRequest(window.game, '${mission.id}', 'regional')" class="px-4 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-sm flex items-center gap-1.5 cursor-pointer">
                   <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                  Mobiliser Région
+                  Mobiliser la Zone de Défense
                 </button>
               ` : `
                 <button disabled class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed">
-                  Non Éligible
+                  Non Éligible (Besoin ≥ 6 secouristes)
                 </button>
               `}
             </div>
           </div>
 
-          <!-- 3. ZONE NATIONALE -->
-          <div class="p-4 rounded-2xl border ${eligibility.national.eligible ? 'border-purple-300 bg-purple-50/70' : 'border-slate-200 bg-slate-100 opacity-60'} flex flex-col justify-between gap-2.5 transition">
+          <!-- 3. ZONE NATIONALE (FNPC) - RÉSERVÉE ADMIN -->
+          <div class="p-4 rounded-2xl border border-purple-200 bg-purple-50/40 flex flex-col justify-between gap-2.5 transition">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-700 text-white uppercase tracking-wider">Zone Nationale</span>
-                <span class="text-xs font-bold text-slate-700">Fédération Nationale (Toute la France)</span>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-700 text-white uppercase tracking-wider">Zone Nationale FNPC</span>
+                <span class="text-xs font-bold text-purple-900">Ordre de Mission Fédéral</span>
               </div>
-              <span class="text-[11px] font-bold ${eligibility.national.eligible ? 'text-emerald-700 font-black' : 'text-slate-400'}">
-                ${eligibility.national.eligible ? '🚨 MAJEUR DÉVERROUILLÉ' : '🔒 Verrouillé'}
+              <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${isAdmin ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-600'}">
+                ${isAdmin ? '👑 Mode Admin Actif' : '🔒 Réservé Admin / FNPC'}
               </span>
             </div>
             <p class="text-[11px] text-slate-600">
-              Réservé exclusivement aux grands événements d'intérêt national et crises majeures IRL (JO, Coupe du Monde, Tempête Chido/Ciaran, Plan NOVI).
+              Ordre de mission national mobilisant l'ensemble des antennes françaises. Déclenché <strong>uniquement par les administrateurs</strong> lors de catastrophes majeures ou crises ORSEC.
             </p>
             <div class="flex items-center justify-between pt-1">
-              <span class="text-[10px] text-slate-500 font-semibold max-w-xs">${eligibility.national.reason}</span>
-              ${eligibility.national.eligible ? `
+              <span class="text-[10px] text-slate-500 font-semibold max-w-xs">Déclenchement centralisé depuis le Panel Admin FNPC</span>
+              ${isAdmin ? `
                 <button onclick="window.ProtecMultiplayer.submitRenfortRequest(window.game, '${mission.id}', 'national')" class="px-4 py-2 rounded-xl text-xs font-black bg-purple-700 hover:bg-purple-800 text-white transition shadow-md flex items-center gap-1.5 cursor-pointer animate-pulse">
                   <i data-lucide="siren" class="w-3.5 h-3.5"></i>
-                  Mobilisation Fédérale
+                  Déclencher (Admin)
                 </button>
               ` : `
-                <button disabled class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed">
-                  Réservé Événements Majeurs
-                </button>
+                <span class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1">
+                  <span>🔒</span> Réservé Direction Nationale
+                </span>
               `}
             </div>
           </div>
@@ -352,6 +356,12 @@ window.ProtecMultiplayer = {
 
     this.injectState(game);
     const needed = Math.max(1, (mission.requiredVolunteers || 4) - (mission.registeredVolunteers?.length || 0));
+    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
+
+    if (zone === 'national' && !isAdmin) {
+      game.showToast('Accès Restreint', 'Les renforts nationaux sont exclusivement déclenchés par les administrateurs FNPC.', 'orange');
+      return;
+    }
 
     // Gestion du quota départemental
     if (zone === 'departemental') {
@@ -362,10 +372,13 @@ window.ProtecMultiplayer = {
       game.weeklyDeptRenforts.count += 1;
     }
 
+    const myDept = game.player?.departmentCode || game.stations?.[0]?.departmentCode || '54';
+    const zoneDef = window.ProtecDepartements?.getZoneDefense(myDept) || { name: 'Zone de Défense', shortName: 'Zonale' };
+
     const zoneLabels = {
       departemental: 'Départementale',
-      regional: 'Régionale',
-      national: 'Nationale (Fédérale)'
+      regional: `Zone de Défense (${zoneDef.shortName})`,
+      national: 'Nationale FNPC'
     };
 
     const renfortData = {
@@ -424,6 +437,11 @@ window.ProtecMultiplayer = {
     }).catch(() => {
       game.renforts.unshift(renfortData);
     });
+
+    // Diffusion en temps réel à toutes les antennes connectées
+    if (window.ProtecSupabase && window.ProtecSupabase.broadcastRenfortCreated) {
+      window.ProtecSupabase.broadcastRenfortCreated(renfortData);
+    }
 
     const modal = document.getElementById('renfort-zone-modal');
     if (modal) modal.classList.add('hidden');

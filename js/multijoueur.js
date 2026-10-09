@@ -223,48 +223,108 @@ window.ProtecMultiplayer = {
       document.body.appendChild(modal);
     }
 
+    const myDept = game.player?.departmentCode || game.stations?.[0]?.departmentCode || '54';
+    const zoneDef = window.ProtecDepartements?.getZoneDefense(myDept) || { name: 'Zone de Défense et de Sécurité', shortName: 'Zone Zonale' };
+    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
+
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-5 bg-white border border-slate-200 text-slate-800">
+      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-5 bg-white border border-slate-200 text-slate-800 max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
               <i data-lucide="handshake" class="w-5 h-5"></i>
             </div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Demande de Renfort Inter-Antennes</h3>
-              <p class="text-xs text-slate-500 font-semibold truncate max-w-sm">${mission.title} (${needed} personnels requis)</p>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Demande de Renfort Inter-Antennes Personnalisée</h3>
+              <p class="text-xs text-slate-500 font-semibold truncate max-w-sm">${mission.title} • Date : ${game.formatShortDate(mission.eventDate)}</p>
             </div>
           </div>
           <button onclick="document.getElementById('renfort-zone-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm">✕</button>
         </div>
 
-        <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
-          Sélectionnez la zone de mobilisation selon l'ampleur opérationnelle de la mission. Pour éviter les abus, les zones Régionale et Nationale sont réservées aux événements d'envergure.
+        <div class="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 text-xs text-indigo-900">
+          Configurez précisément les <strong>moyens humains et matériels</strong> dont votre antenne a besoin ainsi que le <strong>tarif d'indemnisation proposé</strong> aux associations partenaires.
         </div>
 
-        <!-- Choix de la zone -->
-        <div class="space-y-3">
-          
-          <!-- 1. ZONE DÉPARTEMENTALE -->
-          <div class="p-4 rounded-2xl border ${eligibility.departemental.canRequest ? 'border-sky-300 bg-sky-50/60' : 'border-slate-200 bg-slate-50 opacity-70'} flex flex-col justify-between gap-2.5 transition">
+        <!-- 1. PERSONNALISATION DES MOYENS HUMAINS -->
+        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+          <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">1. Effectif Secouriste Demandé :</label>
+          <div class="flex items-center gap-3">
+            <button onclick="const el=document.getElementById('renfort-vols-count'); el.value=Math.max(1, parseInt(el.value||1)-1);" class="w-9 h-9 rounded-xl bg-white border border-slate-300 text-slate-800 font-black text-base hover:bg-slate-100 transition shadow-xs">-</button>
+            <div class="flex-1">
+              <input type="number" id="renfort-vols-count" value="${needed}" min="1" max="30" class="w-full py-2 px-3 text-center text-sm font-black font-mono rounded-xl bg-white border border-slate-300 text-slate-900 focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <button onclick="const el=document.getElementById('renfort-vols-count'); el.value=Math.min(30, parseInt(el.value||1)+1);" class="w-9 h-9 rounded-xl bg-white border border-slate-300 text-slate-800 font-black text-base hover:bg-slate-100 transition shadow-xs">+</button>
+            <span class="text-xs font-bold text-slate-600">secouriste(s)</span>
+          </div>
+          <p class="text-[11px] text-slate-500">Déficit actuel calculé pour l'événement : <strong>${needed}</strong> personne(s).</p>
+        </div>
+
+        <!-- 2. PERSONNALISATION DES MOYENS MATÉRIELS & VÉHICULES -->
+        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+          <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">2. Moyens Matériels & Véhicules Demandés :</label>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
+              <input type="checkbox" id="renfort-veh-vpsp" ${(mission.requiredVehicles && mission.requiredVehicles.includes('VPSP')) ? 'checked' : ''} class="w-4 h-4 text-indigo-600 rounded">
+              <span class="font-bold text-slate-800">🚑 Ambulance VPSP</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
+              <input type="checkbox" id="renfort-veh-vtu" class="w-4 h-4 text-indigo-600 rounded">
+              <span class="font-bold text-slate-800">🚐 Véhicule Tout Usage (VTU)</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
+              <input type="checkbox" id="renfort-veh-vl" class="w-4 h-4 text-indigo-600 rounded">
+              <span class="font-bold text-slate-800">🚗 Véhicule Léger (VL)</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
+              <input type="checkbox" id="renfort-mat-pma" class="w-4 h-4 text-indigo-600 rounded">
+              <span class="font-bold text-slate-800">⛺ Lot PMA / Poste Médical</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
+              <input type="checkbox" id="renfort-mat-dae" class="w-4 h-4 text-indigo-600 rounded">
+              <span class="font-bold text-slate-800">⚡ Lot DAE & Réanimation</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
+              <input type="checkbox" id="renfort-mat-tente" class="w-4 h-4 text-indigo-600 rounded">
+              <span class="font-bold text-slate-800">🎪 Tente de Secours 3x3m</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 3. INDEMNISATION PROPOSÉE (€) -->
+        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">3. Tarif d'Indemnisation Proposé (€) :</label>
+            <span class="text-[10px] text-slate-500 font-semibold">Versé à l'antenne qui apporte son renfort</span>
+          </div>
+          <div class="relative rounded-xl shadow-xs">
+            <input type="number" id="renfort-custom-tariff" value="${Math.max(100, needed * 45 + 50)}" min="50" max="5000" step="10" class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 font-mono font-black text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500">
+            <span class="absolute right-3.5 top-2.5 text-slate-400 font-bold">€</span>
+          </div>
+          <p class="text-[11px] text-slate-500">Montant indicatif conseillé pour attirer rapidement des renforts volontaires.</p>
+        </div>
+
+        <!-- 4. SÉLECTION DE L'ÉCHELON DE MOBILISATION -->
+        <div class="space-y-3 pt-1">
+          <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">4. Échelon de Mobilisation & Envoi :</label>
+
+          <!-- ÉCHELON DÉPARTEMENTAL -->
+          <div class="p-3.5 rounded-2xl border ${eligibility.departemental.canRequest ? 'border-sky-300 bg-sky-50/60' : 'border-slate-200 bg-slate-50 opacity-70'} flex flex-col justify-between gap-2 transition">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-600 text-white uppercase tracking-wider">Zone Départementale</span>
-                <span class="text-xs font-bold text-slate-700">Antennes du département</span>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-600 text-white uppercase tracking-wider">Échelon Départemental</span>
+                <span class="text-xs font-bold text-slate-700">Antennes du département (${myDept})</span>
               </div>
               <span class="text-[11px] font-extrabold ${eligibility.departemental.canRequest ? 'text-sky-800' : 'text-rose-600'}">
                 ${eligibility.departemental.used} / ${eligibility.departemental.max} utilisés cette semaine
               </span>
             </div>
-            <p class="text-[11px] text-slate-600">
-              Mobilise les directeurs d'antenne de votre département. Aucune restriction sur le type de mission.
-            </p>
             <div class="flex items-center justify-between pt-1">
               <span class="text-[10px] text-slate-500 font-semibold">${eligibility.departemental.reason}</span>
               ${eligibility.departemental.canRequest ? `
                 <button onclick="window.ProtecMultiplayer.submitRenfortRequest(window.game, '${mission.id}', 'departemental')" class="px-4 py-2 rounded-xl text-xs font-black bg-sky-600 hover:bg-sky-700 text-white transition shadow-sm flex items-center gap-1.5 cursor-pointer">
                   <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                  Mobiliser Département
+                  Mobiliser le Département
                 </button>
               ` : `
                 <button disabled class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed">
@@ -274,64 +334,57 @@ window.ProtecMultiplayer = {
             </div>
           </div>
 
-          <!-- 2. ZONE RÉGIONALE -->
-          <div class="p-4 rounded-2xl border ${eligibility.regional.eligible ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 bg-slate-100 opacity-60'} flex flex-col justify-between gap-2.5 transition">
+          <!-- ZONE DE DÉFENSE ET DE SÉCURITÉ -->
+          <div class="p-3.5 rounded-2xl border ${eligibility.regional.eligible ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 bg-slate-100 opacity-60'} flex flex-col justify-between gap-2 transition">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-600 text-white uppercase tracking-wider">Zone Régionale</span>
-                <span class="text-xs font-bold text-slate-700">Toute la région administrative</span>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-600 text-white uppercase tracking-wider">Zone de Défense & Sécurité</span>
+                <span class="text-xs font-bold text-slate-700">${zoneDef.name}</span>
               </div>
               <span class="text-[11px] font-bold ${eligibility.regional.eligible ? 'text-emerald-700' : 'text-slate-400'}">
-                ${eligibility.regional.eligible ? '✓ Éligible' : '🔒 Verrouillé'}
+                ${eligibility.regional.eligible ? '✓ Éligible' : '🔒 Requiert DPS-ME / DPS-GE'}
               </span>
             </div>
-            <p class="text-[11px] text-slate-600">
-              Déclenche l'entraide régionale pour les grands rassemblements, festivals et sinistres météo de secteur.
-            </p>
             <div class="flex items-center justify-between pt-1">
               <span class="text-[10px] text-slate-500 font-semibold max-w-xs">${eligibility.regional.reason}</span>
               ${eligibility.regional.eligible ? `
                 <button onclick="window.ProtecMultiplayer.submitRenfortRequest(window.game, '${mission.id}', 'regional')" class="px-4 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-sm flex items-center gap-1.5 cursor-pointer">
                   <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                  Mobiliser Région
+                  Mobiliser la Zone de Défense
                 </button>
               ` : `
                 <button disabled class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed">
-                  Non Éligible
+                  Non Éligible (Besoin ≥ 6 secouristes)
                 </button>
               `}
             </div>
           </div>
 
-          <!-- 3. ZONE NATIONALE -->
-          <div class="p-4 rounded-2xl border ${eligibility.national.eligible ? 'border-purple-300 bg-purple-50/70' : 'border-slate-200 bg-slate-100 opacity-60'} flex flex-col justify-between gap-2.5 transition">
+          <!-- ZONE NATIONALE (FNPC) - RÉSERVÉE ADMIN -->
+          <div class="p-3.5 rounded-2xl border border-purple-200 bg-purple-50/40 flex flex-col justify-between gap-2 transition">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-700 text-white uppercase tracking-wider">Zone Nationale</span>
-                <span class="text-xs font-bold text-slate-700">Fédération Nationale (Toute la France)</span>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-700 text-white uppercase tracking-wider">Zone Nationale FNPC</span>
+                <span class="text-xs font-bold text-purple-900">Ordre Fédéral ORSEC</span>
               </div>
-              <span class="text-[11px] font-bold ${eligibility.national.eligible ? 'text-emerald-700 font-black' : 'text-slate-400'}">
-                ${eligibility.national.eligible ? '🚨 MAJEUR DÉVERROUILLÉ' : '🔒 Verrouillé'}
+              <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${isAdmin ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-600'}">
+                ${isAdmin ? '👑 Mode Admin Actif' : '🔒 Réservé Admin / FNPC'}
               </span>
             </div>
-            <p class="text-[11px] text-slate-600">
-              Réservé exclusivement aux grands événements d'intérêt national et crises majeures IRL (JO, Coupe du Monde, Tempête Chido/Ciaran, Plan NOVI).
-            </p>
             <div class="flex items-center justify-between pt-1">
-              <span class="text-[10px] text-slate-500 font-semibold max-w-xs">${eligibility.national.reason}</span>
-              ${eligibility.national.eligible ? `
+              <span class="text-[10px] text-slate-500 font-semibold max-w-xs">Crises majeures nationales ou NOVI</span>
+              ${isAdmin ? `
                 <button onclick="window.ProtecMultiplayer.submitRenfortRequest(window.game, '${mission.id}', 'national')" class="px-4 py-2 rounded-xl text-xs font-black bg-purple-700 hover:bg-purple-800 text-white transition shadow-md flex items-center gap-1.5 cursor-pointer animate-pulse">
                   <i data-lucide="siren" class="w-3.5 h-3.5"></i>
-                  Mobilisation Fédérale
+                  Déclencher (Admin)
                 </button>
               ` : `
-                <button disabled class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed">
-                  Réservé Événements Majeurs
-                </button>
+                <span class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1">
+                  <span>🔒</span> Réservé Direction Nationale
+                </span>
               `}
             </div>
           </div>
-
         </div>
 
         <div class="flex justify-end pt-2 border-t border-slate-100">
@@ -351,7 +404,29 @@ window.ProtecMultiplayer = {
     if (!mission) return;
 
     this.injectState(game);
-    const needed = Math.max(1, (mission.requiredVolunteers || 4) - (mission.registeredVolunteers?.length || 0));
+    const defaultNeeded = Math.max(1, (mission.requiredVolunteers || 4) - (mission.registeredVolunteers?.length || 0));
+    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
+
+    if (zone === 'national' && !isAdmin) {
+      game.showToast('Accès Restreint', 'Les renforts nationaux sont exclusivement déclenchés par les administrateurs FNPC.', 'orange');
+      return;
+    }
+
+    // Récupération des paramètres personnalisés saisis par le joueur
+    const customVolsInput = document.getElementById('renfort-vols-count');
+    const customTariffInput = document.getElementById('renfort-custom-tariff');
+
+    const requestedVols = customVolsInput ? (parseInt(customVolsInput.value) || defaultNeeded) : defaultNeeded;
+    const requestedTariff = customTariffInput ? (parseFloat(customTariffInput.value) || (zone === 'national' ? 450 : zone === 'regional' ? 300 : 200)) : (zone === 'national' ? 450 : zone === 'regional' ? 300 : 200);
+
+    // Récupération des véhicules et matériels cochés
+    const selectedVehicles = [];
+    if (document.getElementById('renfort-veh-vpsp')?.checked) selectedVehicles.push('Ambulance VPSP');
+    if (document.getElementById('renfort-veh-vtu')?.checked) selectedVehicles.push('VTU');
+    if (document.getElementById('renfort-veh-vl')?.checked) selectedVehicles.push('VL');
+    if (document.getElementById('renfort-mat-pma')?.checked) selectedVehicles.push('Lot PMA');
+    if (document.getElementById('renfort-mat-dae')?.checked) selectedVehicles.push('DAE/Oxygène');
+    if (document.getElementById('renfort-mat-tente')?.checked) selectedVehicles.push('Tente 3x3');
 
     // Gestion du quota départemental
     if (zone === 'departemental') {
@@ -362,11 +437,16 @@ window.ProtecMultiplayer = {
       game.weeklyDeptRenforts.count += 1;
     }
 
+    const myDept = game.player?.departmentCode || game.stations?.[0]?.departmentCode || '54';
+    const zoneDef = window.ProtecDepartements?.getZoneDefense(myDept) || { name: 'Zone de Défense', shortName: 'Zonale' };
+
     const zoneLabels = {
       departemental: 'Départementale',
-      regional: 'Régionale',
-      national: 'Nationale (Fédérale)'
+      regional: `Zone de Défense (${zoneDef.shortName})`,
+      national: 'Nationale FNPC'
     };
+
+    const unitRequestedStr = `${requestedVols} secouriste(s)${selectedVehicles.length > 0 ? ' + ' + selectedVehicles.join(', ') : ''}`;
 
     const renfortData = {
       id: `renf-${Date.now()}`,
@@ -379,9 +459,11 @@ window.ProtecMultiplayer = {
       zone: zone,
       zoneLabel: zoneLabels[zone],
       title: `[${zoneLabels[zone].toUpperCase()}] Renfort pour ${mission.title}`,
-      desc: `Dispositif prévu le ${game.formatShortDate(mission.eventDate)}. Besoin de ${needed} secouriste(s) ou VPSP.`,
-      unitRequested: `${needed} secouristes ou VPSP`,
-      indemnite: zone === 'national' ? 450 : zone === 'regional' ? 300 : 200,
+      desc: `Dispositif prévu le ${game.formatShortDate(mission.eventDate)}. Besoin de ${unitRequestedStr}.`,
+      unitRequested: unitRequestedStr,
+      requestedVolunteersCount: requestedVols,
+      requestedVehicles: selectedVehicles,
+      indemnite: requestedTariff,
       createdAt: new Date().toISOString(),
       status: 'open'
     };
@@ -389,7 +471,7 @@ window.ProtecMultiplayer = {
     // Diffusion dans le bon canal de messagerie si le système est actif
     if (window.ProtecMessaging) {
       window.ProtecMessaging.injectState(game);
-      const msgText = `📢 [DEMANDE DE RENFORT ${zoneLabels[zone].toUpperCase()}] Besoin urgent de ${needed} effectifs pour « ${mission.title} ». Indemnité : +${renfortData.indemnite} €.`;
+      const msgText = `📢 [DEMANDE DE RENFORT ${zoneLabels[zone].toUpperCase()}] Besoin urgent : ${renfortData.unitRequested} pour « ${mission.title} ». Indemnité proposée : +${renfortData.indemnite} €.`;
       const timeStr = `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`;
       
       const newMsg = {
@@ -424,6 +506,11 @@ window.ProtecMultiplayer = {
     }).catch(() => {
       game.renforts.unshift(renfortData);
     });
+
+    // Diffusion en temps réel à toutes les antennes connectées
+    if (window.ProtecSupabase && window.ProtecSupabase.broadcastRenfortCreated) {
+      window.ProtecSupabase.broadcastRenfortCreated(renfortData);
+    }
 
     const modal = document.getElementById('renfort-zone-modal');
     if (modal) modal.classList.add('hidden');
@@ -2327,6 +2414,12 @@ window.ProtecMultiplayer = {
         obtainedAt: new Date().toLocaleDateString('fr-FR')
       });
     }
+
+    // Synchronisation avec le nouveau module officiel ProtecEcussons
+    if (window.ProtecEcussons) {
+      const code = badgeData.code || 'renf_dps_ge';
+      window.ProtecEcussons.attribuerEcusson(code, null, true);
+    }
   },
 
   // Rendu de l'onglet Événements Communautaires dans le module Alliance
@@ -2353,6 +2446,10 @@ window.ProtecMultiplayer = {
             </p>
           </div>
           <div class="flex items-center gap-2">
+            <button onclick="window.game.openModule('ecussons');" class="px-3.5 py-2 rounded-xl text-[11px] font-black bg-amber-400 hover:bg-amber-300 text-slate-900 transition flex items-center gap-1.5 cursor-pointer flex-shrink-0 shadow-sm" title="Ouvrir le tableau d'écussons et la bourse aux échanges">
+              <span>📌</span>
+              <span>Tableau d'Écussons & Troc</span>
+            </button>
             ${isAdmin ? `
               <button onclick="window.ProtecAdmin.openAdminModal(window.game); window.ProtecAdmin.switchTab('events');" class="px-3 py-2 rounded-xl text-xs font-black bg-amber-400 hover:bg-amber-300 text-slate-900 transition shadow-sm flex items-center gap-1.5 cursor-pointer">
                 <i data-lucide="shield" class="w-4 h-4"></i>

@@ -1,0 +1,1905 @@
+/**
+ * PROTEC LIVE - PANEL ADMINISTRATEUR (GESTION DE TOUS LES JOUEURS)
+ * Permet à l'administrateur de superviser la base de données,
+ * modifier les trésoreries, réinitialiser des mots de passe,
+ * gérer les bannissements et diffuser des alertes globales.
+ */
+
+window.ProtecAdmin = {
+  usersCache: [],
+  archivesCache: [],
+  eventsCache: [],
+  activeTab: 'joueurs',
+  searchFilter: '',
+
+  getAuthHeaders() {
+    const token = localStorage.getItem('protec_auth_token') || '';
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'x-admin-key': 'protec_admin_secret_2026'
+    };
+  },
+
+  async openAdminModal(game) {
+    let modal = document.getElementById('admin-modal');
+    if (!modal) {
+      this.createAdminModalDOM();
+      modal = document.getElementById('admin-modal');
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (window.lucide) window.lucide.createIcons();
+
+    await this.loadAdminData(game);
+  },
+
+  switchTab(tab) {
+    this.activeTab = tab;
+    const tabPlayersBtn = document.getElementById('admin-tab-players-btn');
+    const tabArchivesBtn = document.getElementById('admin-tab-archives-btn');
+    const tabMissionsBtn = document.getElementById('admin-tab-missions-btn');
+    const tabEventsBtn = document.getElementById('admin-tab-events-btn');
+    const viewPlayers = document.getElementById('admin-view-players');
+    const viewArchives = document.getElementById('admin-view-archives');
+    const viewMissions = document.getElementById('admin-view-missions');
+    const viewEvents = document.getElementById('admin-view-events');
+
+    const defaultClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition';
+    const activeClass = 'px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition';
+
+    if (tabPlayersBtn) tabPlayersBtn.className = (tab === 'joueurs' ? activeClass : defaultClass);
+    if (tabArchivesBtn) tabArchivesBtn.className = (tab === 'archives' ? activeClass : defaultClass);
+    if (tabMissionsBtn) tabMissionsBtn.className = (tab === 'missions' ? activeClass : defaultClass);
+    if (tabEventsBtn) tabEventsBtn.className = (tab === 'events' ? activeClass : defaultClass);
+
+    if (viewPlayers) viewPlayers.classList.toggle('hidden', tab !== 'joueurs');
+    if (viewArchives) viewArchives.classList.toggle('hidden', tab !== 'archives');
+    if (viewMissions) viewMissions.classList.toggle('hidden', tab !== 'missions');
+    if (viewEvents) viewEvents.classList.toggle('hidden', tab !== 'events');
+
+    if (tab === 'archives') {
+      this.loadResetArchives();
+    } else if (tab === 'events') {
+      this.loadEventsData();
+    }
+  },
+
+  async loadResetArchives() {
+    const tbody = document.getElementById('admin-archives-tbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-xs text-slate-500 font-semibold animate-pulse">Chargement des archives de sauvegarde...</td></tr>`;
+
+    try {
+      const res = await fetch('/api/admin/reset-archives', { headers: this.getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        this.archivesCache = data.archives || [];
+        this.renderArchivesTable();
+      } else {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-xs text-red-500 font-bold">Impossible de récupérer les archives.</td></tr>`;
+      }
+    } catch (e) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-xs text-red-500 font-bold">Erreur de connexion.</td></tr>`;
+    }
+  },
+
+  renderArchivesTable() {
+    const tbody = document.getElementById('admin-archives-tbody');
+    if (!tbody) return;
+
+    if (this.archivesCache.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-xs text-slate-400 font-semibold">Aucune archive de remise à zéro enregistrée en BDD.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = this.archivesCache.map(arc => {
+      const dateStr = new Date(arc.timestamp).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+      const moneyStr = arc.money !== null ? `${Number(arc.money).toLocaleString('fr-FR')} €` : 'N/A';
+
+      return `
+        <tr class="border-b border-slate-100 hover:bg-slate-50/70 transition text-xs">
+          <td class="py-3 px-3">
+            <span class="font-mono text-[11px] text-slate-500 font-bold">${arc.id}</span>
+            <div class="text-[10px] text-slate-400">${dateStr}</div>
+          </td>
+          <td class="py-3 px-3">
+            <div class="font-black text-slate-900">${arc.username}</div>
+            <div class="text-[10px] text-slate-400 font-mono">ID: ${arc.userId}</div>
+          </td>
+          <td class="py-3 px-3 font-extrabold text-emerald-600 mono-num">
+            ${moneyStr}
+          </td>
+          <td class="py-3 px-3 text-slate-600">
+            <span class="font-bold text-pc-blue">${arc.volunteersCount}</span> secouristes • 
+            <span class="font-bold text-slate-700">${arc.stationsCount}</span> antenne(s)
+          </td>
+          <td class="py-3 px-3 text-[11px] text-slate-500 italic">
+            ${arc.reason}
+          </td>
+          <td class="py-3 px-3 text-right">
+            <button onclick="window.ProtecAdmin.confirmRestoreArchive('${arc.id}', '${arc.userId}', '${arc.username}')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center gap-1 ml-auto">
+              <span>Restituer au Joueur</span>
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  async confirmRestoreArchive(archiveId, userId, username) {
+    if (!confirm(`Voulez-vous restaurer cette archive de sauvegarde pour le joueur « ${username} » ? Sa partie actuelle sera remplacée par cette sauvegarde.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/restore-archive', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ archiveId, targetUserId: userId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (window.game) window.game.showToast('Partie Restituée !', `L'archive a été restaurée pour ${username}.`, 'green');
+        alert(`Succès : La sauvegarde a été réattribuée à ${username}. Le joueur peut recharger sa partie depuis le Cloud.`);
+        await this.loadAdminData(window.game);
+        this.switchTab('joueurs');
+      } else {
+        alert(data.error || 'Erreur lors de la restitution.');
+      }
+    } catch (e) {
+      alert('Erreur réseau lors de la restauration.');
+    }
+  },
+
+  async loadEventsData() {
+    const container = document.getElementById('admin-events-list-container');
+    if (container) {
+      container.innerHTML = `<div class="p-6 text-center text-xs text-slate-500 font-semibold animate-pulse">Chargement des événements proposés...</div>`;
+    }
+
+    try {
+      const res = await fetch('/api/events');
+      if (res.ok) {
+        const data = await res.json();
+        this.eventsCache = data.communityEvents || [];
+      } else {
+        this.eventsCache = (window.game && window.game.communityEvents) || [];
+      }
+    } catch (e) {
+      this.eventsCache = (window.game && window.game.communityEvents) || [];
+    }
+
+    if (window.game && window.game.communityEvents) {
+      window.game.communityEvents.forEach(ge => {
+        if (!this.eventsCache.some(ce => ce.id === ge.id)) {
+          this.eventsCache.push(ge);
+        }
+      });
+    }
+
+    this.renderEventsTable();
+  },
+
+  renderEventsTable() {
+    const container = document.getElementById('admin-events-list-container');
+    if (!container) return;
+
+    if (!this.eventsCache || this.eventsCache.length === 0) {
+      container.innerHTML = `
+        <div class="p-8 rounded-2xl glass-card text-center text-slate-400 text-xs italic">
+          Aucun événement proposé par les directeurs dans la base de données.
+        </div>
+      `;
+      return;
+    }
+
+    const sorted = [...this.eventsCache].sort((a, b) => {
+      if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
+      if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
+      return (new Date(b.createdAt || 0)) - (new Date(a.createdAt || 0));
+    });
+
+    container.innerHTML = sorted.map(ev => {
+      const b = ev.badge || {};
+      const isPending = ev.status === 'pending_approval';
+      const isOpen = ev.status === 'open' || !ev.status;
+      const isRejected = ev.status === 'rejected';
+
+      const statusBadge = isPending 
+        ? `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> En Attente de Validation</span>`
+        : isOpen
+        ? `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">✓ Validé & En Ligne</span>`
+        : `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">✕ Refusé</span>`;
+
+      return `
+        <div class="p-4 rounded-2xl bg-white border ${isPending ? 'border-amber-300 ring-2 ring-amber-100' : 'border-slate-200'} shadow-sm space-y-3" id="admin-event-row-${ev.id}">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-800 uppercase">${ev.category || 'Événement'}</span>
+                ${statusBadge}
+              </div>
+              <h4 class="text-sm font-black text-slate-900">${ev.title}</h4>
+              <p class="text-xs text-slate-500 font-medium">
+                Organisateur : <strong class="text-slate-700">${ev.organizerPlayerName}</strong> (${ev.stationName || 'Antenne'} • ${ev.city || 'Ville'})
+              </p>
+            </div>
+            <div class="text-right">
+              <span class="text-xs font-black text-emerald-700 mono-num">+${ev.rewardMoney} €</span>
+              <div class="text-[10px] text-slate-400">ID: ${ev.id}</div>
+            </div>
+          </div>
+
+          <!-- LOCALISATION & ADRESSE OBLIGATOIRE -->
+          <div class="p-2.5 rounded-xl bg-sky-50/70 border border-sky-200 text-xs text-sky-950 flex items-center justify-between">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <i data-lucide="map-pin" class="w-4 h-4 text-sky-600 flex-shrink-0"></i>
+              <span class="truncate">Adresse : <strong class="text-slate-900">${ev.address || (ev.lat && ev.lng ? `Point GPS: ${ev.lat.toFixed(4)}, ${ev.lng.toFixed(4)}` : `${ev.locationName}, ${ev.city}`)}</strong></span>
+            </div>
+            <span class="text-[10px] font-mono font-bold text-sky-700 flex-shrink-0 ml-2">GPS : ${Number(ev.lat || 0).toFixed(4)}, ${Number(ev.lng || 0).toFixed(4)}</span>
+          </div>
+
+          <!-- EFFECTIF, DURÉE, INDEMNISATION BASÉE SUR PERSONNEL & MOYENS -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-600">
+            <div>Public : <strong class="text-slate-800">${Number(ev.publicCount || 0).toLocaleString('fr-FR')} pers.</strong></div>
+            <div>Effectif : <strong class="text-slate-800">${ev.requiredVolunteers} secouristes</strong></div>
+            <div>Durée : <strong class="text-slate-800">${ev.durationHours}h</strong></div>
+            <div>Indemnité : <strong class="text-emerald-700">${ev.rewardMoney} € (15€/h + moyens)</strong></div>
+          </div>
+
+          <!-- ÉCUSSON : LIEN D'IMAGE, UNITÉS ET RARETÉ STRICTE -->
+          ${b.name ? `
+            <div class="p-3 rounded-xl bg-purple-50/70 border border-purple-200 flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-700 to-indigo-900 text-white flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden">
+                  ${b.imageUrl ? `
+                    <img src="${b.imageUrl}" alt="${b.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                    <div class="hidden w-full h-full items-center justify-center">
+                      <i data-lucide="${b.icon || 'award'}" class="w-5 h-5 text-white"></i>
+                    </div>
+                  ` : `
+                    <i data-lucide="${b.icon || 'award'}" class="w-5 h-5"></i>
+                  `}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-xs font-black text-purple-950">${b.name}</span>
+                    <span class="text-[9px] font-black px-1.5 py-0.2 rounded-full ${b.rarityColor || 'bg-purple-100 text-purple-800'}">${b.rarityTier}</span>
+                    <span class="text-[9px] font-bold text-purple-700 bg-white/80 px-1.5 py-0.2 rounded border border-purple-200">
+                      ${b.accessType === 'mission_ouverte' ? 'Mission Ouverte (Commun)' : `${b.availableUnits || 4} antenne(s) max`}
+                    </span>
+                  </div>
+                  <div class="text-[10px] text-purple-700 truncate mt-0.5">
+                    ${b.imageUrl ? `Lien image : <a href="${b.imageUrl}" target="_blank" class="underline text-indigo-700 font-bold">${b.imageUrl}</a>` : 'Aucun lien d\'image fourni (icône vectorielle)'}
+                  </div>
+                </div>
+              </div>
+              <div class="text-right flex-shrink-0">
+                <div class="text-xs font-black text-purple-950">⭐ ${b.rarityScore}/100</div>
+                <div class="text-[9px] text-purple-600 uppercase font-bold">Rareté</div>
+              </div>
+            </div>
+          ` : ''}
+
+          ${isRejected ? `
+            <div class="text-[11px] text-rose-700 font-semibold p-2 rounded-lg bg-rose-50 border border-rose-200">
+              Motif du refus : <em>${ev.rejectionReason || 'Non conforme aux critères'}</em>
+            </div>
+          ` : ''}
+
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+            <span class="text-[10px] text-slate-400">Date prévue : ${ev.eventDate?.day}/${ev.eventDate?.month}/${ev.eventDate?.year || 2026} à ${ev.eventDate?.hour || 14}h</span>
+            <div class="flex items-center gap-2">
+              <!-- POUVOIR DE L'ADMIN : MODIFIER TOUTES LES INFORMATIONS -->
+              <button onclick="window.ProtecAdmin.openEditEventModal('${ev.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition flex items-center gap-1 cursor-pointer" title="Modifier l'adresse, l'indemnisation, l'écusson et l'effectif">
+                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                Modifier Tout
+              </button>
+
+              ${isPending ? `
+                <button onclick="window.ProtecAdmin.promptRejectEvent('${ev.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-700 hover:bg-rose-50 border border-rose-200 transition cursor-pointer">
+                  ✕ Refuser
+                </button>
+                <button onclick="window.ProtecAdmin.approveEvent('${ev.id}')" class="px-4 py-1.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center gap-1 cursor-pointer">
+                  ✓ Valider & Publier
+                </button>
+              ` : isOpen ? `
+                <button onclick="window.ProtecAdmin.promptRejectEvent('${ev.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer">
+                  Suspendre / Retirer
+                </button>
+              ` : `
+                <button onclick="window.ProtecAdmin.approveEvent('${ev.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50 cursor-pointer">
+                  Réexaminer & Valider
+                </button>
+              `}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (window.lucide) window.lucide.createIcons();
+  },
+
+  // MODALE D'ÉDITION ADMINISTRATIVE COMPLÈTE D'UN ÉVÉNEMENT
+  openEditEventModal(eventId) {
+    const ev = (this.eventsCache || []).find(e => e.id === eventId);
+    if (!ev) return;
+
+    let modal = document.getElementById('admin-edit-event-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'admin-edit-event-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modal);
+    }
+
+    const b = ev.badge || {};
+    const bImg = b.imageUrl || '';
+    const accessType = (b.accessType && b.accessType !== 'en_attente') ? b.accessType : 'dps_departemental';
+    const units = b.availableUnits || 4;
+
+    modal.innerHTML = `
+      <div class="glass-panel w-full max-w-2xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-md">
+              <i data-lucide="edit-3" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Modifier l'Événement (Pouvoir Administrateur)</h3>
+              <p class="text-xs text-slate-500 font-semibold">Ajustez l'adresse, l'indemnisation, les moyens et l'écusson avant ou après validation</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('admin-edit-event-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+        </div>
+
+        <form id="admin-edit-event-form" onsubmit="event.preventDefault(); window.ProtecAdmin.saveEventEdit('${ev.id}');" class="space-y-3.5 text-xs">
+          <!-- Titre & Catégorie -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Intitulé de l'Événement :</label>
+              <input type="text" id="adm-evt-title" value="${ev.title}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Catégorie :</label>
+              <input type="text" id="adm-evt-category" value="${ev.category || 'Festival & Concert'}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <!-- ADRESSE & LOCALISATION -->
+          <div class="p-3.5 rounded-2xl bg-sky-50/80 border border-sky-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-sky-950 flex items-center gap-1.5">
+                <i data-lucide="map-pin" class="w-4 h-4 text-sky-600"></i>
+                Adresse & Point sur la Carte (Obligatoire)
+              </span>
+              <button type="button" onclick="window.ProtecAdmin.pickEventLocationOnMap()" class="px-3 py-1.5 rounded-xl bg-pc-blue hover:bg-blue-700 text-white font-extrabold text-[11px] shadow-sm flex items-center gap-1.5 cursor-pointer" title="Cliquer directement sur la carte pour définir la position de l'événement">
+                <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-300"></i>
+                <span>Placer un point sur la map</span>
+              </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="sm:col-span-2">
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Adresse postale :</label>
+                <input type="text" id="adm-evt-address" value="${ev.address || ev.locationName || ''}" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Ville :</label>
+                <input type="text" id="adm-evt-city" value="${ev.city || 'Paris'}" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <label class="block font-semibold text-slate-600 mb-0.5">Latitude (GPS) :</label>
+                <input type="number" step="0.0001" id="adm-evt-lat" value="${ev.lat || 48.8566}" class="w-full px-2.5 py-1 rounded-lg border border-slate-300 font-mono text-slate-800 bg-white text-xs" required />
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-0.5">Longitude (GPS) :</label>
+                <input type="number" step="0.0001" id="adm-evt-lng" value="${ev.lng || 2.3522}" class="w-full px-2.5 py-1 rounded-lg border border-slate-300 font-mono text-slate-800 bg-white text-xs" required />
+              </div>
+            </div>
+          </div>
+
+          <!-- EFFECTIF, DURÉE, MOYENS ET INDEMNISATION -->
+          <div class="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-emerald-950 flex items-center gap-1.5">
+                <i data-lucide="badge-euro" class="w-4 h-4 text-emerald-700"></i>
+                Indemnisation & Moyens Engagés (Modifiable par l'Admin)
+              </span>
+              <button type="button" onclick="window.ProtecAdmin.recalcIndemnisationInEditModal()" class="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10px] cursor-pointer">
+                ⚖️ Recalculer selon Barème
+              </button>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Secouristes Requis :</label>
+                <input type="number" id="adm-evt-volunteers" value="${ev.requiredVolunteers}" min="2" max="40" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Durée (Heures) :</label>
+                <input type="number" id="adm-evt-duration" value="${ev.durationHours}" min="1" max="48" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Indemnisation Totale (€) :</label>
+                <input type="number" id="adm-evt-reward" value="${ev.rewardMoney}" min="50" max="25000" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-emerald-700 bg-white" required />
+              </div>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Véhicules & Moyens Engagés :</label>
+              <input type="text" id="adm-evt-vehicles" value="${(ev.requiredVehicles || []).join(', ')}" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-medium text-slate-800 bg-white" />
+            </div>
+          </div>
+
+          <!-- ÉCUSSON : LIEN D'IMAGE ET RARETÉ STRICTE -->
+          <div class="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-2">
+            <span class="font-black text-purple-950 flex items-center gap-1.5">
+              <i data-lucide="award" class="w-4 h-4 text-purple-700"></i>
+              Écusson : Obtention, Quotas & Rareté Administrative
+            </span>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="sm:col-span-2">
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Lien / URL de l'image de l'écusson :</label>
+                <div class="flex gap-2 items-center">
+                  <input type="url" id="adm-badge-url" value="${bImg}" placeholder="https://..." oninput="window.ProtecAdmin.previewBadgeInEditModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-medium text-slate-800 bg-white" />
+                  <div id="adm-badge-preview-thumb" class="w-9 h-9 rounded-xl bg-purple-100 border border-purple-300 flex items-center justify-center flex-shrink-0 overflow-hidden text-[9px] font-bold text-purple-700">
+                    ${bImg ? `<img src="${bImg}" class="w-full h-full object-cover" onerror="this.parentElement.textContent='Erreur';" />` : 'Aperçu'}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Nom de l'Écusson :</label>
+                <input type="text" id="adm-badge-name" value="${b.name || `Écusson ${ev.title}`}" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Mode d'obtention de l'écusson :</label>
+                <select id="adm-badge-access-type" onchange="window.ProtecAdmin.updateRarityInEditModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
+                  <option value="mission_ouverte" ${accessType === 'mission_ouverte' ? 'selected' : ''}>Accès libre ordinaire (Commun - Tous participants)</option>
+                  <option value="dps_departemental" ${accessType === 'dps_departemental' ? 'selected' : ''}>DPS départemental standard (Peu Commun)</option>
+                  <option value="evenement_regional" ${accessType === 'evenement_regional' ? 'selected' : ''}>Événement régional (Rare)</option>
+                  <option value="evenement_special" ${accessType === 'evenement_special' ? 'selected' : ''}>Événement spécial (Très Rare - Quota d'antennes)</option>
+                  <option value="evenement_unique" ${accessType === 'evenement_unique' ? 'selected' : ''}>Événement unique / historique (Légendaire)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Unités disponibles / Antennes autorisées :</label>
+                <input type="number" id="adm-badge-units" value="${units}" min="1" max="50" oninput="window.ProtecAdmin.updateRarityInEditModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between p-2 rounded-xl bg-white border border-purple-200">
+              <span class="text-[11px] text-purple-900 font-bold">Rareté finale calculée :</span>
+              <span id="adm-badge-rarity-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${b.rarityColor || 'bg-purple-100 text-purple-800'}">
+                ${b.rarityTier || 'Très Rare'} (⭐ ${b.rarityScore || 85}/100)
+              </span>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+            <select id="adm-evt-status" class="px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-xs bg-slate-50">
+              <option value="pending_approval" ${ev.status === 'pending_approval' ? 'selected' : ''}>⏳ En Attente de Validation</option>
+              <option value="open" ${ev.status === 'open' ? 'selected' : ''}>✓ Validé & En Ligne</option>
+              <option value="rejected" ${ev.status === 'rejected' ? 'selected' : ''}>✕ Refusé</option>
+            </select>
+
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="document.getElementById('admin-edit-event-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">
+                Annuler
+              </button>
+              <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="check" class="w-4 h-4"></i>
+                Enregistrer les Modifications
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
+    this.updateRarityInEditModal();
+  },
+
+  pickEventLocationOnMap() {
+    if (!window.game) return;
+
+    const latInput = document.getElementById('adm-evt-lat');
+    const lngInput = document.getElementById('adm-evt-lng');
+    const addrInput = document.getElementById('adm-evt-address');
+    const cityInput = document.getElementById('adm-evt-city');
+
+    window.game.startLocationPicker({
+      title: "Positionnement de l'Événement (Admin)",
+      subtitle: "Cliquez sur la carte à l'emplacement exact où déployer l'événement",
+      onConfirm: (loc) => {
+        if (latInput) latInput.value = loc.lat.toFixed(4);
+        if (lngInput) lngInput.value = loc.lng.toFixed(4);
+        if (loc.address && addrInput) addrInput.value = loc.address;
+        if (loc.city && cityInput) cityInput.value = loc.city;
+        window.game.showToast('Emplacement Enregistré', `Position GPS validée : ${loc.address ? loc.address + ', ' : ''}${loc.city || ''} (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`, 'green');
+      }
+    });
+  },
+
+  geocodeAddressInEditModal() {
+    const addr = document.getElementById('adm-evt-address')?.value || '';
+    const city = document.getElementById('adm-evt-city')?.value || '';
+    const query = `${addr} ${city}`.trim();
+    if (!query) return;
+
+    fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=1`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.features && data.features.length > 0) {
+          const feat = data.features[0];
+          const coords = feat.geometry.coordinates;
+          const latInput = document.getElementById('adm-evt-lat');
+          const lngInput = document.getElementById('adm-evt-lng');
+          const addrInput = document.getElementById('adm-evt-address');
+          const cityInput = document.getElementById('adm-evt-city');
+          if (latInput) latInput.value = coords[1].toFixed(4);
+          if (lngInput) lngInput.value = coords[0].toFixed(4);
+          if (addrInput && feat.properties.name) addrInput.value = feat.properties.name;
+          if (cityInput && feat.properties.city) cityInput.value = feat.properties.city;
+          if (window.game) window.game.showToast('Adresse Localisée', `GPS : ${coords[1].toFixed(4)}, ${coords[0].toFixed(4)}`, 'green');
+        }
+      })
+      .catch(() => {});
+  },
+
+  recalcIndemnisationInEditModal() {
+    const vol = parseInt(document.getElementById('adm-evt-volunteers')?.value || '8', 10);
+    const dur = parseInt(document.getElementById('adm-evt-duration')?.value || '6', 10);
+    const veh = (document.getElementById('adm-evt-vehicles')?.value || '').split(',');
+    if (window.ProtecMultiplayer) {
+      const calc = window.ProtecMultiplayer.calculateEventIndemnisation(vol, dur, veh);
+      const rewInput = document.getElementById('adm-evt-reward');
+      if (rewInput) rewInput.value = calc.total;
+      if (window.game) window.game.showToast('Indemnisation Recalculée', `Total : ${calc.total} € (${vol} sec. × ${dur}h × 15€ + moyens)`, 'blue');
+    }
+  },
+
+  previewBadgeInEditModal() {
+    const url = document.getElementById('adm-badge-url')?.value.trim() || '';
+    const thumb = document.getElementById('adm-badge-preview-thumb');
+    if (!thumb) return;
+    if (url.length > 5) {
+      thumb.innerHTML = `<img src="${url}" class="w-full h-full object-cover" onerror="this.parentElement.textContent='Erreur';" />`;
+    } else {
+      thumb.textContent = 'Aperçu';
+    }
+  },
+
+  updateRarityInEditModal() {
+    const access = document.getElementById('adm-badge-access-type')?.value || 'evenement_special';
+    const units = parseInt(document.getElementById('adm-badge-units')?.value || '4', 10);
+    const badgeEl = document.getElementById('adm-badge-rarity-badge');
+    if (!badgeEl || !window.ProtecMultiplayer) return;
+
+    const rarity = window.ProtecMultiplayer.calculateBadgeRarity(access, units);
+    badgeEl.textContent = `${rarity.tier} (⭐ ${rarity.score}/100)`;
+    badgeEl.className = `px-2.5 py-0.5 rounded-full text-[10px] font-black border ${rarity.color}`;
+  },
+
+  saveEventEdit(eventId) {
+    const ev = (this.eventsCache || []).find(e => e.id === eventId);
+    if (!ev) return;
+
+    const title = document.getElementById('adm-evt-title')?.value.trim() || ev.title;
+    const category = document.getElementById('adm-evt-category')?.value.trim() || ev.category;
+    const address = document.getElementById('adm-evt-address')?.value.trim() || ev.address;
+    const city = document.getElementById('adm-evt-city')?.value.trim() || ev.city;
+    const lat = parseFloat(document.getElementById('adm-evt-lat')?.value || ev.lat || 48.8566);
+    const lng = parseFloat(document.getElementById('adm-evt-lng')?.value || ev.lng || 2.3522);
+    const volunteers = parseInt(document.getElementById('adm-evt-volunteers')?.value || ev.requiredVolunteers, 10);
+    const duration = parseInt(document.getElementById('adm-evt-duration')?.value || ev.durationHours, 10);
+    const reward = parseInt(document.getElementById('adm-evt-reward')?.value || ev.rewardMoney, 10);
+    const vehicles = (document.getElementById('adm-evt-vehicles')?.value || '').split(',').map(v => v.trim()).filter(Boolean);
+    const status = document.getElementById('adm-evt-status')?.value || ev.status;
+
+    const badgeName = document.getElementById('adm-badge-name')?.value.trim() || ev.badge?.name;
+    const badgeUrl = document.getElementById('adm-badge-url')?.value.trim() || '';
+    const badgeAccess = document.getElementById('adm-badge-access-type')?.value || 'evenement_special';
+    const badgeUnits = parseInt(document.getElementById('adm-badge-units')?.value || '4', 10);
+
+    const rarity = window.ProtecMultiplayer ? window.ProtecMultiplayer.calculateBadgeRarity(badgeAccess, badgeUnits) : { score: 85, tier: 'Très Rare', color: 'bg-purple-100 text-purple-800' };
+
+    const updatedBadge = {
+      ...(ev.badge || {}),
+      name: badgeName,
+      imageUrl: badgeUrl,
+      accessType: badgeAccess,
+      availableUnits: badgeUnits,
+      rarityScore: rarity.score,
+      rarityTier: rarity.tier,
+      rarityColor: rarity.color,
+      desc: rarity.desc
+    };
+
+    const updatedData = {
+      title,
+      category,
+      address,
+      locationName: address.split(',')[0] || address,
+      city,
+      lat,
+      lng,
+      requiredVolunteers: volunteers,
+      durationHours: duration,
+      rewardMoney: reward,
+      requiredVehicles: vehicles.length > 0 ? vehicles : ev.requiredVehicles,
+      status,
+      badge: updatedBadge
+    };
+
+    if (window.ProtecMultiplayer && window.game) {
+      window.ProtecMultiplayer.updateCommunityEvent(window.game, eventId, updatedData);
+    }
+
+    Object.assign(ev, updatedData);
+    const modal = document.getElementById('admin-edit-event-modal');
+    if (modal) modal.classList.add('hidden');
+
+    if (window.game) window.game.showToast('Événement Mis à Jour !', `Toutes les informations de « ${title} » ont été enregistrées avec succès.`, 'green');
+    this.renderEventsTable();
+  },
+
+  approveEvent(eventId) {
+    if (window.ProtecMultiplayer && window.game) {
+      window.ProtecMultiplayer.approveCommunityEvent(window.game, eventId);
+      const ev = this.eventsCache.find(e => e.id === eventId);
+      if (ev) ev.status = 'open';
+      this.renderEventsTable();
+    }
+  },
+
+  promptRejectEvent(eventId) {
+    const reason = prompt("Précisez le motif du refus (ex: effectif irréaliste, intitulé non conforme...) :", "Critères de sécurité non respectés");
+    if (reason !== null && reason.trim()) {
+      if (window.ProtecMultiplayer && window.game) {
+        window.ProtecMultiplayer.rejectCommunityEvent(window.game, eventId, reason.trim());
+        const ev = this.eventsCache.find(e => e.id === eventId);
+        if (ev) {
+          ev.status = 'rejected';
+          ev.rejectionReason = reason.trim();
+        }
+        this.renderEventsTable();
+      }
+    }
+  },
+
+  closeAdminModal() {
+    const modal = document.getElementById('admin-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+  },
+
+  async loadAdminData(game) {
+    const tableBody = document.getElementById('admin-players-tbody');
+    if (tableBody) {
+      tableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-xs text-slate-500 font-semibold animate-pulse">Chargement de la base de données des directeurs...</td></tr>`;
+    }
+
+    try {
+      // 1. Récupération des stats globales
+      const statsRes = await fetch('/api/admin/stats', { headers: this.getAuthHeaders() });
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        this.renderStats(statsData.stats);
+      }
+
+      // 2. Récupération des utilisateurs
+      const usersRes = await fetch('/api/admin/users', { headers: this.getAuthHeaders() });
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        this.usersCache = usersData.users || [];
+        this.renderUsersTable(game);
+      } else {
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-xs text-rose-600 font-bold">Accès refusé. Vous devez être connecté avec un compte Administrateur.</td></tr>`;
+        }
+      }
+    } catch (e) {
+      if (tableBody) {
+        tableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-xs text-rose-500 font-semibold">Erreur de communication avec le serveur BDD.</td></tr>`;
+      }
+    }
+  },
+
+  renderStats(stats) {
+    if (!stats) return;
+    const sUsers = document.getElementById('admin-stat-total-users');
+    const sOnline = document.getElementById('admin-stat-online');
+    const sSaves = document.getElementById('admin-stat-saves');
+    const sAlliances = document.getElementById('admin-stat-alliances');
+
+    if (sUsers) sUsers.textContent = stats.totalUsers || 0;
+    if (sOnline) sOnline.textContent = stats.activeOnline || 0;
+    if (sSaves) sSaves.textContent = stats.totalSavedGames || 0;
+    if (sAlliances) sAlliances.textContent = stats.alliancesCount || 0;
+  },
+
+  renderUsersTable(game) {
+    const tableBody = document.getElementById('admin-players-tbody');
+    if (!tableBody) return;
+
+    const term = (this.searchFilter || '').toLowerCase();
+    const filtered = this.usersCache.filter(u =>
+      u.username.toLowerCase().includes(term) ||
+      (u.stationName && u.stationName.toLowerCase().includes(term)) ||
+      (u.city && u.city.toLowerCase().includes(term))
+    );
+
+    if (filtered.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-xs text-slate-400 font-semibold">Aucun joueur ne correspond à la recherche.</td></tr>`;
+      return;
+    }
+
+    tableBody.innerHTML = filtered.map(u => {
+      const isOnline = !!(game && game.player && game.player.id === u.id);
+      const isBanned = u.isBanned;
+      const isAdmin = u.role === 'admin';
+
+      return `
+        <tr class="border-b border-slate-100 hover:bg-slate-50/70 transition text-xs">
+          <!-- Nom & Statut -->
+          <td class="py-3 px-3">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-xl ${isAdmin ? 'bg-indigo-100 text-indigo-700 font-black' : 'bg-slate-100 text-slate-700 font-bold'} flex items-center justify-center text-[10px]">
+                ${isAdmin ? '👑' : '👤'}
+              </div>
+              <div>
+                <div class="font-extrabold text-slate-800 flex items-center gap-1">
+                  ${u.username}
+                  ${isAdmin ? '<span class="text-[9px] bg-indigo-100 text-indigo-800 px-1 py-0.2 rounded font-black">ADMIN</span>' : ''}
+                  ${isBanned ? '<span class="text-[9px] bg-red-100 text-red-800 px-1 py-0.2 rounded font-black">BANNI</span>' : ''}
+                </div>
+                <div class="text-[10px] text-slate-400">ID: ${u.id.substring(0, 10)}...</div>
+              </div>
+            </div>
+          </td>
+
+          <!-- Antenne & Ville -->
+          <td class="py-3 px-3">
+            <div class="font-semibold text-slate-700">${u.stationName}</div>
+            <div class="text-[10px] text-slate-400 uppercase font-bold">${u.city}</div>
+          </td>
+
+          <!-- Trésorerie -->
+          <td class="py-3 px-3 font-extrabold text-emerald-600 mono-num">
+            ${Number(u.money || 0).toLocaleString('fr-FR')} €
+          </td>
+
+          <!-- Effectif & Véhicules -->
+          <td class="py-3 px-3 text-slate-600">
+            <span class="font-bold text-pc-blue">${u.volunteersCount || 0}</span> secouristes • 
+            <span class="font-bold text-slate-700">${u.vehiclesCount || 0}</span> véh.
+          </td>
+
+          <!-- Dernière Sauvegarde -->
+          <td class="py-3 px-3 text-[10px] text-slate-400">
+            ${u.lastSaved ? new Date(u.lastSaved).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'Jamais'}
+          </td>
+
+          <!-- Statut Compte -->
+          <td class="py-3 px-3">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isBanned ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">
+              ${isBanned ? 'Suspendu' : 'Actif'}
+            </span>
+          </td>
+
+          <!-- Actions d'administration -->
+          <td class="py-3 px-3 text-right">
+            <div class="flex items-center justify-end gap-1">
+              <!-- +10k € rapide -->
+              <button onclick="window.ProtecAdmin.quickAddMoney('${u.id}', 10000)" title="+10 000 €" class="px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition">
+                +10k€
+              </button>
+              <!-- Modifier trésorerie -->
+              <button onclick="window.ProtecAdmin.promptEditMoney('${u.id}', ${u.money || 0})" title="Changer Trésorerie" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+                💶
+              </button>
+              <!-- Réinitialiser MdP -->
+              <button onclick="window.ProtecAdmin.promptResetPassword('${u.id}', '${u.username}')" title="Réinitialiser Mot de passe" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+                🔑
+              </button>
+              <!-- Bannir / Débannir -->
+              <button onclick="window.ProtecAdmin.toggleBan('${u.id}', ${!isBanned})" title="${isBanned ? 'Débannir' : 'Bannir'}" class="px-2 py-1 rounded-lg text-[10px] font-bold ${isBanned ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} transition">
+                ${isBanned ? 'Débannir' : 'Bannir'}
+              </button>
+              <!-- Rôle Admin -->
+              <button onclick="window.ProtecAdmin.toggleAdminRole('${u.id}', '${isAdmin ? 'user' : 'admin'}')" title="Changer Rôle" class="p-1 rounded-lg text-indigo-600 hover:bg-indigo-50 transition">
+                👑
+              </button>
+              <!-- Supprimer joueur -->
+              <button onclick="window.ProtecAdmin.confirmDeleteUser('${u.id}', '${u.username}')" title="Supprimer joueur" class="p-1 rounded-lg text-red-500 hover:bg-red-50 transition">
+                🗑️
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    if (window.lucide) window.lucide.createIcons();
+  },
+
+  onSearchInput(val) {
+    this.searchFilter = val;
+    this.renderUsersTable(window.game);
+  },
+
+  async quickAddMoney(userId, amount) {
+    const user = this.usersCache.find(u => u.id === userId);
+    if (!user) return;
+    const newAmount = Number(user.money || 0) + amount;
+    await this.updateUser(userId, { money: newAmount }, `+${amount} € crédités à ${user.username}`);
+  },
+
+  async promptEditMoney(userId, currentMoney) {
+    const user = this.usersCache.find(u => u.id === userId);
+    if (!user) return;
+    const input = prompt(`Définir la trésorerie de ${user.username} (actuel : ${currentMoney} €) :`, currentMoney);
+    if (input !== null && !isNaN(input)) {
+      await this.updateUser(userId, { money: Number(input) }, `Trésorerie de ${user.username} fixée à ${input} €`);
+    }
+  },
+
+  async promptResetPassword(userId, username) {
+    const newPwd = prompt(`Nouveau mot de passe pour ${username} (min. 4 car.) :`);
+    if (newPwd && newPwd.trim().length >= 4) {
+      await this.updateUser(userId, { newPassword: newPwd.trim() }, `Mot de passe de ${username} réinitialisé.`);
+    }
+  },
+
+  async toggleBan(userId, shouldBan) {
+    const user = this.usersCache.find(u => u.id === userId);
+    if (!user) return;
+    if (confirm(`Confirmez-vous la suspension du compte de ${user.username} ?`)) {
+      await this.updateUser(userId, { isBanned: shouldBan }, shouldBan ? `${user.username} a été banni.` : `${user.username} a été réactivé.`);
+    }
+  },
+
+  async toggleAdminRole(userId, newRole) {
+    const user = this.usersCache.find(u => u.id === userId);
+    if (!user) return;
+    await this.updateUser(userId, { role: newRole }, `Rôle de ${user.username} changé en ${newRole}.`);
+  },
+
+  async updateUser(userId, payload, successToast) {
+    try {
+      const res = await fetch('/api/admin/user/update', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ userId, ...payload })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (window.game) window.game.showToast('Administration', successToast || 'Modifications enregistrées en BDD.', 'green');
+        await this.loadAdminData(window.game);
+      } else {
+        alert(data.error || 'Erreur lors de la modification.');
+      }
+    } catch (e) {
+      alert('Erreur réseau avec le serveur.');
+    }
+  },
+
+  async confirmDeleteUser(userId, username) {
+    if (!confirm(`ATTENTION : Voulez-vous définitivement supprimer le compte de ${username} et toutes ses données de jeu ? Cette action est irréversible.`)) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/admin/user/delete', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (window.game) window.game.showToast('Joueur Supprimé', `Le compte de ${username} a été purgé de la BDD.`, 'blue');
+        await this.loadAdminData(window.game);
+      } else {
+        alert(data.error || 'Erreur lors de la suppression.');
+      }
+    } catch (e) {
+      alert('Erreur réseau.');
+    }
+  },
+
+  async sendGlobalBroadcast(e) {
+    e.preventDefault();
+    const input = document.getElementById('admin-broadcast-input');
+    if (!input || !input.value.trim()) return;
+
+    const message = input.value.trim();
+    try {
+      const res = await fetch('/api/admin/broadcast', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          title: '🚨 DIRECTION NATIONALE (Message Flash)',
+          message: message,
+          type: 'orange'
+        })
+      });
+      if (res.ok) {
+        if (window.game) window.game.showToast('Message Diffusé', 'Alerte transmise en direct à tous les joueurs connectés.', 'green');
+        input.value = '';
+      }
+    } catch (e) {
+      alert('Erreur envoi broadcast.');
+    }
+  },
+
+  createAdminModalDOM() {
+    if (document.getElementById('admin-modal')) return;
+    const div = document.createElement('div');
+    div.id = 'admin-modal';
+    div.className = 'hidden fixed inset-0 z-[65] items-center justify-center bg-slate-950/80 backdrop-blur-md p-3 sm:p-6 animate-in fade-in';
+    div.innerHTML = `
+      <div class="w-full max-w-5xl rounded-3xl glass-panel-heavy border-2 border-indigo-500/50 p-5 sm:p-7 shadow-2xl relative text-left max-h-[92vh] flex flex-col">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-4 border-b border-slate-200/80 mb-4 flex-shrink-0">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-lg shadow-indigo-600/30">
+              👑
+            </div>
+            <div>
+              <h3 class="text-base sm:text-lg font-black text-slate-900 leading-tight">Panel Administrateur Protec Live</h3>
+              <p class="text-xs text-indigo-600 font-bold">Gestion globale des Directeurs & Antennes</p>
+            </div>
+          </div>
+          <button onclick="window.ProtecAdmin.closeAdminModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- 4 Cartes de Statistiques -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 flex-shrink-0">
+          <div class="p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
+            <div class="text-[9px] font-black uppercase text-slate-400">Directeurs Inscrits</div>
+            <div class="text-lg font-black text-slate-800" id="admin-stat-total-users">-</div>
+          </div>
+          <div class="p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
+            <div class="text-[9px] font-black uppercase text-emerald-600 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              En Ligne Multi
+            </div>
+            <div class="text-lg font-black text-emerald-600" id="admin-stat-online">-</div>
+          </div>
+          <div class="p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
+            <div class="text-[9px] font-black uppercase text-slate-400">Parties Sauvegardées</div>
+            <div class="text-lg font-black text-slate-800" id="admin-stat-saves">-</div>
+          </div>
+          <div class="p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
+            <div class="text-[9px] font-black uppercase text-slate-400">Alliances Actives</div>
+            <div class="text-lg font-black text-indigo-600" id="admin-stat-alliances">-</div>
+          </div>
+        </div>
+
+        <!-- Onglets Directeurs / Archives / Déclencheur Missions / Événements & Écussons -->
+        <div class="flex items-center gap-2 mb-3 border-b border-slate-200/80 pb-2 flex-shrink-0 flex-wrap">
+          <button id="admin-tab-players-btn" onclick="window.ProtecAdmin.switchTab('joueurs')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition">
+            👥 Directeurs & Comptes
+          </button>
+          <button id="admin-tab-events-btn" onclick="window.ProtecAdmin.switchTab('events')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5">
+            🏅 Événements & Écussons
+          </button>
+          <button id="admin-tab-archives-btn" onclick="window.ProtecAdmin.switchTab('archives')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5">
+            📦 Archives & Remises à Zéro
+          </button>
+          <button id="admin-tab-missions-btn" onclick="window.ProtecAdmin.switchTab('missions')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5">
+            🚀 Déclencheur de Missions (Tests)
+          </button>
+        </div>
+
+        <!-- Vue 1 : Directeurs & Comptes -->
+        <div id="admin-view-players" class="flex flex-col flex-1 min-h-0">
+          <!-- Message Flash Broadcast -->
+          <form onsubmit="window.ProtecAdmin.sendGlobalBroadcast(event)" class="mb-3 flex gap-2 flex-shrink-0">
+            <input type="text" id="admin-broadcast-input" placeholder="📢 Diffuser une annonce flash à tous les joueurs connectés..." 
+              class="flex-1 px-4 py-2 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+            <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition flex items-center gap-1.5 shadow-sm">
+              <span>Diffuser</span>
+            </button>
+          </form>
+
+          <!-- Recherche & Barre d'outils -->
+          <div class="flex items-center justify-between gap-3 mb-2 flex-shrink-0">
+            <input type="text" oninput="window.ProtecAdmin.onSearchInput(this.value)" placeholder="🔍 Rechercher un joueur, antenne, ville..." 
+              class="w-72 px-3 py-1.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none" />
+            <button onclick="window.ProtecAdmin.loadAdminData(window.game)" class="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
+              🔄 Rafraîchir
+            </button>
+          </div>
+
+          <!-- Table des Joueurs (Scrollable) -->
+          <div class="overflow-y-auto overflow-x-auto flex-1 rounded-2xl border border-slate-200/80 bg-white/60 no-scrollbar">
+            <table class="w-full text-left border-collapse">
+              <thead class="sticky top-0 bg-slate-100/90 backdrop-blur-md text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">
+                <tr>
+                  <th class="py-2.5 px-3">Joueur / ID</th>
+                  <th class="py-2.5 px-3">Antenne & Ville</th>
+                  <th class="py-2.5 px-3">Trésorerie</th>
+                  <th class="py-2.5 px-3">Moyens</th>
+                  <th class="py-2.5 px-3">Sauvegarde</th>
+                  <th class="py-2.5 px-3">Statut</th>
+                  <th class="py-2.5 px-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-players-tbody">
+                <!-- Rempli dynamiquement -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Vue 2 : Archives des Remises à Zéro (Restitution Joueur) -->
+        <div id="admin-view-archives" class="hidden flex flex-col flex-1 min-h-0">
+          <div class="p-3 mb-2 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 flex items-center justify-between">
+            <span>🛡️ <strong>Registre de sécurité :</strong> Toutes les parties réinitialisées à zéro sont automatiquement archivées ici. Vous pouvez restituer la sauvegarde intégrale à un joueur en un clic.</span>
+            <button onclick="window.ProtecAdmin.loadResetArchives()" class="px-2.5 py-1 rounded-xl bg-amber-600 text-white font-bold text-xs hover:bg-amber-700">
+              🔄 Actualiser
+            </button>
+          </div>
+
+          <div class="overflow-y-auto overflow-x-auto flex-1 rounded-2xl border border-slate-200/80 bg-white/60 no-scrollbar">
+            <table class="w-full text-left border-collapse">
+              <thead class="sticky top-0 bg-slate-100/90 backdrop-blur-md text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">
+                <tr>
+                  <th class="py-2.5 px-3">Archive / Date</th>
+                  <th class="py-2.5 px-3">Directeur</th>
+                  <th class="py-2.5 px-3">Trésorerie archivée</th>
+                  <th class="py-2.5 px-3">Moyens sauvegardés</th>
+                  <th class="py-2.5 px-3">Motif</th>
+                  <th class="py-2.5 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="admin-archives-tbody">
+                <!-- Rempli dynamiquement -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Vue 3 : Déclencheur Universel de Missions (Tests & Sandbox) -->
+        <div id="admin-view-missions" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4">
+          <div class="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex items-center justify-between">
+            <div>
+              <span class="font-extrabold block">🛠️ Outil de Recette & Simulation Opérationnelle</span>
+              <span class="text-[11px] text-indigo-700">Déclenchez instantanément n'importe quel type de mission sur la carte pour tester l'engagement, les alertes, les effectifs et les lots.</span>
+            </div>
+          </div>
+
+          <!-- ORDRES DE MISSION NATIONAUX FNPC (DÉCLENCHEMENT EXCLUSIF ADMIN) -->
+          <div class="p-4 rounded-3xl bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-purple-500/10 border-2 border-orange-300 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">🌐</span>
+                <div>
+                  <h4 class="text-xs font-black text-slate-900 uppercase tracking-wide">Ordres de Mission Nationaux FNPC (Zone Nationale)</h4>
+                  <p class="text-[11px] text-slate-600">Réservé à l'administration : diffuse un appel national extra-départemental en temps réel à toutes les antennes connectées.</p>
+                </div>
+              </div>
+              <button onclick="window.ProtecAdmin.clearNationalRenforts()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 font-bold text-xs transition border border-slate-200">
+                Clôturer Renforts Nationaux
+              </button>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-1">
+              <button onclick="window.ProtecAdmin.triggerNationalRenfort('novi')" class="p-2.5 rounded-2xl bg-white border border-rose-200 hover:border-rose-400 hover:bg-rose-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">🚨</span>
+                <span class="text-[11px] font-black text-rose-900 leading-tight">Plan NOVI (21)</span>
+                <span class="text-[9px] text-slate-500">6 places • +920 €</span>
+              </button>
+
+              <button onclick="window.ProtecAdmin.triggerNationalRenfort('inondation')" class="p-2.5 rounded-2xl bg-white border border-cyan-200 hover:border-cyan-400 hover:bg-cyan-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">🌊</span>
+                <span class="text-[11px] font-black text-cyan-900 leading-tight">ORSEC Crues (62)</span>
+                <span class="text-[9px] text-slate-500">6 places • +780 €</span>
+              </button>
+
+              <button onclick="window.ProtecAdmin.triggerNationalRenfort('feux')" class="p-2.5 rounded-2xl bg-white border border-orange-200 hover:border-orange-400 hover:bg-orange-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">🚒</span>
+                <span class="text-[11px] font-black text-orange-900 leading-tight">Feux de Forêt (83)</span>
+                <span class="text-[9px] text-slate-500">6 places • +720 €</span>
+              </button>
+
+              <button onclick="window.ProtecAdmin.triggerNationalRenfort('festival')" class="p-2.5 rounded-2xl bg-white border border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">🎪</span>
+                <span class="text-[11px] font-black text-indigo-900 leading-tight">DPS Festival (29)</span>
+                <span class="text-[9px] text-slate-500">8 places • +840 €</span>
+              </button>
+
+              <button onclick="window.ProtecAdmin.triggerNationalRenfort('maraude')" class="p-2.5 rounded-2xl bg-white border border-sky-200 hover:border-sky-400 hover:bg-sky-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">❄️</span>
+                <span class="text-[11px] font-black text-sky-900 leading-tight">Grand Froid (59)</span>
+                <span class="text-[9px] text-slate-500">6 places • +580 €</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <!-- 1. DPS PAPS -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">DPS PAPS (2 pers.)</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-blue-100 text-pc-blue">Brocante</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Poste à pied modeste, idéal pour début de partie sans véhicule.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('dps_paps')" class="w-full py-2 rounded-xl text-xs font-black bg-pc-blue text-white hover:bg-pc-blue-light transition">
+                Générer PAPS
+              </button>
+            </div>
+
+            <!-- 2. DPS Moyen PE -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">DPS-PE (4 sec. + VPSP)</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-blue-100 text-pc-blue">Tournoi</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Dispositif standard avec 1 ambulance et 1 Chef d'Équipe.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('dps_pe')" class="w-full py-2 rounded-xl text-xs font-black bg-pc-blue text-white hover:bg-pc-blue-light transition">
+                Générer DPS-PE
+              </button>
+            </div>
+
+            <!-- 3. DPS Grand Rassemblement GE -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">DPS-GE (10 sec. + 2 VPSP)</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700">Festival</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Grande envergure nécessitant Chef de Dispositif et Lot C.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('dps_ge')" class="w-full py-2 rounded-xl text-xs font-black bg-purple-600 text-white hover:bg-purple-700 transition">
+                Générer DPS-GE
+              </button>
+            </div>
+
+            <!-- 4. SAMU 15 -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Urgence SAMU 15</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-pc-orange">Départ Réflexe</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Malaise grave à domicile ou détresse respiratoire régulée 15.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('samu')" class="w-full py-2 rounded-xl text-xs font-black bg-pc-orange text-white hover:brightness-110 transition">
+                Déclencher SAMU 15
+              </button>
+            </div>
+
+            <!-- 5. Pompiers SDIS -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Garde SDIS 18</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700">Renfort CODIS</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Accident de circulation carambolage ou renfort caserne.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('pompiers')" class="w-full py-2 rounded-xl text-xs font-black bg-red-600 text-white hover:bg-red-700 transition">
+                Déclencher SDIS
+              </button>
+            </div>
+
+            <!-- 6. Crise NOVI -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Plan NOVI / Catastrophe</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-800 animate-pulse">ORSEC</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Accident collectif ferroviaire, PMA, chaîne de tri et noria.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('crise_novi')" class="w-full py-2 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-rose-700 text-white hover:brightness-110 transition">
+                Déclencher Plan NOVI
+              </button>
+            </div>
+
+            <!-- 7. Alerte CUMP & CAI -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Alerte CUMP & CAI</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700">Soutien Psy</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Convention CUMP : montage sous 2h d'un Centre d'Accueil des Impliqués.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('cump_cai')" class="w-full py-2 rounded-xl text-xs font-black bg-purple-700 text-white hover:bg-purple-800 transition">
+                Déclencher CAI CUMP
+              </button>
+            </div>
+
+            <!-- 8. Crise Ferroviaire SNCF -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Convention SNCF Réseau</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">TGV Bloqué</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Rupture caténaire et déploiement CHU en gare.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('sncf')" class="w-full py-2 rounded-xl text-xs font-black bg-amber-600 text-white hover:bg-amber-700 transition">
+                Déclencher Préalerte SNCF
+              </button>
+            </div>
+
+            <!-- 9. Maraude Sociale -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Maraude Sociale 115</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700">Pôle Social</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Tournée de nuit avec boissons chaudes et duvets.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('social')" class="w-full py-2 rounded-xl text-xs font-black bg-purple-600 text-white hover:bg-purple-700 transition">
+                Lancer Maraude
+              </button>
+            </div>
+
+            <!-- 10. Formation Grand Public -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Formation PSC1 / SST</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">Pédagogie</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Session payante grand public avec formateurs de l'antenne.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('formation')" class="w-full py-2 rounded-xl text-xs font-black bg-emerald-600 text-white hover:bg-emerald-700 transition">
+                Ouvrir Session Formation
+              </button>
+            </div>
+
+            <!-- 11. Météo Crues / Inondations -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Alerte Intempéries Météo</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-800">Pompage / Crues</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Intervention motopompes et reconnaissance de voiries inondées.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('meteo')" class="w-full py-2 rounded-xl text-xs font-black bg-sky-600 text-white hover:bg-sky-700 transition">
+                Générer Alerte Météo
+              </button>
+            </div>
+
+            <!-- 12. Devis DPS Immédiat -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Nouvelle Demande Devis</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">Finances</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Sollicitation par une mairie ou un club avec dimensionnement libre.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('devis')" class="w-full py-2 rounded-xl text-xs font-black bg-amber-500 text-white hover:bg-amber-600 transition">
+                Recevoir un Devis
+              </button>
+            </div>
+
+            <!-- 13. Aléa de Sécurité Bâtiment -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Incident Sécurité Bâtiment</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800">Aléa / Risque</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Déclenche une tentative de vol ou de dégradation pour tester vos défenses.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('securite')" class="w-full py-2 rounded-xl text-xs font-black bg-rose-600 text-white hover:bg-rose-700 transition">
+                Simuler Effraction / Vol
+              </button>
+            </div>
+
+            <!-- 14. Livraison Rapide des Chantiers -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Livrer les Chantiers</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-teal-100 text-teal-800">Locaux</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Achève instantanément tous les travaux d'aménagement de pièces en cours.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('finish_works')" class="w-full py-2 rounded-xl text-xs font-black bg-teal-600 text-white hover:bg-teal-700 transition">
+                Achever Tous les Travaux
+              </button>
+            </div>
+
+            <!-- 15. Scénario Réel : Recherche Disparu Gendarmerie -->
+            <div class="p-3.5 rounded-2xl glass-card border border-indigo-200 bg-indigo-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Recherche Gendarmerie</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-800">Drone / Cyno</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Battue en forêt : réquisition PC, télépilote drone thermique, chiens et 4x4.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_recherche_disparu')" class="w-full py-2 rounded-xl text-xs font-black bg-indigo-600 text-white hover:bg-indigo-700 transition">
+                Déclencher Battue Gendarmerie
+              </button>
+            </div>
+
+            <!-- 16. Scénario Réel : Crash Aérien & CAI CUMP -->
+            <div class="p-3.5 rounded-2xl glass-card border border-rose-200 bg-rose-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Crash Aérien & CUMP</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 animate-pulse">50 Impliqués</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Plan catastrophe : CAI sous astreinte CUMP, secrétariat SINUS et réconfort.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_crash_aerien')" class="w-full py-2 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-rose-700 text-white hover:brightness-110 transition">
+                Déclencher Crash Aérien CAI
+              </button>
+            </div>
+
+            <!-- 17. Scénario Réel : Incendie EHPAD -->
+            <div class="p-3.5 rounded-2xl glass-card border border-amber-200 bg-amber-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Incendie EHPAD</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">Évacuation</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Évacuation sanitaire collective : noria d'ambulances VPSP et transport VTP.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_incendie_ehpad')" class="w-full py-2 rounded-xl text-xs font-black bg-amber-600 text-white hover:bg-amber-700 transition">
+                Déclencher Incendie EHPAD
+              </button>
+            </div>
+
+            <!-- 18. Scénario Réel : Manifestation Étudiante SDIS -->
+            <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Manifestation & Garde SDIS</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-700">Préalerte J-1</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Astreinte H-12 et renfort VPSP en caserne pour tension urbaine.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_manifestation_etudiante')" class="w-full py-2 rounded-xl text-xs font-black bg-slate-800 text-white hover:bg-slate-900 transition">
+                Déclencher Garde Manif
+              </button>
+            </div>
+
+            <!-- 19. Scénario Réel : Vigilance Canicule SNCF -->
+            <div class="p-3.5 rounded-2xl glass-card border border-sky-200 bg-sky-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Canicule SNCF Gares</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-800">Convention</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Distribution d'eau et brumisateurs en gare et voies lors de blocages TGV.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_canicule_sncf')" class="w-full py-2 rounded-xl text-xs font-black bg-sky-600 text-white hover:bg-sky-700 transition">
+                Déclencher Canicule SNCF
+              </button>
+            </div>
+
+            <!-- 20. Scénario Réel : Tempête Alerte Rouge -->
+            <div class="p-3.5 rounded-2xl glass-card border border-red-300 bg-red-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Tempête Alerte Rouge</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-800">Interdépartemental</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Renforts 10 départements : CHU isolé, tronçonnage, bâchage et CHU.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_tempete_rouge')" class="w-full py-2 rounded-xl text-xs font-black bg-red-700 text-white hover:bg-red-800 transition">
+                Déclencher Tempête Rouge
+              </button>
+            </div>
+
+            <!-- 21. Scénario Réel : Grand Froid & Verglas -->
+            <div class="p-3.5 rounded-2xl glass-card border border-cyan-200 bg-cyan-50/20 flex flex-col justify-between space-y-2">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-xs">Grand Froid : 2 VPSP SDIS</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-cyan-100 text-cyan-800">Verglas / SUAP</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Chutes et carambolages : engagement de 2 ambulances en renfort pompiers.</p>
+              </div>
+              <button onclick="window.ProtecAdmin.triggerTestMission('scen_grand_froid')" class="w-full py-2 rounded-xl text-xs font-black bg-cyan-700 text-white hover:bg-cyan-800 transition">
+                Déclencher Grand Froid (2 VPSP)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vue 4 : Modération des Événements & Écussons Proposés -->
+        <div id="admin-view-events" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-3">
+          <div class="p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-xs text-purple-900 flex items-center justify-between">
+            <div>
+              <span class="font-extrabold block flex items-center gap-1.5">
+                <i data-lucide="award" class="w-4 h-4 text-purple-700"></i>
+                Modération Fédérale des Grands Événements & Écussons
+              </span>
+              <span class="text-[11px] text-purple-700">Examinez les propositions soumises par les directeurs d'antennes. Validez pour publier sur le réseau et débloquer les écussons, ou refusez les demandes incohérentes.</span>
+            </div>
+            <button onclick="window.ProtecAdmin.loadEventsData()" class="px-3 py-1.5 rounded-xl bg-purple-600 text-white font-bold text-xs hover:bg-purple-700 transition cursor-pointer">
+              🔄 Actualiser
+            </button>
+          </div>
+
+          <!-- Liste des Événements Proposés -->
+          <div id="admin-events-list-container" class="space-y-3 flex-1">
+            <!-- Rempli dynamiquement -->
+          </div>
+        </div>
+
+      </div>
+    `;
+    document.body.appendChild(div);
+  },
+
+  // Déclencheur universel de missions pour test
+  triggerTestMission(type) {
+    const game = window.game;
+    if (!game) return;
+    const base = game.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne Principale' };
+    let m = null;
+    const now = Date.now();
+
+    if (type === 'dps_paps') {
+      const loc = game.calculateRealisticMissionLocation(base, 'dps');
+      m = {
+        id: `test-dps-${now}`,
+        title: 'DPS PAPS : Brocante de Printemps',
+        desc: 'Poste de secours pour 800 chineurs. PAPS à pied 2 secouristes.',
+        type: 'dps',
+        scale: 'PAPS (2 secouristes)',
+        urgency: 'normale',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 2,
+        requiredRanks: ['PSE1', 'PSE2'],
+        requiredVehicles: [],
+        rewardMoney: 280,
+        rewardReputation: 15,
+        durationSeconds: 180,
+        durationHours: '3.0',
+        eventDate: { ...game.clock },
+        status: 'planifie',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'dps_pe') {
+      const loc = game.calculateRealisticMissionLocation(base, 'dps');
+      m = {
+        id: `test-dps-${now}`,
+        title: 'DPS-PE : Tournoi Régional de Handball',
+        desc: 'Dispositif prévisionnel de secours petite envergure pour 2 500 spectateurs.',
+        type: 'dps',
+        scale: 'DPS-PE (4 secouristes + VPSP)',
+        urgency: 'normale',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 4,
+        requiredRanks: ['CE', 'PSE2', 'PSE1'],
+        requiredVehicles: ['VPSP'],
+        rewardMoney: 540,
+        rewardReputation: 25,
+        durationSeconds: 240,
+        durationHours: '4.5',
+        eventDate: { ...game.clock },
+        status: 'planifie',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'dps_ge') {
+      const loc = game.calculateRealisticMissionLocation(base, 'dps');
+      m = {
+        id: `test-dps-${now}`,
+        title: 'DPS-GE : Festival Électro & Son en Plein Air',
+        desc: 'Dispositif de grande envergure pour 12 000 festivaliers avec poste fixe et ambulances.',
+        type: 'dps',
+        scale: 'DPS-GE (10 secouristes + 2 VPSP + VTU)',
+        urgency: 'normale',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 10,
+        requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
+        requiredVehicles: ['VPSP', 'VPSP', 'VTU'],
+        rewardMoney: 1650,
+        rewardReputation: 55,
+        durationSeconds: 360,
+        durationHours: '7.0',
+        eventDate: { ...game.clock },
+        status: 'planifie',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'samu') {
+      const loc = game.calculateRealisticMissionLocation(base, 'samu');
+      m = {
+        id: `test-samu-${now}`,
+        title: 'SAMU 15 : Malaise Cardiaque à Domicile',
+        desc: 'Départ réflexe VPSP sur demande du médecin régulateur SAMU 15. Oxygénothérapie et transport CH.',
+        type: 'samu',
+        urgency: 'critique',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 3,
+        requiredRanks: ['CE', 'PSE2', 'PSE1'],
+        requiredVehicles: ['VPSP'],
+        rewardMoney: 320,
+        rewardReputation: 35,
+        durationSeconds: 90,
+        durationHours: '0.8',
+        eventDate: { ...game.clock },
+        status: 'declenche',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'pompiers') {
+      const loc = game.calculateRealisticMissionLocation(base, 'pompiers');
+      m = {
+        id: `test-sdis-${now}`,
+        title: 'SDIS 18 : Renfort Évacuation AVP Voie Rapide',
+        desc: 'Le CTA-CODIS sollicite un VPSP Protection Civile en renfort des sapeurs-pompiers suite à accident.',
+        type: 'pompiers',
+        urgency: 'haute',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 3,
+        requiredRanks: ['PSE2', 'PSE1'],
+        requiredVehicles: ['VPSP'],
+        rewardMoney: 380,
+        rewardReputation: 30,
+        durationSeconds: 100,
+        durationHours: '1.2',
+        eventDate: { ...game.clock },
+        status: 'declenche',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'crise_novi') {
+      const loc = game.calculateRealisticMissionLocation(base, 'crise');
+      m = {
+        id: `test-novi-${now}`,
+        title: 'CRISE NOVI : Déraillement Train Express & 35 Impliqués',
+        desc: 'Plan NOVI activé par la Préfecture. Montage d’un Poste Médical Avancé (PMA), CAI et noria de VPSP.',
+        type: 'crise',
+        scale: 'PLAN NOVI (8 secouristes + PMA + VPSP)',
+        urgency: 'critique',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 8,
+        requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
+        requiredVehicles: ['VPSP', 'VTU'],
+        rewardMoney: 1800,
+        rewardReputation: 70,
+        durationSeconds: 300,
+        durationHours: '5.0',
+        eventDate: { ...game.clock },
+        status: 'declenche',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'cump_cai') {
+      if (typeof game.generateCumpCaiMission === 'function') {
+        game.generateCumpCaiMission();
+        game.showToast('Test CUMP Déclenché', 'Mission Cellule d’Accueil des Impliqués générée avec succès.', 'green');
+        return;
+      }
+    } else if (type === 'sncf') {
+      if (typeof game.triggerSncfRailCrisis === 'function') {
+        game.triggerSncfRailCrisis();
+        game.showToast('Test SNCF Déclenché', 'Préalerte rupture caténaire générée avec succès.', 'green');
+        return;
+      }
+    } else if (type === 'social') {
+      const loc = game.calculateRealisticMissionLocation(base, 'social');
+      m = {
+        id: `test-social-${now}`,
+        title: 'Social : Maraude Nocturne & Urgence 115',
+        desc: 'Distribution de duvets, repas chauds et écoute des personnes sans-abri en centre-ville.',
+        type: 'social',
+        urgency: 'normale',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 3,
+        requiredRanks: ['PSE1', 'Secouriste'],
+        requiredVehicles: ['VTU'],
+        rewardMoney: 210,
+        rewardReputation: 35,
+        durationSeconds: 150,
+        durationHours: '3.0',
+        eventDate: { ...game.clock },
+        status: 'planifie',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'formation') {
+      const loc = game.calculateRealisticMissionLocation(base, 'dps');
+      m = {
+        id: `test-form-${now}`,
+        title: 'Formation : Session PSC1 Grand Public (10 élèves)',
+        desc: 'Formation aux gestes qui sauvent et délivrance des attestations officielles.',
+        type: 'formation',
+        urgency: 'normale',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 2,
+        requiredRanks: ['Formateur', 'PSE1'],
+        requiredVehicles: [],
+        rewardMoney: 600,
+        rewardReputation: 30,
+        durationSeconds: 180,
+        durationHours: '4.0',
+        eventDate: { ...game.clock },
+        status: 'planifie',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'meteo') {
+      const loc = game.calculateRealisticMissionLocation(base, 'meteo');
+      m = {
+        id: `test-meteo-${now}`,
+        title: 'Intempéries : Reconnaissance & Épuisement Crues',
+        desc: 'Inondations subites de caves et voiries. Déploiement des motopompes et soutien population.',
+        type: 'meteo',
+        urgency: 'haute',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 4,
+        requiredRanks: ['CE', 'PSE2', 'PSE1'],
+        requiredVehicles: ['VTU'],
+        rewardMoney: 490,
+        rewardReputation: 40,
+        durationSeconds: 180,
+        durationHours: '3.5',
+        eventDate: { ...game.clock },
+        status: 'declenche',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
+    } else if (type === 'devis') {
+      if (typeof game.generateRandomDevis === 'function') {
+        game.generateRandomDevis();
+        game.showToast('Devis Généré', 'Une nouvelle demande de devis est arrivée dans vos Finances !', 'green');
+        return;
+      }
+    } else if (type === 'securite') {
+      const prem = game.stations[0]?.premises;
+      if (!prem) {
+        game.showToast('Locaux Requis', 'Choisissez d’abord vos locaux d’antenne pour tester la sécurité.', 'orange');
+        return;
+      }
+      if (window.ProtecLocaux) {
+        window.ProtecLocaux.checkSecurityEvents(game, prem, true);
+      }
+      return;
+    } else if (type === 'finish_works') {
+      const prem = game.stations[0]?.premises;
+      if (!prem || !prem.ongoingWorks || prem.ongoingWorks.length === 0) {
+        game.showToast('Aucun Chantier', 'Il n’y a aucun chantier de travaux en cours sur vos locaux.', 'blue');
+        return;
+      }
+      const count = prem.ongoingWorks.length;
+      prem.ongoingWorks.forEach(w => {
+        prem.grid[w.tileIndex] = w.targetType;
+      });
+      prem.ongoingWorks = [];
+      game.saveGame();
+      game.updateStatsUI();
+      game.showToast('Chantiers Livrés !', `${count} travaux de pièces ont été achevés instantanément !`, 'green');
+      return;
+    } else if (type.startsWith('scen_')) {
+      const scenarioKey = type.replace('scen_', '');
+      if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.createScenarioMission === 'function') {
+        window.ProtecCriseLogistique.createScenarioMission(game, scenarioKey);
+        return;
+      }
+    }
+
+    if (m) {
+      if (m.type === 'social') {
+        m.isSector = true;
+        m.sector = 'Secteur Maraude : Centre Urbain & Gares';
+        m.address = m.sector;
+      } else if (!m.address) {
+        m.address = game.generateRealisticStreetAddress ? game.generateRealisticStreetAddress(base?.city || 'Paris', m.lat, m.lng) : '10 Place de la République, Paris';
+        m.isSector = false;
+      }
+      if (game.enrichMissionLocationWithCity) game.enrichMissionLocationWithCity(m);
+      game.missions.push(m);
+      game.renderMissions();
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Mission Test Générée', `« ${m.title} » ajoutée sur la carte !`, 'green');
+      if (window.ProtecNotifications) {
+        window.ProtecNotifications.recordNotification({ title: m.title, message: m.desc, color: 'blue' });
+      }
+    }
+  },
+
+  // Déclencher un Ordre de Mission National FNPC (Zone Nationale) par un Administrateur
+  triggerNationalRenfort(templateKey) {
+    const game = window.game;
+    if (!game) return;
+
+    const templates = {
+      novi: {
+        id: `renf-nat-novi-${Date.now()}`,
+        isExtraDept: true,
+        zone: 'national',
+        isNationalAdmin: true,
+        typeCategory: 'novi',
+        typeTitle: 'PLAN NOVI / CATASTROPHE ROUTIÈRE',
+        iconEmoji: '🚨',
+        colorClass: 'text-rose-700',
+        address: '21000 Dijon, Côte-d’Or (21)',
+        addressDisplay: '21000 Dijon, Rocade Est A31',
+        deptCode: '21',
+        lat: 47.322,
+        lng: 5.041,
+        needLabel: '1 VPSP + 1 PMA Mobile + 6 Secouristes',
+        demandeur: 'SAMU 21 & Cellule Zonale de Crise',
+        requiredVehType: 'VPSP',
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 920,
+        alliancePoints: 120,
+        status: 'open',
+        description: 'Accident routier collectif à nombreuses victimes. Déploiement urgent d’un Poste Médical Avancé et évacuations sanitaires.',
+        createdAt: new Date().toISOString()
+      },
+      inondation: {
+        id: `renf-nat-crue-${Date.now()}`,
+        isExtraDept: true,
+        zone: 'national',
+        isNationalAdmin: true,
+        typeCategory: 'inondation',
+        typeTitle: 'PLAN ORSEC / CRUES MAJEURES',
+        iconEmoji: '🌊',
+        colorClass: 'text-cyan-700',
+        address: '62500 Saint-Omer, Pas-de-Calais (62)',
+        addressDisplay: '62500 Saint-Omer, Bassin de l’Aa',
+        deptCode: '62',
+        lat: 50.750,
+        lng: 2.256,
+        needLabel: '1 Lot Sauvetage Aquatique + 6 Secouristes',
+        demandeur: 'Préfecture 62 & Zone Nord',
+        requiredVehType: 'VTU',
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 780,
+        alliancePoints: 100,
+        status: 'open',
+        description: 'Crue majeure et évacuation de riverains. Mise en place et armement d’un Centre d’Accueil des Impliqués (CAI).',
+        createdAt: new Date().toISOString()
+      },
+      feux: {
+        id: `renf-nat-feux-${Date.now()}`,
+        isExtraDept: true,
+        zone: 'national',
+        isNationalAdmin: true,
+        typeCategory: 'incendie',
+        typeTitle: 'INCENDIE / COLONNE FEUX DE FORÊT',
+        iconEmoji: '🚒',
+        colorClass: 'text-orange-600',
+        address: '83390 Cuers, Var (83)',
+        addressDisplay: '83390 Cuers, Massif des Maures',
+        deptCode: '83',
+        lat: 43.237,
+        lng: 6.071,
+        needLabel: '1 VTU Logistique + 6 Secouristes',
+        demandeur: 'SDIS 83 - CODIS',
+        requiredVehType: 'VTU',
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 720,
+        alliancePoints: 90,
+        status: 'open',
+        description: 'Mobilisation de la colonne Sud pour ravitaillement, soutien sanitaire et logistique des sapeurs-pompiers en ligne de feu.',
+        createdAt: new Date().toISOString()
+      },
+      festival: {
+        id: `renf-nat-fest-${Date.now()}`,
+        isExtraDept: true,
+        zone: 'national',
+        isNationalAdmin: true,
+        typeCategory: 'dps',
+        typeTitle: 'DPS RENFORT FESTIVAL NATIONAL',
+        iconEmoji: '🎪',
+        colorClass: 'text-indigo-600',
+        address: '29270 Carhaix-Plouguer, Finistère (29)',
+        addressDisplay: '29270 Carhaix-Plouguer, Site de Kerampuilh',
+        deptCode: '29',
+        lat: 48.276,
+        lng: -3.574,
+        needLabel: '2 VPSP + 8 Secouristes PSE2',
+        demandeur: 'Protection Civile 29 / FNPC',
+        requiredVehType: 'VPSP',
+        requiredVolsCount: 8,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 840,
+        alliancePoints: 110,
+        status: 'open',
+        description: 'Grand rassemblement musical national. Renfort interdépartemental pour armer les postes de secours de nuit.',
+        createdAt: new Date().toISOString()
+      },
+      maraude: {
+        id: `renf-nat-froid-${Date.now()}`,
+        isExtraDept: true,
+        zone: 'national',
+        isNationalAdmin: true,
+        typeCategory: 'maraude',
+        typeTitle: 'PLAN GRAND FROID & URGENCE SOCIALE',
+        iconEmoji: '❄️',
+        colorClass: 'text-sky-600',
+        address: '59000 Lille, Nord (59)',
+        addressDisplay: '59000 Lille, Secteur Flandres',
+        deptCode: '59',
+        lat: 50.629,
+        lng: 3.057,
+        needLabel: '1 VTU Maraude Sociale + 6 Équipiers',
+        demandeur: 'SIAO 115 & DDETS',
+        requiredVehType: 'VTU',
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 580,
+        alliancePoints: 70,
+        status: 'open',
+        description: 'Plan Grand Froid niveau 2 activé. Maraude sociale de nuit et orientation d’urgence vers les centres d’hébergement temporaires.',
+        createdAt: new Date().toISOString()
+      }
+    };
+
+    const renfort = templates[templateKey] || templates.novi;
+    if (!game.renforts) game.renforts = [];
+    game.renforts.unshift(renfort);
+
+    if (window.ProtecSupabase && window.ProtecSupabase.broadcastRenfortCreated) {
+      window.ProtecSupabase.broadcastRenfortCreated(renfort);
+    }
+
+    game.showToast('Ordre de Mission National Déclenché !', `L'ordre de mission national « ${renfort.typeTitle} » a été diffusé en direct à l'ensemble des directeurs connectés.`, 'purple');
+    game.updateStatsUI();
+  },
+
+  // Clôturer tous les renforts nationaux en cours
+  clearNationalRenforts() {
+    const game = window.game;
+    if (!game) return;
+    const count = (game.renforts || []).filter(r => r.isExtraDept || r.zone === 'national').length;
+    game.renforts = (game.renforts || []).filter(r => !r.isExtraDept && r.zone !== 'national');
+    game.showToast('Renforts Nationaux Clôturés', `${count} renfort(s) national(aux) ont été clôturés.`, 'blue');
+    game.updateStatsUI();
+  }
+};
