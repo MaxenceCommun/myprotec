@@ -621,10 +621,42 @@ window.ProtecFormations = {
       vol.isTrainer = true;
     }
 
-    // Recyclage / FC
-    if (course.isRecycling) {
-      vol.recycledYear = new Date().getFullYear();
+    // Recyclage / Formation Continue annuelle obligatoire (FC PSE & MAC SST)
+    const curYear = (window.game?.clock?.year) || 2026;
+    if (course.isRecycling || course.id === 'FC_PSE' || course.id === 'MAC_SST') {
+      vol.recycledYear = curYear;
+      vol.qualificationExpired = false;
+      vol.qualificationExpiredReason = null;
+      vol.lastRecycledAt = Date.now();
+    } else if (['PSE1', 'PSE2', 'CE', 'CD'].includes(course.id)) {
+      vol.recycledYear = curYear;
+      vol.qualificationExpired = false;
+      vol.qualificationExpiredReason = null;
+      vol.lastRecycledAt = Date.now();
     }
+  },
+
+  // Contrôle périodique de péremption annuelle des diplômes opérationnels
+  checkAnnualRecycling(game) {
+    if (!game || !game.volunteers) return;
+    const curYear = game.clock?.year || 2026;
+
+    game.volunteers.forEach(v => {
+      // Les secouristes détenant PSE1, PSE2, CE, CD ou Formateur doivent maintenir leurs compétences chaque année
+      const hasOpSkills = ['PSE1', 'PSE2', 'CE', 'CD'].includes(v.rank) || v.isTrainer || (v.skills && v.skills.some(s => ['pse1', 'pse2', 'ce', 'formateur'].includes(s)));
+      if (hasOpSkills) {
+        if (!v.recycledYear) {
+          v.recycledYear = curYear;
+          v.qualificationExpired = false;
+        } else if (curYear > v.recycledYear) {
+          v.qualificationExpired = true;
+          v.qualificationExpiredReason = `Recyclage annuel échu : FC PSE ${curYear} obligatoire pour réactiver les droits opérationnels.`;
+        } else {
+          v.qualificationExpired = false;
+          v.qualificationExpiredReason = null;
+        }
+      }
+    });
   },
 
   // Clôturer et certifier une session de formation
@@ -683,6 +715,7 @@ window.ProtecFormations = {
   // Rendu de l'interface modale
   renderModal(game) {
     this.injectState(game);
+    this.checkAnnualRecycling(game);
     const body = document.getElementById('modal-body');
     const title = document.getElementById('modal-title');
     const subtitle = document.getElementById('modal-subtitle');

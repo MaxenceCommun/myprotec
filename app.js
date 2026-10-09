@@ -1242,9 +1242,34 @@ class ProtecGame {
     };
     const isFirst = this.stations.length === 0;
     if (isFirst) {
-      // 1. ZÉRO VÉHICULE AU DÉPART (l'antenne doit acquérir son 1er véhicule)
-      this.vehicles = [];
-      newStation.vehicles = [];
+      // 1. VPSP OPÉRATIONNEL AU DÉPART (Indispensable pour lancer l'activité de secours et les premiers DPS)
+      const startVpspId = `vpsp-${Date.now()}`;
+      const vpspName = this.generateVehicleCallsign('VPSP', stationId, newStation);
+      const starterVpsp = {
+        id: startVpspId,
+        name: vpspName,
+        type: 'VPSP',
+        label: 'Véhicule de Premiers Secours à Personnes (VPSP)',
+        model: 'Renault Master 2.3 dCi 135 L2H2',
+        year: 2018,
+        mileage: 118400,
+        capacity: 5,
+        seatsCount: 5,
+        status: 'dispo',
+        fuel: 100,
+        mechanical: 92,
+        ctStatus: 'valide',
+        ctExpiryTimestamp: Date.now() + (180 * 24 * 3600 * 1000), // CT valide pendant 6 mois
+        insuranceStatus: 'assure',
+        insuranceMonthlyCost: 95,
+        stationId: stationId,
+        image: this.getVehicleImage('VPSP'),
+        hasTowHitch: false,
+        requiresTrailer: false,
+        reqSkills: ['permis_vpsp']
+      };
+      this.vehicles = [starterVpsp];
+      newStation.vehicles = [startVpspId];
 
       // 2. ZÉRO MATÉRIEL AU DÉPART (stock vierge)
       newStation.stock = {};
@@ -2070,94 +2095,174 @@ class ProtecGame {
       return;
     }
 
-    // Verrouillage immédiat
-    devis.isSubmitting = true;
-    devis.proposedPrice = price;
-    devis.status = 'sent';
-
-    // Désactivation immédiate de l'élément bouton dans le DOM si présent
-    const btn = document.querySelector(`button[onclick*="submitCustomDevis('${devisId}')"]`);
-    if (btn) {
-      btn.disabled = true;
-      btn.classList.add('opacity-50', 'cursor-not-allowed');
-      btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Transmission...';
+    // Calcul réaliste du temps de délibération selon la typologie et taille de l'événement
+    const scale = devis.configuredScale || devis.scale || 'DPS-PE';
+    let deliberationSeconds = 60; // Base par défaut
+    if (scale.includes('PAPS')) {
+      deliberationSeconds = 45 + Math.floor(Math.random() * 20); // 45 à 65 secondes
+    } else if (scale.includes('DPS-PE')) {
+      deliberationSeconds = 80 + Math.floor(Math.random() * 30); // 80 à 110 secondes (~1m30)
+    } else if (scale.includes('DPS-ME')) {
+      deliberationSeconds = 120 + Math.floor(Math.random() * 40); // 120 à 160 secondes (~2m15)
+    } else if (scale.includes('DPS-GE')) {
+      deliberationSeconds = 160 + Math.floor(Math.random() * 50); // 160 à 210 secondes (~3m)
     }
 
-    this.showToast('Devis transmis', `Offre de ${price} € envoyée à l’organisateur. Commission de sécurité et étude des offres concurrentes...`, 'blue');
+    // Verrouillage et passage en statut délibération persistante
+    devis.isSubmitting = false;
+    devis.proposedPrice = price;
+    devis.status = 'sent';
+    devis.submittedAt = Date.now();
+    devis.deliberationTotalSeconds = deliberationSeconds;
+    devis.deliberationSecondsLeft = deliberationSeconds;
+    devis.decisionAt = Date.now() + (deliberationSeconds * 1000);
+
+    const minStr = Math.floor(deliberationSeconds / 60);
+    const secStr = deliberationSeconds % 60;
+    const timeText = minStr > 0 ? `${minStr} min ${secStr > 0 ? secStr + 's' : ''}` : `${secStr} secondes`;
+
+    this.showToast(
+      'Offre transmise à l’organisateur',
+      `Devis de ${price} € transmis pour « ${devis.eventName} ». L’organisateur et la commission de sécurité délibèrent (délai réaliste estimé : ~${timeText}).`,
+      'blue'
+    );
+
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.recordNotification({
+        title: '📋 Devis en Délibération',
+        message: `Proposition de ${price} € transmise pour « ${devis.eventName} ». Délibération organisateur & commission de sécurité en cours (~${timeText}).`,
+        category: 'dps',
+        level: 'info'
+      });
+    }
+
+    this.saveGame();
+    this.updateStatsUI();
     this.openModule('devis', true);
+  }
 
-    setTimeout(() => {
-      const dynamicBareme = this.calculateDynamicBareme(devis);
-      const bareme = dynamicBareme.totalBareme;
-      const ratio = price / bareme;
+  resolveDevisDecision(devis) {
+    if (!devis || devis.status !== 'sent') return;
 
-      // 1. CONTRÔLE DE SÉCURITÉ ET CONFORMITÉ (RNMSC)
-      const numMatch = (devis.publicCount || '').match(/\d[\d\s]*/);
-      const publicEst = numMatch ? parseInt(numMatch[0].replace(/\s/g, ''), 10) : 1000;
-      const vols = devis.configuredVolunteers || devis.requiredVolunteers || 4;
-      const vehs = devis.configuredVehicles || [];
+    const price = devis.proposedPrice || 250;
+    const dynamicBareme = this.calculateDynamicBareme(devis);
+    const bareme = dynamicBareme.totalBareme;
+    const ratio = price / bareme;
 
-      // A. Rejet pour sous-dimensionnement manifeste
-      if (publicEst >= 3000 && vols < 4) {
-        devis.status = 'rejected_security';
-        this.showToast('Refus Préfectoral & Organisateur', `Offre rejetée : Dispositif très sous-dimensionné (${vols} secouristes pour ${devis.publicCount}). La commission de sécurité exige un dispositif renforcé.`, 'orange');
-        this.updateStatsUI();
-        this.saveGame();
-        return;
+    // 1. CONTRÔLE DE SÉCURITÉ ET CONFORMITÉ (RNMSC)
+    const numMatch = (devis.publicCount || '').match(/\d[\d\s]*/);
+    const publicEst = numMatch ? parseInt(numMatch[0].replace(/\s/g, ''), 10) : 1000;
+    const vols = devis.configuredVolunteers || devis.requiredVolunteers || 4;
+    const vehs = devis.configuredVehicles || [];
+
+    // A. Rejet pour sous-dimensionnement manifeste
+    if (publicEst >= 3000 && vols < 4) {
+      devis.status = 'rejected_security';
+      this.showToast('Refus Préfectoral & Organisateur', `Offre rejetée : Dispositif très sous-dimensionné (${vols} secouristes pour ${devis.publicCount}). La commission de sécurité exige un dispositif renforcé.`, 'orange');
+      if (window.ProtecNotifications) {
+        window.ProtecNotifications.recordNotification({
+          title: '❌ Devis Rejeté (RNMSC)',
+          message: `Offre rejetée pour « ${devis.eventName} » : effectif insuffisant (${vols} secouristes pour ${devis.publicCount}).`,
+          category: 'dps',
+          level: 'warning'
+        });
       }
-      if (publicEst >= 1500 && vols < 3 && vehs.length === 0) {
-        devis.status = 'rejected_security';
-        this.showToast('Sous-dimensionnement', `Offre rejetée : Un simple PAPS à pied (${vols} secouristes) est insuffisant pour encadrer ${devis.publicCount}. Une ambulance VPSP est requise.`, 'orange');
-        this.updateStatsUI();
-        this.saveGame();
-        return;
+      this.finishDevisResolution(devis);
+      return;
+    }
+
+    if (publicEst >= 1500 && vols < 3 && vehs.length === 0) {
+      devis.status = 'rejected_security';
+      this.showToast('Sous-dimensionnement', `Offre rejetée : Un simple PAPS à pied (${vols} secouristes) est insuffisant pour encadrer ${devis.publicCount}. Une ambulance VPSP est requise.`, 'orange');
+      if (window.ProtecNotifications) {
+        window.ProtecNotifications.recordNotification({
+          title: '❌ Devis Rejeté (Ambulance Requise)',
+          message: `Offre rejetée pour « ${devis.eventName} » : une ambulance VPSP était indispensable pour encadrer ${devis.publicCount}.`,
+          category: 'dps',
+          level: 'warning'
+        });
       }
+      this.finishDevisResolution(devis);
+      return;
+    }
 
-      // B. Rejet pour sur-dimensionnement absurde
-      if (publicEst <= 350 && vols >= 12 && price > 1200) {
-        devis.status = 'rejected_budget';
-        this.showToast('Offre Disproportionnée', `L'organisateur refuse l'offre : Dispositif sur-dimensionné (${vols} secouristes) et tarif hors budget pour un modeste rassemblement.`, 'orange');
-        this.updateStatsUI();
-        this.saveGame();
-        return;
+    // B. Rejet pour sur-dimensionnement absurde
+    if (publicEst <= 350 && vols >= 12 && price > 1200) {
+      devis.status = 'rejected_budget';
+      this.showToast('Offre Disproportionnée', `L'organisateur refuse l'offre : Dispositif sur-dimensionné (${vols} secouristes) et tarif hors budget pour un modeste rassemblement.`, 'orange');
+      if (window.ProtecNotifications) {
+        window.ProtecNotifications.recordNotification({
+          title: '❌ Devis Hors Budget',
+          message: `Offre refusée pour « ${devis.eventName} » : dimensionnement disproportionné et tarif excessif.`,
+          category: 'dps',
+          level: 'warning'
+        });
       }
+      this.finishDevisResolution(devis);
+      return;
+    }
 
-      // 2. CONCURRENCE DES AUTRES ASSOCIATIONS AGRÉÉES DE SÉCURITÉ CIVILE
-      // Au début (notoriété modeste et antenne peu connue), les organisateurs retiennent souvent les associations concurrentes établies !
-      const completedDpsCount = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
-      const repScore = this.resources.reputationScore || 30;
+    // 2. CONCURRENCE DES AUTRES ASSOCIATIONS AGRÉÉES DE SÉCURITÉ CIVILE
+    // Au début (notoriété modeste et antenne peu connue), les organisateurs retiennent souvent les associations concurrentes établies !
+    const completedDpsCount = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
+    const repScore = this.resources.reputationScore || 30;
 
-      // Base : 25% de base seulement au démarrage du jeu
-      let winProb = 0.25;
-      if (repScore > 100) winProb += 0.12;
-      if (repScore > 300) winProb += 0.15;
-      if (completedDpsCount >= 3) winProb += 0.08;
-      if (completedDpsCount >= 8) winProb += 0.10;
+    // Base : 25% de base seulement au démarrage du jeu
+    let winProb = 0.25;
+    if (repScore > 100) winProb += 0.12;
+    if (repScore > 300) winProb += 0.15;
+    if (completedDpsCount >= 3) winProb += 0.08;
+    if (completedDpsCount >= 8) winProb += 0.10;
 
-      // Influence du tarif
-      if (ratio <= 0.85) winProb += 0.32; // Offre très attractive : fort argument financier
-      else if (ratio <= 0.95) winProb += 0.15;
-      else if (ratio <= 1.05) winProb += 0.0; // Barème standard
-      else if (ratio <= 1.25) winProb -= 0.22; // Plus cher que la moyenne
-      else winProb -= 0.45; // Très cher
+    // Influence du tarif proposé
+    if (ratio <= 0.85) winProb += 0.32; // Offre très attractive : fort argument financier
+    else if (ratio <= 0.95) winProb += 0.15;
+    else if (ratio <= 1.05) winProb += 0.0; // Barème standard
+    else if (ratio <= 1.25) winProb -= 0.22; // Plus cher que la moyenne
+    else winProb -= 0.45; // Très cher
 
-      winProb = Math.max(0.08, Math.min(0.88, winProb));
+    winProb = Math.max(0.08, Math.min(0.88, winProb));
 
-      const isWon = Math.random() <= winProb;
+    const isWon = Math.random() <= winProb;
 
-      if (isWon) {
-        devis.status = 'signed';
-        this.convertDevisToScheduledMission(devis);
-        this.resources.reputationScore = (this.resources.reputationScore || 50) + 12;
-        this.showToast('Convention Signée !', `L’organisateur de « ${devis.eventName} » a retenu votre proposition face aux associations concurrentes !`, 'green');
-      } else {
-        devis.status = 'rejected_competition';
-        this.showToast('Offre Non Retenue', `L’organisateur a préféré l’offre d’une association concurrente agréée (notoriété établie ou meilleur compromis). Continuez la prospection !`, 'orange');
+    if (isWon) {
+      devis.status = 'signed';
+      this.convertDevisToScheduledMission(devis);
+      this.resources.reputationScore = (this.resources.reputationScore || 50) + 12;
+      this.showToast('Convention Signée !', `L’organisateur de « ${devis.eventName} » a retenu votre proposition face aux associations concurrentes ! Dispositif ajouté à votre planning.`, 'green');
+      if (window.ProtecNotifications) {
+        window.ProtecNotifications.recordNotification({
+          title: '✅ Convention DPS Signée !',
+          message: `L'organisateur de « ${devis.eventName} » a retenu votre proposition (${price} €) face aux concurrents ! Dispositif validé au planning opérationnel.`,
+          category: 'dps',
+          level: 'success'
+        });
       }
+    } else {
+      devis.status = 'rejected_competition';
+      this.showToast('Offre Non Retenue', `L’organisateur a préféré l’offre d’une association concurrente agréée (notoriété établie ou meilleur compromis). Continuez la prospection !`, 'orange');
+      if (window.ProtecNotifications) {
+        window.ProtecNotifications.recordNotification({
+          title: '⚠️ Offre Non Retenue',
+          message: `L'organisateur de « ${devis.eventName} » a préféré l'offre d'une association concurrente pour cette édition.`,
+          category: 'dps',
+          level: 'info'
+        });
+      }
+    }
 
-      this.updateStatsUI();
-      this.saveGame();
-    }, 3200);
+    this.finishDevisResolution(devis);
+  }
+
+  finishDevisResolution(devis) {
+    this.updateStatsUI();
+    this.saveGame();
+    if (this.currentModalKey === 'devis') {
+      const modal = document.getElementById('main-modal');
+      if (modal && !modal.classList.contains('hidden')) {
+        this.openModule('devis', true);
+      }
+    }
   }
 
   convertDevisToScheduledMission(devis) {
@@ -3047,6 +3152,16 @@ class ProtecGame {
       }
     }
 
+    // Contrôle réglementaire d'équipage RNMSC (VPSP, Chef d'Agrès, PSE2, PSE1 & Recyclage à jour)
+    if (window.ProtecRNMSC) {
+      const assignedVehs = this.vehicles.filter(veh => mission.requiredVehicles?.includes(veh.type));
+      const compliance = window.ProtecRNMSC.validateCrewCompliance(mission, crewVols, assignedVehs);
+      if (!compliance.valid) {
+        this.showToast('Équipage Inconforme RNMSC 🚫', compliance.errors[0], 'red');
+        return;
+      }
+    }
+
     if (!hasRequiredSkills && mission.type === 'pompiers') {
       this.applyPrefectureSanction('Équipage déployé sans les qualifications obligatoires (Absence de Chef d’Équipe ou PSE)', 12);
     }
@@ -3290,7 +3405,10 @@ class ProtecGame {
       v.exp += 15;
       if (window.ProtecPersonnel) {
         const result = window.ProtecPersonnel.applyMissionExertion(v, mission, !!aep2Specialist);
-        if (result && result.burnout) {
+        if (result && result.resigned) {
+          this.volunteers = this.volunteers.filter(vol => vol.id !== v.id);
+          this.showToast('Démission d’un Bénévole ! 🚪', `${v.name} a démissionné de l’antenne suite à un surmenage excessif et un manque de repos.`, 'red');
+        } else if (result && result.burnout) {
           this.showToast('Alerte Surmenage / Burnout', `${v.name} est épuisé(e) et placé(e) en repos obligatoire (30 min).`, 'red');
         }
       } else {
@@ -3299,7 +3417,7 @@ class ProtecGame {
       }
     });
 
-    // 4. RETOUR DES VÉHICULES, RÉARMEMENT ET USURE SELON LE MORAL
+    // 4. RETOUR DES VÉHICULES, KILOMÉTRAGE, CONDITIONS DE TRAVAIL ET IMPACT SUR LE MORAL
     const avgMoral = crew.length > 0 ? (crew.reduce((sum, v) => sum + (v.motivation || 70), 0) / crew.length) : 70;
     vehicles.forEach(veh => {
       if (mission.type === 'pompiers' && this.sdisGarde && this.sdisGarde.active && veh.id === this.sdisGarde.vehicleId) {
@@ -3312,13 +3430,47 @@ class ProtecGame {
       veh.needsRearming = true;
       veh.fuel = Math.max(10, (veh.fuel || 90) - 15);
 
-      // Usure mécanique : Des bénévoles en forme et motivés prennent plus soin du matériel
-      const wearRate = avgMoral >= 80 ? 2 : (avgMoral < 50 ? 8 : 4);
-      veh.mechanical = Math.max(10, (veh.mechanical || 95) - wearRate);
+      // Incrémentation réaliste du kilométrage compteur (trajet aller-retour et patrouille)
+      const missionKm = Math.floor(Math.random() * 25 + 15);
+      veh.mileage = (veh.mileage || 115000) + missionKm;
 
-      if (avgMoral < 45 && Math.random() < 0.22) {
+      // Évaluation des conditions de travail et confort matériel du véhicule
+      const cond = this.getVehicleCondition(veh);
+
+      // Impact direct sur la motivation et la présence des bénévoles engagés :
+      // Matériel neuf / récent = fierté et boost de motivation.
+      // Vieux tacot (ex: 2006, bruyant, usé) = découragement et fatigue.
+      if (crew.length > 0) {
+        crew.forEach(v => {
+          v.motivation = Math.max(10, Math.min(100, (v.motivation || 75) + cond.moralBonus));
+          v.humeur = Math.max(10, Math.min(100, (v.humeur || 75) + (cond.moralBonus > 0 ? 3 : -3)));
+        });
+
+        if (cond.moralBonus > 0) {
+          this.showToast('Confort Matériel 🌟', `Véhicule moderne et agréable (${veh.model || veh.name}) : les bénévoles sont motivés (+${cond.moralBonus} motivation) !`, 'green');
+        } else if (cond.moralBonus < 0) {
+          this.showToast('Conditions Dégradées ⚠️', `Véhicule ancien et bruyant (${veh.model || veh.name}, ${cond.age} ans) : l’équipage se plaint des conditions de travail (${cond.moralBonus} motivation).`, 'orange');
+        }
+      }
+
+      // Usure mécanique naturelle
+      const wearRate = avgMoral >= 80 ? 2 : (avgMoral < 50 ? 8 : 4);
+      veh.mechanical = Math.max(5, (veh.mechanical || 95) - wearRate);
+
+      // Risque d'avarie mécanique : Très faible sur véhicule récent (<2%), mais élevé sur vieux véhicule (>30%)
+      const finalBreakdownRisk = Math.max(cond.breakdownRisk, (avgMoral < 45 ? 0.20 : 0.02));
+      if (Math.random() < finalBreakdownRisk) {
         veh.isBrokenDown = true;
-        this.showToast('Panne Véhicule', `${veh.name} est tombé en panne mécanique suite à une mauvaise manipulation en mission ! Révision garage requise.`, 'red');
+        veh.mechanical = Math.max(5, (veh.mechanical || 50) - 25);
+        this.showToast('Avarie / Panne Mécanique ! 🚨', `« ${veh.name} » (${veh.model || veh.type}, ${cond.age} ans) est tombé en panne pendant la mission ! Réparation au garage requise.`, 'red');
+        if (window.ProtecNotifications) {
+          window.ProtecNotifications.recordNotification({
+            title: '🚨 Panne Mécanique en Mission',
+            message: `Le véhicule ${veh.name} (${veh.model || veh.type}) a subi une avarie mécanique. Révision garage indispensable.`,
+            category: 'logistique',
+            level: 'danger'
+          });
+        }
       }
     });
 
@@ -5534,9 +5686,12 @@ class ProtecGame {
         const vol = this.volunteers.find(v => v.id === volId);
         if (vol && vol.status === 'renfort') {
           vol.status = 'dispo';
+          vol.exp = (vol.exp || 0) + 40; // Expérience terrain accrue
+          vol.motivation = Math.min(100, (vol.motivation || 70) + 10); // Fierté d'avoir renforcé une antenne
+          vol.missionsCount = (vol.missionsCount || 0) + 1;
         }
       });
-      this.showToast('Retour de Colonne', `${veh.name} et les secouristes sont rentrés à la base après leur mission en renfort !`, 'blue');
+      this.showToast('Retour de Colonne', `${veh.name} et les secouristes sont rentrés à la base après leur mission en renfort (+40 XP par équipier) !`, 'blue');
       this.updateStatsUI();
       this.saveGame();
     }, 180000);
@@ -6624,7 +6779,8 @@ class ProtecGame {
 
       const isAntennaVisible = this.resources.campaigns.social || this.resources.campaigns.posters || (this.stats?.dpsCompleted > 0) || (this.resources.reputationScore >= 60);
       const pendingDevis = this.devis.filter(d => d.status === 'pending');
-      const treatedDevis = this.devis.filter(d => d.status !== 'pending');
+      const inReviewDevis = this.devis.filter(d => d.status === 'sent');
+      const treatedDevis = this.devis.filter(d => ['signed', 'rejected_competition', 'rejected_security', 'rejected_budget', 'expired'].includes(d.status));
 
       body.innerHTML = `
         <div class="space-y-6">
@@ -6641,11 +6797,12 @@ class ProtecGame {
               </button>
               <button class="px-4 py-2 rounded-xl text-xs font-black bg-amber-600 text-white shadow-md flex items-center gap-1.5">
                 <i data-lucide="file-check" class="w-4 h-4 text-white"></i>
-                Devis & Dimensionnement DPS (${pendingDevis.length})
+                Devis & Dimensionnement DPS (${pendingDevis.length + inReviewDevis.length})
               </button>
             </div>
-            <div class="text-xs text-slate-500 font-bold">
-              <span>${pendingDevis.length} devis en attente</span>
+            <div class="text-xs text-slate-500 font-bold flex items-center gap-3">
+              <span><strong>${pendingDevis.length}</strong> à traiter</span>
+              ${inReviewDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 font-extrabold">⏳ ${inReviewDevis.length} en délibération</span>` : ''}
             </div>
           </div>
 
@@ -6703,6 +6860,76 @@ class ProtecGame {
               </div>
             </div>
           </div>
+
+          <!-- Section Devis en Cours d'Étude & Délibération (Temps Réel) -->
+          ${inReviewDevis.length > 0 ? `
+            <div class="space-y-3 p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/90 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="relative flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-600"></span>
+                  </span>
+                  <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wider">Devis en Cours d’Étude & Délibération (${inReviewDevis.length})</h4>
+                </div>
+                <span class="text-[10px] font-extrabold text-indigo-700 bg-indigo-100/90 px-2.5 py-0.5 rounded-lg border border-indigo-200">
+                  Instruction & Sécurité RNMSC
+                </span>
+              </div>
+              <p class="text-[11px] text-indigo-800 leading-relaxed">
+                Les organisateurs délibèrent et consultent la commission de sécurité (RNMSC) tout en comparant votre proposition aux associations concurrentes agréées (Croix-Rouge, etc.). Le verdict sera rendu dès clôture de l’instruction.
+              </p>
+
+              <div class="space-y-3 pt-1">
+                ${inReviewDevis.map(d => {
+                  const m = Math.floor((d.deliberationSecondsLeft || 60) / 60);
+                  const s = (d.deliberationSecondsLeft || 60) % 60;
+                  const timeDisplay = m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`;
+                  const total = d.deliberationTotalSeconds || 60;
+                  const left = (d.deliberationSecondsLeft !== undefined) ? d.deliberationSecondsLeft : 60;
+                  const progressPct = Math.min(100, Math.max(8, Math.round(((total - left) / total) * 100)));
+
+                  return `
+                    <div class="p-4 rounded-xl bg-white border border-indigo-100 shadow-sm space-y-3" id="devis-card-review-${d.id}">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white">${d.eventName}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">Offre transmise : ${d.proposedPrice || 250} €</span>
+                          </div>
+                          <p class="text-xs text-slate-700 mt-1">
+                            Dispositif proposé : <strong>${d.configuredScale || d.scale || 'DPS-PE'}</strong> (${d.configuredVolunteers || 4} secouristes${d.configuredVehicles && d.configuredVehicles.length > 0 ? ', ' + d.configuredVehicles.join(' + ') : ', pédestre'})
+                          </p>
+                          <p class="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
+                            <span>${d.address || (d.lat && d.lng ? `Point GPS: ${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}` : 'Adresse sur site')}</span>
+                          </p>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                          <span class="text-[10px] font-extrabold uppercase text-slate-400 block">Temps d’Arbitrage</span>
+                          <span id="devis-deliberation-timer-${d.id}" class="inline-block px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-black mono-num text-indigo-700">
+                            ${timeDisplay}
+                          </span>
+                        </div>
+                      </div>
+
+                      <!-- Barre de progression de la délibération -->
+                      <div class="space-y-1">
+                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
+                          <div id="devis-deliberation-bar-${d.id}" class="h-full bg-gradient-to-r from-indigo-500 via-blue-500 to-emerald-500 rounded-full transition-all duration-1000" style="width: ${progressPct}%"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5">
+                          <span class="text-emerald-700 font-bold">1. Dossier déposé ✓</span>
+                          <span class="text-indigo-600 font-black animate-pulse">2. Examen RNMSC & Sécurité ⏳</span>
+                          <span>3. Arbitrage concurrence & signature ⚖️</span>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
 
           <!-- Demandes reçues avec configurateur personnalisé -->
           <div class="space-y-4">
@@ -6876,6 +7103,56 @@ class ProtecGame {
               `;
             }).join('')}
           </div>
+
+          <!-- Section Historique des Dernières Décisions Organisateur -->
+          ${treatedDevis.length > 0 ? `
+            <div class="space-y-3 pt-2 border-t border-slate-200/80">
+              <div class="flex items-center justify-between">
+                <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <i data-lucide="archive" class="w-4 h-4 text-slate-500"></i>
+                  Historique Récent des Conventions & Décisions (${treatedDevis.length})
+                </h4>
+                <span class="text-[10px] text-slate-400 font-bold">5 derniers dossiers</span>
+              </div>
+              <div class="space-y-2">
+                ${treatedDevis.slice(-5).reverse().map(d => {
+                  let badge = '';
+                  let motif = '';
+                  if (d.status === 'signed') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Convention Signée</span>';
+                    motif = `Offre de ${d.proposedPrice || 250} € retenue face aux concurrents ! Dispositif ajouté à votre calendrier.`;
+                  } else if (d.status === 'rejected_competition') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">Offre Non Retenue</span>';
+                    motif = `L’organisateur a préféré retenir une association concurrente pour cette édition.`;
+                  } else if (d.status === 'rejected_security') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-red-100 text-red-800 border border-red-300">Rejet RNMSC</span>';
+                    motif = `Sous-dimensionnement sécuritaire refusé par la commission de sécurité.`;
+                  } else if (d.status === 'rejected_budget') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-800 border border-orange-300">Hors Budget</span>';
+                    motif = `Tarif ou dimensionnement jugé disproportionné par rapport au rassemblement.`;
+                  } else if (d.status === 'expired') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300">Expiré</span>';
+                    motif = `Délai de réponse dépassé sans soumission de devis de votre part.`;
+                  }
+
+                  return `
+                    <div class="p-3 rounded-xl glass-card flex items-center justify-between text-xs border border-slate-200/80">
+                      <div>
+                        <div class="font-extrabold text-slate-800 flex items-center gap-2">
+                          <span>${d.eventName}</span>
+                          ${badge}
+                        </div>
+                        <p class="text-[11px] text-slate-500 mt-0.5">${motif}</p>
+                      </div>
+                      <div class="text-right text-[11px] font-mono font-bold text-slate-700">
+                        ${d.proposedPrice ? d.proposedPrice + ' €' : ''}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
         </div>
       `;
     } else if (moduleKey === 'recrutement') {
@@ -7924,33 +8201,84 @@ class ProtecGame {
                 </button>
               </div>
             ` : (this.vehicles || []).map(v => {
+              const cond = this.getVehicleCondition(v);
               const isDispo = v.status === 'dispo';
-              const statusLabel = isDispo ? 'DISPONIBLE AU GARAGE' : (v.status === 'ongoing' || v.status === 'engaged' ? 'ENGAGÉ EN MISSION (DPS)' : (v.status === 'samu_garde' ? 'GARDE SAMU 15' : (v.status && v.status.startsWith('sdis') ? 'GARDE SDIS POMPIERS' : 'INDISPONIBLE')));
-              const statusBadgeClass = isDispo ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300';
-              const dotClass = isDispo ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse';
+              const isBroken = !!v.isBrokenDown;
+              const statusLabel = isBroken ? 'EN PANNE MÉCANIQUE' : (isDispo ? 'DISPONIBLE AU GARAGE' : (v.status === 'ongoing' || v.status === 'engaged' ? 'ENGAGÉ EN MISSION (DPS)' : (v.status === 'samu_garde' ? 'GARDE SAMU 15' : (v.status && v.status.startsWith('sdis') ? 'GARDE SDIS POMPIERS' : 'INDISPONIBLE'))));
+              const statusBadgeClass = isBroken ? 'bg-red-50 text-red-700 border-red-300' : (isDispo ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300');
+              const dotClass = isBroken ? 'bg-red-500 animate-ping' : (isDispo ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse');
+
+              let ctBadge = '';
+              if (cond.ctExpired) {
+                ctBadge = '<span class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-red-100 text-red-800 border border-red-300">🚨 CT Expiré</span>';
+              } else if (cond.ctWarning) {
+                ctBadge = `<span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">⚠️ CT : Reste ${cond.ctDaysLeft}j</span>`;
+              } else {
+                ctBadge = `<span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✅ CT Valide (${cond.ctDaysLeft}j)</span>`;
+              }
+
               return `
-                <div class="fleet-vehicle-card p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm transition flex flex-col sm:flex-row sm:items-center justify-between gap-3" data-name="${(v.name || '').toLowerCase()}" data-type="${(v.type || '').toLowerCase()}">
-                  <div class="flex items-center gap-3">
-                    <div class="w-16 h-12 bg-slate-50 rounded-xl border border-slate-200 p-1 flex items-center justify-center flex-shrink-0">
-                      <img src="${v.image || window.game.getVehicleImage(v.type)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='🚑'" />
-                    </div>
-                    <div>
-                      <div class="flex items-center gap-2">
-                        <h5 class="text-xs sm:text-sm font-black text-slate-900">${v.name}</h5>
-                        <button onclick="window.game.openRenameVehicleModal('${v.id}')" class="text-slate-400 hover:text-pc-blue text-xs p-0.5 rounded transition cursor-pointer" title="Renommer l'indicatif">✏️</button>
+                <div class="fleet-vehicle-card p-4 rounded-2xl bg-white border ${isBroken ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200'} hover:border-slate-300 hover:shadow-sm transition space-y-3" data-name="${(v.name || '').toLowerCase()}" data-type="${(v.type || '').toLowerCase()}">
+                  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex items-start sm:items-center gap-3">
+                      <div class="w-16 h-14 bg-slate-50 rounded-xl border border-slate-200 p-1 flex items-center justify-center flex-shrink-0">
+                        <img src="${v.image || window.game.getVehicleImage(v.type)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='🚑'" />
                       </div>
-                      <p class="text-[11px] font-semibold text-slate-500">${v.label || v.type} • Capacité : <strong>${v.capacity || 4} équipiers</strong></p>
+                      <div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <h5 class="text-sm font-black text-slate-900 tracking-wide">${v.name}</h5>
+                          <span class="px-2 py-0.5 rounded text-[10px] font-bold ${cond.badgeClass}">${cond.label}</span>
+                          <button onclick="window.game.openRenameVehicleModal('${v.id}')" class="text-slate-400 hover:text-pc-blue text-xs p-0.5 rounded transition cursor-pointer" title="Renommer l'indicatif">✏️</button>
+                        </div>
+                        <p class="text-xs font-semibold text-slate-600 mt-0.5">
+                          ${v.model || v.label || v.type}
+                        </p>
+                        <p class="text-[11px] text-slate-500">
+                          Mise en circulation : <strong>${v.year || 2018}</strong> (${cond.age} ans) • Compteur : <strong>${(v.mileage || 115000).toLocaleString('fr-FR')} km</strong> • <strong>${v.capacity || 4} places</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center sm:justify-end gap-2">
+                      <span class="px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusBadgeClass} flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full ${dotClass}"></span>
+                        ${statusLabel}
+                      </span>
+                      ${ctBadge}
+                      <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200">
+                        🛡️ Assurance : ${v.insuranceMonthlyCost || 95} €/mois
+                      </span>
                     </div>
                   </div>
-                  <div class="flex items-center justify-between sm:justify-end gap-2.5">
-                    <span class="px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusBadgeClass} flex items-center gap-1.5">
-                      <span class="w-2 h-2 rounded-full ${dotClass}"></span>
-                      ${statusLabel}
-                    </span>
-                    <button onclick="window.ProtecLogistique.selectedStationId='${v.stationId || primaryStation.id}'; window.ProtecLogistique.activeTab='stock'; window.game.openModule('logistique');" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer" title="Armement du véhicule">
-                      <span>📦</span>
-                      <span class="hidden sm:inline">Armement</span>
-                    </button>
+
+                  <!-- Jauge mécanique et actions réglementaires -->
+                  <div class="pt-2.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div class="flex items-center gap-3">
+                      <span class="text-[11px] font-bold text-slate-500">État Mécanique :</span>
+                      <div class="w-28 bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+                        <div class="h-full rounded-full ${(v.mechanical || 90) > 70 ? 'bg-emerald-500' : ((v.mechanical || 90) > 40 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${v.mechanical || 90}%"></div>
+                      </div>
+                      <span class="font-mono font-bold text-slate-700 text-[11px]">${v.mechanical || 90}%</span>
+                    </div>
+
+                    <div class="flex items-center flex-wrap gap-2">
+                      <button onclick="window.game.passerControleTechnique('${v.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${cond.ctExpired ? 'bg-red-600 hover:bg-red-700 text-white shadow-sm animate-pulse' : (cond.ctWarning ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'glass-button text-slate-700')}">
+                        <span>🔧</span>
+                        <span>Passer le CT (95 €)</span>
+                      </button>
+
+                      ${(isBroken || (v.mechanical || 90) < 80) ? `
+                        <button onclick="window.game.reparerVehiculeGarage('${v.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer">
+                          <span>🔩</span>
+                          <span>Révision Garage (${isBroken ? '320 €' : 'Réparer'})</span>
+                        </button>
+                      ` : ''}
+
+                      <button onclick="window.ProtecLogistique.selectedStationId='${v.stationId || primaryStation.id}'; window.ProtecLogistique.activeTab='stock'; window.game.openModule('logistique');" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer" title="Armement du véhicule">
+                        <span>📦</span>
+                        <span>Armement</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               `;
@@ -8307,6 +8635,280 @@ class ProtecGame {
     if (window.lucide) window.lucide.createIcons();
   }
 
+  // --- SYSTÈME FLOTTE : INDICATIFS, CONDITION, CONTRÔLE TECHNIQUE & ASSURANCE ---
+  generateVehicleCallsign(type, stationId, stationObj = null) {
+    const station = stationObj || this.stations.find(s => s.id === stationId) || this.stations[0];
+    const cleanType = (type || 'VPSP').toUpperCase().trim();
+
+    let stationCity = 'ANTENNE';
+    if (station) {
+      if (station.city && station.city.trim().length > 0) {
+        stationCity = station.city.trim();
+      } else if (station.name && station.name.trim().length > 0) {
+        stationCity = station.name.replace(/^Antenne\s+(de\s+|d'|du\s+|des\s+)?/i, '').trim();
+      }
+    }
+    stationCity = stationCity.toUpperCase();
+
+    // Compter les véhicules du même type rattachés à cette même antenne
+    const sameTypeVehicles = (this.vehicles || []).filter(v => 
+      v.stationId === (station ? station.id : null) && 
+      (v.type || '').toUpperCase() === cleanType
+    );
+    const orderNum = String(sameTypeVehicles.length + 1).padStart(2, '0');
+
+    return `${cleanType} ${orderNum} ${stationCity}`;
+  }
+
+  getVehicleCondition(vehicle) {
+    if (!vehicle) return { age: 0, score: 80, label: 'Bon État', moralBonus: 0, breakdownRisk: 0.05, badgeClass: 'bg-slate-100 text-slate-800', ctExpired: false, ctWarning: false, ctDaysLeft: 180 };
+
+    const currentYear = this.clock?.year || new Date().getFullYear();
+    const age = Math.max(0, currentYear - (vehicle.year || 2018));
+    const mileage = vehicle.mileage || 115000;
+    const mechanical = (vehicle.mechanical !== undefined) ? vehicle.mechanical : 90;
+    
+    // Contrôle Technique
+    const ctExpired = vehicle.ctExpiryTimestamp ? (Date.now() > vehicle.ctExpiryTimestamp) : (vehicle.ctStatus === 'expire');
+    const ctDaysLeft = vehicle.ctExpiryTimestamp ? Math.ceil((vehicle.ctExpiryTimestamp - Date.now()) / (24 * 3600 * 1000)) : 180;
+    const ctWarning = ctDaysLeft <= 30 && !ctExpired;
+
+    // Score de confort et état (0 à 100)
+    let score = 100;
+    
+    // Impact de l'ancienneté :
+    // Véhicule neuf (<= 3 ans) : bonus confort.
+    // Au-delà de 7 ans : perte progressive.
+    // Véhicule de 2006 (20 ans) : lourd malus (-45 pts) !
+    if (age <= 3) {
+      score += 5;
+    } else if (age > 7) {
+      score -= Math.min(48, (age - 7) * 3);
+    }
+
+    // Impact du kilométrage :
+    if (mileage > 90000) {
+      score -= Math.min(25, Math.floor((mileage - 90000) / 10000) * 2);
+    }
+
+    // Impact de la mécanique :
+    if (mechanical < 75) {
+      score -= (75 - mechanical);
+    }
+
+    // Malus si CT dépassé :
+    if (ctExpired) {
+      score -= 30;
+    }
+
+    score = Math.max(10, Math.min(100, Math.round(score)));
+
+    let label = 'Flambant Neuf';
+    let moralBonus = +5;
+    let breakdownRisk = 0.02;
+    let badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+
+    if (score >= 82) {
+      label = '🌟 Flambant Neuf (+Moral équipage)';
+      moralBonus = +5;
+      breakdownRisk = 0.02;
+      badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+    } else if (score >= 62) {
+      label = '👌 Bon État (Confortable)';
+      moralBonus = +2;
+      breakdownRisk = 0.05;
+      badgeClass = 'bg-blue-100 text-blue-800 border-blue-300';
+    } else if (score >= 42) {
+      label = '⚠️ Usure Marquée (Bruyant & fatiguant)';
+      moralBonus = -2;
+      breakdownRisk = 0.14;
+      badgeClass = 'bg-amber-100 text-amber-800 border-amber-300';
+    } else {
+      label = '🚨 Vétuste (-Moral / Fort risque de panne)';
+      moralBonus = -6;
+      breakdownRisk = 0.32;
+      badgeClass = 'bg-red-100 text-red-800 border-red-300';
+    }
+
+    return {
+      age,
+      score,
+      label,
+      moralBonus,
+      breakdownRisk,
+      badgeClass,
+      ctExpired,
+      ctWarning,
+      ctDaysLeft
+    };
+  }
+
+  passerControleTechnique(vehicleId) {
+    const veh = this.vehicles.find(v => v.id === vehicleId);
+    if (!veh) return;
+
+    const cost = 95;
+    if (this.resources.money < cost) {
+      this.showToast('Trésorerie insuffisante', `Le contrôle technique réglementaire coûte ${cost} €.`, 'orange');
+      return;
+    }
+
+    this.resources.money -= cost;
+    veh.ctStatus = 'valide';
+    veh.ctExpiryTimestamp = Date.now() + (365 * 24 * 3600 * 1000); // Valide 1 an
+    veh.mechanical = Math.min(100, (veh.mechanical || 80) + 8);
+
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(this, -cost, `Contrôle Technique : ${veh.name}`, 'entretien');
+    }
+
+    this.showToast('Contrôle Technique Validé ! ✅', `« ${veh.name} » a satisfait aux contrôles de conformité (valide 1 an).`, 'green');
+    this.updateStatsUI();
+    this.saveGame();
+    if (this.currentModalKey === 'flotte') {
+      this.openModule('flotte', true);
+    }
+  }
+
+  reparerVehiculeGarage(vehicleId) {
+    const veh = this.vehicles.find(v => v.id === vehicleId);
+    if (!veh) return;
+
+    const cost = veh.isBrokenDown ? 320 : Math.max(50, Math.round((100 - (veh.mechanical || 80)) * 5));
+    if (this.resources.money < cost) {
+      this.showToast('Trésorerie insuffisante', `La révision / réparation garage coûte ${cost} €.`, 'orange');
+      return;
+    }
+
+    this.resources.money -= cost;
+    veh.isBrokenDown = false;
+    veh.mechanical = 100;
+
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(this, -cost, `Révision Garage : ${veh.name}`, 'entretien');
+    }
+
+    this.showToast('Véhicule Réparé ! 🔧', `« ${veh.name} » sort de révision mécanique (100% opérationnel).`, 'green');
+    this.updateStatsUI();
+    this.saveGame();
+    if (this.currentModalKey === 'flotte') {
+      this.openModule('flotte', true);
+    }
+  }
+
+  checkMonthlyFleetInsurance(now) {
+    if (!this.vehicles || this.vehicles.length === 0) return;
+
+    const monthKey = `${now.getFullYear()}-${now.getMonth()}`;
+    if (this.lastInsuranceMonthKey === monthKey) return;
+
+    if (!this.lastInsuranceMonthKey) {
+      this.lastInsuranceMonthKey = monthKey;
+      return;
+    }
+
+    this.lastInsuranceMonthKey = monthKey;
+    const totalInsurance = this.vehicles.reduce((sum, v) => sum + (v.insuranceMonthlyCost || 95), 0);
+    this.resources.money -= totalInsurance;
+
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        this,
+        -totalInsurance,
+        `Assurance Flotte Roulante (${this.vehicles.length} véhicules)`,
+        'frais'
+      );
+    }
+
+    this.showToast(
+      'Assurance Flotte Roulante 🛡️',
+      `Prélèvement mensuel des assurances : -${totalInsurance} € (${this.vehicles.length} véhicules assurés).`,
+      'blue'
+    );
+
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.recordNotification({
+        title: '🛡️ Prélèvement Assurance Flotte',
+        message: `La cotisation mensuelle d'assurance pour ${this.vehicles.length} véhicules (${totalInsurance} €) a été réglée.`,
+        category: 'logistique',
+        level: 'info'
+      });
+    }
+
+    this.updateStatsUI();
+    this.saveGame();
+  }
+
+  ensureStarterVehicle() {
+    if (!this.stations || this.stations.length === 0) return;
+    if (this.vehicles && this.vehicles.length > 0) return;
+
+    const primaryStation = this.stations[0];
+    const starterId = `vpsp-${Date.now()}`;
+    const callsign = this.generateVehicleCallsign('VPSP', primaryStation.id, primaryStation);
+    const starterVpsp = {
+      id: starterId,
+      name: callsign,
+      type: 'VPSP',
+      label: 'Véhicule de Premiers Secours à Personnes (VPSP)',
+      model: 'Renault Master 2.3 dCi 135 L2H2',
+      year: 2018,
+      mileage: 118400,
+      capacity: 5,
+      seatsCount: 5,
+      status: 'dispo',
+      fuel: 100,
+      mechanical: 92,
+      ctStatus: 'valide',
+      ctExpiryTimestamp: Date.now() + (180 * 24 * 3600 * 1000),
+      insuranceStatus: 'assure',
+      insuranceMonthlyCost: 95,
+      stationId: primaryStation.id,
+      image: this.getVehicleImage('VPSP'),
+      hasTowHitch: false,
+      requiresTrailer: false,
+      reqSkills: ['permis_vpsp']
+    };
+
+    this.vehicles = [starterVpsp];
+    if (!primaryStation.vehicles) primaryStation.vehicles = [];
+    if (!primaryStation.vehicles.includes(starterId)) {
+      primaryStation.vehicles.push(starterId);
+    }
+    this.saveGame();
+  }
+
+  normalizeAllVehicles() {
+    if (!this.vehicles || this.vehicles.length === 0) return;
+
+    this.vehicles.forEach(v => {
+      const station = this.stations.find(s => s.id === v.stationId) || this.stations[0];
+      const type = (v.type || 'VPSP').toUpperCase();
+
+      if (!v.name || !v.name.includes(' ') || v.name === 'VPSP 01' || v.name === 'VTU 01' || v.name === 'VL 01') {
+        v.name = this.generateVehicleCallsign(type, v.stationId, station);
+      }
+
+      if (!v.model) {
+        if (type === 'VPSP') v.model = 'Renault Master 2.3 dCi 135 L2H2';
+        else if (type === 'VTU') v.model = 'Renault Trafic III 2.0 dCi 120';
+        else if (type === 'VL' || type === 'VLHR') v.model = 'Dacia Duster 1.5 Blue dCi 4x4';
+        else if (type === 'VTP') v.model = 'Ford Transit Minibus 9 places';
+        else v.model = `${type} Polyvalent`;
+      }
+
+      if (!v.year) v.year = 2018;
+      if (!v.mileage) v.mileage = 118400;
+      if (!v.ctStatus) v.ctStatus = 'valide';
+      if (!v.ctExpiryTimestamp) v.ctExpiryTimestamp = Date.now() + (180 * 24 * 3600 * 1000);
+      if (!v.insuranceStatus) v.insuranceStatus = 'assure';
+      if (!v.insuranceMonthlyCost) {
+        v.insuranceMonthlyCost = type === 'VPSP' ? 95 : (type === 'VTU' ? 75 : 55);
+      }
+      if (v.mechanical === undefined) v.mechanical = 90;
+    });
+  }
+
   buyVehicle(stationId, type) {
     const catalogItem = window.ProtecAdvanced?.vehicleCatalog?.find(v => v.type === type);
     const cost = catalogItem ? catalogItem.cost : (type === 'VPSP' ? 28500 : 11500);
@@ -8320,11 +8922,48 @@ class ProtecGame {
 
     this.resources.money -= cost;
     const vehId = `${type.toLowerCase()}-${Date.now()}`;
+    const callsign = this.generateVehicleCallsign(type, stationId, station);
+
+    let modelName = 'Véhicule Neuf';
+    let defaultYear = 2024;
+    let defaultMileage = 8500;
+    let insuranceCost = 75;
+
+    if (type === 'VPSP') {
+      modelName = 'Renault Master III Phase 3 2.3 dCi 150 L2H2';
+      defaultYear = 2023;
+      defaultMileage = 28000;
+      insuranceCost = 95;
+    } else if (type === 'VTU') {
+      modelName = 'Renault Trafic III 2.0 Blue dCi 130 Grand Confort';
+      defaultYear = 2022;
+      defaultMileage = 42000;
+      insuranceCost = 75;
+    } else if (type === 'VL') {
+      modelName = 'Dacia Duster II 1.5 Blue dCi 115 4x4';
+      defaultYear = 2024;
+      defaultMileage = 15000;
+      insuranceCost = 55;
+    } else if (type === 'VLHR') {
+      modelName = 'Toyota Hilux 2.4 D-4D Double Cabine 4x4';
+      defaultYear = 2022;
+      defaultMileage = 39000;
+      insuranceCost = 70;
+    } else if (type === 'VTP') {
+      modelName = 'Ford Transit Minibus 2.0 EcoBlue 130 (9 places)';
+      defaultYear = 2023;
+      defaultMileage = 31000;
+      insuranceCost = 80;
+    }
+
     const newVeh = {
       id: vehId,
-      name: `${type} 0${station.vehicles.length + 1}`,
+      name: callsign,
       type: type,
       label: catalogItem?.name || (type === 'VPSP' ? 'Véhicule de Premiers Secours à Personnes' : type),
+      model: modelName,
+      year: defaultYear,
+      mileage: defaultMileage,
       capacity: catalogItem ? catalogItem.capacity : (type === 'VPSP' ? 5 : 4),
       seatsCount: catalogItem ? catalogItem.capacity : (type === 'VPSP' ? 5 : 4),
       extraCapacityLabel: catalogItem?.extraCapacityLabel || null,
@@ -8332,6 +8971,12 @@ class ProtecGame {
       requiresTrailer: catalogItem?.requiresTrailer || false,
       reqSkills: catalogItem?.reqSkills || [],
       status: 'dispo',
+      fuel: 100,
+      mechanical: 98,
+      ctStatus: 'valide',
+      ctExpiryTimestamp: Date.now() + (365 * 24 * 3600 * 1000), // CT valide 1 an
+      insuranceStatus: 'assure',
+      insuranceMonthlyCost: insuranceCost,
       stationId: stationId,
       image: this.getVehicleImage(type)
     };
@@ -8344,7 +8989,7 @@ class ProtecGame {
     this.renderStations();
     this.saveGame();
     this.syncPlayerToServer();
-    this.showToast('Véhicule livré', `${newVeh.name} est prêt au départ !`, 'green');
+    this.showToast('Véhicule livré ! 🚑', `${newVeh.name} (${newVeh.model}) est prêt au départ !`, 'green');
     this.openStationDetails(stationId);
   }
 
@@ -8541,6 +9186,28 @@ class ProtecGame {
         window.ProtecCriseLogistique.updateLogisticClock(this);
       }
 
+      // 1c-bis. GESTION DE LA FLOTTE : Prélèvement assurance mensuelle et péremption Contrôle Technique
+      if (this.clock.second === 0) {
+        this.checkMonthlyFleetInsurance(now);
+
+        if (this.vehicles && this.vehicles.length > 0) {
+          this.vehicles.forEach(v => {
+            if (v.ctExpiryTimestamp && currentTime > v.ctExpiryTimestamp && v.ctStatus !== 'expire') {
+              v.ctStatus = 'expire';
+              this.showToast('Contrôle Technique Expiré ! 🚨', `Le CT de « ${v.name} » est arrivé à échéance ! Faites-le passer au contrôle technique depuis l'onglet Flotte.`, 'orange');
+              if (window.ProtecNotifications) {
+                window.ProtecNotifications.recordNotification({
+                  title: '⚠️ Contrôle Technique Expiré',
+                  message: `Le véhicule ${v.name} (${v.model || v.type}) n'est plus à jour de son CT réglementaire. Passage en centre requis.`,
+                  category: 'logistique',
+                  level: 'warning'
+                });
+              }
+            }
+          });
+        }
+      }
+
       // 1d. GESTION DES SALARIÉS, CODE DU TRAVAIL ET VACATIONS INTERNES
       if (window.ProtecPersonnel) {
         window.ProtecPersonnel.updateSalariesClock(this);
@@ -8617,10 +9284,38 @@ class ProtecGame {
         }
       });
 
-      // 1d. GESTION DE L'EXPIRATION DES DEVIS (expiration au bout de plusieurs heures si non traités)
+      // 1d. GESTION DES DEVIS : Délibération réaliste et Expiration
       if (this.devis && this.devis.length > 0) {
         this.devis.forEach(d => {
-          if (d.status === 'pending') {
+          // Devis transmis à l'organisateur : délibération en cours avec compte à rebours réaliste
+          if (d.status === 'sent') {
+            if (!d.decisionAt) {
+              d.deliberationTotalSeconds = 60;
+              d.decisionAt = currentTime + 60000;
+            }
+            const remainingMs = d.decisionAt - currentTime;
+            d.deliberationSecondsLeft = Math.max(0, Math.ceil(remainingMs / 1000));
+
+            // Mise à jour ciblée dans le DOM sans tout redessiner si l'onglet Devis est ouvert
+            const timerEl = document.getElementById(`devis-deliberation-timer-${d.id}`);
+            if (timerEl) {
+              const m = Math.floor(d.deliberationSecondsLeft / 60);
+              const s = d.deliberationSecondsLeft % 60;
+              timerEl.textContent = m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`;
+            }
+            const barEl = document.getElementById(`devis-deliberation-bar-${d.id}`);
+            if (barEl && d.deliberationTotalSeconds > 0) {
+              const pct = Math.min(100, Math.max(5, Math.round(((d.deliberationTotalSeconds - d.deliberationSecondsLeft) / d.deliberationTotalSeconds) * 100)));
+              barEl.style.width = `${pct}%`;
+            }
+
+            // Délibération terminée : verdict officiel de l'organisateur et de la commission de sécurité
+            if (currentTime >= d.decisionAt) {
+              this.resolveDevisDecision(d);
+            }
+          }
+          // Devis reçus en attente d'une proposition du joueur
+          else if (d.status === 'pending') {
             if (typeof d.secondsLeft !== 'number') {
               d.secondsLeft = 6 * 3600;
             }

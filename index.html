@@ -638,8 +638,17 @@
         <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Liaisons</span>
       </button>
 
-      <!-- 5. Tous les Modules (Menu hiérarchique) -->
-      <button onclick="window.game.openMobileMenu()" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-amber-50 min-w-0 text-pc-orange" title="Centre de Commandement">
+      <!-- 5. ACTION RAPIDE & DÉPARTS D'URGENCE (Quick Dispatch) -->
+      <button onclick="window.ProtecQuickDispatch ? window.ProtecQuickDispatch.open(window.game) : window.game.openModule('planning')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-orange-50 min-w-0 text-orange-600" title="Panneau d'Action Rapide & Départs d'Urgence">
+        <div class="relative">
+          <i data-lucide="zap" class="w-5 h-5 text-orange-600 animate-pulse"></i>
+          <span class="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-orange-500 animate-ping"></span>
+        </div>
+        <span class="text-[9px] font-black text-orange-700 mt-0.5 truncate max-w-full">Urgences</span>
+      </button>
+
+      <!-- 6. Tous les Modules (Menu hiérarchique) -->
+      <button onclick="window.game.openMobileMenu()" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-amber-50 min-w-0 text-pc-blue" title="Centre de Commandement">
         <i data-lucide="layout-grid" class="w-5 h-5"></i>
         <span class="text-[9px] font-extrabold mt-0.5 truncate max-w-full">Menu</span>
       </button>
@@ -896,6 +905,8 @@
   <!-- MODAL MULTI-USAGES (Formations, Flotte, Équipe, Finances...) -->
   <div id="main-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-sm" onclick="if(event.target === this) window.game.handleBackdropClick(event)">
     <div class="glass-panel-heavy rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl border border-white/90 modal-fade-in overflow-hidden">
+      <!-- Poignée tactile de glissement Bottom Sheet -->
+      <div class="bottom-sheet-handle"></div>
       
       <!-- Modal Header -->
       <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white/50">

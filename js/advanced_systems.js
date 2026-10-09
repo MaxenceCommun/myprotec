@@ -704,17 +704,26 @@ window.ProtecAdvanced = {
 
     game.resources.money -= cat.cost;
     const vehId = `${cat.type.toLowerCase()}-${Date.now()}`;
+    const callsign = typeof game.generateVehicleCallsign === 'function' ? game.generateVehicleCallsign(cat.type, station.id, station) : `${cat.type} 0${station.vehicles.length + 1} ${(station.city || 'ANTENNE').toUpperCase()}`;
+    
     const newVeh = {
       id: vehId,
-      name: `${cat.type} 0${station.vehicles.length + 1}`,
+      name: callsign,
       type: cat.type,
       label: cat.name,
+      model: `${cat.name} (Neuf)`,
+      year: 2024,
+      mileage: 8500,
       capacity: cat.capacity,
       seatsCount: cat.capacity,
       extraCapacityLabel: cat.extraCapacityLabel || null,
       status: 'dispo',
       fuel: 100,
       mechanical: 100,
+      ctStatus: 'valide',
+      ctExpiryTimestamp: Date.now() + (365 * 24 * 3600 * 1000),
+      insuranceStatus: 'assure',
+      insuranceMonthlyCost: cat.type === 'VPSP' ? 95 : (cat.type === 'VTU' ? 75 : 55),
       disinfectionNeeded: false,
       stationId: station.id,
       specialty: cat.specialty,

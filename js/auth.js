@@ -925,6 +925,14 @@ window.ProtecAuth = {
         }
       }
 
+      // Assurer la présence du VPSP initial et normaliser les indicatifs d'antenne
+      if (typeof game.ensureStarterVehicle === 'function') {
+        game.ensureStarterVehicle();
+      }
+      if (typeof game.normalizeAllVehicles === 'function') {
+        game.normalizeAllVehicles();
+      }
+
       game.updateStatsUI();
       if (game.renderStations) game.renderStations();
       if (game.renderMissions) game.renderMissions();

@@ -521,6 +521,71 @@ window.ProtecFinances = {
 
       </div>
 
+      <!-- 1b. SEGMENTATION RÉGLEMENTAIRE DES 3 FLUX FINANCIERS DE L'AASC -->
+      ${(() => {
+        const fluxDps = history.filter(h => h.category === 'dps').reduce((acc, h) => acc + (h.amount > 0 ? h.amount : 0), 0);
+        const fluxGarde = history.filter(h => h.category === 'garde' || h.category === 'prestation').reduce((acc, h) => acc + (h.amount > 0 ? h.amount : 0), 0);
+        const fluxSubv = history.filter(h => h.category === 'subvention').reduce((acc, h) => acc + (h.amount > 0 ? h.amount : 0), 0);
+        const totalFlux = (fluxDps + fluxGarde + fluxSubv) || 1;
+        const pctDps = Math.round((fluxDps / totalFlux) * 100);
+        const pctGarde = Math.round((fluxGarde / totalFlux) * 100);
+        const pctSubv = Math.round((fluxSubv / totalFlux) * 100);
+
+        return `
+          <div class="p-4 rounded-3xl glass-card border border-slate-200/90 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-lg">⚖️</span>
+                <div>
+                  <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Segmentation des 3 Flux de Trésorerie AASC</h4>
+                  <p class="text-[11px] text-slate-500">Traçabilité budgétaire différenciée selon les directives de sécurité civile.</p>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-pc-blue/10 text-pc-blue">
+                Répartition des Recettes
+              </span>
+            </div>
+
+            <!-- Jauge segmentée 100% -->
+            <div class="w-full h-3 rounded-full bg-slate-100 flex overflow-hidden border border-slate-200/60">
+              <div class="bg-amber-500 h-full transition-all" style="width: ${pctDps}%" title="DPS : ${pctDps}%"></div>
+              <div class="bg-sky-500 h-full transition-all" style="width: ${pctGarde}%" title="Gardes 15/18 : ${pctGarde}%"></div>
+              <div class="bg-indigo-600 h-full transition-all" style="width: ${pctSubv}%" title="Subventions : ${pctSubv}%"></div>
+            </div>
+
+            <!-- 3 Blocs de flux -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+              <div class="p-2.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold text-amber-900 text-[11px]">1. DPS Facturés</span>
+                  <span class="font-mono font-bold text-amber-800">${pctDps}%</span>
+                </div>
+                <div class="text-sm font-black text-amber-950 font-mono">+${fluxDps.toLocaleString('fr-FR')} €</div>
+                <span class="text-[10px] text-amber-700 block">Devis privés & manifestations</span>
+              </div>
+
+              <div class="p-2.5 rounded-2xl bg-sky-50/60 border border-sky-200/70 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold text-sky-900 text-[11px]">2. Gardes SAMU & SDIS</span>
+                  <span class="font-mono font-bold text-sky-800">${pctGarde}%</span>
+                </div>
+                <div class="text-sm font-black text-sky-950 font-mono">+${fluxGarde.toLocaleString('fr-FR')} €</div>
+                <span class="text-[10px] text-sky-700 block">Forfaits astreintes & sorties 15</span>
+              </div>
+
+              <div class="p-2.5 rounded-2xl bg-indigo-50/60 border border-indigo-200/70 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold text-indigo-900 text-[11px]">3. Subventions Publiques</span>
+                  <span class="font-mono font-bold text-indigo-800">${pctSubv}%</span>
+                </div>
+                <div class="text-sm font-black text-indigo-950 font-mono">+${fluxSubv.toLocaleString('fr-FR')} €</div>
+                <span class="text-[10px] text-indigo-700 block">Dotations Mairie & État FDVA</span>
+              </div>
+            </div>
+          </div>
+        `;
+      })()}
+
       <!-- 2. COURBE SVG D'ÉVOLUTION DU SOLDE BANCAIRE -->
       <div class="p-5 rounded-3xl bg-slate-900 text-white shadow-xl space-y-3">
         <div class="flex items-center justify-between">

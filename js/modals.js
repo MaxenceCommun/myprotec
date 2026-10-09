@@ -486,3 +486,435 @@ window.ProtecModals = {
     }
   }
 };
+
+// ============================================================================
+// COMPOSANT UNIVERSEL BOTTOM SHEET (FLUIDITÉ TACTILE SMARTPHONES & TABLETTES)
+// ============================================================================
+window.ProtecBottomSheet = {
+  activeSheet: null,
+  touchStartY: 0,
+  touchCurrentY: 0,
+
+  // Ouverture fluide d'un volet coulissant depuis le bas
+  open({ title, subtitle, icon, content, categorySubnav = null, size = 'default', onBack = null, isQuickDispatch = false }) {
+    const modal = document.getElementById('main-modal');
+    if (!modal) return;
+
+    const modalBox = modal.querySelector('.glass-panel-heavy') || modal.firstElementChild;
+    const titleEl = document.getElementById('modal-title');
+    const subtitleEl = document.getElementById('modal-subtitle');
+    const iconContainer = document.getElementById('modal-icon-container');
+    const iconEl = document.getElementById('modal-icon');
+    const bodyEl = document.getElementById('modal-body');
+    const subnavEl = document.getElementById('modal-category-subnav');
+    const backBtn = document.getElementById('modal-back-btn');
+
+    // Assurer la présence de la poignée tactile (drag handle)
+    let handle = modalBox.querySelector('.bottom-sheet-handle');
+    if (!handle) {
+      handle = document.createElement('div');
+      handle.className = 'bottom-sheet-handle';
+      modalBox.insertBefore(handle, modalBox.firstChild);
+      this.attachTouchListeners(handle, modalBox);
+    }
+
+    // Mise à jour des textes et icônes
+    if (titleEl) titleEl.textContent = title || '';
+    if (subtitleEl) {
+      if (subtitle) {
+        subtitleEl.textContent = subtitle;
+        subtitleEl.classList.remove('hidden');
+      } else {
+        subtitleEl.classList.add('hidden');
+      }
+    }
+    if (iconEl && icon) {
+      iconEl.setAttribute('data-lucide', icon);
+    }
+
+    // Gestion du bouton retour unifié (évite la superposition opaque)
+    if (backBtn) {
+      if (onBack) {
+        backBtn.classList.remove('hidden');
+        backBtn.onclick = onBack;
+      } else {
+        backBtn.classList.add('hidden');
+      }
+    }
+
+    // Sous-navigation par onglets
+    if (subnavEl) {
+      if (categorySubnav) {
+        subnavEl.innerHTML = categorySubnav;
+        subnavEl.classList.remove('hidden');
+      } else {
+        subnavEl.innerHTML = '';
+        subnavEl.classList.add('hidden');
+      }
+    }
+
+    // Contenu
+    if (bodyEl) {
+      bodyEl.innerHTML = content || '';
+      bodyEl.scrollTop = 0;
+    }
+
+    // Thème d'urgence Quick Dispatch vs Thème standard
+    if (isQuickDispatch) {
+      modalBox.classList.add('quick-dispatch-sheet');
+    } else {
+      modalBox.classList.remove('quick-dispatch-sheet');
+    }
+
+    // Affichage
+    modal.classList.remove('hidden');
+    modalBox.classList.remove('bottom-sheet-slide-down');
+    modalBox.classList.add('bottom-sheet-slide-up');
+
+    if (window.lucide) window.lucide.createIcons();
+    this.activeSheet = { title, onBack };
+  },
+
+  // Fermeture douce avec animation vers le bas
+  close() {
+    const modal = document.getElementById('main-modal');
+    if (!modal) return;
+    const modalBox = modal.querySelector('.glass-panel-heavy') || modal.firstElementChild;
+    if (modalBox) {
+      modalBox.classList.remove('bottom-sheet-slide-up');
+      modalBox.classList.add('bottom-sheet-slide-down');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+        modalBox.classList.remove('bottom-sheet-slide-down');
+      }, 200);
+    } else {
+      modal.classList.add('hidden');
+    }
+    this.activeSheet = null;
+  },
+
+  // Écouteurs de gestes tactiles (swipe vers le bas pour fermer)
+  attachTouchListeners(handle, modalBox) {
+    if (!handle || handle._hasTouchListeners) return;
+    handle._hasTouchListeners = true;
+
+    handle.addEventListener('touchstart', (e) => {
+      this.touchStartY = e.touches[0].clientY;
+      modalBox.style.transition = 'none';
+    }, { passive: true });
+
+    handle.addEventListener('touchmove', (e) => {
+      this.touchCurrentY = e.touches[0].clientY;
+      const deltaY = this.touchCurrentY - this.touchStartY;
+      if (deltaY > 0) {
+        modalBox.style.transform = `translateY(${deltaY}px)`;
+      }
+    }, { passive: true });
+
+    handle.addEventListener('touchend', () => {
+      const deltaY = this.touchCurrentY - this.touchStartY;
+      modalBox.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+      if (deltaY > 100) {
+        this.close();
+      } else {
+        modalBox.style.transform = 'translateY(0)';
+      }
+      this.touchStartY = 0;
+      this.touchCurrentY = 0;
+    }, { passive: true });
+  }
+};
+
+// ============================================================================
+// PANNEAU D'ACTION RAPIDE (ACTION SHEET D'URGENCE & QUICK DISPATCH)
+// ============================================================================
+window.ProtecQuickDispatch = {
+  open(game) {
+    if (!game) game = window.game;
+    const ongoingMissions = (game.missions || []).filter(m => m.status === 'ongoing');
+    const pendingSamu = (game.missions || []).filter(m => m.type === 'samu' && m.status !== 'completed');
+    const availableVehicles = (game.vehicles || []).filter(v => v.status === 'disponible');
+    const availableVolunteers = (game.volunteers || []).filter(v => v.status === 'disponible' && (!v.isBurnout));
+    const vpspList = (game.vehicles || []).filter(v => v.type === 'VPSP');
+    const hasActiveSamuGarde = game.samuGarde?.active;
+
+    const content = `
+      <div class="space-y-6">
+        <!-- Bandeau d'état d'alerte opérationnelle -->
+        <div class="p-4 rounded-2xl bg-gradient-to-r from-red-600 via-orange-600 to-amber-600 text-white shadow-xl flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-2xl font-black animate-pulse">
+              ⚡
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h4 class="text-base font-black tracking-wide">CENTRE D'ENGAGEMENT RAPIDE</h4>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-white/30 uppercase tracking-wider">Alerte Réflexe</span>
+              </div>
+              <p class="text-xs text-white/90">Mobilisation immédiate des vecteurs d'intervention et suivi des urgences sans changer de vue.</p>
+            </div>
+          </div>
+          <div class="text-right hidden sm:block">
+            <span class="text-[11px] font-bold text-white/80 block">Disponibilité Locale</span>
+            <span class="text-sm font-black">${availableVolunteers.length} secouristes • ${availableVehicles.length} véhicules</span>
+          </div>
+        </div>
+
+        <!-- 1. ACTIONS RÉFLEXES EN 1 CLIC -->
+        <div class="space-y-2">
+          <h5 class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+            <i data-lucide="zap" class="w-4 h-4 text-orange-500"></i>
+            Départs Réflexes & Prises de Garde
+          </h5>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <!-- Bouton Départ Réflexe VPSP -->
+            <button onclick="window.ProtecQuickDispatch.dispatchEmergencyVpsp(window.game)" class="p-3.5 rounded-2xl quick-dispatch-btn-urgent text-white text-left flex flex-col justify-between space-y-2 shadow-lg group">
+              <div class="flex items-center justify-between">
+                <span class="text-2xl">🚑</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-black/30 uppercase">Départ 1-Clic</span>
+              </div>
+              <div>
+                <h6 class="text-xs font-black">Départ Réflexe VPSP</h6>
+                <p class="text-[10px] text-white/80 leading-tight">Arme le 1er VPSP dispo avec un équipage RNMSC complet.</p>
+              </div>
+            </button>
+
+            <!-- Bouton Garde SAMU 15 -->
+            <button onclick="window.ProtecQuickDispatch.toggleSamuGarde(window.game)" class="p-3.5 rounded-2xl ${hasActiveSamuGarde ? 'bg-sky-600 border-2 border-sky-400' : 'bg-slate-900 hover:bg-slate-800'} text-white text-left flex flex-col justify-between space-y-2 shadow-lg transition">
+              <div class="flex items-center justify-between">
+                <span class="text-2xl">📞</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black ${hasActiveSamuGarde ? 'bg-emerald-500 text-white animate-pulse' : 'bg-white/20 text-white'} uppercase">
+                  ${hasActiveSamuGarde ? 'Garde Active ✓' : 'Prise de Garde'}
+                </span>
+              </div>
+              <div>
+                <h6 class="text-xs font-black">Garde Conventionnée SAMU 15</h6>
+                <p class="text-[10px] text-slate-300 leading-tight">${hasActiveSamuGarde ? 'Permanence en cours avec le CRRA 15.' : 'Active la permanence ambulance VPSP (indemnité horaire).'}</p>
+              </div>
+            </button>
+
+            <!-- Réarmement Express -->
+            <button onclick="window.ProtecQuickDispatch.refuelAndRestockAll(window.game)" class="p-3.5 rounded-2xl bg-indigo-900 hover:bg-indigo-800 text-white text-left flex flex-col justify-between space-y-2 shadow-lg transition">
+              <div class="flex items-center justify-between">
+                <span class="text-2xl">📦</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-700 uppercase">Logistique</span>
+              </div>
+              <div>
+                <h6 class="text-xs font-black">Réarmement Express Flotte</h6>
+                <p class="text-[10px] text-indigo-200 leading-tight">Ravitaille O2, pansements, brancards et carburant de tous les vecteurs.</p>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. VECTEURS DISPONIBLES ET ÉQUIPAGES RNMSC -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <h5 class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
+              Vecteurs d'Intervention Prêts (${availableVehicles.length} / ${game.vehicles?.length || 0})
+            </h5>
+            <span class="text-[11px] text-slate-400 font-semibold">Validation équipage RNMSC en direct</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-56 overflow-y-auto pr-1">
+            ${(game.vehicles || []).map(veh => {
+              const isDispo = veh.status === 'disponible';
+              const isVpsp = veh.type === 'VPSP';
+              const fuel = veh.fuel || 100;
+              const hasCrew = veh.assignedCrew && veh.assignedCrew.length > 0;
+
+              return `
+                <div class="p-3 rounded-2xl glass-card flex items-center justify-between gap-3 border ${isDispo ? 'border-slate-200' : 'border-amber-200 bg-amber-50/30'}">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-2xl">${isVpsp ? '🚑' : (veh.type === 'VTU' ? '🚐' : '🚗')}</span>
+                    <div>
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-black text-slate-900">${veh.name}</span>
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-extrabold ${isDispo ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                          ${isDispo ? 'Dispo' : veh.status}
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-2 text-[10px] text-slate-500 font-semibold mt-0.5">
+                        <span>⛽ ${fuel}%</span>
+                        <span>•</span>
+                        <span>${isVpsp ? 'Lot Sanitaire A' : 'Lot Logistique'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    ${isDispo ? `
+                      <button onclick="window.ProtecQuickDispatch.armAndDispatchVehicle(window.game, '${veh.id}')" class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-pc-blue hover:bg-pc-blue-light text-white transition shadow-sm flex items-center gap-1">
+                        <i data-lucide="send" class="w-3 h-3"></i>
+                        <span>Armer</span>
+                      </button>
+                    ` : `
+                      <span class="text-[10px] font-bold text-slate-400 uppercase">En mission</span>
+                    `}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- 3. INTERVENTIONS ET DISPOSITIFS EN COURS -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <h5 class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <i data-lucide="radio" class="w-4 h-4 text-emerald-600"></i>
+              Missions & Dispositifs en Cours (${ongoingMissions.length})
+            </h5>
+          </div>
+
+          <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+            ${ongoingMissions.length === 0 ? `
+              <div class="p-3 rounded-2xl bg-slate-50 text-center text-xs text-slate-500">
+                Aucune mission en cours actuellement. Prêt pour un engagement d'urgence.
+              </div>
+            ` : ongoingMissions.map(m => {
+              const crewCount = m.assignedCrew?.volunteers?.length || m.registeredVolunteers?.length || 0;
+              const vehCount = m.assignedCrew?.vehicles?.length || 0;
+              return `
+                <div class="p-3 rounded-2xl glass-card flex items-center justify-between text-xs">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <span class="font-extrabold text-slate-900">${m.title}</span>
+                      <span class="px-2 py-0.2 rounded text-[10px] font-bold bg-sky-100 text-sky-800 uppercase">${m.type}</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-0.5">Engagés : ${crewCount} secouristes • ${vehCount} véhicules</p>
+                  </div>
+                  <button onclick="window.game.openMissionDetails('${m.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+                    Détails →
+                  </button>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+
+    window.ProtecBottomSheet.open({
+      title: "Panneau d'Action Rapide & Départs Urgence",
+      subtitle: "Centre d'engagement réflexe et armement instantané des vecteurs de secours",
+      icon: 'siren',
+      content: content,
+      isQuickDispatch: true
+    });
+  },
+
+  // Départ réflexe VPSP en 1 clic avec composition conforme RNMSC
+  dispatchEmergencyVpsp(game) {
+    if (!game) game = window.game;
+    const vpsp = (game.vehicles || []).find(v => v.type === 'VPSP' && v.status === 'disponible');
+    if (!vpsp) {
+      game.showToast('Aucun VPSP Disponible', 'Toutes les ambulances sont actuellement engagées ou indisponibles.', 'orange');
+      return;
+    }
+
+    // Trouver 4 secouristes conformes RNMSC : 1 CE, 1 Conducteur, 1 PSE2, 1 PSE1 (tous à jour)
+    const dispo = (game.volunteers || []).filter(v => v.status === 'disponible' && !v.isBurnout && v.energy >= 25);
+    
+    // Vérifier les compétences à jour
+    const hasValidCert = (vol, skill) => {
+      const isUpToDate = !vol.qualificationExpired;
+      return vol.skills?.includes(skill.toLowerCase()) && isUpToDate;
+    };
+
+    const ce = dispo.find(v => ['CE', 'CD', 'Cadre'].includes(v.rank) || hasValidCert(v, 'ce'));
+    const driver = dispo.find(v => v.id !== ce?.id && (v.isDriver || v.skills?.includes('conducteur') || v.skills?.includes('permis_b')));
+    const pse2 = dispo.find(v => v.id !== ce?.id && v.id !== driver?.id && (v.rank === 'PSE2' || hasValidCert(v, 'pse2')));
+    const pse1 = dispo.find(v => v.id !== ce?.id && v.id !== driver?.id && v.id !== pse2?.id);
+
+    if (!ce || !driver || !pse2 || !pse1) {
+      game.showToast('Équipage Incomplet RNMSC', 'Impossible de lancer un VPSP : il manque au moins 1 Chef d’équipe, 1 Conducteur, 1 PSE2 ou 1 PSE1 qualifié et disponible.', 'orange');
+      return;
+    }
+
+    const crew = [ce, driver, pse2, pse1];
+    crew.forEach(v => { v.status = 'mission'; });
+    vpsp.status = 'mission';
+
+    // Créer une mission réflexe d'urgence si aucune mission SAMU en attente
+    let targetMission = (game.missions || []).find(m => m.type === 'samu' && m.status === 'planifie');
+    if (!targetMission) {
+      targetMission = {
+        id: `urg-${Date.now()}`,
+        type: 'samu',
+        title: 'Départ Réflexe SAMU 15 - Urgence Préfectorale',
+        scale: 'DPS-PE',
+        requiredVolunteers: 4,
+        status: 'ongoing',
+        startedAt: Date.now(),
+        durationSeconds: 25 * 60,
+        endsAt: Date.now() + (25 * 60 * 1000),
+        lat: game.stations[0]?.lat ? game.stations[0].lat + (Math.random() - 0.5) * 0.04 : 48.8566,
+        lng: game.stations[0]?.lng ? game.stations[0].lng + (Math.random() - 0.5) * 0.04 : 2.3522,
+        assignedCrew: {
+          volunteers: crew,
+          vehicles: [vpsp]
+        }
+      };
+      game.missions.unshift(targetMission);
+    } else {
+      targetMission.status = 'ongoing';
+      targetMission.startedAt = Date.now();
+      targetMission.endsAt = Date.now() + 1500000;
+      targetMission.assignedCrew = { volunteers: crew, vehicles: [vpsp] };
+    }
+
+    window.ProtecBottomSheet.close();
+    game.showToast('🚑 Départ VPSP Immédiat', `L’équipage complet (${ce.name}, ${driver.name}, ${pse2.name}, ${pse1.name}) décolle avec ${vpsp.name} !`, 'blue');
+    game.saveGame();
+    game.updateStatsUI();
+  },
+
+  // Bascule de la garde SAMU 15
+  toggleSamuGarde(game) {
+    if (!game) game = window.game;
+    if (!game.samuGarde) game.samuGarde = { active: false };
+    game.samuGarde.active = !game.samuGarde.active;
+    game.showToast(
+      game.samuGarde.active ? 'Garde SAMU 15 Activée' : 'Fin de Garde SAMU',
+      game.samuGarde.active ? 'L’antenne est maintenant en astreinte active pour le SAMU 15.' : 'Astreinte SAMU 15 clôturée.',
+      game.samuGarde.active ? 'green' : 'slate'
+    );
+    game.saveGame();
+    this.open(game);
+  },
+
+  // Réarmement complet de toute la flotte en 1 clic
+  refuelAndRestockAll(game) {
+    if (!game) game = window.game;
+    const cost = 240;
+    if (game.resources.money < cost) {
+      game.showToast('Fonds Insuffisants', `Il vous faut ${cost} € pour réapprovisionner l'intégralité de la flotte.`, 'orange');
+      return;
+    }
+    game.resources.money -= cost;
+    (game.vehicles || []).forEach(v => {
+      v.fuel = 100;
+      v.disinfectionNeeded = false;
+    });
+    if (!game.logistics) game.logistics = {};
+    game.logistics.oxygenBottles = Math.min(20, (game.logistics.oxygenBottles || 5) + 6);
+    game.logistics.woundKits = Math.min(30, (game.logistics.woundKits || 10) + 10);
+    game.showToast('Flotte Entièrement Réarmée', `Tous les véhicules sont pleins (carburant 100%, O2 réarmé, désinfection faite). -${cost} €`, 'green');
+    game.saveGame();
+    this.open(game);
+  },
+
+  // Armement rapide d'un véhicule spécifique
+  armAndDispatchVehicle(game, vehicleId) {
+    if (!game) game = window.game;
+    const veh = (game.vehicles || []).find(v => v.id === vehicleId);
+    if (!veh) return;
+    if (veh.type === 'VPSP') {
+      this.dispatchEmergencyVpsp(game);
+    } else {
+      game.showToast('Vecteur Armé', `${veh.name} est assigné et prêt au départ.`, 'blue');
+    }
+  }
+};
+

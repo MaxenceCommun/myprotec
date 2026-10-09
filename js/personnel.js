@@ -235,20 +235,62 @@ window.ProtecPersonnel = {
       return { available: false, reason: 'Énergie critique (besoin de repos)' };
     }
 
+    // Période de repos obligatoire post-mission (bénévoles & salariés)
+    const now = Date.now();
+    if (volunteer.restUntil && now < volunteer.restUntil) {
+      const secLeft = Math.ceil((volunteer.restUntil - now) / 1000);
+      return {
+        available: false,
+        reason: `En repos post-mission obligatoire (encore ${secLeft}s)`
+      };
+    }
+
     const profile = this.socialProfiles[volunteer.profilSocial] || this.socialProfiles.benevole;
     const currentDayName = (mission && mission.eventDate?.dayName) ? mission.eventDate.dayName : game.clock.daysNames[game.clock.day % 7];
+    const missionHour = mission?.startHour || mission?.eventDate?.hour || game.clock.hour || 14;
+    const isWeekend = currentDayName === 'Samedi' || currentDayName === 'Dimanche';
+
+    // Plages horaires réalistes selon le profil socio-professionnel
+    let hourEligible = true;
+    let hourReason = '';
+
+    if (volunteer.profilSocial === 'etudiant') {
+      // Disponible soirs (dès 17h) et week-ends entiers
+      if (!isWeekend && missionHour < 17 && missionHour >= 8) {
+        hourEligible = false;
+        hourReason = 'En cours / amphithéâtre en journée de semaine';
+      }
+    } else if (volunteer.profilSocial === 'salarie') {
+      // Disponible uniquement en soirée (dès 19h) et le week-end
+      if (!isWeekend && missionHour < 19 && missionHour >= 8) {
+        hourEligible = false;
+        hourReason = 'Au travail (actif en entreprise en journée de semaine)';
+      }
+    } else if (volunteer.profilSocial === 'retraite') {
+      // Disponible en journée de semaine, indisponible la nuit
+      if (missionHour >= 22 || missionHour < 7) {
+        hourEligible = false;
+        hourReason = 'Indisponible en horaire nocturne tardif';
+      }
+    }
+
+    if (!hourEligible && volunteer.contractType !== 'salarie_asso') {
+      return {
+        available: false,
+        reason: `${profile.label} : ${hourReason}`
+      };
+    }
 
     // Vérification du jour favori selon profil social et préférences
     const isPreferredDay = volunteer.dispoJours?.includes(currentDayName) || profile.favDays.includes(currentDayName);
     
-    // Probabilité d'acceptation :
-    // Même si le bénévole a Samedi/Dimanche, il peut quand même se libérer en semaine (mardi, etc.) avec une probabilité réduite
+    // Probabilité d'acceptation réaliste
     let chance = isPreferredDay ? (profile.baseDispoRate + 0.35) : 0.16;
     if (volunteer.motivation > 75) chance += 0.12;
     if (volunteer.energy > 70) chance += 0.08;
-    if (volunteer.contractType === 'salarie') chance += 0.40; // Les salariés ont une présence renforcée
+    if (volunteer.contractType === 'salarie' || volunteer.contractType === 'salarie_asso') chance += 0.40;
     
-    // Si petit poste de secours (durée <= 4h ou PAPS/DPS-PE), plus accessible en semaine
+    // Si petit poste de secours (durée <= 4h ou PAPS/DPS-PE), plus accessible
     if (mission && (mission.durationHours <= 4 || (mission.scale && (mission.scale.includes('PE') || mission.scale.includes('PAPS'))))) {
       chance += 0.10;
     }
@@ -256,11 +298,11 @@ window.ProtecPersonnel = {
     const available = Math.random() < Math.min(0.96, Math.max(0.08, chance));
     return {
       available,
-      reason: available ? 'Disponible' : `${profile.label} : indisponible ce jour-là`
+      reason: available ? 'Disponible' : `${profile.label} : indisponible sur ce créneau`
     };
   },
 
-  // Déduction de fatigue et mise à jour psychologique lors d'une mission
+  // Déduction de fatigue, repos obligatoire et risque d'usure/démission
   applyMissionExertion(volunteer, mission, hasAep2 = false) {
     const profile = this.socialProfiles[volunteer.profilSocial] || this.socialProfiles.benevole;
     let drain = 20 * (profile.energyDrainRatio || 1);
@@ -281,14 +323,28 @@ window.ProtecPersonnel = {
     volunteer.missionsCount = (volunteer.missionsCount || 0) + 1;
     volunteer.consecutiveMissions = (volunteer.consecutiveMissions || 0) + 1;
 
+    // Enclenchement d'une période de repos obligatoire post-mission (30 à 60 secondes de jeu)
+    const restDurationMs = Math.max(30000, (mission.durationHours || 4) * 8000);
+    volunteer.restUntil = Date.now() + restDurationMs;
+
     // Si le bénévole enchaîne trop sans pause (surmenage)
     if (volunteer.consecutiveMissions >= 3) {
-      volunteer.motivation = Math.max(10, volunteer.motivation - 12);
-      volunteer.humeur = Math.max(10, volunteer.humeur - 15);
+      volunteer.motivation = Math.max(5, volunteer.motivation - 16);
+      volunteer.humeur = Math.max(5, volunteer.humeur - 18);
     } else {
       // Mission valorisante accomplie avec succès
       volunteer.motivation = Math.min(100, volunteer.motivation + 6);
       volunteer.humeur = Math.min(100, volunteer.humeur + 5);
+    }
+
+    // Risque avéré de DÉMISSION / TURNOVER si le bénévole est sur-sollicité et épuisé
+    if (volunteer.energy < 20 && volunteer.motivation < 25 && volunteer.contractType === 'benevole') {
+      const quitChance = volunteer.consecutiveMissions >= 4 ? 0.45 : 0.20;
+      if (Math.random() < quitChance) {
+        volunteer.hasResigned = true;
+        volunteer.status = 'demissionne';
+        return { burnout: true, resigned: true, volunteer };
+      }
     }
 
     // Risque de burnout critique si énergie = 0 ou dépassement excessif
