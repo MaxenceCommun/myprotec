@@ -555,7 +555,13 @@ window.ProtecAuth = {
     const username = document.getElementById('auth-reg-username').value.trim();
     const password = document.getElementById('auth-reg-password').value;
     const stationName = (document.getElementById('auth-reg-station')?.value || '').trim() || 'Antenne Protection Civile';
-    const departmentCode = this.regDeptCode || document.getElementById('auth-reg-dept-select')?.value || '75';
+    const departmentCode = this.regDeptCode || document.getElementById('auth-reg-dept-select')?.value || '54';
+    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(departmentCode) : null;
+    let city = deptInfo ? deptInfo.chefLieu : 'Nancy';
+    if (stationName && stationName.length > 2 && !stationName.toLowerCase().startsWith('antenne')) {
+      city = stationName;
+    }
+
     const errorEl = document.getElementById('auth-error-msg');
     const submitBtn = document.getElementById('auth-submit-btn');
 
@@ -568,7 +574,7 @@ window.ProtecAuth = {
 
       // 1. Enregistrement dans Supabase Cloud en priorité
       if (window.ProtecSupabase && window.ProtecSupabase.client) {
-        const supaRes = await window.ProtecSupabase.registerPlayer(username, password, { stationName, departmentCode });
+        const supaRes = await window.ProtecSupabase.registerPlayer(username, password, { stationName, departmentCode, city });
         if (supaRes && supaRes.user) {
           data = {
             success: true,
@@ -578,7 +584,7 @@ window.ProtecAuth = {
               username: supaRes.user.username,
               role: supaRes.user.role || 'directeur',
               stationName: supaRes.user.station_name,
-              city: supaRes.user.city,
+              city: supaRes.user.city || city,
               departmentCode: supaRes.user.department_code || departmentCode
             }
           };

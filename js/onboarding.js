@@ -1030,9 +1030,18 @@ window.ProtecOnboarding = {
     if (game.player) {
       game.player.stationName = stationName;
       game.player.departmentCode = deptCode;
+      game.player.city = city;
     }
     game.currentDepartmentCode = deptCode;
     localStorage.setItem('protec_department_code', deptCode);
+
+    // Synchronisation immédiate vers la BDD Supabase (table players)
+    if (window.ProtecSupabase && window.ProtecSupabase.client) {
+      const pid = (game.player && game.player.id) || localStorage.getItem('protec_player_id');
+      if (pid) {
+        window.ProtecSupabase.updatePlayerCityAndStation(pid, city, stationName, deptCode).catch(e => console.warn(e));
+      }
+    }
 
     // Fermer définitivement le modal d'onboarding
     const modal = document.getElementById('onboarding-modal');

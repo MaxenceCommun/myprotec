@@ -77,6 +77,25 @@ window.ProtecSupabase = {
     }
   },
 
+  // Fonction de hachage sécurisée pour les mots de passe
+  async hashPassword(password) {
+    if (!password) return null;
+    try {
+      if (window.crypto && window.crypto.subtle) {
+        const msgBuffer = new TextEncoder().encode(String(password) + '_protec_secret_salt_2026');
+        const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+    } catch (e) {}
+    let h = 0;
+    const str = String(password) + '_salt';
+    for (let i = 0; i < str.length; i++) {
+      h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+    }
+    return 'h_' + Math.abs(h).toString(16);
+  },
+
   // 1. Inscription d'un nouveau Directeur d'Antenne dans Supabase
   async registerPlayer(username, password, extraData = {}) {
     if (!this.client) return { error: 'Client BDD non initialisé' };
@@ -93,14 +112,30 @@ window.ProtecSupabase = {
         return { error: 'Ce nom de directeur est déjà utilisé. Veuillez en choisir un autre.' };
       }
 
-      // 2. Création de l'enregistrement
+      // Déduction précise de la ville d'implantation (priorité à la ville passée, puis chef-lieu du département)
+      let detectedCity = extraData.city;
+      if (!detectedCity && window.ProtecDepartements && extraData.departmentCode) {
+        const dept = window.ProtecDepartements.getByCode(extraData.departmentCode);
+        if (dept) detectedCity = dept.chefLieu;
+      }
+      if (!detectedCity && extraData.stationName) {
+        const cleanSt = extraData.stationName.replace(/^antenne\s+(de\s+)?/i, '').trim();
+        if (cleanSt.length > 2) detectedCity = cleanSt;
+      }
+      if (!detectedCity) detectedCity = 'Nancy';
+
+      // Hachage du mot de passe
+      const pwdHash = await this.hashPassword(password);
+
+      // 2. Création de l'enregistrement avec mot de passe et ville exacte
       const newPlayer = {
         username: username.trim(),
-        station_name: extraData.stationName || 'Antenne Locale',
-        city: extraData.city || 'Paris',
-        department_code: extraData.departmentCode || '75',
+        password_hash: pwdHash,
+        station_name: extraData.stationName || 'Antenne Protection Civile',
+        city: detectedCity,
+        department_code: extraData.departmentCode || '54',
         role: 'directeur',
-        alliance_id: extraData.allianceId || 'alliance-fnpc',
+        alliance_id: extraData.allianceId || null,
         created_at: new Date().toISOString(),
         last_login: new Date().toISOString()
       };
@@ -138,6 +173,22 @@ window.ProtecSupabase = {
         return { error: 'Directeur introuvable. Veuillez vérifier vos identifiants.' };
       }
 
+      // Vérification sécurisée du mot de passe
+      if (player.password_hash) {
+        const inputHash = await this.hashPassword(password);
+        if (player.password_hash !== inputHash && player.password_hash !== password) {
+          return { error: 'Mot de passe incorrect. Veuillez vérifier vos identifiants.' };
+        }
+      } else if (password) {
+        // Enregistrement transparent du mot de passe pour les comptes existants
+        const newHash = await this.hashPassword(password);
+        await this.client
+          .from('players')
+          .update({ password_hash: newHash })
+          .eq('id', player.id);
+        player.password_hash = newHash;
+      }
+
       // Mise à jour de la dernière connexion
       await this.client
         .from('players')
@@ -148,6 +199,31 @@ window.ProtecSupabase = {
     } catch (e) {
       console.error('Exception connexion Supabase:', e);
       return { error: e.message || 'Erreur réseau BDD' };
+    }
+  },
+
+  // Mise à jour de la ville et de l'antenne du joueur dans la BDD Supabase
+  async updatePlayerCityAndStation(playerId, city, stationName = null, departmentCode = null) {
+    if (!this.client || !playerId || !city) return;
+    try {
+      const updates = { city: city.trim(), last_login: new Date().toISOString() };
+      if (stationName) updates.station_name = stationName.trim();
+      if (departmentCode) updates.department_code = String(departmentCode).trim();
+
+      const isUUID = typeof playerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerId);
+      if (isUUID) {
+        await this.client
+          .from('players')
+          .update(updates)
+          .eq('id', playerId);
+      } else {
+        await this.client
+          .from('players')
+          .update(updates)
+          .eq('username', playerId);
+      }
+    } catch (e) {
+      console.warn('Erreur mise à jour ville Supabase:', e);
     }
   },
 
@@ -207,6 +283,16 @@ window.ProtecSupabase = {
       }
 
       console.log('☁️ Partie sauvegardée dans Supabase avec succès.');
+
+      // Synchronisation silencieuse de la ville et de l'antenne dans la table players
+      const currentStation = (game.stations && game.stations[0]) || null;
+      const playerCity = game.player?.city || currentStation?.city;
+      const playerStation = game.player?.stationName || currentStation?.name;
+      const playerDept = game.player?.departmentCode || currentStation?.departmentCode;
+      if (playerCity && userId) {
+        this.updatePlayerCityAndStation(userId, playerCity, playerStation, playerDept).catch(() => {});
+      }
+
       return true;
     } catch (e) {
       console.warn('Erreur push sauvegarde Supabase:', e);
