@@ -297,10 +297,10 @@ window.ProtecAuth = {
           <!-- Formulaire d'Inscription -->
           <form onsubmit="window.ProtecAuth.handleRegisterForm(event, window.game)" class="space-y-3">
             <div>
-              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Nom du Directeur / Secouriste</label>
+              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Identifiant / Nom du Directeur</label>
               <div class="relative">
                 <i data-lucide="user-plus" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                <input type="text" id="auth-reg-username" required minlength="3" placeholder="Ex: Cdt_Thomas" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                <input type="text" id="auth-reg-username" required minlength="3" placeholder="Ex: Cdt_Thomas, Secouriste_Alex..." class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
               </div>
             </div>
 
@@ -312,28 +312,16 @@ window.ProtecAuth = {
               </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Nom de l'Antenne</label>
-                <input type="text" id="auth-reg-station" placeholder="Ex: Antenne Territoriale" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
-              </div>
-              <div>
-                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">N° Département</label>
-                <select id="auth-reg-department" onchange="localStorage.setItem('protec_last_reg_dept', this.value)" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue">
-                  ${(() => {
-                    const depts = (window.ProtecDepartements && window.ProtecDepartements.list) ? window.ProtecDepartements.list : [];
-                    const savedDept = localStorage.getItem('protec_last_reg_dept') || '54';
-                    return depts.map(d => `<option value="${d.code}" ${d.code === savedDept ? 'selected' : ''}>${d.code} - ${d.name}</option>`).join('');
-                  })()}
-                </select>
-              </div>
+            <div class="p-2.5 rounded-xl bg-blue-50/80 border border-blue-200 text-[11px] text-blue-900 leading-snug flex items-center gap-2">
+              <span class="text-base">🏢</span>
+              <span>L'étape suivante vous permettra de choisir le nom et le département de votre antenne ainsi que d'aménager vos locaux sur le plan 2D.</span>
             </div>
 
             <div id="auth-error-msg" class="hidden p-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold"></div>
 
-            <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl text-xs font-extrabold bg-pc-orange text-white hover:bg-pc-orange-dark transition shadow-lg shadow-pc-orange/20 flex items-center justify-center gap-2">
+            <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl text-xs font-extrabold bg-pc-orange text-white hover:bg-pc-orange-dark transition shadow-lg shadow-pc-orange/20 flex items-center justify-center gap-2 cursor-pointer">
               <i data-lucide="shield-check" class="w-4 h-4"></i>
-              Créer mon compte & Rejoindre la carte
+              Créer mon compte & Configurer mon antenne
             </button>
           </form>
         `}
@@ -435,11 +423,10 @@ window.ProtecAuth = {
 
   async handleRegisterForm(e, game) {
     e.preventDefault();
-    const username = document.getElementById('auth-reg-username').value;
+    const username = document.getElementById('auth-reg-username').value.trim();
     const password = document.getElementById('auth-reg-password').value;
-    const stationName = document.getElementById('auth-reg-station').value;
-    const deptEl = document.getElementById('auth-reg-department');
-    const departmentCode = deptEl ? deptEl.value : '75';
+    const stationName = 'En cours de création';
+    const departmentCode = '75';
     const errorEl = document.getElementById('auth-error-msg');
     const submitBtn = document.getElementById('auth-submit-btn');
 
@@ -542,14 +529,14 @@ window.ProtecAuth = {
         game.syncPlayerToServer();
       }
 
-      // Proposer immédiatement d'implanter le bâtiment sur la carte
+      // Proposer immédiatement de fonder son antenne via le parcours d'onboarding
       setTimeout(() => {
-        if (game.showOnboardingModal) {
+        if (window.ProtecOnboarding) {
+          window.ProtecOnboarding.showWizard(game);
+        } else if (game.showOnboardingModal) {
           game.showOnboardingModal();
-        } else if (game.startFirstStationOnboarding) {
-          game.startFirstStationOnboarding();
         }
-      }, 500);
+      }, 300);
 
     } catch (err) {
       errorEl.textContent = 'Impossible de contacter le serveur multijoueur.';

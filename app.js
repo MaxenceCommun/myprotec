@@ -607,10 +607,18 @@ class ProtecGame {
     }
 
     if (this.stations.length === 0) {
-      if (window.ProtecOnboarding) {
-        window.ProtecOnboarding.showWizard(this);
+      const isAuth = !!(window.ProtecAuth && window.ProtecAuth.currentUser && window.ProtecAuth.token);
+      if (!isAuth) {
+        // La création de l'identifiant et mot de passe se fait impérativement avant les étapes de création de l'antenne
+        if (window.ProtecAuth) {
+          window.ProtecAuth.openAuthModal(true);
+        }
       } else {
-        this.showOnboardingModal();
+        if (window.ProtecOnboarding) {
+          window.ProtecOnboarding.showWizard(this);
+        } else {
+          this.showOnboardingModal();
+        }
       }
     } else {
       this.showToast('Partie chargée', `Bienvenue ! Votre antenne compte ${this.volunteers.length} secouristes.`, 'blue');
