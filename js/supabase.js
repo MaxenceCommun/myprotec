@@ -1433,37 +1433,38 @@ window.ProtecSupabase = {
       this.realtimeChannel = this.client.channel('protec-live-global', {
         config: { broadcast: { self: true } }
       });
+
+      // Écoute des broadcasts d'événements opérationnels en direct
+      this.realtimeChannel.on('broadcast', { event: 'operational_event' }, (evt) => {
+        if (evt.payload && typeof onNewLog === 'function') {
+          onNewLog(this.formatLogItem(evt.payload));
+        }
+        if (typeof onTelemetryUpdate === 'function') {
+          this.getOperationalTelemetry().then(onTelemetryUpdate);
+        }
+      });
+
+      // Écoute des modifications de tables (missions, sauvegardes, operational_log)
+      this.realtimeChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'operational_log' }, (payload) => {
+        if (payload.new && typeof onNewLog === 'function') {
+          onNewLog(this.formatLogItem(payload.new));
+        }
+      });
+
+      this.realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'active_missions' }, () => {
+        if (typeof onTelemetryUpdate === 'function') {
+          this.getOperationalTelemetry().then(onTelemetryUpdate);
+        }
+      });
+
+      this.realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'game_saves' }, () => {
+        if (typeof onTelemetryUpdate === 'function') {
+          this.getOperationalTelemetry().then(onTelemetryUpdate);
+        }
+      });
+
       this.realtimeChannel.subscribe();
     }
-
-    // Écoute des broadcasts d'événements opérationnels en direct
-    this.realtimeChannel.on('broadcast', { event: 'operational_event' }, (evt) => {
-      if (evt.payload && typeof onNewLog === 'function') {
-        onNewLog(this.formatLogItem(evt.payload));
-      }
-      if (typeof onTelemetryUpdate === 'function') {
-        this.getOperationalTelemetry().then(onTelemetryUpdate);
-      }
-    });
-
-    // Écoute des modifications de tables (missions, sauvegardes, operational_log)
-    this.realtimeChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'operational_log' }, (payload) => {
-      if (payload.new && typeof onNewLog === 'function') {
-        onNewLog(this.formatLogItem(payload.new));
-      }
-    });
-
-    this.realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'active_missions' }, () => {
-      if (typeof onTelemetryUpdate === 'function') {
-        this.getOperationalTelemetry().then(onTelemetryUpdate);
-      }
-    });
-
-    this.realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'game_saves' }, () => {
-      if (typeof onTelemetryUpdate === 'function') {
-        this.getOperationalTelemetry().then(onTelemetryUpdate);
-      }
-    });
   }
 };
 

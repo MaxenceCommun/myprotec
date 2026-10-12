@@ -5,14 +5,14 @@ window.ProtecAuth = {
   lastSyncTime: null,
   isSyncing: false,
 
-  init(game) {
+  init(game = null) {
     this.token = localStorage.getItem('protec_auth_token') || null;
     this.currentUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
     this.updateHeaderUI();
 
-    if (this.token) {
+    if (this.token && game) {
       this.checkSession(game);
-    } else {
+    } else if (!this.token) {
       // Si la landing page est active et visible, ne pas afficher la modale au chargement pour laisser le joueur découvrir l'accueil
       const landingEl = document.getElementById('myprotec-landing-page');
       if (!landingEl || landingEl.classList.contains('is-hidden')) {
@@ -20,14 +20,16 @@ window.ProtecAuth = {
       }
     }
 
-    // Intercepter la sauvegarde de partie pour l'envoyer au serveur multijoueur
-    const originalSaveGame = game.saveGame.bind(game);
-    game.saveGame = () => {
-      originalSaveGame();
-      if (this.token && this.currentUser) {
-        this.debouncedSaveToDatabase(game);
-      }
-    };
+    // Intercepter la sauvegarde de partie pour l'envoyer au serveur multijoueur si le jeu est instancié
+    if (game && typeof game.saveGame === 'function') {
+      const originalSaveGame = game.saveGame.bind(game);
+      game.saveGame = () => {
+        originalSaveGame();
+        if (this.token && this.currentUser) {
+          this.debouncedSaveToDatabase(game);
+        }
+      };
+    }
   },
 
   async checkSession(game) {
@@ -250,8 +252,8 @@ window.ProtecAuth = {
     const subTitleEl = document.getElementById('auth-modal-subtitle');
     if (!container) return;
 
-    // Si déjà connecté, afficher le profil du Directeur
-    if (this.currentUser && this.token) {
+    // Si déjà connecté et qu'on ne demande pas explicitement l'inscription, afficher le profil du Directeur
+    if (this.currentUser && this.token && activeTab !== 'register') {
       if (titleEl) titleEl.textContent = 'Profil Directeur';
       if (subTitleEl) subTitleEl.textContent = 'Réseau Opérationnel Multijoueur';
 
@@ -262,67 +264,83 @@ window.ProtecAuth = {
                          (this.currentUser.city && this.currentUser.city !== 'Paris' ? this.currentUser.city : (window.game?.selectedDept?.name || 'France'));
       const actualStationName = (station?.name) || this.currentUser.stationName || 'Antenne Protection Civile';
 
+      const isLandingPage = !window.game || !document.getElementById('map');
+
       container.innerHTML = `
         <div class="space-y-4">
           <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center gap-3.5">
-            <div class="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-emerald-500/20">
+            <div class="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-emerald-500/20 flex-shrink-0">
               <i data-lucide="radio" class="w-6 h-6"></i>
             </div>
-            <div class="flex-1">
+            <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
-                <span class="font-extrabold text-slate-900 text-base">${this.currentUser.username}</span>
-                <span class="text-[9px] font-black uppercase tracking-wider bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded-full">Multijoueur</span>
+                <span class="font-extrabold text-slate-900 text-base truncate">${this.currentUser.username}</span>
+                <span class="text-[9px] font-black uppercase tracking-wider bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded-full flex-shrink-0">Connecté</span>
               </div>
-              <div class="text-xs text-slate-600 mt-0.5">
+              <div class="text-xs text-slate-600 mt-0.5 truncate">
                 ${actualStationName} • Ville : <strong class="capitalize">${actualCity}</strong>
               </div>
             </div>
           </div>
 
-          <div class="p-4 rounded-2xl glass-card space-y-2 text-xs text-slate-700">
-            <div class="flex justify-between items-center py-1 border-b border-slate-100">
-              <span class="text-slate-500 font-medium">Mode de Jeu</span>
-              <span class="font-bold text-pc-blue flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Multijoueur
-              </span>
+          <!-- Bouton d'entrée dans le jeu immédiat si on est sur la page d'accueil -->
+          ${isLandingPage ? `
+            <div class="space-y-2 pt-1">
+              <button onclick="window.location.href='jeu.html'" class="w-full py-3.5 rounded-2xl bg-[#ff6600] hover:bg-[#e65c00] active:scale-98 text-white font-black text-sm shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
+                <span>🚀 Accéder au Poste de Commandement</span>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+              </button>
+              <button onclick="window.ProtecAuth.clearSession(); window.ProtecAuth.renderModalContent('register', false);" class="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer">
+                Ouvrir une autre antenne (Nouveau compte)
+              </button>
             </div>
-            <div class="flex justify-between items-center py-1">
-              <span class="text-slate-500 font-medium">Synchronisation Réseau</span>
-              <span class="font-mono font-bold text-slate-800" id="auth-sync-date">${syncDate}</span>
-            </div>
-          </div>
-
-          <!-- Collection d'Écussons Commémoratifs & Rareté -->
-          ${window.ProtecMultiplayer ? window.ProtecMultiplayer.renderBadgesCollectionHTML(window.game) : ''}
-
-          <!-- Initiative d'Événement Fédéral Exceptionnel -->
-          <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 border border-indigo-500/30 text-white shadow-lg space-y-2.5">
-            <div class="flex items-center gap-2.5">
-              <div class="w-8 h-8 rounded-xl bg-amber-400 text-slate-900 flex items-center justify-center font-black shadow-sm">
-                <i data-lucide="crown" class="w-4 h-4"></i>
+          ` : `
+            <div class="p-4 rounded-2xl glass-card space-y-2 text-xs text-slate-700">
+              <div class="flex justify-between items-center py-1 border-b border-slate-100">
+                <span class="text-slate-500 font-medium">Mode de Jeu</span>
+                <span class="font-bold text-pc-blue flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Multijoueur
+                </span>
               </div>
-              <div>
-                <h5 class="text-xs font-black text-amber-200 uppercase tracking-wide">Initiative Fédérale Exceptionnelle</h5>
-                <p class="text-[10px] text-slate-300">Organisation de Grand Rassemblement & DPS National</p>
+              <div class="flex justify-between items-center py-1">
+                <span class="text-slate-500 font-medium">Synchronisation Réseau</span>
+                <span class="font-mono font-bold text-slate-800" id="auth-sync-date">${syncDate}</span>
               </div>
             </div>
-            <p class="text-[11px] text-slate-300 leading-relaxed">
-              En tant que Directeur d'Antenne, vous pouvez soumettre un dossier à caractère exceptionnel pour créer un événement public d'envergure nationale ou inter-départementale doté d'un écusson officiel. Tout dossier est rigoureusement audité et validé par l'administration fédérale avant déploiement.
-            </p>
-            <button onclick="window.ProtecAuth.closeAuthModal(); window.ProtecMultiplayer.openCreateCommunityEventModal(window.game);" class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
-              <i data-lucide="sparkles" class="w-4 h-4 text-slate-950"></i>
-              Proposer un Événement Fédéral (Dossier Exceptionnel)
-            </button>
-          </div>
+
+            <!-- Collection d'Écussons Commémoratifs & Rareté -->
+            ${window.ProtecMultiplayer ? window.ProtecMultiplayer.renderBadgesCollectionHTML(window.game) : ''}
+
+            <!-- Initiative d'Événement Fédéral Exceptionnel -->
+            <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 border border-indigo-500/30 text-white shadow-lg space-y-2.5">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-amber-400 text-slate-900 flex items-center justify-center font-black shadow-sm">
+                  <i data-lucide="crown" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h5 class="text-xs font-black text-amber-200 uppercase tracking-wide">Initiative Fédérale Exceptionnelle</h5>
+                  <p class="text-[10px] text-slate-300">Organisation de Grand Rassemblement & DPS National</p>
+                </div>
+              </div>
+              <p class="text-[11px] text-slate-300 leading-relaxed">
+                En tant que Directeur d'Antenne, vous pouvez soumettre un dossier à caractère exceptionnel pour créer un événement public d'envergure nationale ou inter-départementale doté d'un écusson officiel. Tout dossier est rigoureusement audité et validé par l'administration fédérale avant déploiement.
+              </p>
+              <button onclick="window.ProtecAuth.closeAuthModal(); window.ProtecMultiplayer.openCreateCommunityEventModal(window.game);" class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                <i data-lucide="sparkles" class="w-4 h-4 text-slate-950"></i>
+                Proposer un Événement Fédéral (Dossier Exceptionnel)
+              </button>
+            </div>
+          `}
 
           <div class="pt-2">
-            <button onclick="window.ProtecAuth.logout(window.game)" class="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition flex items-center justify-center gap-1.5 border border-rose-200/60">
+            <button onclick="window.ProtecAuth.logout(window.game)" class="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition flex items-center justify-center gap-1.5 border border-rose-200/60 cursor-pointer">
               <i data-lucide="log-out" class="w-4 h-4"></i>
               Se déconnecter du serveur
             </button>
           </div>
         </div>
       `;
+      if (window.lucide) window.lucide.createIcons();
       return;
     }
 
@@ -519,7 +537,7 @@ window.ProtecAuth = {
       localStorage.setItem('protec_user', JSON.stringify(data.user));
       // Si la connexion a lieu depuis la landing page (hors simulateur), redirection immédiate vers le jeu
       if (!window.game || !document.getElementById('map')) {
-        window.location.href = '/jeu';
+        window.location.href = 'jeu.html';
         return;
       }
 
@@ -663,7 +681,7 @@ window.ProtecAuth = {
 
       // Si l'inscription a lieu depuis la landing page (hors simulateur), redirection immédiate vers le jeu
       if (!window.game || !document.getElementById('map')) {
-        window.location.href = '/jeu';
+        window.location.href = 'jeu.html';
         return;
       }
 

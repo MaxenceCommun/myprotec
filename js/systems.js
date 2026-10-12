@@ -1510,6 +1510,11 @@ updateWeatherAndDayNight(game) {
       return;
     }
 
+    // Actualisation du vivier d'ancrage réel territorial (20 événements du mois par antenne)
+    if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.checkMonthlyTerritoryRefresh === 'function') {
+      window.ProtecEvenementsReels.checkMonthlyTerritoryRefresh(game);
+    }
+
     // Si les événements ne sont pas présents pour le mois courant, déclencher la génération
     this.triggerMonthlyEventsGeneration(game, monthKey);
   },

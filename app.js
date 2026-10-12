@@ -784,6 +784,9 @@ class ProtecGame {
       }
     } else {
       this.showToast('Partie chargée', `Bienvenue ! Votre antenne compte ${this.volunteers.length} secouristes.`, 'blue');
+      if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.ensureTerritoryEvents === 'function') {
+        window.ProtecEvenementsReels.ensureTerritoryEvents(this);
+      }
     }
   }
 
@@ -1620,6 +1623,11 @@ class ProtecGame {
     // Actualisation météo réelle immédiate au point exact de l'antenne nouvellement créée
     if (window.ProtecSystems) {
       window.ProtecSystems.fetchRealWeather(this, true);
+    }
+
+    // Initialisation immédiate du vivier territorial d'une vingtaine d'événements réels (ancrage réel)
+    if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.initStationEvents === 'function') {
+      window.ProtecEvenementsReels.initStationEvents(this, newStation);
     }
 
     this.showToast('Bâtiment Implanté !', `${stationName} est désormais implantée sur le secteur. Ouverture du plan d'aménagement...`, 'green');
@@ -8877,6 +8885,11 @@ class ProtecGame {
                     <div>
                       <div class="flex items-center gap-2 flex-wrap">
                         <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${d.eventName}</span>
+                        ${d.isRealTerritoryEvent ? `
+                          <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                            📍 Ancrage Réel Territoire (${d.commune || 'Secteur'})
+                          </span>
+                        ` : ''}
                         ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3} (Annulation autre AASC)</span>` : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">📅 Planification J-${d.daysAhead || 30}</span>`}
                       </div>
                       <h4 class="text-base font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
@@ -8891,6 +8904,7 @@ class ProtecGame {
                     <div class="text-right">
                       <span class="text-[10px] text-slate-400 font-bold uppercase block">Dimensionnement</span>
                       <span class="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-800 font-black text-xs border border-slate-200">Saisie Manuelle</span>
+                      ${d.risScore ? `<span class="block text-[10px] text-emerald-700 font-extrabold mt-1">RIS calculé : ${d.risScore}</span>` : ''}
                     </div>
                   </div>
 
@@ -8908,7 +8922,7 @@ class ProtecGame {
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-700">
                       <div class="p-2 bg-white rounded-xl border border-sky-100">
                         <span class="text-slate-400 block text-[9px] uppercase font-bold">Public attendu (N)</span>
-                        <strong class="text-slate-900">${d.publicCount} personnes</strong>
+                        <strong class="text-slate-900">${d.publicCount.includes('personnes') || d.publicCount.includes('supporters') || d.publicCount.includes('participants') ? d.publicCount : d.publicCount + ' personnes'}</strong>
                       </div>
                       <div class="p-2 bg-white rounded-xl border border-sky-100">
                         <span class="text-slate-400 block text-[9px] uppercase font-bold">Configuration du site</span>
@@ -11310,6 +11324,9 @@ class ProtecGame {
         // Détection du passage mensuel et génération des événements réels du département
         if (window.ProtecSystems && typeof window.ProtecSystems.checkMonthlyEventsCycle === 'function') {
           window.ProtecSystems.checkMonthlyEventsCycle(this);
+        }
+        if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.checkMonthlyTerritoryRefresh === 'function') {
+          window.ProtecEvenementsReels.checkMonthlyTerritoryRefresh(this);
         }
 
         if (this.vehicles && this.vehicles.length > 0) {

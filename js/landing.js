@@ -129,7 +129,7 @@ window.MyProtecLanding = {
 
   // Ouvrir le simulateur opérationnel en direct
   enterGame() {
-    window.location.href = '/jeu';
+    window.location.href = 'jeu.html';
   },
 
   // Réafficher la landing page (ex: depuis le profil ou déconnexion)
@@ -516,7 +516,7 @@ window.MyProtecLanding = {
                       (r === 'epique' ? 'bg-purple-50 text-purple-600 border border-purple-200' :
                       (r === 'rare' ? 'bg-cyan-50 text-cyan-600 border border-cyan-200' : 'bg-slate-100 text-slate-600 border border-slate-200'))
                     } flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
-                      <i data-lucide="${badge.icon || 'shield'}" class="w-5 h-5"></i>
+                      <i data-lucide="${(badge.icon && !badge.icon.includes('/') && !badge.icon.includes('.')) ? badge.icon : 'shield'}" class="w-5 h-5"></i>
                     </div>
 
                     <strong class="text-[11px] font-black text-slate-800 leading-tight block truncate max-w-full">
