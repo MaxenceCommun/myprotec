@@ -307,9 +307,9 @@ window.ProtecFinances = {
       game.financesHistory = game.financesHistory.slice(-120);
     }
 
-    // Si la modale est actuellement ouverte, rafraîchir son affichage
-    const root = document.getElementById('finances-modal-root');
-    if (root && !root.closest('.hidden')) {
+    // Si la modale Finances est actuellement ouverte, rafraîchir son affichage
+    const modal = document.getElementById('main-modal');
+    if (modal && !modal.classList.contains('hidden') && window.game && window.game.currentModalKey === 'finances') {
       this.renderModal(game);
     }
   },
@@ -343,10 +343,28 @@ window.ProtecFinances = {
     this.renderModal(window.game);
   },
 
+  renderFinancesModal(game) {
+    this.renderModal(game);
+  },
+
+  openModal(game) {
+    this.renderModal(game);
+  },
+
   // Rendu de la vue principale dans la fenêtre modale
   renderModal(game) {
-    const root = document.getElementById('finances-modal-root');
+    game = game || window.game;
+    const modal = document.getElementById('main-modal');
+    const root = document.getElementById('modal-body') || document.getElementById('finances-modal-root');
+    const title = document.getElementById('modal-title');
+    const subtitle = document.getElementById('modal-subtitle');
+    const icon = document.getElementById('modal-icon');
     if (!root) return;
+
+    if (modal) modal.classList.remove('hidden');
+    if (title) title.textContent = "Direction Financière & Comptabilité Réglementaire";
+    if (subtitle) subtitle.textContent = "Trésorerie d'antenne, grand livre des comptes, bilans d'exploitation et subventions";
+    if (icon) icon.setAttribute('data-lucide', 'wallet');
 
     this.injectState(game);
     const history = game.financesHistory || [];

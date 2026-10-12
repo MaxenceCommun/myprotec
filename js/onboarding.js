@@ -39,11 +39,12 @@ window.ProtecOnboarding = {
   placedFurniture: [],
   selectedRoomId: 'room_1',
   roomsConfig: [
-    { id: 'room_1', name: 'Salle 1', type: 'bureau', label: 'Bureau & Direction', area: 19.3, icon: '💼', color: '#131b2e' },
-    { id: 'room_2', name: 'Salle 2', type: 'formation', label: 'Salle de Formation', area: 20.2, icon: '🎓', color: '#131b2e' },
-    { id: 'room_3', name: 'Salle 3', type: 'stockage', label: 'Stockage & Logistique', area: 45.1, icon: '📦', color: '#131b2e' }
+    { id: 'room_1', name: 'Salle 1', type: 'libre', label: 'Libre', area: 19.3, icon: '🚪', color: '#131b2e' },
+    { id: 'room_2', name: 'Salle 2', type: 'libre', label: 'Libre', area: 20.2, icon: '🚪', color: '#131b2e' },
+    { id: 'room_3', name: 'Salle 3', type: 'libre', label: 'Libre', area: 45.1, icon: '🚪', color: '#131b2e' }
   ],
   roomTypesList: [
+    { id: 'libre', label: 'Libre (Non affectée)', icon: '🚪', desc: 'Fonction de la pièce non définie', color: '#1e293b' },
     { id: 'bureau', label: 'Bureau & Direction', icon: '💼', desc: 'Gestion administrative & planification', color: '#1e3a8a' },
     { id: 'formation', label: 'Salle de Formation', icon: '🎓', desc: 'Sessions PSC, SST et recyclages', color: '#1e40af' },
     { id: 'stockage', label: 'Stockage & Logistique', icon: '📦', desc: 'Réserve matériel, lots de secours', color: '#334155' },
@@ -90,9 +91,9 @@ window.ProtecOnboarding = {
     this.placedFurniture = [];
     this.selectedRoomId = 'room_1';
     this.roomsConfig = [
-      { id: 'room_1', name: 'Salle 1', type: 'bureau', label: 'Bureau & Direction', area: 19.3, icon: '💼', color: '#131b2e' },
-      { id: 'room_2', name: 'Salle 2', type: 'formation', label: 'Salle de Formation', area: 20.2, icon: '🎓', color: '#131b2e' },
-      { id: 'room_3', name: 'Salle 3', type: 'stockage', label: 'Stockage & Logistique', area: 45.1, icon: '📦', color: '#131b2e' }
+      { id: 'room_1', name: 'Salle 1', type: 'libre', label: 'Libre', area: 19.3, icon: '🚪', color: '#131b2e' },
+      { id: 'room_2', name: 'Salle 2', type: 'libre', label: 'Libre', area: 20.2, icon: '🚪', color: '#131b2e' },
+      { id: 'room_3', name: 'Salle 3', type: 'libre', label: 'Libre', area: 45.1, icon: '🚪', color: '#131b2e' }
     ];
 
     const modal = document.getElementById('onboarding-modal');

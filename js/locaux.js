@@ -42,6 +42,19 @@ window.ProtecLocaux = {
 
   // Définition des types de pièces et caractéristiques
   ZONE_TYPES: {
+    libre: {
+      id: 'libre',
+      name: 'Libre (Non affectée)',
+      icon: '🚪',
+      bgClass: 'bg-slate-900 border-slate-700',
+      textClass: 'text-slate-300',
+      blueprintClass: 'bg-blue-950/80 border-blue-400 text-blue-200',
+      lightBg: 'bg-slate-100 text-slate-700 border-slate-300',
+      desc: 'Pièce disponible. Définissez son affectation pour débloquer les fonctionnalités correspondantes.',
+      costPerTile: 0,
+      workDurationSec: 0,
+      perTileStats: {}
+    },
     bureau: {
       id: 'bureau',
       name: 'Bureau & Direction',

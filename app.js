@@ -7734,59 +7734,145 @@ class ProtecGame {
       title.textContent = "Collection & Troc d'Écussons";
       subtitle.textContent = "Tableau en liège d'antenne et bourse aux échanges inter-antennes en ligne";
       icon.setAttribute('data-lucide', 'shield');
-      if (window.ProtecEcussons) {
-        window.ProtecEcussons.renderTableauEcussons(this, body);
+      if (window.ProtecEcussons && typeof window.ProtecEcussons.renderTableauEcussons === 'function') {
+        try {
+          window.ProtecEcussons.renderTableauEcussons(this, body);
+        } catch (e) {
+          console.error('[ProtecEcussons] Error rendering module:', e);
+        }
         if (window.lucide) window.lucide.createIcons();
         return;
       }
     } else if (moduleKey === 'finances') {
+      title.textContent = "Direction Financière & Comptabilité Réglementaire";
+      subtitle.textContent = "Trésorerie d'antenne, grand livre des comptes, bilans d'exploitation et subventions";
+      icon.setAttribute('data-lucide', 'wallet');
       if (window.ProtecFinances) {
-        window.ProtecFinances.renderFinancesModal(this);
+        try {
+          if (typeof window.ProtecFinances.renderFinancesModal === 'function') {
+            window.ProtecFinances.renderFinancesModal(this);
+          } else if (typeof window.ProtecFinances.renderModal === 'function') {
+            window.ProtecFinances.renderModal(this);
+          }
+        } catch (e) {
+          console.error('[ProtecFinances] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
         return;
       }
     } else if (moduleKey === 'equipements') {
+      title.textContent = "Inventaire & Dotations Matérielles";
+      subtitle.textContent = "Lots opérationnels (Lots A, B, C), tenues d'intervention et matériels de secours";
+      icon.setAttribute('data-lucide', 'box');
       if (window.ProtecEquipements) {
-        window.ProtecEquipements.renderEquipementsModal(this);
+        try {
+          if (typeof window.ProtecEquipements.renderEquipementsModal === 'function') {
+            window.ProtecEquipements.renderEquipementsModal(this);
+          } else if (typeof window.ProtecEquipements.renderModal === 'function') {
+            window.ProtecEquipements.renderModal(this);
+          }
+        } catch (e) {
+          console.error('[ProtecEquipements] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
         return;
       }
     } else if (moduleKey === 'conventions') {
+      title.textContent = "Conventions Cadres & Partenariats";
+      subtitle.textContent = "Accords de secours d'urgence, CUMP, SAMU et conventions annuelles";
+      icon.setAttribute('data-lucide', 'file-check-2');
       if (window.ProtecConventions) {
-        window.ProtecConventions.renderModal(this);
+        try {
+          window.ProtecConventions.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecConventions] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
         return;
       }
     } else if (moduleKey === 'subventions') {
+      title.textContent = "Pôle Action Sociale & Subventions Publiques";
+      subtitle.textContent = "Financements DDETS, CCAS et Conseil Départemental pour maraudes";
+      icon.setAttribute('data-lucide', 'landmark');
       if (window.ProtecSocial) {
-        window.ProtecSocial.renderModal(this);
+        try {
+          window.ProtecSocial.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecSocial] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
         return;
       }
     } else if (moduleKey === 'communication') {
+      title.textContent = "Communication & Rayonnement d'Antenne";
+      subtitle.textContent = "Réseaux sociaux, campagnes de notoriété et relations presse";
+      icon.setAttribute('data-lucide', 'megaphone');
       if (window.ProtecCommunication) {
-        window.ProtecCommunication.renderModal(this);
+        try {
+          window.ProtecCommunication.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecCommunication] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
         return;
       }
     } else if (moduleKey === 'tchat' || moduleKey === 'messagerie') {
+      title.textContent = "Messagerie & Communications Opérationnelles";
+      subtitle.textContent = "Échanges inter-bénévoles, canaux d'antenne et alertes de mission";
+      icon.setAttribute('data-lucide', 'message-square');
       if (window.ProtecMessaging) {
-        window.ProtecMessaging.renderModal(this);
+        try {
+          window.ProtecMessaging.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecMessaging] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
         return;
       }
     } else if (moduleKey === 'cump') {
+      title.textContent = "Cellule d'Urgence Médico-Psychologique (CUMP)";
+      subtitle.textContent = "Soutien psychologique d'urgence et Cellule d'Accueil des Impliqués (CAI)";
+      icon.setAttribute('data-lucide', 'heart-handshake');
       if (window.ProtecCump) {
-        window.ProtecCump.renderCumpTab(this);
+        try {
+          if (typeof window.ProtecCump.renderCumpTab === 'function') {
+            window.ProtecCump.renderCumpTab(this);
+          } else if (typeof window.ProtecCump.renderModal === 'function') {
+            window.ProtecCump.renderModal(this);
+          }
+        } catch (e) {
+          console.error('[ProtecCump] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
         return;
       }
     } else if (moduleKey === 'apc') {
+      title.textContent = "Gouvernance Fédérale & Élections (APC)";
+      subtitle.textContent = "Comité directeur, vote d'orientation et politique nationale FNPC";
+      icon.setAttribute('data-lucide', 'award');
       if (window.ProtecAPC) {
-        window.ProtecAPC.renderModal(this);
+        try {
+          window.ProtecAPC.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecAPC] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
         return;
       }
     } else if (moduleKey === 'marche_occasion' || moduleKey === 'bourse' || moduleKey === 'occasion') {
+      title.textContent = "Marché d'Occasion & Revente Inter-Antennes";
+      subtitle.textContent = "Véhicules et équipements d'occasion cédés par d'autres antennes";
+      icon.setAttribute('data-lucide', 'repeat');
       if (window.ProtecMarcheOccasion) {
-        window.ProtecMarcheOccasion.renderModal(this);
+        try {
+          window.ProtecMarcheOccasion.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecMarcheOccasion] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
         return;
       }
-    }
-
-    if (moduleKey === 'alliance') {
+    } else if (moduleKey === 'alliance') {
       title.textContent = 'Fédération, Alliances & Veille Opérationnelle';
       subtitle.textContent = 'Entraide inter-antennes, détachements de renforts, astreintes et réseau fédéral';
       icon.setAttribute('data-lucide', 'handshake');
