@@ -426,7 +426,9 @@ window.ProtecAuth = {
                 </label>
                 <span id="auth-reg-dept-badge" class="text-[10px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
                   ${(() => {
-                    const depts = (window.ProtecDepartements && window.ProtecDepartements.list) || [];
+                    const depts = (typeof window.ProtecAuth.getDepartementsList === 'function') 
+                      ? window.ProtecAuth.getDepartementsList() 
+                      : ((window.ProtecDepartements && window.ProtecDepartements.list) || []);
                     const cur = depts.find(d => d.code === (window.ProtecAuth.regDeptCode || '75')) || depts[0];
                     return cur ? `✓ ${cur.code} - ${cur.name}` : '75 - Paris';
                   })()}
@@ -438,7 +440,7 @@ window.ProtecAuth = {
                 <input 
                   type="search" 
                   id="auth-reg-dept-search"
-                  placeholder="Rechercher par numéro ou nom (ex: 33, 974, Gironde, Paris...)"
+                  placeholder="Rechercher par numéro ou nom (ex: 54, 33, Meurthe-et-Moselle, Paris...)"
                   oninput="window.ProtecAuth.onRegDeptSearch(this.value)"
                   class="w-full pl-7 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/30"
                 />
@@ -448,9 +450,11 @@ window.ProtecAuth = {
               <select 
                 id="auth-reg-dept-select"
                 onchange="window.ProtecAuth.selectRegDept(this.value)"
-                class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 bg-white">
+                class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white shadow-xs focus:ring-2 focus:ring-pc-blue/30">
                 ${(() => {
-                  const depts = (window.ProtecDepartements && window.ProtecDepartements.list) || [];
+                  const depts = (typeof window.ProtecAuth.getDepartementsList === 'function') 
+                    ? window.ProtecAuth.getDepartementsList() 
+                    : ((window.ProtecDepartements && window.ProtecDepartements.list) || []);
                   const curCode = window.ProtecAuth.regDeptCode || '75';
                   return depts.map(d => `<option value="${d.code}" ${d.code === curCode ? 'selected' : ''}>${d.code} - ${d.name} (${d.region})</option>`).join('');
                 })()}
@@ -459,9 +463,9 @@ window.ProtecAuth = {
 
             <div id="auth-error-msg" class="hidden p-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold"></div>
 
-            <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl text-xs font-extrabold bg-gradient-to-r from-pc-orange to-pc-orange-dark text-white hover:brightness-110 transition shadow-lg shadow-pc-orange/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95">
-              <i data-lucide="shield-check" class="w-4 h-4"></i>
-              Créer mon compte & Démarrer le Tutoriel
+            <button type="submit" id="auth-submit-btn" class="w-full py-3.5 px-4 rounded-xl text-xs font-black bg-[#ff6600] hover:bg-[#e65c00] active:scale-98 text-white transition shadow-md shadow-orange-500/25 flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
+              <i data-lucide="shield-check" class="w-4 h-4 text-white"></i>
+              <span>Créer mon compte & Démarrer le Tutoriel</span>
             </button>
           </form>
         `}
@@ -572,27 +576,152 @@ window.ProtecAuth = {
 
   regDeptCode: '75',
 
+  // Liste de secours garantie des 101 départements français si departements.js n'était pas encore évalué
+  FALLBACK_DEPARTEMENTS_LIST: [
+    { code: '01', name: 'Ain', region: 'Auvergne-Rhône-Alpes' },
+    { code: '02', name: 'Aisne', region: 'Hauts-de-France' },
+    { code: '03', name: 'Allier', region: 'Auvergne-Rhône-Alpes' },
+    { code: '04', name: 'Alpes-de-Haute-Provence', region: 'Provence-Alpes-Côte d’Azur' },
+    { code: '05', name: 'Hautes-Alpes', region: 'Provence-Alpes-Côte d’Azur' },
+    { code: '06', name: 'Alpes-Maritimes', region: 'Provence-Alpes-Côte d’Azur' },
+    { code: '07', name: 'Ardèche', region: 'Auvergne-Rhône-Alpes' },
+    { code: '08', name: 'Ardennes', region: 'Grand Est' },
+    { code: '09', name: 'Ariège', region: 'Occitanie' },
+    { code: '10', name: 'Aube', region: 'Grand Est' },
+    { code: '11', name: 'Aude', region: 'Occitanie' },
+    { code: '12', name: 'Aveyron', region: 'Occitanie' },
+    { code: '13', name: 'Bouches-du-Rhône', region: 'Provence-Alpes-Côte d’Azur' },
+    { code: '14', name: 'Calvados', region: 'Normandie' },
+    { code: '15', name: 'Cantal', region: 'Auvergne-Rhône-Alpes' },
+    { code: '16', name: 'Charente', region: 'Nouvelle-Aquitaine' },
+    { code: '17', name: 'Charente-Maritime', region: 'Nouvelle-Aquitaine' },
+    { code: '18', name: 'Cher', region: 'Centre-Val de Loire' },
+    { code: '19', name: 'Corrèze', region: 'Nouvelle-Aquitaine' },
+    { code: '21', name: 'Côte-d’Or', region: 'Bourgogne-Franche-Comté' },
+    { code: '22', name: 'Côtes-d’Armor', region: 'Bretagne' },
+    { code: '23', name: 'Creuse', region: 'Nouvelle-Aquitaine' },
+    { code: '24', name: 'Dordogne', region: 'Nouvelle-Aquitaine' },
+    { code: '25', name: 'Doubs', region: 'Bourgogne-Franche-Comté' },
+    { code: '26', name: 'Drôme', region: 'Auvergne-Rhône-Alpes' },
+    { code: '27', name: 'Eure', region: 'Normandie' },
+    { code: '28', name: 'Eure-et-Loir', region: 'Centre-Val de Loire' },
+    { code: '29', name: 'Finistère', region: 'Bretagne' },
+    { code: '2A', name: 'Corse-du-Sud', region: 'Corse' },
+    { code: '2B', name: 'Haute-Corse', region: 'Corse' },
+    { code: '30', name: 'Gard', region: 'Occitanie' },
+    { code: '31', name: 'Haute-Garonne', region: 'Occitanie' },
+    { code: '32', name: 'Gers', region: 'Occitanie' },
+    { code: '33', name: 'Gironde', region: 'Nouvelle-Aquitaine' },
+    { code: '34', name: 'Hérault', region: 'Occitanie' },
+    { code: '35', name: 'Ille-et-Vilaine', region: 'Bretagne' },
+    { code: '36', name: 'Indre', region: 'Centre-Val de Loire' },
+    { code: '37', name: 'Indre-et-Loire', region: 'Centre-Val de Loire' },
+    { code: '38', name: 'Isère', region: 'Auvergne-Rhône-Alpes' },
+    { code: '39', name: 'Jura', region: 'Bourgogne-Franche-Comté' },
+    { code: '40', name: 'Landes', region: 'Nouvelle-Aquitaine' },
+    { code: '41', name: 'Loir-et-Cher', region: 'Centre-Val de Loire' },
+    { code: '42', name: 'Loire', region: 'Auvergne-Rhône-Alpes' },
+    { code: '43', name: 'Haute-Loire', region: 'Auvergne-Rhône-Alpes' },
+    { code: '44', name: 'Loire-Atlantique', region: 'Pays de la Loire' },
+    { code: '45', name: 'Loiret', region: 'Centre-Val de Loire' },
+    { code: '46', name: 'Lot', region: 'Occitanie' },
+    { code: '47', name: 'Lot-et-Garonne', region: 'Nouvelle-Aquitaine' },
+    { code: '48', name: 'Lozère', region: 'Occitanie' },
+    { code: '49', name: 'Maine-et-Loire', region: 'Pays de la Loire' },
+    { code: '50', name: 'Manche', region: 'Normandie' },
+    { code: '51', name: 'Marne', region: 'Grand Est' },
+    { code: '52', name: 'Haute-Marne', region: 'Grand Est' },
+    { code: '53', name: 'Mayenne', region: 'Pays de la Loire' },
+    { code: '54', name: 'Meurthe-et-Moselle', region: 'Grand Est' },
+    { code: '55', name: 'Meuse', region: 'Grand Est' },
+    { code: '56', name: 'Morbihan', region: 'Bretagne' },
+    { code: '57', name: 'Moselle', region: 'Grand Est' },
+    { code: '58', name: 'Nièvre', region: 'Bourgogne-Franche-Comté' },
+    { code: '59', name: 'Nord', region: 'Hauts-de-France' },
+    { code: '60', name: 'Oise', region: 'Hauts-de-France' },
+    { code: '61', name: 'Orne', region: 'Normandie' },
+    { code: '62', name: 'Pas-de-Calais', region: 'Hauts-de-France' },
+    { code: '63', name: 'Puy-de-Dôme', region: 'Auvergne-Rhône-Alpes' },
+    { code: '64', name: 'Pyrénées-Atlantiques', region: 'Nouvelle-Aquitaine' },
+    { code: '65', name: 'Hautes-Pyrénées', region: 'Occitanie' },
+    { code: '66', name: 'Pyrénées-Orientales', region: 'Occitanie' },
+    { code: '67', name: 'Bas-Rhin', region: 'Grand Est' },
+    { code: '68', name: 'Haut-Rhin', region: 'Grand Est' },
+    { code: '69', name: 'Rhône', region: 'Auvergne-Rhône-Alpes' },
+    { code: '70', name: 'Haute-Saône', region: 'Bourgogne-Franche-Comté' },
+    { code: '71', name: 'Saône-et-Loire', region: 'Bourgogne-Franche-Comté' },
+    { code: '72', name: 'Sarthe', region: 'Pays de la Loire' },
+    { code: '73', name: 'Savoie', region: 'Auvergne-Rhône-Alpes' },
+    { code: '74', name: 'Haute-Savoie', region: 'Auvergne-Rhône-Alpes' },
+    { code: '75', name: 'Paris', region: 'Île-de-France' },
+    { code: '76', name: 'Seine-Maritime', region: 'Normandie' },
+    { code: '77', name: 'Seine-et-Marne', region: 'Île-de-France' },
+    { code: '78', name: 'Yvelines', region: 'Île-de-France' },
+    { code: '79', name: 'Deux-Sèvres', region: 'Nouvelle-Aquitaine' },
+    { code: '80', name: 'Somme', region: 'Hauts-de-France' },
+    { code: '81', name: 'Tarn', region: 'Occitanie' },
+    { code: '82', name: 'Tarn-et-Garonne', region: 'Occitanie' },
+    { code: '83', name: 'Var', region: 'Provence-Alpes-Côte d’Azur' },
+    { code: '84', name: 'Vaucluse', region: 'Provence-Alpes-Côte d’Azur' },
+    { code: '85', name: 'Vendée', region: 'Pays de la Loire' },
+    { code: '86', name: 'Vienne', region: 'Nouvelle-Aquitaine' },
+    { code: '87', name: 'Haute-Vienne', region: 'Nouvelle-Aquitaine' },
+    { code: '88', name: 'Vosges', region: 'Grand Est' },
+    { code: '89', name: 'Yonne', region: 'Bourgogne-Franche-Comté' },
+    { code: '90', name: 'Territoire de Belfort', region: 'Bourgogne-Franche-Comté' },
+    { code: '91', name: 'Essonne', region: 'Île-de-France' },
+    { code: '92', name: 'Hauts-de-Seine', region: 'Île-de-France' },
+    { code: '93', name: 'Seine-Saint-Denis', region: 'Île-de-France' },
+    { code: '94', name: 'Val-de-Marne', region: 'Île-de-France' },
+    { code: '95', name: 'Val-d’Oise', region: 'Île-de-France' },
+    { code: '971', name: 'Guadeloupe', region: 'Guadeloupe' },
+    { code: '972', name: 'Martinique', region: 'Martinique' },
+    { code: '973', name: 'Guyane', region: 'Guyane' },
+    { code: '974', name: 'La Réunion', region: 'La Réunion' },
+    { code: '976', name: 'Mayotte', region: 'Mayotte' }
+  ],
+
+  getDepartementsList() {
+    if (window.ProtecDepartements && Array.isArray(window.ProtecDepartements.list) && window.ProtecDepartements.list.length > 0) {
+      return window.ProtecDepartements.list;
+    }
+    if (window.ProtecDepartements && Array.isArray(window.ProtecDepartements.DEPARTEMENTS_DATA) && window.ProtecDepartements.DEPARTEMENTS_DATA.length > 0) {
+      return window.ProtecDepartements.DEPARTEMENTS_DATA;
+    }
+    return this.FALLBACK_DEPARTEMENTS_LIST;
+  },
+
   onRegDeptSearch(val) {
     const q = (val || '').trim().toLowerCase();
-    const depts = (window.ProtecDepartements && window.ProtecDepartements.list) || [];
+    const depts = this.getDepartementsList();
     const select = document.getElementById('auth-reg-dept-select');
     if (!select) return;
 
     const filtered = depts.filter(d => {
       if (!q) return true;
-      return d.code.toLowerCase().includes(q) || d.name.toLowerCase().includes(q) || d.region.toLowerCase().includes(q);
+      const codeStr = String(d.code).toLowerCase();
+      const nameStr = String(d.name || '').toLowerCase();
+      const regionStr = String(d.region || '').toLowerCase();
+      return codeStr.includes(q) || nameStr.includes(q) || regionStr.includes(q);
     });
+
+    if (filtered.length === 0) {
+      select.innerHTML = `<option value="" disabled selected>Aucun département trouvé pour "${val}"</option>`;
+      return;
+    }
 
     select.innerHTML = filtered.map(d => `<option value="${d.code}" ${d.code === this.regDeptCode ? 'selected' : ''}>${d.code} - ${d.name} (${d.region})</option>`).join('');
 
-    if (filtered.length > 0 && !filtered.some(d => d.code === this.regDeptCode)) {
+    // Si le département actuellement sélectionné n'est pas dans le filtre, on prend le premier résultat
+    if (!filtered.some(d => d.code === this.regDeptCode)) {
       this.selectRegDept(filtered[0].code);
     }
   },
 
   selectRegDept(code) {
+    if (!code) return;
     this.regDeptCode = code;
-    const depts = (window.ProtecDepartements && window.ProtecDepartements.list) || [];
+    const depts = this.getDepartementsList();
     const cur = depts.find(d => d.code === code) || depts[0];
     const badge = document.getElementById('auth-reg-dept-badge');
     if (badge && cur) {
@@ -646,7 +775,7 @@ window.ProtecAuth = {
           errorEl.textContent = supaRes.error;
           errorEl.classList.remove('hidden');
           submitBtn.disabled = false;
-          submitBtn.innerHTML = '<i data-lucide="shield-check" class="w-4 h-4"></i> Créer mon compte & Rejoindre la carte';
+          submitBtn.innerHTML = '<i data-lucide="shield-check" class="w-4 h-4"></i> <span>Créer mon compte & Démarrer le Tutoriel</span>';
           if (window.lucide) window.lucide.createIcons();
           return;
         }
@@ -666,7 +795,7 @@ window.ProtecAuth = {
         errorEl.textContent = (data && data.error) || 'Erreur lors de l’inscription.';
         errorEl.classList.remove('hidden');
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i data-lucide="shield-check" class="w-4 h-4"></i> Créer mon compte & Rejoindre la carte';
+        submitBtn.innerHTML = '<i data-lucide="shield-check" class="w-4 h-4"></i> <span>Créer mon compte & Démarrer le Tutoriel</span>';
         if (window.lucide) window.lucide.createIcons();
         return;
       }
