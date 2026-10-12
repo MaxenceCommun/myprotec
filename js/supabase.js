@@ -1277,6 +1277,14 @@ window.ProtecSupabase = {
         if (!stErr && stationCount !== null) {
           stations = Math.max(stations, stationCount);
         }
+
+        // Nombre de directeurs / antennes enregistrées
+        const { count: playerCount, error: pErr } = await this.client
+          .from('players')
+          .select('*', { count: 'exact', head: true });
+        if (!pErr && playerCount !== null) {
+          stations = Math.max(stations, playerCount);
+        }
       } catch (e) {
         console.warn('Erreur récupération télémétrie Supabase:', e);
       }

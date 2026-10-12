@@ -2209,6 +2209,7 @@ window.ProtecPersonnel = {
         temps_ralliement_minutes: cand.temps_ralliement_minutes,
         mode_transport: cand.mode_transport,
         permis_b: cand.permis_b,
+        permis_c: cand.permis_c,
         permis_moto: cand.permis_moto,
         missionsCount: 0,
         consecutiveMissions: 0,
@@ -2261,6 +2262,7 @@ window.ProtecPersonnel = {
         temps_ralliement_minutes: cand.temps_ralliement_minutes,
         mode_transport: cand.mode_transport,
         permis_b: cand.permis_b,
+        permis_c: cand.permis_c,
         permis_moto: cand.permis_moto,
         contractMonthlyHours: 151,
         monthlyHoursWorked: 0,
@@ -2551,9 +2553,12 @@ window.ProtecPersonnel = {
 
     // 4. Permis de conduire
     const age = volunteerProfile.age || 25;
-    const hasExistingPermisB = volunteerProfile.skills?.includes('permis_b') || volunteerProfile.skills?.includes('permis_vpsp');
+    const hasExistingPermisB = volunteerProfile.skills?.includes('permis_b') || volunteerProfile.skills?.includes('permis_vpsp') || volunteerProfile.permis_b;
     const hasPermisB = hasExistingPermisB !== undefined ? !!hasExistingPermisB : (age >= 24 ? Math.random() < 0.88 : (age >= 20 ? Math.random() < 0.76 : Math.random() < 0.45));
     const hasPermisMoto = volunteerProfile.skills?.includes('permis_moto') ? true : (Math.random() < 0.16);
+    // Permis C (Poids Lourd > 3.5t : FLIT, VALOG, PCM...)
+    const hasExistingPermisC = volunteerProfile.skills?.includes('permis_c') || volunteerProfile.permis_c;
+    const hasPermisC = hasExistingPermisC !== undefined ? !!hasExistingPermisC : (hasPermisB && age >= 21 && Math.random() < 0.18);
 
     // 5. Mode de transport
     let modeTransport = 'velo_transports';
@@ -2590,6 +2595,7 @@ window.ProtecPersonnel = {
       temps_ralliement_minutes: tempsRalliementMinutes,
       mode_transport: modeTransport,
       permis_b: hasPermisB,
+      permis_c: hasPermisC,
       permis_moto: hasPermisMoto
     };
   },
@@ -2647,8 +2653,9 @@ window.ProtecPersonnel = {
         v.temps_trajet_base_minutes = newGeo.temps_ralliement_minutes;
         v.mode_transport = newGeo.mode_transport;
         v.permis_b = v.permis_b !== undefined ? v.permis_b : newGeo.permis_b;
+        v.permis_c = v.permis_c !== undefined ? v.permis_c : (newGeo.permis_c !== undefined ? newGeo.permis_c : (v.permis_b && (v.age || 25) >= 21 && Math.random() < 0.18));
         v.permis_moto = v.permis_moto !== undefined ? v.permis_moto : newGeo.permis_moto;
-        v.possede_permis = !!v.permis_b || !!v.permis_moto;
+        v.possede_permis = !!v.permis_b || !!v.permis_c || !!v.permis_moto;
         modified = true;
         this.resolveVolunteerRealAddress(v, game);
       } else if (!v.isOfficialBanAddress) {
@@ -2727,8 +2734,9 @@ window.ProtecPersonnel = {
       volunteer.temps_trajet_base_minutes = geo.temps_ralliement_minutes;
       volunteer.mode_transport = geo.mode_transport;
       volunteer.permis_b = volunteer.permis_b !== undefined ? volunteer.permis_b : geo.permis_b;
+      volunteer.permis_c = volunteer.permis_c !== undefined ? volunteer.permis_c : geo.permis_c;
       volunteer.permis_moto = volunteer.permis_moto !== undefined ? volunteer.permis_moto : geo.permis_moto;
-      volunteer.possede_permis = !!volunteer.permis_b || !!volunteer.permis_moto;
+      volunteer.possede_permis = !!volunteer.permis_b || !!volunteer.permis_c || !!volunteer.permis_moto;
       this.resolveVolunteerRealAddress(volunteer, game);
     } else if (!volunteer.isOfficialBanAddress) {
       this.resolveVolunteerRealAddress(volunteer, game);
@@ -2738,6 +2746,9 @@ window.ProtecPersonnel = {
     volunteer.skills = volunteer.skills || [];
     if (volunteer.permis_b && !volunteer.skills.includes('permis_b')) {
       volunteer.skills.push('permis_b');
+    }
+    if (volunteer.permis_c && !volunteer.skills.includes('permis_c')) {
+      volunteer.skills.push('permis_c');
     }
     if (volunteer.permis_moto && !volunteer.skills.includes('permis_moto')) {
       volunteer.skills.push('permis_moto');

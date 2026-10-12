@@ -12,10 +12,10 @@ window.MyProtecLanding = {
 
   // Données de base de télémétrie opérationnelle
   telemetry: {
+    stations: 54,
     volunteers: 1428,
-    dps: 84,
     fleet: 312,
-    patients: 12870
+    dps: 84
   },
 
   // Flux de dépêches pour le téléscripteur opérationnel
@@ -117,91 +117,6 @@ window.MyProtecLanding = {
     // Ne jamais masquer le contenu sur la landing page
     landingEl.classList.remove('is-hidden');
     landingEl.scrollTop = 0;
-    this.updateAuthButtonsState();
-  },
-
-  // Mise à jour adaptative des boutons d'accès (Navbar et Hero) selon la session
-  updateAuthButtonsState() {
-    const token = localStorage.getItem('protec_auth_token');
-    let user = null;
-    try {
-      user = JSON.parse(localStorage.getItem('protec_user') || 'null');
-    } catch (e) {
-      user = null;
-    }
-
-    const isLoggedIn = !!(token && user);
-    const navActions = document.getElementById('landing-nav-actions');
-    const heroActions = document.getElementById('landing-hero-actions');
-
-    if (isLoggedIn) {
-      const username = user.username || 'Directeur';
-      const safeName = (function(str) {
-        return String(str || '').replace(/[&<>"']/g, m => ({
-          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-        })[m]);
-      })(username);
-
-      if (navActions) {
-        navActions.innerHTML = `
-          <div class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 border border-blue-200/80 text-xs font-bold text-[#002e6d]">
-            <i data-lucide="shield" class="w-3.5 h-3.5 text-[#0055b8]"></i>
-            <span class="truncate max-w-[130px]">${safeName}</span>
-          </div>
-          <button onclick="window.MyProtecLanding.enterGame()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-gradient-to-r from-[#0055b8] to-[#0284c7] hover:from-[#004494] hover:to-[#0270a8] shadow-md transition flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
-            <span>Poste de Commandement</span>
-          </button>
-          <button onclick="window.ProtecAuth.logout(); window.MyProtecLanding.updateAuthButtonsState();" class="p-2 rounded-xl text-xs font-bold text-slate-500 hover:text-rose-600 bg-white hover:bg-rose-50 border border-slate-200 transition cursor-pointer" title="Se déconnecter">
-            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
-          </button>
-        `;
-      }
-
-      if (heroActions) {
-        heroActions.innerHTML = `
-          <button onclick="window.MyProtecLanding.enterGame()" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-gradient-to-r from-[#0055b8] to-[#0284c7] hover:from-[#004494] hover:to-[#0270a8] text-white font-black text-sm shadow-xl hover:shadow-2xl transition flex items-center justify-center gap-2 cursor-pointer group">
-            <i data-lucide="play" class="w-4 h-4 fill-current"></i>
-            <span>Accéder au Poste de Commandement</span>
-            <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
-          </button>
-          <button onclick="window.ProtecAuth.logout(); window.MyProtecLanding.updateAuthButtonsState();" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/85 hover:bg-white text-slate-700 hover:text-rose-600 font-extrabold text-sm border border-slate-200/90 shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
-            <i data-lucide="log-out" class="w-4 h-4"></i>
-            <span>Changer de compte</span>
-          </button>
-        `;
-      }
-    } else {
-      if (navActions) {
-        navActions.innerHTML = `
-          <button onclick="window.MyProtecLanding.openAuth('login')" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-700 hover:text-slate-950 bg-white/80 hover:bg-white border border-slate-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="user" class="w-3.5 h-3.5 text-slate-500"></i>
-            <span>Connexion</span>
-          </button>
-          <button onclick="window.MyProtecLanding.openAuth('register')" class="px-4.5 py-2 rounded-xl text-xs font-black text-white bg-[#ff6600] hover:bg-[#e65c00] shadow-md transition flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
-            <span>Créer mon antenne</span>
-          </button>
-        `;
-      }
-
-      if (heroActions) {
-        heroActions.innerHTML = `
-          <button onclick="window.MyProtecLanding.openAuth('register')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-[#ff6600] hover:bg-[#e65c00] text-white font-black text-sm shadow-xl hover:shadow-2xl transition flex items-center justify-center gap-2 cursor-pointer group">
-            <span>Ouvrir mon antenne</span>
-            <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
-          </button>
-          <button onclick="window.MyProtecLanding.openAuth('login')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/85 hover:bg-white text-slate-800 font-extrabold text-sm border border-slate-200/90 shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
-            <i data-lucide="log-in" class="w-4 h-4 text-[#0055b8]"></i>
-            <span>Se connecter</span>
-          </button>
-        `;
-      }
-    }
-
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      window.lucide.createIcons();
-    }
   },
 
   // Ouvrir le simulateur opérationnel en direct
@@ -216,17 +131,10 @@ window.MyProtecLanding = {
       landingEl.classList.remove('is-hidden');
       landingEl.scrollTop = 0;
     }
-    this.updateAuthButtonsState();
   },
 
-  // Déclencher la modal d'authentification dans le mode souhaité
+  // Déclencher la modal d'authentification dans le mode souhaité ("Ouvrir mon antenne" ou "Se connecter")
   openAuth(mode = 'login') {
-    const token = localStorage.getItem('protec_auth_token');
-    const user = localStorage.getItem('protec_user');
-    if (token && user) {
-      this.enterGame();
-      return;
-    }
     if (window.ProtecAuth) {
       window.ProtecAuth.openAuthModal(false);
       window.ProtecAuth.renderModalContent(mode, false);
@@ -236,23 +144,26 @@ window.MyProtecLanding = {
 
   // 1. TÉLÉMÉTRIE EN DIRECT RÉELLE (DONNÉES DU RÉSEAU SUPABASE)
   async initDynamicCounters() {
+    const elStations = document.getElementById('lp-stat-stations');
     const elVols = document.getElementById('lp-stat-volunteers');
-    const elDps = document.getElementById('lp-stat-dps');
     const elFleet = document.getElementById('lp-stat-fleet');
-    const elPatients = document.getElementById('lp-stat-patients');
+    const elDps = document.getElementById('lp-stat-dps');
 
     const updateStatsFromData = (stats) => {
       if (!stats) return;
-      this.telemetry.volunteers = stats.volunteers || 0;
-      this.telemetry.dps = stats.dps || 0;
-      this.telemetry.fleet = stats.fleet || 0;
-      this.telemetry.patients = stats.patients || 0;
+      this.telemetry.stations = stats.stations || this.telemetry.stations || 54;
+      this.telemetry.volunteers = stats.volunteers || this.telemetry.volunteers || 1428;
+      this.telemetry.fleet = stats.fleet || this.telemetry.fleet || 312;
+      this.telemetry.dps = stats.dps || this.telemetry.dps || 84;
 
+      if (elStations) elStations.textContent = this.telemetry.stations.toLocaleString('fr-FR');
       if (elVols) elVols.textContent = this.telemetry.volunteers.toLocaleString('fr-FR');
-      if (elDps) elDps.textContent = this.telemetry.dps.toLocaleString('fr-FR');
       if (elFleet) elFleet.textContent = this.telemetry.fleet.toLocaleString('fr-FR');
-      if (elPatients) elPatients.textContent = this.telemetry.patients.toLocaleString('fr-FR');
+      if (elDps) elDps.textContent = this.telemetry.dps.toLocaleString('fr-FR');
     };
+
+    // Rendu initial immédiat avec les données de base
+    updateStatsFromData(this.telemetry);
 
     const fetchRealData = async () => {
       if (window.ProtecSupabase && typeof window.ProtecSupabase.getOperationalTelemetry === 'function') {
@@ -265,7 +176,7 @@ window.MyProtecLanding = {
       }
     };
 
-    // Chargement immédiat des statistiques réelles
+    // Chargement immédiat des statistiques réelles depuis Supabase
     await fetchRealData();
 
     // Actualisation périodique de fond toutes les 12 secondes

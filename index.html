@@ -97,12 +97,12 @@
           <!-- Boutons d'action -->
           <div id="landing-nav-actions" class="flex items-center gap-2.5">
             <button onclick="window.MyProtecLanding.openAuth('login')" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-700 hover:text-slate-950 bg-white/80 hover:bg-white border border-slate-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
-              <i data-lucide="user" class="w-3.5 h-3.5 text-slate-500"></i>
-              <span>Connexion</span>
+              <i data-lucide="log-in" class="w-3.5 h-3.5 text-[#0055b8]"></i>
+              <span>Se connecter</span>
             </button>
             <button onclick="window.MyProtecLanding.openAuth('register')" class="px-4.5 py-2 rounded-xl text-xs font-black text-white bg-[#ff6600] hover:bg-[#e65c00] shadow-md transition flex items-center gap-1.5 cursor-pointer">
               <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
-              <span>Créer mon antenne</span>
+              <span>Ouvrir mon antenne</span>
             </button>
           </div>
         </div>
@@ -158,19 +158,43 @@
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <!-- Carte 1 : Secouristes mobilisés -->
+              <!-- Carte 1 : Antennes de Secours (remplace Bilans Secouristes) -->
+              <div class="lp-glass-card p-4 rounded-2xl flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-400 mb-2">
+                  <span class="text-[10px] font-bold uppercase tracking-wider">Antennes de Secours</span>
+                  <div class="w-7 h-7 rounded-xl bg-blue-50 text-[#0055b8] flex items-center justify-center">
+                    <i data-lucide="building-2" class="w-4 h-4"></i>
+                  </div>
+                </div>
+                <strong id="lp-stat-stations" class="text-2xl font-black text-slate-900 mono-num">0</strong>
+                <span class="text-[10px] text-slate-500 font-semibold mt-1">Centres territoriaux</span>
+              </div>
+
+              <!-- Carte 2 : Secouristes mobilisés -->
               <div class="lp-glass-card p-4 rounded-2xl flex flex-col justify-between">
                 <div class="flex items-center justify-between text-slate-400 mb-2">
                   <span class="text-[10px] font-bold uppercase tracking-wider">Secouristes Terrain</span>
-                  <div class="w-7 h-7 rounded-xl bg-blue-50 text-[#0055b8] flex items-center justify-center">
+                  <div class="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
                     <i data-lucide="users" class="w-4 h-4"></i>
                   </div>
                 </div>
                 <strong id="lp-stat-volunteers" class="text-2xl font-black text-slate-900 mono-num">0</strong>
-                <span class="text-[10px] text-slate-500 font-semibold mt-1">Équipiers PSE</span>
+                <span class="text-[10px] text-slate-500 font-semibold mt-1">Équipiers PSE & Cadres</span>
               </div>
 
-              <!-- Carte 2 : Dispositifs DPS en cours -->
+              <!-- Carte 3 : Flotte engagée -->
+              <div class="lp-glass-card p-4 rounded-2xl flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-400 mb-2">
+                  <span class="text-[10px] font-bold uppercase tracking-wider">Flotte Opérationnelle</span>
+                  <div class="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <i data-lucide="truck" class="w-4 h-4"></i>
+                  </div>
+                </div>
+                <strong id="lp-stat-fleet" class="text-2xl font-black text-slate-900 mono-num">0</strong>
+                <span class="text-[10px] text-slate-500 font-semibold mt-1">Véhicules & Ambulances</span>
+              </div>
+
+              <!-- Carte 4 : Postes DPS en cours -->
               <div class="lp-glass-card p-4 rounded-2xl flex flex-col justify-between">
                 <div class="flex items-center justify-between text-slate-400 mb-2">
                   <span class="text-[10px] font-bold uppercase tracking-wider">Postes DPS en Cours</span>
@@ -180,30 +204,6 @@
                 </div>
                 <strong id="lp-stat-dps" class="text-2xl font-black text-slate-900 mono-num">0</strong>
                 <span class="text-[10px] text-slate-500 font-semibold mt-1">Dispositifs engagés</span>
-              </div>
-
-              <!-- Carte 3 : Flotte engagée -->
-              <div class="lp-glass-card p-4 rounded-2xl flex flex-col justify-between">
-                <div class="flex items-center justify-between text-slate-400 mb-2">
-                  <span class="text-[10px] font-bold uppercase tracking-wider">Flotte Engagée</span>
-                  <div class="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                    <i data-lucide="truck" class="w-4 h-4"></i>
-                  </div>
-                </div>
-                <strong id="lp-stat-fleet" class="text-2xl font-black text-slate-900 mono-num">0</strong>
-                <span class="text-[10px] text-slate-500 font-semibold mt-1">Véhicules de secours</span>
-              </div>
-
-              <!-- Carte 4 : Prises en charge & bilans -->
-              <div class="lp-glass-card p-4 rounded-2xl flex flex-col justify-between">
-                <div class="flex items-center justify-between text-slate-400 mb-2">
-                  <span class="text-[10px] font-bold uppercase tracking-wider">Bilans Secouristes</span>
-                  <div class="w-7 h-7 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-                    <i data-lucide="heart-pulse" class="w-4 h-4"></i>
-                  </div>
-                </div>
-                <strong id="lp-stat-patients" class="text-2xl font-black text-slate-900 mono-num">0</strong>
-                <span class="text-[10px] text-slate-500 font-semibold mt-1">Prises en charge</span>
               </div>
             </div>
           </div>

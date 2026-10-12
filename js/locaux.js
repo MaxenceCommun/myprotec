@@ -758,6 +758,15 @@ window.ProtecLocaux = {
     }
 
     p.ongoingWorks = p.ongoingWorks || [];
+
+    // Verrouillage mensuel immédiat si un incident a déjà eu lieu dans l'historique
+    if (!p.lastSecurityIncidentMonth && Array.isArray(p.securityLogs) && p.securityLogs.length > 0) {
+      const curYear = (game && game.clock && game.clock.year) || new Date().getFullYear();
+      const curMonth = (game && game.clock && game.clock.month !== undefined) ? game.clock.month : new Date().getMonth();
+      p.lastSecurityIncidentMonth = `${curYear}-${curMonth}`;
+      p.lastSecurityIncidentTimestamp = Date.now();
+    }
+
     return p;
   },
 
@@ -1622,25 +1631,51 @@ window.ProtecLocaux = {
 
     // 2. Vérification périodique des risques et événements de sécurité (vol, dégradation)
     if (!prem.lastSecurityCheck) prem.lastSecurityCheck = Date.now();
-    // Test toutes les 120 secondes réelles (ou plus fréquent la nuit)
-    const isNight = game.clock && (game.clock.hour >= 22 || game.clock.hour < 6);
-    const intervalCheck = isNight ? 90000 : 150000;
+    // Test rarissime : toutes les 20 minutes réelles au maximum, et uniquement au coeur de la nuit (01h-04h in-game)
+    const isDeepNight = game.clock && (game.clock.hour >= 1 && game.clock.hour <= 4);
+    const intervalCheck = 20 * 60 * 1000; // 20 minutes réelles
 
     if (Date.now() - prem.lastSecurityCheck > intervalCheck) {
       prem.lastSecurityCheck = Date.now();
-      this.checkSecurityEvents(game, prem, isNight);
+      if (isDeepNight) {
+        this.checkSecurityEvents(game, prem, true);
+      }
     }
   },
 
   // =========================================================================
   // GESTION DES RISQUES & ÉVÉNEMENTS DE SÉCURITÉ (Vol, Dégradation, Siphonage)
+  // RÈGLE : TRÈS TRÈS RARE (MAXIMUM 1 FOIS PAR MOIS IN-GAME ET ENCORE)
   // =========================================================================
   checkSecurityEvents(game, prem, isNight) {
-    // Probabilité d'incident : 30% la nuit, 15% le jour
-    const triggerChance = isNight ? 0.32 : 0.16;
+    if (!isNight) return;
+
+    // 1. VERROUILLAGE MENSUEL STRICT : MAXIMUM 1 INCIDENT PAR MOIS CIVIL IN-GAME
+    const curYear = (game.clock && game.clock.year) || new Date().getFullYear();
+    const curMonth = (game.clock && game.clock.month !== undefined) ? game.clock.month : new Date().getMonth();
+    const currentMonthKey = `${curYear}-${curMonth}`;
+
+    if (prem.lastSecurityIncidentMonth === currentMonthKey) {
+      // Déjà eu un incident au cours de ce mois in-game -> aucun nouvel incident autorisé
+      return;
+    }
+
+    // 2. DÉLAI RÉEL MINIMUM DE SÉCURITÉ : Au moins 3 heures de jeu réelles consécutives
+    if (prem.lastSecurityIncidentTimestamp && (Date.now() - prem.lastSecurityIncidentTimestamp < 3 * 3600 * 1000)) {
+      return;
+    }
+
+    // 3. PROBABILITÉ RARISSIME PAR TEST (0.8% de base, encore plus faible avec des équipements)
+    const securityScore = this.getSecurityScore(prem);
+    const securityReduction = Math.max(0.12, (100 - securityScore) / 100);
+    const triggerChance = 0.008 * securityReduction;
+
     if (Math.random() > triggerChance) return;
 
-    const securityScore = this.getSecurityScore(prem);
+    // ENREGISTREMENT DU VERROU MENSUEL IMMÉDIAT
+    prem.lastSecurityIncidentMonth = currentMonthKey;
+    prem.lastSecurityIncidentTimestamp = Date.now();
+
     const eq = prem.securityEquipments || [];
     const hasAlarm = eq.includes('alarm_system');
     const hasCCTV = eq.includes('cctv_system');

@@ -9,6 +9,416 @@
 
 window.ProtecAdvanced = {
   // --- CATALOGUE DES VÉHICULES ÉTENDU ---
+  // --- CATALOGUE DES MODÈLES & CHÂSSIS (PARTIE 1 DU MAGASIN : RECHERCHE PAR MODÈLE & CONFIGURATION) ---
+  chassisModels: [
+    {
+      id: 'master3',
+      name: 'Renault Master III',
+      brand: 'Renault Trucks',
+      desc: 'Le grand fourgon utilitaire de référence de la Protection Civile. Châssis éprouvé, disponible en ambulance profilée, grand volume cube, minibus 9 places ou logistique tôlée.',
+      icon: '🚐',
+      defaultVariantId: 'master3_vpsp',
+      variants: [
+        {
+          id: 'master3_vpsp',
+          type: 'VPSP',
+          name: 'Renault Master III - VPSP Cellule Standard Profilée',
+          shortName: 'Ambulance VPSP Profilée',
+          category: 'Secours d’Urgence',
+          missionFilter: ['secours'],
+          desc: 'Cellule sanitaire grand volume profilée intégrée d’origine aux normes EN 1789, brancard 3 points, oxygénothérapie et armoire d’urgence SUAP.',
+          cost: 28500,
+          capacity: 5,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B (+ Habilitation P.VPSP)',
+          speedKmH: 85,
+          hasTowHitch: false,
+          image: 'images/vehicles/master3_vpsp.png',
+          specialty: 'Urgences Réflexes & SAMU 15'
+        },
+        {
+          id: 'master3_vpsp_cube',
+          type: 'VPSP',
+          name: 'Renault Master III - VPSP Grande Cellule Cube Sanitaire',
+          shortName: 'Ambulance VPSP Grande Cellule Cube',
+          category: 'Secours d’Urgence',
+          missionFilter: ['secours'],
+          desc: 'Cellule sanitaire carrée cubique XXL modulaire sur châssis-cabine. Espace d’intervention maximal idéal pour réanimation avancée et postes médicaux de grande envergure.',
+          cost: 32000,
+          capacity: 5,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B (+ Habilitation P.VPSP)',
+          speedKmH: 80,
+          hasTowHitch: false,
+          image: 'images/vehicles/master3_vpsp_cube.png',
+          specialty: 'Soins Intensifs & Cellule Grand Volume'
+        },
+        {
+          id: 'master3_vtp',
+          type: 'VTP',
+          name: 'Renault Master III - VTP Transport de Personnel (9 places)',
+          shortName: 'Minibus VTP 9 places',
+          category: 'Transport d’Équipes',
+          missionFilter: ['logistique'],
+          desc: 'Minibus grand confort 9 places vitré pour acheminement d’équipes complètes de secouristes, relèves d’astreinte et longs déplacements interdépartementaux.',
+          cost: 21000,
+          capacity: 9,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B',
+          speedKmH: 85,
+          hasTowHitch: true,
+          image: 'images/vehicles/master3_vtp.png',
+          specialty: 'Acheminement de Renforts'
+        },
+        {
+          id: 'master3_vtu_log',
+          type: 'VTU',
+          name: 'Renault Master III - VTU Fourgon Logistique Opérationnelle',
+          shortName: 'VTU Tôlé Logistique',
+          category: 'Logistique & Événementiel',
+          missionFilter: ['logistique'],
+          serigraphieKey: 'logistique',
+          serigraphieLabel: 'Logistique Opérationnelle',
+          desc: 'Fourgon tôlé utilitaire grand volume équipé d’étagères modulaires, sangles d’arrimage et crochet d’attelage pour tentes, PMA, lits de camp et logistique.',
+          cost: 17500,
+          capacity: 3,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B',
+          speedKmH: 75,
+          hasTowHitch: true,
+          image: 'images/vehicles/master3_vtu_log.png',
+          specialty: 'Transport Lots PMA & Tentes'
+        },
+        {
+          id: 'master3_vtu_pop',
+          type: 'VTU',
+          name: 'Renault Master III - VTU Soutien aux Populations',
+          shortName: 'VTU Soutien Populations',
+          category: 'Soutien & Sauvegarde',
+          missionFilter: ['logistique', 'social'],
+          serigraphieKey: 'soutien_pop',
+          serigraphieLabel: 'Soutien aux Populations',
+          desc: 'Fourgon d’assistance et sauvegarde citoyenne avec sérigraphie officielle Soutien aux Populations : kits sinistrés, ravitaillement de crise et accueil d’urgence.',
+          cost: 17500,
+          capacity: 3,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B',
+          speedKmH: 75,
+          hasTowHitch: true,
+          image: 'images/vehicles/master3_vtu_pop.png',
+          specialty: 'Assistance Sinistrés & Catastrophes'
+        }
+      ]
+    },
+    {
+      id: 'trafic3',
+      name: 'Renault Trafic III',
+      brand: 'Renault',
+      desc: 'Fourgon compact moderne et maniable, parfait en milieu urbain dense et pour les liaisons rapides d’antenne.',
+      icon: '🚐',
+      defaultVariantId: 'trafic3_vtp',
+      variants: [
+        {
+          id: 'trafic3_vtp',
+          type: 'VTP',
+          name: 'Renault Trafic III - VTP Minibus d’Intervention (9 places)',
+          shortName: 'Minibus VTP 9 places',
+          category: 'Transport d’Équipes',
+          missionFilter: ['logistique'],
+          desc: 'Minibus 9 places polyvalent, idéal pour la relève rapide des équipes sur dispositifs prévisionnels de secours urbains.',
+          cost: 19500,
+          capacity: 9,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B',
+          speedKmH: 90,
+          hasTowHitch: true,
+          image: 'images/vehicles/trafic_vtp.png',
+          specialty: 'Transport Urbain & Relèves'
+        },
+        {
+          id: 'trafic3_vtu',
+          type: 'VTU',
+          name: 'Renault Trafic III - VTU Fourgon Moyen Logistique',
+          shortName: 'Fourgon VTU Polyvalent',
+          category: 'Logistique & Événementiel',
+          missionFilter: ['logistique'],
+          desc: 'Fourgon moyen agile avec cloison de séparation et crochet d’attelage pour matériel léger et tentes de secours.',
+          cost: 16000,
+          capacity: 3,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B',
+          speedKmH: 90,
+          hasTowHitch: true,
+          image: 'images/vehicles/VTU.png',
+          specialty: 'Logistique Rapide'
+        }
+      ]
+    },
+    {
+      id: 'ducato',
+      name: 'Fiat Ducato',
+      brand: 'Fiat Professional',
+      desc: 'Plateforme utilitaire robuste et spacieuse, réputée pour sa fiabilité et sa grande largeur utile.',
+      icon: '🚑',
+      defaultVariantId: 'ducato_vpsp',
+      variants: [
+        {
+          id: 'ducato_vpsp',
+          type: 'VPSP',
+          name: 'Fiat Ducato - VPSP Secours Sanitaire',
+          shortName: 'Ambulance VPSP Grand Volume',
+          category: 'Secours d’Urgence',
+          missionFilter: ['secours'],
+          desc: 'Ambulance de premiers secours avec cellule ergonomique grand gabarit pour prise en charge médicale confortable.',
+          cost: 27900,
+          capacity: 5,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B (+ Habilitation P.VPSP)',
+          speedKmH: 85,
+          hasTowHitch: false,
+          image: 'images/vehicles/VPSP.png',
+          specialty: 'Secours d’Urgence'
+        },
+        {
+          id: 'ducato_vtu',
+          type: 'VTU',
+          name: 'Fiat Ducato - VTU Grand Volume Fret',
+          shortName: 'Fourgon VTU Fret L3H2',
+          category: 'Logistique & Événementiel',
+          missionFilter: ['logistique'],
+          desc: 'Fourgon grand volume pour acheminement de gros matériel et charges lourdes sur évènements sportifs et culturels.',
+          cost: 18000,
+          capacity: 3,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B',
+          speedKmH: 80,
+          hasTowHitch: true,
+          image: 'images/vehicles/VTU.png',
+          specialty: 'Transport Lourd de Fret'
+        }
+      ]
+    },
+    {
+      id: 'tout_terrain_vl',
+      name: 'Dacia Duster & Gamme 4x4 (VL / VLHR)',
+      brand: 'Dacia / Toyota',
+      desc: 'Véhicules légers et tout-terrain de commandement, reconnaissance rapide et franchissement.',
+      icon: '🚙',
+      defaultVariantId: 'duster_vl',
+      variants: [
+        {
+          id: 'duster_vl',
+          type: 'VL',
+          name: 'Dacia Duster II - Véhicule de Liaison (VL)',
+          shortName: 'VL Liaison Rapide',
+          category: 'Reconnaissance Rapide',
+          missionFilter: ['liaison'],
+          desc: 'Véhicule léger avec rampe lumineuse, équipement radio et crochet d’attelage pour reconnaissance et commandement.',
+          cost: 11500,
+          capacity: 4,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B',
+          speedKmH: 100,
+          hasTowHitch: true,
+          image: 'images/vehicles/VL.png',
+          specialty: 'Reconnaissance & Commandement'
+        },
+        {
+          id: 'hilux_vlhr',
+          type: 'VLHR',
+          name: 'Toyota Hilux 4x4 - Véhicule Léger Hors Route (VLHR)',
+          shortName: 'VLHR Franchissement 4x4',
+          category: 'Tout-Terrain',
+          missionFilter: ['liaison', 'tout_terrain'],
+          desc: 'Pick-up 4x4 tout-terrain pour zones accidentées, massifs forestiers, franchissement et remorquage lourd.',
+          cost: 19500,
+          capacity: 4,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B',
+          speedKmH: 90,
+          hasTowHitch: true,
+          image: 'images/vehicles/VLHR.png',
+          specialty: 'Accès Tout-Terrain & Crues'
+        }
+      ]
+    },
+    {
+      id: 'heavy_fleet',
+      name: 'Flotte Poids Lourds (> 3.5t - Permis C Requis)',
+      brand: 'Gamme Poids Lourd Officielle',
+      desc: 'Poids lourds opérationnels (> 3.5 tonnes) nécessitant un conducteur titulaire du Permis C (Poids Lourd).',
+      icon: '🚚',
+      defaultVariantId: 'flit_heavy',
+      variants: [
+        {
+          id: 'flit_heavy',
+          type: 'FLIT',
+          name: 'FLIT - Fourgon Lourd d’Intervention Technique',
+          shortName: 'FLIT Fourgon Lourd (> 3.5t)',
+          category: 'Technique & Soutien',
+          missionFilter: ['logistique', 'usar'],
+          desc: 'Poids lourd d’intervention technique pour montage rapide de Poste Médical Avancé (PMA), groupes électrogènes et mâts d’éclairage. Conducteur Permis C obligatoire.',
+          cost: 26000,
+          capacity: 3,
+          licenseRequired: 'C',
+          licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
+          speedKmH: 70,
+          hasTowHitch: true,
+          image: 'images/vehicles/FLIT.png',
+          specialty: 'Postes Médicaux Avancés & Crises'
+        },
+        {
+          id: 'pcm_heavy',
+          type: 'PCM',
+          name: 'PCM - Poste de Commandement Mobile',
+          shortName: 'Poste de Commandement Mobile (> 3.5t)',
+          category: 'Commandement Lourd',
+          missionFilter: ['liaison'],
+          desc: 'Centre opérationnel mobile de crise avec baie de transmissions VHF/UHF, liaisons satellites et salle de crise embarquée. Conducteur Permis C obligatoire.',
+          cost: 45000,
+          capacity: 3,
+          licenseRequired: 'C',
+          licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
+          speedKmH: 65,
+          hasTowHitch: false,
+          image: 'images/vehicles/PCM.png',
+          specialty: 'Coordination Grands Événements & NOVI'
+        }
+      ]
+    },
+    {
+      id: 'specialities_fleet',
+      name: 'Vecteurs Mobiles, Nautique & Spécialités',
+      brand: 'Équipements Spécifiques',
+      desc: 'Moyens nautiques, deux-roues et remorques pour interventions spécialisées.',
+      icon: '🚤',
+      defaultVariantId: 'ers_boat',
+      variants: [
+        {
+          id: 'ers_boat',
+          type: 'ERS',
+          name: 'ERS - Embarcation de Reconnaissance et de Sauvetage',
+          shortName: 'Bateau ERS + Remorque',
+          category: 'Sauvetage Aquatique (SSA)',
+          missionFilter: ['nautique'],
+          desc: 'Bateau pneumatique rigide (4 places) avec remorque routière fournie. Se tracte avec un véhicule à attelage. Qualifications : SSA & Permis Bateau.',
+          cost: 13500,
+          capacity: 4,
+          requiresTrailer: true,
+          hasTrailerIncluded: true,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis Bateau & SSA (Tracté en Permis B)',
+          reqSkills: ['ssa', 'permis_bateau'],
+          image: 'images/vehicles/ERS.png',
+          speedKmH: 45,
+          specialty: 'Sauvetage Aquatique'
+        },
+        {
+          id: 'mps_moto',
+          type: 'MPS',
+          name: 'MPS - Moto de Premiers Secours',
+          shortName: 'Moto MPS 2 places',
+          category: 'Vecteur Rapide',
+          missionFilter: ['secours', 'tout_terrain'],
+          desc: 'Moto de premiers secours d’urgence pour circulation rapide en trafic dense. Permis Moto requis.',
+          cost: 8500,
+          capacity: 2,
+          licenseRequired: 'Moto',
+          licenseLabel: 'Permis Moto Requis 🏍️',
+          image: 'images/vehicles/Moto.png',
+          speedKmH: 110,
+          specialty: 'Intervention Express Trafic Dense'
+        },
+        {
+          id: 'quad_interv',
+          type: 'QUAD',
+          name: 'Quad Tout-Terrain d’Intervention',
+          shortName: 'Quad Tout-Terrain + Remorque',
+          category: 'Tout-Terrain Agile',
+          missionFilter: ['tout_terrain'],
+          desc: 'Quad d’intervention pour sentiers étroits avec remorque de transport fournie.',
+          cost: 7200,
+          capacity: 2,
+          requiresTrailer: true,
+          hasTrailerIncluded: true,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B',
+          image: 'images/vehicles/QUAD.png',
+          speedKmH: 50,
+          specialty: 'Évacuation Hors Pistes'
+        },
+        {
+          id: 'velo_patrouille',
+          type: 'VELO',
+          name: 'Binôme Vélo / VTT Premiers Secours',
+          shortName: 'Binôme VTT d’Urgence',
+          category: 'Dispositif Mobile',
+          missionFilter: ['secours', 'tout_terrain'],
+          desc: 'Vélos équipés de sacoches de secours et DAE pour patrouilles douces sur berges et parcs.',
+          cost: 2500,
+          capacity: 2,
+          licenseRequired: 'None',
+          licenseLabel: 'Aucun Permis Requis 🚲',
+          image: 'images/vehicles/VELO.png',
+          speedKmH: 25,
+          specialty: 'Patrouilles & Parcs'
+        },
+        {
+          id: 'vahu_social',
+          type: 'VAHU',
+          name: 'VAHU - Véhicule d’Accueil & Hébergement d’Urgence',
+          shortName: 'Fourgon VAHU Social',
+          category: 'Action Sociale & Accueil',
+          missionFilter: ['social'],
+          desc: 'Aménagé pour maraudes, collations chaudes, distribution de couvertures et écoute sociale.',
+          cost: 16000,
+          capacity: 3,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B',
+          image: 'images/vehicles/VAHU.png',
+          speedKmH: 70,
+          specialty: 'Maraudes & Accueil d’Urgence'
+        },
+        {
+          id: 'vcyn_chien',
+          type: 'VCYN',
+          name: 'VCYN - Véhicule Cynotechnique USAR',
+          shortName: 'Fourgon VCYN Maître-Chien',
+          category: 'USAR / Cyno',
+          missionFilter: ['usar'],
+          desc: 'Fourgon cynotechnique USAR avec 2 boxes canins intégrés pour chiens de sauvetage en décombres.',
+          cost: 22500,
+          capacity: 3,
+          extraCapacityLabel: '+ 2 places chiens (box USAR)',
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B',
+          image: 'images/vehicles/VCYN.png',
+          speedKmH: 80,
+          specialty: 'Recherche & Sauvetage Cyno'
+        },
+        {
+          id: 'rem_eclairage',
+          type: 'REM',
+          name: 'Remorque Lot PMA & Éclairage',
+          shortName: 'Remorque PMA & Mât Éclairage',
+          category: 'Remorque Spécialisée',
+          missionFilter: ['logistique', 'tout_terrain'],
+          desc: 'Remorque équipée d’un groupe électrogène haute puissance, tente gonflable et mâts d’éclairage nocturne.',
+          cost: 4900,
+          capacity: 0,
+          requiresTrailer: true,
+          hasTrailerIncluded: true,
+          licenseRequired: 'B',
+          licenseLabel: 'Permis B (Tractée avec attelage)',
+          image: 'images/vehicles/REM.png',
+          speedKmH: 70,
+          specialty: 'Éclairage & PMA Mobile'
+        }
+      ]
+    }
+  ],
+
+  // --- CATALOGUE DES VÉHICULES GÉNÉRAL (POUR COMPATIBILITÉ ET PARTIE 2 PAR TYPE) ---
   vehicleCatalog: [
     {
       type: 'VPSP',
@@ -18,7 +428,9 @@ window.ProtecAdvanced = {
       desc: 'Cellule sanitaire grand volume (brancard, O2, DAE, matériel pédiatrique & d’urgence) aux normes EN 1789.',
       cost: 28500,
       capacity: 5,
-      image: 'images/vehicles/VPSP.png',
+      licenseRequired: 'B',
+      licenseLabel: 'Permis B (+ P.VPSP)',
+      image: 'images/vehicles/master3_vpsp.png',
       icon: '🚑',
       speedKmH: 85,
       specialty: 'Transport Sanitaire & SAMU 15'
@@ -32,6 +444,8 @@ window.ProtecAdvanced = {
       cost: 11500,
       capacity: 4,
       hasTowHitch: true,
+      licenseRequired: 'B',
+      licenseLabel: 'Permis B',
       image: 'images/vehicles/VL.png',
       icon: '🚗',
       speedKmH: 100,
@@ -46,6 +460,8 @@ window.ProtecAdvanced = {
       cost: 19500,
       capacity: 4,
       hasTowHitch: true,
+      licenseRequired: 'B',
+      licenseLabel: 'Permis B',
       image: 'images/vehicles/VLHR.png',
       icon: '🚙',
       speedKmH: 90,
@@ -60,7 +476,9 @@ window.ProtecAdvanced = {
       cost: 17500,
       capacity: 3,
       hasTowHitch: true,
-      image: 'images/vehicles/VTU.png',
+      licenseRequired: 'B',
+      licenseLabel: 'Permis B',
+      image: 'images/vehicles/master3_vtu_log.png',
       icon: '🚐',
       speedKmH: 75,
       specialty: 'Logistique & Ravitaillement'
@@ -73,7 +491,9 @@ window.ProtecAdvanced = {
       desc: 'Minibus 9 places pour l’acheminement des équipiers et relèves de secours sur les grands dispositifs ou renforts distants.',
       cost: 21000,
       capacity: 9,
-      image: 'images/vehicles/VTP.png',
+      licenseRequired: 'B',
+      licenseLabel: 'Permis B',
+      image: 'images/vehicles/master3_vtp.png',
       icon: '🚌',
       speedKmH: 85,
       specialty: 'Acheminement de Renforts'
@@ -83,9 +503,11 @@ window.ProtecAdvanced = {
       name: 'Poste de Commandement Mobile (PCM)',
       category: 'Commandement Lourd',
       missionFilter: ['liaison'],
-      desc: 'Centre opérationnel mobile avec baie informatique, transmission radio VHF/UHF, satellite et espace de coordination de crise.',
+      desc: 'Centre opérationnel mobile avec baie informatique, transmission radio VHF/UHF, satellite et espace de coordination de crise. Poids Lourd > 3.5t.',
       cost: 45000,
       capacity: 3,
+      licenseRequired: 'C',
+      licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
       image: 'images/vehicles/PCM.png',
       icon: '🚍',
       speedKmH: 65,
@@ -99,6 +521,8 @@ window.ProtecAdvanced = {
       desc: 'Aménagé pour l’accueil des impliqués, maraudes sociales hivernales, distribution de repas chauds, kits d’hygiène et écoute sociale.',
       cost: 16000,
       capacity: 3,
+      licenseRequired: 'B',
+      licenseLabel: 'Permis B',
       image: 'images/vehicles/VAHU.png',
       icon: '☕',
       speedKmH: 70,
@@ -109,9 +533,11 @@ window.ProtecAdvanced = {
       name: 'FLIT - Fourgon Lourd d\'Intervention Technique',
       category: 'Technique & Soutien',
       missionFilter: ['logistique', 'usar'],
-      desc: 'Fourgon lourd équipé pour le montage rapide de Poste Médical Avancé (PMA), groupes électrogènes, mâts d’éclairage et pompes d’épuisement.',
+      desc: 'Fourgon lourd équipé pour le montage rapide de Poste Médical Avancé (PMA), groupes électrogènes, mâts d’éclairage et pompes d’épuisement. Poids Lourd > 3.5t.',
       cost: 26000,
       capacity: 3,
+      licenseRequired: 'C',
+      licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
       image: 'images/vehicles/FLIT.png',
       icon: '🏗️',
       speedKmH: 70,
@@ -126,6 +552,8 @@ window.ProtecAdvanced = {
       cost: 22500,
       capacity: 3,
       extraCapacityLabel: '+ 2 places chiens (box USAR)',
+      licenseRequired: 'B',
+      licenseLabel: 'Permis B',
       image: 'images/vehicles/VCYN.png',
       icon: '🐕',
       speedKmH: 80,
@@ -136,11 +564,13 @@ window.ProtecAdvanced = {
       name: 'ERS - Embarcation de Reconnaissance et de Sauvetage',
       category: 'Sauvetage Aquatique (SSA)',
       missionFilter: ['nautique'],
-      desc: 'Bateau de reconnaissance et sauvetage (4 places). Remorque routière fournie à l’achat. Nécessite un véhicule tracteur avec attelage (VL, VTU...) pour le transport en mission. Qualifications : SSA & Conduite Bateau.',
+      desc: 'Bateau de reconnaissance et sauvetage (4 places). Remorque routière fournie à l’achat. Qualifications : SSA & Conduite Bateau.',
       cost: 13500,
       capacity: 4,
       requiresTrailer: true,
       hasTrailerIncluded: true,
+      licenseRequired: 'B',
+      licenseLabel: 'Permis Bateau & SSA (Tracté Permis B)',
       reqSkills: ['ssa', 'permis_bateau'],
       image: 'images/vehicles/ERS.png',
       icon: '🚤',
@@ -152,9 +582,11 @@ window.ProtecAdvanced = {
       name: 'MPS - Moto de Premiers Secours',
       category: 'Vecteur Rapide',
       missionFilter: ['secours', 'tout_terrain'],
-      desc: 'Moto de premiers secours (2 places) pour fendre les embouteillages urbains et assurer un premier bilan médical en temps record.',
+      desc: 'Moto de premiers secours (2 places) pour trafic dense et premier bilan médical en temps record.',
       cost: 8500,
       capacity: 2,
+      licenseRequired: 'Moto',
+      licenseLabel: 'Permis Moto Requis 🏍️',
       image: 'images/vehicles/Moto.png',
       icon: '🏍️',
       speedKmH: 110,
@@ -165,11 +597,13 @@ window.ProtecAdvanced = {
       name: 'Quad Tout-Terrain d’Intervention',
       category: 'Tout-Terrain Agile',
       missionFilter: ['tout_terrain'],
-      desc: 'Quad tout-terrain d’intervention (2 places) pour sentiers étroits et parcs. Remorque routière fournie à l’achat. Nécessite un véhicule tracteur avec attelage (VL, VTU...) pour le transport en mission.',
+      desc: 'Quad tout-terrain d’intervention (2 places) pour sentiers étroits. Remorque routière fournie à l’achat.',
       cost: 7200,
       capacity: 2,
       requiresTrailer: true,
       hasTrailerIncluded: true,
+      licenseRequired: 'B',
+      licenseLabel: 'Permis B',
       image: 'images/vehicles/QUAD.png',
       icon: '🚜',
       speedKmH: 50,
@@ -180,9 +614,11 @@ window.ProtecAdvanced = {
       name: 'Véhicule Technique Déblaiement (USAR)',
       category: 'Sauvetage Déblaiement (USAR)',
       missionFilter: ['usar'],
-      desc: 'Véhicule d’appui USAR transportant l’outillage lourd de déblaiement, étaiement et matériel de recherche sous décombres lors d’effondrements ou catastrophes.',
+      desc: 'Véhicule d’appui USAR transportant l’outillage lourd de déblaiement, étaiement et recherche sous décombres.',
       cost: 14000,
       capacity: 3,
+      licenseRequired: 'B',
+      licenseLabel: 'Permis B',
       image: 'images/vehicles/VTD.png',
       icon: '⛏️',
       speedKmH: 85,
@@ -196,6 +632,8 @@ window.ProtecAdvanced = {
       desc: 'Vélos équipés de sacoches d’urgence et DAE pour patrouilles mobiles sur courses à pied et berges.',
       cost: 2500,
       capacity: 2,
+      licenseRequired: 'None',
+      licenseLabel: 'Sans Permis 🚲',
       image: 'images/vehicles/VELO.png',
       icon: '🚲',
       speedKmH: 25,
@@ -209,6 +647,8 @@ window.ProtecAdvanced = {
       desc: 'Logistique électrique de pointe, compresseur et assistance mécanique pour opérations de longue durée.',
       cost: 19000,
       capacity: 2,
+      licenseRequired: 'B',
+      licenseLabel: 'Permis B',
       image: 'images/vehicles/VST.png',
       icon: '⚡',
       speedKmH: 70,
@@ -224,6 +664,8 @@ window.ProtecAdvanced = {
       capacity: 0,
       requiresTrailer: true,
       hasTrailerIncluded: true,
+      licenseRequired: 'B',
+      licenseLabel: 'Permis B (Tractée avec attelage)',
       image: 'images/vehicles/REM.png',
       icon: '📦',
       speedKmH: 70,
@@ -263,7 +705,8 @@ window.ProtecAdvanced = {
   skillsList: [
     // Conduite & Permis opérationnels
     { id: 'permis_vpsp', name: 'Conducteur VPSP (Permis VPSP)', icon: '🚑', xpRequired: 30, desc: 'Habilitation interne obligatoire autorisant la conduite du VPSP lors d’une prise en charge ou transport de victime.' },
-    { id: 'permis_b', name: 'Permis B (Véhicules Légers)', icon: '🚗', xpRequired: 15, desc: 'Autorise la conduite des véhicules légers (VL, VTU, VTP) et VPSP hors prise en charge de victime.' },
+    { id: 'permis_b', name: 'Permis B (Véhicules Légers)', icon: '🚗', xpRequired: 15, desc: 'Autorise la conduite des véhicules légers (VL, VTU, VTP, VAHU) et VPSP hors prise en charge de victime.' },
+    { id: 'permis_c', name: 'Permis C (Poids Lourd > 3.5t)', icon: '🚚', xpRequired: 35, desc: 'Permis Poids Lourd obligatoire pour la conduite du FLIT, VALOG et gros porteurs d’intervention.' },
     { id: 'radio', name: 'Opérateur Radio & PC', icon: '📻', xpRequired: 20, desc: 'Maîtrise parfaite des procédures SAMU 15 et transmissions CODIS.' },
 
     // Rôles & Compétences Opérationnelles
@@ -681,13 +1124,13 @@ window.ProtecAdvanced = {
     game.openModule('base');
   },
 
-  // 4. Commande d'un nouveau véhicule spécialisé
-  buySpecializedVehicle(game, stationId, vehicleType) {
-    const cat = this.vehicleCatalog.find(v => v.type === vehicleType);
-    if (!cat) return;
+  // 4. Commande d'un nouveau véhicule spécialisé avec configuration / variante
+  buySpecializedVehicle(game, stationId, vehicleType, variantOptions = null) {
+    const cat = this.vehicleCatalog.find(v => v.type === vehicleType) || {};
+    const finalCost = (variantOptions && variantOptions.cost !== undefined) ? variantOptions.cost : (cat.cost || 20000);
 
-    if (game.resources.money < cat.cost) {
-      game.showToast('Fonds insuffisants', `L’acquisition du véhicule requiert ${cat.cost} €.`, 'orange');
+    if (game.resources.money < finalCost) {
+      game.showToast('Fonds insuffisants', `L’acquisition du véhicule requiert ${finalCost.toLocaleString('fr-FR')} €.`, 'orange');
       return;
     }
 
@@ -702,34 +1145,37 @@ window.ProtecAdvanced = {
       return;
     }
 
-    game.resources.money -= cat.cost;
-    const vehId = `${cat.type.toLowerCase()}-${Date.now()}`;
-    const callsign = typeof game.generateVehicleCallsign === 'function' ? game.generateVehicleCallsign(cat.type, station.id, station) : `${cat.type} 0${station.vehicles.length + 1} ${(station.city || 'ANTENNE').toUpperCase()}`;
+    game.resources.money -= finalCost;
+    const vehId = `${(vehicleType || 'vpsp').toLowerCase()}-${Date.now()}`;
+    const callsign = typeof game.generateVehicleCallsign === 'function' ? game.generateVehicleCallsign(vehicleType, station.id, station) : `${vehicleType} 0${station.vehicles.length + 1} ${(station.city || 'ANTENNE').toUpperCase()}`;
     
     const newVeh = {
       id: vehId,
       name: callsign,
-      type: cat.type,
-      label: cat.name,
-      model: `${cat.name} (Neuf)`,
+      type: vehicleType,
+      label: variantOptions?.name || cat.name || vehicleType,
+      model: variantOptions?.name || variantOptions?.model || `${cat.name || vehicleType} (Neuf)`,
+      variantId: variantOptions?.id || null,
+      serigraphie: variantOptions?.serigraphieLabel || variantOptions?.serigraphieKey || null,
       year: 2024,
       mileage: 8500,
-      capacity: cat.capacity,
-      seatsCount: cat.capacity,
-      extraCapacityLabel: cat.extraCapacityLabel || null,
+      capacity: variantOptions?.capacity || cat.capacity || 4,
+      seatsCount: variantOptions?.capacity || cat.capacity || 4,
+      extraCapacityLabel: variantOptions?.extraCapacityLabel || cat.extraCapacityLabel || null,
+      licenseRequired: variantOptions?.licenseRequired || cat.licenseRequired || (['FLIT', 'VALOG', 'PCM'].includes(vehicleType) ? 'C' : 'B'),
       status: 'dispo',
       fuel: 100,
       mechanical: 100,
       ctStatus: 'valide',
       ctExpiryTimestamp: Date.now() + (365 * 24 * 3600 * 1000),
       insuranceStatus: 'assure',
-      insuranceMonthlyCost: cat.type === 'VPSP' ? 95 : (cat.type === 'VTU' ? 75 : 55),
+      insuranceMonthlyCost: vehicleType === 'VPSP' ? 95 : (vehicleType === 'VTU' ? 75 : 55),
       disinfectionNeeded: false,
       stationId: station.id,
-      specialty: cat.specialty,
-      icon: cat.icon,
-      image: cat.image || `images/vehicles/${cat.type}.png`,
-      hasTowHitch: cat.hasTowHitch || false,
+      specialty: variantOptions?.specialty || cat.specialty || '',
+      icon: cat.icon || '🚐',
+      image: variantOptions?.image || cat.image || `images/vehicles/${vehicleType}.png`,
+      hasTowHitch: variantOptions?.hasTowHitch !== undefined ? variantOptions.hasTowHitch : (cat.hasTowHitch || false),
       requiresTrailer: cat.requiresTrailer || false,
       reqSkills: cat.reqSkills || []
     };
@@ -742,8 +1188,10 @@ window.ProtecAdvanced = {
     game.renderStations();
     game.saveGame();
     game.syncPlayerToServer();
-    game.showToast('Véhicule en Dotation !', `${cat.icon} ${newVeh.name} est stationné au garage de l’antenne !`, 'green');
-    game.openStationDetails(station.id);
+    game.showToast('Véhicule en Dotation !', `${cat.icon || '🚑'} ${newVeh.name} (${newVeh.model}) est stationné au garage de l’antenne !`, 'green');
+    if (typeof game.openStationDetails === 'function') {
+      game.openStationDetails(station.id);
+    }
   },
 
   // 5. Arbre de compétences des bénévoles

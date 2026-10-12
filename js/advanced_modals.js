@@ -206,6 +206,17 @@ window.ProtecAdvancedModals = {
   vehicleFilter: 'all',
   vehicleSort: 'price_asc',
   vehicleSearch: '',
+  shopMode: 'models', // 'models' (Mode 1: Par Porteur & Configuration) ou 'types' (Mode 2: Par Rôle Opérationnel)
+  selectedVariants: {}, // { [chassisId]: variantId }
+  selectedSerigraphies: {}, // { [groupKey]: variantId }
+
+  setVehicleShopMode(mode, stationId) {
+    this.shopMode = mode;
+    if (window.game) {
+      const body = document.getElementById('modal-body');
+      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
+    }
+  },
 
   setVehicleSearch(searchKey, stationId) {
     this.vehicleSearch = searchKey;
@@ -238,54 +249,56 @@ window.ProtecAdvancedModals = {
     }
   },
 
+  selectModelVariant(modelId, variantId, stationId) {
+    if (!this.selectedVariants) this.selectedVariants = {};
+    this.selectedVariants[modelId] = variantId;
+    if (window.game) {
+      const body = document.getElementById('modal-body');
+      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
+    }
+  },
+
+  selectTypeSerigraphie(groupKey, variantId, stationId) {
+    if (!this.selectedSerigraphies) this.selectedSerigraphies = {};
+    this.selectedSerigraphies[groupKey] = variantId;
+    if (window.game) {
+      const body = document.getElementById('modal-body');
+      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
+    }
+  },
+
+  buyConfiguredVariant(stationId, vehicleType, modelId, variantId) {
+    const chassisModels = window.ProtecAdvanced?.chassisModels || [];
+    let foundVariant = null;
+
+    for (const m of chassisModels) {
+      const v = (m.variants || []).find(varItem => varItem.id === variantId);
+      if (v) {
+        foundVariant = v;
+        break;
+      }
+    }
+
+    if (!foundVariant) {
+      // Fallback catalogue classique
+      foundVariant = (window.ProtecAdvanced?.vehicleCatalog || []).find(v => v.type === vehicleType);
+    }
+
+    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.buySpecializedVehicle === 'function') {
+      window.ProtecAdvanced.buySpecializedVehicle(window.game, stationId, vehicleType, foundVariant);
+    }
+  },
+
   renderVehicleShop(game, stationId) {
     const st = game.stations.find(s => s.id === stationId) || game.stations[0];
     const garageLevel = st?.rooms?.garage || 1;
     const maxSlots = garageLevel === 1 ? 2 : (garageLevel === 2 ? 4 : 8);
     const usedSlots = st?.vehicles?.length || 0;
 
+    const currentShopMode = this.shopMode || 'models';
     const activeFilter = this.vehicleFilter || 'all';
     const activeSort = this.vehicleSort || 'price_asc';
     const activeSearch = (this.vehicleSearch || '').toLowerCase().trim();
-
-    let list = [...(window.ProtecAdvanced.vehicleCatalog || [])];
-
-    // 0. Recherche textuelle par nom, type, spécialité, catégorie ou description
-    if (activeSearch) {
-      list = list.filter(v => {
-        const name = (v.name || '').toLowerCase();
-        const type = (v.type || '').toLowerCase();
-        const spec = (v.specialty || '').toLowerCase();
-        const cat = (v.category || '').toLowerCase();
-        const desc = (v.desc || '').toLowerCase();
-        return name.includes(activeSearch) || type.includes(activeSearch) || spec.includes(activeSearch) || cat.includes(activeSearch) || desc.includes(activeSearch);
-      });
-    }
-
-    // 1. Filtrage par type de mission / véhicule
-    if (activeFilter !== 'all') {
-      list = list.filter(v => v.missionFilter && v.missionFilter.includes(activeFilter));
-    }
-
-    // 2. Tri par prix ou critère
-    if (activeSort === 'price_asc') {
-      list.sort((a, b) => a.cost - b.cost);
-    } else if (activeSort === 'price_desc') {
-      list.sort((a, b) => b.cost - a.cost);
-    } else if (activeSort === 'name_asc') {
-      list.sort((a, b) => a.name.localeCompare(b.name));
-    }
-
-    const filterOptions = [
-      { id: 'all', label: 'Tout le Catalogue', icon: '🏪' },
-      { id: 'secours', label: 'Secours & Sanitaire (VPSP, MPS)', icon: '🚑' },
-      { id: 'liaison', label: 'Reconnaissance & Commandement (VL, PCM)', icon: '🚗' },
-      { id: 'logistique', label: 'Logistique & Transport (VTU, VTP)', icon: '🚐' },
-      { id: 'social', label: 'Social & Accueil (VAHU)', icon: '☕' },
-      { id: 'usar', label: 'Spécialités USAR & Cyno', icon: '⛏️' },
-      { id: 'nautique', label: 'Nautique (ERS Bateau)', icon: '🚤' },
-      { id: 'tout_terrain', label: 'Tout-Terrain & Remorques', icon: '🚜' }
-    ];
 
     return `
       <div class="space-y-4">
@@ -314,6 +327,43 @@ window.ProtecAdvancedModals = {
           </button>
         </div>
 
+        <!-- ══════════════════════════════════════════════════════════ -->
+        <!-- SÉLECTEUR DES DEUX MODES DE RECHERCHE / CONFIGURATION    -->
+        <!-- ══════════════════════════════════════════════════════════ -->
+        <div class="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-slate-100 border border-slate-200 shadow-inner">
+          <button 
+            type="button" 
+            onclick="window.ProtecAdvancedModals.setVehicleShopMode('models', '${st?.id}')" 
+            class="py-2.5 px-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
+              currentShopMode === 'models' 
+                ? 'bg-white text-pc-blue shadow-md ring-2 ring-pc-blue/30 scale-[1.01]' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+            }"
+          >
+            <span class="text-base">🚗</span>
+            <div class="text-left">
+              <span class="block leading-none">Mode 1 : Par Modèle & Configuration</span>
+              <span class="text-[10px] font-semibold text-slate-500 block mt-0.5">Master 3, Trafic, Ducato • Choix aménagement & cube</span>
+            </div>
+          </button>
+
+          <button 
+            type="button" 
+            onclick="window.ProtecAdvancedModals.setVehicleShopMode('types', '${st?.id}')" 
+            class="py-2.5 px-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
+              currentShopMode === 'types' 
+                ? 'bg-white text-pc-blue shadow-md ring-2 ring-pc-blue/30 scale-[1.01]' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+            }"
+          >
+            <span class="text-base">🚑</span>
+            <div class="text-left">
+              <span class="block leading-none">Mode 2 : Par Type Opérationnel</span>
+              <span class="text-[10px] font-semibold text-slate-500 block mt-0.5">VPSP, VTU, VTP, VL, Poids Lourds • Sérigraphies regroupées</span>
+            </div>
+          </button>
+        </div>
+
         <!-- Barre de Recherche Véhicules -->
         <div class="relative">
           <input 
@@ -321,7 +371,7 @@ window.ProtecAdvancedModals = {
             id="vehicle-search-input"
             value="${this.vehicleSearch || ''}" 
             oninput="window.ProtecAdvancedModals.setVehicleSearch(this.value, '${st?.id}')" 
-            placeholder="🔍 Rechercher un véhicule (ex: VPSP, VTU, VL, Master, Bateau, Quad, Équipage...)" 
+            placeholder="🔍 Rechercher un véhicule (ex: Master 3, Cube, VPSP, VTU, Trafic, Poids Lourd, Permis C...)" 
             class="w-full pl-4 pr-10 py-2.5 rounded-2xl bg-white border border-slate-300 shadow-sm font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
           />
           ${this.vehicleSearch ? `
@@ -329,9 +379,530 @@ window.ProtecAdvancedModals = {
           ` : ''}
         </div>
 
-        <!-- Barre de Filtres par Type de Mission & Tri par Prix -->
+        ${currentShopMode === 'models' 
+          ? this.renderModeByModels(game, st, activeSearch, activeSort) 
+          : this.renderModeByTypes(game, st, activeSearch, activeFilter, activeSort)
+        }
+      </div>
+    `;
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDU DU MODE 1 : PAR MODÈLE / CHÂSSIS & CONFIGURATION D'AMÉNAGEMENT
+  // ══════════════════════════════════════════════════════════════════════════
+  renderModeByModels(game, st, activeSearch, activeSort) {
+    const chassisList = [...(window.ProtecAdvanced.chassisModels || [])];
+    
+    // Filtrage recherche
+    let filteredChassis = chassisList.filter(model => {
+      if (!activeSearch) return true;
+      const mName = (model.name || '').toLowerCase();
+      const mBrand = (model.brand || '').toLowerCase();
+      const mDesc = (model.desc || '').toLowerCase();
+      const variantsMatch = (model.variants || []).some(v => 
+        (v.name || '').toLowerCase().includes(activeSearch) ||
+        (v.type || '').toLowerCase().includes(activeSearch) ||
+        (v.shortName || '').toLowerCase().includes(activeSearch) ||
+        (v.desc || '').toLowerCase().includes(activeSearch)
+      );
+      return mName.includes(activeSearch) || mBrand.includes(activeSearch) || mDesc.includes(activeSearch) || variantsMatch;
+    });
+
+    if (filteredChassis.length === 0) {
+      return `
+        <div class="p-8 text-center glass-card rounded-2xl text-slate-500">
+          <p class="font-bold text-sm">Aucun modèle trouvé pour la recherche « ${activeSearch} ».</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="space-y-4">
+        <div class="flex items-center justify-between text-[11px] font-bold text-slate-500 px-1">
+          <span>Sélectionnez un porteur puis choisissez l’aménagement et la livrée souhaitée :</span>
+          <span>${filteredChassis.length} porteur(s) disponible(s)</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          ${filteredChassis.map(model => {
+            const variants = model.variants || [];
+            const selectedVarId = this.selectedVariants?.[model.id] || model.defaultVariantId || variants[0]?.id;
+            const currentVariant = variants.find(v => v.id === selectedVarId) || variants[0];
+            if (!currentVariant) return '';
+
+            const isHeavyLicense = currentVariant.licenseRequired === 'C';
+            const isMotoLicense = currentVariant.licenseRequired === 'Moto';
+            const isNoLicense = currentVariant.licenseRequired === 'None';
+
+            return `
+              <div class="p-4 rounded-2xl glass-card space-y-3.5 flex flex-col justify-between hover:shadow-xl transition border border-slate-200/80 bg-white/95">
+                <div class="space-y-3">
+                  <!-- En-tête modèle & marque -->
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-lg">${model.icon || '🚐'}</span>
+                        <h4 class="font-black text-slate-900 text-sm">${model.name}</h4>
+                      </div>
+                      <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">${model.brand}</span>
+                    </div>
+
+                    <!-- Prix dynamique selon la configuration active -->
+                    <div class="text-right">
+                      <span class="font-mono font-black text-base text-slate-900 block">${currentVariant.cost.toLocaleString('fr-FR')} €</span>
+                      <span class="text-[9.5px] font-bold text-slate-400">TTC • Neuf d'usine</span>
+                    </div>
+                  </div>
+
+                  <!-- Image dynamique en temps réel selon la variante -->
+                  <div class="h-44 w-full flex items-center justify-center p-3 bg-gradient-to-b from-slate-50 to-slate-100/70 rounded-2xl border border-slate-100 overflow-hidden shadow-inner group relative">
+                    <img 
+                      src="${currentVariant.image || `images/vehicles/${currentVariant.type}.png`}" 
+                      alt="${currentVariant.name}" 
+                      class="max-h-full max-w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-200" 
+                      onerror="this.outerHTML='<span class=\\'text-5xl\\'>${model.icon || '🚐'}</span>'" 
+                    />
+
+                    <!-- Badge Type Opérationnel en haut à gauche -->
+                    <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                      <span class="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-pc-blue text-white shadow-xs">
+                        ${currentVariant.type}
+                      </span>
+                      <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white/90 text-slate-700 backdrop-blur-xs border border-slate-200/70">
+                        ${currentVariant.category}
+                      </span>
+                    </div>
+
+                    <!-- Badge Permis Requis en bas à droite -->
+                    <div class="absolute bottom-2.5 right-2.5">
+                      <span class="px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wide border shadow-xs ${
+                        isHeavyLicense 
+                          ? 'bg-amber-500 text-white border-amber-600 animate-pulse' 
+                          : (isMotoLicense 
+                              ? 'bg-sky-500 text-white border-sky-600' 
+                              : (isNoLicense 
+                                  ? 'bg-slate-200 text-slate-700 border-slate-300' 
+                                  : 'bg-emerald-600 text-white border-emerald-700'))
+                      }">
+                        ${currentVariant.licenseLabel || `Permis ${currentVariant.licenseRequired}`}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Sélecteur d'Aménagement / Configuration spécifique à ce châssis -->
+                  <div>
+                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1.5">
+                      ⚙️ Choisissez la configuration / aménagement (${variants.length} au choix) :
+                    </span>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      ${variants.map(v => {
+                        const isSelected = v.id === currentVariant.id;
+                        return `
+                          <button 
+                            type="button" 
+                            onclick="window.ProtecAdvancedModals.selectModelVariant('${model.id}', '${v.id}', '${st?.id}')" 
+                            class="px-2.5 py-2 rounded-xl text-left transition border cursor-pointer ${
+                              isSelected 
+                                ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black ring-1 ring-pc-blue/40 shadow-xs' 
+                                : 'bg-slate-50 hover:bg-slate-100 border-slate-200/90 text-slate-700 font-bold'
+                            }"
+                          >
+                            <div class="flex items-center justify-between text-xs leading-tight">
+                              <span class="truncate">${v.shortName || v.name}</span>
+                              <span class="font-mono text-[11px] shrink-0 font-black ${isSelected ? 'text-pc-blue' : 'text-slate-500'} ml-1">
+                                ${(v.cost / 1000).toFixed(1)} k€
+                              </span>
+                            </div>
+                            <span class="text-[9.5px] block font-semibold ${isSelected ? 'text-pc-blue/80' : 'text-slate-400'} mt-0.5">
+                              ${v.type} • ${v.capacity} pl.
+                            </span>
+                          </button>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
+
+                  <!-- Description & Spécificités de la variante configurée -->
+                  <div class="space-y-1">
+                    <h5 class="text-xs font-black text-slate-900">${currentVariant.name}</h5>
+                    <p class="text-[11px] text-slate-600 leading-relaxed">${currentVariant.desc}</p>
+                  </div>
+
+                  <!-- Fiche Technique Rapide -->
+                  <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[10.5px] font-bold text-slate-700 grid grid-cols-2 gap-2">
+                    <div>
+                      Capacité : <strong class="text-slate-900">${currentVariant.capacity} place${currentVariant.capacity > 1 ? 's' : ''}</strong>
+                    </div>
+                    <div>
+                      Vitesse max : <strong class="text-slate-900">${currentVariant.speedKmH} km/h</strong>
+                    </div>
+                    <div>
+                      Attelage : <strong class="${currentVariant.hasTowHitch ? 'text-emerald-700' : 'text-slate-400'}">${currentVariant.hasTowHitch ? '✓ Présent' : 'Non équipé'}</strong>
+                    </div>
+                    <div>
+                      Spécialité : <strong class="text-pc-blue">${currentVariant.specialty || 'Polyvalent'}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Bouton d'achat de la configuration choisie -->
+                <button 
+                  type="button" 
+                  onclick="window.ProtecAdvancedModals.buyConfiguredVariant('${st?.id}', '${currentVariant.type}', '${model.id}', '${currentVariant.id}')" 
+                  class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer mt-2"
+                >
+                  <span>Commander cette Configuration (${currentVariant.cost.toLocaleString('fr-FR')} €)</span>
+                  <span>➜</span>
+                </button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDU DU MODE 2 : PAR RÔLE & TYPE OPÉRATIONNEL (AVEC SÉRIGRAPHIES REGROUPÉES)
+  // ══════════════════════════════════════════════════════════════════════════
+  renderModeByTypes(game, st, activeSearch, activeFilter, activeSort) {
+    const filterOptions = [
+      { id: 'all', label: 'Tous les Types', icon: '🏪' },
+      { id: 'secours', label: 'VPSP & Urgence (Ambulances)', icon: '🚑' },
+      { id: 'logistique', label: 'VTU & Logistique (Tôlés)', icon: '🚐' },
+      { id: 'transport', label: 'VTP & Minibus (9 places)', icon: '🚌' },
+      { id: 'liaison', label: 'VL & VLHR (Liaison & 4x4)', icon: '🚗' },
+      { id: 'heavy', label: 'Poids Lourds (Permis C)', icon: '🚚' },
+      { id: 'specialites', label: 'Spécialités (Bateau, USAR, Quad, Moto)', icon: '🚤' }
+    ];
+
+    // Construction d'une liste de cartes opérationnelles enrichies
+    // Regroupement particulier pour le VTU Master 3 (Logistique vs Soutien aux populations)
+    const operationalCards = [
+      // 1. VPSP Renault Master 3 Profilé
+      {
+        id: 'type_vpsp_master3',
+        type: 'VPSP',
+        title: 'VPSP - Ambulance Profilée Standard (Master III)',
+        category: 'Secours d’Urgence',
+        roleGroup: 'secours',
+        desc: 'Cellule sanitaire profilée d’intervention d’urgence aux normes EN 1789, brancard 3 points et dotation SUAP.',
+        cost: 28500,
+        capacity: 5,
+        speedKmH: 85,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B (+ P.VPSP)',
+        hasTowHitch: false,
+        image: 'images/vehicles/master3_vpsp.png',
+        icon: '🚑',
+        specialty: 'SAMU 15 & Urgences Réflexes',
+        variantOptions: {
+          id: 'master3_vpsp',
+          name: 'Renault Master III - VPSP Cellule Standard Profilée',
+          model: 'Renault Master III VPSP Profilé',
+          cost: 28500,
+          capacity: 5,
+          licenseRequired: 'B',
+          image: 'images/vehicles/master3_vpsp.png'
+        }
+      },
+      // 2. VPSP Renault Master 3 Cube
+      {
+        id: 'type_vpsp_cube_master3',
+        type: 'VPSP',
+        title: 'VPSP - Grande Cellule Carrée Cube (Master III)',
+        category: 'Secours d’Urgence',
+        roleGroup: 'secours',
+        desc: 'Cellule cubique sanitaire XXL grand volume. Espace d’intervention maximal idéal pour réanimation et soins intensifs.',
+        cost: 32000,
+        capacity: 5,
+        speedKmH: 80,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B (+ P.VPSP)',
+        hasTowHitch: false,
+        image: 'images/vehicles/master3_vpsp_cube.png',
+        icon: '🚑',
+        specialty: 'Soins Intensifs & Volume XXL',
+        variantOptions: {
+          id: 'master3_vpsp_cube',
+          name: 'Renault Master III - VPSP Grande Cellule Cube Sanitaire',
+          model: 'Renault Master III VPSP Cube',
+          cost: 32000,
+          capacity: 5,
+          licenseRequired: 'B',
+          image: 'images/vehicles/master3_vpsp_cube.png'
+        }
+      },
+      // 3. VTU Renault Master 3 avec Sélecteur de Sérigraphie Intégré (CONFORME DEMANDE)
+      {
+        id: 'type_vtu_master3_grouped',
+        type: 'VTU',
+        title: 'VTU - Fourgon Tout Usage (Renault Master III)',
+        category: 'Logistique & Événementiel',
+        roleGroup: 'logistique',
+        hasSerigraphieSelector: true,
+        groupKey: 'vtu_master3_serigraphie',
+        serigraphies: [
+          {
+            key: 'logistique',
+            label: '🔵 Logistique Opérationnelle',
+            subTitle: 'VTU Fourgon Logistique Opérationnelle',
+            desc: 'Fourgon tôlé utilitaire grand volume pour transport de tentes, lits de camp, barnums et matériel de poste de secours. Crochet d’attelage inclus.',
+            image: 'images/vehicles/master3_vtu_log.png',
+            specialty: 'Matériel PMA & Tentes'
+          },
+          {
+            key: 'soutien_pop',
+            label: '🟠 Soutien aux Populations',
+            subTitle: 'VTU Soutien aux Populations & Sinistrés',
+            desc: 'Sérigraphie officielle Soutien aux Populations pour assistance citoyenne, centres d’accueil d’urgence et distribution de ravitaillement aux sinistrés.',
+            image: 'images/vehicles/master3_vtu_pop.png',
+            specialty: 'Assistance Sinistrés & Crises'
+          }
+        ],
+        cost: 17500,
+        capacity: 3,
+        speedKmH: 75,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        hasTowHitch: true,
+        icon: '🚐'
+      },
+      // 4. VTP Renault Master 3 Minibus 9p
+      {
+        id: 'type_vtp_master3',
+        type: 'VTP',
+        title: 'VTP - Minibus Grand Confort 9 Places (Master III)',
+        category: 'Transport d’Équipes',
+        roleGroup: 'transport',
+        desc: 'Minibus vitré 9 places pour acheminement d’équipages complets et relèves distantes avec crochet d’attelage.',
+        cost: 21000,
+        capacity: 9,
+        speedKmH: 85,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        hasTowHitch: true,
+        image: 'images/vehicles/master3_vtp.png',
+        icon: '🚌',
+        specialty: 'Acheminement de Renforts',
+        variantOptions: {
+          id: 'master3_vtp',
+          name: 'Renault Master III - VTP Transport de Personnel (9 places)',
+          model: 'Renault Master III VTP',
+          cost: 21000,
+          capacity: 9,
+          licenseRequired: 'B',
+          image: 'images/vehicles/master3_vtp.png'
+        }
+      },
+      // 5. VTP Renault Trafic Minibus
+      {
+        id: 'type_vtp_trafic',
+        type: 'VTP',
+        title: 'VTP - Minibus Agile 9 Places (Renault Trafic III)',
+        category: 'Transport d’Équipes',
+        roleGroup: 'transport',
+        desc: 'Minibus compact maniable, parfait pour les relèves rapides d’équipes en milieu urbain dense.',
+        cost: 19500,
+        capacity: 9,
+        speedKmH: 90,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        hasTowHitch: true,
+        image: 'images/vehicles/trafic_vtp.png',
+        icon: '🚌',
+        specialty: 'Relèves Urbaines Rapides',
+        variantOptions: {
+          id: 'trafic3_vtp',
+          name: 'Renault Trafic III - VTP Minibus (9 places)',
+          model: 'Renault Trafic III VTP',
+          cost: 19500,
+          capacity: 9,
+          licenseRequired: 'B',
+          image: 'images/vehicles/trafic_vtp.png'
+        }
+      },
+      // 6. VL Dacia Duster
+      {
+        id: 'type_vl_duster',
+        type: 'VL',
+        title: 'VL - Véhicule de Liaison (Dacia Duster II)',
+        category: 'Reconnaissance Rapide',
+        roleGroup: 'liaison',
+        desc: 'Véhicule léger avec rampe lumineuse, équipement radio et crochet d’attelage pour reconnaissance et commandement.',
+        cost: 11500,
+        capacity: 4,
+        speedKmH: 100,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        hasTowHitch: true,
+        image: 'images/vehicles/VL.png',
+        icon: '🚗',
+        specialty: 'Reconnaissance & Commandement'
+      },
+      // 7. VLHR Toyota Hilux 4x4
+      {
+        id: 'type_vlhr_hilux',
+        type: 'VLHR',
+        title: 'VLHR - Véhicule Léger Hors Route 4x4 (Hilux)',
+        category: 'Tout-Terrain',
+        roleGroup: 'liaison',
+        desc: 'Pick-up 4x4 tout-terrain pour zones accidentées, massifs forestiers, franchissement et remorquage lourd.',
+        cost: 19500,
+        capacity: 4,
+        speedKmH: 90,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        hasTowHitch: true,
+        image: 'images/vehicles/VLHR.png',
+        icon: '🚙',
+        specialty: 'Accès Tout-Terrain & Crues'
+      },
+      // 8. FLIT Poids Lourd (Permis C)
+      {
+        id: 'type_flit_heavy',
+        type: 'FLIT',
+        title: 'FLIT - Fourgon Lourd d’Intervention Technique (> 3.5t)',
+        category: 'Technique & Soutien',
+        roleGroup: 'heavy',
+        desc: 'Fourgon lourd d’intervention technique pour montage rapide de PMA, groupes électrogènes et mâts d’éclairage. Conducteur Permis C obligatoire.',
+        cost: 26000,
+        capacity: 3,
+        speedKmH: 70,
+        licenseRequired: 'C',
+        licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
+        hasTowHitch: true,
+        image: 'images/vehicles/FLIT.png',
+        icon: '🏗️',
+        specialty: 'Postes Médicaux Avancés & Crises'
+      },
+      // 9. PCM Poids Lourd (Permis C)
+      {
+        id: 'type_pcm_heavy',
+        type: 'PCM',
+        title: 'PCM - Poste de Commandement Mobile (> 3.5t)',
+        category: 'Commandement Lourd',
+        roleGroup: 'heavy',
+        desc: 'Centre opérationnel mobile de crise avec baie de transmissions VHF/UHF, satellite et salle de crise. Conducteur Permis C obligatoire.',
+        cost: 45000,
+        capacity: 3,
+        speedKmH: 65,
+        licenseRequired: 'C',
+        licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
+        hasTowHitch: false,
+        image: 'images/vehicles/PCM.png',
+        icon: '🚍',
+        specialty: 'Coordination Grands Événements & NOVI'
+      },
+      // 10. Bateau ERS
+      {
+        id: 'type_ers_boat',
+        type: 'ERS',
+        title: 'ERS - Embarcation de Sauvetage + Remorque',
+        category: 'Sauvetage Aquatique (SSA)',
+        roleGroup: 'specialites',
+        desc: 'Bateau pneumatique rigide (4 places) avec remorque routière fournie. Qualifications : SSA & Conduite Bateau.',
+        cost: 13500,
+        capacity: 4,
+        speedKmH: 45,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis Bateau & SSA (Tracté Permis B)',
+        requiresTrailer: true,
+        image: 'images/vehicles/ERS.png',
+        icon: '🚤',
+        specialty: 'Sauvetage Aquatique'
+      },
+      // 11. Moto MPS
+      {
+        id: 'type_mps_moto',
+        type: 'MPS',
+        title: 'MPS - Moto de Premiers Secours (2 places)',
+        category: 'Vecteur Rapide',
+        roleGroup: 'specialites',
+        desc: 'Moto de premiers secours pour circulation rapide en trafic dense. Permis Moto requis.',
+        cost: 8500,
+        capacity: 2,
+        speedKmH: 110,
+        licenseRequired: 'Moto',
+        licenseLabel: 'Permis Moto Requis 🏍️',
+        image: 'images/vehicles/Moto.png',
+        icon: '🏍️',
+        specialty: 'Intervention Express Trafic Dense'
+      },
+      // 12. Quad Tout-Terrain
+      {
+        id: 'type_quad_interv',
+        type: 'QUAD',
+        title: 'Quad Tout-Terrain d’Intervention + Remorque',
+        category: 'Tout-Terrain Agile',
+        roleGroup: 'specialites',
+        desc: 'Quad tout-terrain pour sentiers étroits avec remorque de transport fournie.',
+        cost: 7200,
+        capacity: 2,
+        speedKmH: 50,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        requiresTrailer: true,
+        image: 'images/vehicles/QUAD.png',
+        icon: '🚜',
+        specialty: 'Évacuation Hors Pistes'
+      },
+      // 13. Binôme Vélo VTT
+      {
+        id: 'type_velo_patrouille',
+        type: 'VELO',
+        title: 'Binôme Vélo / VTT Premiers Secours',
+        category: 'Dispositif Mobile',
+        roleGroup: 'specialites',
+        desc: 'Vélos équipés de sacoches de secours et DAE pour patrouilles douces sur berges et parcs.',
+        cost: 2500,
+        capacity: 2,
+        speedKmH: 25,
+        licenseRequired: 'None',
+        licenseLabel: 'Sans Permis 🚲',
+        image: 'images/vehicles/VELO.png',
+        icon: '🚲',
+        specialty: 'Patrouilles & Parcs'
+      }
+    ];
+
+    // Filtrage par onglet de rôle
+    let filteredCards = operationalCards.filter(c => {
+      if (activeFilter === 'all') return true;
+      if (activeFilter === 'secours') return c.roleGroup === 'secours';
+      if (activeFilter === 'logistique') return c.roleGroup === 'logistique';
+      if (activeFilter === 'transport') return c.roleGroup === 'transport';
+      if (activeFilter === 'liaison') return c.roleGroup === 'liaison';
+      if (activeFilter === 'heavy') return c.roleGroup === 'heavy';
+      if (activeFilter === 'specialites') return c.roleGroup === 'specialites';
+      return true;
+    });
+
+    // Filtrage recherche
+    if (activeSearch) {
+      filteredCards = filteredCards.filter(c => {
+        const title = (c.title || '').toLowerCase();
+        const type = (c.type || '').toLowerCase();
+        const desc = (c.desc || '').toLowerCase();
+        const spec = (c.specialty || '').toLowerCase();
+        return title.includes(activeSearch) || type.includes(activeSearch) || desc.includes(activeSearch) || spec.includes(activeSearch);
+      });
+    }
+
+    // Tri
+    if (activeSort === 'price_asc') {
+      filteredCards.sort((a, b) => a.cost - b.cost);
+    } else if (activeSort === 'price_desc') {
+      filteredCards.sort((a, b) => b.cost - a.cost);
+    } else if (activeSort === 'name_asc') {
+      filteredCards.sort((a, b) => a.title.localeCompare(b.title));
+    }
+
+    return `
+      <div class="space-y-4">
+        <!-- Barre de Filtres par Type Opérationnel & Tri -->
         <div class="p-3 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
-          <!-- Filtres par type de mission / véhicule -->
+          <!-- Filtres boutons -->
           <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
             ${filterOptions.map(f => {
               const isActive = activeFilter === f.id;
@@ -346,7 +917,7 @@ window.ProtecAdvancedModals = {
             }).join('')}
           </div>
 
-          <!-- Sélecteur de Tri par Prix -->
+          <!-- Sélecteur de Tri -->
           <div class="flex items-center gap-2 self-end md:self-auto shrink-0">
             <span class="text-[11px] font-bold text-slate-500 whitespace-nowrap">Trier par :</span>
             <select onchange="window.ProtecAdvancedModals.setVehicleSort(this.value, '${st?.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-300 font-bold text-xs text-slate-800 cursor-pointer focus:ring-2 focus:ring-pc-blue">
@@ -357,73 +928,240 @@ window.ProtecAdvancedModals = {
           </div>
         </div>
 
-        <!-- Grille des Véhicules filtrés et triés -->
+        <!-- Grille des Cartes Opérationnelles -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          ${list.length === 0 ? `
+          ${filteredCards.length === 0 ? `
             <div class="col-span-full p-8 text-center glass-card rounded-2xl text-slate-500">
-              <p class="font-bold text-sm">Aucun véhicule trouvé pour cette sélection.</p>
+              <p class="font-bold text-sm">Aucun véhicule opérationnel trouvé pour cette sélection.</p>
             </div>
-          ` : list.map(veh => `
-            <div class="p-4 rounded-2xl glass-card space-y-3 flex flex-col justify-between hover:shadow-lg transition">
-              <div class="space-y-2">
-                <!-- Image officielle du véhicule -->
-                <div class="h-24 w-full flex items-center justify-center p-2 bg-gradient-to-b from-slate-50 to-slate-100/60 rounded-2xl border border-slate-100 overflow-hidden shadow-inner group">
-                  <img src="${veh.image || `images/vehicles/${veh.type}.png`}" alt="${veh.name}" class="max-h-full max-w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform" onerror="this.outerHTML='<span class=\\'text-3xl\\'>${veh.icon}</span>'" />
-                </div>
+          ` : filteredCards.map(card => {
+            const isHeavyLicense = card.licenseRequired === 'C';
+            const isMotoLicense = card.licenseRequired === 'Moto';
+            const isNoLicense = card.licenseRequired === 'None';
 
-                <div class="flex items-center justify-between">
-                  <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-pc-blue/10 text-pc-blue">${veh.category}</span>
-                  <span class="font-mono font-black text-sm text-slate-900">${veh.cost.toLocaleString('fr-FR')} €</span>
-                </div>
+            // Gestion de la sérigraphie dynamique pour le groupe VTU
+            let activeImage = card.image;
+            let activeTitle = card.title;
+            let activeDesc = card.desc;
+            let activeSpecialty = card.specialty;
+            let activeSerigraphieLabel = null;
 
-                <div>
-                  <h5 class="text-xs font-black text-slate-900 leading-tight">${veh.name}</h5>
-                  <p class="text-[10px] text-slate-500 font-semibold mt-0.5">${veh.specialty}</p>
-                </div>
+            if (card.hasSerigraphieSelector && card.serigraphies) {
+              const selectedSerigKey = this.selectedSerigraphies?.[card.groupKey] || card.serigraphies[0].key;
+              const curSerig = card.serigraphies.find(s => s.key === selectedSerigKey) || card.serigraphies[0];
+              activeImage = curSerig.image;
+              activeTitle = curSerig.subTitle;
+              activeDesc = curSerig.desc;
+              activeSpecialty = curSerig.specialty;
+              activeSerigraphieLabel = curSerig.label;
+            }
 
-                <p class="text-[11px] text-slate-600 leading-relaxed">${veh.desc}</p>
+            return `
+              <div class="p-4 rounded-2xl glass-card space-y-3 flex flex-col justify-between hover:shadow-lg transition border border-slate-200/80 bg-white/95">
+                <div class="space-y-2.5">
+                  <!-- Image du véhicule -->
+                  <div class="h-28 w-full flex items-center justify-center p-2 bg-gradient-to-b from-slate-50 to-slate-100/60 rounded-2xl border border-slate-100 overflow-hidden shadow-inner group relative">
+                    <img 
+                      src="${activeImage || `images/vehicles/${card.type}.png`}" 
+                      alt="${activeTitle}" 
+                      class="max-h-full max-w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-200" 
+                      onerror="this.outerHTML='<span class=\\'text-4xl\\'>${card.icon || '🚐'}</span>'" 
+                    />
 
-                <div class="p-2.5 rounded-xl glass-card-blue text-[10px] text-pc-blue font-bold flex flex-col gap-1.5">
-                  <div class="flex justify-between items-center">
-                    <span>Capacité : <strong class="text-slate-900">${veh.capacity} place${veh.capacity > 1 ? 's' : ''}</strong>${veh.extraCapacityLabel ? ` <span class="text-indigo-800 font-semibold">${veh.extraCapacityLabel}</span>` : ''}</span>
-                    <span class="text-slate-600">Vitesse : ${veh.speedKmH} km/h</span>
+                    <!-- Badge Permis Requis bien visible -->
+                    <div class="absolute bottom-2 right-2">
+                      <span class="px-2 py-0.5 rounded-lg text-[9.5px] font-black tracking-wide border shadow-xs ${
+                        isHeavyLicense 
+                          ? 'bg-amber-500 text-white border-amber-600 animate-pulse' 
+                          : (isMotoLicense 
+                              ? 'bg-sky-500 text-white border-sky-600' 
+                              : (isNoLicense 
+                                  ? 'bg-slate-200 text-slate-700 border-slate-300' 
+                                  : 'bg-emerald-600 text-white border-emerald-700'))
+                      }">
+                        ${card.licenseLabel || `Permis ${card.licenseRequired}`}
+                      </span>
+                    </div>
                   </div>
 
-                  <!-- Présence d'attelage discrète -->
-                  ${veh.hasTowHitch ? `
-                    <div class="text-[10.5px] text-emerald-700 font-bold flex items-center gap-1">
-                      <span>✓ Attelage</span>
+                  <!-- Badge catégorie et prix -->
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5">
+                      <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-pc-blue/10 text-pc-blue">
+                        ${card.type}
+                      </span>
+                      <span class="text-[10px] font-bold text-slate-500">
+                        ${card.category}
+                      </span>
+                    </div>
+                    <span class="font-mono font-black text-sm text-slate-900">${card.cost.toLocaleString('fr-FR')} €</span>
+                  </div>
+
+                  <!-- Titre et Spécialité -->
+                  <div>
+                    <h5 class="text-xs font-black text-slate-900 leading-tight">${activeTitle}</h5>
+                    <p class="text-[10px] text-slate-500 font-semibold mt-0.5">${activeSpecialty}</p>
+                  </div>
+
+                  <!-- SÉLECTEUR DE SÉRIGRAPHIE INTÉGRÉ POUR VTU (CONFORME DEMANDE) -->
+                  ${card.hasSerigraphieSelector ? `
+                    <div class="p-2 rounded-xl bg-orange-50/70 border border-orange-200/70 space-y-1.5">
+                      <span class="text-[9.5px] font-black text-slate-700 block uppercase tracking-wider">
+                        🎨 Sérigraphie / Livrée au choix :
+                      </span>
+                      <div class="grid grid-cols-1 gap-1">
+                        ${card.serigraphies.map(s => {
+                          const isCur = (this.selectedSerigraphies?.[card.groupKey] || card.serigraphies[0].key) === s.key;
+                          return `
+                            <button 
+                              type="button" 
+                              onclick="window.ProtecAdvancedModals.selectTypeSerigraphie('${card.groupKey}', '${s.key}', '${st?.id}')" 
+                              class="px-2 py-1.5 rounded-lg text-left text-[10.5px] font-bold transition border cursor-pointer ${
+                                isCur 
+                                  ? 'bg-white border-pc-orange text-pc-orange font-black shadow-xs ring-1 ring-pc-orange/40' 
+                                  : 'bg-white/60 hover:bg-white text-slate-600 border-slate-200'
+                              }"
+                            >
+                              <span>${s.label}</span>
+                            </button>
+                          `;
+                        }).join('')}
+                      </div>
                     </div>
                   ` : ''}
 
-                  <!-- Remorque fournie à l'achat pour bateau ou quad -->
-                  ${veh.requiresTrailer ? `
-                    <div class="text-[10px] bg-amber-50 rounded-lg p-2 border border-amber-200/80 space-y-0.5">
-                      <div class="text-emerald-700 font-bold flex items-center gap-1">
-                        <span>📦 Remorque fournie à l’achat</span>
-                      </div>
-                      <div class="text-amber-800 font-semibold text-[9.5px]">
-                        ⚠️ Se déplace tracté par un véhicule avec attelage (VL, VTU...)
-                      </div>
-                    </div>
-                  ` : ''}
+                  <p class="text-[11px] text-slate-600 leading-relaxed">${activeDesc}</p>
 
-                  ${veh.reqSkills && veh.reqSkills.length > 0 ? `
-                    <div class="text-[9px] text-blue-900 bg-blue-100/80 rounded-md px-1.5 py-0.5 font-semibold border border-blue-200 flex items-center gap-1">
-                      <span>📋 Qualifications requises : SSA & Conduite Bateau</span>
+                  <!-- Spécifications techniques -->
+                  <div class="p-2.5 rounded-xl glass-card-blue text-[10px] text-pc-blue font-bold flex flex-col gap-1">
+                    <div class="flex justify-between items-center">
+                      <span>Capacité : <strong class="text-slate-900">${card.capacity} place${card.capacity > 1 ? 's' : ''}</strong></span>
+                      <span class="text-slate-600">Vitesse : ${card.speedKmH} km/h</span>
                     </div>
-                  ` : ''}
+
+                    ${card.hasTowHitch ? `
+                      <div class="text-[10.5px] text-emerald-700 font-bold flex items-center gap-1">
+                        <span>✓ Crochet d'attelage</span>
+                      </div>
+                    ` : ''}
+
+                    ${card.requiresTrailer ? `
+                      <div class="text-[9.5px] text-amber-800 font-semibold bg-amber-50 rounded p-1 border border-amber-200/80">
+                        📦 Remorque routière fournie à l'achat
+                      </div>
+                    ` : ''}
+                  </div>
                 </div>
-              </div>
 
-              <button onclick="window.ProtecAdvanced.buySpecializedVehicle(window.game, '${st?.id}', '${veh.type}')" class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer">
-                <span>Commander (${veh.cost.toLocaleString('fr-FR')} €)</span>
-              </button>
-            </div>
-          `).join('')}
+                <!-- Bouton de Commande -->
+                <button 
+                  type="button" 
+                  onclick="window.ProtecAdvancedModals.buyFromTypeCard('${st?.id}', '${card.type}', '${card.id}')" 
+                  class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>Commander (${card.cost.toLocaleString('fr-FR')} €)</span>
+                </button>
+              </div>
+            `;
+          }).join('')}
         </div>
       </div>
     `;
+  },
+
+  buyFromTypeCard(stationId, vehicleType, cardId) {
+    if (cardId === 'type_vtu_master3_grouped') {
+      const selectedSerigKey = this.selectedSerigraphies?.['vtu_master3_serigraphie'] || 'logistique';
+      const isSoutienPop = selectedSerigKey === 'soutien_pop';
+      const variantOptions = {
+        id: isSoutienPop ? 'master3_vtu_pop' : 'master3_vtu_log',
+        name: isSoutienPop ? 'Renault Master III - VTU Soutien aux Populations' : 'Renault Master III - VTU Fourgon Logistique Opérationnelle',
+        model: isSoutienPop ? 'Renault Master III VTU Soutien Pop' : 'Renault Master III VTU Logistique',
+        cost: 17500,
+        capacity: 3,
+        licenseRequired: 'B',
+        hasTowHitch: true,
+        serigraphieLabel: isSoutienPop ? 'Soutien aux Populations' : 'Logistique Opérationnelle',
+        image: isSoutienPop ? 'images/vehicles/master3_vtu_pop.png' : 'images/vehicles/master3_vtu_log.png',
+        specialty: isSoutienPop ? 'Assistance Sinistrés' : 'Transport Lots PMA & Tentes'
+      };
+      if (window.ProtecAdvanced && typeof window.ProtecAdvanced.buySpecializedVehicle === 'function') {
+        window.ProtecAdvanced.buySpecializedVehicle(window.game, stationId, vehicleType, variantOptions);
+      }
+      return;
+    }
+
+    // Autres cartes
+    const catalogItem = (window.ProtecAdvanced?.vehicleCatalog || []).find(v => v.type === vehicleType);
+    let options = null;
+    if (cardId === 'type_vpsp_master3') {
+      options = {
+        id: 'master3_vpsp',
+        name: 'Renault Master III - VPSP Cellule Standard Profilée',
+        model: 'Renault Master III VPSP Profilé',
+        cost: 28500,
+        capacity: 5,
+        licenseRequired: 'B',
+        image: 'images/vehicles/master3_vpsp.png'
+      };
+    } else if (cardId === 'type_vpsp_cube_master3') {
+      options = {
+        id: 'master3_vpsp_cube',
+        name: 'Renault Master III - VPSP Grande Cellule Cube Sanitaire',
+        model: 'Renault Master III VPSP Cube',
+        cost: 32000,
+        capacity: 5,
+        licenseRequired: 'B',
+        image: 'images/vehicles/master3_vpsp_cube.png'
+      };
+    } else if (cardId === 'type_vtp_master3') {
+      options = {
+        id: 'master3_vtp',
+        name: 'Renault Master III - VTP Transport de Personnel (9 places)',
+        model: 'Renault Master III VTP',
+        cost: 21000,
+        capacity: 9,
+        licenseRequired: 'B',
+        hasTowHitch: true,
+        image: 'images/vehicles/master3_vtp.png'
+      };
+    } else if (cardId === 'type_vtp_trafic') {
+      options = {
+        id: 'trafic3_vtp',
+        name: 'Renault Trafic III - VTP Minibus (9 places)',
+        model: 'Renault Trafic III VTP',
+        cost: 19500,
+        capacity: 9,
+        licenseRequired: 'B',
+        hasTowHitch: true,
+        image: 'images/vehicles/trafic_vtp.png'
+      };
+    } else if (cardId === 'type_flit_heavy') {
+      options = {
+        id: 'flit_heavy',
+        name: 'FLIT - Fourgon Lourd d’Intervention Technique',
+        model: 'FLIT Poids Lourd',
+        cost: 26000,
+        capacity: 3,
+        licenseRequired: 'C',
+        hasTowHitch: true,
+        image: 'images/vehicles/FLIT.png'
+      };
+    } else if (cardId === 'type_pcm_heavy') {
+      options = {
+        id: 'pcm_heavy',
+        name: 'PCM - Poste de Commandement Mobile',
+        model: 'PCM Poids Lourd',
+        cost: 45000,
+        capacity: 3,
+        licenseRequired: 'C',
+        image: 'images/vehicles/PCM.png'
+      };
+    }
+
+    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.buySpecializedVehicle === 'function') {
+      window.ProtecAdvanced.buySpecializedVehicle(window.game, stationId, vehicleType, options || catalogItem);
+    }
   },
 
   // --- 4. ARBRE DE COMPÉTENCES & BUREAU D'ANTENNE ---

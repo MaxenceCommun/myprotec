@@ -2794,6 +2794,100 @@ class ProtecGame {
     this.saveGame();
   }
 
+  // Affectation manuelle d'un véhicule spécifique du garage à un slot requis du poste
+  assignVehicleToMissionSlot(missionId, slotIndex, vehicleId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    if (!Array.isArray(mission.assignedVehicleIds)) {
+      mission.assignedVehicleIds = [];
+    }
+
+    if (!vehicleId || vehicleId === 'none' || vehicleId === '') {
+      mission.assignedVehicleIds[slotIndex] = null;
+      this.openMissionDetails(missionId);
+      this.saveGame();
+      return;
+    }
+
+    const veh = this.vehicles.find(v => v.id === vehicleId);
+    if (!veh) return;
+
+    // Retirer ce véhicule s'il était déjà affecté à un autre slot de la même mission
+    const oldSlotIdx = mission.assignedVehicleIds.findIndex((id, idx) => id === vehicleId && idx !== slotIndex);
+    if (oldSlotIdx >= 0) {
+      mission.assignedVehicleIds[oldSlotIdx] = null;
+    }
+
+    mission.assignedVehicleIds[slotIndex] = vehicleId;
+    this.showToast('Véhicule Affecté 🚑', `${veh.name} (${veh.type}) est désormais assigné à ce poste.`, 'blue');
+    this.openMissionDetails(missionId);
+    this.saveGame();
+  }
+
+  // Retrait d'un véhicule affecté à un slot requis
+  unassignVehicleFromMissionSlot(missionId, slotIndex) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    if (Array.isArray(mission.assignedVehicleIds)) {
+      mission.assignedVehicleIds[slotIndex] = null;
+    }
+    this.openMissionDetails(missionId);
+    this.saveGame();
+  }
+
+  // Affectation automatique de tous les véhicules requis disponibles
+  autoAssignVehiclesToMission(missionId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission || !Array.isArray(mission.requiredVehicles) || mission.requiredVehicles.length === 0) return;
+
+    if (!Array.isArray(mission.assignedVehicleIds)) {
+      mission.assignedVehicleIds = [];
+    }
+
+    const busyVehicleIds = new Set();
+    this.missions.filter(m => m.id !== missionId && m.status === 'ongoing').forEach(m => {
+      (m.assignedCrew?.vehicles || []).forEach(v => busyVehicleIds.add(v.id));
+    });
+
+    let assignedCount = 0;
+    const currentAssigned = [...mission.assignedVehicleIds];
+
+    mission.requiredVehicles.forEach((reqType, slotIdx) => {
+      const existingId = currentAssigned[slotIdx];
+      const existingVeh = existingId ? this.vehicles.find(v => v.id === existingId) : null;
+
+      // Si le véhicule déjà assigné est valide, dispo et non occupé ailleurs, on le conserve
+      if (existingVeh && (existingVeh.status === 'dispo' || existingVeh.status === 'sdis_caserne') && !busyVehicleIds.has(existingVeh.id)) {
+        return;
+      }
+
+      // Recherche du premier véhicule disponible correspondant au type
+      const match = this.vehicles.find(v =>
+        v.type === reqType &&
+        (v.status === 'dispo' || v.status === 'sdis_caserne') &&
+        !busyVehicleIds.has(v.id) &&
+        !currentAssigned.includes(v.id) &&
+        !(mission.extraTransportVehicles || []).includes(v.id)
+      );
+
+      if (match) {
+        currentAssigned[slotIdx] = match.id;
+        assignedCount++;
+      } else {
+        currentAssigned[slotIdx] = null;
+      }
+    });
+
+    mission.assignedVehicleIds = currentAssigned;
+    if (assignedCount > 0) {
+      this.showToast('Véhicules Affectés ⚡', `${assignedCount} véhicule(s) ont été affectés au dispositif selon vos disponibilités.`, 'green');
+    } else {
+      this.showToast('Affectation Véhicules', 'Aucun nouveau véhicule disponible à affecter pour les postes requis.', 'slate');
+    }
+    this.openMissionDetails(missionId);
+    this.saveGame();
+  }
+
   // Bascule manuelle d'un lot matériel engagé (Lot A, Lot B, DAE, etc.)
   toggleDevisLot(devisId, lotType) {
     const devis = this.devis.find(d => d.id === devisId);
@@ -3515,6 +3609,24 @@ class ProtecGame {
     const vehsSummary = this.formatDevisVehiclesSummary(devis);
     const roundedPubText = this.formatRoundedPublic(devis.publicCount);
 
+    // Pré-affectation automatique des véhicules du garage si disponibles
+    const preAssignedVehIds = [];
+    const busyVehIds = new Set();
+    this.missions.filter(m => m.status === 'ongoing').forEach(m => {
+      (m.assignedCrew?.vehicles || []).forEach(v => busyVehIds.add(v.id));
+    });
+    if (Array.isArray(vehsChosen) && vehsChosen.length > 0) {
+      vehsChosen.forEach(reqType => {
+        const match = this.vehicles.find(v => 
+          v.type === reqType && 
+          (v.status === 'dispo' || v.status === 'sdis_caserne') && 
+          !busyVehIds.has(v.id) && 
+          !preAssignedVehIds.includes(v.id)
+        );
+        preAssignedVehIds.push(match ? match.id : null);
+      });
+    }
+
     const newMission = {
       id: `m-plan-${Date.now()}`,
       type: 'dps',
@@ -3535,6 +3647,7 @@ class ProtecGame {
       configuredCP: devis.configuredCP || 0,
       requiredRanks: devis.requiredRanks || ['PSE1', 'PSE2'],
       requiredVehicles: vehsChosen,
+      assignedVehicleIds: preAssignedVehIds,
       contractVehiclesSummary: vehsSummary,
       configuredVehicleCounts: { ...(devis.configuredVehicleCounts || {}) },
       extraTransportVehicles: [],
@@ -4782,27 +4895,51 @@ class ProtecGame {
     // Contrôle des compétences exigées (CE / PSE2)
     const requiredRanks = mission.requiredRanks || [];
     const crewVols = mission.registeredVolunteers.map(vid => this.volunteers.find(v => v.id === vid)).filter(Boolean);
-    // Contrôle de l'habilitation Conducteur VPSP (prise en charge avec victime)
-    if (mission.requiredVehicles && mission.requiredVehicles.includes('VPSP')) {
-      const hasVpspDriver = crewVols.some(v => v.skills && (v.skills.includes('permis_vpsp') || v.skills.includes('pilotage')));
-      if (!hasVpspDriver) {
-        this.showToast(
-          'Conducteur VPSP Requis ! 🚑',
-          'La conduite du VPSP lors d’une prise en charge de victime nécessite obligatoirement l’habilitation interne « Permis VPSP (P. VPSP) ». Assignez un conducteur qualifié à l’équipage !',
-          'orange'
-        );
-        return;
+    // Contrôle des Permis de Conduire des Véhicules Engagés (Permis B léger, Permis C poids lourd, P.VPSP)
+    if (mission.requiredVehicles && mission.requiredVehicles.length > 0) {
+      const assignedVehs = (this.vehicles || []).filter(veh => mission.requiredVehicles.includes(veh.type));
+      const requiresHeavyLicense = mission.requiredVehicles.some(vt => ['FLIT', 'VALOG'].includes(vt)) ||
+                                    assignedVehs.some(v => v.licenseRequired === 'C');
+
+      // 1. Contrôle Poids Lourd (Permis C)
+      if (requiresHeavyLicense) {
+        const hasHeavyDriver = crewVols.some(v => v.permis_c || (v.skills && (v.skills.includes('permis_c') || v.skills.includes('pl'))));
+        if (!hasHeavyDriver) {
+          this.showToast(
+            'Conducteur Permis C Requis ! 🚚',
+            'La conduite d’un véhicule lourd (> 3.5t - FLIT / VALOG) nécessite qu’au moins un équipier détienne le Permis C (Poids Lourd). Assignez un conducteur qualifié à l’équipage !',
+            'orange'
+          );
+          return;
+        }
       }
-    } else if (mission.requiredVehicles && mission.requiredVehicles.length > 0) {
-      // Pour les autres véhicules légers (VL, VTU, VTP...) : Permis B requis
-      const hasDriver = crewVols.some(v => v.skills && (v.skills.includes('permis_b') || v.skills.includes('permis_vpsp') || v.skills.includes('pilotage')));
-      if (!hasDriver) {
-        this.showToast(
-          'Conducteur Permis B Requis ! 🚗',
-          'Au moins un équipier doit détenir le Permis B pour conduire le véhicule de mission.',
-          'orange'
-        );
-        return;
+
+      // 2. Contrôle de l'habilitation Conducteur VPSP (prise en charge avec victime)
+      if (mission.requiredVehicles.includes('VPSP')) {
+        const hasVpspDriver = crewVols.some(v => v.skills && (v.skills.includes('permis_vpsp') || v.skills.includes('pilotage')));
+        if (!hasVpspDriver) {
+          this.showToast(
+            'Conducteur VPSP Requis ! 🚑',
+            'La conduite du VPSP lors d’une prise en charge de victime nécessite obligatoirement l’habilitation interne « Permis VPSP (P. VPSP) ». Assignez un conducteur qualifié à l’équipage !',
+            'orange'
+          );
+          return;
+        }
+      }
+
+      // 3. Contrôle Permis B pour tous véhicules légers routiers (VL, VTU, VTP, VAHU, VCYN...)
+      const requiresLightLicense = mission.requiredVehicles.some(vt => ['VPSP', 'VL', 'VLHR', 'VTU', 'VTP', 'VAHU', 'VCYN', 'VTD', 'VST'].includes(vt)) ||
+                                    assignedVehs.some(v => v.licenseRequired === 'B' || !v.licenseRequired);
+      if (requiresLightLicense) {
+        const hasLightDriver = crewVols.some(v => v.permis_b || (v.skills && (v.skills.includes('permis_b') || v.skills.includes('permis_vpsp') || v.skills.includes('pilotage'))));
+        if (!hasLightDriver) {
+          this.showToast(
+            'Conducteur Permis B Requis ! 🚗',
+            'Au moins un équipier doit détenir le Permis B pour conduire le véhicule engagé sur cette mission.',
+            'orange'
+          );
+          return;
+        }
       }
     }
 
@@ -4836,12 +4973,25 @@ class ProtecGame {
 
     // 1. Engagement des véhicules requis (prévus au devis)
     if (Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) {
-      mission.requiredVehicles.forEach(reqType => {
+      mission.requiredVehicles.forEach((reqType, slotIdx) => {
         let dispoVeh = null;
-        if (mission.type === 'pompiers' && this.sdisGarde && this.sdisGarde.vehicleId && !usedVehIds.has(this.sdisGarde.vehicleId)) {
+
+        // Priorité 1 : Véhicule spécifique préalablement affecté à ce slot par le joueur
+        const preAssignedId = Array.isArray(mission.assignedVehicleIds) ? mission.assignedVehicleIds[slotIdx] : null;
+        if (preAssignedId && !usedVehIds.has(preAssignedId)) {
+          const specificVeh = this.vehicles.find(v => v.id === preAssignedId);
+          if (specificVeh && (specificVeh.status === 'dispo' || specificVeh.status === 'sdis_caserne')) {
+            dispoVeh = specificVeh;
+          }
+        }
+
+        // Priorité 2 : Véhicule en garde SDIS / Caserne
+        if (!dispoVeh && mission.type === 'pompiers' && this.sdisGarde && this.sdisGarde.vehicleId && !usedVehIds.has(this.sdisGarde.vehicleId)) {
           const caserneVeh = this.vehicles.find(v => v.id === this.sdisGarde.vehicleId);
           if (caserneVeh && caserneVeh.type === reqType) dispoVeh = caserneVeh;
         }
+
+        // Priorité 3 : Fallback vers le premier véhicule disponible du type
         if (!dispoVeh) {
           dispoVeh = this.vehicles.find(veh => 
             !usedVehIds.has(veh.id) && 
@@ -5514,7 +5664,8 @@ class ProtecGame {
       'stagiaire': { id: 'stagiaire', label: 'Stagiaire en Intégration', cat: 'Formation', badge: 'STAG', color: 'bg-slate-800 text-slate-300 border-slate-600' },
       'psc1': { id: 'psc1', label: 'PSC1 / Premiers Secours', cat: 'Secours', badge: 'PSC1', color: 'bg-teal-950/90 text-teal-300 border-teal-500/70' },
       'permis_vpsp': { id: 'permis_vpsp', label: 'P.VPSP Conduite Ambulance', cat: 'Véhicule', badge: 'P.VPSP', color: 'bg-emerald-950/90 text-emerald-300 border-emerald-500/70' },
-      'permis_b': { id: 'permis_b', label: 'Permis B (VL / VTU)', cat: 'Véhicule', badge: 'Permis B', color: 'bg-emerald-950/90 text-emerald-300 border-emerald-500/70' },
+      'permis_b': { id: 'permis_b', label: 'Permis B (VL / VTU / VTP)', cat: 'Véhicule', badge: 'Permis B', color: 'bg-emerald-950/90 text-emerald-300 border-emerald-500/70' },
+      'permis_c': { id: 'permis_c', label: 'Permis C (Poids Lourd - FLIT / VALOG)', cat: 'Véhicule', badge: 'Permis C (PL)', color: 'bg-amber-950/90 text-amber-300 border-amber-500/70' },
       'formateur_ps': { id: 'formateur_ps', label: 'Formateur Premiers Secours (PS)', cat: 'Pédagogie', badge: 'Formateur PS', color: 'bg-orange-950/90 text-orange-300 border-orange-500/70' },
       'formateur_psc': { id: 'formateur_psc', label: 'Formateur PSC (PIC F)', cat: 'Pédagogie', badge: 'Formateur PSC', color: 'bg-amber-950/90 text-amber-300 border-amber-500/70' },
       'formateur_sst': { id: 'formateur_sst', label: 'Formateur SST', cat: 'Pédagogie', badge: 'Formateur SST', color: 'bg-amber-950/90 text-amber-300 border-amber-500/70' },
@@ -5532,6 +5683,8 @@ class ProtecGame {
       if (!s) return;
       const clean = String(s).toLowerCase().replace(/[- ]/g, '_');
       if (clean.includes('vpsp') || clean.includes('pilotage')) detected.add('permis_vpsp');
+      else if (clean.includes('permis_c') || clean === 'pl' || clean.includes('poids_lourd')) detected.add('permis_c');
+      else if (clean === 'permis_b') detected.add('permis_b');
       else if (clean.includes('psc') && clean.includes('formateur')) detected.add('formateur_psc');
       else if (clean.includes('ps') && clean.includes('formateur')) detected.add('formateur_ps');
       else if (clean === 'formateur' || clean.includes('formateur')) {
@@ -5577,6 +5730,9 @@ class ProtecGame {
       detected.add('stagiaire');
       detected.add('psc1');
     }
+
+    if (v.permis_b) detected.add('permis_b');
+    if (v.permis_c) detected.add('permis_c');
 
     if (v.isTrainer) {
       detected.add('formateur_psc');
@@ -5859,10 +6015,13 @@ class ProtecGame {
       repLoss = 5;
     }
 
+    const missionKind = mission.type === 'social' ? 'la maraude' : (mission.type === 'pompiers' ? 'la garde SDIS' : (mission.type === 'samu' ? 'l’intervention SAMU' : 'le DPS'));
+    const missionKindTitle = mission.type === 'social' ? 'Annulation de la Maraude' : (mission.type === 'pompiers' ? 'Annulation de la Garde' : 'Annulation du Dispositif');
+
     const confirmed = await window.ProtecDialog.confirm(
-      `Êtes-vous certain de vouloir annuler le DPS « ${mission.title} » ?\n\nAttention : Cette annulation impactera la popularité de votre antenne (-${repLoss} pts de réputation) car l'organisateur devra trouver une autre association en urgence.`,
-      'Annulation du Dispositif',
-      { isDestructive: true, confirmText: 'Confirmer l\'annulation', cancelText: 'Conserver le DPS' }
+      `Êtes-vous certain de vouloir annuler ${missionKind} « ${mission.title} » ?\n\nAttention : Cette annulation impactera la popularité de votre antenne (-${repLoss} pts de réputation) car le demandeur devra trouver une autre association en urgence.`,
+      missionKindTitle,
+      { isDestructive: true, confirmText: 'Confirmer l\'annulation', cancelText: 'Conserver la mission' }
     );
     if (!confirmed) {
       return;
@@ -6115,20 +6274,138 @@ class ProtecGame {
               ${window.ProtecCriseLogistique.renderVehiclesCapacityAndRearmAlertHTML(this, mission)}
             ` : ''}
 
-            <!-- VECTEURS DU DISPOSITIF & VÉHICULES DE TRANSPORT DES BÉNÉVOLES (HORS DEVIS) -->
-            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+            <!-- SECTION AFFECTATION DES VÉHICULES DU DISPOSITIF -->
+            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
                   <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
-                  <span>Vecteurs & Déplacement des Bénévoles</span>
+                  <span>Véhicules du Dispositif (Devis Organisateur)</span>
                 </span>
-                <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
-                  Devis client : <strong>${mission.contractVehiclesSummary || (mission.requiredVehicles && mission.requiredVehicles.length > 0 ? mission.requiredVehicles.join(', ') : 'Pédestre')}</strong>
-                </span>
+                ${(Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) ? `
+                  <button 
+                    type="button" 
+                    onclick="window.game.autoAssignVehiclesToMission('${mission.id}')" 
+                    class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue/10 hover:bg-pc-blue hover:text-white text-pc-blue transition flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="zap" class="w-3 h-3"></i>
+                    <span>Affectation Auto</span>
+                  </button>
+                ` : ''}
               </div>
 
+              <!-- Slots des véhicules requis par l'organisateur -->
+              ${(Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) ? `
+                <div class="space-y-2">
+                  ${mission.requiredVehicles.map((reqType, slotIdx) => {
+                    const assignedId = (mission.assignedVehicleIds && mission.assignedVehicleIds[slotIdx]) ? mission.assignedVehicleIds[slotIdx] : null;
+                    const assignedVeh = assignedId ? this.vehicles.find(v => v.id === assignedId) : null;
+
+                    // Liste des véhicules disponibles dans le garage pour ce type
+                    const alreadyAssignedIds = (mission.assignedVehicleIds || []).filter((id, idx) => idx !== slotIdx && id);
+                    const extraAssignedIds = mission.extraTransportVehicles || [];
+                    const dispoVehsForSlot = this.vehicles.filter(v => 
+                      v.type === reqType && 
+                      (v.status === 'dispo' || v.status === 'sdis_caserne') &&
+                      !alreadyAssignedIds.includes(v.id) &&
+                      !extraAssignedIds.includes(v.id)
+                    );
+
+                    if (assignedVeh) {
+                      const fuelPct = assignedVeh.fuel !== undefined ? assignedVeh.fuel : 90;
+                      const mechPct = assignedVeh.mechanical !== undefined ? assignedVeh.mechanical : 95;
+                      const fuelColor = fuelPct > 50 ? 'text-emerald-600' : (fuelPct > 20 ? 'text-amber-600' : 'text-red-600');
+                      const driverSkill = assignedVeh.licenseRequired === 'C' ? 'Permis C (PL)' : (assignedVeh.type === 'VPSP' ? 'P. VPSP' : 'Permis B');
+
+                      return `
+                        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-0.5 flex-shrink-0 shadow-2xs overflow-hidden">
+                              <img src="${assignedVeh.image || this.getVehicleImage(assignedVeh.type)}" class="max-w-full max-h-full object-contain" alt="${assignedVeh.name}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\'><text y=\\'18\\' font-size=\\'18\\'>🚑</text></svg>'">
+                            </div>
+                            <div class="min-w-0">
+                              <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="text-xs font-black text-slate-800 truncate">${assignedVeh.name}</span>
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-100 text-blue-800 uppercase">${assignedVeh.type}</span>
+                                ${assignedVeh.immat ? `<span class="text-[9px] font-bold text-slate-400 font-mono">${assignedVeh.immat}</span>` : ''}
+                              </div>
+                              <div class="flex items-center gap-2.5 text-[10px] text-slate-500 pt-0.5">
+                                <span class="flex items-center gap-1 ${fuelColor} font-bold">
+                                  <span>⛽</span> ${fuelPct}%
+                                </span>
+                                <span class="flex items-center gap-1 text-slate-600 font-bold">
+                                  <span>🔧</span> ${mechPct}%
+                                </span>
+                                <span class="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-bold text-[9px]">
+                                  ${driverSkill}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div class="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-center">
+                            ${dispoVehsForSlot.length > 0 ? `
+                              <select 
+                                onchange="window.game.assignVehicleToMissionSlot('${mission.id}', ${slotIdx}, this.value)" 
+                                class="text-[11px] font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-700 cursor-pointer shadow-2xs">
+                                <option value="${assignedVeh.id}">Changer (${assignedVeh.name})</option>
+                                ${dispoVehsForSlot.map(v => `<option value="${v.id}">↳ ${v.name} (${v.fuel || 90}% carbu)</option>`).join('')}
+                              </select>
+                            ` : ''}
+                            <button 
+                              type="button" 
+                              onclick="window.game.unassignVehicleFromMissionSlot('${mission.id}', ${slotIdx})" 
+                              class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition cursor-pointer flex items-center gap-1"
+                              title="Retirer ce véhicule du dispositif">
+                              <i data-lucide="x" class="w-3 h-3"></i>
+                              <span>Retirer</span>
+                            </button>
+                          </div>
+                        </div>
+                      `;
+                    } else {
+                      return `
+                        <div class="p-2.5 rounded-xl bg-amber-500/5 border border-dashed border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div class="flex items-center gap-2">
+                            <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 font-black text-xs flex items-center justify-center flex-shrink-0">
+                              #${slotIdx + 1}
+                            </span>
+                            <div>
+                              <p class="text-xs font-bold text-amber-900">
+                                Emplacement ${reqType} à pourvoir
+                              </p>
+                              <p class="text-[10px] text-amber-700">
+                                Prévu au devis validé (${mission.title})
+                              </p>
+                            </div>
+                          </div>
+
+                          <div class="flex items-center gap-1.5">
+                            ${dispoVehsForSlot.length > 0 ? `
+                              <select 
+                                onchange="window.game.assignVehicleToMissionSlot('${mission.id}', ${slotIdx}, this.value)" 
+                                class="text-[11px] font-bold bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-slate-800 cursor-pointer shadow-2xs">
+                                <option value="">-- Affecter un ${reqType} (${dispoVehsForSlot.length} dispo) --</option>
+                                ${dispoVehsForSlot.map(v => `<option value="${v.id}">${v.name} • ${v.fuel || 90}% carbu • ${v.mechanical || 95}% méca</option>`).join('')}
+                              </select>
+                            ` : `
+                              <span class="px-2.5 py-1 rounded-lg bg-rose-100 text-rose-700 text-[10px] font-extrabold flex items-center gap-1">
+                                <span>⚠️</span> Aucun ${reqType} disponible au garage
+                              </span>
+                            `}
+                          </div>
+                        </div>
+                      `;
+                    }
+                  }).join('')}
+                </div>
+              ` : `
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
+                  <span>🚶</span>
+                  <span>Dispositif pédestre / poste de secours fixe (aucun véhicule requis au devis).</span>
+                </div>
+              `}
+
               <!-- Acheminement interne des bénévoles -->
-              <div class="pt-1.5 border-t border-slate-100 space-y-2">
+              <div class="pt-2 border-t border-slate-100 space-y-2">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
                   <span class="font-bold text-slate-700 flex items-center gap-1">
                     <span>🚐</span> Véhicule de transport bénévoles (Non facturé au devis) :
@@ -6404,8 +6681,8 @@ class ProtecGame {
       const canEchelon = registeredVols.length >= 3 && !isComplete;
       footer.innerHTML = `
         <button onclick="window.game.closeDrawer()" class="px-3 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
-        <button onclick="window.game.cancelDpsMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition border border-rose-200" title="Annuler ce DPS (pénalité de popularité selon le préavis)">
-          <i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Annuler DPS
+        <button onclick="window.game.cancelDpsMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition border border-rose-200" title="${mission.type === 'social' ? 'Annuler la maraude' : (mission.type === 'pompiers' ? 'Annuler la garde' : 'Annuler le DPS')}">
+          <i data-lucide="x-circle" class="w-3.5 h-3.5"></i> ${mission.type === 'social' ? 'Annuler Maraude' : (mission.type === 'pompiers' ? 'Annuler Garde' : (mission.type === 'samu' ? 'Refuser Urgence' : 'Annuler DPS'))}
         </button>
         <button onclick="window.game.manualRelanceVolunteers('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 hover:bg-amber-100 transition flex items-center gap-1" title="Déclencher une relance d'équipe avec suivi">
           <i data-lucide="bell" class="w-3.5 h-3.5"></i> Relancer (${mission.relancesCount || 0})
@@ -11614,6 +11891,7 @@ class ProtecGame {
       ctExpiryTimestamp: Date.now() + (365 * 24 * 3600 * 1000), // CT valide 1 an
       insuranceStatus: 'assure',
       insuranceMonthlyCost: insuranceCost,
+      licenseRequired: catalogItem?.licenseRequired || (['FLIT', 'VALOG', 'PCM'].includes(type) ? 'C' : 'B'),
       stationId: stationId,
       image: this.getVehicleImage(type)
     };
@@ -13190,6 +13468,18 @@ class ProtecGame {
 
     // Actualisation du masquage/déblocage automatique
     this.updateDockAndFiltersVisibility();
+
+    // Gestion du bouton PC Crise dans le Header : Affiché UNIQUEMENT s'il y a une vraie crise active
+    const pcCriseBtn = document.getElementById('pc-crise-header-btn');
+    if (pcCriseBtn) {
+      const hasRealCrisis = (this.activeCrises && this.activeCrises.some(c => c.status === 'active')) ||
+                            (this.missions && this.missions.some(m => (m.type === 'crise' || m.urgency === 'critique') && (m.status === 'ongoing' || m.status === 'planifie')));
+      if (hasRealCrisis) {
+        pcCriseBtn.classList.remove('hidden');
+      } else {
+        pcCriseBtn.classList.add('hidden');
+      }
+    }
 
     // Gestion de la notification cadeau : UNIQUEMENT s'il y a une antenne configurée et quelque chose de prêt à être réclamé
     const r = this.rewards;
