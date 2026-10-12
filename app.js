@@ -939,6 +939,7 @@ class ProtecGame {
       console.warn('Erreur réinitialisation état local:', e);
     }
     this.initReactiveResources();
+    this.cleanPastDevis();
   }
 
   confirmResetGame() {
@@ -2159,6 +2160,87 @@ class ProtecGame {
     this.devis.push(d);
   }
 
+  // Garantit qu'un devis a une date strictement située dans le futur
+  ensureFutureDevisDate(d) {
+    if (!d || !this.clock) return;
+    const curYear = this.clock.year || new Date().getFullYear();
+    const curMonth = (this.clock.month !== undefined) ? this.clock.month : new Date().getMonth();
+    const curDay = this.clock.day || new Date().getDate();
+
+    const evtDate = d.eventDate;
+    let isPast = false;
+    if (!evtDate || evtDate.year == null || evtDate.month == null || evtDate.day == null) {
+      isPast = true;
+    } else {
+      if (evtDate.year < curYear) isPast = true;
+      else if (evtDate.year === curYear && evtDate.month < curMonth) isPast = true;
+      else if (evtDate.year === curYear && evtDate.month === curMonth && evtDate.day <= curDay) isPast = true;
+    }
+
+    if (isPast) {
+      const daysAhead = d.isLastMinute ? (2 + Math.floor(Math.random() * 3)) : (4 + Math.floor(Math.random() * 14));
+      const targetDate = new Date(curYear, curMonth, curDay + daysAhead);
+      const daysNames = this.clock.daysNames || ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+      const monthsNames = this.clock.monthsNames || ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+      const startHour = (evtDate && evtDate.startHour) || 14;
+      const dur = d.durationHours || 5;
+
+      d.eventDate = {
+        year: targetDate.getFullYear(),
+        month: targetDate.getMonth(),
+        day: targetDate.getDate(),
+        hour: startHour,
+        minute: 0,
+        startHour: startHour,
+        endHour: (startHour + dur) % 24,
+        dayName: daysNames[targetDate.getDay()],
+        monthName: monthsNames[targetDate.getMonth()]
+      };
+      d.daysAhead = daysAhead;
+    }
+  }
+
+  // Recale ou régularise les devis dont la date est passée
+  cleanPastDevis() {
+    if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.cleanPastDevis === 'function') {
+      window.ProtecEvenementsReels.cleanPastDevis(this);
+      return;
+    }
+    if (!Array.isArray(this.devis)) return;
+    const curYear = this.clock?.year || new Date().getFullYear();
+    const curMonth = (this.clock?.month !== undefined) ? this.clock.month : new Date().getMonth();
+    const curDay = this.clock?.day || new Date().getDate();
+
+    const isPast = (evtDate) => {
+      if (!evtDate || evtDate.year == null || evtDate.month == null || evtDate.day == null) return true;
+      if (evtDate.year < curYear) return true;
+      else if (evtDate.year === curYear && evtDate.month < curMonth) return true;
+      else if (evtDate.year === curYear && evtDate.month === curMonth && evtDate.day < curDay) return true;
+      return false;
+    };
+
+    let modified = false;
+    this.devis.forEach(d => {
+      if (['pending', 'previsionnel', 'sent'].includes(d.status) && isPast(d.eventDate)) {
+        this.ensureFutureDevisDate(d);
+        modified = true;
+      }
+    });
+
+    if (Array.isArray(this.territoryEventsPool)) {
+      this.territoryEventsPool.forEach(evt => {
+        if (isPast(evt.eventDate)) {
+          this.ensureFutureDevisDate(evt);
+          modified = true;
+        }
+      });
+    }
+
+    if (modified && typeof this.updateStatsUI === 'function') {
+      this.updateStatsUI();
+    }
+  }
+
   // Limite dynamique et invisible du nombre de demandes de devis/DPS en simultané
   getSimultaneousDevisLimit() {
     const hasActiveCampaign = !!(this.resources.campaigns?.social || this.resources.campaigns?.posters);
@@ -2196,6 +2278,7 @@ class ProtecGame {
       const nextRealIndex = this.territoryEventsPool.findIndex(e => !existingNames.has((e.eventName || '').trim().toLowerCase()));
       if (nextRealIndex !== -1) {
         const pickedReal = this.territoryEventsPool.splice(nextRealIndex, 1)[0];
+        this.ensureFutureDevisDate(pickedReal);
         pickedReal.status = 'pending';
         pickedReal.secondsLeft = pickedReal.isLastMinute ? (3 * 3600) : (6 * 3600);
         this.devis.push(pickedReal);
@@ -8463,6 +8546,9 @@ class ProtecGame {
       subtitle.textContent = 'Dispositifs prévisionnels (DPS), gardes SAMU/SDIS, maraudes sociales et calendrier officiel';
       icon.setAttribute('data-lucide', 'calendar');
 
+      // Régulariser immédiatement tout devis dont la date serait passée
+      this.cleanPastDevis();
+
       const currentTab = this.activePlanningTab || 'calendar';
       const allScheduled = this.missions.filter(m => m.status === 'planifie' || m.status === 'ongoing' || m.type === 'dps');
       const pendingAndPrevDevis = (this.devis || []).filter(d => ['pending', 'previsionnel', 'sent'].includes(d.status));
@@ -8919,6 +9005,9 @@ class ProtecGame {
       title.textContent = 'Gestion des Devis & Dimensionnement DPS';
       subtitle.textContent = 'Configurez votre type de DPS, secouristes et véhicules. L’organisateur évalue votre offre face à la concurrence.';
       icon.setAttribute('data-lucide', 'file-check');
+
+      // Régulariser immédiatement tout devis dont la date serait passée
+      this.cleanPastDevis();
 
       const isAntennaVisible = this.resources.campaigns.social || this.resources.campaigns.posters || (this.stats?.dpsCompleted > 0) || (this.resources.reputationScore >= 60);
       const pendingDevis = this.devis.filter(d => d.status === 'pending');
@@ -11815,6 +11904,9 @@ class ProtecGame {
         if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.checkMonthlyTerritoryRefresh === 'function') {
           window.ProtecEvenementsReels.checkMonthlyTerritoryRefresh(this);
         }
+
+        // Régularisation des devis et événements dont la date est passée
+        this.cleanPastDevis();
 
         if (this.vehicles && this.vehicles.length > 0) {
           this.vehicles.forEach(v => {

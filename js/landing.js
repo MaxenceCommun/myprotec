@@ -109,21 +109,98 @@ window.MyProtecLanding = {
     }
   },
 
-  // Décision de visibilité : Afficher la landing page si non connecté
+  // Décision de visibilité : Sur la page index.html, la landing page reste TOUJOURS visible
   checkLandingVisibility() {
     const landingEl = document.getElementById('myprotec-landing-page');
     if (!landingEl) return;
 
-    const token = localStorage.getItem('protec_auth_token');
-    const user = localStorage.getItem('protec_user');
+    // Ne jamais masquer le contenu sur la landing page
+    landingEl.classList.remove('is-hidden');
+    landingEl.scrollTop = 0;
+    this.updateAuthButtonsState();
+  },
 
-    // Si le joueur n'est pas authentifié, la landing page est impérativement visible
-    if (!token || !user) {
-      landingEl.classList.remove('is-hidden');
-      landingEl.scrollTop = 0;
+  // Mise à jour adaptative des boutons d'accès (Navbar et Hero) selon la session
+  updateAuthButtonsState() {
+    const token = localStorage.getItem('protec_auth_token');
+    let user = null;
+    try {
+      user = JSON.parse(localStorage.getItem('protec_user') || 'null');
+    } catch (e) {
+      user = null;
+    }
+
+    const isLoggedIn = !!(token && user);
+    const navActions = document.getElementById('landing-nav-actions');
+    const heroActions = document.getElementById('landing-hero-actions');
+
+    if (isLoggedIn) {
+      const username = user.username || 'Directeur';
+      const safeName = (function(str) {
+        return String(str || '').replace(/[&<>"']/g, m => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+        })[m]);
+      })(username);
+
+      if (navActions) {
+        navActions.innerHTML = `
+          <div class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 border border-blue-200/80 text-xs font-bold text-[#002e6d]">
+            <i data-lucide="shield" class="w-3.5 h-3.5 text-[#0055b8]"></i>
+            <span class="truncate max-w-[130px]">${safeName}</span>
+          </div>
+          <button onclick="window.MyProtecLanding.enterGame()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-gradient-to-r from-[#0055b8] to-[#0284c7] hover:from-[#004494] hover:to-[#0270a8] shadow-md transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+            <span>Poste de Commandement</span>
+          </button>
+          <button onclick="window.ProtecAuth.logout(); window.MyProtecLanding.updateAuthButtonsState();" class="p-2 rounded-xl text-xs font-bold text-slate-500 hover:text-rose-600 bg-white hover:bg-rose-50 border border-slate-200 transition cursor-pointer" title="Se déconnecter">
+            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+          </button>
+        `;
+      }
+
+      if (heroActions) {
+        heroActions.innerHTML = `
+          <button onclick="window.MyProtecLanding.enterGame()" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-gradient-to-r from-[#0055b8] to-[#0284c7] hover:from-[#004494] hover:to-[#0270a8] text-white font-black text-sm shadow-xl hover:shadow-2xl transition flex items-center justify-center gap-2 cursor-pointer group">
+            <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+            <span>Accéder au Poste de Commandement</span>
+            <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+          </button>
+          <button onclick="window.ProtecAuth.logout(); window.MyProtecLanding.updateAuthButtonsState();" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/85 hover:bg-white text-slate-700 hover:text-rose-600 font-extrabold text-sm border border-slate-200/90 shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            <span>Changer de compte</span>
+          </button>
+        `;
+      }
     } else {
-      // Si déjà connecté, on peut masquer ou laisser le choix
-      landingEl.classList.add('is-hidden');
+      if (navActions) {
+        navActions.innerHTML = `
+          <button onclick="window.MyProtecLanding.openAuth('login')" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-700 hover:text-slate-950 bg-white/80 hover:bg-white border border-slate-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="user" class="w-3.5 h-3.5 text-slate-500"></i>
+            <span>Connexion</span>
+          </button>
+          <button onclick="window.MyProtecLanding.openAuth('register')" class="px-4.5 py-2 rounded-xl text-xs font-black text-white bg-[#ff6600] hover:bg-[#e65c00] shadow-md transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+            <span>Créer mon antenne</span>
+          </button>
+        `;
+      }
+
+      if (heroActions) {
+        heroActions.innerHTML = `
+          <button onclick="window.MyProtecLanding.openAuth('register')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-[#ff6600] hover:bg-[#e65c00] text-white font-black text-sm shadow-xl hover:shadow-2xl transition flex items-center justify-center gap-2 cursor-pointer group">
+            <span>Ouvrir mon antenne</span>
+            <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+          </button>
+          <button onclick="window.MyProtecLanding.openAuth('login')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/85 hover:bg-white text-slate-800 font-extrabold text-sm border border-slate-200/90 shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+            <i data-lucide="log-in" class="w-4 h-4 text-[#0055b8]"></i>
+            <span>Se connecter</span>
+          </button>
+        `;
+      }
+    }
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
     }
   },
 
@@ -139,10 +216,17 @@ window.MyProtecLanding = {
       landingEl.classList.remove('is-hidden');
       landingEl.scrollTop = 0;
     }
+    this.updateAuthButtonsState();
   },
 
   // Déclencher la modal d'authentification dans le mode souhaité
   openAuth(mode = 'login') {
+    const token = localStorage.getItem('protec_auth_token');
+    const user = localStorage.getItem('protec_user');
+    if (token && user) {
+      this.enterGame();
+      return;
+    }
     if (window.ProtecAuth) {
       window.ProtecAuth.openAuthModal(false);
       window.ProtecAuth.renderModalContent(mode, false);

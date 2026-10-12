@@ -553,6 +553,95 @@
       };
     },
 
+    // Helper pour générer une date d'événement garantie dans le futur
+    createFutureEventDate(currentYear, currentMonth, currentDay, daysAhead, startHour, dur, daysNames, monthsNames) {
+      const targetDate = new Date(currentYear, currentMonth, currentDay + daysAhead);
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth();
+      const day = targetDate.getDate();
+      const dayName = (Array.isArray(daysNames) && daysNames[targetDate.getDay()]) || 'Samedi';
+      const monthName = (Array.isArray(monthsNames) && monthsNames[month]) || 'Mois';
+
+      return {
+        year,
+        month,
+        day,
+        hour: startHour,
+        minute: 0,
+        startHour,
+        endHour: (startHour + dur) % 24,
+        dayName,
+        monthName
+      };
+    },
+
+    // Garantit qu'un événement prévisionnel ou devis a une date strictement située dans le futur
+    ensureFutureEventDate(evt, game) {
+      if (!evt || !game || !game.clock) return;
+      const curYear = game.clock.year || new Date().getFullYear();
+      const curMonth = (game.clock.month !== undefined) ? game.clock.month : new Date().getMonth();
+      const curDay = game.clock.day || new Date().getDate();
+
+      const evtDate = evt.eventDate;
+      let isPast = false;
+      if (!evtDate || evtDate.year == null || evtDate.month == null || evtDate.day == null) {
+        isPast = true;
+      } else {
+        if (evtDate.year < curYear) isPast = true;
+        else if (evtDate.year === curYear && evtDate.month < curMonth) isPast = true;
+        else if (evtDate.year === curYear && evtDate.month === curMonth && evtDate.day <= curDay) isPast = true;
+      }
+
+      if (isPast) {
+        const daysNames = game.clock.daysNames || ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+        const monthsNames = game.clock.monthsNames || ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+        const daysAhead = evt.isLastMinute ? (2 + Math.floor(Math.random() * 3)) : (4 + Math.floor(Math.random() * 14));
+        const startHour = (evtDate && evtDate.startHour) || 14;
+        const dur = evt.durationHours || 5;
+
+        evt.eventDate = this.createFutureEventDate(curYear, curMonth, curDay, daysAhead, startHour, dur, daysNames, monthsNames);
+        evt.daysAhead = daysAhead;
+      }
+    },
+
+    // Recale ou nettoie tous les devis actifs dont la date serait passée
+    cleanPastDevis(game) {
+      if (!game || !Array.isArray(game.devis)) return;
+      const curYear = game.clock?.year || new Date().getFullYear();
+      const curMonth = (game.clock?.month !== undefined) ? game.clock.month : new Date().getMonth();
+      const curDay = game.clock?.day || new Date().getDate();
+
+      const isPast = (evtDate) => {
+        if (!evtDate || evtDate.year == null || evtDate.month == null || evtDate.day == null) return true;
+        if (evtDate.year < curYear) return true;
+        else if (evtDate.year === curYear && evtDate.month < curMonth) return true;
+        else if (evtDate.year === curYear && evtDate.month === curMonth && evtDate.day < curDay) return true;
+        return false;
+      };
+
+      let modified = false;
+
+      game.devis.forEach(d => {
+        if (['pending', 'previsionnel', 'sent'].includes(d.status) && isPast(d.eventDate)) {
+          this.ensureFutureEventDate(d, game);
+          modified = true;
+        }
+      });
+
+      if (Array.isArray(game.territoryEventsPool)) {
+        game.territoryEventsPool.forEach(evt => {
+          if (isPast(evt.eventDate)) {
+            this.ensureFutureEventDate(evt, game);
+            modified = true;
+          }
+        });
+      }
+
+      if (modified && typeof game.updateStatsUI === 'function') {
+        game.updateStatsUI();
+      }
+    },
+
     // =========================================================================
     // 5. GÉNÉRATION DU VIVIER DE ~20 ÉVÉNEMENTS DU TERRITOIRE
     // =========================================================================
@@ -575,9 +664,9 @@
         ? window.ProtecDepartements.getCommunesForDepartment(deptCode)
         : [{ nom: station.city || deptInfo.chefLieu, cp: `${deptCode}000`, lat: station.lat, lng: station.lng }];
 
-      const year = game.clock?.year || new Date().getFullYear();
-      const monthIndex = (game.clock?.month !== undefined) ? game.clock.month : new Date().getMonth();
-      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+      const currentYear = game.clock?.year || new Date().getFullYear();
+      const currentMonth = (game.clock?.month !== undefined) ? game.clock.month : new Date().getMonth();
+      const currentDay = game.clock?.day || new Date().getDate();
       const daysNames = game.clock?.daysNames || ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
       const monthsNames = game.clock?.monthsNames || ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -602,9 +691,10 @@
           const lat = parseFloat(((clubCommuneObj?.lat || station.lat) + (Math.random() - 0.5) * 0.015).toFixed(4));
           const lng = parseFloat(((clubCommuneObj?.lng || station.lng) + (Math.random() - 0.5) * 0.015).toFixed(4));
 
-          const dayNum = Math.min(daysInMonth, Math.max(2, 4 + (cIdx * 5) + Math.floor(Math.random() * 3)));
-          const dateObj = new Date(year, monthIndex, dayNum);
+          // Date garantie dans le futur : échelonnée de J+4 à J+24
+          const daysAhead = 4 + (cIdx * 4) + Math.floor(Math.random() * 3);
           const startHour = (club.sport === 'Football' || club.sport === 'Rugby') ? 19 : 20;
+          const eventDateObj = this.createFutureEventDate(currentYear, currentMonth, currentDay, daysAhead, startHour, dur, daysNames, monthsNames);
 
           generatedEvents.push({
             id: `real-sport-${deptCode}-${cIdx}-${Date.now()}`,
@@ -617,13 +707,7 @@
             address: `${club.venue}, ${club.city || station.city}`,
             lat,
             lng,
-            eventDate: {
-              year, month: monthIndex, day: dayNum,
-              hour: startHour, minute: 0,
-              startHour, endHour: (startHour + dur) % 24,
-              dayName: daysNames[dateObj.getDay()],
-              monthName: monthsNames[monthIndex]
-            },
+            eventDate: eventDateObj,
             durationHours: dur,
             publicCount: `${pub.toLocaleString('fr-FR')} supporters & spectateurs`,
             rawPublicCount: pub,
@@ -642,7 +726,7 @@
             consumableCost: ris.scaleKey === 'PAPS' ? 20 : 45,
             status: 'pending',
             isLastMinute: Math.random() < 0.20,
-            daysAhead: Math.max(2, dayNum - (game.clock?.day || 1)),
+            daysAhead: daysAhead,
             secondsLeft: 3600 * 24 * 7,
             budgetMax: fin.budgetMax,
             bareme: fin.bareme,
@@ -670,9 +754,10 @@
           const lat = parseFloat(((regCommuneObj?.lat || station.lat) + (Math.random() - 0.5) * 0.02).toFixed(4));
           const lng = parseFloat(((regCommuneObj?.lng || station.lng) + (Math.random() - 0.5) * 0.02).toFixed(4));
 
-          const dayNum = Math.min(daysInMonth, Math.max(3, 5 + (rIdx * 3) + Math.floor(Math.random() * 2)));
-          const dateObj = new Date(year, monthIndex, dayNum);
+          // Date garantie dans le futur : échelonnée de J+6 à J+30
+          const daysAhead = 6 + (rIdx * 5) + Math.floor(Math.random() * 3);
           const startHour = regEvt.category === 'culturel' ? 18 : 14;
+          const eventDateObj = this.createFutureEventDate(currentYear, currentMonth, currentDay, daysAhead, startHour, dur, daysNames, monthsNames);
 
           generatedEvents.push({
             id: `real-reg-${deptCode}-${rIdx}-${Date.now()}`,
@@ -685,13 +770,7 @@
             address: `${regEvt.venue}, ${regEvt.city}`,
             lat,
             lng,
-            eventDate: {
-              year, month: monthIndex, day: dayNum,
-              hour: startHour, minute: 0,
-              startHour, endHour: (startHour + dur) % 24,
-              dayName: daysNames[dateObj.getDay()],
-              monthName: monthsNames[monthIndex]
-            },
+            eventDate: eventDateObj,
             durationHours: dur,
             publicCount: `${pub.toLocaleString('fr-FR')} participants & public`,
             rawPublicCount: pub,
@@ -710,7 +789,7 @@
             consumableCost: 50,
             status: 'pending',
             isLastMinute: Math.random() < 0.15,
-            daysAhead: Math.max(3, dayNum - (game.clock?.day || 1)),
+            daysAhead: daysAhead,
             secondsLeft: 3600 * 24 * 7,
             budgetMax: fin.budgetMax,
             bareme: fin.bareme,
@@ -743,9 +822,12 @@
           const lat = parseFloat(((comObj.lat || station.lat) + (Math.random() - 0.5) * 0.012).toFixed(4));
           const lng = parseFloat(((comObj.lng || station.lng) + (Math.random() - 0.5) * 0.012).toFixed(4));
 
-          const dayNum = Math.min(daysInMonth, Math.max(2, 2 + ((generatedEvents.length * 2) % 27) + Math.floor(Math.random() * 2)));
-          const dateObj = new Date(year, monthIndex, dayNum);
+          const isLastMinute = Math.random() < 0.20;
+          const daysAhead = isLastMinute 
+            ? (2 + Math.floor(Math.random() * 3))
+            : (7 + (generatedEvents.length * 2) + Math.floor(Math.random() * 3));
           const startHour = (title.includes('Nocturne') || title.includes('Fête Patronale') || title.includes('Musique')) ? 19 : 14;
+          const eventDateObj = this.createFutureEventDate(currentYear, currentMonth, currentDay, daysAhead, startHour, dur, daysNames, monthsNames);
 
           const venueName = tpl.venueTpl.replace(/{commune}/g, comObj.nom);
           const clientName = tpl.clientTpl.replace(/{commune}/g, comObj.nom);
@@ -761,13 +843,7 @@
             address: `${venueName}, ${comObj.nom}`,
             lat,
             lng,
-            eventDate: {
-              year, month: monthIndex, day: dayNum,
-              hour: startHour, minute: 0,
-              startHour, endHour: (startHour + dur) % 24,
-              dayName: daysNames[dateObj.getDay()],
-              monthName: monthsNames[monthIndex]
-            },
+            eventDate: eventDateObj,
             durationHours: dur,
             publicCount: `${pub.toLocaleString('fr-FR')} personnes`,
             rawPublicCount: pub,
@@ -785,8 +861,8 @@
             hiddenRequiredSkills: ris.requiredRanks,
             consumableCost: ris.scaleKey === 'PAPS' ? 15 : 35,
             status: 'pending',
-            isLastMinute: Math.random() < 0.20,
-            daysAhead: Math.max(2, dayNum - (game.clock?.day || 1)),
+            isLastMinute: isLastMinute,
+            daysAhead: daysAhead,
             secondsLeft: 3600 * 24 * 7,
             budgetMax: fin.budgetMax,
             bareme: fin.bareme,
@@ -866,6 +942,7 @@
 
       while (currentPending < maxLimit && game.territoryEventsPool.length > 0) {
         const nextEvt = game.territoryEventsPool.shift();
+        this.ensureFutureEventDate(nextEvt, game);
         nextEvt.status = 'pending';
         nextEvt.secondsLeft = nextEvt.isLastMinute ? (3 * 3600) : (6 * 3600);
         game.devis.push(nextEvt);
@@ -958,10 +1035,13 @@
 
     /**
      * Sécurité au chargement du jeu : assure que si une antenne est posée,
-     * les 20 événements territoriaux existent.
+     * les 20 événements territoriaux existent et que tous les devis passés sont régularisés.
      */
     ensureTerritoryEvents(game) {
       if (!game || !game.stations || game.stations.length === 0) return;
+
+      // Nettoyage et recalage systématique de tout devis dont la date serait passée
+      this.cleanPastDevis(game);
 
       const hasRealEvents = (Array.isArray(game.devis) && game.devis.some(d => d.isRealTerritoryEvent)) ||
                             (Array.isArray(game.territoryEventsPool) && game.territoryEventsPool.length > 0);

@@ -13,9 +13,9 @@ window.ProtecAuth = {
     if (this.token && game) {
       this.checkSession(game);
     } else if (!this.token) {
-      // Si la landing page est active et visible, ne pas afficher la modale au chargement pour laisser le joueur découvrir l'accueil
+      // Si la landing page est active, ne pas afficher la modale au chargement pour laisser le joueur découvrir l'accueil
       const landingEl = document.getElementById('myprotec-landing-page');
-      if (!landingEl || landingEl.classList.contains('is-hidden')) {
+      if (!landingEl) {
         this.openAuthModal(true);
       }
     }
@@ -224,8 +224,9 @@ window.ProtecAuth = {
     const closeBtn = document.getElementById('auth-modal-close-btn');
     if (!modal) return;
 
-    // Si le joueur n'est pas connecté, la modal est obligatoire et non refermable
-    const mandatory = isMandatory || !this.currentUser || !this.token;
+    // Si on se trouve sur la landing page (index.html), la modale n'est JAMAIS bloquante
+    const isLandingPage = !!document.getElementById('myprotec-landing-page');
+    const mandatory = isLandingPage ? false : (isMandatory || !this.currentUser || !this.token);
 
     if (closeBtn) {
       if (mandatory) {
@@ -244,20 +245,20 @@ window.ProtecAuth = {
   },
 
   closeAuthModal() {
-    const landingEl = document.getElementById('myprotec-landing-page');
-    const isLandingActive = landingEl && !landingEl.classList.contains('is-hidden');
+    const isLandingPage = !!document.getElementById('myprotec-landing-page');
 
-    // Impossible de fermer si non connecté, sauf si la landing page est affichée à l'écran
-    if (!this.currentUser || !this.token) {
-      if (!isLandingActive) return;
+    // Impossible de fermer si non connecté, SAUF si on se trouve sur la landing page
+    if (!isLandingPage && (!this.currentUser || !this.token)) {
+      return;
     }
     const modal = document.getElementById('auth-modal');
     if (modal) {
       modal.classList.add('hidden');
       modal.classList.remove('flex');
     }
-    // Si connecté avec succès, masquer la page d'accueil pour afficher le poste de commandement
-    if (this.currentUser && this.token && landingEl) {
+    // Sur jeu.html uniquement : si connecté avec succès, masquer la page d'accueil si elle existe
+    const landingEl = document.getElementById('myprotec-landing-page');
+    if (!isLandingPage && this.currentUser && this.token && landingEl) {
       landingEl.classList.add('is-hidden');
     }
   },
@@ -1197,6 +1198,9 @@ window.ProtecAuth = {
       game.updateStatsUI();
       if (game.renderStations) game.renderStations();
       if (game.renderMissions) game.renderMissions();
+      if (typeof game.cleanPastDevis === 'function') {
+        game.cleanPastDevis();
+      }
       if (window.ProtecSystems && window.ProtecSystems.updateWeatherAndDayNight) {
         window.ProtecSystems.updateWeatherAndDayNight(game);
       }
@@ -1205,7 +1209,7 @@ window.ProtecAuth = {
     }
   },
 
-  logout(game) {
+  logout(game = null) {
     if (this.token) {
       fetch('/api/auth/logout', {
         method: 'POST',
@@ -1213,9 +1217,15 @@ window.ProtecAuth = {
       }).catch(() => {});
     }
     this.clearSession();
-    game.showToast('Déconnexion', 'Vous avez quitté le serveur multijoueur.', 'blue');
-    if (window.MyProtecLanding) {
+    const g = game || window.game;
+    if (g && typeof g.showToast === 'function') {
+      g.showToast('Déconnexion', 'Vous avez quitté le serveur multijoueur.', 'blue');
+    }
+    if (window.MyProtecLanding && typeof window.MyProtecLanding.showLanding === 'function') {
       window.MyProtecLanding.showLanding();
+      if (typeof window.MyProtecLanding.updateAuthButtonsState === 'function') {
+        window.MyProtecLanding.updateAuthButtonsState();
+      }
     } else {
       this.openAuthModal(true);
     }
