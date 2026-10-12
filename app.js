@@ -740,6 +740,13 @@ class ProtecGame {
     this.updateDockAndFiltersVisibility();
     this.startSimulationClock();
 
+    // Règle régalienne : toute antenne implantée bénéficie de sa convention AASC fondatrice (affiliation FNPC)
+    if (this.stations && this.stations.length > 0) {
+      if (!this.aascConvention || !this.aascConvention.signed) {
+        this.aascConvention = { signed: true, signedAt: Date.now(), cost: 800 };
+      }
+    }
+
     // Contrôle et génération initiale des événements réels du mois si absents
     if (window.ProtecSystems && typeof window.ProtecSystems.checkMonthlyEventsCycle === 'function') {
       window.ProtecSystems.checkMonthlyEventsCycle(this);
@@ -1567,8 +1574,8 @@ class ProtecGame {
       newStation.stock = {};
       this.logistics = { oxygenBottles: 0, aedPads: 0, woundKits: 0, cervicalCollars: 0 };
 
-      // 3. ZÉRO CONVENTION AU DÉPART (ni AASC, ni partenaires)
-      this.aascConvention = { signed: false, signedAt: null, cost: 800 };
+      // 3. CONVENTION FONDATRICE AASC (Octroyée dès l'affiliation FNPC lors du tutoriel)
+      this.aascConvention = { signed: true, signedAt: Date.now(), cost: 800 };
       this.samuConvention = { signed: false, signedAt: null, totalInterventions: 0 };
       this.sdisConvention = { signed: false, signedAt: null, totalInterventions: 0 };
       this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
@@ -2096,8 +2103,61 @@ class ProtecGame {
     this.devis.push(d);
   }
 
+  // Limite dynamique et invisible du nombre de demandes de devis/DPS en simultané
+  getSimultaneousDevisLimit() {
+    const hasActiveCampaign = !!(this.resources.campaigns?.social || this.resources.campaigns?.posters);
+    const completedDpsCount = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
+    const repScore = this.resources.reputationScore || 0;
+
+    // Antenne débutante sans campagne de communication active : 2 demandes simultanées maximum
+    if (!hasActiveCampaign && completedDpsCount < 3 && repScore < 100) {
+      return 2;
+    }
+    // Avec communication active ou notoriété montante (3 à 8 DPS) : 3 demandes simultanées
+    if (hasActiveCampaign || completedDpsCount < 8 || repScore < 250) {
+      return 3;
+    }
+    // Antenne bien implantée (8 à 20 DPS) : 4 demandes simultanées
+    if (completedDpsCount < 20 || repScore < 500) {
+      return 4;
+    }
+    // Grande antenne réputée : 5 demandes simultanées maximum
+    return 5;
+  }
+
   generateRandomDevisOpportunity() {
     if (this.stations.length === 0) return;
+
+    // Contrôle strict de la limite invisible du nombre de demandes simultanées en attente
+    const pendingDevisCount = (this.devis || []).filter(d => d.status === 'pending').length;
+    if (pendingDevisCount >= this.getSimultaneousDevisLimit()) {
+      return; // Limite invisible atteinte : aucune nouvelle demande tant qu'un devis n'est pas traité
+    }
+
+    // Priorité absolue au vivier d'événements réels du territoire (clubs, festivals, salons)
+    if (this.territoryEventsPool && this.territoryEventsPool.length > 0) {
+      const existingNames = new Set((this.devis || []).map(d => (d.eventName || '').trim().toLowerCase()));
+      const nextRealIndex = this.territoryEventsPool.findIndex(e => !existingNames.has((e.eventName || '').trim().toLowerCase()));
+      if (nextRealIndex !== -1) {
+        const pickedReal = this.territoryEventsPool.splice(nextRealIndex, 1)[0];
+        pickedReal.status = 'pending';
+        pickedReal.secondsLeft = pickedReal.isLastMinute ? (3 * 3600) : (6 * 3600);
+        this.devis.push(pickedReal);
+        this.updateStatsUI();
+        this.saveGame();
+        if (window.ProtecNotifications) {
+          window.ProtecNotifications.notifyCategory(
+            'dps',
+            `📬 Nouvelle Demande de DPS`,
+            `${pickedReal.clientName || 'Un organisateur'} vous sollicite pour « ${pickedReal.eventName} » (${pickedReal.scale || 'DPS'}). Consultez et validez le devis !`,
+            `dps-${pickedReal.id}`
+          );
+        }
+        this.showToast('Nouvelle Demande Organisateur', `« ${pickedReal.eventName} » vous a sollicité pour un devis.`, 'blue');
+        return;
+      }
+    }
+
     const base = this.stations[Math.floor(Math.random() * this.stations.length)];
     const cap = this.calculatePlayerCapacity ? this.calculatePlayerCapacity() : { tier: 1 };
     const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
@@ -11685,31 +11745,32 @@ class ProtecGame {
 
       // 4. Sollicitations spontanées des organisateurs locaux
       // RÈGLE : Si l'antenne vient d'ouvrir et ne fait NI pub NI DPS -> VISIBILITÉ NULLE = 0 DEMANDE DE DEVIS
-      if (this.clock.second === 0 && this.clock.minute % 2 === 0) {
+      if (this.clock.second === 0 && this.clock.minute % 5 === 0) {
         if (this.stations.length > 0) {
           const hasActiveCampaign = !!(this.resources.campaigns?.social || this.resources.campaigns?.posters);
           const completedDpsCount = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
           const repScore = this.resources.reputationScore || 0;
 
           // L'antenne n'est visible que si elle communique activement OU qu'elle a déjà fait ses preuves sur des DPS (ou notoriété établie)
-          const isAntennaVisible = hasActiveCampaign || completedDpsCount > 0 || repScore >= 60;
+          const isAntennaVisible = hasActiveCampaign || completedDpsCount > 0 || repScore >= 120;
 
           if (isAntennaVisible) {
-            let devisChance = 0.06; // Base modeste
-            if (completedDpsCount >= 1) devisChance += 0.14;
-            if (completedDpsCount >= 5) devisChance += 0.10;
-            devisChance += Math.min(0.20, repScore / 1200); // Bonus réputation
-            if (this.resources.campaigns?.social) devisChance += 0.30; // Fort impact pub réseaux
-            if (this.resources.campaigns?.posters) devisChance += 0.25; // Fort impact affichage mairie
+            let devisChance = 0.04; // Base modeste et réaliste
+            if (completedDpsCount >= 1) devisChance += 0.08;
+            if (completedDpsCount >= 5) devisChance += 0.06;
+            devisChance += Math.min(0.12, repScore / 2000); // Bonus réputation progressif
+            if (this.resources.campaigns?.social) devisChance += 0.20; // Impact pub réseaux
+            if (this.resources.campaigns?.posters) devisChance += 0.15; // Impact affichage mairie
             
             // Impact direct des Réseaux Sociaux & Visibilité (0 € mais régularité requise)
             const socialVis = this.socialMedia?.visibilityScore ?? 75;
-            if (socialVis >= 75) devisChance += 0.20; // Antenne active et visible : devis fréquents
-            else if (socialVis >= 50) devisChance += 0.08;
-            else if (socialVis < 30) devisChance = Math.max(0.02, devisChance - 0.08); // Silence radio : baisse d'activité
+            if (socialVis >= 75) devisChance += 0.10; // Antenne active et visible : devis réguliers
+            else if (socialVis >= 50) devisChance += 0.04;
+            else if (socialVis < 30) devisChance = Math.max(0.01, devisChance - 0.05); // Silence radio : baisse d'activité
 
-            const pendingDevisCount = this.devis.filter(d => d.status === 'pending').length;
-            if (pendingDevisCount < 4 && Math.random() < devisChance) {
+            const pendingDevisCount = (this.devis || []).filter(d => d.status === 'pending').length;
+            const maxSimultaneous = this.getSimultaneousDevisLimit();
+            if (pendingDevisCount < maxSimultaneous && Math.random() < devisChance) {
               this.generateRandomDevisOpportunity();
             }
           }

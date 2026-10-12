@@ -798,31 +798,72 @@
     },
 
     // =========================================================================
-    // 6. INJECTION ET SYNCHRONISATION AVEC LES DEVIS DU JOUEUR
+    // 6. INJECTION ET SYNCHRONISATION AVEC LES DEVIS DU JOUEUR (AVEC LIMITE INVISIBLE)
     // =========================================================================
     /**
-     * Injecte les événements du vivier dans `game.devis` en évitant les doublons
-     * et en conservant les devis déjà validés ou traités par le joueur.
+     * Conserve le vivier complet des événements du territoire en réserve (territoryEventsPool)
+     * et n'injecte dans les devis du joueur que le nombre autorisé par la limite invisible
+     * afin de ne jamais submerger une antenne débutante sans campagne de publicité.
      */
     injectEventsIntoGame(game, eventsList) {
       if (!game || !Array.isArray(eventsList) || eventsList.length === 0) return 0;
       if (!Array.isArray(game.devis)) game.devis = [];
+      if (!Array.isArray(game.territoryEventsPool)) game.territoryEventsPool = [];
 
-      const existingNames = new Set(
-        game.devis.map(d => (d.eventName || '').trim().toLowerCase())
-      );
+      const existingNames = new Set([
+        ...game.devis.map(d => (d.eventName || '').trim().toLowerCase()),
+        ...game.territoryEventsPool.map(d => (d.eventName || '').trim().toLowerCase())
+      ]);
 
-      let addedCount = 0;
+      // 1. Ajouter les nouveaux événements dans le vivier territorial en évitant les doublons
       eventsList.forEach(evt => {
         const normName = (evt.eventName || '').trim().toLowerCase();
         if (!existingNames.has(normName)) {
           existingNames.add(normName);
-          game.devis.push(evt);
-          addedCount++;
+          game.territoryEventsPool.push(evt);
         }
       });
 
-      if (addedCount > 0) {
+      // 2. Limite invisible de demandes en simultané
+      const maxLimit = typeof game.getSimultaneousDevisLimit === 'function'
+        ? game.getSimultaneousDevisLimit()
+        : 2;
+
+      // 3. Si le carnet de devis a un excédent de demandes en attente (ex: ancienne injection massive de 20 devis),
+      // basculer le surplus dans le vivier territorial pour ne conserver que la limite autorisée en attente
+      const pendingDevis = game.devis.filter(d => d.status === 'pending');
+      if (pendingDevis.length > maxLimit) {
+        const toKeep = pendingDevis.slice(0, maxLimit);
+        const toMoveToPool = pendingDevis.slice(maxLimit);
+        
+        // Transférer l'excédent dans le vivier
+        toMoveToPool.forEach(d => {
+          if (!game.territoryEventsPool.some(p => (p.eventName || '').toLowerCase() === (d.eventName || '').toLowerCase())) {
+            game.territoryEventsPool.push(d);
+          }
+        });
+
+        // Conserver uniquement les devis validés, refusés et les devis pending autorisés
+        game.devis = [
+          ...game.devis.filter(d => d.status !== 'pending'),
+          ...toKeep
+        ];
+      }
+
+      // 4. Injecter au compte-goutte depuis le vivier si la file n'est pas encore pleine
+      let currentPending = game.devis.filter(d => d.status === 'pending').length;
+      let addedCount = 0;
+
+      while (currentPending < maxLimit && game.territoryEventsPool.length > 0) {
+        const nextEvt = game.territoryEventsPool.shift();
+        nextEvt.status = 'pending';
+        nextEvt.secondsLeft = nextEvt.isLastMinute ? (3 * 3600) : (6 * 3600);
+        game.devis.push(nextEvt);
+        currentPending++;
+        addedCount++;
+      }
+
+      if (addedCount > 0 || pendingDevis.length > maxLimit) {
         if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
         if (typeof game.saveGame === 'function') game.saveGame();
       }
@@ -835,35 +876,25 @@
     // =========================================================================
     /**
      * DÉCLENCHEUR 1 : Lors du placement de l'antenne sur la carte.
-     * Génère immédiatement la vingtaine d'événements pour le secteur.
+     * Génère le vivier d'événements du territoire et alimente modérément le carnet de devis.
      */
     initStationEvents(game, station) {
       if (!game || !station) return;
 
-      console.log(`[MyProtec EvenementsReels] 📍 Déclenchement lors du placement de l'antenne: ${station.name} (${station.city})`);
+      console.log(`[MyProtec EvenementsReels] 📍 Vivier d'ancrage territorial initialisé pour ${station.name} (${station.city})`);
 
       const pool = this.generateTerritoryEventsPool(game, station, 20);
       const added = this.injectEventsIntoGame(game, pool);
 
-      // Enregistrement de l'historique sur la station
       station.territoryEventsPoolCount = pool.length;
       station.lastTerritoryEventsGeneratedAt = Date.now();
 
-      if (typeof game.showToast === 'function') {
+      if (added > 0 && typeof game.showToast === 'function') {
         game.showToast(
-          'Ancrage Territorial Activé ! 📍',
-          `${added} événements réels et locaux identifiés sur le secteur de ${station.city || 'votre antenne'} ! Consultez vos opportunités de DPS.`,
+          'Ancrage Territorial Activé 📍',
+          `${added} opportunité(s) de DPS issue(s) du secteur de ${station.city || 'votre antenne'} disponible(s).`,
           'blue'
         );
-      }
-
-      if (window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
-        window.ProtecNotifications.recordNotification({
-          title: '📍 Ancrage avec la Réalité : Événements Locaux',
-          message: `${added} événements du territoire (clubs de sport, festivals, manifestations de ${station.city || 'votre secteur'}) sont désormais disponibles dans votre carnet de devis DPS.`,
-          category: 'dps',
-          level: 'success'
-        });
       }
 
       return added;
@@ -922,10 +953,15 @@
     ensureTerritoryEvents(game) {
       if (!game || !game.stations || game.stations.length === 0) return;
 
-      const hasRealEvents = Array.isArray(game.devis) && game.devis.some(d => d.isRealTerritoryEvent);
+      const hasRealEvents = (Array.isArray(game.devis) && game.devis.some(d => d.isRealTerritoryEvent)) ||
+                            (Array.isArray(game.territoryEventsPool) && game.territoryEventsPool.length > 0);
+
       if (!hasRealEvents) {
         console.log('[MyProtec EvenementsReels] Initialisation de rattrapage des événements du territoire...');
         this.initStationEvents(game, game.stations[0]);
+      } else {
+        // Nettoyage systématique de tout excédent de devis pending existant
+        this.injectEventsIntoGame(game, []);
       }
     }
   };
