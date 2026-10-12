@@ -204,6 +204,40 @@ window.ProtecSupabase = {
       }
     });
 
+    // Écoute 4 : Annonces administratives globales en direct (Flash, Maintenance, Événements)
+    this.realtimeChannel.on('broadcast', { event: 'admin_broadcast' }, (evt) => {
+      const data = evt.payload;
+      const g = game || window.game;
+      if (g && g.handleMultiplayerEvent && data) {
+        g.handleMultiplayerEvent('admin_broadcast', data);
+      }
+    });
+
+    // Écoute 5 : Modification administrative de compte joueur (argent, ban, reset mdp)
+    this.realtimeChannel.on('broadcast', { event: 'admin_user_updated' }, (evt) => {
+      const data = evt.payload;
+      const g = game || window.game;
+      if (g && g.handleMultiplayerEvent && data) {
+        g.handleMultiplayerEvent('admin_user_updated', data);
+      }
+    });
+
+    // Écoute 6 : Synchronisation temps réel de la bourse de l'occasion (market_listings)
+    this.realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'market_listings' }, (payload) => {
+      const g = game || window.game;
+      if (window.ProtecMarcheOccasion && window.ProtecMarcheOccasion.handleRealtimeEvent) {
+        window.ProtecMarcheOccasion.handleRealtimeEvent(payload, g);
+      }
+    });
+
+    // Écoute 7 : Broadcast des annonces du marché d'occasion
+    this.realtimeChannel.on('broadcast', { event: 'market_update' }, (evt) => {
+      const g = game || window.game;
+      if (window.ProtecMarcheOccasion && window.ProtecMarcheOccasion.handleBroadcastEvent) {
+        window.ProtecMarcheOccasion.handleBroadcastEvent(evt.payload, g);
+      }
+    });
+
     this.realtimeChannel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         console.log('⚡ Canal Supabase Realtime actif : synchronisation en direct (< 50ms) connectée.');
@@ -236,6 +270,164 @@ window.ProtecSupabase = {
       });
     } catch (e) {
       console.warn('Erreur broadcast création renfort:', e);
+    }
+  },
+
+  // Diffusion d'une annonce administrative en direct sur Supabase
+  broadcastAdminAnnouncement(broadcastData) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'admin_broadcast',
+        payload: broadcastData
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast annonce admin:', e);
+    }
+  },
+
+  // Diffusion d'une mise à jour de compte joueur en direct sur Supabase
+  broadcastAdminUserUpdated(updateData) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'admin_user_updated',
+        payload: updateData
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast admin_user_updated:', e);
+    }
+  },
+
+  // Récupération de tous les comptes joueurs et de leurs sauvegardes pour le Panel Admin
+  async getAllPlayersForAdmin() {
+    if (!this.client) return [];
+    try {
+      const { data: players, error } = await this.client
+        .from('players')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error || !players) return [];
+
+      // Récupérer les sauvegardes correspondantes
+      const { data: saves } = await this.client
+        .from('game_saves')
+        .select('*');
+
+      const savesMap = {};
+      if (saves && Array.isArray(saves)) {
+        saves.forEach(s => {
+          if (s.user_id) savesMap[s.user_id] = s;
+          if (s.username) savesMap[s.username] = s;
+        });
+      }
+
+      return players.map(p => {
+        const s = savesMap[p.id] || savesMap[p.username] || null;
+        const sData = s ? s.save_data : null;
+        return {
+          id: p.id,
+          username: p.username,
+          role: p.role || 'user',
+          isBanned: !!p.is_banned,
+          stationName: p.station_name || 'Antenne',
+          city: p.city || 'Paris',
+          departmentCode: p.department_code || '75',
+          createdAt: p.created_at,
+          lastLogin: p.last_login,
+          money: (sData?.resources?.money !== undefined) ? sData.resources.money : (s?.funds ?? 15000),
+          volunteersCount: (sData?.volunteers?.length !== undefined) ? sData.volunteers.length : (s?.volunteers_count ?? 4),
+          vehiclesCount: (sData?.vehicles?.length !== undefined) ? sData.vehicles.length : (s?.vehicles_count ?? 1),
+          stationsCount: (sData?.stations?.length !== undefined) ? sData.stations.length : (s?.stations_count ?? 1),
+          missionsCount: (sData?.missions?.length !== undefined) ? sData.missions.length : 0,
+          reputationScore: (sData?.resources?.reputationScore !== undefined) ? sData.resources.reputationScore : 50,
+          timeTracking: sData?.timeTracking || p.time_tracking || null,
+          lastSaved: s?.updated_at || null,
+          saveData: sData
+        };
+      });
+    } catch (e) {
+      console.warn('Erreur lecture admin players Supabase:', e);
+      return [];
+    }
+  },
+
+  // Modification d'un compte joueur dans Supabase par l'Admin
+  async updatePlayerByAdmin(playerId, updates) {
+    if (!this.client || !playerId) return { error: 'Paramètres invalides' };
+    try {
+      const isUUID = typeof playerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerId);
+      const playerUpdates = {};
+
+      if (updates.username) playerUpdates.username = updates.username.trim();
+      if (updates.role) playerUpdates.role = updates.role;
+      if (updates.isBanned !== undefined) playerUpdates.is_banned = !!updates.isBanned;
+      if (updates.stationName) playerUpdates.station_name = updates.stationName.trim();
+      if (updates.newPassword) {
+        playerUpdates.password_hash = await this.hashPassword(updates.newPassword);
+      }
+
+      if (Object.keys(playerUpdates).length > 0) {
+        let q = this.client.from('players').update(playerUpdates);
+        if (isUUID) q = q.eq('id', playerId);
+        else q = q.eq('username', playerId);
+        const { error } = await q;
+        if (error) console.warn('Erreur update player Supabase:', error);
+      }
+
+      // Si l'argent ou des éléments de jeu ont été modifiés dans la sauvegarde
+      if (updates.money !== undefined || updates.saveData) {
+        let saveRecord = await this.loadGameState(playerId);
+        let sData = saveRecord?.save_data || {};
+        if (updates.saveData) {
+          sData = { ...sData, ...updates.saveData };
+        }
+        if (updates.money !== undefined) {
+          if (!sData.resources) sData.resources = {};
+          sData.resources.money = Number(updates.money);
+          sData.resources.budget = Number(updates.money);
+          sData.resources.funds = Number(updates.money);
+        }
+        await this.client.from('game_saves').upsert({
+          user_id: isUUID ? playerId : null,
+          username: updates.username || (saveRecord ? saveRecord.username : null),
+          save_data: sData,
+          funds: updates.money !== undefined ? Number(updates.money) : (saveRecord?.funds ?? 15000),
+          updated_at: new Date().toISOString()
+        }, { onConflict: isUUID ? 'user_id' : 'username' });
+      }
+
+      // Émettre le broadcast temps réel
+      this.broadcastAdminUserUpdated({ userId: playerId, updates });
+
+      return { success: true };
+    } catch (e) {
+      console.warn('Erreur update admin Supabase:', e);
+      return { error: e.message || 'Erreur mise à jour BDD' };
+    }
+  },
+
+  // Suppression définitive d'un compte joueur dans Supabase
+  async deletePlayerByAdmin(playerId) {
+    if (!this.client || !playerId) return { error: 'Paramètres invalides' };
+    try {
+      const isUUID = typeof playerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerId);
+      let q = this.client.from('players').delete();
+      if (isUUID) q = q.eq('id', playerId);
+      else q = q.eq('username', playerId);
+      await q;
+
+      let qSave = this.client.from('game_saves').delete();
+      if (isUUID) qSave = qSave.eq('user_id', playerId);
+      else qSave = qSave.eq('username', playerId);
+      await qSave;
+
+      return { success: true };
+    } catch (e) {
+      return { error: e.message };
     }
   },
 
@@ -399,6 +591,13 @@ window.ProtecSupabase = {
     }
 
     try {
+      const moneyVal = (game.resources?.money !== undefined) ? game.resources.money : ((game.resources?.budget !== undefined) ? game.resources.budget : 15000);
+      if (game.resources) {
+        game.resources.money = moneyVal;
+        game.resources.budget = moneyVal;
+        game.resources.funds = moneyVal;
+      }
+
       const stateToSave = {
         player: game.player,
         clock: game.clock,
@@ -420,13 +619,20 @@ window.ProtecSupabase = {
         samuGarde: game.samuGarde,
         sdisGarde: game.sdisGarde,
         prefectureState: game.prefectureState,
-        sncfConvention: game.sncfConvention,
-        cumpConvention: game.cumpConvention,
+        aascConvention: game.aascConvention || null,
+        samuConvention: game.samuConvention || null,
+        sdisConvention: game.sdisConvention || null,
+        sncfConvention: game.sncfConvention || null,
+        cumpConvention: game.cumpConvention || null,
+        conventionRequests: game.conventionRequests || null,
+        financesHistory: game.financesHistory || [],
+        alertSubscription: game.alertSubscription || null,
+        treasury: game.treasury || null,
         jobOffers: game.jobOffers,
         adRewards: game.adRewards,
         workplaceEquipment: game.workplaceEquipment,
         annualContracts: game.annualContracts || [],
-        messagesHistory: game.messagesHistory || [],
+        messagesHistory: game.messagesHistory || {},
         monthlyEventsGenerated: game.monthlyEventsGenerated || {},
         reputation_samu: game.reputation_samu !== undefined ? game.reputation_samu : 50,
         reputation_sdis: game.reputation_sdis !== undefined ? game.reputation_sdis : 50,
@@ -443,7 +649,7 @@ window.ProtecSupabase = {
         volunteers_count: (game.volunteers || []).length,
         vehicles_count: (game.vehicles || []).length,
         reputation: game.resources?.reputation || 50,
-        funds: game.resources?.funds || 15000,
+        funds: moneyVal,
         updated_at: new Date().toISOString()
       };
 
@@ -749,6 +955,166 @@ window.ProtecSupabase = {
         }, { onConflict: 'id' });
     } catch (e) {
       console.warn('Erreur enregistrement formation serveur:', e);
+    }
+  },
+
+  // --- BOURSE DE L'OCCASION (MARKET LISTINGS) ---
+  async fetchMarketListings(category = 'all', status = 'active') {
+    if (!this.client) return [];
+    try {
+      let query = this.client
+        .from('market_listings')
+        .select('*');
+      
+      if (status !== 'all') {
+        query = query.eq('status', status);
+      }
+      if (category && category !== 'all') {
+        query = query.eq('category', category);
+      }
+      query = query.order('created_at', { ascending: false });
+
+      const { data, error } = await query;
+      if (error) {
+        console.warn('Erreur chargement market_listings:', error);
+        return [];
+      }
+      return data || [];
+    } catch (e) {
+      console.warn('Exception fetchMarketListings:', e);
+      return [];
+    }
+  },
+
+  async createMarketListing(listingData) {
+    if (!this.client) return { error: 'Client Supabase indisponible' };
+    try {
+      const { data, error } = await this.client
+        .from('market_listings')
+        .insert([listingData])
+        .select()
+        .single();
+      
+      if (error) throw error;
+
+      // Broadcast pour affichage instantané chez les autres directeurs
+      this.broadcastMarketEvent({ type: 'created', listing: data });
+      return { success: true, listing: data };
+    } catch (e) {
+      console.warn('Erreur createMarketListing:', e);
+      return { error: e.message || 'Erreur publication annonce' };
+    }
+  },
+
+  async buyMarketListing(listingId, buyerId, buyerName) {
+    if (!this.client) return { error: 'Client Supabase indisponible' };
+    try {
+      // 1. Tenter la fonction RPC transactionnelle PostgreSQL
+      const { data: rpcRes, error: rpcErr } = await this.client.rpc('buy_market_listing', {
+        p_listing_id: listingId,
+        p_buyer_id: buyerId,
+        p_buyer_name: buyerName
+      });
+
+      if (!rpcErr && rpcRes) {
+        if (!rpcRes.success) {
+          return { error: rpcRes.error || 'Erreur lors de l\'achat' };
+        }
+        this.broadcastMarketEvent({ type: 'bought', listingId, buyerName });
+        return { success: true, ...rpcRes };
+      }
+
+      // 2. Fallback direct si la fonction RPC n'a pas encore été créée dans l'éditeur SQL Supabase
+      const { data: listing, error: fetchErr } = await this.client
+        .from('market_listings')
+        .select('*')
+        .eq('id', listingId)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (fetchErr || !listing) {
+        return { error: 'Annonce introuvable ou déjà vendue.' };
+      }
+
+      if (listing.seller_user_id === buyerId) {
+        return { error: 'Vous ne pouvez pas acheter votre propre annonce.' };
+      }
+
+      // Mise à jour de l'annonce en statut 'sold'
+      const { data: updated, error: updateErr } = await this.client
+        .from('market_listings')
+        .update({
+          status: 'sold',
+          buyer_antenne_id: buyerId,
+          buyer_name: buyerName,
+          sold_at: new Date().toISOString()
+        })
+        .eq('id', listingId)
+        .eq('status', 'active')
+        .select()
+        .single();
+
+      if (updateErr || !updated) {
+        return { error: 'Ce bien a déjà été acheté par une autre antenne.' };
+      }
+
+      this.broadcastMarketEvent({ type: 'bought', listingId, buyerName });
+      return { success: true, listing: updated, price: listing.price, item_data: listing.item_data };
+    } catch (e) {
+      console.warn('Exception buyMarketListing:', e);
+      return { error: e.message || 'Erreur achat annonce' };
+    }
+  },
+
+  async cancelMarketListing(listingId, userId) {
+    if (!this.client) return { error: 'Client Supabase indisponible' };
+    try {
+      // 1. Tenter la fonction RPC
+      const { data: rpcRes, error: rpcErr } = await this.client.rpc('cancel_market_listing', {
+        p_listing_id: listingId,
+        p_user_id: userId
+      });
+
+      if (!rpcErr && rpcRes) {
+        if (!rpcRes.success) {
+          return { error: rpcRes.error || 'Erreur annulation' };
+        }
+        this.broadcastMarketEvent({ type: 'cancelled', listingId });
+        return { success: true, ...rpcRes };
+      }
+
+      // 2. Fallback direct
+      const { data: updated, error: updateErr } = await this.client
+        .from('market_listings')
+        .update({ status: 'cancelled' })
+        .eq('id', listingId)
+        .eq('seller_user_id', userId)
+        .eq('status', 'active')
+        .select()
+        .single();
+
+      if (updateErr || !updated) {
+        return { error: 'Impossible de retirer cette annonce (non trouvée ou déjà vendue).' };
+      }
+
+      this.broadcastMarketEvent({ type: 'cancelled', listingId });
+      return { success: true, listing: updated, item_data: updated.item_data, category: updated.category };
+    } catch (e) {
+      console.warn('Exception cancelMarketListing:', e);
+      return { error: e.message || 'Erreur retrait annonce' };
+    }
+  },
+
+  broadcastMarketEvent(payload) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'market_update',
+        payload: payload
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast market_update:', e);
     }
   }
 };

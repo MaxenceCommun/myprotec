@@ -16,9 +16,10 @@ window.ProtecMessaging = {
   filterMissionId: null,
 
   injectState(game) {
-    if (!game.messagesHistory) {
+    if (!game.messagesHistory || Array.isArray(game.messagesHistory) || typeof game.messagesHistory !== 'object') {
+      const oldArr = Array.isArray(game.messagesHistory) ? game.messagesHistory : [];
       game.messagesHistory = {
-        interne: [],
+        interne: oldArr,
         national: [
           {
             id: 'init-1',
@@ -30,14 +31,32 @@ window.ProtecMessaging = {
             time: '08:00'
           }
         ],
-        regional: {}, // Mapping par nom de vraie région de France
+        regional: {},
         departemental: [],
-        mp: {} // recipientId -> [ messages ]
+        mp: {}
       };
     }
 
     if (!Array.isArray(game.messagesHistory.interne)) {
       game.messagesHistory.interne = [];
+    }
+    if (!Array.isArray(game.messagesHistory.national)) {
+      game.messagesHistory.national = [];
+    }
+    if (!Array.isArray(game.messagesHistory.departemental)) {
+      game.messagesHistory.departemental = [];
+    }
+    if (!game.messagesHistory.regional || typeof game.messagesHistory.regional !== 'object' || Array.isArray(game.messagesHistory.regional)) {
+      const oldRegional = Array.isArray(game.messagesHistory.regional) ? game.messagesHistory.regional : [];
+      game.messagesHistory.regional = {};
+      const dept = game.stations?.[0]?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '75';
+      const reg = window.ProtecDepartements?.getRegion(dept) || 'Île-de-France';
+      if (oldRegional.length > 0) {
+        game.messagesHistory.regional[reg] = oldRegional;
+      }
+    }
+    if (!game.messagesHistory.mp || typeof game.messagesHistory.mp !== 'object' || Array.isArray(game.messagesHistory.mp)) {
+      game.messagesHistory.mp = {};
     }
 
     if (game.messagesHistory.interne.length === 0) {
@@ -52,17 +71,6 @@ window.ProtecMessaging = {
       });
     }
 
-    // Assurer la compatibilité si regional était un simple tableau
-    if (Array.isArray(game.messagesHistory.regional)) {
-      const oldRegional = game.messagesHistory.regional;
-      game.messagesHistory.regional = {};
-      const myDeptCode = game.stations?.[0]?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '75';
-      const myRegion = window.ProtecDepartements?.getRegion(myDeptCode) || 'Île-de-France';
-      if (oldRegional.length > 0) {
-        game.messagesHistory.regional[myRegion] = oldRegional;
-      }
-    }
-
     // Déterminer la région active par défaut (celle de l'antenne du joueur)
     const myDeptCode = game.stations?.[0]?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '75';
     const myRegion = window.ProtecDepartements?.getRegion(myDeptCode) || 'Île-de-France';
@@ -71,7 +79,7 @@ window.ProtecMessaging = {
     }
 
     // Assurer l'existence du canal pour la région active avec un message initial de l'état-major
-    if (!game.messagesHistory.regional[this.selectedRegionName] || game.messagesHistory.regional[this.selectedRegionName].length === 0) {
+    if (!game.messagesHistory.regional[this.selectedRegionName] || !Array.isArray(game.messagesHistory.regional[this.selectedRegionName]) || game.messagesHistory.regional[this.selectedRegionName].length === 0) {
       game.messagesHistory.regional[this.selectedRegionName] = [
         {
           id: `init-reg-${this.selectedRegionName}`,
@@ -273,17 +281,40 @@ window.ProtecMessaging = {
     const activeRegion = this.selectedRegionName || myRegion;
     const allRegions = window.ProtecDepartements?.REGIONS || [];
 
-    // Liste des interlocuteurs pour les MP (autres directeurs de la fédération ou alliés)
-    const availableRecipients = [
+    // Liste des interlocuteurs pour les MP (vrais joueurs d'abord, puis réseau fédéral)
+    const availableRecipients = [];
+    const seenIds = new Set();
+
+    // 1. Vrais directeurs d'antenne (autres joueurs réels enregistrés)
+    if (Array.isArray(game.allianceStations)) {
+      game.allianceStations.forEach(st => {
+        if (!st || !st.playerId || st.playerId === game.player?.id || seenIds.has(st.playerId)) return;
+        seenIds.add(st.playerId);
+        availableRecipients.push({
+          id: st.playerId,
+          name: `${st.playerName || 'Directeur'} • ${st.name || 'Antenne'}`,
+          dept: st.deptCode || 'ADPC',
+          city: st.city || 'Partenaire',
+          isRealPlayer: true
+        });
+      });
+    }
+
+    // 2. Directeurs départementaux du réseau
+    const defaultRecipients = [
       { id: 'npc-lyon', name: 'Directeur PC Rhône (69)', dept: '69', city: 'Lyon' },
       { id: 'npc-marseille', name: 'Directeur PC Bouches-du-Rhône (13)', dept: '13', city: 'Marseille' },
       { id: 'npc-bordeaux', name: 'Directeur PC Gironde (33)', dept: '33', city: 'Bordeaux' },
       { id: 'npc-lille', name: 'Directeur PC Nord (59)', dept: '59', city: 'Lille' },
-      { id: 'npc-toulouse', name: 'Directeur PC Haute-Garonne (31)', dept: '31', city: 'Toulouse' },
       { id: 'npc-strasbourg', name: 'Directeur PC Bas-Rhin (67)', dept: '67', city: 'Strasbourg' },
-      { id: 'npc-rennes', name: 'Directeur PC Ille-et-Vilaine (35)', dept: '35', city: 'Rennes' },
       { id: 'npc-nantes', name: 'Directeur PC Loire-Atlantique (44)', dept: '44', city: 'Nantes' }
     ];
+    defaultRecipients.forEach(r => {
+      if (!seenIds.has(r.id)) {
+        seenIds.add(r.id);
+        availableRecipients.push(r);
+      }
+    });
 
     if (!this.selectedMpRecipientId && availableRecipients.length > 0) {
       this.selectedMpRecipientId = availableRecipients[0].id;

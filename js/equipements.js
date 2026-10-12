@@ -73,7 +73,7 @@ window.ProtecEquipements = {
           bullets: [
             '🌟 +25% de satisfaction des apprenants (+20 € tarif PSC1 autorisé)',
             '⚡ +15% de rapidité de formation des nouveaux PSE bénévoles',
-            '💪 Boost de fierté et motivation pour les formateurs (+15 moral)',
+            '💪 Fort boost de fierté et de motivation pour les formateurs',
             '🏛️ Attire des demandes spontanées d’entreprises locales (conventions SST)'
           ],
           stats: { attractivity: 0.25, learnSpeedBonus: 0.25, trainerMoralBonus: 15, publicPriceBonus: 20, satisfactionScore: 100, triggerCompanyContracts: true }
@@ -113,7 +113,7 @@ window.ProtecEquipements = {
           bullets: [
             '✓ Hausse de la qualité de validation PSE1 / PSC (+20% taux de réussite)',
             '✓ Scénarios d’arythmie variés et réalistes',
-            '✓ +10 pts de réputation pédagogique d’antenne'
+            '✓ Réputation pédagogique d’antenne grandement renforcée'
           ],
           stats: { examSuccessBonus: 0.20, repBonus: 10 }
         }
@@ -153,7 +153,7 @@ window.ProtecEquipements = {
           bullets: [
             '⚡ Bilan secouriste 30% plus rapide en intervention',
             '✓ 0% d’erreur de transcription ou de mesure',
-            '✓ +5 pts de réputation auprès du SAMU 15'
+            '✓ Excellente appréciation de la régulation SAMU 15'
           ],
           stats: { speedBonus: 0.30, errorRisk: 0, samuRepBonus: 5, crewMoralBonus: 5, regulationSpeed: 1.3 }
         },
@@ -168,8 +168,8 @@ window.ProtecEquipements = {
           bullets: [
             '⚡ Bilan vital instantané (-50% temps de prise en charge)',
             '🚑 Libération accélérée du VPSP aux Urgences/SAMU (-40% attente)',
-            '🏥 +10 pts de réputation SAMU 15 lors de chaque régulation',
-            '💪 Confiance et fierté totale des secouristes (+10 moral permanent)'
+            '🏥 Reconnaissance et confiance maximale du SAMU 15 lors des bilans',
+            '💪 Confiance et fierté totale des secouristes en intervention'
           ],
           stats: { speedBonus: 0.50, errorRisk: 0, samuRepBonus: 10, crewMoralBonus: 10, regulationSpeed: 2.0, fastHospitalRelease: true }
         }
@@ -246,7 +246,7 @@ window.ProtecEquipements = {
           desc: 'Terminaux numériques haute puissance compatibles réseau de Sécurité Civile, micros déportés et oreillettes discrètes.',
           bullets: [
             '✓ Coordination fluide sans interférence sur les DPS de grande envergure',
-            '✓ +15 pts de réputation auprès de la Préfecture',
+            '✓ Appréciation renforcée par la Préfecture et le COD',
             '✓ Moins de fatigue mentale pour les chefs d’équipe'
           ],
           stats: { coordinationBonus: 0.30, prefectureRepBonus: 15 }
@@ -311,7 +311,7 @@ window.ProtecEquipements = {
           desc: 'Parkas et pantalons reconditionnés d’anciens stocks associatifs.',
           bullets: [
             '⚠️ Usure rapide et tissus vieillissants',
-            '⚪ Moral neutre pour les bénévoles'
+            '⚪ Confort et présentation basiques'
           ],
           stats: { moralBonus: 0, retentionBonus: 0 }
         },
@@ -324,7 +324,7 @@ window.ProtecEquipements = {
           maintenanceCostAnnual: 30,
           desc: 'Textiles respirants déperlants, bandes rétroréfléchissantes classe 3 haute visibilité et coupe ajustée.',
           bullets: [
-            '🌟 Gros boost de moral et d’investissement des bénévoles (+15 moral permanent)',
+            '🌟 Fort engagement et excellente cohésion d’équipe des bénévoles',
             '✓ Sentiment d’appartenance et valorisation d’image renforcés',
             '✓ Réduit significativement le taux d’attrition et départs de membres'
           ],
@@ -347,7 +347,7 @@ window.ProtecEquipements = {
       badge: 'Secours à Personne Standard',
       badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300',
       desc: 'Sac d’intervention complet avec oxygénothérapie d’urgence (bouteille O2 2L composite avec manodétendeur débitmètre), BAVU adulte et pédiatrique avec masques, saturomètre de pouls, tensiomètre manuel avec stéthoscope, colliers cervicaux pédiatriques et adultes réglables, garrots tourniquets, pansements compressifs hémostatiques, ciseaux Gesco et consommables de premiers soins.',
-      bonus: 'Dotation fondamentale de tout VPSP et PAPS. Améliore la rapidité de prise en charge des malaises et traumatismes de 35% et valorise la qualité du bilan secouriste (+15 pts réputation).'
+      bonus: 'Dotation fondamentale de tout VPSP et PAPS. Améliore la rapidité de prise en charge des malaises et traumatismes et valorise la qualité du bilan secouriste.'
     },
     {
       id: 'lot_secours_b',
@@ -358,7 +358,7 @@ window.ProtecEquipements = {
       badge: 'Immobilisation & Traumatologie',
       badgeColor: 'bg-indigo-100 text-indigo-900 border-indigo-300',
       desc: 'Matelas immobilisateur à dépression (matelas coquille homologué) avec pompe à dépression manuelle double effet, plan dur pédiatrique et adulte avec jeu complet de sangles araignée et immobilisateur de tête rigide, attelles à dépression pour membres supérieurs et inférieurs (attelles alu et dépression), chaise de transport d’escalier pliable en aluminium.',
-      bonus: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates. Prévient toute aggravation neurologique ou ostéo-articulaire (+25 pts de réputation et félicitations du médecin régulateur SAMU).'
+      bonus: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates. Prévient toute aggravation neurologique ou ostéo-articulaire et suscite les félicitations du médecin régulateur SAMU.'
     },
     {
       id: 'lot_secours_c',
@@ -369,7 +369,7 @@ window.ProtecEquipements = {
       badge: 'Poste Fixe & Accueil Victimes',
       badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
       desc: 'Tente gonflable de poste de secours 16 m² à déploiement rapide ou barnum armé renforcé, 2 brancards de soins sur tréteaux de consultation avec porte-perfusion, rampe d’éclairage LED autonome avec batterie, paravents de confidentialité pour respect de l’intimité des victimes, table d’examen et de secrétariat SINUS, tabourets d’auscultation pliables et poubelles DASRI étanches.',
-      bonus: 'Armement des Postes de Secours fixes pour grands dispositifs (DPS-ME, DPS-GE, festivals). Permet de soigner jusqu’à 6 victimes simultanément sans saturer les secours publics (+30 pts réputation).'
+      bonus: 'Armement des Postes de Secours fixes pour grands dispositifs (DPS-ME, DPS-GE, festivals). Permet de soigner jusqu’à 6 victimes simultanément sans saturer les secours publics.'
     },
     {
       id: 'lot_tronconnage',
@@ -380,7 +380,7 @@ window.ProtecEquipements = {
       badge: 'Tempêtes & Axes Routiers',
       badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
       desc: '2 tronçonneuses thermiques d’abattage et débitage (guides 45 & 50 cm), 1 tronçonneuse d’élagage, bidons de carburant 2T/huile, EPI anti-coupure complets (classe 2), tire-fort 1,6T avec câbles acier, haches d’abattage et serpes.',
-      bonus: 'Dégagement express d’arbres tombés sur les voies lors d’intempéries : suppression des risques de blocage, axes prioritaires rétablis et +25 pts de notoriété communale.'
+      bonus: 'Dégagement express d’arbres tombés sur les voies lors d’intempéries : suppression des risques de blocage et axes prioritaires rétablis pour la commune.'
     },
     {
       id: 'lot_pompage',
@@ -391,7 +391,7 @@ window.ProtecEquipements = {
       badge: 'Inondations & Crues',
       badgeColor: 'bg-blue-100 text-blue-900 border-blue-300',
       desc: '2 motopompes thermiques gros débit (60 m³/h et 30 m³/h auto-amorçantes), 2 pompes électriques submersibles vide-caves (eaux chargées), 100m de tuyaux de refoulement souples, tuyaux d’aspiration armés avec crépines, coffret électrique étanche IP67.',
-      bonus: 'Assèchement rapide des sous-sols, caves et parkings inondés. Permet de traiter jusqu’à 3 chantiers d’épuisement en simultané et rapporte +40% d’indemnité mairie (+160 €).'
+      bonus: 'Assèchement rapide des sous-sols, caves et parkings inondés. Permet de traiter jusqu’à 3 chantiers d’épuisement en simultané avec indemnisation municipale majorée.'
     },
     {
       id: 'lot_eclairage',
@@ -402,7 +402,7 @@ window.ProtecEquipements = {
       badge: 'Nuit, Black-out & PMA',
       badgeColor: 'bg-yellow-100 text-yellow-900 border-yellow-300',
       desc: 'Groupe électrogène insonorisé 3,5 kVA inverter, 2 mâts d’éclairage télescopiques 4m à projecteurs LED 360° (2x 50 000 lumens), ballon éclairant anti-éblouissant Airstar, 4 projecteurs rechargeables autonomes de chantier, enrouleurs étanches 50m.',
-      bonus: 'Illumination complète des Postes Médicaux Avancés (PMA), postes de commandement et zones de recherche de disparus nocturnes. Sécurité maximale des équipiers et +20 pts de réputation.'
+      bonus: 'Illumination complète des Postes Médicaux Avancés (PMA), postes de commandement et zones de recherche de disparus nocturnes. Sécurité maximale des équipiers.'
     },
     {
       id: 'lot_bachage',
@@ -413,7 +413,7 @@ window.ProtecEquipements = {
       badge: 'Intempéries & Toitures',
       badgeColor: 'bg-orange-100 text-orange-900 border-orange-300',
       desc: '6 grandes bâches armées imperméables 10x12m et 8x10m (250 g/m²), tasseaux et liteaux de fixation, cloueuses et agrafeuses pneumatiques, sangles d’arrimage à cliquet, cordages de fixation, échelles de toit et harnais antichute avec longes absorbantes.',
-      bonus: 'Mise hors d’eau d’urgence des toitures arrachées par les vents violents ou perforées par la grêle. Protection immédiate des foyers sinistrés (+30 pts de réputation et félicitations du Maire).'
+      bonus: 'Mise hors d’eau d’urgence des toitures arrachées par les vents violents ou perforées par la grêle. Protection immédiate des foyers sinistrés et reconnaissance des élus locaux.'
     },
     {
       id: 'lot_hebergement',
@@ -424,7 +424,7 @@ window.ProtecEquipements = {
       badge: 'Gymnases & Plan PCS',
       badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300',
       desc: '30 lits de camp pliants métalliques homologués Sécurité Civile (lits picots), 30 duvets thermiques grand froid, 30 kits d’hygiène individuels complets, paravents de séparation d’intimité, coin jeux et doudous d’urgence.',
-      bonus: 'Armement immédiat d’un Centre d’Hébergement d’Urgence (CHU) ou gymnase pour 30 sinistrés évacués lors d’inondations ou d’incendies d’immeubles (+35 pts de notoriété préfectorale).'
+      bonus: 'Armement immédiat d’un Centre d’Hébergement d’Urgence (CHU) ou gymnase pour 30 sinistrés évacués lors d’inondations ou d’incendies d’immeubles sous réquisition préfectorale.'
     },
     {
       id: 'lot_ravitaillement',
@@ -435,7 +435,7 @@ window.ProtecEquipements = {
       badge: 'Logistique Alimentaire & Crise',
       badgeColor: 'bg-rose-100 text-rose-900 border-rose-300',
       desc: 'Percolateur inox 15L pour boissons chaudes, 4 marmites isothermes 20L de maintien au chaud, réchauds grande puissance à gaz avec détendeurs sécurisés, barnum réfectoire pliant 3x3m avec tables et bancs, caisses de repas d’urgence et gobelets réutilisables.',
-      bonus: 'Distribution de boissons chaudes et repas complets aux secouristes, pompiers et personnes sinistrées lors de dispositifs de plus de 4h. Restaure +20% d’énergie et de moral aux équipages sur place.'
+      bonus: 'Distribution de boissons chaudes et repas complets aux secouristes, pompiers et personnes sinistrées lors de dispositifs de longue durée. Maintient l’énergie et le moral des équipages sur place.'
     },
     {
       id: 'lot_soutien_psy',
@@ -446,7 +446,7 @@ window.ProtecEquipements = {
       badge: 'Centre d’Accueil Impliqués (CAI)',
       badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
       desc: 'Mobilier ergonomique pliant pour sas d’accueil confidentiel, paravents acoustiques, plaids thermiques douillets, coin jeux/coloriages et peluches d’urgence pour enfants traumatisés, thermos de réconfort, fiches de traçabilité des impliqués et kits CUMP.',
-      bonus: 'Déploiement du CAI lors d’accidents collectifs ou de crises NOVI. Décuple l’impact des compétences AEP1 / AEP2 (+40 pts de réputation, apaisement immédiat des familles et traumatisme désamorcé).'
+      bonus: 'Déploiement du CAI lors d’accidents collectifs ou de crises NOVI. Décuple l’impact des compétences AEP, assurant l’apaisement immédiat des familles et la prise en charge du choc psychologique.'
     }
   ],
 
@@ -492,17 +492,17 @@ window.ProtecEquipements = {
       badge: 'Santé au Travail & Ergonomie',
       badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
       desc: 'Sièges relax inclinables et literie ergonomique pour la salle de veille et le foyer des secouristes en garde.',
-      bonus: '+25% de vitesse de régénération de fatigue lors des temps de repos au local.'
+      bonus: 'Accélère significativement la récupération physique lors des temps de repos au local.'
     },
     {
       id: 'cafe',
       name: 'Machine à Café Pro & Espace Convivialité',
       icon: '☕',
       price: 380,
-      badge: 'Vie d’Antenne & Moral',
+      badge: 'Vie d’Antenne & Convivialité',
       badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
       desc: 'Machine expresso haute capacité, bouilloire et distributeur de collations pour les retours d’interventions nocturnes.',
-      bonus: '+10% de moral permanent pour l’ensemble des bénévoles et salariés de l’antenne.'
+      bonus: 'Favorise la cohésion d’équipe et le réconfort après les interventions éprouvantes.'
     }
   ],
 
@@ -667,7 +667,7 @@ window.ProtecEquipements = {
 
     game.showToast(
       '🎉 Matériel Réceptionné & Armé !',
-      `« ${targetTierDef.title} » est désormais opérationnel ! Ancien matériel repris pour ${tradeInValue} €. Bénévoles fiers et motivés (+${moralBoost} moral) !`,
+      `« ${targetTierDef.title} » est désormais opérationnel ! Ancien matériel repris pour ${tradeInValue} €. Bénévoles fiers et motivés !`,
       'green'
     );
 
@@ -855,7 +855,7 @@ window.ProtecEquipements = {
     // 1. Lot Tronçonnage / Dégagement
     if ((mText.includes('arbre') || mText.includes('vent') || mText.includes('tempête') || mText.includes('dégagement') || mText.includes('voie')) && this.hasEquipment(game, 'lot_tronconnage')) {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + 25;
-      game.showToast('🪚 Lot Tronçonnage Déployé !', 'Les tronçonneuses et tire-forts ont permis un déblaiement rapide de la voirie (+25 pts de notoriété communale).', 'emerald');
+      game.showToast('🪚 Lot Tronçonnage Déployé !', 'Les tronçonneuses et tire-forts ont permis un déblaiement rapide de la voirie. Voie sécurisée !', 'emerald');
     }
 
     // 2. Lot Épuisement / Pompage
@@ -866,25 +866,25 @@ window.ProtecEquipements = {
       if (window.ProtecFinances) {
         window.ProtecFinances.recordTransaction(game, bonusPay, 'Indemnité Pompage Municipal (Lot Épuisement)', 'prestation');
       }
-      game.showToast('🚰 Lot Pompage & Épuisement !', `Motopompes thermiques déployées avec succès : caves et voiries asséchées (+${bonusPay} € indemnité mairie, +20 pts notoriété) !`, 'blue');
+      game.showToast('🚰 Lot Pompage & Épuisement !', `Motopompes thermiques déployées avec succès : caves et voiries asséchées (+${bonusPay} € indemnité mairie conventionnée) !`, 'blue');
     }
 
     // 3. Lot Bâchage & Consolidation
     if ((mText.includes('toiture') || mText.includes('bâchage') || mText.includes('grêle') || mText.includes('bourrasque')) && this.hasEquipment(game, 'lot_bachage')) {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + 30;
-      game.showToast('🛖 Lot Bâchage Déployé !', 'Mise hors d’eau d’urgence des toitures endommagées : habitations préservées des infiltrations (+30 pts notoriété) !', 'amber');
+      game.showToast('🛖 Lot Bâchage Déployé !', 'Mise hors d’eau d’urgence des toitures endommagées : habitations préservées des infiltrations avec succès !', 'amber');
     }
 
     // 4. Lot Éclairage d'urgence
     if ((mText.includes('nuit') || mText.includes('nocturne') || mText.includes('obscurité') || mText.includes('coupure') || mText.includes('pma') || mText.includes('recherche')) && this.hasEquipment(game, 'lot_eclairage')) {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + 20;
-      game.showToast('💡 Lot Éclairage Déployé !', 'Mâts LED 360° et ballon éclairant déployés : zone de travail sécurisée en pleine nuit (+20 pts notoriété) !', 'yellow');
+      game.showToast('💡 Lot Éclairage Déployé !', 'Mâts LED 360° et ballon éclairant déployés : zone de travail sécurisée en pleine nuit !', 'yellow');
     }
 
     // 5. Lot Hébergement d'urgence
     if ((mText.includes('gymnase') || mText.includes('hébergement') || mText.includes('sinistrés') || mText.includes('évacuation') || mText.includes('pcs')) && this.hasEquipment(game, 'lot_hebergement')) {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + 35;
-      game.showToast('🛏️ Lot Hébergement d’Urgence !', '30 lits de camp et kits d’hygiène installés dans le gymnase d’accueil communal (+35 pts notoriété préfectorale) !', 'emerald');
+      game.showToast('🛏️ Lot Hébergement d’Urgence !', '30 lits de camp et kits d’hygiène installés dans le gymnase d’accueil communal pour les sinistrés.', 'emerald');
     }
 
     // 6. Lot Ravitaillement / Cuisine de crise
@@ -895,13 +895,13 @@ window.ProtecEquipements = {
         v.energy = Math.min(100, (v.energy || 70) + 15);
         v.motivation = Math.min(100, (v.motivation || 70) + 10);
       });
-      game.showToast('🍲 Lot Ravitaillement Déployé !', 'Repas et boissons chaudes servis aux secouristes et impliqués (+15 pts notoriété, énergie équipage restaurée) !', 'rose');
+      game.showToast('🍲 Lot Ravitaillement Déployé !', 'Repas et boissons chaudes servis aux secouristes et impliqués : équipages réconfortés !', 'rose');
     }
 
     // 7. Lot Soutien psychologique & Accueil (CAI, CHU)
     if ((mText.includes('cai') || mText.includes('impliqués') || mText.includes('psychologique') || mText.includes('novi') || mText.includes('famille')) && this.hasEquipment(game, 'lot_soutien_psy')) {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + 40;
-      game.showToast('🫂 Lot Soutien Psy & Accueil (CAI) !', 'Sas confidentiel et prise en charge humaine déployés avec succès pour les familles et impliqués (+40 pts notoriété) !', 'purple');
+      game.showToast('🫂 Lot Soutien Psy & Accueil (CAI) !', 'Sas confidentiel et prise en charge humaine déployés avec succès pour les familles et impliqués !', 'purple');
     }
 
     // 8. Lot A, B, C
@@ -1045,6 +1045,25 @@ window.ProtecEquipements = {
             </span>
           </div>
 
+        </div>
+
+        <!-- Raccourci vers la Bourse de l'Occasion -->
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl">🏷️</span>
+            <div>
+              <strong class="text-slate-800 text-xs block">Bourse de l'Occasion & Revente Inter-Antennes</strong>
+              <span class="text-[11px] text-slate-500">Achetez du matériel révisé ou revendez vos surplus pour récupérer des fonds.</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 self-end sm:self-auto">
+            <button onclick="window.game.openModule('marche_occasion')" class="px-3 py-1.5 rounded-xl bg-pc-orange hover:bg-orange-600 active:scale-95 text-white font-extrabold text-xs shadow-xs transition cursor-pointer">
+              Bourse de l'Occasion 🏷️
+            </button>
+            <button onclick="window.ProtecMarcheOccasion.openSellModal('equipment')" class="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-extrabold text-xs border border-slate-300 shadow-xs transition cursor-pointer">
+              Vendre du Matériel
+            </button>
+          </div>
         </div>
 
         <!-- Synthèse Visuelle des Affectations (VPSP & Salle Pédagogique) -->

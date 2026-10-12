@@ -300,6 +300,20 @@ window.ProtecAdvancedModals = {
           </div>
         </div>
 
+        <!-- Raccourci vers le Marché de l'Occasion -->
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200/80 flex items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl">🏷️</span>
+            <div>
+              <strong class="text-slate-800 text-xs block">Envie d'économiser sur votre parc roulant ?</strong>
+              <span class="text-[11px] text-slate-500">Découvrez les véhicules révisés cédés par les autres directeurs (jusqu'à -50% vs neuf).</span>
+            </div>
+          </div>
+          <button onclick="window.game.openModule('marche_occasion')" class="px-3.5 py-1.5 rounded-xl bg-pc-orange hover:bg-orange-600 active:scale-95 text-white font-extrabold text-xs shadow-xs transition cursor-pointer flex-shrink-0">
+            Voir l'Occasion 🏷️
+          </button>
+        </div>
+
         <!-- Barre de Recherche Véhicules -->
         <div class="relative">
           <input 

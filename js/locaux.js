@@ -2432,9 +2432,10 @@ window.ProtecLocaux = {
         <div class="space-y-2.5">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1 pb-1 border-b border-slate-100">
             <span class="text-slate-600">Sélectionnez un mobilier à acheter et placer dans <strong>${selectedRoom?.name?.split('\n')[0] || 'la pièce'}</strong> :</span>
-            <div class="flex items-center gap-3">
-              <span class="text-xs font-bold text-slate-700">Trésorerie disponible : <strong class="text-emerald-600 font-black">${money.toLocaleString('fr-FR')} €</strong></span>
-              <span class="text-pc-blue font-bold text-[11px] hidden sm:inline">• Déplacement & rotation [R] 100% gratuits</span>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="window.game.openModule('marche_occasion')" class="px-2.5 py-1 rounded-xl bg-orange-50 hover:bg-orange-100 text-pc-orange font-bold text-[11px] border border-orange-200 transition">Bourse Occasion 🏷️</button>
+              <button type="button" onclick="window.ProtecMarcheOccasion.openSellModal('equipment')" class="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] border border-slate-300 transition">Vendre Mobilier</button>
+              <span class="text-xs font-bold text-slate-700 ml-1">Trésorerie : <strong class="text-emerald-600 font-black">${money.toLocaleString('fr-FR')} €</strong></span>
             </div>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
@@ -3065,14 +3066,10 @@ window.ProtecLocaux = {
           <!-- CANVAS PRINCIPAL HAUTE DÉFINITION -->
           <canvas id="architect-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
 
-          <!-- 1. En-tête gauche : Badge Plan 2D & Statut En direct -->
+          <!-- 1. En-tête gauche : Badge Plan d'Architecte 2D -->
           <div class="absolute top-3.5 left-3.5 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-lg text-xs font-bold text-white pointer-events-none">
             <span class="text-blue-400 text-sm">📐</span>
-            <span>Plan 2D</span>
-            <span class="flex items-center gap-1.5 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              En direct (1)
-            </span>
+            <span>Plan d'Aménagement 2D</span>
           </div>
 
           <!-- 2. En-tête centre : Badge 2D -->

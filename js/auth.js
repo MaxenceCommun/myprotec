@@ -13,8 +13,11 @@ window.ProtecAuth = {
     if (this.token) {
       this.checkSession(game);
     } else {
-      // Connexion obligatoire au lancement du jeu : affiche le sas de connexion
-      this.openAuthModal(true);
+      // Si la landing page est active et visible, ne pas afficher la modale au chargement pour laisser le joueur découvrir l'accueil
+      const landingEl = document.getElementById('myprotec-landing-page');
+      if (!landingEl || landingEl.classList.contains('is-hidden')) {
+        this.openAuthModal(true);
+      }
     }
 
     // Intercepter la sauvegarde de partie pour l'envoyer au serveur multijoueur
@@ -223,14 +226,21 @@ window.ProtecAuth = {
   },
 
   closeAuthModal() {
-    // Impossible de fermer si non connecté
+    const landingEl = document.getElementById('myprotec-landing-page');
+    const isLandingActive = landingEl && !landingEl.classList.contains('is-hidden');
+
+    // Impossible de fermer si non connecté, sauf si la landing page est affichée à l'écran
     if (!this.currentUser || !this.token) {
-      return;
+      if (!isLandingActive) return;
     }
     const modal = document.getElementById('auth-modal');
     if (modal) {
       modal.classList.add('hidden');
       modal.classList.remove('flex');
+    }
+    // Si connecté avec succès, masquer la page d'accueil pour afficher le poste de commandement
+    if (this.currentUser && this.token && landingEl) {
+      landingEl.classList.add('is-hidden');
     }
   },
 
@@ -776,15 +786,24 @@ window.ProtecAuth = {
   },
 
   debouncedSaveTimeout: null,
-  debouncedSaveToDatabase(game) {
+  hasPendingSave: false,
+  debouncedSaveToDatabase(game, forceInstant = false) {
     if (this.debouncedSaveTimeout) clearTimeout(this.debouncedSaveTimeout);
+    if (forceInstant) {
+      this.saveToDatabase(game);
+      return;
+    }
     this.debouncedSaveTimeout = setTimeout(() => {
       this.saveToDatabase(game);
-    }, 1500);
+    }, 400);
   },
 
   async saveToDatabase(game) {
-    if (!this.currentUser || this.isSyncing) return;
+    if (!this.currentUser) return;
+    if (this.isSyncing) {
+      this.hasPendingSave = true;
+      return;
+    }
     // Ne pas sauvegarder un état sans antenne pour ne pas créer d'anomalies
     if (!game.stations || game.stations.length === 0) return;
 
@@ -799,6 +818,13 @@ window.ProtecAuth = {
 
       // 2. Synchronisation de redondance avec le serveur local
       if (this.token && !this.token.startsWith('supa-')) {
+        const moneyVal = (game.resources?.money !== undefined) ? game.resources.money : ((game.resources?.budget !== undefined) ? game.resources.budget : 15000);
+        if (game.resources) {
+          game.resources.money = moneyVal;
+          game.resources.budget = moneyVal;
+          game.resources.funds = moneyVal;
+        }
+
         const stateToSave = {
           player: game.player,
           clock: game.clock,
@@ -817,8 +843,20 @@ window.ProtecAuth = {
           challenges: game.challenges,
           adRewards: game.adRewards,
           annualContracts: game.annualContracts || [],
-          messagesHistory: game.messagesHistory || [],
+          messagesHistory: game.messagesHistory || {},
           monthlyEventsGenerated: game.monthlyEventsGenerated || {},
+          aascConvention: game.aascConvention || null,
+          samuConvention: game.samuConvention || null,
+          sdisConvention: game.sdisConvention || null,
+          sncfConvention: game.sncfConvention || null,
+          cumpConvention: game.cumpConvention || null,
+          conventionRequests: game.conventionRequests || null,
+          financesHistory: game.financesHistory || [],
+          alertSubscription: game.alertSubscription || null,
+          treasury: game.treasury || null,
+          bureau: game.bureau || null,
+          samuGarde: game.samuGarde || null,
+          sdisGarde: game.sdisGarde || null,
           reputation_samu: game.reputation_samu !== undefined ? game.reputation_samu : 50,
           reputation_sdis: game.reputation_sdis !== undefined ? game.reputation_sdis : 50,
           reputation_prefecture: game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50,
@@ -841,6 +879,10 @@ window.ProtecAuth = {
       this.updateHeaderUI(true);
     } finally {
       this.isSyncing = false;
+      if (this.hasPendingSave) {
+        this.hasPendingSave = false;
+        setTimeout(() => this.saveToDatabase(game), 50);
+      }
     }
   },
 
@@ -914,7 +956,26 @@ window.ProtecAuth = {
       if (savedData.reputation_prefecture !== undefined) game.reputation_prefecture = savedData.reputation_prefecture;
       if (savedData.reputation_villes && typeof savedData.reputation_villes === 'object') game.reputation_villes = savedData.reputation_villes;
 
-      if (savedData.resources) game.resources = savedData.resources;
+      if (savedData.resources) {
+        game.resources = savedData.resources;
+        const m = (game.resources.money !== undefined) ? game.resources.money : ((game.resources.budget !== undefined) ? game.resources.budget : 15000);
+        game.resources.money = m;
+        game.resources.budget = m;
+        game.resources.funds = m;
+      }
+      if (savedData.aascConvention) game.aascConvention = savedData.aascConvention;
+      if (savedData.samuConvention) game.samuConvention = savedData.samuConvention;
+      if (savedData.sdisConvention) game.sdisConvention = savedData.sdisConvention;
+      if (savedData.sncfConvention) game.sncfConvention = savedData.sncfConvention;
+      if (savedData.cumpConvention) game.cumpConvention = savedData.cumpConvention;
+      if (savedData.conventionRequests) game.conventionRequests = savedData.conventionRequests;
+      if (Array.isArray(savedData.financesHistory)) game.financesHistory = savedData.financesHistory;
+      if (savedData.alertSubscription) game.alertSubscription = savedData.alertSubscription;
+      if (savedData.treasury) game.treasury = savedData.treasury;
+      if (savedData.bureau) game.bureau = savedData.bureau;
+      if (savedData.samuGarde) game.samuGarde = savedData.samuGarde;
+      if (savedData.sdisGarde) game.sdisGarde = savedData.sdisGarde;
+
       if (savedData.clock) game.clock = savedData.clock;
       if (savedData.grants) game.grants = savedData.grants;
       if (savedData.baseUpgrades) game.baseUpgrades = savedData.baseUpgrades;
@@ -967,8 +1028,11 @@ window.ProtecAuth = {
     }
     this.clearSession();
     game.showToast('Déconnexion', 'Vous avez quitté le serveur multijoueur.', 'blue');
-    // Réaffiche immédiatement le sas de connexion obligatoire
-    this.openAuthModal(true);
+    if (window.MyProtecLanding) {
+      window.MyProtecLanding.showLanding();
+    } else {
+      this.openAuthModal(true);
+    }
   },
 
   // Prise en compte de la suppression du compte dans la base de données

@@ -18,8 +18,18 @@ CREATE TABLE IF NOT EXISTS players (
   role TEXT DEFAULT 'directeur',
   alliance_id TEXT DEFAULT 'alliance-fnpc',
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  last_login TIMESTAMPTZ DEFAULT NOW()
+  last_login TIMESTAMPTZ DEFAULT NOW(),
+  is_banned BOOLEAN DEFAULT FALSE,
+  ban_reason TEXT,
+  time_tracking JSONB DEFAULT '{"activeSeconds":0,"idleSeconds":0,"lastSeen":0}'::jsonb,
+  last_active_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Mises à niveau idempotentes pour players existante
+ALTER TABLE players ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS ban_reason TEXT;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS time_tracking JSONB DEFAULT '{"activeSeconds":0,"idleSeconds":0,"lastSeen":0}'::jsonb;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ DEFAULT NOW();
 
 -- 3. TABLE DES SAUVEGARDES CLOUD DU MONDE PERSISTANT
 CREATE TABLE IF NOT EXISTS game_saves (
@@ -720,4 +730,264 @@ CREATE INDEX IF NOT EXISTS idx_volunteers_station ON volunteers(station_id);
 CREATE INDEX IF NOT EXISTS idx_volunteers_commune ON volunteers(commune);
 ALTER TABLE volunteers DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON TABLE volunteers TO anon, authenticated, service_role;
+
+-- ==============================================================================
+-- 10. FORMATIONS B2B, STRUCTURES ET MARCHÉS D'ENTREPRISES (SST, PSC, GQS)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS formation_b2b_proposals (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  department_code TEXT DEFAULT '54',
+  antenne_id TEXT NOT NULL,
+  client_name TEXT NOT NULL,
+  client_type TEXT DEFAULT 'pme', -- 'pme', 'btp', 'mairie', 'scolaire', 'industrie', 'sport'
+  training_type TEXT NOT NULL, -- 'SST', 'MAC_SST', 'PSC', 'GQS'
+  attendees_count INT NOT NULL DEFAULT 8,
+  mode TEXT NOT NULL DEFAULT 'intra', -- 'intra', 'inter'
+  client_target_budget NUMERIC NOT NULL DEFAULT 1200,
+  proposed_price NUMERIC,
+  acceptance_rate INT DEFAULT 75,
+  status TEXT NOT NULL DEFAULT 'pending_quote', -- 'pending_quote', 'evaluating', 'accepted', 'rejected', 'in_progress', 'completed'
+  trainer_id TEXT,
+  vehicle_id TEXT,
+  consumable_cost NUMERIC DEFAULT 80,
+  deadline TIMESTAMPTZ,
+  evaluation_ends_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  details JSONB DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_formation_b2b_antenne ON formation_b2b_proposals(antenne_id);
+CREATE INDEX IF NOT EXISTS idx_formation_b2b_status ON formation_b2b_proposals(status);
+CREATE INDEX IF NOT EXISTS idx_formation_b2b_dept ON formation_b2b_proposals(department_code);
+ALTER TABLE formation_b2b_proposals DISABLE ROW LEVEL SECURITY;
+-- ==============================================================================
+-- 11. BOURSE DE L'OCCASION & MARCHÉ INTER-ANTENNES (VÉHICULES, MATÉRIEL, MOBILIER)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS market_listings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  seller_user_id TEXT NOT NULL,
+  seller_antenne_id TEXT,
+  seller_name TEXT NOT NULL,
+  seller_station_name TEXT DEFAULT 'Antenne Locale',
+  seller_dept TEXT DEFAULT '54',
+  category TEXT NOT NULL CHECK (category IN ('vehicle', 'equipment')),
+  item_type TEXT NOT NULL,
+  item_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  price BIGINT NOT NULL CHECK (price >= 0),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'sold', 'cancelled')),
+  buyer_antenne_id TEXT,
+  buyer_name TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sold_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_market_status ON market_listings(status);
+CREATE INDEX IF NOT EXISTS idx_market_category ON market_listings(category);
+CREATE INDEX IF NOT EXISTS idx_market_seller ON market_listings(seller_user_id);
+CREATE INDEX IF NOT EXISTS idx_market_created ON market_listings(created_at DESC);
+
+-- Sécurité et RLS
+ALTER TABLE market_listings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "market_select_all" ON market_listings;
+CREATE POLICY "market_select_all" ON market_listings FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "market_insert_seller" ON market_listings;
+CREATE POLICY "market_insert_seller" ON market_listings FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "market_update_seller_or_buyer" ON market_listings;
+CREATE POLICY "market_update_seller_or_buyer" ON market_listings FOR UPDATE USING (true);
+
+GRANT ALL ON TABLE market_listings TO anon, authenticated, service_role;
+
+-- Fonction RPC transactionnelle d'achat atomique (sans duplication ni condition de concurrence)
+CREATE OR REPLACE FUNCTION buy_market_listing(
+  p_listing_id UUID,
+  p_buyer_id TEXT,
+  p_buyer_name TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_listing RECORD;
+  v_buyer_funds NUMERIC;
+  v_buyer_save RECORD;
+  v_seller_gain NUMERIC;
+BEGIN
+  -- 1. Verrouiller la ligne de l'annonce pour éviter les achats concurrents simultanés (FOR UPDATE)
+  SELECT * INTO v_listing
+  FROM market_listings
+  WHERE id = p_listing_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Annonce introuvable.');
+  END IF;
+
+  IF v_listing.status <> 'active' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Cet article a déjà été vendu ou retiré de la vente.');
+  END IF;
+
+  IF v_listing.seller_user_id = p_buyer_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Vous ne pouvez pas acheter votre propre annonce.');
+  END IF;
+
+  -- 2. Vérifier les fonds de l'acheteur dans game_saves
+  SELECT funds, save_data INTO v_buyer_save
+  FROM game_saves
+  WHERE user_id = p_buyer_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    SELECT funds, save_data INTO v_buyer_save
+    FROM game_saves
+    WHERE username = p_buyer_name
+    FOR UPDATE;
+  END IF;
+
+  v_buyer_funds := COALESCE(v_buyer_save.funds, 0);
+  IF v_buyer_funds <= 0 AND v_buyer_save.save_data IS NOT NULL THEN
+    v_buyer_funds := COALESCE((v_buyer_save.save_data->'resources'->>'money')::numeric, 0);
+  END IF;
+
+  IF v_buyer_funds < v_listing.price THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Trésorerie insuffisante pour finaliser cet achat.');
+  END IF;
+
+  -- 3. Débiter l'acheteur dans game_saves
+  UPDATE game_saves
+  SET 
+    funds = funds - v_listing.price,
+    save_data = jsonb_set(
+      save_data, 
+      '{resources,money}', 
+      to_jsonb(COALESCE((save_data->'resources'->>'money')::numeric, funds) - v_listing.price)
+    ),
+    updated_at = NOW()
+  WHERE (user_id = p_buyer_id OR username = p_buyer_name);
+
+  -- 4. Créditer le vendeur dans game_saves
+  v_seller_gain := v_listing.price;
+  UPDATE game_saves
+  SET 
+    funds = funds + v_seller_gain,
+    save_data = jsonb_set(
+      save_data, 
+      '{resources,money}', 
+      to_jsonb(COALESCE((save_data->'resources'->>'money')::numeric, funds) + v_seller_gain)
+    ),
+    updated_at = NOW()
+  WHERE (user_id = v_listing.seller_user_id OR username = v_listing.seller_name);
+
+  -- 5. Marquer l'annonce comme vendue
+  UPDATE market_listings
+  SET 
+    status = 'sold',
+    buyer_antenne_id = p_buyer_id,
+    buyer_name = p_buyer_name,
+    sold_at = NOW()
+  WHERE id = p_listing_id;
+
+  RETURN jsonb_build_object(
+    'success', true, 
+    'message', 'Achat d''occasion validé ! Le bien a été transféré à votre antenne.',
+    'listing_id', v_listing.id,
+    'price', v_listing.price,
+    'category', v_listing.category,
+    'item_type', v_listing.item_type,
+    'item_data', v_listing.item_data
+  );
+END;
+$$;
+
+-- Fonction RPC pour annuler et retirer de la vente
+CREATE OR REPLACE FUNCTION cancel_market_listing(
+  p_listing_id UUID,
+  p_user_id TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_listing RECORD;
+BEGIN
+  SELECT * INTO v_listing
+  FROM market_listings
+  WHERE id = p_listing_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Annonce introuvable.');
+  END IF;
+
+  IF v_listing.seller_user_id <> p_user_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Action non autorisée : vous n''êtes pas le vendeur.');
+  END IF;
+
+  IF v_listing.status <> 'active' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Cette annonce n''est plus active.');
+  END IF;
+
+  UPDATE market_listings
+  SET status = 'cancelled'
+  WHERE id = p_listing_id;
+
+  RETURN jsonb_build_object(
+    'success', true, 
+    'message', 'Annonce retirée. Le bien est réintégré à votre antenne.',
+    'listing_id', v_listing.id,
+    'category', v_listing.category,
+    'item_data', v_listing.item_data
+  );
+END;
+$$;
+
+-- ==============================================================================
+-- 12. GOUVERNANCE DÉPARTEMENTALE (APC - ASSOCIATIONS DE PROTECTION CIVILE)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS apc_departments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  department_code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  president_id TEXT,
+  president_name TEXT,
+  treasurer_id TEXT,
+  treasurer_name TEXT,
+  secretary_id TEXT,
+  secretary_name TEXT,
+  treasury NUMERIC DEFAULT 0,
+  daily_contribution NUMERIC DEFAULT 50,
+  astreinte_bonus NUMERIC DEFAULT 20,
+  conventions JSONB DEFAULT '[]'::jsonb,
+  mutual_equipment JSONB DEFAULT '[]'::jsonb,
+  election_history JSONB DEFAULT '[]'::jsonb,
+  current_votes JSONB DEFAULT '{}'::jsonb,
+  debts JSONB DEFAULT '{}'::jsonb,
+  solidarity_fund JSONB DEFAULT '[]'::jsonb,
+  last_processed_day INT DEFAULT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_apc_dept_code ON apc_departments(department_code);
+
+-- Droits et RLS pour APC
+ALTER TABLE apc_departments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "apc_select_all" ON apc_departments;
+CREATE POLICY "apc_select_all" ON apc_departments FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "apc_insert_all" ON apc_departments;
+CREATE POLICY "apc_insert_all" ON apc_departments FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "apc_update_all" ON apc_departments;
+CREATE POLICY "apc_update_all" ON apc_departments FOR UPDATE USING (true);
+
+GRANT ALL ON TABLE apc_departments TO anon, authenticated, service_role;
+
+
 

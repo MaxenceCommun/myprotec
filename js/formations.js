@@ -317,10 +317,653 @@ window.ProtecFormations = {
     }
   ],
 
+  // --- ÉTAT ET CONFIGURATIONS DU SYSTÈME B2B (ENTREPRISES & INSTITUTIONS) ---
+  mainTab: 'entreprises', // 'entreprises' ou 'grand_public'
+  b2bFilter: 'tous', // 'tous', 'pending', 'evaluating', 'accepted', 'completed'
+  activeQuoteModalProposalId: null,
+
+  // Référentiel des formations B2B proposées aux entreprises
+  TRAINING_B2B_CONFIG: {
+    'SST': {
+      title: 'SST - Sauveteur Secouriste du Travail (Initial)',
+      badge: 'SST 14h',
+      desc: 'Formation certifiante INRS de 14 heures pour les salariés d’entreprises, usines et chantiers.',
+      durationHours: 14,
+      minAttendees: 6,
+      maxAttendees: 10,
+      baseBudget: 1400,
+      budgetMin: 1100,
+      budgetMax: 1800,
+      consumableCost: 110,
+      kitRequired: 'kit_pedago_sst',
+      kitName: 'Kit Pédagogique SST',
+      trainerSkillReq: 'formateur_sst',
+      trainerSkillLabel: 'Formateur SST',
+      repGain: 18,
+      isSST: true
+    },
+    'MAC_SST': {
+      title: 'MAC SST - Maintien & Actualisation des Compétences',
+      badge: 'MAC SST 7h',
+      desc: 'Recyclage obligatoire périodique de 7 heures (tous les 24 mois) pour renouveler la carte SST.',
+      durationHours: 7,
+      minAttendees: 6,
+      maxAttendees: 10,
+      baseBudget: 850,
+      budgetMin: 650,
+      budgetMax: 1150,
+      consumableCost: 65,
+      kitRequired: 'kit_pedago_sst',
+      kitName: 'Kit Pédagogique SST',
+      trainerSkillReq: 'formateur_sst',
+      trainerSkillLabel: 'Formateur SST',
+      repGain: 12,
+      isRecycling: true
+    },
+    'PSC': {
+      title: 'PSC - Prévention et Secours Civiques (Collectif)',
+      badge: 'PSC 7h',
+      desc: 'Formation citoyenne certifiante de 7 heures pour les agents territoriaux, enseignants et personnels associatifs.',
+      durationHours: 7,
+      minAttendees: 7,
+      maxAttendees: 10,
+      baseBudget: 650,
+      budgetMin: 480,
+      budgetMax: 900,
+      consumableCost: 50,
+      kitRequired: 'kit_pedago_psc',
+      kitName: 'Kit Pédagogique PSC',
+      trainerSkillReq: 'formateur_psc',
+      trainerSkillLabel: 'Formateur PSC / PS',
+      repGain: 10
+    },
+    'GQS': {
+      title: 'GQS - Gestes Qui Sauvent (Sensibilisation)',
+      badge: 'GQS 2h',
+      desc: 'Atelier de sensibilisation courte (2h) : massage cardiaque, défibrillateur DAE et gestes d’urgence face aux hémorragies.',
+      durationHours: 2,
+      minAttendees: 10,
+      maxAttendees: 15,
+      baseBudget: 350,
+      budgetMin: 220,
+      budgetMax: 480,
+      consumableCost: 25,
+      kitRequired: 'kit_pedago_psc',
+      kitName: 'Kit Pédagogique PSC',
+      trainerSkillReq: 'formateur_psc',
+      trainerSkillLabel: 'Formateur PSC / PS',
+      repGain: 6
+    }
+  },
+
+  // Vivier de clients potentiels et activités économiques
+  CLIENT_PRESETS: [
+    { name: 'Bouygues Bâtiment Grand Est', type: 'btp', label: 'BTP & Chantier Gros Œuvre', icon: 'hard-hat' },
+    { name: 'Eiffage Travaux Publics', type: 'btp', label: 'Génie Civil & BTP', icon: 'hard-hat' },
+    { name: 'Vinci Construction Métropole', type: 'btp', label: 'Travaux Publics & Ouvrages', icon: 'hard-hat' },
+    { name: 'Amazon Logistics Platform', type: 'industrie', label: 'Plateforme Logistique', icon: 'truck' },
+    { name: 'Entrepôts Stef Frais', type: 'industrie', label: 'Chaîne Logistique & Transport', icon: 'truck' },
+    { name: 'ArcelorMittal Site Industriel', type: 'industrie', label: 'Usine Sidérurgie & Fonderie', icon: 'factory' },
+    { name: 'Safran Aérostructures', type: 'industrie', label: 'Haute Technologie Aéronautique', icon: 'plane' },
+    { name: 'Mairie Centrale - Services Techniques', type: 'mairie', label: 'Collectivité / Mairie', icon: 'landmark' },
+    { name: 'Communauté Urbaine Métropole', type: 'mairie', label: 'Agents Intercommunaux', icon: 'landmark' },
+    { name: 'Médiathèque Municipale & Culture', type: 'mairie', label: 'Service Public Municipal', icon: 'landmark' },
+    { name: 'Lycée Polyvalent Régional', type: 'scolaire', label: 'Enseignement Secondaire & Pro', icon: 'graduation-cap' },
+    { name: 'Collège Saint-Exupéry', type: 'scolaire', label: 'Personnel Éducatif & Enseignants', icon: 'graduation-cap' },
+    { name: 'Groupe Scolaire Pasteur (ATSEM)', type: 'scolaire', label: 'Écoles Primaires & Petite Enfance', icon: 'graduation-cap' },
+    { name: 'Galeries Lafayette & Centre Commercial', type: 'commerce', label: 'Commerce & Retail', icon: 'shopping-bag' },
+    { name: 'Leroy Merlin - Équipe Sécurité', type: 'commerce', label: 'Grande Distribution Bricolage', icon: 'shopping-bag' },
+    { name: 'Siège Régional Banque Populaire', type: 'commerce', label: 'Secteur Tertiaire & Bureaux', icon: 'building' },
+    { name: 'Complexe Aquatique Métropolitain', type: 'sport', label: 'Sports & Loisirs Nautiques', icon: 'activity' },
+    { name: 'Club Omnisports Régional', type: 'sport', label: 'Association Sportive & Éducateurs', icon: 'trophy' }
+  ],
+
   // Initialisation de l'état
   injectState(game) {
     if (!game.sessionsFormation) {
       game.sessionsFormation = [];
+    }
+    if (!game.formationB2BProposals) {
+      game.formationB2BProposals = [];
+    }
+    this.generateB2BOpportunities(game);
+  },
+
+  setMainTab(tab) {
+    this.mainTab = tab;
+    if (window.game) this.renderModal(window.game);
+  },
+
+  setB2BFilter(f) {
+    this.b2bFilter = f;
+    if (window.game) this.renderModal(window.game);
+  },
+
+  // 1. GÉNÉRATEUR D'OPPORTUNITÉS B2B ENTRANTES
+  generateB2BOpportunities(game, forceNew = false) {
+    if (!game) return;
+    if (!game.formationB2BProposals) game.formationB2BProposals = [];
+
+    const now = Date.now();
+
+    // Nettoyage des opportunités non traitées dont la date butoir est échue
+    game.formationB2BProposals = game.formationB2BProposals.filter(p => {
+      if (p.status === 'pending_quote' && p.deadline && now > p.deadline) {
+        return false;
+      }
+      return true;
+    });
+
+    const activeCount = game.formationB2BProposals.filter(p => ['pending_quote', 'evaluating', 'accepted', 'in_progress'].includes(p.status)).length;
+    const targetPool = forceNew ? (activeCount + 1) : Math.max(3, Math.min(5, 3 + Math.floor((game.resources?.reputationScore || 50) / 100)));
+
+    if (activeCount < targetPool || forceNew) {
+      const needed = forceNew ? 1 : (targetPool - activeCount);
+      const station = game.stations?.[0] || { city: 'Nancy', id: 'station-1' };
+      const deptCode = game.currentDepartmentCode || game.player?.departmentCode || '54';
+
+      for (let i = 0; i < needed; i++) {
+        // Choix du type de formation (Pondération : SST 40%, MAC_SST 25%, PSC 20%, GQS 15%)
+        const roll = Math.random();
+        let trainingType = 'SST';
+        if (roll < 0.40) trainingType = 'SST';
+        else if (roll < 0.65) trainingType = 'MAC_SST';
+        else if (roll < 0.85) trainingType = 'PSC';
+        else trainingType = 'GQS';
+
+        const cfg = this.TRAINING_B2B_CONFIG[trainingType];
+        const clientPreset = this.CLIENT_PRESETS[Math.floor(Math.random() * this.CLIENT_PRESETS.length)];
+        const attendeesCount = Math.floor(Math.random() * (cfg.maxAttendees - cfg.minAttendees + 1)) + cfg.minAttendees;
+
+        // Modalité : 65% Intra-entreprise (chez le client) vs 35% Inter-entreprise (à l'antenne)
+        const mode = Math.random() < 0.65 ? 'intra' : 'inter';
+
+        // Budget indicatif du client avec légère variation locale
+        const variation = 0.88 + Math.random() * 0.28; // 88% à 116% du budget de base
+        const targetBudget = Math.round((cfg.baseBudget * variation) / 10) * 10;
+
+        // Délai de réponse accordé à l'antenne (de 24h à 72h réelles / simulées)
+        const deadlineHours = 24 + Math.floor(Math.random() * 48);
+        const deadline = now + (deadlineHours * 3600 * 1000);
+
+        const proposalId = `b2b-${now}-${Math.random().toString(36).substring(2, 7)}`;
+
+        const newProposal = {
+          id: proposalId,
+          department_code: deptCode,
+          antenne_id: station.id || 'station-1',
+          client_name: clientPreset.name,
+          client_type: clientPreset.type,
+          client_label: clientPreset.label,
+          client_icon: clientPreset.icon,
+          client_city: station.city || 'Nancy',
+          training_type: trainingType,
+          attendees_count: attendeesCount,
+          mode: mode,
+          client_target_budget: targetBudget,
+          clientTargetBudget: targetBudget,
+          proposed_price: null,
+          proposedPrice: null,
+          acceptance_rate: 75,
+          acceptanceRate: 75,
+          status: 'pending_quote', // 'pending_quote', 'evaluating', 'accepted', 'rejected', 'in_progress', 'completed'
+          trainer_id: null,
+          trainerId: null,
+          vehicle_id: null,
+          vehicleId: null,
+          consumable_cost: cfg.consumableCost,
+          consumableCost: cfg.consumableCost,
+          deadline: deadline,
+          evaluation_ends_at: null,
+          evaluationEndsAt: null,
+          created_at: new Date(now).toISOString(),
+          createdAt: now
+        };
+
+        game.formationB2BProposals.unshift(newProposal);
+        this.syncB2BWithSupabase(game, newProposal);
+      }
+
+      game.saveGame();
+    }
+  },
+
+  // 2. CALCUL DYNAMIQUE DE LA PROBABILITÉ D'ACCORD (JAUGE LIVE)
+  calculateQuoteOdds(game, proposal, proposedPrice) {
+    if (!proposal) return { odds: 50, label: 'Inconnu' };
+
+    const target = Number(proposal.client_target_budget || proposal.clientTargetBudget || 1200);
+    const price = Number(proposedPrice);
+
+    if (!price || isNaN(price) || price <= 0) {
+      return { odds: 0, label: 'Montant requis', baseOdds: 0, repBonus: 0, conventionBonus: 0, marginNet: 0 };
+    }
+
+    const ratio = price / target;
+    let baseOdds = 75;
+
+    if (ratio <= 0.80) {
+      baseOdds = 96;
+    } else if (ratio <= 1.00) {
+      baseOdds = 96 - ((ratio - 0.80) / 0.20) * 16; // 96% -> 80%
+    } else if (ratio <= 1.15) {
+      baseOdds = 80 - ((ratio - 1.00) / 0.15) * 26; // 80% -> 54%
+    } else if (ratio <= 1.30) {
+      baseOdds = 54 - ((ratio - 1.15) / 0.15) * 28; // 54% -> 26%
+    } else if (ratio <= 1.55) {
+      baseOdds = 26 - ((ratio - 1.30) / 0.25) * 19; // 26% -> 7%
+    } else {
+      baseOdds = Math.max(1, 7 - (ratio - 1.55) * 12);
+    }
+
+    // Bonus de Réputation de l'antenne (+0% à +15%)
+    const currentRep = game?.resources?.reputationScore || 50;
+    const repBonus = Math.min(15, Math.round(Math.max(0, currentRep - 30) / 7));
+
+    // Bonus des conventions officielles et APC départementale (+5% à +10%)
+    let conventionBonus = 0;
+    if (window.ProtecAPC && typeof window.ProtecAPC.getEffectiveMultiplier === 'function' && window.ProtecAPC.getEffectiveMultiplier(game) > 1) {
+      conventionBonus += 6;
+    }
+    if (game?.conventions && game.conventions.length > 0) {
+      conventionBonus += 4;
+    }
+
+    const totalOdds = Math.max(2, Math.min(98, Math.round(baseOdds + repBonus + conventionBonus)));
+    const consumable = Number(proposal.consumable_cost || proposal.consumableCost || 80);
+    const marginNet = Math.max(0, price - consumable);
+
+    return {
+      odds: totalOdds,
+      ratio: ratio,
+      baseOdds: Math.round(baseOdds),
+      repBonus: repBonus,
+      conventionBonus: conventionBonus,
+      marginNet: marginNet
+    };
+  },
+
+  // 3. GESTION DE LA MODALE D'ÉMISSION DU DEVIS
+  openQuoteModal(proposalId) {
+    this.activeQuoteModalProposalId = proposalId;
+    if (window.game) this.renderModal(window.game);
+  },
+
+  closeQuoteModal() {
+    this.activeQuoteModalProposalId = null;
+    if (window.game) this.renderModal(window.game);
+  },
+
+  updateQuoteModalLive(proposalId, newPrice) {
+    if (!window.game) return;
+    const proposal = (window.game.formationB2BProposals || []).find(p => p.id === proposalId);
+    if (!proposal) return;
+
+    const price = Math.max(10, Number(newPrice) || 0);
+    const syncInput = document.getElementById('b2b-quote-price-input');
+    const syncSlider = document.getElementById('b2b-quote-price-slider');
+    if (syncInput && document.activeElement !== syncInput) syncInput.value = price;
+    if (syncSlider && document.activeElement !== syncSlider) syncSlider.value = price;
+
+    const oddsData = this.calculateQuoteOdds(window.game, proposal, price);
+    const oddsBadge = document.getElementById('b2b-quote-odds-badge');
+    const oddsBar = document.getElementById('b2b-quote-odds-bar');
+    const marginDisplay = document.getElementById('b2b-quote-margin-display');
+
+    if (oddsBadge) {
+      let colorClass = 'text-emerald-700 bg-emerald-100 border-emerald-300';
+      if (oddsData.odds < 40) colorClass = 'text-rose-700 bg-rose-100 border-rose-300';
+      else if (oddsData.odds < 70) colorClass = 'text-amber-800 bg-amber-100 border-amber-300';
+
+      oddsBadge.className = `px-3 py-1 rounded-xl border font-black text-sm mono-num transition ${colorClass}`;
+      oddsBadge.textContent = `${oddsData.odds}% de chance de signature`;
+    }
+
+    if (oddsBar) {
+      oddsBar.style.width = `${oddsData.odds}%`;
+      if (oddsData.odds < 40) oddsBar.className = 'h-full bg-rose-500 rounded-full transition-all duration-300';
+      else if (oddsData.odds < 70) oddsBar.className = 'h-full bg-amber-500 rounded-full transition-all duration-300';
+      else oddsBar.className = 'h-full bg-emerald-500 rounded-full transition-all duration-300';
+    }
+
+    if (marginDisplay) {
+      marginDisplay.textContent = `+${oddsData.marginNet.toLocaleString('fr-FR')} € net`;
+    }
+  },
+
+  // 4. ÉMISSION & VALIDATION DU DEVIS PAR LE JOUEUR
+  submitQuote(game, proposalId, proposedPrice) {
+    if (!game) return;
+    const proposal = (game.formationB2BProposals || []).find(p => p.id === proposalId);
+    if (!proposal) return;
+
+    const price = Math.max(10, Math.round(Number(proposedPrice) || 0));
+    if (price <= 0) {
+      game.showToast('Montant Invalide', 'Veuillez saisir un tarif supérieur à 0 €.', 'orange');
+      return;
+    }
+
+    const oddsData = this.calculateQuoteOdds(game, proposal, price);
+
+    proposal.proposed_price = price;
+    proposal.proposedPrice = price;
+    proposal.acceptance_rate = oddsData.odds;
+    proposal.acceptanceRate = oddsData.odds;
+    proposal.status = 'evaluating';
+
+    // 40 secondes réelles de délibération de la direction cliente
+    proposal.evaluationEndsAt = Date.now() + 40000;
+    proposal.evaluation_ends_at = new Date(proposal.evaluationEndsAt).toISOString();
+
+    this.activeQuoteModalProposalId = null;
+    this.syncB2BWithSupabase(game, proposal);
+    game.saveGame();
+
+    game.showToast(
+      'Devis Transmis ! 📨',
+      `Votre proposition commerciale de ${price.toLocaleString('fr-FR')} € a été remise à la direction de « ${proposal.client_name} ». Délibération en cours...`,
+      'blue'
+    );
+
+    this.renderModal(game);
+  },
+
+  // 5. RÉSOLUTION DE LA DÉCISION DU CLIENT (ACCORD OU REFUS)
+  resolveQuote(game, proposalId, forceInstant = false) {
+    if (!game) return;
+    const proposal = (game.formationB2BProposals || []).find(p => p.id === proposalId);
+    if (!proposal || proposal.status !== 'evaluating') return;
+
+    if (!forceInstant && proposal.evaluationEndsAt && Date.now() < proposal.evaluationEndsAt) {
+      game.showToast('Délibération en Cours', `La direction de « ${proposal.client_name} » étudie votre devis. Décision imminente !`, 'blue');
+      return;
+    }
+
+    const roll = Math.random() * 100;
+    const won = roll <= (proposal.acceptance_rate || 75);
+
+    if (won) {
+      proposal.status = 'accepted';
+      game.showToast(
+        'Devis Signé ! 🎉',
+        `L’entreprise « ${proposal.client_name} » a accepté votre devis de ${proposal.proposed_price.toLocaleString('fr-FR')} € ! Affectez votre formateur et planifiez la session.`,
+        'green'
+      );
+    } else {
+      proposal.status = 'rejected';
+      const isTooExpensive = proposal.proposed_price > (proposal.client_target_budget * 1.15);
+      proposal.rejectionReason = isTooExpensive
+        ? 'Tarif jugé excessif par rapport à l’offre d’un organisme concurrent.'
+        : 'Projet interne suspendu ou réorientation budgétaire du client.';
+
+      game.showToast(
+        'Devis Décliné ❌',
+        `« ${proposal.client_name} » n’a pas retenu votre offre (${proposal.rejectionReason}).`,
+        'orange'
+      );
+    }
+
+    this.syncB2BWithSupabase(game, proposal);
+    game.saveGame();
+    this.renderModal(game);
+  },
+
+  // 6. DÉMARRAGE DE LA SESSION B2B SIGNÉE
+  startB2BSession(game, proposalId, trainerId, vehicleId) {
+    if (!game) return;
+    const proposal = (game.formationB2BProposals || []).find(p => p.id === proposalId);
+    if (!proposal || proposal.status !== 'accepted') return;
+
+    // A. Contrôle du formateur
+    const trainer = (game.volunteers || []).find(v => v.id === trainerId);
+    if (!trainer) {
+      game.showToast('Formateur Requis', 'Veuillez sélectionner un formateur disponible dans la liste.', 'orange');
+      return;
+    }
+    if (trainer.status !== 'dispo') {
+      game.showToast('Formateur Indisponible', `${trainer.name} est actuellement engagé(e) (${trainer.status}). Choisissez un autre formateur ou attendez son retour.`, 'orange');
+      return;
+    }
+
+    const check = this.isEligibleTrainer(trainer, { id: proposal.training_type });
+    if (!check.eligible) {
+      game.showToast('Habilitation Insuffisante', `${trainer.name} n'est pas qualifié(e) pour animer ce cursus : ${check.reason}`, 'orange');
+      return;
+    }
+
+    // B. Contrôle du véhicule si modalité Intra (déplacement chez le client avec les malles)
+    let vehicle = null;
+    if (proposal.mode === 'intra') {
+      if (!vehicleId) {
+        game.showToast('Véhicule Requis', 'La session a lieu chez le client (Intra) : affectez un véhicule de transport (VL, VTU, VTP) pour convoyer les malles de formation.', 'orange');
+        return;
+      }
+      vehicle = (game.vehicles || []).find(v => v.id === vehicleId);
+      if (!vehicle || vehicle.status !== 'dispo') {
+        game.showToast('Véhicule Indisponible', 'Le véhicule sélectionné n’est pas disponible à l’antenne.', 'orange');
+        return;
+      }
+    }
+
+    // C. Contrôle de la salle de formation si modalité Inter (accueil à l'antenne)
+    if (proposal.mode === 'inter') {
+      if (window.ProtecLocaux && !window.ProtecLocaux.hasFormationRoom(game)) {
+        game.showToast(
+          'Salle Pédagogique Requise !',
+          'La session est en inter-entreprises (dans vos locaux) : vous devez d’abord aménager une salle de formation dans le Bâtiment (Onglet Locaux).',
+          'orange'
+        );
+        return;
+      }
+    }
+
+    // D. Contrôle du lot pédagogique
+    const cfg = this.TRAINING_B2B_CONFIG[proposal.training_type];
+    if (cfg.kitRequired && !this.hasTrainingKit(game, cfg.kitRequired)) {
+      game.showToast(
+        'Lot Pédagogique Requis !',
+        `L’antenne doit posséder le lot de formation « ${cfg.kitName} » pour assurer cette session. Commandez-le dans l'onglet Logistique !`,
+        'orange'
+      );
+      return;
+    }
+
+    // Réservation opérationnelle des ressources
+    trainer.status = 'formation_b2b';
+    if (vehicle) vehicle.status = 'formation_b2b';
+
+    proposal.trainer_id = trainer.id;
+    proposal.trainerId = trainer.id;
+    proposal.vehicle_id = vehicle ? vehicle.id : null;
+    proposal.vehicleId = vehicle ? vehicle.id : null;
+    proposal.status = 'in_progress';
+    proposal.startedAt = Date.now();
+
+    this.syncB2BWithSupabase(game, proposal);
+    game.saveGame();
+
+    game.showToast(
+      'Session B2B Lancée ! 🚀',
+      `La formation ${proposal.training_type} chez « ${proposal.client_name} » a débuté. Formateur : ${trainer.name} ${vehicle ? `(Convoyage : ${vehicle.name})` : ''}.`,
+      'blue'
+    );
+
+    this.renderModal(game);
+  },
+
+  // 7. CLÔTURE, FACTURATION ET CERTIFICATION DE LA SESSION B2B
+  completeB2BSession(game, proposalId) {
+    if (!game) return;
+    const proposal = (game.formationB2BProposals || []).find(p => p.id === proposalId);
+    if (!proposal || !['in_progress', 'accepted'].includes(proposal.status)) return;
+
+    // Libération du formateur
+    const trainerId = proposal.trainer_id || proposal.trainerId;
+    const trainer = (game.volunteers || []).find(v => v.id === trainerId);
+    if (trainer) {
+      trainer.status = 'dispo';
+      trainer.exp = (trainer.exp || 0) + 25;
+      trainer.motivation = Math.min(100, (trainer.motivation || 80) + 12);
+      trainer.humeur = Math.min(100, (trainer.humeur || 80) + 10);
+    }
+
+    // Libération du véhicule
+    const vehicleId = proposal.vehicle_id || proposal.vehicleId;
+    const vehicle = (game.vehicles || []).find(v => v.id === vehicleId);
+    if (vehicle) {
+      vehicle.status = 'dispo';
+      vehicle.fuel = Math.max(15, (vehicle.fuel || 90) - 10);
+      vehicle.mileage = (vehicle.mileage || 110000) + Math.floor(Math.random() * 25 + 15);
+    }
+
+    // Décompte financier : Encaissement du devis et déduction des consommables pédagogiques
+    const grossPrice = Number(proposal.proposed_price || proposal.proposedPrice || proposal.client_target_budget || 1200);
+    const consumableCost = Number(proposal.consumable_cost || proposal.consumableCost || 80);
+    const netGain = Math.max(0, grossPrice - consumableCost);
+
+    game.resources.money += netGain;
+
+    // Écritures comptables dans le grand livre
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        game,
+        grossPrice,
+        `Facturation B2B : ${proposal.client_name} (${proposal.training_type} - ${proposal.attendees_count} stagiaires)`,
+        'formation'
+      );
+      window.ProtecFinances.recordTransaction(
+        game,
+        -consumableCost,
+        `Consommables Formation (Peaux, Masques, DAE) : ${proposal.client_name}`,
+        'materiel'
+      );
+    }
+
+    // Gain de réputation territoriale
+    const cfg = this.TRAINING_B2B_CONFIG[proposal.training_type] || {};
+    const repGain = cfg.repGain || 14;
+    game.resources.reputationScore = (game.resources.reputationScore || 50) + repGain;
+
+    // Fidélisation : Si la formation est un SST initial, programmer un rappel MAC SST pour ce client
+    if (proposal.training_type === 'SST') {
+      this.createMacSstReminder(game, proposal);
+    }
+
+    proposal.status = 'completed';
+    proposal.completedAt = Date.now();
+    proposal.completed_at = new Date().toISOString();
+
+    this.syncB2BWithSupabase(game, proposal);
+    game.saveGame();
+
+    game.showToast(
+      'Session B2B Validée & Certifiée ! 🎓',
+      `Facturation honorée : +${grossPrice.toLocaleString('fr-FR')} € (-${consumableCost} € consommables déduits, soit +${netGain.toLocaleString('fr-FR')} € net) et +${repGain} pts de réputation !`,
+      'green'
+    );
+
+    this.renderModal(game);
+  },
+
+  // 8. FIDÉLISATION & RAPPEL AUTOMATIQUE DE RECYCLAGE MAC SST
+  createMacSstReminder(game, completedProposal) {
+    if (!game || !completedProposal) return;
+    if (!game.formationB2BProposals) game.formationB2BProposals = [];
+
+    // Déclenchement d'une future opportunité de recyclage MAC SST pour cette entreprise
+    const now = Date.now();
+    const reminderProposal = {
+      id: `b2b-mac-${now}-${Math.random().toString(36).substring(2, 6)}`,
+      department_code: completedProposal.department_code || '54',
+      antenne_id: completedProposal.antenne_id || 'station-1',
+      client_name: completedProposal.client_name,
+      client_type: completedProposal.client_type,
+      client_label: completedProposal.client_label,
+      client_icon: completedProposal.client_icon,
+      client_city: completedProposal.client_city,
+      training_type: 'MAC_SST',
+      attendees_count: completedProposal.attendees_count,
+      mode: completedProposal.mode,
+      client_target_budget: 850,
+      clientTargetBudget: 850,
+      proposed_price: null,
+      proposedPrice: null,
+      acceptance_rate: 90, // Bonus de fidélité pour recyclage de clients déjà formés chez nous
+      acceptanceRate: 90,
+      status: 'pending_quote',
+      trainer_id: null,
+      vehicle_id: null,
+      consumable_cost: 65,
+      consumableCost: 65,
+      isFidelisation: true,
+      originProposalId: completedProposal.id,
+      deadline: now + (72 * 3600 * 1000),
+      created_at: new Date(now).toISOString(),
+      createdAt: now
+    };
+
+    game.formationB2BProposals.push(reminderProposal);
+    this.syncB2BWithSupabase(game, reminderProposal);
+  },
+
+  // 9. SURVEILLANCE PÉRIODIQUE D'HORLOGE (DÉLIBÉRATIONS & RECYCLAGES)
+  processClockTick(game) {
+    if (!game || !game.formationB2BProposals) return;
+
+    const now = Date.now();
+    let hasChanges = false;
+
+    game.formationB2BProposals.forEach(p => {
+      // Délibération terminée -> résolution automatique
+      if (p.status === 'evaluating' && p.evaluationEndsAt && now >= p.evaluationEndsAt) {
+        this.resolveQuote(game, p.id, true);
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges && this.mainTab === 'entreprises') {
+      const modal = document.getElementById('main-modal');
+      if (modal && !modal.classList.contains('hidden')) {
+        this.renderModal(game);
+      }
+    }
+  },
+
+  // 10. SYNCHRONISATION ROBUSTE AVEC SUPABASE POSTGRESQL
+  async syncB2BWithSupabase(game, proposal) {
+    if (!proposal || !window.ProtecSupabase || !window.ProtecSupabase.isConnected || !window.ProtecSupabase.client) {
+      return;
+    }
+
+    try {
+      const payload = {
+        id: proposal.id,
+        department_code: proposal.department_code || '54',
+        antenne_id: proposal.antenne_id || 'station-1',
+        client_name: proposal.client_name,
+        client_type: proposal.client_type,
+        training_type: proposal.training_type,
+        attendees_count: proposal.attendees_count,
+        mode: proposal.mode,
+        client_target_budget: proposal.client_target_budget,
+        proposed_price: proposal.proposed_price,
+        acceptance_rate: proposal.acceptance_rate,
+        status: proposal.status,
+        trainer_id: proposal.trainer_id,
+        vehicle_id: proposal.vehicle_id,
+        consumable_cost: proposal.consumable_cost,
+        deadline: proposal.deadline ? new Date(proposal.deadline).toISOString() : null,
+        evaluation_ends_at: proposal.evaluationEndsAt ? new Date(proposal.evaluationEndsAt).toISOString() : null,
+        completed_at: proposal.completedAt ? new Date(proposal.completedAt).toISOString() : null,
+        created_at: proposal.created_at || new Date().toISOString()
+      };
+
+      await window.ProtecSupabase.client
+        .from('formation_b2b_proposals')
+        .upsert(payload);
+    } catch (err) {
+      // Échec discret en cas de réseau instable ou table non migrée
+      console.info('Synchro B2B locale active:', err?.message || err);
     }
   },
 
@@ -791,6 +1434,529 @@ window.ProtecFormations = {
     this.renderModal(game);
   },
 
+  // 11. RENDU DE L'ONGLET STRUCTURES & ENTREPRISES B2B
+  renderB2BTab(game) {
+    const proposals = game.formationB2BProposals || [];
+    const pendingQuotes = proposals.filter(p => p.status === 'pending_quote');
+    const evaluatingQuotes = proposals.filter(p => p.status === 'evaluating');
+    const acceptedQuotes = proposals.filter(p => p.status === 'accepted');
+    const inProgressQuotes = proposals.filter(p => p.status === 'in_progress');
+    const completedQuotes = proposals.filter(p => p.status === 'completed');
+    const activeSignedCount = acceptedQuotes.length + inProgressQuotes.length;
+
+    // Calcul du CA B2B encaissé total
+    const totalRevenueB2B = completedQuotes.reduce((sum, p) => {
+      const gross = Number(p.proposed_price || p.proposedPrice || p.client_target_budget || 0);
+      const consumable = Number(p.consumable_cost || p.consumableCost || 0);
+      return sum + Math.max(0, gross - consumable);
+    }, 0);
+
+    const currentFilter = this.b2bFilter || 'tous';
+    const filteredProposals = proposals.filter(p => {
+      if (currentFilter === 'pending') return p.status === 'pending_quote';
+      if (currentFilter === 'evaluating') return p.status === 'evaluating';
+      if (currentFilter === 'accepted') return ['accepted', 'in_progress'].includes(p.status);
+      if (currentFilter === 'completed') return ['completed', 'rejected'].includes(p.status);
+      return true;
+    });
+
+    const now = Date.now();
+    const availableTrainers = (game.volunteers || []).filter(v => v.status === 'dispo');
+    const availableVehicles = (game.vehicles || []).filter(v => v.status === 'dispo' && !v.requiresTrailer);
+    const hasRoom = window.ProtecLocaux && typeof window.ProtecLocaux.hasFormationRoom === 'function' ? window.ProtecLocaux.hasFormationRoom(game) : true;
+
+    return `
+      <div class="space-y-6">
+
+        <!-- 1. CARTES STATISTIQUES KPI B2B -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 shadow-xs">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-700 block">Demandes Entrantes</span>
+            <div class="flex items-baseline gap-1.5 mt-0.5">
+              <strong class="text-xl font-black text-blue-900 mono-num">${pendingQuotes.length}</strong>
+              <span class="text-[10px] text-blue-600 font-medium">à chiffrer</span>
+            </div>
+          </div>
+
+          <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 shadow-xs">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">En Délibération</span>
+            <div class="flex items-baseline gap-1.5 mt-0.5">
+              <strong class="text-xl font-black text-amber-900 mono-num">${evaluatingQuotes.length}</strong>
+              <span class="text-[10px] text-amber-700 font-medium">devis émis</span>
+            </div>
+          </div>
+
+          <div class="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-xs">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">Signées & En Cours</span>
+            <div class="flex items-baseline gap-1.5 mt-0.5">
+              <strong class="text-xl font-black text-emerald-900 mono-num">${activeSignedCount}</strong>
+              <span class="text-[10px] text-emerald-600 font-medium">sessions</span>
+            </div>
+          </div>
+
+          <div class="p-3.5 rounded-2xl bg-slate-900 text-white shadow-xs">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">CA B2B Encaissé</span>
+            <div class="flex items-baseline gap-1 mt-0.5">
+              <strong class="text-lg sm:text-xl font-black text-emerald-400 mono-num">+${totalRevenueB2B.toLocaleString('fr-FR')} €</strong>
+              <span class="text-[9px] text-slate-400 font-normal">net</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. BARRE D'ACTIONS ET DE FILTRES RAPIDES -->
+        <div class="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-slate-100">
+          <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
+            <button onclick="window.ProtecFormations.setB2BFilter('tous')" class="px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${currentFilter === 'tous' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+              Toutes (${proposals.length})
+            </button>
+            <button onclick="window.ProtecFormations.setB2BFilter('pending')" class="px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${currentFilter === 'pending' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-800 hover:bg-blue-100'}">
+              À Chiffrer (${pendingQuotes.length})
+            </button>
+            <button onclick="window.ProtecFormations.setB2BFilter('evaluating')" class="px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${currentFilter === 'evaluating' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100'}">
+              En Délibération (${evaluatingQuotes.length})
+            </button>
+            <button onclick="window.ProtecFormations.setB2BFilter('accepted')" class="px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${currentFilter === 'accepted' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}">
+              Signées & En Cours (${activeSignedCount})
+            </button>
+            <button onclick="window.ProtecFormations.setB2BFilter('completed')" class="px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${currentFilter === 'completed' ? 'bg-slate-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+              Historique (${completedQuotes.length})
+            </button>
+          </div>
+
+          <span class="text-[11px] text-slate-500 font-medium hidden sm:inline">
+            SST • MAC SST • PSC • GQS en milieu professionnel
+          </span>
+        </div>
+
+        <!-- 3. LISTE DES OPPORTUNITÉS ET SESSIONS B2B -->
+        ${filteredProposals.length === 0 ? `
+          <div class="p-8 rounded-3xl bg-slate-50 border border-dashed border-slate-300 text-center space-y-3">
+            <div class="w-12 h-12 rounded-2xl bg-white shadow-xs mx-auto flex items-center justify-center text-2xl text-slate-400">
+              🏢
+            </div>
+            <div>
+              <h5 class="text-sm font-black text-slate-800">Aucune opportunité dans cette sélection</h5>
+              <p class="text-xs text-slate-500 max-w-md mx-auto mt-0.5">
+                Les entreprises et mairies locales consultent régulièrement votre antenne pour leurs plans de formation sécurité au travail.
+              </p>
+            </div>
+            <button onclick="window.ProtecFormations.generateB2BOpportunities(window.game, true); window.ProtecFormations.renderModal(window.game);" class="px-4 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-extrabold text-xs shadow-md transition inline-flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="sparkles" class="w-4 h-4"></i>
+              Générer une opportunité entrante
+            </button>
+          </div>
+        ` : `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            ${filteredProposals.map(p => {
+              const cfg = this.TRAINING_B2B_CONFIG[p.training_type] || this.TRAINING_B2B_CONFIG['SST'];
+              const isIntra = p.mode === 'intra';
+              const hasKit = this.hasTrainingKit(game, cfg.kitRequired);
+              const targetBudget = Number(p.client_target_budget || p.clientTargetBudget || 1200);
+              const proposedPrice = Number(p.proposed_price || p.proposedPrice || 0);
+
+              // Calcul du temps restant pour la deadline
+              const msLeft = (p.deadline || 0) - now;
+              const hoursLeft = Math.max(0, Math.floor(msLeft / 3600000));
+              const minsLeft = Math.max(0, Math.floor((msLeft % 3600000) / 60000));
+
+              // Données formateur et véhicule
+              const assignedTrainer = (game.volunteers || []).find(v => v.id === (p.trainer_id || p.trainerId));
+              const assignedVehicle = (game.vehicles || []).find(v => v.id === (p.vehicle_id || p.vehicleId));
+
+              return `
+                <div class="p-4 rounded-3xl bg-white border ${p.status === 'accepted' ? 'border-emerald-300 ring-2 ring-emerald-100 shadow-md' : (p.status === 'in_progress' ? 'border-blue-300 ring-2 ring-blue-100 shadow-md' : 'border-slate-200/90 shadow-sm')} space-y-3.5 flex flex-col justify-between transition hover:shadow-md">
+                  
+                  <!-- En-tête de la carte -->
+                  <div class="space-y-2">
+                    <div class="flex items-center justify-between flex-wrap gap-1">
+                      <div class="flex items-center gap-1.5">
+                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase ${
+                          p.training_type === 'SST' ? 'bg-indigo-100 text-indigo-800' :
+                          (p.training_type === 'MAC_SST' ? 'bg-amber-100 text-amber-800' :
+                          (p.training_type === 'PSC' ? 'bg-emerald-100 text-emerald-800' : 'bg-cyan-100 text-cyan-800'))
+                        }">
+                          ${cfg.badge}
+                        </span>
+                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-black ${isIntra ? 'bg-purple-100 text-purple-800' : 'bg-sky-100 text-sky-800'} flex items-center gap-1">
+                          <i data-lucide="${isIntra ? 'truck' : 'landmark'}" class="w-3 h-3"></i>
+                          ${isIntra ? 'Intra (Chez le client)' : 'Inter (À l’antenne)'}
+                        </span>
+                        ${p.isFidelisation ? `
+                          <span class="px-1.5 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-50 border border-amber-300 text-amber-800">
+                            ⭐ Client Fidélisé
+                          </span>
+                        ` : ''}
+                      </div>
+
+                      <!-- Statut de la proposition -->
+                      <span class="text-[10px] font-black">
+                        ${p.status === 'pending_quote' ? `<span class="text-blue-700">⏳ Réponse due dans ${hoursLeft}h${minsLeft > 0 ? `${minsLeft}m` : ''}</span>` : ''}
+                        ${p.status === 'evaluating' ? `<span class="text-amber-700 animate-pulse">⏳ Délibération en cours</span>` : ''}
+                        ${p.status === 'accepted' ? `<span class="text-emerald-700">✓ Devis Signé</span>` : ''}
+                        ${p.status === 'in_progress' ? `<span class="text-blue-700">🚀 Session en cours</span>` : ''}
+                        ${p.status === 'completed' ? `<span class="text-slate-600">✓ Réalisée & Payée</span>` : ''}
+                        ${p.status === 'rejected' ? `<span class="text-rose-600">✕ Devis non retenu</span>` : ''}
+                      </span>
+                    </div>
+
+                    <!-- Titre client & activité -->
+                    <div>
+                      <h4 class="text-sm font-black text-slate-900 leading-snug flex items-center gap-1.5">
+                        <i data-lucide="${p.client_icon || 'building'}" class="w-4 h-4 text-slate-500 flex-shrink-0"></i>
+                        <span>${p.client_name}</span>
+                      </h4>
+                      <div class="text-[11px] text-slate-500 font-medium flex items-center gap-2 mt-0.5">
+                        <span>${p.client_label || 'Entreprise locale'}</span>
+                        <span>•</span>
+                        <span>${p.client_city || 'Bassin d’antenne'}</span>
+                        <span>•</span>
+                        <strong class="text-slate-700">${p.attendees_count} salariés</strong>
+                      </div>
+                    </div>
+
+                    <!-- Présentation du besoin et prérequis -->
+                    <div class="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5 text-[11px]">
+                      <div class="flex items-center justify-between">
+                        <span class="text-slate-600 font-medium">${cfg.title} (${cfg.durationHours}h)</span>
+                        <strong class="text-slate-800 mono-num">Budget client : ~${targetBudget.toLocaleString('fr-FR')} €</strong>
+                      </div>
+
+                      <div class="flex items-center justify-between text-[10px] pt-1 border-t border-slate-200/60">
+                        <span class="flex items-center gap-1 ${hasKit ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}">
+                          <i data-lucide="${hasKit ? 'check-circle' : 'alert-triangle'}" class="w-3 h-3"></i>
+                          ${hasKit ? 'Lot en stock' : 'Lot requis : ' + cfg.kitName}
+                        </span>
+                        <span class="text-slate-500">
+                          Coût consommables : <strong class="text-slate-700">${cfg.consumableCost} €</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- AFFICHAGE SELON L'ÉTAT DU DEVIS -->
+                    ${p.status === 'evaluating' ? `
+                      <div class="p-3 rounded-2xl bg-amber-50/80 border border-amber-200 space-y-2">
+                        <div class="flex items-center justify-between text-xs">
+                          <span class="text-amber-900 font-bold">Devis proposé : <strong>${proposedPrice.toLocaleString('fr-FR')} €</strong></span>
+                          <span class="px-2 py-0.5 rounded-lg bg-amber-200 text-amber-900 font-black mono-num text-[11px]">${p.acceptance_rate || 75}% d’accord</span>
+                        </div>
+                        <div class="w-full bg-amber-200/80 rounded-full h-1.5 overflow-hidden">
+                          <div class="bg-amber-600 h-full rounded-full animate-pulse" style="width: 75%;"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] text-amber-800">
+                          <span>La direction délibère...</span>
+                          <button onclick="window.ProtecFormations.resolveQuote(window.game, '${p.id}', true)" class="font-extrabold text-amber-900 underline hover:text-amber-950 cursor-pointer">
+                            ⚡ Consulter la décision
+                          </button>
+                        </div>
+                      </div>
+                    ` : ''}
+
+                    ${p.status === 'accepted' ? `
+                      <div class="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-2.5">
+                        <div class="flex items-center justify-between text-xs">
+                          <span class="text-emerald-950 font-black">Montant validé : <strong class="text-emerald-700 mono-num">${proposedPrice.toLocaleString('fr-FR')} €</strong></span>
+                          <span class="text-[10px] text-emerald-800 font-bold">Marge nette estimée : +${Math.max(0, proposedPrice - cfg.consumableCost).toLocaleString('fr-FR')} €</span>
+                        </div>
+
+                        <!-- Choix du Formateur -->
+                        <div>
+                          <label class="block text-[10px] font-black uppercase text-slate-500 mb-0.5">1. Formateur qualifié requis (${cfg.trainerSkillLabel}) :</label>
+                          <select id="b2b-trainer-${p.id}" class="w-full p-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white">
+                            <option value="">Sélectionner un formateur habilité...</option>
+                            ${availableTrainers.map(t => {
+                              const check = this.isEligibleTrainer(t, { id: p.training_type });
+                              return `
+                                <option value="${t.id}" class="${check.eligible ? 'text-slate-900 font-bold' : 'text-slate-400 italic'}">
+                                  ${check.eligible ? '✓ ' : '⚠️ '} ${t.name} (${t.role || t.rank}) ${check.eligible ? `[${check.badge || 'Qualifié'}]` : '[Non habilité]'}
+                                </option>
+                              `;
+                            }).join('')}
+                          </select>
+                        </div>
+
+                        <!-- Choix du Véhicule si Intra -->
+                        ${isIntra ? `
+                          <div>
+                            <label class="block text-[10px] font-black uppercase text-slate-500 mb-0.5">2. Véhicule d'antenne (Transport malles & matériel) :</label>
+                            <select id="b2b-vehicle-${p.id}" class="w-full p-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white">
+                              <option value="">Sélectionner un véhicule (VL, VTU, VTP)...</option>
+                              ${availableVehicles.map(veh => `
+                                <option value="${veh.id}">${veh.name} (${veh.model || veh.type}) - Dispo</option>
+                              `).join('')}
+                            </select>
+                          </div>
+                        ` : `
+                          <div class="text-[10px] ${hasRoom ? 'text-emerald-800 font-bold' : 'text-amber-800 font-bold'} flex items-center gap-1">
+                            <i data-lucide="${hasRoom ? 'check-circle' : 'alert-circle'}" class="w-3.5 h-3.5"></i>
+                            <span>${hasRoom ? 'Salle de formation opérationnelle à l’antenne ✓' : 'Attention : Aucune salle de formation aménagée aux locaux !'}</span>
+                          </div>
+                        `}
+                      </div>
+                    ` : ''}
+
+                    ${p.status === 'in_progress' ? `
+                      <div class="p-3 rounded-2xl bg-blue-50 border border-blue-200 space-y-2 text-xs">
+                        <div class="flex items-center justify-between text-blue-900 font-bold">
+                          <span>Session en cours chez le client</span>
+                          <span class="animate-pulse text-blue-700 font-black">● Active</span>
+                        </div>
+                        <div class="text-[11px] text-blue-800 space-y-0.5">
+                          <div>Formateur engagé : <strong>${assignedTrainer ? assignedTrainer.name : 'Formateur'}</strong></div>
+                          ${assignedVehicle ? `<div>Véhicule mobilisé : <strong>${assignedVehicle.name} (${assignedVehicle.type})</strong></div>` : ''}
+                        </div>
+                      </div>
+                    ` : ''}
+
+                    ${p.status === 'completed' ? `
+                      <div class="p-2.5 rounded-2xl bg-slate-100 text-xs space-y-1">
+                        <div class="flex items-center justify-between text-slate-700 font-bold">
+                          <span>Chiffre d’affaires encaissé :</span>
+                          <strong class="text-emerald-700 mono-num">+${proposedPrice.toLocaleString('fr-FR')} €</strong>
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] text-slate-500">
+                          <span>Consommables déduits : -${cfg.consumableCost} €</span>
+                          <span>Bénéfice net : <strong class="text-slate-800">+${Math.max(0, proposedPrice - cfg.consumableCost).toLocaleString('fr-FR')} €</strong></span>
+                        </div>
+                        ${p.training_type === 'SST' ? `
+                          <div class="text-[10px] text-indigo-700 font-bold pt-1 border-t border-slate-200">
+                            ⭐ Recyclage MAC SST (24 mois) planifié pour ce client !
+                          </div>
+                        ` : ''}
+                      </div>
+                    ` : ''}
+
+                    ${p.status === 'rejected' ? `
+                      <div class="p-2.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 space-y-1">
+                        <span class="font-bold block">Motif du refus client :</span>
+                        <p class="text-[11px] text-rose-700">${p.rejectionReason || 'Offre concurrente retenue.'}</p>
+                      </div>
+                    ` : ''}
+
+                  </div>
+
+                  <!-- Boutons d'Action selon l'état -->
+                  <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    ${p.status === 'pending_quote' ? `
+                      <span class="text-[10px] text-slate-400 font-bold">Jauge de chance calculée en direct</span>
+                      <button onclick="window.ProtecFormations.openQuoteModal('${p.id}')" class="px-4 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                        <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                        Émettre un Devis
+                      </button>
+                    ` : ''}
+
+                    ${p.status === 'evaluating' ? `
+                      <span class="text-[10px] text-amber-700 font-medium">Délibération sous 40s</span>
+                      <button onclick="window.ProtecFormations.resolveQuote(window.game, '${p.id}', true)" class="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs shadow-xs transition flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                        Vérifier l'accord
+                      </button>
+                    ` : ''}
+
+                    ${p.status === 'accepted' ? `
+                      <span class="text-[10px] text-slate-400">Prêt au déploiement</span>
+                      <button onclick="
+                        const trId = document.getElementById('b2b-trainer-${p.id}').value;
+                        const vhId = document.getElementById('b2b-vehicle-${p.id}') ? document.getElementById('b2b-vehicle-${p.id}').value : null;
+                        window.ProtecFormations.startB2BSession(window.game, '${p.id}', trId, vhId);
+                      " class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                        <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                        Démarrer la Session B2B
+                      </button>
+                    ` : ''}
+
+                    ${p.status === 'in_progress' ? `
+                      <span class="text-[10px] text-blue-600 font-bold">Formation sur le terrain</span>
+                      <button onclick="window.ProtecFormations.completeB2BSession(window.game, '${p.id}')" class="px-4 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                        <i data-lucide="award" class="w-3.5 h-3.5"></i>
+                        Clôturer & Encaisser
+                      </button>
+                    ` : ''}
+
+                    ${p.status === 'completed' ? `
+                      <span class="text-[10px] text-emerald-700 font-bold">✓ Attestations délivrées</span>
+                      <span class="text-xs font-black text-emerald-600">+${cfg.repGain || 12} Réputation</span>
+                    ` : ''}
+
+                    ${p.status === 'rejected' ? `
+                      <span class="text-[10px] text-slate-400">Opportunité archivée</span>
+                      <span class="text-xs font-bold text-slate-500">Classé sans suite</span>
+                    ` : ''}
+                  </div>
+
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `}
+
+      </div>
+    `;
+  },
+
+  // 12. RENDU DE LA MODALE D'ÉLABORATION DU DEVIS B2B (MODALE INTERACTIVE AVEC JAUGE LIVE)
+  renderQuoteModalHTML(game, proposal) {
+    if (!proposal) return '';
+
+    const cfg = this.TRAINING_B2B_CONFIG[proposal.training_type] || this.TRAINING_B2B_CONFIG['SST'];
+    const targetBudget = Number(proposal.client_target_budget || proposal.clientTargetBudget || 1200);
+    const initialPrice = Number(proposal.proposed_price || proposal.proposedPrice || targetBudget);
+    const oddsData = this.calculateQuoteOdds(game, proposal, initialPrice);
+
+    const minSlider = Math.round(targetBudget * 0.5);
+    const maxSlider = Math.round(targetBudget * 1.8);
+
+    const hasKit = this.hasTrainingKit(game, cfg.kitRequired);
+    const hasTrainer = (game.volunteers || []).some(v => this.isEligibleTrainer(v, { id: proposal.training_type }).eligible);
+    const isIntra = proposal.mode === 'intra';
+    const hasVeh = isIntra ? (game.vehicles || []).some(v => v.status === 'dispo' && !v.requiresTrailer) : true;
+    const hasRoom = !isIntra ? (window.ProtecLocaux && typeof window.ProtecLocaux.hasFormationRoom === 'function' ? window.ProtecLocaux.hasFormationRoom(game) : true) : true;
+
+    return `
+      <div id="b2b-quote-modal-backdrop" class="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-4 bg-slate-900/75 backdrop-blur-xs animate-fade-in">
+        <div class="glass-panel-heavy rounded-3xl w-full max-w-xl p-5 sm:p-6 shadow-2xl border border-white/90 space-y-4 animate-scale-in max-h-[92vh] overflow-y-auto">
+          
+          <!-- En-tête de la modale de devis -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+            <div class="flex items-center gap-2.5">
+              <div class="w-10 h-10 rounded-2xl bg-pc-blue/10 text-pc-blue flex items-center justify-center text-xl">
+                💼
+              </div>
+              <div>
+                <h4 class="text-sm font-black text-slate-900 leading-tight">Élaboration du Devis B2B</h4>
+                <p class="text-[11px] text-slate-500">${proposal.client_name} • ${proposal.client_city || 'Antenne'}</p>
+              </div>
+            </div>
+            <button onclick="window.ProtecFormations.closeQuoteModal()" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition cursor-pointer font-bold">
+              ✕
+            </button>
+          </div>
+
+          <!-- Synthèse de la demande -->
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div>
+              <span class="text-[10px] font-bold uppercase text-slate-400 block">Formation</span>
+              <strong class="text-slate-800 text-xs">${cfg.badge}</strong>
+            </div>
+            <div>
+              <span class="text-[10px] font-bold uppercase text-slate-400 block">Effectif</span>
+              <strong class="text-slate-800 text-xs">${proposal.attendees_count} stagiaires</strong>
+            </div>
+            <div>
+              <span class="text-[10px] font-bold uppercase text-slate-400 block">Modalité</span>
+              <strong class="text-slate-800 text-xs">${isIntra ? 'Intra (Sur site)' : 'Inter (Antenne)'}</strong>
+            </div>
+            <div>
+              <span class="text-[10px] font-bold uppercase text-slate-400 block">Budget Indicatif</span>
+              <strong class="text-pc-blue text-xs mono-num">~${targetBudget.toLocaleString('fr-FR')} €</strong>
+            </div>
+          </div>
+
+          <!-- Formulaire de prix dynamique avec slider interactif -->
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-black uppercase tracking-wider text-slate-700">Votre Proposition Tarifaire (€) :</label>
+              <div class="flex items-center gap-1.5">
+                <input 
+                  type="number" 
+                  id="b2b-quote-price-input" 
+                  value="${initialPrice}" 
+                  min="50" 
+                  max="5000" 
+                  step="10"
+                  oninput="window.ProtecFormations.updateQuoteModalLive('${proposal.id}', this.value)"
+                  class="w-28 p-1.5 rounded-xl border border-slate-300 font-black text-right text-base text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue mono-num"
+                />
+                <span class="text-sm font-black text-slate-600">€</span>
+              </div>
+            </div>
+
+            <!-- Slider fluide -->
+            <input 
+              type="range" 
+              id="b2b-quote-price-slider" 
+              min="${minSlider}" 
+              max="${maxSlider}" 
+              step="10" 
+              value="${initialPrice}"
+              oninput="window.ProtecFormations.updateQuoteModalLive('${proposal.id}', this.value)"
+              class="w-full accent-pc-blue cursor-pointer"
+            />
+
+            <div class="flex items-center justify-between text-[10px] text-slate-400">
+              <span>Attractif (${minSlider} €)</span>
+              <span class="font-bold text-slate-600">Cible client : ${targetBudget} €</span>
+              <span>Haut de gamme (${maxSlider} €)</span>
+            </div>
+          </div>
+
+          <!-- JAUGE LIVE DE PROBABILITÉ DE SIGNATURE -->
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-black uppercase text-slate-700">Probabilité d’accord client :</span>
+              <span id="b2b-quote-odds-badge" class="px-3 py-1 rounded-xl border font-black text-sm mono-num transition ${
+                oddsData.odds < 40 ? 'text-rose-700 bg-rose-100 border-rose-300' :
+                (oddsData.odds < 70 ? 'text-amber-800 bg-amber-100 border-amber-300' : 'text-emerald-700 bg-emerald-100 border-emerald-300')
+              }">
+                ${oddsData.odds}% de chance de signature
+              </span>
+            </div>
+
+            <!-- Barre de jauge -->
+            <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+              <div id="b2b-quote-odds-bar" class="h-full rounded-full transition-all duration-300 ${
+                oddsData.odds < 40 ? 'bg-rose-500' : (oddsData.odds < 70 ? 'bg-amber-500' : 'bg-emerald-500')
+              }" style="width: ${oddsData.odds}%;"></div>
+            </div>
+
+            <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+              <span>Réputation d'antenne : <strong>+${oddsData.repBonus}%</strong></span>
+              <span>Accords APC : <strong>+${oddsData.conventionBonus}%</strong></span>
+              <span class="text-slate-600">Bénéfice net estimé : <strong id="b2b-quote-margin-display" class="text-emerald-700 font-extrabold">+${oddsData.marginNet.toLocaleString('fr-FR')} €</strong></span>
+            </div>
+          </div>
+
+          <!-- CHECKLIST DES PRÉREQUIS MATÉRIELS ET QUALIFICATIONS -->
+          <div class="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2 text-xs">
+            <h5 class="text-[11px] font-black uppercase tracking-wider text-slate-700">Contrôle des Prérequis Opérationnels :</h5>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+              <div class="flex items-center gap-1.5 ${hasKit ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}">
+                <i data-lucide="${hasKit ? 'check-circle' : 'alert-triangle'}" class="w-3.5 h-3.5"></i>
+                <span>Lot requis : ${cfg.kitName}</span>
+              </div>
+              <div class="flex items-center gap-1.5 ${hasTrainer ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}">
+                <i data-lucide="${hasTrainer ? 'check-circle' : 'alert-triangle'}" class="w-3.5 h-3.5"></i>
+                <span>Formateur qualifié (${cfg.trainerSkillLabel})</span>
+              </div>
+              <div class="flex items-center gap-1.5 ${hasVeh ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}">
+                <i data-lucide="${hasVeh ? 'check-circle' : 'alert-triangle'}" class="w-3.5 h-3.5"></i>
+                <span>${isIntra ? 'Véhicule de liaison VL/VTU' : 'Accueil sur place'}</span>
+              </div>
+              <div class="flex items-center gap-1.5 ${hasRoom ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}">
+                <i data-lucide="${hasRoom ? 'check-circle' : 'alert-triangle'}" class="w-3.5 h-3.5"></i>
+                <span>${isIntra ? 'Locaux entreprise cliente' : 'Salle pédagogique antenne'}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Boutons de validation -->
+          <div class="pt-2 flex items-center justify-end gap-2.5">
+            <button onclick="window.ProtecFormations.closeQuoteModal()" class="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs transition cursor-pointer">
+              Annuler
+            </button>
+            <button onclick="
+              const pr = document.getElementById('b2b-quote-price-input').value;
+              window.ProtecFormations.submitQuote(window.game, '${proposal.id}', pr);
+            " class="px-6 py-2.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="send" class="w-4 h-4"></i>
+              Valider & Transmettre le Devis
+            </button>
+          </div>
+
+        </div>
+      </div>
+    `;
+  },
+
   // Rendu de l'interface modale
   renderModal(game) {
     this.injectState(game);
@@ -803,8 +1969,10 @@ window.ProtecFormations = {
     if (!body || !title) return;
 
     title.textContent = 'Pôle Formations & Pédagogie de Sécurité Civile';
-    subtitle.textContent = 'Cursus Grand Public, Secourisme Opérationnel, Recyclages FC, Soutien Psycho et Filière Formateurs';
+    subtitle.textContent = 'Cursus Entreprises (B2B), Grand Public, Secourisme Opérationnel, Recyclages FC et Filière Formateurs';
     icon.setAttribute('data-lucide', 'graduation-cap');
+
+    const pendingB2BCount = (game.formationB2BProposals || []).filter(p => p.status === 'pending_quote').length;
 
     const trainers = (game.volunteers || []).filter(v => v.isTrainer || (v.skills && v.skills.some(s => s.startsWith('formateur') || s === 'cef' || s === 'picf')));
 
@@ -831,8 +1999,48 @@ window.ProtecFormations = {
       return str.includes(fsq);
     });
 
+    const navTabsHTML = `
+      <!-- Barre de navigation supérieure des deux canaux de formation -->
+      <div class="flex items-center justify-between border-b border-slate-200/80 pb-3 flex-wrap gap-2">
+        <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl">
+          <button onclick="window.ProtecFormations.setMainTab('entreprises')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.mainTab === 'entreprises' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:text-slate-900 cursor-pointer'}">
+            <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
+            <span>Structures & Entreprises (B2B)</span>
+            ${pendingB2BCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-black ${this.mainTab === 'entreprises' ? 'bg-white text-pc-blue' : 'bg-pc-blue text-white'}">${pendingB2BCount}</span>` : ''}
+          </button>
+          <button onclick="window.ProtecFormations.setMainTab('grand_public')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.mainTab === 'grand_public' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:text-slate-900 cursor-pointer'}">
+            <i data-lucide="users" class="w-3.5 h-3.5"></i>
+            <span>Grand Public & Internes</span>
+            ${activeSessions.length > 0 ? `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-black ${this.mainTab === 'grand_public' ? 'bg-white text-pc-blue' : 'bg-slate-300 text-slate-800'}">${activeSessions.length}</span>` : ''}
+          </button>
+        </div>
+        ${this.mainTab === 'entreprises' ? `
+          <button onclick="window.ProtecFormations.generateB2BOpportunities(window.game, true); window.ProtecFormations.renderModal(window.game);" class="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-extrabold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-emerald-600"></i>
+            <span>Prospection Commerciale (+ Demande)</span>
+          </button>
+        ` : ''}
+      </div>
+    `;
+
+    // Si onglet Entreprises sélectionné :
+    if (this.mainTab === 'entreprises') {
+      const activeProposal = this.activeQuoteModalProposalId ? (game.formationB2BProposals || []).find(p => p.id === this.activeQuoteModalProposalId) : null;
+      body.innerHTML = `
+        <div class="space-y-6">
+          ${navTabsHTML}
+          ${this.renderB2BTab(game)}
+          ${activeProposal ? this.renderQuoteModalHTML(game, activeProposal) : ''}
+        </div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+      return;
+    }
+
+    // Sinon, onglet historique Grand Public & Internes
     body.innerHTML = `
       <div class="space-y-6">
+        ${navTabsHTML}
 
         <!-- Bandeau d'information Doctrine Protec Civile -->
         <div class="p-3.5 rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-pc-blue text-white shadow-md flex items-center justify-between gap-3 text-xs">

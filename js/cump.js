@@ -146,16 +146,16 @@ window.ProtecCump = {
 
     const reasons = [];
     if (totalVols < 10) {
-      reasons.push(`Effectif insuffisant : 10 secouristes minimum requis pour l'astreinte H24 (${totalVols}/10 actuellement).`);
+      reasons.push("Effectif mobilisable insuffisant pour assurer la rotation continue de l'astreinte H24 du Centre d'Accueil des Impliqués.");
     }
     if (!hasAgrementA) {
-      reasons.push('Agrément A (SAMU 15 / Secours d\'urgence) obligatoire.');
+      reasons.push("Agrément A (SAMU 15 / Secours d'urgence pré-hospitalier) obligatoire.");
     }
     if (!hasAgrementB) {
-      reasons.push('Agrément B (Action Sociale & Soutien aux populations) obligatoire.');
+      reasons.push("Agrément B (Action Sociale & Soutien aux populations) obligatoire.");
     }
     if (vehCount < 2) {
-      reasons.push(`Flotte insuffisante : au moins 2 véhicules requis (${vehCount}/2).`);
+      reasons.push("Flotte véhiculaire opérationnelle insuffisante pour déployer simultanément les intervenants et la logistique de prise en charge.");
     }
 
     const isEligible = reasons.length === 0;
@@ -229,9 +229,13 @@ window.ProtecCump = {
         'green'
       );
 
-      game.saveGame();
+      game.saveGame(true);
       game.updateStatsUI();
-      this.renderCumpTab(game);
+      if (game.currentModalKey === 'conventions' && window.ProtecConventions) {
+        window.ProtecConventions.renderModal(game);
+      } else {
+        this.renderCumpTab(game);
+      }
     };
 
     if (window.ProtecSignature && typeof window.ProtecSignature.openSignatureModal === 'function') {
@@ -416,31 +420,31 @@ window.ProtecCump = {
           </div>
         </div>
 
-        <!-- Section 1 : Statut d'Éligibilité & Sollicitation du SAMU -->
+        <!-- Section 1 : Cadre Opérationnel & Engagement CUMP -->
         <div class="p-4 rounded-2xl glass-card space-y-3">
           <div class="flex items-center justify-between">
-            <h5 class="text-xs font-black uppercase text-slate-800 tracking-wider">Prérequis Réglementaires pour la Convention</h5>
-            <span class="text-xs font-bold ${prereq.eligible ? 'text-emerald-600' : 'text-amber-600'}">
-              ${prereq.eligible ? '✅ Antenne Reconnue Apte par le SAMU' : '⚠️ Prérequis Incomplets'}
+            <h5 class="text-xs font-black uppercase text-slate-800 tracking-wider">Cadre Opérationnel & Engagements de la Convention CUMP</h5>
+            <span class="text-xs font-bold text-red-600">
+              Dispositif Médico-Psychologique d'Urgence
             </span>
           </div>
 
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-semibold">
-            <div class="p-2.5 rounded-xl border ${prereq.totalVols >= 10 ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}">
-              <span class="block text-[9px] uppercase font-black text-slate-400">Effectif H24</span>
-              <strong>${prereq.totalVols} / 10 bénévoles</strong>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-semibold text-slate-700">
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="block text-[9px] uppercase font-black text-slate-400">Astreinte H24</span>
+              <span>Déploiement sous 2h en cas d'accident majeur</span>
             </div>
-            <div class="p-2.5 rounded-xl border ${prereq.hasAgrementA ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}">
-              <span class="block text-[9px] uppercase font-black text-slate-400">Agrément A</span>
-              <strong>${prereq.hasAgrementA ? '✅ Valide' : '❌ Requis'}</strong>
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="block text-[9px] uppercase font-black text-slate-400">Mission Sanitaire</span>
+              <span>Prise en charge d'urgence avec les psychiatres SAMU</span>
             </div>
-            <div class="p-2.5 rounded-xl border ${prereq.hasAgrementB ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}">
-              <span class="block text-[9px] uppercase font-black text-slate-400">Agrément B</span>
-              <strong>${prereq.hasAgrementB ? '✅ Valide' : '❌ Requis'}</strong>
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="block text-[9px] uppercase font-black text-slate-400">Action Sociale</span>
+              <span>Accueil, réconfort et orientation des familles</span>
             </div>
-            <div class="p-2.5 rounded-xl border ${prereq.vehCount >= 2 ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}">
-              <span class="block text-[9px] uppercase font-black text-slate-400">Flotte Opérationnelle</span>
-              <strong>${prereq.vehCount} / 2 véhicules</strong>
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="block text-[9px] uppercase font-black text-slate-400">Moyens CAI</span>
+              <span>Transport sécurisé & logistique d'accueil</span>
             </div>
           </div>
 

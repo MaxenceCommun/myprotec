@@ -38,23 +38,36 @@ window.ProtecAdmin = {
   switchTab(tab) {
     this.activeTab = tab;
     const tabPlayersBtn = document.getElementById('admin-tab-players-btn');
+    const tabAnnouncementsBtn = document.getElementById('admin-tab-announcements-btn');
+    const tabSuspicionBtn = document.getElementById('admin-tab-suspicion-btn');
+    const tabSupportBtn = document.getElementById('admin-tab-support-btn');
     const tabArchivesBtn = document.getElementById('admin-tab-archives-btn');
     const tabMissionsBtn = document.getElementById('admin-tab-missions-btn');
     const tabEventsBtn = document.getElementById('admin-tab-events-btn');
+
     const viewPlayers = document.getElementById('admin-view-players');
+    const viewAnnouncements = document.getElementById('admin-view-announcements');
+    const viewSuspicion = document.getElementById('admin-view-suspicion');
+    const viewSupport = document.getElementById('admin-view-support');
     const viewArchives = document.getElementById('admin-view-archives');
     const viewMissions = document.getElementById('admin-view-missions');
     const viewEvents = document.getElementById('admin-view-events');
 
-    const defaultClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition';
-    const activeClass = 'px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition';
+    const defaultClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer';
+    const activeClass = 'px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer';
 
     if (tabPlayersBtn) tabPlayersBtn.className = (tab === 'joueurs' ? activeClass : defaultClass);
+    if (tabAnnouncementsBtn) tabAnnouncementsBtn.className = (tab === 'annonces' ? activeClass : defaultClass);
+    if (tabSuspicionBtn) tabSuspicionBtn.className = (tab === 'suspicion' ? activeClass : defaultClass);
+    if (tabSupportBtn) tabSupportBtn.className = (tab === 'support' ? activeClass : defaultClass);
     if (tabArchivesBtn) tabArchivesBtn.className = (tab === 'archives' ? activeClass : defaultClass);
     if (tabMissionsBtn) tabMissionsBtn.className = (tab === 'missions' ? activeClass : defaultClass);
     if (tabEventsBtn) tabEventsBtn.className = (tab === 'events' ? activeClass : defaultClass);
 
     if (viewPlayers) viewPlayers.classList.toggle('hidden', tab !== 'joueurs');
+    if (viewAnnouncements) viewAnnouncements.classList.toggle('hidden', tab !== 'annonces');
+    if (viewSuspicion) viewSuspicion.classList.toggle('hidden', tab !== 'suspicion');
+    if (viewSupport) viewSupport.classList.toggle('hidden', tab !== 'support');
     if (viewArchives) viewArchives.classList.toggle('hidden', tab !== 'archives');
     if (viewMissions) viewMissions.classList.toggle('hidden', tab !== 'missions');
     if (viewEvents) viewEvents.classList.toggle('hidden', tab !== 'events');
@@ -63,6 +76,10 @@ window.ProtecAdmin = {
       this.loadResetArchives();
     } else if (tab === 'events') {
       this.loadEventsData();
+    } else if (tab === 'suspicion') {
+      this.renderSuspiciousAlerts();
+    } else if (tab === 'support') {
+      this.renderSupportPlayerSelect();
     }
   },
 
@@ -695,31 +712,60 @@ window.ProtecAdmin = {
   async loadAdminData(game) {
     const tableBody = document.getElementById('admin-players-tbody');
     if (tableBody) {
-      tableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-xs text-slate-500 font-semibold animate-pulse">Chargement de la base de données des directeurs...</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-xs text-slate-500 font-semibold animate-pulse">Chargement de la base de données des directeurs...</td></tr>`;
     }
 
     try {
       // 1. Récupération des stats globales
-      const statsRes = await fetch('/api/admin/stats', { headers: this.getAuthHeaders() });
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        this.renderStats(statsData.stats);
-      }
+      let statsLoaded = false;
+      try {
+        const statsRes = await fetch('/api/admin/stats', { headers: this.getAuthHeaders() });
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          this.renderStats(statsData.stats);
+          statsLoaded = true;
+        }
+      } catch (e) {}
 
       // 2. Récupération des utilisateurs
-      const usersRes = await fetch('/api/admin/users', { headers: this.getAuthHeaders() });
-      if (usersRes.ok) {
-        const usersData = await usersRes.json();
-        this.usersCache = usersData.users || [];
+      let usersLoaded = false;
+      try {
+        const usersRes = await fetch('/api/admin/users', { headers: this.getAuthHeaders() });
+        if (usersRes.ok) {
+          const usersData = await usersRes.json();
+          this.usersCache = usersData.users || [];
+          usersLoaded = true;
+        }
+      } catch (e) {}
+
+      // Fallback Supabase si le backend local n'a pas répondu ou est vide
+      if (!usersLoaded && window.ProtecSupabase && window.ProtecSupabase.getAllPlayersForAdmin) {
+        const supaPlayers = await window.ProtecSupabase.getAllPlayersForAdmin();
+        if (supaPlayers && supaPlayers.length > 0) {
+          this.usersCache = supaPlayers;
+          usersLoaded = true;
+          if (!statsLoaded) {
+            this.renderStats({
+              totalUsers: supaPlayers.length,
+              activeOnline: supaPlayers.filter(p => p.timeTracking && (Date.now() - (p.timeTracking.lastSeen || 0) < 60000)).length || 1,
+              totalSavedGames: supaPlayers.filter(p => p.lastSaved).length,
+              alliancesCount: 1
+            });
+          }
+        }
+      }
+
+      if (usersLoaded) {
         this.renderUsersTable(game);
+        this.scanForSuspiciousActivities();
       } else {
         if (tableBody) {
-          tableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-xs text-rose-600 font-bold">Accès refusé. Vous devez être connecté avec un compte Administrateur.</td></tr>`;
+          tableBody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-xs text-rose-600 font-bold">Impossible de charger les données des directeurs. Vérifiez la connexion serveur ou Supabase.</td></tr>`;
         }
       }
     } catch (e) {
       if (tableBody) {
-        tableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-xs text-rose-500 font-semibold">Erreur de communication avec le serveur BDD.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-xs text-rose-500 font-semibold">Erreur de communication avec la BDD.</td></tr>`;
       }
     }
   },
@@ -749,7 +795,7 @@ window.ProtecAdmin = {
     );
 
     if (filtered.length === 0) {
-      tableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-xs text-slate-400 font-semibold">Aucun joueur ne correspond à la recherche.</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-xs text-slate-400 font-semibold">Aucun joueur ne correspond à la recherche.</td></tr>`;
       return;
     }
 
@@ -757,6 +803,23 @@ window.ProtecAdmin = {
       const isOnline = !!(game && game.player && game.player.id === u.id);
       const isBanned = u.isBanned;
       const isAdmin = u.role === 'admin';
+
+      // Calcul des durées de connexion
+      const tt = u.timeTracking || {};
+      const actSec = Number(tt.activeSeconds || 0);
+      const idleSec = Number(tt.idleSeconds || 0);
+      const totalSec = actSec + idleSec;
+
+      const formatSec = (sec) => {
+        if (!sec || sec < 60) return `${sec || 0}s`;
+        const m = Math.floor(sec / 60);
+        if (m < 60) return `${m}m`;
+        const h = Math.floor(m / 60);
+        return `${h}h ${m % 60}m`;
+      };
+
+      const activeStr = formatSec(actSec);
+      const idleStr = formatSec(idleSec);
 
       return `
         <tr class="border-b border-slate-100 hover:bg-slate-50/70 transition text-xs">
@@ -772,7 +835,7 @@ window.ProtecAdmin = {
                   ${isAdmin ? '<span class="text-[9px] bg-indigo-100 text-indigo-800 px-1 py-0.2 rounded font-black">ADMIN</span>' : ''}
                   ${isBanned ? '<span class="text-[9px] bg-red-100 text-red-800 px-1 py-0.2 rounded font-black">BANNI</span>' : ''}
                 </div>
-                <div class="text-[10px] text-slate-400">ID: ${u.id.substring(0, 10)}...</div>
+                <div class="text-[10px] text-slate-400 font-mono">ID: ${u.id.substring(0, 10)}...</div>
               </div>
             </div>
           </td>
@@ -780,7 +843,19 @@ window.ProtecAdmin = {
           <!-- Antenne & Ville -->
           <td class="py-3 px-3">
             <div class="font-semibold text-slate-700">${u.stationName}</div>
-            <div class="text-[10px] text-slate-400 uppercase font-bold">${u.city}</div>
+            <div class="text-[10px] text-slate-400 uppercase font-bold">${u.city} (${u.departmentCode || 'FR'})</div>
+          </td>
+
+          <!-- Temps de Connexion (Actif vs Veille) -->
+          <td class="py-3 px-3">
+            <div class="flex items-center gap-1.5">
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold text-[10px]" title="Temps actif (onglet au premier plan)">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Actif: ${activeStr}
+              </span>
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold text-[10px]" title="Temps en veille (onglet en arrière-plan)">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Veille: ${idleStr}
+              </span>
+            </div>
           </td>
 
           <!-- Trésorerie -->
@@ -788,10 +863,10 @@ window.ProtecAdmin = {
             ${Number(u.money || 0).toLocaleString('fr-FR')} €
           </td>
 
-          <!-- Effectif & Véhicules -->
+          <!-- Avancement & Moyens -->
           <td class="py-3 px-3 text-slate-600">
-            <span class="font-bold text-pc-blue">${u.volunteersCount || 0}</span> secouristes • 
-            <span class="font-bold text-slate-700">${u.vehiclesCount || 0}</span> véh.
+            <div class="font-bold text-slate-800">${u.volunteersCount || 0} sec. • ${u.vehiclesCount || 0} véh.</div>
+            <div class="text-[10px] text-slate-400">${u.missionsCount || 0} missions • Réput: ${u.reputationScore || 50}/100</div>
           </td>
 
           <!-- Dernière Sauvegarde -->
@@ -809,28 +884,36 @@ window.ProtecAdmin = {
           <!-- Actions d'administration -->
           <td class="py-3 px-3 text-right">
             <div class="flex items-center justify-end gap-1">
+              <!-- Modifier Pseudo -->
+              <button onclick="window.ProtecAdmin.promptEditUsername('${u.id}', '${u.username}')" title="Modifier le Pseudo" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition cursor-pointer">
+                ✏️
+              </button>
               <!-- +10k € rapide -->
-              <button onclick="window.ProtecAdmin.quickAddMoney('${u.id}', 10000)" title="+10 000 €" class="px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition">
+              <button onclick="window.ProtecAdmin.quickAddMoney('${u.id}', 10000)" title="+10 000 €" class="px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition cursor-pointer">
                 +10k€
               </button>
               <!-- Modifier trésorerie -->
-              <button onclick="window.ProtecAdmin.promptEditMoney('${u.id}', ${u.money || 0})" title="Changer Trésorerie" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+              <button onclick="window.ProtecAdmin.promptEditMoney('${u.id}', ${u.money || 0})" title="Changer Trésorerie" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition cursor-pointer">
                 💶
               </button>
               <!-- Réinitialiser MdP -->
-              <button onclick="window.ProtecAdmin.promptResetPassword('${u.id}', '${u.username}')" title="Réinitialiser Mot de passe" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition">
+              <button onclick="window.ProtecAdmin.promptResetPassword('${u.id}', '${u.username}')" title="Réinitialiser Mot de passe" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition cursor-pointer">
                 🔑
               </button>
+              <!-- Support Flotte & Missions -->
+              <button onclick="window.ProtecAdmin.openSupportForPlayer('${u.id}')" title="Dépanner Véhicules & Missions" class="p-1 rounded-lg text-amber-600 hover:bg-amber-50 transition cursor-pointer">
+                🛠️
+              </button>
               <!-- Bannir / Débannir -->
-              <button onclick="window.ProtecAdmin.toggleBan('${u.id}', ${!isBanned})" title="${isBanned ? 'Débannir' : 'Bannir'}" class="px-2 py-1 rounded-lg text-[10px] font-bold ${isBanned ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} transition">
+              <button onclick="window.ProtecAdmin.toggleBan('${u.id}', ${!isBanned})" title="${isBanned ? 'Débannir' : 'Bannir'}" class="px-2 py-1 rounded-lg text-[10px] font-bold ${isBanned ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} transition cursor-pointer">
                 ${isBanned ? 'Débannir' : 'Bannir'}
               </button>
               <!-- Rôle Admin -->
-              <button onclick="window.ProtecAdmin.toggleAdminRole('${u.id}', '${isAdmin ? 'user' : 'admin'}')" title="Changer Rôle" class="p-1 rounded-lg text-indigo-600 hover:bg-indigo-50 transition">
+              <button onclick="window.ProtecAdmin.toggleAdminRole('${u.id}', '${isAdmin ? 'user' : 'admin'}')" title="Changer Rôle" class="p-1 rounded-lg text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
                 👑
               </button>
               <!-- Supprimer joueur -->
-              <button onclick="window.ProtecAdmin.confirmDeleteUser('${u.id}', '${u.username}')" title="Supprimer joueur" class="p-1 rounded-lg text-red-500 hover:bg-red-50 transition">
+              <button onclick="window.ProtecAdmin.confirmDeleteUser('${u.id}', '${u.username}')" title="Supprimer joueur" class="p-1 rounded-lg text-red-500 hover:bg-red-50 transition cursor-pointer">
                 🗑️
               </button>
             </div>
@@ -845,6 +928,18 @@ window.ProtecAdmin = {
   onSearchInput(val) {
     this.searchFilter = val;
     this.renderUsersTable(window.game);
+  },
+
+  async promptEditUsername(userId, currentUsername) {
+    const newName = await window.ProtecDialog.prompt(
+      `Modifier le pseudo de ${currentUsername} (min. 3 caractères) :`,
+      currentUsername,
+      'Changement de Pseudo',
+      { inputType: 'text', placeholder: 'Nouveau pseudo...' }
+    );
+    if (newName && newName.trim().length >= 3 && newName.trim() !== currentUsername) {
+      await this.updateUser(userId, { newUsername: newName.trim() }, `Pseudo mis à jour en « ${newName.trim()} »`);
+    }
   },
 
   async quickAddMoney(userId, amount) {
@@ -900,21 +995,39 @@ window.ProtecAdmin = {
   },
 
   async updateUser(userId, payload, successToast) {
+    let success = false;
     try {
       const res = await fetch('/api/admin/user/update', {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({ userId, ...payload })
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        if (window.game) window.game.showToast('Administration', successToast || 'Modifications enregistrées en BDD.', 'green');
-        await this.loadAdminData(window.game);
-      } else {
-        await window.ProtecDialog.alert(data.error || 'Erreur lors de la modification.', 'Erreur Administration');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) success = true;
       }
-    } catch (e) {
-      await window.ProtecDialog.alert('Erreur réseau avec le serveur.', 'Erreur Réseau');
+    } catch (e) {}
+
+    // Fallback Supabase si le backend Node est hors ligne
+    if (!success && window.ProtecSupabase && window.ProtecSupabase.updatePlayerByAdmin) {
+      const supaRes = await window.ProtecSupabase.updatePlayerByAdmin(userId, {
+        username: payload.newUsername,
+        role: payload.role,
+        isBanned: payload.isBanned,
+        stationName: payload.stationName,
+        city: payload.city,
+        newPassword: payload.newPassword,
+        money: payload.money,
+        saveData: payload.saveData
+      });
+      if (supaRes.success) success = true;
+    }
+
+    if (success) {
+      if (window.game) window.game.showToast('Administration', successToast || 'Modifications enregistrées en BDD.', 'green');
+      await this.loadAdminData(window.game);
+    } else {
+      await window.ProtecDialog.alert('Erreur lors de la modification du joueur.', 'Erreur Administration');
     }
   },
 
@@ -927,22 +1040,458 @@ window.ProtecAdmin = {
     if (!confirmed) {
       return;
     }
+
+    let success = false;
     try {
       const res = await fetch('/api/admin/user/delete', {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({ userId })
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        if (window.game) window.game.showToast('Joueur Supprimé', `Le compte de ${username} a été purgé de la BDD.`, 'blue');
-        await this.loadAdminData(window.game);
-      } else {
-        await window.ProtecDialog.alert(data.error || 'Erreur lors de la suppression.', 'Erreur Suppression');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) success = true;
       }
-    } catch (e) {
-      await window.ProtecDialog.alert('Erreur réseau.', 'Erreur Réseau');
+    } catch (e) {}
+
+    if (!success && window.ProtecSupabase && window.ProtecSupabase.deletePlayerByAdmin) {
+      const supaDel = await window.ProtecSupabase.deletePlayerByAdmin(userId);
+      if (supaDel.success) success = true;
     }
+
+    if (success) {
+      if (window.game) window.game.showToast('Joueur Supprimé', `Le compte de ${username} a été purgé de la BDD.`, 'blue');
+      await this.loadAdminData(window.game);
+    } else {
+      await window.ProtecDialog.alert('Erreur lors de la suppression.', 'Erreur Suppression');
+    }
+  },
+
+  // =========================================================================
+  // GESTION DES ANNONCES & MESSAGES FLASH EN TEMPS RÉEL
+  // =========================================================================
+  broadcastsHistory: [],
+
+  async handlePublishAnnouncement(e) {
+    e.preventDefault();
+    const titleInput = document.getElementById('adm-ann-title');
+    const catSelect = document.getElementById('adm-ann-category');
+    const msgInput = document.getElementById('adm-ann-message');
+    const popupCheck = document.getElementById('adm-ann-popup');
+
+    if (!titleInput || !msgInput) return;
+    const title = titleInput.value.trim();
+    const message = msgInput.value.trim();
+    const category = catSelect ? catSelect.value : 'update';
+    const showPopup = popupCheck ? popupCheck.checked : true;
+
+    if (!title || !message) return;
+
+    const payload = {
+      title,
+      message,
+      category,
+      showPopup,
+      type: category === 'urgent' ? 'red' : (category === 'maintenance' ? 'orange' : 'blue'),
+      timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      date: new Date().toLocaleDateString('fr-FR')
+    };
+
+    let sent = false;
+    try {
+      const res = await fetch('/api/admin/broadcast', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) sent = true;
+    } catch (e) {}
+
+    // Diffusion via Supabase Realtime si connecté
+    if (window.ProtecSupabase && window.ProtecSupabase.broadcastAdminAnnouncement) {
+      window.ProtecSupabase.broadcastAdminAnnouncement(payload);
+      sent = true;
+    }
+
+    // Affichage local immédiat pour l'administrateur
+    if (window.game && window.game.handleMultiplayerEvent) {
+      window.game.handleMultiplayerEvent('admin_broadcast', payload);
+    }
+
+    this.broadcastsHistory.unshift(payload);
+    this.renderBroadcastHistory();
+
+    titleInput.value = '';
+    msgInput.value = '';
+
+    if (window.game) window.game.showToast('Annonce Diffusée !', `L'annonce « ${title} » a été transmise à tous les joueurs connectés.`, 'green');
+  },
+
+  renderBroadcastHistory() {
+    const container = document.getElementById('admin-broadcast-history');
+    if (!container) return;
+
+    if (this.broadcastsHistory.length === 0) {
+      container.innerHTML = `<div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-[11px] italic">Aucune annonce diffusée durant cette session.</div>`;
+      return;
+    }
+
+    container.innerHTML = this.broadcastsHistory.map(b => `
+      <div class="p-3 rounded-xl border border-slate-200 bg-white shadow-xs flex items-start justify-between gap-2">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${b.category === 'urgent' ? 'bg-rose-100 text-rose-800' : 'bg-indigo-100 text-indigo-800'}">
+              ${b.category}
+            </span>
+            <span class="text-[10px] text-slate-400 font-semibold">${b.date} à ${b.timestamp}</span>
+          </div>
+          <div class="font-bold text-slate-800 text-xs">${b.title}</div>
+          <p class="text-[11px] text-slate-600 mt-0.5 leading-snug">${b.message}</p>
+        </div>
+        <span class="text-xs">📢</span>
+      </div>
+    `).join('');
+  },
+
+  displayBroadcastPopup(data) {
+    if (!data.showPopup && data.category !== 'urgent') return;
+
+    let pop = document.getElementById('admin-broadcast-modal');
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.id = 'admin-broadcast-modal';
+      pop.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in';
+      document.body.appendChild(pop);
+    }
+
+    const catLabels = {
+      update: { label: 'Mise à Jour Déployée', icon: '🚀', color: 'bg-indigo-600', text: 'text-indigo-600' },
+      event: { label: 'Événement Fédéral Spécial', icon: '🎪', color: 'bg-purple-600', text: 'text-purple-600' },
+      maintenance: { label: 'Maintenance du Réseau', icon: '🛠️', color: 'bg-amber-600', text: 'text-amber-600' },
+      urgent: { label: 'Ordre Fédéral & Consigne Urgente', icon: '🚨', color: 'bg-rose-600', text: 'text-rose-600' }
+    };
+
+    const cfg = catLabels[data.category] || catLabels.update;
+
+    pop.innerHTML = `
+      <div class="w-full max-w-lg rounded-3xl bg-white border-2 border-indigo-500/40 p-6 shadow-2xl relative text-left">
+        <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100">
+          <div class="w-12 h-12 rounded-2xl ${cfg.color} text-white flex items-center justify-center text-2xl shadow-md">
+            ${cfg.icon}
+          </div>
+          <div>
+            <span class="text-[10px] font-black uppercase tracking-wider ${cfg.text}">${cfg.label}</span>
+            <h3 class="text-base font-black text-slate-900 leading-tight">${data.title}</h3>
+            <span class="text-[10px] text-slate-400 font-semibold">${data.date || 'Aujourd’hui'} à ${data.timestamp || 'Direct'}</span>
+          </div>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 mb-5">
+          <p class="text-xs text-slate-700 leading-relaxed font-medium whitespace-pre-line">${data.message}</p>
+        </div>
+
+        <div class="flex items-center justify-end">
+          <button onclick="document.getElementById('admin-broadcast-modal').remove()" class="px-5 py-2.5 rounded-xl ${cfg.color} text-white font-black text-xs hover:brightness-110 shadow-md transition cursor-pointer">
+            J'ai pris connaissance
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
+  // =========================================================================
+  // DÉTECTION DES MOUVEMENTS SUSPECTS & ANTI-TRICHE
+  // =========================================================================
+  suspiciousAlerts: [],
+
+  scanForSuspiciousActivities() {
+    this.suspiciousAlerts = [];
+    const users = this.usersCache || [];
+
+    users.forEach(u => {
+      const money = Number(u.money || 0);
+      const missions = Number(u.missionsCount || 0);
+      const volunteers = Number(u.volunteersCount || 0);
+      const vehicles = Number(u.vehiclesCount || 0);
+      const tt = u.timeTracking || {};
+      const totalSec = Number(tt.activeSeconds || 0) + Number(tt.idleSeconds || 0);
+
+      // Règle 1 : Trésorerie massive avec peu de missions et peu d'heures de jeu
+      if (money > 60000 && missions < 5) {
+        this.suspiciousAlerts.push({
+          id: `susp-${u.id}-money`,
+          userId: u.id,
+          username: u.username,
+          type: 'money_spike',
+          severity: 'critical',
+          title: 'Trésorerie Anormale',
+          description: `Solde de ${money.toLocaleString('fr-FR')} € avec seulement ${missions} mission(s) réalisée(s).`,
+          recommendation: 'Inspecter ou réajuster le solde à 15 000 €.'
+        });
+      }
+
+      // Règle 2 : Flotte démesurée sans base financière
+      if (vehicles > 6 && missions < 3) {
+        this.suspiciousAlerts.push({
+          id: `susp-${u.id}-fleet`,
+          userId: u.id,
+          username: u.username,
+          type: 'fleet_spike',
+          severity: 'warning',
+          title: 'Flotte Véhicules Incohérente',
+          description: `${vehicles} véhicules déclarés avec ${missions} mission(s) effectuée(s).`,
+          recommendation: 'Vérifier la sauvegarde dans l’onglet Support.'
+        });
+      }
+
+      // Règle 3 : Temps de jeu extrêmement faible avec progression majeure
+      if (money > 35000 && totalSec < 300 && totalSec > 0) {
+        this.suspiciousAlerts.push({
+          id: `susp-${u.id}-speed`,
+          userId: u.id,
+          username: u.username,
+          type: 'fast_progress',
+          severity: 'high',
+          title: 'Progression Éclair Suspecte',
+          description: `Gain rapide de fonds en moins de 5 minutes de connexion (${totalSec}s).`,
+          recommendation: 'Surveiller les logs ou réinitialiser le compte.'
+        });
+      }
+    });
+
+    this.renderSuspiciousAlerts();
+  },
+
+  renderSuspiciousAlerts() {
+    const list = document.getElementById('admin-suspicion-list');
+    const badge = document.getElementById('admin-suspicion-badge');
+    const countText = document.getElementById('admin-suspicion-count-text');
+
+    const count = this.suspiciousAlerts.length;
+    if (badge) {
+      badge.textContent = count;
+      badge.classList.toggle('hidden', count === 0);
+    }
+    if (countText) countText.textContent = `${count} alerte(s) détectée(s)`;
+
+    if (!list) return;
+
+    if (count === 0) {
+      list.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">Aucun mouvement suspect détecté. Tout est conforme.</div>`;
+      return;
+    }
+
+    list.innerHTML = this.suspiciousAlerts.map(a => {
+      const colorBg = a.severity === 'critical' ? 'bg-rose-50 border-rose-300 text-rose-900' : (a.severity === 'high' ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-slate-50 border-slate-300 text-slate-900');
+      const badgeSev = a.severity === 'critical' ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-600 text-white">Critique</span>' : '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-500 text-white">Attention</span>';
+
+      return `
+        <div class="p-3.5 rounded-2xl border ${colorBg} shadow-xs space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">🚨</span>
+              <strong class="text-xs font-black">${a.title} : ${a.username}</strong>
+              ${badgeSev}
+            </div>
+            <div class="flex items-center gap-1">
+              <button onclick="window.ProtecAdmin.openSupportForPlayer('${a.userId}')" class="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 font-bold text-[10px] hover:bg-slate-100 cursor-pointer">
+                Inspecter
+              </button>
+              <button onclick="window.ProtecAdmin.quickAddMoney('${a.userId}', -25000)" class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black text-[10px] cursor-pointer">
+                -25k €
+              </button>
+            </div>
+          </div>
+          <p class="text-[11px] leading-snug">${a.description} <em class="block text-[10px] opacity-80 mt-0.5">Conseil : ${a.recommendation}</em></p>
+        </div>
+      `;
+    }).join('');
+  },
+
+  // =========================================================================
+  // OUTILS DE SUPPORT : GESTION DES VÉHICULES ET MISSIONS
+  // =========================================================================
+  selectedSupportUserId: null,
+
+  renderSupportPlayerSelect() {
+    const sel = document.getElementById('adm-support-player-select');
+    if (!sel) return;
+
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="">-- Choisir un joueur à assister --</option>' +
+      (this.usersCache || []).map(u => `
+        <option value="${u.id}" ${u.id === currentVal ? 'selected' : ''}>${u.username} (${u.stationName} • ${Number(u.money || 0).toLocaleString('fr-FR')} €)</option>
+      `).join('');
+  },
+
+  openSupportForPlayer(userId) {
+    this.switchTab('support');
+    const sel = document.getElementById('adm-support-player-select');
+    if (sel) {
+      sel.value = userId;
+      this.onSupportPlayerSelected(userId);
+    }
+  },
+
+  onSupportPlayerSelected(userId) {
+    this.selectedSupportUserId = userId;
+    this.refreshSupportPlayerView();
+  },
+
+  async refreshSupportPlayerView() {
+    const container = document.getElementById('adm-support-player-content');
+    if (!container) return;
+
+    if (!this.selectedSupportUserId) {
+      container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">Sélectionnez un joueur ci-dessus pour inspecter et réparer sa partie.</div>`;
+      return;
+    }
+
+    const user = (this.usersCache || []).find(u => u.id === this.selectedSupportUserId);
+    if (!user) {
+      container.innerHTML = `<div class="p-6 text-center text-xs text-rose-500 font-bold">Joueur introuvable.</div>`;
+      return;
+    }
+
+    // Récupérer la sauvegarde complète
+    let sData = user.saveData;
+    if (!sData && window.ProtecSupabase) {
+      const supaSave = await window.ProtecSupabase.loadGameState(user.id, user.username);
+      sData = supaSave ? supaSave.save_data : null;
+    }
+
+    const vehicles = sData?.vehicles || [];
+    const missions = sData?.missions || [];
+
+    container.innerHTML = `
+      <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+        <div>
+          <h4 class="text-xs font-black text-slate-900">${user.username}</h4>
+          <p class="text-[10px] text-slate-500">${user.stationName} • ${user.city} • Solde: <strong class="text-emerald-700">${Number(user.money || 0).toLocaleString('fr-FR')} €</strong></p>
+        </div>
+        <div class="flex gap-1.5">
+          <button onclick="window.ProtecAdmin.supportAddVehicle('${user.id}', 'VPSP')" class="px-2.5 py-1.5 rounded-xl bg-pc-blue text-white font-extrabold text-[10px] shadow-xs cursor-pointer">
+            + Ajouter VPSP
+          </button>
+          <button onclick="window.ProtecAdmin.supportAddVehicle('${user.id}', 'VTU')" class="px-2.5 py-1.5 rounded-xl bg-slate-700 text-white font-extrabold text-[10px] shadow-xs cursor-pointer">
+            + Ajouter VTU
+          </button>
+          <button onclick="window.ProtecAdmin.supportClearStuckMissions('${user.id}')" class="px-2.5 py-1.5 rounded-xl bg-rose-600 text-white font-extrabold text-[10px] shadow-xs cursor-pointer">
+            🧹 Débloquer Missions
+          </button>
+        </div>
+      </div>
+
+      <!-- Véhicules du joueur -->
+      <div class="border border-slate-200 rounded-2xl p-3 bg-white space-y-2">
+        <span class="text-xs font-black text-slate-800 block">Flotte de Véhicules (${vehicles.length})</span>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          ${vehicles.length === 0 ? '<div class="text-[11px] text-slate-400 italic col-span-2">Aucun véhicule enregistré.</div>' : vehicles.map(v => `
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+              <div>
+                <strong class="text-slate-900">${v.name || v.type}</strong>
+                <span class="text-[10px] text-slate-400 block">${v.immat || 'Sans plaque'} • État: ${v.condition || 100}%</span>
+              </div>
+              <button onclick="window.ProtecAdmin.supportRemoveVehicle('${user.id}', '${v.id}')" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[10px] cursor-pointer">
+                Retirer
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Missions en cours -->
+      <div class="border border-slate-200 rounded-2xl p-3 bg-white space-y-2">
+        <span class="text-xs font-black text-slate-800 block">Missions & DPS en Cours (${missions.length})</span>
+        <div class="space-y-1.5">
+          ${missions.length === 0 ? '<div class="text-[11px] text-slate-400 italic">Aucune mission active.</div>' : missions.map(m => `
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+              <div>
+                <strong class="text-slate-900">${m.title}</strong>
+                <span class="text-[10px] text-slate-500 block">Statut: ${m.status || 'En cours'} • ID: ${m.id}</span>
+              </div>
+              <div class="flex gap-1">
+                <button onclick="window.ProtecAdmin.supportForceCompleteMission('${user.id}', '${m.id}')" class="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-[10px] cursor-pointer">
+                  Valider (+Gain)
+                </button>
+                <button onclick="window.ProtecAdmin.supportCancelMission('${user.id}', '${m.id}')" class="px-2 py-1 rounded-lg bg-slate-200 text-slate-700 font-bold text-[10px] cursor-pointer">
+                  Annuler
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  },
+
+  async supportAddVehicle(userId, vehicleType) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) return;
+
+    let sData = user.saveData || {};
+    if (!sData.vehicles) sData.vehicles = [];
+
+    const newVeh = {
+      id: `veh-admin-${Date.now()}`,
+      type: vehicleType,
+      name: `${vehicleType} Antenne`,
+      immat: `PC-${Math.floor(100 + Math.random() * 900)}-FR`,
+      condition: 100,
+      inService: true,
+      stationId: sData.stations?.[0]?.id || 'st-default'
+    };
+
+    sData.vehicles.push(newVeh);
+    await this.updateUser(userId, { saveData: sData }, `Véhicule ${vehicleType} ajouté au joueur ${user.username}`);
+    this.refreshSupportPlayerView();
+  },
+
+  async supportRemoveVehicle(userId, vehicleId) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) return;
+
+    let sData = user.saveData || {};
+    if (!sData.vehicles) return;
+
+    sData.vehicles = sData.vehicles.filter(v => v.id !== vehicleId);
+    await this.updateUser(userId, { saveData: sData }, `Véhicule retiré de la flotte de ${user.username}`);
+    this.refreshSupportPlayerView();
+  },
+
+  async supportClearStuckMissions(userId) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) return;
+
+    let sData = user.saveData || {};
+    sData.missions = [];
+    await this.updateUser(userId, { saveData: sData }, `Toutes les missions de ${user.username} ont été réinitialisées.`);
+    this.refreshSupportPlayerView();
+  },
+
+  async supportForceCompleteMission(userId, missionId) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) return;
+
+    let sData = user.saveData || {};
+    const m = (sData.missions || []).find(x => x.id === missionId);
+    const reward = m?.rewardMoney || 500;
+
+    sData.missions = (sData.missions || []).filter(x => x.id !== missionId);
+    const newMoney = Number(user.money || 0) + reward;
+
+    await this.updateUser(userId, { money: newMoney, saveData: sData }, `Mission validée avec succès (+${reward} € pour ${user.username})`);
+    this.refreshSupportPlayerView();
+  },
+
+  async supportCancelMission(userId, missionId) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) return;
+
+    let sData = user.saveData || {};
+    sData.missions = (sData.missions || []).filter(x => x.id !== missionId);
+    await this.updateUser(userId, { saveData: sData }, `Mission annulée sans pénalité pour ${user.username}`);
+    this.refreshSupportPlayerView();
   },
 
   async sendGlobalBroadcast(e) {
@@ -1017,19 +1566,28 @@ window.ProtecAdmin = {
           </div>
         </div>
 
-        <!-- Onglets Directeurs / Archives / Déclencheur Missions / Événements & Écussons -->
+        <!-- Onglets Directeurs / Annonces / Anti-Triche / Support / Archives / Tests Missions / Événements -->
         <div class="flex items-center gap-2 mb-3 border-b border-slate-200/80 pb-2 flex-shrink-0 flex-wrap">
-          <button id="admin-tab-players-btn" onclick="window.ProtecAdmin.switchTab('joueurs')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition">
+          <button id="admin-tab-players-btn" onclick="window.ProtecAdmin.switchTab('joueurs')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer">
             👥 Directeurs & Comptes
           </button>
-          <button id="admin-tab-events-btn" onclick="window.ProtecAdmin.switchTab('events')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5">
+          <button id="admin-tab-announcements-btn" onclick="window.ProtecAdmin.switchTab('annonces')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
+            📢 Annonces & Alertes Flash
+          </button>
+          <button id="admin-tab-suspicion-btn" onclick="window.ProtecAdmin.switchTab('suspicion')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
+            🚨 Mouvements Suspects <span id="admin-suspicion-badge" class="hidden px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-600 text-white animate-pulse">0</span>
+          </button>
+          <button id="admin-tab-support-btn" onclick="window.ProtecAdmin.switchTab('support')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
+            🛠️ Support Flotte & Missions
+          </button>
+          <button id="admin-tab-events-btn" onclick="window.ProtecAdmin.switchTab('events')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
             🏅 Événements & Écussons
           </button>
-          <button id="admin-tab-archives-btn" onclick="window.ProtecAdmin.switchTab('archives')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5">
-            📦 Archives & Remises à Zéro
+          <button id="admin-tab-archives-btn" onclick="window.ProtecAdmin.switchTab('archives')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
+            📦 Archives Sauvegardes
           </button>
-          <button id="admin-tab-missions-btn" onclick="window.ProtecAdmin.switchTab('missions')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5">
-            🚀 Déclencheur de Missions (Tests)
+          <button id="admin-tab-missions-btn" onclick="window.ProtecAdmin.switchTab('missions')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
+            🚀 Recette & Tests
           </button>
         </div>
 
@@ -1058,10 +1616,11 @@ window.ProtecAdmin = {
             <table class="w-full text-left border-collapse">
               <thead class="sticky top-0 bg-slate-100/90 backdrop-blur-md text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">
                 <tr>
-                  <th class="py-2.5 px-3">Joueur / ID</th>
+                  <th class="py-2.5 px-3">Joueur / Rôle</th>
                   <th class="py-2.5 px-3">Antenne & Ville</th>
+                  <th class="py-2.5 px-3">Temps de Connexion</th>
                   <th class="py-2.5 px-3">Trésorerie</th>
-                  <th class="py-2.5 px-3">Moyens</th>
+                  <th class="py-2.5 px-3">Avancement & Flotte</th>
                   <th class="py-2.5 px-3">Sauvegarde</th>
                   <th class="py-2.5 px-3">Statut</th>
                   <th class="py-2.5 px-3 text-right">Actions</th>
@@ -1071,6 +1630,113 @@ window.ProtecAdmin = {
                 <!-- Rempli dynamiquement -->
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- Vue : Annonces & Alertes Flash -->
+        <div id="admin-view-announcements" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4">
+          <div class="p-4 rounded-3xl bg-indigo-50 border border-indigo-200">
+            <h4 class="text-xs font-black text-indigo-950 uppercase mb-1 flex items-center gap-1.5">
+              <span>📢 Diffusion d'Annonces & Ordres Généraux</span>
+            </h4>
+            <p class="text-[11px] text-indigo-700 leading-relaxed mb-3">
+              Diffusez un message officiel en temps réel à l'ensemble des directeurs connectés. Le message apparaît immédiatement sur leur écran sous forme de bandeau d'alerte ou de fenêtre modale fédérale avec carillon d'urgence.
+            </p>
+            <form onsubmit="window.ProtecAdmin.handlePublishAnnouncement(event)" class="space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div class="sm:col-span-2">
+                  <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Titre de l'annonce :</label>
+                  <input type="text" id="adm-ann-title" placeholder="Ex: [MAJ 2.4] Nouvelles fonctionnalités disponibles !" required
+                    class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Catégorie :</label>
+                  <select id="adm-ann-category" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:outline-none">
+                    <option value="update">🚀 Mise à jour</option>
+                    <option value="event">🎪 Événement Spécial</option>
+                    <option value="maintenance">🛠️ Maintenance Prévue</option>
+                    <option value="urgent">🚨 Consigne Fédérale Urgente</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Message détaillé :</label>
+                <textarea id="adm-ann-message" rows="3" placeholder="Saisissez ici les consignes, détails de mise à jour ou instructions fédérales transmises en direct à tous les joueurs..." required
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"></textarea>
+              </div>
+
+              <div class="flex items-center justify-between pt-1">
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-600 font-semibold">
+                  <input type="checkbox" id="adm-ann-popup" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                  <span>Ouvrir une fenêtre modale d'alerte obligatoire à l'écran</span>
+                </label>
+                <button type="submit" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                  <span>Diffuser l'Annonce Fédérale</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="p-3.5 rounded-2xl bg-white border border-slate-200">
+            <h5 class="text-xs font-black text-slate-800 mb-2">Historique récent des diffusions administratives</h5>
+            <div id="admin-broadcast-history" class="space-y-2 text-xs text-slate-500">
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-[11px] italic">Aucune annonce diffusée durant cette session.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vue : Alertes Mouvements Suspects & Anti-Triche -->
+        <div id="admin-view-suspicion" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4">
+          <div class="p-4 rounded-3xl bg-rose-50 border border-rose-200 flex items-start justify-between gap-3">
+            <div>
+              <h4 class="text-xs font-black text-rose-950 uppercase mb-1 flex items-center gap-1.5">
+                <span>🚨 Surveillance des Mouvements Suspects & Intégrité</span>
+              </h4>
+              <p class="text-[11px] text-rose-700 leading-relaxed">
+                Détection automatique des hausses d'argent anormales (> 20 000 € d'un coup sans mission), du spam d'actions et des incohérences de trésorerie ou de véhicules dans les sauvegardes.
+              </p>
+            </div>
+            <button onclick="window.ProtecAdmin.scanForSuspiciousActivities()" class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-sm flex items-center gap-1 cursor-pointer flex-shrink-0">
+              <span>🔍 Scanner la BDD</span>
+            </button>
+          </div>
+
+          <div class="flex-1 rounded-2xl border border-slate-200 bg-white overflow-hidden">
+            <div class="p-3 bg-slate-50 border-b border-slate-200 text-xs font-black text-slate-700 flex items-center justify-between">
+              <span>Journal des Alertes & Incohérences Détectées</span>
+              <span id="admin-suspicion-count-text" class="text-[10px] text-slate-500">0 alerte</span>
+            </div>
+            <div id="admin-suspicion-list" class="p-3 space-y-2 max-h-[380px] overflow-y-auto no-scrollbar">
+              <div class="p-6 text-center text-xs text-slate-400 italic">Aucun mouvement suspect détecté. Tout est conforme.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vue : Support Flotte & Missions Joueur (Débogage) -->
+        <div id="admin-view-support" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4">
+          <div class="p-4 rounded-3xl bg-amber-50 border border-amber-200">
+            <h4 class="text-xs font-black text-amber-950 uppercase mb-1 flex items-center gap-1.5">
+              <span>🛠️ Outils de Débogage & Assistance aux Joueurs</span>
+            </h4>
+            <p class="text-[11px] text-amber-800 leading-relaxed">
+              Corrigez les situations de blocage pour un joueur spécifique : débloquer des missions bloquées, ajouter un véhicule d'urgence (VPSP, VTU, VLHR) ou réajuster un état de partie.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-3">
+            <label class="block text-xs font-bold text-slate-700">Sélectionnez le directeur à assister :</label>
+            <div class="flex gap-2">
+              <select id="adm-support-player-select" onchange="window.ProtecAdmin.onSupportPlayerSelected(this.value)" class="flex-1 px-3 py-2 rounded-xl border border-slate-300 font-bold text-xs bg-slate-50 text-slate-800 focus:outline-none">
+                <option value="">-- Choisir un joueur --</option>
+              </select>
+              <button onclick="window.ProtecAdmin.refreshSupportPlayerView()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 cursor-pointer">
+                Actualiser
+              </button>
+            </div>
+            <div id="adm-support-player-content" class="mt-3 space-y-3">
+              <div class="p-6 text-center text-xs text-slate-400 italic">Sélectionnez un joueur ci-dessus pour inspecter et réparer sa partie.</div>
+            </div>
           </div>
         </div>
 

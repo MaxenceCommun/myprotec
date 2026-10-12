@@ -334,6 +334,18 @@ const server = http.createServer((req, res) => {
         const player = JSON.parse(body);
         player.lastSeen = Date.now();
         gameState.players[player.id] = player;
+
+        // Si timeTracking est envoyé, le sauvegarder dans l'utilisateur en base
+        if (player.timeTracking && db.data.users) {
+          for (const u of Object.values(db.data.users)) {
+            if (u.id === player.id) {
+              u.timeTracking = player.timeTracking;
+              u.lastLogin = new Date().toISOString();
+              break;
+            }
+          }
+        }
+
         broadcastSSE('player_sync', { player });
         sendJson(res, 200, { success: true, gameState });
       } catch (err) {

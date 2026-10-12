@@ -150,13 +150,49 @@ class ProtecGame {
     this.sdisConvention = { signed: false, signedAt: null, totalInterventions: 0 };
     this.logistics = { oxygenBottles: 0, aedPads: 0, woundKits: 0, cervicalCollars: 0 };
 
-    // Marqueurs Leaflet
+    // Marqueurs Leaflet & Clustering
     this.markers = {
       stations: {},
       otherStations: {},
       allianceStations: {},
       missions: {}
     };
+    this.missionsClusterGroup = null;
+
+    // Filtre DPS étendu : 'today' (DPS du jour) vs 'all' (Tous les DPS à venir)
+    this.dpsFilterMode = 'today';
+
+    // Système d'Alerte et Rappel Automatisé (Module E-Alerte SaaS)
+    this.alertSubscription = {
+      active: false,
+      monthlyCost: 75,
+      autoSmsNewMission: true,
+      autoRelanceShortage: true,
+      autoIndividualCalls: true,
+      lastTickMinute: -1,
+      lastMonthlyDebitMonth: null,
+      stats: {
+        smsSent: 0,
+        relancesSent: 0,
+        callsMade: 0,
+        volunteersRecruited: 0
+      }
+    };
+
+    // Système de suivi du temps de connexion (Actif vs Veille)
+    this.connectionTimeTracker = {
+      activeSeconds: 0,
+      idleSeconds: 0,
+      isWindowFocused: document.hasFocus ? document.hasFocus() : true,
+      lastTickTimestamp: Date.now()
+    };
+    try {
+      const savedTimes = JSON.parse(localStorage.getItem('protec_time_tracking') || '{}');
+      if (savedTimes.activeSeconds) this.connectionTimeTracker.activeSeconds = Number(savedTimes.activeSeconds) || 0;
+      if (savedTimes.idleSeconds) this.connectionTimeTracker.idleSeconds = Number(savedTimes.idleSeconds) || 0;
+    } catch (e) {}
+
+    this.initConnectionTimeTracking();
 
     this.loadGame();
     if (window.ProtecSystems) {
@@ -182,6 +218,43 @@ class ProtecGame {
     if (window.ProtecVeille) {
       window.ProtecVeille.init(this);
     }
+  }
+
+  // Initialisation du traçage du temps de présence actif vs veille
+  initConnectionTimeTracking() {
+    const updateFocusState = () => {
+      const isVisible = document.visibilityState === 'visible';
+      const isFocused = document.hasFocus ? document.hasFocus() : true;
+      this.connectionTimeTracker.isWindowFocused = isVisible && isFocused;
+    };
+
+    window.addEventListener('focus', updateFocusState);
+    window.addEventListener('blur', updateFocusState);
+    document.addEventListener('visibilitychange', updateFocusState);
+
+    // Incrémentation chaque seconde
+    setInterval(() => {
+      const isVisible = document.visibilityState === 'visible';
+      const isFocused = document.hasFocus ? document.hasFocus() : true;
+      const isReallyActive = isVisible && isFocused;
+
+      if (isReallyActive) {
+        this.connectionTimeTracker.activeSeconds += 1;
+      } else {
+        this.connectionTimeTracker.idleSeconds += 1;
+      }
+
+      // Persistance locale toutes les 15 secondes
+      if ((this.connectionTimeTracker.activeSeconds + this.connectionTimeTracker.idleSeconds) % 15 === 0) {
+        try {
+          localStorage.setItem('protec_time_tracking', JSON.stringify({
+            activeSeconds: this.connectionTimeTracker.activeSeconds,
+            idleSeconds: this.connectionTimeTracker.idleSeconds,
+            lastSeen: Date.now()
+          }));
+        } catch (e) {}
+      }
+    }, 1000);
   }
 
   openAuthModal() {
@@ -356,6 +429,12 @@ class ProtecGame {
       id: this.player.id,
       name: this.player.name,
       allianceId: this.player.allianceId,
+      timeTracking: {
+        activeSeconds: this.connectionTimeTracker ? this.connectionTimeTracker.activeSeconds : 0,
+        idleSeconds: this.connectionTimeTracker ? this.connectionTimeTracker.idleSeconds : 0,
+        isFocused: this.connectionTimeTracker ? this.connectionTimeTracker.isWindowFocused : true,
+        lastSeen: Date.now()
+      },
       stations: this.stations.map(s => ({
         id: s.id,
         name: s.name,
@@ -447,9 +526,21 @@ class ProtecGame {
         this.updateRemotePlayerStations(data.player);
       }
     } else if (type === 'admin_broadcast') {
-      this.showToast(data.title || 'Message Flash de la Direction', data.message, data.type || 'orange');
+      const bTitle = data.title || '🚨 DIRECTION NATIONALE (Message Flash)';
+      const bMsg = data.message || '';
+      const bCategory = data.category || 'info'; // 'update', 'event', 'maintenance', 'urgent'
+      
+      this.showToast(bTitle, bMsg, data.type || (bCategory === 'urgent' ? 'red' : 'orange'));
       if (window.ProtecIncidents) {
-        window.ProtecIncidents.sendSystemNotification(data.title || '🚨 Direction Nationale', data.message, 'admin-broadcast');
+        window.ProtecIncidents.sendSystemNotification(bTitle, bMsg, 'admin-broadcast');
+      }
+      if (window.ProtecAudio && typeof window.ProtecAudio.playAlertSound === 'function') {
+        try { window.ProtecAudio.playAlertSound(); } catch (e) {}
+      }
+
+      // Si l'annonce est urgente ou un événement/mise à jour, ouvrir la modale d'affichage officielle
+      if (window.ProtecAdmin && typeof window.ProtecAdmin.displayBroadcastPopup === 'function') {
+        window.ProtecAdmin.displayBroadcastPopup(data);
       }
     } else if (type === 'admin_user_updated') {
       if (data.userId === this.player.id) {
@@ -700,14 +791,43 @@ class ProtecGame {
     this.saveGame();
   }
 
-  saveGame() {
+  saveGame(forceInstant = false) {
     try {
-      // Purge du stockage local obsolète pour éviter tout conflit avec la BDD
-      localStorage.removeItem('protec_live_save_v4');
-      
-      // La sauvegarde est transmise directement et uniquement à la BDD
-      if (window.ProtecAuth && window.ProtecAuth.saveToDatabase) {
-        window.ProtecAuth.debouncedSaveToDatabase(this);
+      // 1. Synchronisation stricte de l'argent dans resources
+      const moneyVal = (this.resources?.money !== undefined) ? this.resources.money : ((this.resources?.budget !== undefined) ? this.resources.budget : 15000);
+      if (this.resources) {
+        this.resources.money = moneyVal;
+        this.resources.budget = moneyVal;
+        this.resources.funds = moneyVal;
+      }
+
+      // 2. Cache instantané local de secours (Zéro perte de données en cas de reload immédiat)
+      if (this.stations && this.stations.length > 0) {
+        try {
+          const cacheData = {
+            money: moneyVal,
+            stations: this.stations,
+            vehicles: this.vehicles,
+            volunteers: this.volunteers,
+            missions: this.missions,
+            devis: this.devis,
+            aascConvention: this.aascConvention,
+            samuConvention: this.samuConvention,
+            sdisConvention: this.sdisConvention,
+            sncfConvention: this.sncfConvention,
+            cumpConvention: this.cumpConvention,
+            conventionRequests: this.conventionRequests,
+            financesHistory: this.financesHistory || [],
+            alertSubscription: this.alertSubscription,
+            savedAt: Date.now()
+          };
+          sessionStorage.setItem('myprotec_instant_cache', JSON.stringify(cacheData));
+        } catch (ce) {}
+      }
+
+      // 3. La sauvegarde est transmise directement et fidèlement à la BDD
+      if (window.ProtecAuth && window.ProtecAuth.debouncedSaveToDatabase) {
+        window.ProtecAuth.debouncedSaveToDatabase(this, forceInstant);
       }
     } catch (e) {
       console.warn('Erreur sauvegarde BDD:', e);
@@ -716,10 +836,7 @@ class ProtecGame {
 
   loadGame() {
     try {
-      // Éradication du stockage local : la BDD est la seule source de vérité
-      localStorage.removeItem('protec_live_save_v4');
-      
-      // Initialisation propre : aucune antenne fantôme locale
+      // Initialisation propre
       this.stations = [];
       this.vehicles = [];
       this.volunteers = [];
@@ -729,6 +846,34 @@ class ProtecGame {
       this.formations = [];
       this.renforts = [];
       this.annualContracts = [];
+
+      // Pré-restauration instantanée depuis le cache de session si disponible
+      const rawCache = sessionStorage.getItem('myprotec_instant_cache');
+      if (rawCache) {
+        try {
+          const c = JSON.parse(rawCache);
+          if (c && c.stations && c.stations.length > 0) {
+            this.stations = c.stations || [];
+            this.vehicles = c.vehicles || [];
+            this.volunteers = c.volunteers || [];
+            this.missions = c.missions || [];
+            this.devis = c.devis || [];
+            if (c.money !== undefined && this.resources) {
+              this.resources.money = c.money;
+              this.resources.budget = c.money;
+              this.resources.funds = c.money;
+            }
+            if (c.aascConvention) this.aascConvention = c.aascConvention;
+            if (c.samuConvention) this.samuConvention = c.samuConvention;
+            if (c.sdisConvention) this.sdisConvention = c.sdisConvention;
+            if (c.sncfConvention) this.sncfConvention = c.sncfConvention;
+            if (c.cumpConvention) this.cumpConvention = c.cumpConvention;
+            if (c.conventionRequests) this.conventionRequests = c.conventionRequests;
+            if (c.financesHistory) this.financesHistory = c.financesHistory;
+            if (c.alertSubscription) this.alertSubscription = c.alertSubscription;
+          }
+        } catch (ce) {}
+      }
     } catch (e) {
       console.warn('Erreur réinitialisation état local:', e);
     }
@@ -1022,94 +1167,16 @@ class ProtecGame {
     if (window.lucide) window.lucide.createIcons();
   }
 
-  // Affichage des autres antennes de Protection Civile locales sur la carte
+  // Affichage des antennes des autres joueurs réels sur la carte (aucune antenne fictive)
   renderOtherStations() {
     if (!this.markers) return;
-    if (!this.markers.otherStations) this.markers.otherStations = {};
+    if (this.markers.otherStations) {
+      Object.values(this.markers.otherStations).forEach(m => this.map.removeLayer(m));
+      this.markers.otherStations = {};
+    }
 
-    // Nettoyage des marqueurs précédents
-    Object.values(this.markers.otherStations).forEach(m => this.map.removeLayer(m));
-    this.markers.otherStations = {};
-
-    const deptCode = this.inspectedDepartmentCode || this.currentDepartmentCode || this.player.departmentCode || '75';
-    if (!window.ProtecDepartements) return;
-
-    const communes = (typeof window.ProtecDepartements.getCommunesForDepartment === 'function')
-      ? window.ProtecDepartements.getCommunesForDepartment(deptCode)
-      : [];
-
-    const myStations = this.stations || [];
-    const allianceStations = this.allianceStations || [];
-
-    communes.forEach(commune => {
-      // Ignorer si la commune correspond à une station du joueur (proximité < 1.5 km ou même nom)
-      const isMyStation = myStations.some(s => {
-        if (s.city && s.city.toLowerCase() === commune.nom.toLowerCase()) return true;
-        if (s.lat && s.lng && commune.lat && commune.lng) {
-          const dist = Math.sqrt(Math.pow(s.lat - commune.lat, 2) + Math.pow(s.lng - commune.lng, 2));
-          if (dist < 0.015) return true;
-        }
-        return false;
-      });
-      if (isMyStation) return;
-
-      // Ignorer si déjà couverte par une station d'alliance multijoueur
-      const isAlliance = allianceStations.some(s => {
-        if (s.city && s.city.toLowerCase() === commune.nom.toLowerCase()) return true;
-        if (s.lat && s.lng && commune.lat && commune.lng) {
-          const dist = Math.sqrt(Math.pow(s.lat - commune.lat, 2) + Math.pow(s.lng - commune.lng, 2));
-          if (dist < 0.015) return true;
-        }
-        return false;
-      });
-      if (isAlliance) return;
-
-      const stationData = {
-        id: `other-station-${deptCode}-${commune.nom.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-        name: `Protection Civile - Antenne de ${commune.nom}`,
-        shortName: `Antenne de ${commune.nom}`,
-        city: commune.nom,
-        cp: commune.cp || `${deptCode}000`,
-        deptCode: deptCode,
-        lat: commune.lat,
-        lng: commune.lng,
-        type: 'adpc_locale',
-        level: 1 + (commune.nom.length % 3),
-        vehicles: ['VPSP', 'VTU', (commune.nom.length % 2 === 0 ? 'VL' : 'VPS')],
-        volunteersCount: 16 + (Math.abs(commune.nom.length * 2) % 12)
-      };
-
-      const el = document.createElement('div');
-      el.className = 'custom-leaflet-marker other-antenna-marker';
-      el.innerHTML = `
-        <div class="marker-inner bg-white border-2 border-indigo-600 p-0.5 shadow-md hover:scale-110 transition-transform">
-          <img src="logo_protection_civile.png" alt="PC ${commune.nom}" class="w-full h-full object-contain rounded-full opacity-95" />
-          <span class="badge-counter bg-indigo-600 text-white font-mono text-[9px] shadow-sm">${stationData.vehicles.length}</span>
-        </div>
-      `;
-
-      const icon = L.divIcon({
-        className: 'clean-marker',
-        html: el,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
-      });
-
-      const marker = L.marker([stationData.lat, stationData.lng], { icon }).addTo(this.map);
-      marker.bindTooltip(`<strong>${stationData.name}</strong><br><span style="font-size:10px;color:#4f46e5;">ADPC ${deptCode} • ${stationData.vehicles.length} véhicules • ${stationData.volunteersCount} bénévoles</span>`, {
-        direction: 'top',
-        offset: [0, -18],
-        className: 'custom-leaflet-tooltip'
-      });
-
-      marker.on('click', () => {
-        this.openOtherStationDetails(stationData);
-      });
-
-      this.markers.otherStations[stationData.id] = marker;
-    });
-
-    if (window.lucide) window.lucide.createIcons();
+    // Afficher exclusivement les vraies antennes des autres joueurs réels
+    this.renderAllianceStations();
   }
 
   // Volet contextuel d'une autre antenne de Protection Civile
@@ -1175,16 +1242,45 @@ class ProtecGame {
   }
 
   renderMissions() {
+    // Initialisation paresseuse du groupe de clustering de marqueurs Leaflet
+    if (!this.missionsClusterGroup && typeof L !== 'undefined' && typeof L.markerClusterGroup === 'function') {
+      try {
+        this.missionsClusterGroup = L.markerClusterGroup({
+          maxClusterRadius: 40,
+          spiderfyOnMaxZoom: true,
+          showCoverageOnHover: false,
+          zoomToBoundsOnClick: true,
+          disableClusteringAtZoom: 17,
+          iconCreateFunction: (cluster) => {
+            const count = cluster.getChildCount();
+            return L.divIcon({
+              html: `<div class="mission-cluster-badge w-10 h-10 text-xs shadow-xl"><span class="leading-none">${count}</span></div>`,
+              className: 'custom-mission-cluster',
+              iconSize: [40, 40],
+              iconAnchor: [20, 20]
+            });
+          }
+        });
+        this.map.addLayer(this.missionsClusterGroup);
+      } catch (e) {
+        console.warn('MarkerClusterGroup non disponible, utilisation des marqueurs classiques:', e);
+        this.missionsClusterGroup = null;
+      }
+    }
+
+    if (this.missionsClusterGroup) {
+      this.missionsClusterGroup.clearLayers();
+    }
     Object.values(this.markers.missions).forEach(m => this.map.removeLayer(m));
     this.markers.missions = {};
 
     this.missions.forEach(mission => {
       if (this.currentFilter !== 'all' && mission.type !== this.currentFilter) return;
 
-      // Règle : Afficher sur la carte exclusivement les DPS programmés pour le jour même (ou en cours)
+      // Règle DPS : selon le mode actif ('today' = uniquement jour même ou en cours, 'all' = tous les DPS à venir)
       if (mission.type === 'dps' && mission.status === 'planifie') {
         const isToday = mission.eventDate ? (mission.eventDate.day === this.clock.day && mission.eventDate.month === this.clock.month) : true;
-        if (!isToday) return;
+        if (this.dpsFilterMode === 'today' && !isToday) return;
       }
 
       const el = document.createElement('div');
@@ -1229,12 +1325,18 @@ class ProtecGame {
         iconAnchor: [21, 21]
       });
 
-      const marker = L.marker([mission.lat, mission.lng], { icon }).addTo(this.map);
+      const marker = L.marker([mission.lat, mission.lng], { icon });
       marker.on('click', () => this.openMissionDetails(mission.id));
       const tooltipText = (mission.type === 'social' || mission.isSector)
         ? `<b>${mission.title}</b><br/><span style="color:#7c3aed;">🗺️ ${mission.sector || mission.address || 'Secteur de Maraude'}</span>`
         : `<b>${mission.title}</b><br/><span>📍 ${mission.address || 'Point cartographique'}</span>`;
       marker.bindTooltip(tooltipText, { direction: 'top', offset: [0, -15] });
+
+      if (this.missionsClusterGroup) {
+        this.missionsClusterGroup.addLayer(marker);
+      } else {
+        marker.addTo(this.map);
+      }
       this.markers.missions[mission.id] = marker;
     });
 
@@ -3337,6 +3439,318 @@ class ProtecGame {
     }
   }
 
+  // --- SYSTÈME D'ALERTE & RAPPEL AUTOMATISÉ (MODULE E-ALERTE SAAS) ---
+  toggleAlertSubscription(forceState = null) {
+    if (!this.alertSubscription) {
+      this.alertSubscription = {
+        active: false,
+        monthlyCost: 75,
+        autoSmsNewMission: true,
+        autoRelanceShortage: true,
+        autoIndividualCalls: true,
+        lastTickMinute: -1,
+        lastMonthlyDebitMonth: null,
+        stats: { smsSent: 0, relancesSent: 0, callsMade: 0, volunteersRecruited: 0 }
+      };
+    }
+
+    const newState = (forceState !== null) ? forceState : !this.alertSubscription.active;
+    this.alertSubscription.active = newState;
+
+    if (newState) {
+      // Débit initial si premier mois
+      const cost = this.alertSubscription.monthlyCost || 75;
+      if (this.resources && (this.resources.budget || 0) < cost) {
+        this.showToast('Budget insuffisant', `Il vous faut au moins ${cost} € pour activer l'abonnement E-Alerte.`, 'orange');
+        this.alertSubscription.active = false;
+        return;
+      }
+      this.showToast(
+        'Abonnement E-Alerte Activé 📱',
+        `Le système automatisé d’alerte et de relance est en service (${cost} €/mois). Vos bénévoles seront alertés par SMS et relancés individuellement en continu dès qu'un besoin apparaît.`,
+        'green'
+      );
+    } else {
+      this.showToast(
+        'Abonnement E-Alerte Suspendu',
+        'Le système d’alerte automatisé a été mis en pause. La mobilisation et les appels redeviennent 100% manuels.',
+        'slate'
+      );
+    }
+
+    this.saveGame();
+    if (this.currentModalKey === 'planning') {
+      this.openModule('planning', true);
+    }
+  }
+
+  toggleAlertSubscriptionOption(key) {
+    if (!this.alertSubscription) return;
+    this.alertSubscription[key] = !this.alertSubscription[key];
+    const labels = {
+      autoSmsNewMission: 'Envoi SMS automatique dès planification',
+      autoRelanceShortage: 'Relances automatiques groupées si manque d’effectifs',
+      autoIndividualCalls: 'Appels téléphoniques individuels automatisés'
+    };
+    const optionName = labels[key] || key;
+    this.showToast('Option E-Alerte Modifiée', `« ${optionName} » est désormais ${this.alertSubscription[key] ? 'activé' : 'désactivé'}.`, 'blue');
+    this.saveGame();
+    if (this.currentModalKey === 'planning') {
+      this.openModule('planning', true);
+    }
+  }
+
+  checkAutoAlertSystem(currentTime) {
+    if (!this.alertSubscription || !this.alertSubscription.active) return;
+
+    // 1. Prélèvement mensuel automatique de l'abonnement
+    const curMonth = this.clock ? this.clock.month : new Date().getMonth();
+    if (this.alertSubscription.lastMonthlyDebitMonth !== curMonth) {
+      this.alertSubscription.lastMonthlyDebitMonth = curMonth;
+      const cost = this.alertSubscription.monthlyCost || 75;
+      if (this.resources) {
+        this.resources.budget = Math.max(0, (this.resources.budget || 0) - cost);
+        if (this.financesHistory) {
+          this.financesHistory.unshift({
+            id: `tx-ealerte-${currentTime}`,
+            label: 'Abonnement Mensuel Plateforme E-Alerte & Rappel Automatisé',
+            amount: -cost,
+            category: 'frais',
+            type: 'depense',
+            timestamp: currentTime,
+            dateStr: this.formatFullDate ? this.formatFullDate(this.clock) : 'Mensuel'
+          });
+        }
+        this.showToast(
+          'Facturation E-Alerte 💳',
+          `Prélèvement mensuel de ${cost} € pour la solution SaaS de mobilisation et rappel automatique d'équipe.`,
+          'blue'
+        );
+      }
+    }
+
+    // 2. Fréquence d'exécution : une fois par minute virtuelle de jeu
+    const curMinute = this.clock ? this.clock.minute : new Date().getMinutes();
+    if (this.alertSubscription.lastTickMinute === curMinute) return;
+    this.alertSubscription.lastTickMinute = curMinute;
+
+    const incompleteMissions = this.missions.filter(m => 
+      ['planifie', 'prealerte'].includes(m.status) &&
+      (m.registeredVolunteers?.length || 0) < (m.requiredVolunteers || 1)
+    );
+
+    if (incompleteMissions.length === 0) return;
+
+    // A. ENVOI SMS AUTOMATIQUE DES NOUVELLES MISSIONS NON ENCORE SOLLICITÉES
+    if (this.alertSubscription.autoSmsNewMission) {
+      incompleteMissions.forEach(mission => {
+        if (!mission.sollicitationSent && !mission.smsCampaignActive) {
+          this.launchSmsMobilization(mission.id);
+          this.alertSubscription.stats = this.alertSubscription.stats || {};
+          this.alertSubscription.stats.smsSent = (this.alertSubscription.stats.smsSent || 0) + 1;
+        }
+      });
+    }
+
+    // B. RELANCES AUTOMATIQUES EN CAS DE MANQUE DE PERSONNEL
+    if (this.alertSubscription.autoRelanceShortage) {
+      incompleteMissions.forEach(mission => {
+        const regCount = mission.registeredVolunteers?.length || 0;
+        const reqCount = mission.requiredVolunteers || 1;
+        const relances = mission.relancesCount || 0;
+
+        // Si la mission a déjà été alertée, n'est pas pleine, sans campagne en cours, et max 4 relances
+        if (mission.sollicitationSent && regCount < reqCount && relances < 4 && !mission.smsCampaignActive) {
+          // Relance aléatoire étalée (environ 30% de chance chaque minute)
+          if (Math.random() < 0.30) {
+            mission.relancesCount = relances + 1;
+            this.alertSubscription.stats = this.alertSubscription.stats || {};
+            this.alertSubscription.stats.relancesSent = (this.alertSubscription.stats.relancesSent || 0) + 1;
+            this.showToast(
+              '🤖 E-Alerte Auto : Relance Transmise',
+              `Relance automatique #${mission.relancesCount} pour « ${mission.title} » (${regCount}/${reqCount} inscrits).`,
+              'amber'
+            );
+            this.launchSmsMobilization(mission.id);
+          }
+        }
+      });
+    }
+
+    // C. APPELS INDIVIDUELS AUTOMATISÉS (Même travail de fond que les appels manuels du joueur)
+    if (this.alertSubscription.autoIndividualCalls) {
+      incompleteMissions.forEach(mission => {
+        const regCount = mission.registeredVolunteers?.length || 0;
+        const reqCount = mission.requiredVolunteers || 1;
+        if (regCount >= reqCount) return;
+
+        // Trouver un bénévole disponible non inscrit sur cette mission
+        const candidate = (this.volunteers || []).find(v => 
+          !mission.registeredVolunteers.includes(v.id) &&
+          v.status !== 'mission' &&
+          !v.isBurnout &&
+          (v.energy === undefined || v.energy >= 30)
+        );
+
+        if (candidate) {
+          this.alertSubscription.stats = this.alertSubscription.stats || {};
+          this.alertSubscription.stats.callsMade = (this.alertSubscription.stats.callsMade || 0) + 1;
+
+          // Même formule réaliste que callVolunteerIndividually
+          const motivation = candidate.motivation !== undefined ? candidate.motivation : 70;
+          const energy = candidate.energy !== undefined ? candidate.energy : 80;
+          const humeur = candidate.humeur !== undefined ? candidate.humeur : 70;
+
+          let proba = 0.45 + (motivation * 0.30 / 100) + (humeur * 0.20 / 100);
+          if (energy < 30) proba -= 0.35;
+          else if (energy < 55) proba -= 0.15;
+          if (candidate.trait === 'devoue') proba += 0.18;
+          if (candidate.trait === 'casanier') proba -= 0.18;
+          if (candidate.contractType === 'salarie') proba += 0.25;
+          proba = Math.max(0.18, Math.min(0.92, proba));
+
+          if (Math.random() <= proba) {
+            mission.registeredVolunteers.push(candidate.id);
+            candidate.motivation = Math.min(100, (candidate.motivation || 70) + 4);
+            this.alertSubscription.stats.volunteersRecruited = (this.alertSubscription.stats.volunteersRecruited || 0) + 1;
+
+            this.showToast(
+              '🤖 E-Alerte : Appel Réussi !',
+              `L'automate a appelé ${candidate.name} (${candidate.rank}) qui a accepté de se joindre à « ${mission.title} » ! (${mission.registeredVolunteers.length}/${mission.requiredVolunteers})`,
+              'green'
+            );
+            this.checkEnginProgressNotification(mission);
+            this.renderMissions();
+            this.updateStatsUI();
+          }
+        }
+      });
+    }
+
+    this.saveGame();
+  }
+
+  renderAlertSubscriptionBannerHTML() {
+    const sub = this.alertSubscription || {
+      active: false,
+      monthlyCost: 75,
+      autoSmsNewMission: true,
+      autoRelanceShortage: true,
+      autoIndividualCalls: true,
+      stats: { smsSent: 0, relancesSent: 0, callsMade: 0, volunteersRecruited: 0 }
+    };
+    const stats = sub.stats || { smsSent: 0, relancesSent: 0, callsMade: 0, volunteersRecruited: 0 };
+    const cost = sub.monthlyCost || 75;
+
+    if (sub.active) {
+      return `
+        <div class="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border-1.5 border-emerald-300/80 shadow-xs space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs flex-shrink-0 animate-pulse">
+                <i data-lucide="radio" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="text-xs font-black text-emerald-950 uppercase tracking-wider">Abonnement E-Alerte & Astreinte Pro</h4>
+                  <span class="px-2 py-0.2 rounded-full text-[10px] font-black bg-emerald-200 text-emerald-900 border border-emerald-300">ACTIF (${cost} € / mois)</span>
+                </div>
+                <p class="text-[11px] text-emerald-800 font-medium">
+                  Le système alerte vos bénévoles, relance les indisponibles et passe automatiquement des appels individuels à votre place.
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 self-end sm:self-auto">
+              <button onclick="window.game.toggleAlertSubscription(false)" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-rose-700 hover:bg-rose-50 border border-rose-200 transition shadow-2xs flex items-center gap-1.5 cursor-pointer" title="Mettre en pause l'abonnement">
+                <i data-lucide="pause-circle" class="w-3.5 h-3.5 text-rose-600"></i>
+                <span>Suspendre</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Options automatiques avec toggle cliquables -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-emerald-200/60 text-xs">
+            <button onclick="window.game.toggleAlertSubscriptionOption('autoSmsNewMission')" class="p-2 rounded-xl border text-left transition flex items-center justify-between gap-2 cursor-pointer ${sub.autoSmsNewMission ? 'bg-emerald-100/70 border-emerald-300 text-emerald-950 font-bold' : 'bg-white/80 border-slate-200 text-slate-500 font-medium'}">
+              <span class="flex items-center gap-1.5 truncate">
+                <i data-lucide="message-square-plus" class="w-3.5 h-3.5 ${sub.autoSmsNewMission ? 'text-emerald-700' : 'text-slate-400'}"></i>
+                <span class="truncate">SMS Dès Création</span>
+              </span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded font-black ${sub.autoSmsNewMission ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'}">
+                ${sub.autoSmsNewMission ? 'OUI' : 'NON'}
+              </span>
+            </button>
+
+            <button onclick="window.game.toggleAlertSubscriptionOption('autoRelanceShortage')" class="p-2 rounded-xl border text-left transition flex items-center justify-between gap-2 cursor-pointer ${sub.autoRelanceShortage ? 'bg-emerald-100/70 border-emerald-300 text-emerald-950 font-bold' : 'bg-white/80 border-slate-200 text-slate-500 font-medium'}">
+              <span class="flex items-center gap-1.5 truncate">
+                <i data-lucide="bell-ring" class="w-3.5 h-3.5 ${sub.autoRelanceShortage ? 'text-emerald-700' : 'text-slate-400'}"></i>
+                <span class="truncate">Relances Groupées Auto</span>
+              </span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded font-black ${sub.autoRelanceShortage ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'}">
+                ${sub.autoRelanceShortage ? 'OUI' : 'NON'}
+              </span>
+            </button>
+
+            <button onclick="window.game.toggleAlertSubscriptionOption('autoIndividualCalls')" class="p-2 rounded-xl border text-left transition flex items-center justify-between gap-2 cursor-pointer ${sub.autoIndividualCalls ? 'bg-emerald-100/70 border-emerald-300 text-emerald-950 font-bold' : 'bg-white/80 border-slate-200 text-slate-500 font-medium'}">
+              <span class="flex items-center gap-1.5 truncate">
+                <i data-lucide="phone-call" class="w-3.5 h-3.5 ${sub.autoIndividualCalls ? 'text-emerald-700' : 'text-slate-400'}"></i>
+                <span class="truncate">Appels Individuels Auto</span>
+              </span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded font-black ${sub.autoIndividualCalls ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'}">
+                ${sub.autoIndividualCalls ? 'OUI' : 'NON'}
+              </span>
+            </button>
+          </div>
+
+          <!-- Statistiques opérationnelles -->
+          <div class="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-emerald-900 bg-white/70 px-3 py-1.5 rounded-xl border border-emerald-200">
+            <span class="flex items-center gap-1">
+              <i data-lucide="send" class="w-3 h-3 text-emerald-700"></i>
+              <span>SMS diffusés : <strong>${stats.smsSent || 0}</strong></span>
+            </span>
+            <span class="flex items-center gap-1">
+              <i data-lucide="refresh-cw" class="w-3 h-3 text-emerald-700"></i>
+              <span>Relances auto : <strong>${stats.relancesSent || 0}</strong></span>
+            </span>
+            <span class="flex items-center gap-1">
+              <i data-lucide="phone" class="w-3 h-3 text-emerald-700"></i>
+              <span>Appels passés : <strong>${stats.callsMade || 0}</strong></span>
+            </span>
+            <span class="flex items-center gap-1 text-emerald-800">
+              <i data-lucide="user-check" class="w-3 h-3 text-emerald-600"></i>
+              <span>Bénévoles trouvés par l'automate : <strong class="text-emerald-700 font-black">${stats.volunteersRecruited || 0}</strong></span>
+            </span>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white border border-indigo-500/40 shadow-md space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-pc-orange text-white flex items-center justify-center shadow-md flex-shrink-0">
+              <i data-lucide="smartphone" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h4 class="text-xs font-black uppercase tracking-wider text-amber-300">Option SaaS : Abonnement E-Alerte Automatisé</h4>
+                <span class="px-2 py-0.2 rounded-full text-[10px] font-bold bg-white/20 text-white border border-white/30">75 € / mois</span>
+              </div>
+              <p class="text-[11px] text-slate-200 font-medium leading-relaxed mt-0.5">
+                Ne perdez plus de temps à relancer un par un chaque secouriste. Notre système envoie automatiquement les alertes SMS, effectue les relances et passe les appels téléphoniques individuels réguliers pour vous !
+              </p>
+            </div>
+          </div>
+          <button onclick="window.game.toggleAlertSubscription(true)" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-pc-orange to-amber-500 hover:brightness-110 active:scale-95 text-white shadow-md flex items-center justify-center gap-1.5 transition flex-shrink-0 cursor-pointer">
+            <i data-lucide="zap" class="w-4 h-4"></i>
+            <span>Activer l'Abonnement (75 €/mois)</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+
   // Départ échelonné d'un premier engin (montée en charge progressive sur le terrain)
   launchEchelonMission(missionId) {
     const mission = this.missions.find(m => m.id === missionId);
@@ -3507,7 +3921,7 @@ class ProtecGame {
     this.resources.reputationScore = (this.resources.reputationScore || 0) + 50;
 
     this.showToast('Convention AASC Ratifiée ! 📜', 'Votre antenne est désormais officiellement agréée de Sécurité Civile par la Préfecture ! Vous pouvez assurer vos missions.', 'green');
-    this.saveGame();
+    this.saveGame(true);
     this.updateStatsUI();
 
     if (window.ProtecAdvancedSystems) {
@@ -3583,7 +3997,7 @@ class ProtecGame {
     this.resources.money += 350; // Dotation de mise en route SAMU
     this.resources.reputationScore = (this.resources.reputationScore || 0) + 20;
     this.showToast('Convention SAMU 15 Signée ! 🚑', 'Partenariat avec la régulation départementale 15 activé (+350 € dotation). Vous pouvez désormais armer des gardes.', 'green');
-    this.saveGame();
+    this.saveGame(true);
     this.updateStatsUI();
 
     if (window.ProtecAdvancedSystems) {
@@ -3599,7 +4013,7 @@ class ProtecGame {
     }
     this.samuConvention = { signed: false, signedAt: null, totalInterventions: 0 };
     this.showToast('Convention SAMU 15 Résiliée', 'La convention avec la régulation SAMU a été suspendue.', 'slate');
-    this.saveGame();
+    this.saveGame(true);
     this.updateStatsUI();
     if (this.currentModalKey === 'samu') this.openModule('samu');
     else if (this.currentModalKey === 'conventions') window.ProtecConventions.renderModal(this);
@@ -3648,7 +4062,7 @@ class ProtecGame {
     this.resources.money += 350; // Dotation de mise en route SDIS
     this.resources.reputationScore = (this.resources.reputationScore || 0) + 20;
     this.showToast('Convention SDIS Signée ! 🚒', 'Partenariat avec le Service Départemental d’Incendie et de Secours activé (+350 € dotation). Vous pouvez armer les gardes pompiers.', 'green');
-    this.saveGame();
+    this.saveGame(true);
     this.updateStatsUI();
 
     if (window.ProtecAdvancedSystems) {
@@ -3664,7 +4078,7 @@ class ProtecGame {
     }
     this.sdisConvention = { signed: false, signedAt: null, totalInterventions: 0 };
     this.showToast('Convention SDIS Résiliée', 'La convention partenariale avec les pompiers a été suspendue.', 'slate');
-    this.saveGame();
+    this.saveGame(true);
     this.updateStatsUI();
     if (this.currentModalKey === 'pompiers') this.openModule('pompiers');
     else if (this.currentModalKey === 'conventions') window.ProtecConventions.renderModal(this);
@@ -3713,17 +4127,25 @@ class ProtecGame {
       window.ProtecEcussons.attribuerEcusson('miss_sncf');
     }
 
-    this.saveGame();
+    this.saveGame(true);
     this.updateStatsUI();
-    this.openModule('devis', true);
+    if (this.currentModalKey === 'conventions' && window.ProtecConventions) {
+      window.ProtecConventions.renderModal(this);
+    } else {
+      this.openModule('devis', true);
+    }
   }
 
   terminateSncfConvention() {
     this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
     this.showToast('Convention SNCF Résiliée', 'La convention avec la SNCF a été suspendue.', 'slate');
-    this.saveGame();
+    this.saveGame(true);
     this.updateStatsUI();
-    this.openModule('devis', true);
+    if (this.currentModalKey === 'conventions' && window.ProtecConventions) {
+      window.ProtecConventions.renderModal(this);
+    } else {
+      this.openModule('devis', true);
+    }
   }
 
   triggerSncfPrealert() {
@@ -4222,7 +4644,11 @@ class ProtecGame {
       } else {
         // Succès éclatant : Gain de réputation progressif et dégressif (plus la réputation est haute, moins elle monte vite)
         const currentRep = this.resources.reputationScore || 0;
-        const repGain = Math.max(2, Math.round(18 * (1 - (currentRep / 2200))));
+        let repGain = Math.max(2, Math.round(18 * (1 - (currentRep / 2200))));
+        if (window.ProtecAPC && typeof window.ProtecAPC.getEffectiveMultiplier === 'function') {
+          const apcMult = window.ProtecAPC.getEffectiveMultiplier(this);
+          if (apcMult > 1) repGain = Math.round(repGain * apcMult);
+        }
         // Amélioration de la réputation sur la commune hôte
         const successCity = mission.commune || mission.city || this.stations[0]?.city || 'Nancy';
         if (window.ProtecConventions) {
@@ -4417,7 +4843,16 @@ class ProtecGame {
       this.prefectureState.trustScore = Math.min(100, (this.prefectureState.trustScore || 85) + 3);
     }
 
-    this.resources.money += mission.rewardMoney || 0;
+    let finalReward = mission.rewardMoney || 0;
+    if (window.ProtecAPC && typeof window.ProtecAPC.getEffectiveMultiplier === 'function') {
+      const apcMult = window.ProtecAPC.getEffectiveMultiplier(this);
+      if (apcMult > 1 && finalReward > 0) {
+        const bonus = Math.round(finalReward * (apcMult - 1));
+        finalReward += bonus;
+        this.showToast('Bonus APC Départementale 🏛️', `+${bonus} € obtenus grâce aux conventions de votre APC départementale !`, 'blue');
+      }
+    }
+    this.resources.money += finalReward;
 
     // Déclenchement de la récurrence automatique des contrats annuels
     if (window.ProtecContratsAnnuels && typeof window.ProtecContratsAnnuels.onMissionCompleted === 'function') {
@@ -5358,7 +5793,12 @@ class ProtecGame {
                   <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
                   <span>Fil des convocations (${(this.messagesHistory || []).filter(m => m.missionId === mission.id).length})</span>
                 </button>
-                ${(!isComplete && mission.status === 'planifie') ? `
+                ${(this.alertSubscription?.active) ? `
+                  <div class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shadow-2xs" title="L'abonnement E-Alerte est actif : les relances et appels individuels sont automatisés">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>🤖 E-Alerte active (relances & appels auto)</span>
+                  </div>
+                ` : (!isComplete && mission.status === 'planifie') ? `
                   <button onclick="window.game.manualRelanceVolunteers('${mission.id}')" class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1 transition cursor-pointer" title="Déclencher une relance manuelle si effectif incomplet">
                     <i data-lucide="bell-ring" class="w-3 h-3"></i>
                     <span>Relancer l'équipe</span>
@@ -5812,7 +6252,10 @@ class ProtecGame {
         <div class="space-y-2">
           <div class="flex items-center justify-between">
             <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider">Flotte (${stationVehicles.length})</h4>
-            <button onclick="window.game.openBuyVehicleModal('${station.id}')" class="text-xs font-extrabold text-pc-orange hover:underline">+ Acheter Véhicule</button>
+            <div class="flex items-center gap-2.5">
+              <button onclick="window.game.openModule('marche_occasion')" class="text-xs font-extrabold text-slate-500 hover:text-pc-orange hover:underline">Bourse Occasion 🏷️</button>
+              <button onclick="window.game.openBuyVehicleModal('${station.id}')" class="text-xs font-extrabold text-pc-orange hover:underline">+ Acheter Neuf</button>
+            </div>
           </div>
           <div class="space-y-1.5">
             ${stationVehicles.map(v => `
@@ -5826,9 +6269,16 @@ class ProtecGame {
                     <span class="text-[9.5px] text-slate-500 font-semibold">${v.label || v.type}</span>
                   </div>
                 </div>
-                <span class="px-2 py-0.5 rounded text-[10px] font-black border ${v.status === 'dispo' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300'}">
-                  ${v.status === 'dispo' ? 'DISPO' : 'ENGAGÉ'}
-                </span>
+                <div class="flex items-center gap-2">
+                  ${v.status === 'dispo' ? `
+                    <button onclick="window.ProtecMarcheOccasion.openSellModal('vehicle', '${v.id}')" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-pc-orange border border-slate-200 transition" title="Mettre ce véhicule en vente sur la bourse d'occasion">
+                      Vendre 🏷️
+                    </button>
+                  ` : ''}
+                  <span class="px-2 py-0.5 rounded text-[10px] font-black border ${v.status === 'dispo' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300'}">
+                    ${v.status === 'dispo' ? 'DISPO' : 'ENGAGÉ'}
+                  </span>
+                </div>
               </div>
             `).join('')}
           </div>
@@ -7036,6 +7486,9 @@ class ProtecGame {
       'batiments': 'antenne',
       'logistique': 'antenne',
       'specialites': 'antenne',
+      'marche_occasion': 'antenne',
+      'bourse': 'antenne',
+      'occasion': 'antenne',
 
       'radio': 'liaisons',
       'tchat': 'liaisons',
@@ -7117,13 +7570,15 @@ class ProtecGame {
         { key: 'locaux', label: 'Bâtiment (Plan 2D)', icon: 'layout-grid' },
         { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
         { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
-        { key: 'specialites', label: 'Spécialités', icon: 'crosshair' }
+        { key: 'specialites', label: 'Spécialités', icon: 'crosshair' },
+        { key: 'marche_occasion', label: 'Bourse Occasion', icon: 'tag' }
       ],
       materiel: [
         { key: 'locaux', label: 'Bâtiment (Plan 2D)', icon: 'layout-grid' },
         { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
         { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
-        { key: 'specialites', label: 'Spécialités', icon: 'crosshair' }
+        { key: 'specialites', label: 'Spécialités', icon: 'crosshair' },
+        { key: 'marche_occasion', label: 'Bourse Occasion', icon: 'tag' }
       ],
       rh: [
         { key: 'recrutement', label: 'Bénévoles & Équipe', icon: 'users', count: this.volunteers?.length || 0 },
@@ -7198,7 +7653,13 @@ class ProtecGame {
       'batiments': 'locaux',
       'locaux': 'locaux',
       'devis_dps': 'devis',
-      'dps': 'planning'
+      'dps': 'planning',
+      'apc_dep': 'apc',
+      'apc_departementale': 'apc',
+      'bourse': 'marche_occasion',
+      'marche': 'marche_occasion',
+      'occasion': 'marche_occasion',
+      'marche_occasion': 'marche_occasion'
     };
 
     if (moduleKey === 'evenements') {
@@ -7287,6 +7748,16 @@ class ProtecGame {
     } else if (moduleKey === 'cump') {
       if (window.ProtecCump) {
         window.ProtecCump.renderCumpTab(this);
+        return;
+      }
+    } else if (moduleKey === 'apc') {
+      if (window.ProtecAPC) {
+        window.ProtecAPC.renderModal(this);
+        return;
+      }
+    } else if (moduleKey === 'marche_occasion' || moduleKey === 'bourse' || moduleKey === 'occasion') {
+      if (window.ProtecMarcheOccasion) {
+        window.ProtecMarcheOccasion.renderModal(this);
         return;
       }
     }
@@ -7624,6 +8095,9 @@ class ProtecGame {
 
           <!-- Alerte Prioritaire Demande Extra-Départementale -->
           ${this.renderExtraDeptRenfortsBlockHTML(true)}
+
+          <!-- Système d'Alerte & Rappel Automatisé (E-Alerte SaaS) -->
+          ${this.renderAlertSubscriptionBannerHTML()}
 
           ${currentTab === 'calendar' ? `
             <!-- VUE CALENDRIER -->
@@ -10733,11 +11207,25 @@ class ProtecGame {
   }
 
   setFilter(filterKey) {
-    this.currentFilter = filterKey;
+    if (filterKey === 'dps') {
+      if (this.currentFilter === 'dps') {
+        // Clic répété sur DPS : basculer entre 'today' (DPS du jour) et 'all' (Tous les DPS à venir)
+        this.dpsFilterMode = (this.dpsFilterMode === 'today') ? 'all' : 'today';
+        const label = this.dpsFilterMode === 'today' ? "DPS du Jour uniquement" : "Tous les DPS à venir";
+        this.showToast('Filtre DPS', `Affichage carte : ${label}`, 'blue');
+      } else {
+        this.currentFilter = 'dps';
+        this.dpsFilterMode = 'today';
+      }
+    } else {
+      this.currentFilter = filterKey;
+      this.dpsFilterMode = 'today';
+    }
+
     ['all', 'dps', 'samu', 'meteo', 'pompiers', 'social', 'crise'].forEach(f => {
       const btn = document.getElementById(`filter-btn-${f}`);
       if (!btn) return;
-      if (f === filterKey) {
+      if (f === this.currentFilter) {
         btn.classList.add('border-pc-blue/40', 'text-pc-blue', 'font-bold');
         btn.classList.remove('text-slate-600', 'font-semibold');
       } else {
@@ -10850,6 +11338,11 @@ class ProtecGame {
         window.ProtecCommunication.updateSocialMediaClock(this);
       }
 
+      // 1g. GESTION DES FORMATIONS B2B ET MARCHÉS D'ENTREPRISES (Délibérations devis, opportunités)
+      if (window.ProtecFormations && typeof window.ProtecFormations.processClockTick === 'function') {
+        window.ProtecFormations.processClockTick(this);
+      }
+
       // 1b. DÉPART AUTOMATIQUE DES DPS À L'HEURE DU POSTE
       if (this.clock.second === 0) {
         this.missions.forEach(m => {
@@ -10882,6 +11375,12 @@ class ProtecGame {
         if (window.ProtecCommunication && typeof window.ProtecCommunication.processDailyTick === 'function') {
           window.ProtecCommunication.processDailyTick(this);
         }
+        if (window.ProtecAPC && typeof window.ProtecAPC.processDailyCycle === 'function') {
+          window.ProtecAPC.processDailyCycle(this);
+        }
+
+        // 1b-ter. SYSTÈME D'ALERTE ET RELANCE AUTOMATISÉE (E-ALERTE SAAS)
+        this.checkAutoAlertSystem(currentTime);
       }
 
       // 1b-bis. INSTRUCTION ET DÉLIBÉRATION RÉALISTE DES CONVENTIONS (SAMU, SDIS, SNCF, CUMP)
@@ -12009,6 +12508,17 @@ class ProtecGame {
         : 'hidden';
     }
 
+    const bSubForm = document.getElementById('badge-submenu-formations');
+    if (bSubForm) {
+      const b2bPending = (this.formationB2BProposals || []).filter(p => p.status === 'pending_quote').length;
+      if (b2bPending > 0) {
+        bSubForm.textContent = b2bPending;
+        bSubForm.className = 'text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-black shadow-xs';
+      } else {
+        bSubForm.className = 'hidden';
+      }
+    }
+
     // Rétrocompatibilité anciens badges et badges finances / antenne
     const bPlan = document.getElementById('badge-planning-dock');
     if (bPlan) bPlan.textContent = planCount;
@@ -12079,20 +12589,65 @@ class ProtecGame {
   }
 
   updateMissionCounts() {
+    const todayDay = this.clock ? this.clock.day : new Date().getDate();
+    const todayMonth = this.clock ? this.clock.month : new Date().getMonth();
+
+    // 1. Décompte rigoureux des DPS : du jour (ou en cours/urgents) vs tous les DPS à venir
+    const dpsTodayList = this.missions.filter(m => {
+      if (m.type !== 'dps') return false;
+      if (m.status !== 'planifie') return true; // en cours, déclenché, etc.
+      return m.eventDate ? (m.eventDate.day === todayDay && m.eventDate.month === todayMonth) : true;
+    });
+    const dpsAllList = this.missions.filter(m => m.type === 'dps');
+
+    const dpsTodayCount = dpsTodayList.length;
+    const dpsAllCount = dpsAllList.length;
+    const activeDpsCount = (this.dpsFilterMode === 'all') ? dpsAllCount : dpsTodayCount;
+
     const counts = {
-      all: this.missions.length,
-      dps: this.missions.filter(m => m.type === 'dps').length,
       samu: this.missions.filter(m => m.type === 'samu').length,
       pompiers: this.missions.filter(m => m.type === 'pompiers').length,
       meteo: this.missions.filter(m => m.type === 'meteo').length,
       social: this.missions.filter(m => m.type === 'social').length,
-      crise: this.missions.filter(m => m.type === 'crise').length
+      crise: this.missions.filter(m => m.type === 'crise').length,
+      dps: activeDpsCount
     };
 
-    ['all', 'dps', 'samu', 'pompiers', 'meteo', 'social', 'crise'].forEach(c => {
+    // Le compteur "Toutes" reflète fidèlement le nombre de missions actuellement affichables sur la carte
+    counts.all = counts.samu + counts.pompiers + counts.meteo + counts.social + counts.crise + activeDpsCount;
+
+    ['all', 'samu', 'pompiers', 'meteo', 'social', 'crise'].forEach(c => {
       const el = document.getElementById(`count-${c}`);
       if (el) el.textContent = counts[c];
     });
+
+    // 2. Mise à jour dynamique du libellé et du compteur du bouton DPS
+    const dpsBtn = document.getElementById('filter-btn-dps');
+    if (dpsBtn) {
+      if (this.currentFilter === 'dps') {
+        if (this.dpsFilterMode === 'today') {
+          dpsBtn.innerHTML = `
+            <span class="w-2 h-2 rounded-full bg-pc-blue animate-pulse"></span>
+            <span>DPS Jour (<span id="count-dps">${dpsTodayCount}</span>)</span>
+            <span class="text-[9px] bg-blue-100 text-pc-blue px-1 py-0.2 rounded font-extrabold ml-0.5" title="Cliquez à nouveau pour afficher TOUS les DPS à venir">1/2</span>
+          `;
+          dpsBtn.title = `Filtre DPS Jour actif (${dpsTodayCount} dispositifs). Cliquez à nouveau pour afficher TOUS les DPS à venir (${dpsAllCount}).`;
+        } else {
+          dpsBtn.innerHTML = `
+            <span class="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
+            <span>Tous les DPS (<span id="count-dps">${dpsAllCount}</span>)</span>
+            <span class="text-[9px] bg-indigo-100 text-indigo-700 px-1 py-0.2 rounded font-extrabold ml-0.5" title="Cliquez pour revenir aux DPS du jour">2/2</span>
+          `;
+          dpsBtn.title = `Filtre Tous les DPS actif (${dpsAllCount} dispositifs). Cliquez pour revenir aux DPS du jour (${dpsTodayCount}).`;
+        }
+      } else {
+        dpsBtn.innerHTML = `
+          <span class="w-2 h-2 rounded-full bg-pc-blue"></span>
+          <span>DPS (<span id="count-dps">${dpsTodayCount}</span>)</span>
+        `;
+        dpsBtn.title = `Filtrer les DPS (1er clic = Jour: ${dpsTodayCount}, 2ème clic = Tous: ${dpsAllCount})`;
+      }
+    }
   }
 
   updateToastContainerPosition() {

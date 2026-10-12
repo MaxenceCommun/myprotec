@@ -151,30 +151,30 @@ window.ProtecContratsAnnuels = {
 
     // 1. Convention AASC obligatoire
     if (!game?.aascConvention?.signed) {
-      errors.push("Convention Préfectorale d'AASC requise (onglet Conventions).");
+      errors.push("Absence de Convention Préfectorale d'AASC en cours de validité (cadre légal régalien obligatoire).");
     }
 
     // 2. Agrément D obligatoire
     if (!game?.resources?.agrements?.D) {
-      errors.push("Agrément D (Dispositifs Prévisionnels de Secours) obligatoire.");
+      errors.push("Agrément D (Dispositifs Prévisionnels de Secours) non détenu par votre antenne.");
     }
 
     // 3. Effectif suffisant de secouristes
-    const volCount = (game?.volunteers || []).length;
+    const volCount = (game?.volunteers || []).filter(v => !v.isBurnout && v.status !== 'burnout').length;
     if (volCount < item.minVolunteersRequired) {
-      errors.push(`Effectif d'antenne insuffisant (${volCount}/${item.minVolunteersRequired} secouristes requis).`);
+      errors.push("Effectif de secouristes opérationnels insuffisant pour garantir la couverture récurrente de l'ensemble des dates.");
     }
 
     // 4. Flotte de véhicules
-    const vehCount = (game?.vehicles || []).length;
+    const vehCount = (game?.vehicles || []).filter(v => v.status !== 'panne').length;
     if (vehCount < item.minVehiclesRequired) {
-      errors.push(`Véhicules insuffisants (${vehCount}/${item.minVehiclesRequired} requis : au moins 1 VPSP).`);
+      errors.push("Parc de véhicules insuffisant pour mobiliser les moyens roulants exigés par le cahier des charges.");
     }
 
     // 5. Réputation / Notoriété
     const repScore = game?.resources?.reputationScore || 0;
     if (repScore < item.minReputationRequired) {
-      errors.push(`Notoriété d'antenne insuffisante (${repScore}/${item.minReputationRequired} pts requis).`);
+      errors.push(`Notoriété et assise locale insuffisantes auprès de « ${item.client} » pour un engagement exclusif de cette ampleur.`);
     }
 
     return {
@@ -198,16 +198,47 @@ window.ProtecContratsAnnuels = {
 
     const check = this.checkEligibility(game, item);
     if (!check.eligible) {
-      const msg = `Critères non remplis pour signer « ${item.title} » :\n• ` + check.errors.join('\n• ');
+      const rejectReason = check.errors.join(' ');
+      if (!game.annualContractReviews) game.annualContractReviews = {};
+      game.annualContractReviews[contractId] = {
+        status: 'rejected',
+        reason: rejectReason,
+        rejectedAt: Date.now()
+      };
+      game.saveGame();
+
+      const rejectDetails = `Décision de la Commission d'Attribution (« ${item.client} ») :\n\n` +
+        `Votre dossier de candidature pour « ${item.title} » a été examiné.\n` +
+        `Après délibération, la commission a émis un AVIS DÉFAVORABLE pour les motifs suivants :\n\n` +
+        check.errors.map(e => `• ${e}`).join('\n') +
+        `\n\nConseil : Poursuivez vos missions et le développement de votre antenne afin d'asseoir votre réputation avant de renouveler votre demande.`;
+
       if (window.ProtecDialog) {
-        await window.ProtecDialog.alert(msg, 'Critères Insuffisants');
+        await window.ProtecDialog.alert(rejectDetails, 'Candidature Non Retenue ❌');
       } else {
-        alert(msg);
+        alert(rejectDetails);
+      }
+
+      if (game.showToast) {
+        game.showToast('Candidature Non Retenue ❌', `La commission de « ${item.client} » a rejeté votre dossier.`, 'red');
+      }
+
+      // Rafraîchir l'interface active
+      if (game.currentModalKey === 'devis') {
+        game.openModule('devis', true);
+      } else if (game.currentModalKey === 'conventions') {
+        window.ProtecConventions.renderModal(game);
       }
       return;
     }
 
-    const confirmMsg = `Confirmez-vous la signature de la convention cadre annuelle avec « ${item.client} » ?\n\n` +
+    // Réinitialiser tout ancien rejet si désormais accepté
+    if (game.annualContractReviews && game.annualContractReviews[contractId]) {
+      delete game.annualContractReviews[contractId];
+    }
+
+    const confirmMsg = `Félicitations ! Votre dossier a reçu un AVIS FAVORABLE de « ${item.client} ».\n\n` +
+      `Confirmez-vous la signature de la convention cadre annuelle ?\n\n` +
       `• Fréquence : ${item.recurrenceLabel}\n` +
       `• Indemnité par poste : ${item.revenuePerEvent} €\n` +
       `• Prime annuelle de partenariat : +${item.annualGrantBonus} € (versée immédiatement)\n` +
@@ -518,10 +549,12 @@ window.ProtecContratsAnnuels = {
                       <span>✓ Postes assurés cette saison : <strong>${contractData?.eventsCompleted || 0}</strong></span>
                       <span>Total perçu : <strong>${(contractData?.totalEarned || 0).toLocaleString('fr-FR')} €</strong></span>
                     </div>
-                  ` : !check.eligible ? `
-                    <div class="p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[10px] space-y-0.5">
-                      <span class="font-bold block">Prérequis manquants :</span>
-                      ${check.errors.map(err => `<div>• ${err}</div>`).join('')}
+                  ` : (game.annualContractReviews?.[item.id]?.status === 'rejected') ? `
+                    <div class="p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-[10px] space-y-0.5">
+                      <div class="font-bold flex items-center gap-1">
+                        <span>⚠️ Avis défavorable de la commission :</span>
+                      </div>
+                      <div class="leading-relaxed">${game.annualContractReviews[item.id].reason}</div>
                     </div>
                   ` : ''}
                 </div>
@@ -536,9 +569,9 @@ window.ProtecContratsAnnuels = {
                       Résilier
                     </button>
                   ` : `
-                    <button onclick="window.ProtecContratsAnnuels.signContract(window.game, '${item.id}')" ${!check.eligible ? 'disabled class="w-full px-4 py-2.5 rounded-xl bg-slate-200 text-slate-400 font-bold text-xs cursor-not-allowed"' : 'class="w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-pc-blue hover:brightness-110 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"'}>
-                      <span>✍️</span>
-                      <span>Signer la Convention Annuelle (+${item.annualGrantBonus} €)</span>
+                    <button onclick="window.ProtecContratsAnnuels.signContract(window.game, '${item.id}')" class="w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-pc-blue hover:brightness-110 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                      <span>📑</span>
+                      <span>${game.annualContractReviews?.[item.id]?.status === 'rejected' ? 'Renouveler le Dossier de Candidature' : 'Déposer un Dossier de Candidature'} (+${item.annualGrantBonus} €)</span>
                     </button>
                   `}
                 </div>

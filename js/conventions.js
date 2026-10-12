@@ -308,8 +308,8 @@ window.ProtecConventions = {
                   <span class="text-emerald-700 font-bold">+350 €</span>
                 </div>
                 <div class="flex justify-between">
-                  <span>Exigences d'implantation :</span>
-                  <span>AASC, ≥1 VPSP, ≥3 PSE/CE, Réputation SAMU ≥ 50, ≥ 3 DPS achevés</span>
+                  <span>Cadre d'intervention :</span>
+                  <span>Missions de secours d'urgence & départs réflexes sous régulation médicale 15</span>
                 </div>
               </div>
 
@@ -355,7 +355,7 @@ window.ProtecConventions = {
                   <span>Convention Validée : Parapher & Activer (+350 €)</span>
                 </button>
               ` : `
-                <button onclick="window.game.requestSamuConvention()" ${!game.aascConvention?.signed ? 'disabled class="w-full px-3.5 py-1.5 rounded-xl bg-slate-200 text-slate-400 font-bold text-xs cursor-not-allowed"' : 'class="w-full px-3.5 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"'}>
+                <button onclick="window.game.requestSamuConvention()" class="w-full px-3.5 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
                   <span>📑</span>
                   <span>${game.samuConvention?.requestStatus === 'rejected' ? 'Renouveler la Demande au SAMU 15' : 'Déposer une Demande de Conventionnement SAMU 15'}</span>
                 </button>
@@ -410,8 +410,8 @@ window.ProtecConventions = {
                   <span class="text-emerald-700 font-bold">+350 €</span>
                 </div>
                 <div class="flex justify-between">
-                  <span>Exigences d'implantation :</span>
-                  <span>AASC, ≥1 VPSP, ≥3 secouristes, Réputation SDIS ≥ 45, ≥ 3 DPS achevés</span>
+                  <span>Cadre d'intervention :</span>
+                  <span>Gardes caserne VPSP & renforts secours d'urgence au profit du CODIS</span>
                 </div>
               </div>
 
@@ -457,7 +457,7 @@ window.ProtecConventions = {
                   <span>Convention Validée : Parapher & Activer (+350 €)</span>
                 </button>
               ` : `
-                <button onclick="window.game.requestSdisConvention()" ${!game.aascConvention?.signed ? 'disabled class="w-full px-3.5 py-1.5 rounded-xl bg-slate-200 text-slate-400 font-bold text-xs cursor-not-allowed"' : 'class="w-full px-3.5 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"'}>
+                <button onclick="window.game.requestSdisConvention()" class="w-full px-3.5 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
                   <span>📑</span>
                   <span>${game.sdisConvention?.requestStatus === 'rejected' ? 'Renouveler la Demande au SDIS' : 'Déposer une Demande de Conventionnement SDIS'}</span>
                 </button>
@@ -508,8 +508,8 @@ window.ProtecConventions = {
 
               <div class="p-2.5 rounded-xl bg-slate-50 text-[10px] space-y-1 font-semibold text-slate-700">
                 <div class="flex justify-between">
-                  <span>Prérequis stricts :</span>
-                  <span>≥10 bénévoles, Agréments A & B, ≥2 véhicules, Réputation ≥60, ≥5 DPS</span>
+                  <span>Cadre d'intervention :</span>
+                  <span>Armement de Centre d'Accueil des Impliqués (CAI) & soutien médico-psychologique</span>
                 </div>
                 <div class="flex justify-between">
                   <span>Mise aux normes :</span>
@@ -611,8 +611,8 @@ window.ProtecConventions = {
                   <span>+120 € / levée</span>
                 </div>
                 <div class="flex justify-between">
-                  <span>Exigences d'implantation :</span>
-                  <span>≥1 véhicule, ≥4 secouristes, Réputation ≥ 40, ≥ 2 DPS achevés</span>
+                  <span>Cadre d'intervention :</span>
+                  <span>Prise en charge, eau et réconfort des voyageurs bloqués en gare ou pleine voie</span>
                 </div>
               </div>
 
@@ -1485,10 +1485,6 @@ if (numVehicles > 0 && totalCrew > 0) {
   // Dépôt d'une demande de conventionnement par le joueur
   requestConvention(game, type) {
     if (!game) game = window.game;
-    if (!game.aascConvention?.signed && type !== 'aasc') {
-      game.showToast('Agrément Requis ⚠️', 'Votre antenne doit préalablement disposer de son agrément d’AASC auprès de la Préfecture.', 'orange');
-      return;
-    }
 
     const convKey = type === 'samu' ? 'samuConvention' : (type === 'sdis' ? 'sdisConvention' : (type === 'sncf' ? 'sncfConvention' : 'cumpConvention'));
     game[convKey] = game[convKey] || {};
@@ -1581,80 +1577,80 @@ if (numVehicles > 0 && totalCrew > 0) {
       const samuRep = game.reputation_samu !== undefined ? game.reputation_samu : 50;
       if (!game.aascConvention?.signed) {
         accepted = false;
-        reasons.push("Absence de Convention Préfectorale d'AASC.");
+        reasons.push("Absence de Convention Préfectorale d'AASC en cours de validité (cadre légal régalien obligatoire).");
       }
       if (vpsps < 1) {
         accepted = false;
-        reasons.push("Aucune ambulance VPSP en parc opérationnel.");
+        reasons.push("Absence d'ambulance de premiers secours à personnes (VPSP) opérationnelle dans votre parc roulant.");
       }
       if (pseQualified < 3) {
         accepted = false;
-        reasons.push(`Effectif secouriste insuffisant (${pseQualified}/3 secouristes qualifiés minimum).`);
+        reasons.push("Effectif secouriste insuffisant : un équipage complet d'équipiers PSE et d'un Chef d'équipe qualifié est indispensable pour les départs réflexes.");
       }
       if (completedDps < 3) {
         accepted = false;
-        reasons.push(`Antenne trop jeune sur le terrain (${completedDps}/3 postes DPS réalisés avec succès).`);
+        reasons.push("Antécédents opérationnels insuffisants : l'antenne doit d'abord démontrer sa régularité et sa rigueur sur le terrain via des postes de secours.");
       }
       if (samuRep < 45) {
         accepted = false;
-        reasons.push(`Niveau de confiance SAMU insuffisant (${samuRep}/100, minimum 45 requis).`);
+        reasons.push("Niveau de réputation et de confiance auprès du SAMU 15 insuffisant pour intégrer le dispositif de régulation d'urgence.");
       }
     } else if (type === 'sdis') {
       const sdisRep = game.reputation_sdis !== undefined ? game.reputation_sdis : 50;
       if (!game.aascConvention?.signed) {
         accepted = false;
-        reasons.push("Agrément Sécurité Civile non vérifié.");
+        reasons.push("Agrément de Sécurité Civile (AASC) non validé par les autorités préfectorales.");
       }
       if (vpsps < 1) {
         accepted = false;
-        reasons.push("Pas de véhicule de premiers secours à personnes (VPSP).");
+        reasons.push("Aucun véhicule de premiers secours à personnes (VPSP) disponible pour assurer les gardes caserne.");
       }
       if (pseQualified < 3) {
         accepted = false;
-        reasons.push(`Équipage insuffisant (${pseQualified}/3 équipiers requis).`);
+        reasons.push("Équipage secouriste incomplet pour assurer la continuité des vacations en centre de secours.");
       }
       if (completedDps < 3) {
         accepted = false;
-        reasons.push(`Expérience opérationnelle insuffisante (${completedDps}/3 DPS terminés).`);
+        reasons.push("Expérience opérationnelle sur le terrain encore trop limitée pour intégrer les renforts départementaux du SDIS.");
       }
       if (sdisRep < 42) {
         accepted = false;
-        reasons.push(`Relation avec l'État-Major SDIS encore fragile (${sdisRep}/100, minimum 42 requis).`);
+        reasons.push("Niveau de réputation et d'implantation auprès de l'État-Major SDIS encore fragile.");
       }
     } else if (type === 'sncf') {
       if (allVehs < 1) {
         accepted = false;
-        reasons.push("Aucun véhicule de logistique ou d'intervention en dotation.");
+        reasons.push("Aucun véhicule logistique ou de transport disponible pour l'acheminement des lots de crise en gare.");
       }
       if (totalVols < 4) {
         accepted = false;
-        reasons.push(`Effectif bénévole trop restreint (${totalVols}/4 secouristes minimum).`);
+        reasons.push("Effectif bénévole mobilisable trop restreint pour garantir une équipe de réconfort en gare.");
       }
       if (completedDps < 2) {
         accepted = false;
-        reasons.push(`Expérience sur rassemblements insuffisante (${completedDps}/2 DPS réalisés).`);
+        reasons.push("Expérience d'encadrement de foule insuffisante sur des rassemblements grand public.");
       }
     } else if (type === 'cump') {
       const samuRep = game.reputation_samu !== undefined ? game.reputation_samu : 50;
       if (totalVols < 10) {
         accepted = false;
-        reasons.push(`Capacité de mobilisation H24 insuffisante (${totalVols}/10 bénévoles minimum exigés).`);
+        reasons.push("Capacité de mobilisation H24 insuffisante pour assurer la rotation continue des équipes du Centre d'Accueil des Impliqués.");
       }
       if (allVehs < 2) {
         accepted = false;
-        reasons.push(`Flotte de soutien trop réduite (${allVehs}/2 véhicules minimum pour CAI).`);
+        reasons.push("Flotte véhiculaire trop réduite pour assurer le transport simultané des personnels et des malles d'urgence.");
       }
       if (!game.aascConvention?.signed) {
         accepted = false;
-        reasons.push("Agréments A & B de Sécurité Civile non détenus.");
+        reasons.push("Absence des Agréments Nationaux A & B de Sécurité Civile délivrés par le Ministère de l'Intérieur.");
       }
       if (completedDps < 5) {
         accepted = false;
-        reasons.push(`Solidité de l'antenne non confirmée (${completedDps}/5 DPS réussis).`);
+        reasons.push("Solidité et maturité opérationnelle de l'antenne non confirmées sur des événements de grande ampleur.");
       }
       if (samuRep < 55) {
         accepted = false;
-        reasons.push(`Confiance de la coordination hospitalière insuffisante (${samuRep}/100, minimum 55 requis).`);
+        reasons.push("Niveau de réputation et d'accréditation médico-psychologique insuffisant auprès de la coordination hospitalière.");
       }
     }
 

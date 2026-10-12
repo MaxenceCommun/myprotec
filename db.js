@@ -407,6 +407,7 @@ class Database {
         isBanned: !!u.isBanned,
         stationName: u.stationName || 'Antenne',
         city: u.city || 'paris',
+        departmentCode: u.departmentCode || '75',
         createdAt: u.createdAt,
         lastLogin: u.lastLogin,
         money: gData?.resources?.money ?? 15000,
@@ -414,7 +415,10 @@ class Database {
         vehiclesCount: gData?.vehicles?.length ?? 1,
         stationsCount: gData?.stations?.length ?? 1,
         missionsCount: gData?.missions?.length ?? 0,
-        lastSaved: save?.savedAt || null
+        reputationScore: gData?.resources?.reputationScore ?? 50,
+        timeTracking: u.timeTracking || gData?.timeTracking || null,
+        lastSaved: save?.savedAt || null,
+        saveData: gData
       };
     });
   }
@@ -433,6 +437,21 @@ class Database {
 
     if (!targetUser) return { error: 'Joueur introuvable.' };
 
+    // Modification du pseudo
+    if (updates.newUsername && updates.newUsername.trim().length >= 3) {
+      const newClean = updates.newUsername.trim();
+      const newKey = newClean.toLowerCase();
+      if (newKey !== targetKey && this.data.users[newKey]) {
+        return { error: 'Ce nom d’utilisateur est déjà utilisé par un autre joueur.' };
+      }
+      targetUser.username = newClean;
+      if (newKey !== targetKey) {
+        this.data.users[newKey] = targetUser;
+        delete this.data.users[targetKey];
+        targetKey = newKey;
+      }
+    }
+
     if (updates.role !== undefined) {
       targetUser.role = updates.role;
     }
@@ -448,26 +467,38 @@ class Database {
     if (updates.stationName) {
       targetUser.stationName = updates.stationName;
     }
+    if (updates.city) {
+      targetUser.city = updates.city;
+    }
     if (updates.newPassword && updates.newPassword.length >= 4) {
       const newSalt = this.generateSalt();
       targetUser.salt = newSalt;
       targetUser.passwordHash = this.hashPassword(updates.newPassword, newSalt);
     }
 
-    // Mise à jour de la trésorerie dans la sauvegarde
-    if (updates.money !== undefined && !isNaN(updates.money)) {
+    // Mise à jour de la sauvegarde de jeu (Trésorerie, Véhicules, Missions...)
+    if (updates.money !== undefined || updates.saveData) {
       if (!this.data.savedGames[userId]) {
         this.data.savedGames[userId] = {
           savedAt: new Date().toISOString(),
-          data: { resources: { money: Number(updates.money) } }
+          data: { resources: { money: Number(updates.money || 15000) } }
         };
-      } else {
-        if (!this.data.savedGames[userId].data.resources) {
-          this.data.savedGames[userId].data.resources = {};
-        }
-        this.data.savedGames[userId].data.resources.money = Number(updates.money);
-        this.data.savedGames[userId].savedAt = new Date().toISOString();
       }
+      const saveRecord = this.data.savedGames[userId];
+      if (!saveRecord.data) saveRecord.data = {};
+      if (!saveRecord.data.resources) saveRecord.data.resources = {};
+
+      if (updates.money !== undefined && !isNaN(updates.money)) {
+        saveRecord.data.resources.money = Number(updates.money);
+        saveRecord.data.resources.budget = Number(updates.money);
+        saveRecord.data.resources.funds = Number(updates.money);
+      }
+
+      if (updates.saveData) {
+        saveRecord.data = { ...saveRecord.data, ...updates.saveData };
+      }
+
+      saveRecord.savedAt = new Date().toISOString();
     }
 
     this.save();
