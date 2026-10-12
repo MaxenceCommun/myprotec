@@ -413,17 +413,32 @@ GRANT EXECUTE ON FUNCTION sync_server_world(TEXT) TO anon, authenticated, servic
 -- 8. SYSTÈME D'ÉCUSSONS DE COLLECTION & BOURSE AUX ÉCHANGES (TROC INTER-ANTENNES)
 -- ==============================================================================
 
--- A. Table du catalogue officiel des écussons
+-- A. Table du catalogue officiel des écussons (avec écussons personnalisés d'antenne)
 CREATE TABLE IF NOT EXISTS ecussons (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code TEXT UNIQUE NOT NULL,
   nom TEXT NOT NULL,
   description TEXT,
-  categorie TEXT NOT NULL CHECK (categorie IN ('specialite', 'mission', 'departement', 'renfort')),
+  categorie TEXT NOT NULL CHECK (categorie IN ('specialite', 'mission', 'departement', 'renfort', 'antenne')),
   badge_url TEXT,
   rarete TEXT NOT NULL CHECK (rarete IN ('commun', 'rare', 'epique', 'historique')),
+  creator_antenne_id TEXT,
+  creator_name TEXT,
+  custom_data JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Assouplissement de la contrainte categorie si la table existait déjà
+DO $$
+BEGIN
+  ALTER TABLE ecussons DROP CONSTRAINT IF EXISTS ecussons_categorie_check;
+  ALTER TABLE ecussons ADD CONSTRAINT ecussons_categorie_check CHECK (categorie IN ('specialite', 'mission', 'departement', 'renfort', 'antenne'));
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+ALTER TABLE ecussons ADD COLUMN IF NOT EXISTS creator_antenne_id TEXT;
+ALTER TABLE ecussons ADD COLUMN IF NOT EXISTS creator_name TEXT;
+ALTER TABLE ecussons ADD COLUMN IF NOT EXISTS custom_data JSONB DEFAULT '{}'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_ecussons_categorie ON ecussons(categorie);
 CREATE INDEX IF NOT EXISTS idx_ecussons_code ON ecussons(code);
@@ -441,7 +456,7 @@ CREATE TABLE IF NOT EXISTS antenne_ecussons (
 CREATE INDEX IF NOT EXISTS idx_antenne_ecussons_antenne ON antenne_ecussons(antenne_id);
 CREATE INDEX IF NOT EXISTS idx_antenne_ecussons_ecusson ON antenne_ecussons(ecusson_id);
 
--- C. Table des offres de troc / bourse d'échanges
+-- C. Table des offres de troc / bourse d'échanges (échange écusson contre écusson)
 CREATE TABLE IF NOT EXISTS ecusson_echanges (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   antenne_offreur_id TEXT NOT NULL,
@@ -453,6 +468,24 @@ CREATE TABLE IF NOT EXISTS ecusson_echanges (
 
 CREATE INDEX IF NOT EXISTS idx_ecusson_echanges_statut ON ecusson_echanges(statut);
 CREATE INDEX IF NOT EXISTS idx_ecusson_echanges_offreur ON ecusson_echanges(antenne_offreur_id);
+
+-- D. Table des ventes d'écussons en € entre directeurs d'antenne (pour générer des fonds)
+CREATE TABLE IF NOT EXISTS ecusson_ventes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  seller_antenne_id TEXT NOT NULL,
+  seller_name TEXT NOT NULL,
+  seller_dept TEXT DEFAULT '54',
+  ecusson_id UUID NOT NULL REFERENCES ecussons(id) ON DELETE CASCADE,
+  prix BIGINT NOT NULL CHECK (prix >= 0),
+  statut TEXT NOT NULL DEFAULT 'actif' CHECK (statut IN ('actif', 'vendu', 'annule')),
+  buyer_antenne_id TEXT,
+  buyer_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  sold_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_ecusson_ventes_statut ON ecusson_ventes(statut);
+CREATE INDEX IF NOT EXISTS idx_ecusson_ventes_seller ON ecusson_ventes(seller_antenne_id);
 
 -- ==============================================================================
 -- FONCTIONS RPC SÉCURISÉES POUR LE TROC D'ÉCUSSONS
@@ -685,13 +718,193 @@ INSERT INTO ecussons (code, nom, description, categorie, badge_url, rarete) VALU
   ('renf_dps_ge', 'Grande Envergure • Renfort Inter-Antennes', 'Décerné à toute antenne ayant dépêché un équipage ou VPSP en renfort sur un DPS-GE.', 'renfort', 'images/badges/badge_renfort_ge.png', 'epique'),
   ('renf_colonne_crue', 'Colonne Nationale de Secours Crues', 'Écusson de prestige remis lors des déploiements zonaux de crise hydraulique.', 'renfort', 'images/badges/badge_crue.png', 'historique'),
   ('renf_zonal', 'Solidarité Zonale de Sécurité Civile', 'Attribué pour l’appui logistique ou opérationnel rapide entre départements limitrophes.', 'renfort', 'images/badges/badge_zonal.png', 'rare'),
-  ('renf_fondateur', 'Pionnier FNPC • Fondation d’Antenne', 'Écusson commémoratif remis aux directeurs ayant inauguré leur bâtiment d’antenne.', 'renfort', 'images/badges/badge_fondateur.png', 'historique')
+  ('renf_fondateur', 'Pionnier MyProtec', 'Écusson commémoratif remis aux directeurs ayant inauguré leur bâtiment d’antenne.', 'renfort', 'images/badges/badge_fondateur.png', 'historique')
 ON CONFLICT (code) DO UPDATE SET
   nom = EXCLUDED.nom,
   description = EXCLUDED.description,
   categorie = EXCLUDED.categorie,
   badge_url = EXCLUDED.badge_url,
   rarete = EXCLUDED.rarete;
+
+-- ==============================================================================
+-- FONCTIONS RPC TRANSACTIONNELLES DE VENTE D'ÉCUSSONS EN EUROS (€)
+-- ==============================================================================
+
+-- 1. Mettre en vente un écusson (déduit 1 exemplaire du tableau)
+CREATE OR REPLACE FUNCTION mettre_en_vente_ecusson(
+  p_ecusson_id UUID,
+  p_prix BIGINT,
+  p_seller_id TEXT,
+  p_seller_name TEXT,
+  p_seller_dept TEXT DEFAULT '54'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_dispo INT;
+  v_vente_id UUID;
+BEGIN
+  IF p_prix <= 0 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Le prix de vente doit être supérieur à zéro.');
+  END IF;
+
+  SELECT quantite INTO v_dispo
+  FROM antenne_ecussons
+  WHERE antenne_id = p_seller_id AND ecusson_id = p_ecusson_id
+  FOR UPDATE;
+
+  IF v_dispo IS NULL OR v_dispo < 1 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Vous ne possédez aucun exemplaire disponible de cet écusson.');
+  END IF;
+
+  -- Décrémenter l'exemplaire du stock
+  UPDATE antenne_ecussons
+  SET quantite = quantite - 1, updated_at = NOW()
+  WHERE antenne_id = p_seller_id AND ecusson_id = p_ecusson_id;
+
+  INSERT INTO ecusson_ventes (seller_antenne_id, seller_name, seller_dept, ecusson_id, prix, statut)
+  VALUES (p_seller_id, p_seller_name, p_seller_dept, p_ecusson_id, p_prix, 'actif')
+  RETURNING id INTO v_vente_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'vente_id', v_vente_id,
+    'message', 'Votre écusson a été mis en vente sur le marché inter-antennes !'
+  );
+END;
+$$;
+
+-- 2. Annuler une mise en vente et restituer l'écusson
+CREATE OR REPLACE FUNCTION annuler_vente_ecusson(
+  p_vente_id UUID,
+  p_seller_id TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_vente RECORD;
+BEGIN
+  SELECT * INTO v_vente
+  FROM ecusson_ventes
+  WHERE id = p_vente_id AND statut = 'actif'
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Annonce de vente introuvable ou déjà clôturée.');
+  END IF;
+
+  IF v_vente.seller_antenne_id <> p_seller_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Seul le propriétaire de l''annonce peut l''annuler.');
+  END IF;
+
+  UPDATE ecusson_ventes
+  SET statut = 'annule'
+  WHERE id = p_vente_id;
+
+  -- Restituer l'écusson dans l'inventaire du vendeur
+  INSERT INTO antenne_ecussons (antenne_id, ecusson_id, quantite, updated_at)
+  VALUES (p_seller_id, v_vente.ecusson_id, 1, NOW())
+  ON CONFLICT (antenne_id, ecusson_id)
+  DO UPDATE SET quantite = antenne_ecussons.quantite + 1, updated_at = NOW();
+
+  RETURN jsonb_build_object('success', true, 'message', 'L''annonce a été retirée et l''écusson a réintégré votre tableau.');
+END;
+$$;
+
+-- 3. Acheter un écusson en vente (transaction atomique : débit acheteur, crédit vendeur, transfert objet)
+CREATE OR REPLACE FUNCTION acheter_ecusson_vente(
+  p_vente_id UUID,
+  p_buyer_id TEXT,
+  p_buyer_name TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_vente RECORD;
+  v_buyer_save RECORD;
+  v_buyer_funds NUMERIC;
+BEGIN
+  SELECT * INTO v_vente
+  FROM ecusson_ventes
+  WHERE id = p_vente_id AND statut = 'actif'
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Cet écusson n''est plus disponible à la vente.');
+  END IF;
+
+  IF v_vente.seller_antenne_id = p_buyer_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Vous ne pouvez pas acheter votre propre écusson mis en vente.');
+  END IF;
+
+  -- Vérifier les fonds de l'acheteur si présent dans game_saves
+  SELECT * INTO v_buyer_save
+  FROM game_saves
+  WHERE user_id = p_buyer_id
+  FOR UPDATE;
+
+  IF FOUND AND v_buyer_save.game_state IS NOT NULL THEN
+    v_buyer_funds := COALESCE((v_buyer_save.game_state->>'budget')::numeric, 0);
+    IF v_buyer_funds < v_vente.prix THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Fonds insuffisants dans votre trésorerie d''antenne.');
+    END IF;
+
+    -- Débiter l'acheteur
+    UPDATE game_saves
+    SET game_state = jsonb_set(game_state, '{budget}', to_jsonb(v_buyer_funds - v_vente.prix)),
+        updated_at = NOW()
+    WHERE user_id = p_buyer_id;
+
+    -- Créditer le vendeur
+    UPDATE game_saves
+    SET game_state = jsonb_set(game_state, '{budget}', to_jsonb(COALESCE((game_state->>'budget')::numeric, 0) + v_vente.prix)),
+        updated_at = NOW()
+    WHERE user_id = v_vente.seller_antenne_id;
+  END IF;
+
+  -- Transférer l'écusson dans la collection de l'acheteur
+  INSERT INTO antenne_ecussons (antenne_id, ecusson_id, quantite, updated_at)
+  VALUES (p_buyer_id, v_vente.ecusson_id, 1, NOW())
+  ON CONFLICT (antenne_id, ecusson_id)
+  DO UPDATE SET quantite = antenne_ecussons.quantite + 1, updated_at = NOW();
+
+  -- Marquer la vente comme conclue
+  UPDATE ecusson_ventes
+  SET statut = 'vendu',
+      buyer_antenne_id = p_buyer_id,
+      buyer_name = p_buyer_name,
+      sold_at = NOW()
+  WHERE id = p_vente_id;
+
+  -- Notification pour le vendeur
+  INSERT INTO server_events_log (player_id, event_type, title, message)
+  VALUES (
+    v_vente.seller_antenne_id,
+    'ecusson_sale',
+    'Écusson Vendu ! 💰',
+    'Votre écusson a été acheté par ' || p_buyer_name || ' pour la somme de ' || v_vente.prix || ' €.'
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'prix', v_vente.prix,
+    'message', 'Félicitations ! L''écusson a été acheté et accroché sur votre tableau en liège.'
+  );
+END;
+$$;
+
+-- RLS & Permissions
+ALTER TABLE ecusson_ventes DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE ecusson_ventes TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION mettre_en_vente_ecusson(UUID, BIGINT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION annuler_vente_ecusson(UUID, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION acheter_ecusson_vente(UUID, TEXT, TEXT) TO anon, authenticated, service_role;
 
 -- ==============================================================================
 -- 9. GÉOGRAPHIE, BASSIN D'ATTRACTIVITÉ & PERSISTANCE DES BÉNÉVOLES TERRITORIAUX

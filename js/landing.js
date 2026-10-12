@@ -46,7 +46,7 @@ window.MyProtecLanding = {
       director: 'Directeur Thomas',
       department: 'Meurthe-et-Moselle (54)',
       badges: [
-        { id: 'b1', code: 'renf_fondateur', name: 'Pionnier FNPC • Fondation d’Antenne', cat: 'renfort', rarity: 'historique', icon: 'crown', desc: 'Attribué aux directeurs pionniers ayant ouvert leur premier centre de secours territorial.' },
+        { id: 'b1', code: 'renf_fondateur', name: 'Pionnier MyProtec', cat: 'renfort', rarity: 'historique', icon: 'crown', desc: 'Attribué aux directeurs pionniers ayant ouvert leur premier centre de secours territorial.' },
         { id: 'b2', code: 'renf_colonne_crue', name: 'Colonne Nationale Crues & Inondations', cat: 'renfort', rarity: 'historique', icon: 'droplets', desc: 'Distinction officielle suite aux opérations majeures de pompage lourd et d’évacuation de population.' },
         { id: 'b3', code: 'spec_pma', name: 'Poste Médical Avancé (PMA)', cat: 'specialite', rarity: 'epique', icon: 'plus-square', desc: 'Aptitude certifiée au déploiement rapide d’une chaîne médicale avancée de tri d’urgence.' },
         { id: 'b4', code: 'dept_54', name: 'Territoire 54 • Meurthe-et-Moselle', cat: 'departement', rarity: 'commun', icon: 'map-pin', desc: 'Insigne officiel des unités de secours et d’action citoyenne de Meurthe-et-Moselle.' }
@@ -469,16 +469,15 @@ window.MyProtecLanding = {
         <div class="showcase-grid-card">
           <div class="showcase-inner-card p-6 flex flex-col justify-between h-full bg-white/90 rounded-3xl border border-slate-200/80 shadow-md">
             
-            <!-- En-tête : Rang officiel & Score de rareté cumulé -->
+            <!-- En-tête : Rang officiel & Collection -->
             <div class="space-y-3 pb-4 border-b border-slate-200/70">
               <div class="flex items-center justify-between">
                 ${rankBadgeHTML}
                 <div class="text-right">
-                  <div class="flex items-baseline justify-end gap-1">
-                    <strong class="text-xl font-black text-slate-900 mono-num">${antenne.rarityScore}</strong>
-                    <span class="text-xs font-black text-[#0055b8]">pts</span>
+                  <div class="text-xs font-black text-slate-700">
+                    <span class="text-sm font-black text-slate-900 mono-num">${antenne.badges.length}</span> écusson${antenne.badges.length > 1 ? 's' : ''}
                   </div>
-                  <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Score de Rareté</span>
+                  <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Collection Officielle</span>
                 </div>
               </div>
 
@@ -498,11 +497,10 @@ window.MyProtecLanding = {
             <div class="grid grid-cols-2 gap-3 my-5">
               ${displayBadges.length > 0 ? displayBadges.map(badge => {
                 const r = badge.rarity || badge.rarete || 'commun';
-                const pts = this.rarityWeights[r] || 1;
                 return `
                   <div 
                     class="patch-badge-item group relative p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col items-center text-center cursor-pointer overflow-hidden transition hover:shadow-md"
-                    onmouseenter="window.MyProtecLanding.showBadgeTooltip(event, '${badge.name}', '${badge.desc || ''}', '${r.toUpperCase()} • Valeur : +${pts} pts')"
+                    onmouseenter="window.MyProtecLanding.showBadgeTooltip(event, '${badge.name}', '${badge.desc || ''}', '${r.toUpperCase()}')"
                     onmouseleave="window.MyProtecLanding.hideBadgeTooltip()"
                   >
                     <!-- Couche Foil Holographique -->
@@ -530,7 +528,7 @@ window.MyProtecLanding = {
                       (r === 'epique' ? 'bg-purple-100 text-purple-900' :
                       (r === 'rare' ? 'bg-cyan-100 text-cyan-900' : 'bg-slate-100 text-slate-600'))
                     }">
-                      ${r} (+${pts} pts)
+                      ${r}
                     </span>
                   </div>
                 `;
