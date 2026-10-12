@@ -192,6 +192,7 @@ class ProtecGame {
       if (savedTimes.idleSeconds) this.connectionTimeTracker.idleSeconds = Number(savedTimes.idleSeconds) || 0;
     } catch (e) {}
 
+    this.initReactiveResources();
     this.initConnectionTimeTracking();
 
     this.loadGame();
@@ -217,6 +218,53 @@ class ProtecGame {
     }
     if (window.ProtecVeille) {
       window.ProtecVeille.init(this);
+    }
+  }
+
+  // --- RÉACTIVITÉ AUTOMATIQUE DE LA TRÉSORERIE SANS RELOAD ---
+  initReactiveResources() {
+    if (!this.resources) {
+      this.resources = {
+        _money: 15000,
+        reputationScore: 0,
+        reputationLevel: 1,
+        followers: 140,
+        alliancePoints: 50,
+        campaigns: { social: false, posters: false }
+      };
+    }
+
+    let initialMoney = 15000;
+    if (typeof this.resources._money === 'number') {
+      initialMoney = this.resources._money;
+    } else if (typeof this.resources.money === 'number') {
+      initialMoney = this.resources.money;
+    } else if (typeof this.resources.budget === 'number') {
+      initialMoney = this.resources.budget;
+    }
+    this.resources._money = initialMoney;
+
+    const game = this;
+    try {
+      Object.defineProperty(this.resources, 'money', {
+        get() {
+          return this._money !== undefined ? this._money : 15000;
+        },
+        set(val) {
+          const num = Math.round(Number(val) || 0);
+          const changed = num !== this._money;
+          this._money = num;
+          this.budget = num;
+          this.funds = num;
+          if (changed && typeof game.updateStatsUI === 'function') {
+            game.updateStatsUI();
+          }
+        },
+        configurable: true,
+        enumerable: true
+      });
+    } catch (e) {
+      console.warn('Getter/setter réactif money:', e);
     }
   }
 
@@ -794,6 +842,9 @@ class ProtecGame {
       if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.ensureTerritoryEvents === 'function') {
         window.ProtecEvenementsReels.ensureTerritoryEvents(this);
       }
+      if (window.ProtecPersonnel && typeof window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences === 'function') {
+        window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences(this);
+      }
     }
   }
 
@@ -887,6 +938,7 @@ class ProtecGame {
     } catch (e) {
       console.warn('Erreur réinitialisation état local:', e);
     }
+    this.initReactiveResources();
   }
 
   confirmResetGame() {
@@ -1540,6 +1592,7 @@ class ProtecGame {
       vehicles: []
     };
     const isFirst = this.stations.length === 0;
+    this.stations.push(newStation);
     if (isFirst) {
       // 1. VPSP OPÉRATIONNEL AU DÉPART (Indispensable pour lancer l'activité de secours et les premiers DPS)
       const startVpspId = `vpsp-${Date.now()}`;
@@ -1617,9 +1670,12 @@ class ProtecGame {
         }
         this.volunteers.push(newVol);
       });
+
+      if (window.ProtecPersonnel && typeof window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences === 'function') {
+        window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences(this);
+      }
     }
 
-    this.stations.push(newStation);
     this.cancelAntennaPlacement();
     this.renderStations();
     this.renderMissions();
@@ -2350,11 +2406,20 @@ class ProtecGame {
     const personnelCost = vols * dur * ratePerHour;
 
     let vehicleCost = 0;
-    const vehs = devis.configuredVehicles || devis.requiredVehicles || [];
-    vehs.forEach(v => {
-      if (v === 'VPSP') vehicleCost += 110;
-      else if (v === 'VTU') vehicleCost += 55;
-      else if (v === 'VL') vehicleCost += 35;
+    const counts = this.ensureDevisVehicleCounts(devis);
+    Object.entries(counts).forEach(([vType, count]) => {
+      const c = Number(count) || 0;
+      if (vType === 'VPSP') vehicleCost += 110 * c;
+      else if (vType === 'VTU') vehicleCost += 55 * c;
+      else if (vType === 'VL') vehicleCost += 35 * c;
+      else if (vType === 'VTP') vehicleCost += 45 * c;
+      else if (vType === 'VPS') vehicleCost += 70 * c;
+      else if (vType === 'QUAD') vehicleCost += 50 * c;
+      else if (vType === 'MOTO') vehicleCost += 40 * c;
+      else if (vType === 'VELO') vehicleCost += 20 * c;
+      else if (vType === 'DRONE') vehicleCost += 60 * c;
+      else if (vType === 'ERS') vehicleCost += 80 * c;
+      else vehicleCost += 40 * c;
     });
 
     const scale = devis.configuredScale || devis.scale || 'DPS-PE';
@@ -2534,18 +2599,116 @@ class ProtecGame {
     this.openModule('devis', true);
   }
 
-  // Bascule manuelle d'un véhicule engagé
+  // Formatage propre et arrondi du public attendu pour affichage
+  formatRoundedPublic(pub) {
+    if (pub === null || pub === undefined) return '500 personnes';
+    if (typeof pub === 'number') {
+      const r = typeof window.roundExpectedPublic === 'function' ? window.roundExpectedPublic(pub) : Math.round(pub);
+      return `${r.toLocaleString('fr-FR')} personnes`;
+    }
+    const str = String(pub);
+    const numMatch = str.replace(/\s/g, '').match(/\d+/);
+    if (numMatch) {
+      const rawNum = parseInt(numMatch[0], 10);
+      const r = typeof window.roundExpectedPublic === 'function' ? window.roundExpectedPublic(rawNum) : Math.round(rawNum);
+      const formattedNum = r.toLocaleString('fr-FR');
+      return str.replace(/[\d\s]+(?=(?:[^\d]|$))/, formattedNum + ' ');
+    }
+    return str;
+  }
+
+  // Initialisation et normalisation des compteurs de véhicules d'un devis
+  ensureDevisVehicleCounts(devis) {
+    if (!devis) return {};
+    if (!devis.configuredVehicleCounts || typeof devis.configuredVehicleCounts !== 'object') {
+      devis.configuredVehicleCounts = {};
+      if (Array.isArray(devis.configuredVehicles)) {
+        devis.configuredVehicles.forEach(t => {
+          devis.configuredVehicleCounts[t] = (devis.configuredVehicleCounts[t] || 0) + 1;
+        });
+      }
+    }
+    return devis.configuredVehicleCounts;
+  }
+
+  // Synchronisation de la liste à plat de configuredVehicles avec les compteurs
+  syncDevisConfiguredVehicles(devis) {
+    const counts = this.ensureDevisVehicleCounts(devis);
+    const list = [];
+    Object.entries(counts).forEach(([t, count]) => {
+      const n = Math.max(0, parseInt(count, 10) || 0);
+      for (let i = 0; i < n; i++) {
+        list.push(t);
+      }
+    });
+    devis.configuredVehicles = list;
+    return list;
+  }
+
+  // Résumé lisible des véhicules du devis (ex: "3 VPSP, 1 VTU")
+  formatDevisVehiclesSummary(devis) {
+    if (!devis) return 'pédestre';
+    const counts = this.ensureDevisVehicleCounts(devis);
+    const parts = [];
+    Object.entries(counts).forEach(([type, count]) => {
+      if (count > 0) {
+        parts.push(`${count} ${type}`);
+      }
+    });
+    if (parts.length === 0) {
+      if (Array.isArray(devis.configuredVehicles) && devis.configuredVehicles.length > 0) {
+        const temp = {};
+        devis.configuredVehicles.forEach(t => { temp[t] = (temp[t] || 0) + 1; });
+        return Object.entries(temp).map(([t, c]) => `${c} ${t}`).join(', ');
+      }
+      return 'pédestre';
+    }
+    return parts.join(', ');
+  }
+
+  // Bascule manuelle (cocher / décocher un type de véhicule)
   toggleDevisVehicleType(devisId, vehType) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
-    if (!Array.isArray(devis.configuredVehicles)) devis.configuredVehicles = [];
-    const idx = devis.configuredVehicles.indexOf(vehType);
-    if (idx >= 0) {
-      devis.configuredVehicles.splice(idx, 1);
+    const counts = this.ensureDevisVehicleCounts(devis);
+    if (counts[vehType] && counts[vehType] > 0) {
+      delete counts[vehType];
     } else {
-      devis.configuredVehicles.push(vehType);
+      counts[vehType] = 1;
     }
+    this.syncDevisConfiguredVehicles(devis);
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
+  }
+
+  // Ajustement du compteur pour un type de véhicule coché
+  adjustDevisVehicleCount(devisId, vehType, delta) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const counts = this.ensureDevisVehicleCounts(devis);
+    const current = counts[vehType] || 0;
+    const next = Math.max(1, Math.min(10, current + delta));
+    counts[vehType] = next;
+    this.syncDevisConfiguredVehicles(devis);
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Ajout / retrait d'un véhicule de transport pour les bénévoles sur une mission (non facturé au devis)
+  toggleMissionExtraTransportVehicle(missionId, vehicleId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    if (!Array.isArray(mission.extraTransportVehicles)) mission.extraTransportVehicles = [];
+    const idx = mission.extraTransportVehicles.indexOf(vehicleId);
+    if (idx >= 0) {
+      mission.extraTransportVehicles.splice(idx, 1);
+    } else {
+      mission.extraTransportVehicles.push(vehicleId);
+    }
+    this.openMissionDetails(missionId);
+    this.saveGame();
   }
 
   // Bascule manuelle d'un lot matériel engagé (Lot A, Lot B, DAE, etc.)
@@ -3266,12 +3429,15 @@ class ProtecGame {
       });
     }
 
+    const vehsSummary = this.formatDevisVehiclesSummary(devis);
+    const roundedPubText = this.formatRoundedPublic(devis.publicCount);
+
     const newMission = {
       id: `m-plan-${Date.now()}`,
       type: 'dps',
       categoryLabel: 'DPS - Dispositif Prévu au Calendrier',
       title: devis.eventName,
-      desc: `Couverture sanitaire pour ${devis.publicCount}. ${scaleChosen}.`,
+      desc: `Couverture sanitaire pour ${roundedPubText}. Moyens devis : ${vehsSummary}. ${scaleChosen}.`,
       lat: devis.lat,
       lng: devis.lng,
       scale: scaleChosen,
@@ -3286,6 +3452,9 @@ class ProtecGame {
       configuredCP: devis.configuredCP || 0,
       requiredRanks: devis.requiredRanks || ['PSE1', 'PSE2'],
       requiredVehicles: vehsChosen,
+      contractVehiclesSummary: vehsSummary,
+      configuredVehicleCounts: { ...(devis.configuredVehicleCounts || {}) },
+      extraTransportVehicles: [],
       configuredLots: devis.configuredLots || [],
       rewardMoney: devis.proposedPrice,
       rewardReputation: 25,
@@ -4022,6 +4191,14 @@ class ProtecGame {
     }
   }
 
+  requestCumpConvention() {
+    if (window.ProtecConventions && typeof window.ProtecConventions.requestConvention === 'function') {
+      window.ProtecConventions.requestConvention(this, 'cump');
+    } else if (window.ProtecCump && typeof window.ProtecCump.requestConvention === 'function') {
+      window.ProtecCump.requestConvention(this);
+    }
+  }
+
   // --- CONVENTION CADRE SAMU 15 (URGENCES RÉFLEXES VPSP) ---
   signSamuConvention(bypassSimulator = false) {
     if (!this.aascConvention || !this.aascConvention.signed) {
@@ -4572,33 +4749,59 @@ class ProtecGame {
     });
 
     const assignedVehicles = [];
-    if (mission.requiredVehicles.length > 0) {
-      // Pour les pompiers, privilégier le VPSP armé en caserne
-      let dispoVeh = null;
-      if (mission.type === 'pompiers' && this.sdisGarde && this.sdisGarde.vehicleId) {
-        dispoVeh = this.vehicles.find(v => v.id === this.sdisGarde.vehicleId);
-      }
-      if (!dispoVeh) {
-        dispoVeh = this.vehicles.find(veh => (veh.status === 'dispo' || veh.status === 'sdis_caserne') && mission.requiredVehicles.includes(veh.type));
-      }
+    const usedVehIds = new Set();
 
-      if (dispoVeh) {
-        // Vérification remorque (ERS Bateau, Quad, Remorque) : Tractage obligatoire
-        if (dispoVeh.requiresTrailer) {
-          const tractor = this.vehicles.find(v => v.id !== dispoVeh.id && v.status === 'dispo' && v.hasTowHitch);
-          if (!tractor) {
-            this.showToast('Véhicule avec Attelage Requis ! ⚠️', `${dispoVeh.name} est sur remorque (fournie). Il vous faut un véhicule tracteur équipé d'un crochet d'attelage disponible (VL, VTU...) pour le tracter sur la mission !`, 'orange');
-            return;
-          }
-          tractor.status = 'mission';
-          tractor.fuel = Math.max(10, (tractor.fuel || 90) - 10);
-          assignedVehicles.push(tractor);
+    // 1. Engagement des véhicules requis (prévus au devis)
+    if (Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) {
+      mission.requiredVehicles.forEach(reqType => {
+        let dispoVeh = null;
+        if (mission.type === 'pompiers' && this.sdisGarde && this.sdisGarde.vehicleId && !usedVehIds.has(this.sdisGarde.vehicleId)) {
+          const caserneVeh = this.vehicles.find(v => v.id === this.sdisGarde.vehicleId);
+          if (caserneVeh && caserneVeh.type === reqType) dispoVeh = caserneVeh;
+        }
+        if (!dispoVeh) {
+          dispoVeh = this.vehicles.find(veh => 
+            !usedVehIds.has(veh.id) && 
+            (veh.status === 'dispo' || veh.status === 'sdis_caserne') && 
+            veh.type === reqType
+          );
         }
 
-        dispoVeh.status = 'mission';
-        dispoVeh.fuel = Math.max(10, (dispoVeh.fuel || 90) - 12);
-        assignedVehicles.push(dispoVeh);
-      }
+        if (dispoVeh) {
+          usedVehIds.add(dispoVeh.id);
+          // Vérification remorque (ERS Bateau, Quad, Remorque) : Tractage obligatoire
+          if (dispoVeh.requiresTrailer) {
+            const tractor = this.vehicles.find(v => !usedVehIds.has(v.id) && v.status === 'dispo' && v.hasTowHitch);
+            if (tractor) {
+              usedVehIds.add(tractor.id);
+              tractor.status = 'mission';
+              tractor.fuel = Math.max(10, (tractor.fuel || 90) - 10);
+              assignedVehicles.push(tractor);
+            }
+          }
+
+          dispoVeh.status = 'mission';
+          dispoVeh.fuel = Math.max(10, (dispoVeh.fuel || 90) - 12);
+          assignedVehicles.push(dispoVeh);
+        }
+      });
+    }
+
+    // 2. Engagement des véhicules logistiques internes ajoutés pour le transport des bénévoles (VTP, VL...)
+    if (Array.isArray(mission.extraTransportVehicles)) {
+      mission.extraTransportVehicles.forEach(vIdOrType => {
+        const extraVeh = this.vehicles.find(v => 
+          !usedVehIds.has(v.id) && 
+          (v.id === vIdOrType || v.type === vIdOrType) && 
+          (v.status === 'dispo' || v.status === 'sdis_caserne')
+        );
+        if (extraVeh) {
+          usedVehIds.add(extraVeh.id);
+          extraVeh.status = 'mission';
+          extraVeh.fuel = Math.max(10, (extraVeh.fuel || 90) - 10);
+          assignedVehicles.push(extraVeh);
+        }
+      });
     }
 
     mission.status = 'ongoing';
@@ -5766,7 +5969,7 @@ class ProtecGame {
                   <i data-lucide="hourglass" class="w-4 h-4 text-amber-600 animate-spin"></i>
                   Veille Opérationnelle en cours
                 </span>
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 mono-num animate-pulse">
+                <span id="mission-prealert-timer" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 mono-num animate-pulse">
                   ⏳ ${mission.prealertSecondsLeft || 0}s
                 </span>
               </div>
@@ -5804,10 +6007,10 @@ class ProtecGame {
                   <i data-lucide="radio" class="w-3.5 h-3.5 text-pc-blue animate-pulse"></i>
                   Dispositif actif sur le terrain
                 </span>
-                <span class="font-extrabold mono-num text-pc-blue">${remainingTimeText} (${progressPct}%)</span>
+                <span id="mission-ongoing-timer" class="font-extrabold mono-num text-pc-blue">${remainingTimeText} (${progressPct}%)</span>
               </div>
               <div class="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden shimmer-bar">
-                <div class="bg-gradient-to-r from-pc-blue to-pc-orange h-full rounded-full transition-all duration-300" style="width: ${progressPct}%"></div>
+                <div id="mission-ongoing-bar" class="bg-gradient-to-r from-pc-blue to-pc-orange h-full rounded-full transition-all duration-300" style="width: ${progressPct}%"></div>
               </div>
               
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
@@ -5828,6 +6031,55 @@ class ProtecGame {
             ${window.ProtecCriseLogistique ? `
               ${window.ProtecCriseLogistique.renderVehiclesCapacityAndRearmAlertHTML(this, mission)}
             ` : ''}
+
+            <!-- VECTEURS DU DISPOSITIF & VÉHICULES DE TRANSPORT DES BÉNÉVOLES (HORS DEVIS) -->
+            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                  <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
+                  <span>Vecteurs & Déplacement des Bénévoles</span>
+                </span>
+                <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
+                  Devis client : <strong>${mission.contractVehiclesSummary || (mission.requiredVehicles && mission.requiredVehicles.length > 0 ? mission.requiredVehicles.join(', ') : 'Pédestre')}</strong>
+                </span>
+              </div>
+
+              <!-- Acheminement interne des bénévoles -->
+              <div class="pt-1.5 border-t border-slate-100 space-y-2">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
+                  <span class="font-bold text-slate-700 flex items-center gap-1">
+                    <span>🚐</span> Véhicule de transport bénévoles (Non facturé au devis) :
+                  </span>
+                  ${(mission.extraTransportVehicles && mission.extraTransportVehicles.length > 0) ? `
+                    <span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-extrabold text-[10px]">
+                      ${mission.extraTransportVehicles.map(id => this.vehicles.find(v => v.id === id)?.name || id).join(', ')}
+                    </span>
+                  ` : `
+                    <span class="text-slate-400 text-[10px] italic">Aucun véhicule d'acheminement ajouté</span>
+                  `}
+                </div>
+                <p class="text-[10px] text-slate-500">
+                  Vous pouvez ajouter un VTP (9 places) ou un VL pour transporter votre équipe sur le site de la mission sans modifier le devis facturé.
+                </p>
+
+                <div class="flex flex-wrap gap-1.5 pt-1">
+                  ${this.vehicles.filter(v => ['VTP', 'VL', 'VTU'].includes(v.type) && (v.status === 'dispo' || (mission.extraTransportVehicles || []).includes(v.id))).map(veh => {
+                    const isAdded = (mission.extraTransportVehicles || []).includes(veh.id);
+                    return `
+                      <button 
+                        type="button" 
+                        onclick="window.game.toggleMissionExtraTransportVehicle('${mission.id}', '${veh.id}')" 
+                        class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${isAdded ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}">
+                        <span>${isAdded ? '✓ ' : '+ '}${veh.name} (${veh.type} • ${veh.seatsCount || veh.capacity || 4} pl.)</span>
+                      </button>
+                    `;
+                  }).join('')}
+                  ${this.vehicles.filter(v => ['VTP', 'VL', 'VTU'].includes(v.type)).length === 0 ? `
+                    <span class="text-[10px] text-slate-400 italic">Aucun VTP ou VL disponible dans le garage de l'antenne pour transporter les bénévoles.</span>
+                  ` : ''}
+                </div>
+              </div>
+            </div>
 
             ${(() => {
               if (!window.ProtecRNMSC || registeredVols.length === 0) return '';
@@ -7763,6 +8015,9 @@ class ProtecGame {
     const body = document.getElementById('modal-body');
     const backBtn = document.getElementById('modal-back-btn');
 
+    // Sauvegarde du scroll lors des rafraîchissements doux sans perte de position
+    const savedScrollTop = (isBackNavigation && body) ? body.scrollTop : 0;
+
     if (!isBackNavigation && this.currentModalKey && this.currentModalKey !== moduleKey) {
       if (!this.modalHistory) this.modalHistory = [];
       this.modalHistory.push(this.currentModalKey);
@@ -8730,42 +8985,6 @@ class ProtecGame {
           <!-- Grille Officielle d'Évaluation des Risques RNMSC dans la page Devis -->
           ${window.ProtecRNMSC ? window.ProtecRNMSC.renderRNMSCSimulatorCardHTML('devis-rnmsc') : ''}
 
-          <!-- Section Communication, Publicité & Rayonnement d'Antenne -->
-          <div class="p-4 rounded-2xl glass-card space-y-3">
-            <div class="flex items-center justify-between">
-              <div>
-                <h4 class="text-xs font-black uppercase text-slate-800 tracking-wider">Rayonnement & Communication de l'Antenne</h4>
-                <p class="text-[11px] text-slate-500">Activez des campagnes de communication pour accroître votre popularité et recevoir des sollicitations d'organisateurs d'événements.</p>
-              </div>
-              <div class="text-right">
-                <span class="text-[10px] text-slate-400 font-bold uppercase block">Popularité</span>
-                <span class="text-xs font-black text-pc-blue">${this.resources.reputationScore} pts (${this.resources.followers} abonnés)</span>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <div class="p-3 rounded-2xl glass-card flex items-center justify-between">
-                <div>
-                  <div class="text-xs font-bold text-slate-800">Campagne Réseaux Sociaux</div>
-                  <div class="text-[10px] text-slate-500">Notoriété locale & associations (+sollicitations)</div>
-                </div>
-                <button onclick="window.game.toggleCampaign('social'); window.game.openModule('devis', true);" class="px-3 py-1.5 rounded-xl text-xs font-bold ${this.resources.campaigns.social ? 'bg-emerald-600 text-white' : 'glass-button text-slate-700'} transition">
-                  ${this.resources.campaigns.social ? 'Active ✓' : 'Lancer (150 €)'}
-                </button>
-              </div>
-
-              <div class="p-3 rounded-2xl glass-card flex items-center justify-between">
-                <div>
-                  <div class="text-xs font-bold text-slate-800">Affichage & Mairie</div>
-                  <div class="text-[10px] text-slate-500">Visibilité municipale (+grands dispositifs)</div>
-                </div>
-                <button onclick="window.game.toggleCampaign('posters'); window.game.openModule('devis', true);" class="px-3 py-1.5 rounded-xl text-xs font-bold ${this.resources.campaigns.posters ? 'bg-emerald-600 text-white' : 'glass-button text-slate-700'} transition">
-                  ${this.resources.campaigns.posters ? 'Actif ✓' : 'Lancer (200 €)'}
-                </button>
-              </div>
-            </div>
-          </div>
-
           <!-- Section Devis en Cours d'Étude & Délibération (Temps Réel) -->
           ${inReviewDevis.length > 0 ? `
             <div class="space-y-3 p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/90 shadow-sm">
@@ -8815,7 +9034,7 @@ class ProtecGame {
                             <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">Offre transmise : ${d.proposedPrice || 250} €</span>
                           </div>
                           <p class="text-xs text-slate-700 mt-1">
-                            Dispositif proposé : <strong>${d.configuredScale || d.scale || 'DPS-PE'}</strong> (${d.configuredVolunteers || 4} secouristes${d.configuredVehicles && d.configuredVehicles.length > 0 ? ', ' + d.configuredVehicles.join(' + ') : ', pédestre'})
+                            Dispositif proposé : <strong>${d.configuredScale || d.scale || 'DPS-PE'}</strong> (${d.configuredVolunteers || 4} secouristes • Moyens : <strong>${this.formatDevisVehiclesSummary(d)}</strong>)
                           </p>
                           <p class="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
                             <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
@@ -9068,7 +9287,7 @@ class ProtecGame {
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-700">
                       <div class="p-2 bg-white rounded-xl border border-sky-100">
                         <span class="text-slate-400 block text-[9px] uppercase font-bold">Public attendu (N)</span>
-                        <strong class="text-slate-900">${d.publicCount.includes('personnes') || d.publicCount.includes('supporters') || d.publicCount.includes('participants') ? d.publicCount : d.publicCount + ' personnes'}</strong>
+                        <strong class="text-slate-900">${this.formatRoundedPublic(d.publicCount)}</strong>
                       </div>
                       <div class="p-2 bg-white rounded-xl border border-sky-100">
                         <span class="text-slate-400 block text-[9px] uppercase font-bold">Configuration du site</span>
@@ -9182,27 +9401,69 @@ class ProtecGame {
                     </div>
 
                     <!-- Moyens matériels & vecteurs : Véhicules et Lots -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                      <!-- Véhicules engagés -->
-                      <div>
-                        <label class="block text-[11px] font-bold text-slate-600 mb-1">Véhicules engagés (Vecteurs) :</label>
-                        <div class="grid grid-cols-2 gap-1.5 text-xs">
-                          ${['VPSP', 'VL', 'VPS', 'VTU'].map(vehType => {
-                            const isSelected = (d.configuredVehicles || []).includes(vehType);
-                            const label = vehType === 'VPSP' ? 'Ambulance VPSP' : (vehType === 'VL' ? 'Véhicule VL' : (vehType === 'VPS' ? 'Vecteur VPS' : 'Logistique VTU'));
+                    <div class="space-y-3 pt-1">
+                      <!-- Véhicules proposés au client (Compteurs par type) -->
+                      <div class="p-3 rounded-2xl bg-white border border-slate-200 space-y-2">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                          <label class="block text-[11px] font-black text-slate-800 uppercase tracking-wide">
+                            Véhicules proposés au devis (Cochez les types puis réglez le nombre) :
+                          </label>
+                          <span class="text-[10px] font-black text-pc-blue bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200 self-start sm:self-auto">
+                            Moyens : <strong>${this.formatDevisVehiclesSummary(d)}</strong>
+                          </span>
+                        </div>
+                        <p class="text-[10px] text-slate-500">
+                          Cochez les catégories de véhicules souhaitées pour le dispositif puis ajustez le nombre exact avec les compteurs <strong>-</strong> et <strong>+</strong>.
+                        </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-1">
+                          ${[
+                            { type: 'VPSP', name: 'Ambulance VPSP', emoji: '🚑' },
+                            { type: 'VTU', name: 'Logistique VTU', emoji: '🚚' },
+                            { type: 'VL', name: 'Véhicule Liaison VL', emoji: '🚗' },
+                            { type: 'VTP', name: 'Transport VTP', emoji: '🚐' },
+                            { type: 'VPS', name: 'Premiers Secours VPS', emoji: '🚐' },
+                            { type: 'MOTO', name: 'Moto Secours', emoji: '🏍️' },
+                            { type: 'VELO', name: 'Patrouille Vélo / VTT', emoji: '🚲' },
+                            { type: 'QUAD', name: 'Quad Tout-Terrain', emoji: '🚜' },
+                            { type: 'DRONE', name: 'Télépilote Drone', emoji: '🛸' }
+                          ].map(vItem => {
+                            const counts = this.ensureDevisVehicleCounts(d);
+                            const count = counts[vItem.type] || 0;
+                            const isChecked = count > 0;
                             return `
-                              <button type="button" onclick="window.game.toggleDevisVehicleType('${d.id}', '${vehType}')" class="p-2 rounded-xl text-xs font-bold transition text-center cursor-pointer border ${isSelected ? 'bg-pc-blue text-white border-pc-blue shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}">
-                                ${isSelected ? '✓ ' : ''}${label}
-                              </button>
+                              <div class="p-2 rounded-xl border transition flex items-center justify-between gap-1.5 ${isChecked ? 'bg-indigo-50/80 border-pc-blue shadow-2xs ring-1 ring-pc-blue/30' : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'}">
+                                <label class="flex items-center gap-2 cursor-pointer select-none flex-1 min-w-0">
+                                  <input 
+                                    type="checkbox" 
+                                    ${isChecked ? 'checked' : ''} 
+                                    onchange="window.game.toggleDevisVehicleType('${d.id}', '${vItem.type}')" 
+                                    class="w-4 h-4 rounded text-pc-blue accent-pc-blue cursor-pointer shrink-0"
+                                  />
+                                  <span class="text-xs font-extrabold text-slate-800 truncate">${vItem.emoji} ${vItem.name}</span>
+                                </label>
+                                ${isChecked ? `
+                                  <div class="flex items-center gap-1 shrink-0 bg-white px-1.5 py-0.5 rounded-lg border border-indigo-200 shadow-2xs">
+                                    <button 
+                                      type="button" 
+                                      onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', -1)" 
+                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">-</button>
+                                    <span class="w-5 text-center font-black text-xs text-pc-blue mono-num">${count}</span>
+                                    <button 
+                                      type="button" 
+                                      onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', 1)" 
+                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">+</button>
+                                  </div>
+                                ` : ''}
+                              </div>
                             `;
                           }).join('')}
                         </div>
                       </div>
 
                       <!-- Lots matériels engagés -->
-                      <div>
-                        <label class="block text-[11px] font-bold text-slate-600 mb-1">Lots matériels engagés :</label>
-                        <div class="grid grid-cols-2 gap-1.5 text-xs">
+                      <div class="p-3 rounded-2xl bg-white border border-slate-200 space-y-2">
+                        <label class="block text-[11px] font-black text-slate-800 uppercase tracking-wide">Lots matériels engagés :</label>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
                           ${[
                             { id: 'lot_a', name: 'Lot A (Secours/PMA)' },
                             { id: 'lot_b', name: 'Lot B (Trauma)' },
@@ -9830,7 +10091,7 @@ class ProtecGame {
                             <div class="h-full rounded-full bg-indigo-500" style="width: ${energy}%"></div>
                           </div>
                         </div>
-                      </div></div>
+                      </div>
                     </div>
                   `;
                 }).join('')}
@@ -10442,11 +10703,49 @@ class ProtecGame {
               </div>
             ` : (this.vehicles || []).map(v => {
               const cond = this.getVehicleCondition(v);
-              const isDispo = v.status === 'dispo';
+              const isDispo = v.status === 'dispo' || v.status === 'disponible';
               const isBroken = !!v.isBrokenDown;
-              const statusLabel = isBroken ? 'EN PANNE MÉCANIQUE' : (isDispo ? 'DISPONIBLE AU GARAGE' : (v.status === 'ongoing' || v.status === 'engaged' ? 'ENGAGÉ EN MISSION (DPS)' : (v.status === 'samu_garde' ? 'GARDE SAMU 15' : (v.status && v.status.startsWith('sdis') ? 'GARDE SDIS POMPIERS' : 'INDISPONIBLE'))));
-              const statusBadgeClass = isBroken ? 'bg-red-50 text-red-700 border-red-300' : (isDispo ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300');
-              const dotClass = isBroken ? 'bg-red-500 animate-ping' : (isDispo ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse');
+              let statusLabel = 'INDISPONIBLE';
+              let statusBadgeClass = 'bg-slate-100 text-slate-800 border-slate-300';
+              let dotClass = 'bg-slate-400';
+
+              if (isBroken) {
+                statusLabel = 'EN PANNE MÉCANIQUE';
+                statusBadgeClass = 'bg-red-50 text-red-700 border-red-300';
+                dotClass = 'bg-red-500 animate-ping';
+              } else if (v.status === 'transit') {
+                statusLabel = 'EN TRANSIT ROUTIER (S2/S4/S6)';
+                statusBadgeClass = 'bg-sky-50 text-sky-800 border-sky-300';
+                dotClass = 'bg-sky-500 animate-pulse';
+              } else if (v.status === 'sur_les_lieux') {
+                statusLabel = 'SUR LES LIEUX (S3)';
+                statusBadgeClass = 'bg-amber-50 text-amber-900 border-amber-300';
+                dotClass = 'bg-amber-500 animate-pulse';
+              } else if (v.status === 'urgences_chu') {
+                statusLabel = 'URGENCES CHU (S5)';
+                statusBadgeClass = 'bg-purple-50 text-purple-900 border-purple-300';
+                dotClass = 'bg-purple-500 animate-pulse';
+              } else if (v.status === 'a_rearme' || v.status === 'rearmement' || v.needsRearming) {
+                statusLabel = 'RÉARMEMENT REQUIS';
+                statusBadgeClass = 'bg-orange-50 text-orange-900 border-orange-300';
+                dotClass = 'bg-orange-500 animate-pulse';
+              } else if (v.status === 'samu_garde') {
+                statusLabel = 'GARDE SAMU 15';
+                statusBadgeClass = 'bg-orange-50 text-orange-800 border-orange-300';
+                dotClass = 'bg-orange-500 animate-pulse';
+              } else if (v.status && v.status.startsWith('sdis')) {
+                statusLabel = 'GARDE SDIS POMPIERS';
+                statusBadgeClass = 'bg-red-50 text-red-800 border-red-300';
+                dotClass = 'bg-red-500 animate-pulse';
+              } else if (v.status === 'ongoing' || v.status === 'engaged' || v.status === 'mission') {
+                statusLabel = 'ENGAGÉ EN MISSION (DPS)';
+                statusBadgeClass = 'bg-amber-50 text-amber-800 border-amber-300';
+                dotClass = 'bg-amber-500 animate-pulse';
+              } else if (isDispo) {
+                statusLabel = 'DISPONIBLE AU GARAGE (S1)';
+                statusBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-300';
+                dotClass = 'bg-emerald-500';
+              }
 
               let ctBadge = '';
               if (cond.ctExpired) {
@@ -10704,6 +11003,10 @@ class ProtecGame {
       // Fallback de sécurité : si la clé n'est pas reconnue, rediriger proprement vers le planning
       this.openModule('planning', isBackNavigation);
       return;
+    }
+
+    if (body && isBackNavigation && savedScrollTop > 0) {
+      body.scrollTop = savedScrollTop;
     }
 
     if (window.lucide) window.lucide.createIcons();
@@ -11319,6 +11622,44 @@ class ProtecGame {
     }
   }
 
+  // --- RAFRAÎCHISSEMENT DOUX SANS RECHARGEMENT DE PAGE POUR LES MODALS OUVERTS ---
+  refreshCurrentModalIfSafe() {
+    const modal = document.getElementById('main-modal');
+    if (!modal || modal.classList.contains('hidden') || !this.currentModalKey) return;
+
+    // Ne jamais interrompre un utilisateur en train de taper ou de modifier un champ
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT')) {
+      return;
+    }
+
+    try {
+      if (this.currentModalKey === 'flotte') {
+        this.openModule('flotte', true);
+      } else if (this.currentModalKey === 'planning') {
+        this.openModule('planning', true);
+      } else if (this.currentModalKey === 'devis') {
+        this.openModule('devis', true);
+      } else if (this.currentModalKey === 'logistique' && window.ProtecLogistique && typeof window.ProtecLogistique.renderModal === 'function') {
+        window.ProtecLogistique.renderModal(this);
+      } else if (this.currentModalKey === 'radio' && window.ProtecModals) {
+        const body = document.getElementById('modal-body');
+        if (body) {
+          body.innerHTML = window.ProtecModals.renderRadio(this);
+          if (window.lucide) window.lucide.createIcons();
+        }
+      } else if (this.currentModalKey === 'pompiers') {
+        this.openModule('pompiers', true);
+      } else if (this.currentModalKey === 'samu') {
+        this.openModule('samu', true);
+      } else if (this.currentModalKey === 'recrutement') {
+        this.openModule('recrutement', true);
+      }
+    } catch (e) {
+      console.warn('Erreur refreshCurrentModalIfSafe:', e);
+    }
+  }
+
   closeModal() {
     const modal = document.getElementById('main-modal');
     if (modal) {
@@ -11859,10 +12200,45 @@ class ProtecGame {
 
       this.updateClockUI();
 
+      // Synchronisation réactive continue (Argent, effectifs dispo, compteurs de badges)
+      this.updateStatsUI();
+
+      // Détection automatique de tout changement d'état ou nouvelle mission pour Leaflet
+      const currentMissionSig = (this.missions || []).map(m => `${m.id}:${m.status}`).join('|');
+      if (this._lastMissionSig !== currentMissionSig) {
+        this._lastMissionSig = currentMissionSig;
+        this.renderMissions();
+      }
+
+      // Rafraîchissement non destructif des modals ouverts (Flotte, Planning, Devis, Logistique, Radio)
+      if (this.clock.second % 2 === 0) {
+        this.refreshCurrentModalIfSafe();
+      }
+
+      // Mise à jour fluide du tiroir de mission latérale sans perturber la navigation du joueur
       if (this.selectedMissionId) {
         const cur = this.missions.find(m => m.id === this.selectedMissionId);
-        if (cur && (cur.status === 'ongoing' || cur.status === 'prealerte')) {
-          this.openMissionDetails(cur.id);
+        if (cur) {
+          if (cur.status === 'ongoing') {
+            const nowMs = Date.now();
+            const totalSec = cur.durationSeconds || (cur.duration * 60) || 1800;
+            const elapsedSec = Math.max(0, Math.floor((nowMs - (cur.startedAt || nowMs)) / 1000));
+            const remainingSec = Math.max(0, totalSec - elapsedSec);
+            const progressPct = Math.min(100, Math.round((elapsedSec / totalSec) * 100));
+
+            const hrs = Math.floor(remainingSec / 3600);
+            const mins = Math.floor((remainingSec % 3600) / 60);
+            const secs = remainingSec % 60;
+            const remainingTimeText = hrs > 0 ? `${hrs}h ${mins.toString().padStart(2, '0')}m restantes` : `${mins}m ${secs.toString().padStart(2, '0')}s restantes`;
+
+            const timerEl = document.getElementById('mission-ongoing-timer');
+            if (timerEl) timerEl.textContent = `${remainingTimeText} (${progressPct}%)`;
+            const barEl = document.getElementById('mission-ongoing-bar');
+            if (barEl) barEl.style.width = `${progressPct}%`;
+          } else if (cur.status === 'prealerte') {
+            const timerEl = document.getElementById('mission-prealert-timer');
+            if (timerEl) timerEl.textContent = `⏳ ${cur.prealertSecondsLeft || 0}s`;
+          }
         }
       }
 
@@ -12533,7 +12909,7 @@ class ProtecGame {
     if (geo.permis_b && !candidateSkills.includes('permis_b')) candidateSkills.push('permis_b');
     if (geo.permis_moto && !candidateSkills.includes('permis_moto')) candidateSkills.push('permis_moto');
 
-    this.candidatures.push({
+    const newCand = {
       id: `cand-${Date.now()}`,
       name: p.n,
       age: p.a,
@@ -12559,7 +12935,12 @@ class ProtecGame {
       mode_transport: geo.mode_transport,
       permis_b: geo.permis_b,
       permis_moto: geo.permis_moto
-    });
+    };
+
+    if (window.ProtecPersonnel && typeof window.ProtecPersonnel.resolveVolunteerRealAddress === 'function') {
+      window.ProtecPersonnel.resolveVolunteerRealAddress(newCand, this);
+    }
+    this.candidatures.push(newCand);
 
     if (window.ProtecNotifications) {
       window.ProtecNotifications.notifyCategory(

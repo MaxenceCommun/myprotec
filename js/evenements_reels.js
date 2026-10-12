@@ -422,6 +422,16 @@
       }
     ],
 
+    // Arrondi réglementaire et réaliste du public attendu
+    roundExpectedPublic(n) {
+      const val = Math.max(50, Math.round(Number(n) || 100));
+      if (val < 200) return Math.round(val / 10) * 10;
+      if (val < 1000) return Math.round(val / 50) * 50;
+      if (val < 5000) return Math.round(val / 100) * 100;
+      if (val < 20000) return Math.round(val / 500) * 500;
+      return Math.round(val / 1000) * 1000;
+    },
+
     // =========================================================================
     // 4. MOTEUR DU RIS & DÉDUCTION DES INFORMATIONS MANQUANTES (RNMSC OFFICIEL)
     // =========================================================================
@@ -582,7 +592,7 @@
           usedEventTitles.add(title);
 
           const dur = 5;
-          const pub = Math.round(club.avgAttendance * (0.85 + Math.random() * 0.30));
+          const pub = this.roundExpectedPublic(club.avgAttendance * (0.85 + Math.random() * 0.30));
           const env = (club.sport === 'Basketball' || club.sport === 'Handball') ? 'ferme' : 'ouvert_urbain';
           const ris = this.calculateRis(pub, env, 'moyen', 10);
           const fin = this.calculateFinancials(ris.minVolunteers, dur, ris.requiredVehicles, ris.scaleKey);
@@ -652,7 +662,7 @@
           usedEventTitles.add(regEvt.name);
 
           const dur = regEvt.dur || 7;
-          const pub = Math.round(regEvt.pub * (0.90 + Math.random() * 0.20));
+          const pub = this.roundExpectedPublic(regEvt.pub * (0.90 + Math.random() * 0.20));
           const ris = this.calculateRis(pub, regEvt.env, 'élevé', 12);
           const fin = this.calculateFinancials(ris.minVolunteers, dur, ris.requiredVehicles, ris.scaleKey);
 
@@ -726,7 +736,7 @@
           usedEventTitles.add(title);
 
           const dur = tpl.dur;
-          const pub = Math.round(tpl.minPub + Math.random() * (tpl.maxPub - tpl.minPub));
+          const pub = this.roundExpectedPublic(tpl.minPub + Math.random() * (tpl.maxPub - tpl.minPub));
           const ris = this.calculateRis(pub, tpl.env, tpl.risk, tpl.delayMin);
           const fin = this.calculateFinancials(ris.minVolunteers, dur, ris.requiredVehicles, ris.scaleKey);
 
@@ -965,6 +975,8 @@
       }
     }
   };
+
+  window.roundExpectedPublic = window.ProtecEvenementsReels.roundExpectedPublic;
 
   console.log('[MyProtec] Module EvenementsReels (Ancrage Réel & DPS Territoire) initialisé avec succès.');
 })();

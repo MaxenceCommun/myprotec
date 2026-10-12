@@ -268,12 +268,19 @@ window.ProtecSystems = {
 
         this.playRadioChirp();
         if (t.statusTarget === 2) {
+          if (t.vehicle) t.vehicle.status = 'sur_les_lieux';
           this.addRadioLog(game, t.vehicle.name, 3, `STATUT 3 : Sur les lieux. Dispositif en place pour « ${t.mission?.title} ».`);
           game.showToast('Arrivée sur les lieux', `${t.vehicle.name} est au contact. Statut 3 activé.`, 'green');
         } else if (t.statusTarget === 4) {
+          if (t.vehicle) t.vehicle.status = 'urgences_chu';
           this.addRadioLog(game, t.vehicle.name, 5, `STATUT 5 : Arrivée aux Urgences Hospitalières de secteur. Prise en charge médicale.`);
           game.showToast('Arrivée Urgences CHU', `${t.vehicle.name} est arrivé aux Urgences hospitalières. Relève effectuée.`, 'green');
         } else if (t.statusTarget === 6) {
+          if (t.vehicle) {
+            t.vehicle.status = 'dispo';
+            t.vehicle.needsRearming = false;
+            t.vehicle.a_rearme = false;
+          }
           this.addRadioLog(game, t.vehicle.name, 1, `STATUT 1 : De retour à l’antenne. Véhicule disponible.`);
           game.showToast('Retour Antenne', `${t.vehicle.name} a regagné sa base. Véhicule disponible.`, 'blue');
         }
@@ -281,6 +288,9 @@ window.ProtecSystems = {
         if (typeof t.onArrival === 'function') {
           t.onArrival();
         }
+
+        if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+        if (typeof game.refreshCurrentModalIfSafe === 'function') game.refreshCurrentModalIfSafe();
       }
     }
 

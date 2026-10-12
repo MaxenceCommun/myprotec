@@ -22,6 +22,20 @@ window.ProtecAdmin = {
   },
 
   async openAdminModal(game) {
+    const isActuallyAdmin = !!(
+      (window.ProtecAuth?.currentUser?.isAdmin) ||
+      (window.ProtecAuth?.currentUser?.role === 'admin') ||
+      (game?.player?.isAdmin) ||
+      (game?.player?.role === 'admin')
+    );
+
+    if (!isActuallyAdmin) {
+      if (game && typeof game.showToast === 'function') {
+        game.showToast('Accès Restreint', 'Accès réservé exclusivement aux comptes Administrateurs certifiés en BDD.', 'red');
+      }
+      return;
+    }
+
     let modal = document.getElementById('admin-modal');
     if (!modal) {
       this.createAdminModalDOM();

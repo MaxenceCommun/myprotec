@@ -416,7 +416,7 @@ window.ProtecCommunication = {
   },
 
   // 4. LANCER UNE CAMPAGNE SPONSORISÉE PAYANTE
-  launchCampaign(game, subjectId, channelId) {
+  async launchCampaign(game, subjectId, channelId) {
     this.injectState(game);
     const sub = this.SUBJECTS.find(s => s.id === subjectId);
     const chan = this.CHANNELS.find(c => c.id === channelId);
@@ -428,7 +428,12 @@ window.ProtecCommunication = {
     }
 
     if (game.commData.activeCampaign) {
-      if (!confirm('Une campagne sponsorisée est déjà active. Remplacer par la nouvelle campagne ?')) {
+      const confirmed = await window.ProtecDialog.confirm(
+        'Une campagne sponsorisée est déjà active.\n\nSouhaitez-vous la remplacer par la nouvelle campagne ? Les effets de la précédente prendront fin immédiatement.',
+        'Remplacement de Campagne',
+        { confirmText: 'Remplacer la Campagne', cancelText: 'Annuler' }
+      );
+      if (!confirmed) {
         return;
       }
     }
@@ -834,6 +839,42 @@ window.ProtecCommunication = {
     const currentDay = game.currentDayIndex || 0;
 
     return `
+      <!-- Section Rayonnement & Notoriété Locale Permanente de l'Antenne -->
+      <div class="p-4 rounded-3xl glass-card space-y-3 border border-indigo-200/80 bg-gradient-to-r from-indigo-50/50 via-white to-pink-50/50">
+        <div class="flex items-center justify-between">
+          <div>
+            <h4 class="text-xs font-black uppercase text-slate-800 tracking-wider">Rayonnement & Communication de l'Antenne</h4>
+            <p class="text-[11px] text-slate-500">Activez des campagnes de communication pour accroître votre popularité et recevoir des sollicitations d'organisateurs d'événements.</p>
+          </div>
+          <div class="text-right">
+            <span class="text-[10px] text-slate-400 font-bold uppercase block">Popularité</span>
+            <span class="text-xs font-black text-pc-blue">${game.resources.reputationScore} pts (${game.resources.followers} abonnés)</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div class="p-3.5 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
+            <div>
+              <div class="text-xs font-bold text-slate-800">Campagne Réseaux Sociaux</div>
+              <div class="text-[10px] text-slate-500">Notoriété locale & associations (+sollicitations DPS)</div>
+            </div>
+            <button onclick="window.game.toggleCampaign('social'); window.ProtecCommunication.renderModal(window.game);" class="px-3.5 py-1.5 rounded-xl text-xs font-bold ${game.resources.campaigns?.social ? 'bg-emerald-600 text-white' : 'glass-button text-slate-700'} transition cursor-pointer">
+              ${game.resources.campaigns?.social ? 'Active ✓' : 'Lancer (150 €)'}
+            </button>
+          </div>
+
+          <div class="p-3.5 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
+            <div>
+              <div class="text-xs font-bold text-slate-800">Affichage & Mairie</div>
+              <div class="text-[10px] text-slate-500">Visibilité municipale (+grands dispositifs)</div>
+            </div>
+            <button onclick="window.game.toggleCampaign('posters'); window.ProtecCommunication.renderModal(window.game);" class="px-3.5 py-1.5 rounded-xl text-xs font-bold ${game.resources.campaigns?.posters ? 'bg-emerald-600 text-white' : 'glass-button text-slate-700'} transition cursor-pointer">
+              ${game.resources.campaigns?.posters ? 'Actif ✓' : 'Lancer (200 €)'}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Section Campagne en cours si active -->
       ${camp ? `
         <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-pink-50 border-2 border-pink-300 text-slate-800 space-y-3 shadow-sm">

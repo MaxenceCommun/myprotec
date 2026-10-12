@@ -193,7 +193,11 @@ window.ProtecCump = {
   requestConvention(game) {
     if (window.ProtecConventions && typeof window.ProtecConventions.requestConvention === 'function') {
       window.ProtecConventions.requestConvention(game, 'cump');
-      this.renderCumpTab(game);
+      if (game && game.currentModalKey === 'conventions') {
+        window.ProtecConventions.renderModal(game);
+      } else {
+        this.renderCumpTab(game);
+      }
     }
   },
 

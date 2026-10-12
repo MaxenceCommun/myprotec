@@ -407,16 +407,23 @@ window.ProtecCriseLogistique = {
       if (elapsed >= task.durationSeconds) {
         // Tâche terminée !
         const veh = game.vehicles.find(v => v.id === task.vehicleId);
-        if (veh) veh.isRearmed = true;
+        if (veh) {
+          veh.isRearmed = true;
+          veh.needsRearming = false;
+          veh.a_rearme = false;
+          veh.status = 'dispo';
+        }
 
         const vol = game.volunteers.find(v => v.id === task.volunteerId);
         if (vol) {
-          vol.status = 'disponible';
+          vol.status = 'dispo';
           vol.experience = Math.min(100, (vol.experience || 30) + 5);
         }
 
         game.showToast('Véhicule Réarmé ! ✓', `Ambulance ${task.vehicleName} parfaitement reconditionnée et opérationnelle pour le prochain départ.`, 'green');
         if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
+        if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+        if (typeof game.refreshCurrentModalIfSafe === 'function') game.refreshCurrentModalIfSafe();
         return false;
       }
       return true;

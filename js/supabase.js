@@ -476,6 +476,11 @@ window.ProtecSupabase = {
       // Hachage du mot de passe
       const pwdHash = await this.hashPassword(password);
 
+      // Nettoyage préventif de toute sauvegarde orpheline résiduelle pour ce pseudo
+      try {
+        await this.client.from('game_saves').delete().eq('username', username.trim());
+      } catch (cleanErr) {}
+
       // 2. Création de l'enregistrement avec mot de passe et ville exacte
       const newPlayer = {
         username: username.trim(),
@@ -484,6 +489,7 @@ window.ProtecSupabase = {
         city: detectedCity,
         department_code: extraData.departmentCode || '54',
         role: 'directeur',
+        is_admin: false, // Sécurité : jamais administrateur par défaut à l'inscription
         alliance_id: extraData.allianceId || null,
         created_at: new Date().toISOString(),
         last_login: new Date().toISOString()
@@ -653,12 +659,44 @@ window.ProtecSupabase = {
         updated_at: new Date().toISOString()
       };
 
-      const { error } = await this.client
-        .from('game_saves')
-        .upsert(payload, { onConflict: 'user_id' });
+      let saveError = null;
+      try {
+        let existing = null;
+        if (userId) {
+          const { data } = await this.client
+            .from('game_saves')
+            .select('id')
+            .eq('user_id', userId)
+            .maybeSingle();
+          existing = data;
+        }
+        if (!existing && username) {
+          const { data } = await this.client
+            .from('game_saves')
+            .select('id')
+            .eq('username', username)
+            .maybeSingle();
+          existing = data;
+        }
 
-      if (error) {
-        console.warn('Avertissement sauvegarde Supabase:', error);
+        if (existing && existing.id) {
+          const { error } = await this.client
+            .from('game_saves')
+            .update(payload)
+            .eq('id', existing.id);
+          saveError = error;
+        } else {
+          const { error } = await this.client
+            .from('game_saves')
+            .insert(payload);
+          saveError = error;
+        }
+      } catch (errUpsert) {
+        saveError = errUpsert;
+      }
+
+      if (saveError) {
+        console.warn('Avertissement sauvegarde Supabase:', saveError);
         return false;
       }
 
@@ -688,7 +726,7 @@ window.ProtecSupabase = {
       const isUUID = typeof userId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
       let data = null;
 
-      // 1. Recherche par UUID si valide
+      // 1. Recherche stricte par UUID officiel du compte actuel
       if (isUUID) {
         const { data: byId, error } = await this.client
           .from('game_saves')
@@ -698,15 +736,26 @@ window.ProtecSupabase = {
         if (!error && byId) data = byId;
       }
 
-      // 2. Repli par username si non trouvé ou si userId n'est pas un UUID
+      // 2. Contrôle de sécurité sur les sauvegardes orphelines par username
       const targetUser = username || (!isUUID ? userId : null);
-      if (!data && targetUser) {
-        const { data: byName, error: errName } = await this.client
+      if (targetUser) {
+        const { data: byName } = await this.client
           .from('game_saves')
           .select('*')
           .eq('username', targetUser)
           .maybeSingle();
-        if (!errName && byName) data = byName;
+
+        if (byName) {
+          // Si une sauvegarde existe sous ce pseudo mais avec un UUID d'un ancien compte supprimé différent de l'actuel
+          if (isUUID && byName.user_id && byName.user_id !== userId) {
+            console.warn('🧹 Purge d’une ancienne sauvegarde orpheline liée à un ancien compte supprimé:', byName.user_id);
+            await this.client.from('game_saves').delete().eq('id', byName.id);
+            // Ne surtout pas charger cette ancienne sauvegarde pour le nouveau compte !
+            data = null;
+          } else if (!data && !isUUID) {
+            data = byName;
+          }
+        }
       }
 
       return data;

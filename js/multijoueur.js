@@ -225,7 +225,7 @@ window.ProtecMultiplayer = {
 
     const myDept = game.player?.departmentCode || game.stations?.[0]?.departmentCode || '54';
     const zoneDef = window.ProtecDepartements?.getZoneDefense(myDept) || { name: 'Zone de Défense et de Sécurité', shortName: 'Zone Zonale' };
-    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
+    const isAdmin = !!(game.player?.isAdmin || game.player?.role === 'admin' || window.ProtecAuth?.currentUser?.isAdmin || window.ProtecAuth?.currentUser?.role === 'admin');
 
     modal.innerHTML = `
       <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-5 bg-white border border-slate-200 text-slate-800 max-h-[90vh] overflow-y-auto">
@@ -440,7 +440,7 @@ window.ProtecMultiplayer = {
 
     this.injectState(game);
     const defaultNeeded = Math.max(1, (mission.requiredVolunteers || 4) - (mission.registeredVolunteers?.length || 0));
-    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
+    const isAdmin = !!(game.player?.isAdmin || game.player?.role === 'admin' || window.ProtecAuth?.currentUser?.isAdmin || window.ProtecAuth?.currentUser?.role === 'admin');
 
     if (zone === 'national' && !isAdmin) {
       game.showToast('Accès Restreint', 'Les renforts nationaux sont exclusivement déclenchés par les administrateurs FNPC.', 'orange');
@@ -2472,7 +2472,7 @@ window.ProtecMultiplayer = {
     this.injectState(game);
     const allEvents = game.communityEvents || [];
     const myPlayerId = game.player?.id || 'directeur-local';
-    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
+    const isAdmin = !!(game.player?.isAdmin || game.player?.role === 'admin' || window.ProtecAuth?.currentUser?.isAdmin || window.ProtecAuth?.currentUser?.role === 'admin');
 
     const openEvents = allEvents.filter(e => e.status === 'open' || !e.status);
     const myPendingEvents = allEvents.filter(e => e.organizerPlayerId === myPlayerId && e.status === 'pending_approval');

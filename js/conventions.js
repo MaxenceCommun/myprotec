@@ -14,6 +14,7 @@ window.ProtecConventions = {
     const subtitle = document.getElementById('modal-subtitle');
     const icon = document.getElementById('modal-icon');
     const body = document.getElementById('modal-body');
+    const prevScroll = body ? body.scrollTop : 0;
 
     modal.classList.remove('hidden');
     title.textContent = 'Conventions Opérationnelles & Partenariats Officiels';
@@ -556,7 +557,7 @@ window.ProtecConventions = {
                   <span>Demande Validée : Signer dans le module CUMP</span>
                 </button>
               ` : `
-                <button onclick="window.ProtecCump.requestConvention(window.game)" class="w-full px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
+                <button onclick="window.game.requestCumpConvention ? window.game.requestCumpConvention() : (window.ProtecConventions && window.ProtecConventions.requestConvention ? window.ProtecConventions.requestConvention(window.game, 'cump') : window.ProtecCump.requestConvention(window.game))" class="w-full px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
                   <span>📑</span>
                   <span>${cump.requestStatus === 'rejected' ? 'Renouveler la Demande CUMP' : 'Déposer une Demande de Conventionnement CUMP'}</span>
                 </button>
@@ -702,10 +703,7 @@ window.ProtecConventions = {
 
         </div>
 
-        <!-- 3. SIMULATEUR ET GRILLE OFFICIELLE RNMSC - DPS -->
-        ${window.ProtecRNMSC ? window.ProtecRNMSC.renderRNMSCSimulatorCardHTML('rnmsc') : ''}
-
-        <!-- 4. SEGMENTATION DES REVENUS ET SUBVENTIONS PUBLIQUES -->
+        <!-- 3. SEGMENTATION DES REVENUS ET SUBVENTIONS PUBLIQUES -->
         <div class="p-5 rounded-3xl glass-card border border-slate-200 space-y-4">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
@@ -785,9 +783,15 @@ window.ProtecConventions = {
       </div>
     `;
 
+    if (body && prevScroll > 0) {
+      body.scrollTop = prevScroll;
+    }
+
     if (window.lucide) window.lucide.createIcons();
     setTimeout(() => {
-      if (window.ProtecRNMSC) window.ProtecRNMSC.updateSimulatorUI();
+      if (body && prevScroll > 0) {
+        body.scrollTop = prevScroll;
+      }
     }, 50);
   }
 };
@@ -1536,8 +1540,8 @@ if (numVehicles > 0 && totalCrew > 0) {
     }
 
     game.saveGame();
-    if (game.currentModalKey === 'conventions') {
-      this.renderModal(game);
+    if (game.currentModalKey === 'conventions' && window.ProtecConventions && window.ProtecConventions.renderModal) {
+      window.ProtecConventions.renderModal(game);
     }
   },
 
@@ -1701,8 +1705,8 @@ if (numVehicles > 0 && totalCrew > 0) {
     }
 
     game.saveGame();
-    if (game.currentModalKey === 'conventions') {
-      this.renderModal(game);
+    if (game.currentModalKey === 'conventions' && window.ProtecConventions && window.ProtecConventions.renderModal) {
+      window.ProtecConventions.renderModal(game);
     }
   },
 
@@ -2048,7 +2052,8 @@ if (numVehicles > 0 && totalCrew > 0) {
       let finalReqVols = needs.minVolunteers;
       let finalReqVehs = [...needs.requiredVehicles];
       let eventTitle = evt.nom;
-      let clientDesc = `Événement organisé à ${evt.commune} (${evt.type}). Public attendu : ${Number(evt.public_instantane).toLocaleString('fr-FR')} personnes.`;
+      const roundedPub = typeof window.roundExpectedPublic === 'function' ? window.roundExpectedPublic(evt.public_instantane) : Math.round(Number(evt.public_instantane) || 100);
+      let clientDesc = `Événement organisé à ${evt.commune} (${evt.type}). Public attendu : ${Number(roundedPub).toLocaleString('fr-FR')} personnes.`;
 
       // Ancrage territorial : Réputation individualisée de la commune hôte
       const cityRepScore = (game.reputation_villes && game.reputation_villes[evt.commune]) !== undefined ? game.reputation_villes[evt.commune] : 50;
@@ -2138,7 +2143,8 @@ if (numVehicles > 0 && totalCrew > 0) {
         lng: lng,
         eventDate: eventDate,
         durationHours: evt.duree_heures || 4,
-        publicCount: `${Number(evt.public_instantane).toLocaleString('fr-FR')} personnes`,
+        publicCount: `${Number(roundedPub).toLocaleString('fr-FR')} personnes`,
+        rawPublicCount: roundedPub,
         environment: evt.environnement || 'ouvert_urbain',
         emergencyAccess: `${evt.delai_acces_secours_minutes || 15} min`,
         riskLevel: evt.activite_risque || 'moyen',
@@ -2223,14 +2229,46 @@ if (numVehicles > 0 && totalCrew > 0) {
   },
 };
 
-// Export direct des méthodes RNMSC et de timeline sur window.ProtecConventions
-if (window.ProtecConventions) {
-  window.ProtecConventions.getDeployedStructures = window.ProtecRNMSC.getDeployedStructures.bind(window.ProtecRNMSC);
-  window.ProtecConventions.validateCrewCompliance = window.ProtecRNMSC.validateCrewCompliance.bind(window.ProtecRNMSC);
-  window.ProtecConventions.autoAssignMissionRoles = window.ProtecRNMSC.autoAssignMissionRoles.bind(window.ProtecRNMSC);
-  window.ProtecConventions.calculateRoadDistanceKm = window.ProtecRNMSC.calculateRoadDistanceKm.bind(window.ProtecRNMSC);
-  window.ProtecConventions.creerTimelineUrgence = window.ProtecRNMSC.creerTimelineUrgence.bind(window.ProtecRNMSC);
-  window.ProtecConventions.initMissionTimeline = window.ProtecRNMSC.initMissionTimeline.bind(window.ProtecRNMSC);
-  window.ProtecConventions.renderTimelineWidget = window.ProtecRNMSC.renderTimelineWidget.bind(window.ProtecRNMSC);
+// Export direct des méthodes RNMSC, conventions et de timeline sur window.ProtecConventions
+if (window.ProtecConventions && window.ProtecRNMSC) {
+  if (typeof window.ProtecRNMSC.requestConvention === 'function') {
+    window.ProtecConventions.requestConvention = window.ProtecRNMSC.requestConvention.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.checkConventionDecisions === 'function') {
+    window.ProtecConventions.checkConventionDecisions = window.ProtecRNMSC.checkConventionDecisions.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.evaluateConventionDecision === 'function') {
+    window.ProtecConventions.evaluateConventionDecision = window.ProtecRNMSC.evaluateConventionDecision.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.adjustLocalReputation === 'function') {
+    window.ProtecConventions.adjustLocalReputation = window.ProtecRNMSC.adjustLocalReputation.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.adjustInstitutionalReputation === 'function') {
+    window.ProtecConventions.adjustInstitutionalReputation = window.ProtecRNMSC.adjustInstitutionalReputation.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.claimAnnualGrant === 'function') {
+    window.ProtecConventions.claimAnnualGrant = window.ProtecRNMSC.claimAnnualGrant.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.getDeployedStructures === 'function') {
+    window.ProtecConventions.getDeployedStructures = window.ProtecRNMSC.getDeployedStructures.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.validateCrewCompliance === 'function') {
+    window.ProtecConventions.validateCrewCompliance = window.ProtecRNMSC.validateCrewCompliance.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.autoAssignMissionRoles === 'function') {
+    window.ProtecConventions.autoAssignMissionRoles = window.ProtecRNMSC.autoAssignMissionRoles.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.calculateRoadDistanceKm === 'function') {
+    window.ProtecConventions.calculateRoadDistanceKm = window.ProtecRNMSC.calculateRoadDistanceKm.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.creerTimelineUrgence === 'function') {
+    window.ProtecConventions.creerTimelineUrgence = window.ProtecRNMSC.creerTimelineUrgence.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.initMissionTimeline === 'function') {
+    window.ProtecConventions.initMissionTimeline = window.ProtecRNMSC.initMissionTimeline.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.renderTimelineWidget === 'function') {
+    window.ProtecConventions.renderTimelineWidget = window.ProtecRNMSC.renderTimelineWidget.bind(window.ProtecRNMSC);
+  }
 }
 

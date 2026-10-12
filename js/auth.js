@@ -59,10 +59,12 @@ window.ProtecAuth = {
           }
 
           if (supaUser) {
+            const isUserAdmin = !!(supaUser.is_admin === true || supaUser.role === 'admin');
             this.currentUser = {
               id: supaUser.id,
               username: supaUser.username,
-              role: supaUser.role || 'directeur',
+              role: supaUser.role || (isUserAdmin ? 'admin' : 'directeur'),
+              isAdmin: isUserAdmin,
               stationName: supaUser.station_name,
               city: supaUser.city
             };
@@ -72,7 +74,8 @@ window.ProtecAuth = {
 
             game.player.id = supaUser.id;
             game.player.name = supaUser.username;
-            game.player.role = supaUser.role || 'user';
+            game.player.role = this.currentUser.role;
+            game.player.isAdmin = isUserAdmin;
 
             this.updateHeaderUI(false);
             this.closeAuthModal();
@@ -200,6 +203,19 @@ window.ProtecAuth = {
       if (statusIcon) {
         statusIcon.className = 'w-6 h-6 rounded-lg bg-pc-blue/10 text-pc-blue flex items-center justify-center transition';
       }
+    }
+
+    // Sécurité stricte d'accès aux boutons Panel Admin (Desktop et Mobile)
+    const isActualAdmin = !!(this.currentUser && (this.currentUser.isAdmin || this.currentUser.role === 'admin'));
+    const adminBtn = document.getElementById('admin-header-btn');
+    if (adminBtn) {
+      if (isActualAdmin) adminBtn.classList.remove('hidden');
+      else adminBtn.classList.add('hidden');
+    }
+    const adminMobileBtn = document.getElementById('admin-mobile-btn');
+    if (adminMobileBtn) {
+      if (isActualAdmin) adminMobileBtn.classList.remove('hidden');
+      else adminMobileBtn.classList.add('hidden');
     }
   },
 
@@ -501,13 +517,15 @@ window.ProtecAuth = {
       if (window.ProtecSupabase && window.ProtecSupabase.client) {
         const supaRes = await window.ProtecSupabase.loginPlayer(username, password);
         if (supaRes && supaRes.user) {
+          const isUserAdmin = !!(supaRes.user.is_admin === true || supaRes.user.role === 'admin');
           data = {
             success: true,
             token: `supa-${supaRes.user.id}`,
             user: {
               id: supaRes.user.id,
               username: supaRes.user.username,
-              role: supaRes.user.role || 'directeur',
+              role: supaRes.user.role || (isUserAdmin ? 'admin' : 'directeur'),
+              isAdmin: isUserAdmin,
               stationName: supaRes.user.station_name,
               city: supaRes.user.city
             }
@@ -523,6 +541,9 @@ window.ProtecAuth = {
           body: JSON.stringify({ username, password })
         });
         data = await res.json();
+        if (data && data.user) {
+          data.user.isAdmin = !!(data.user.is_admin === true || data.user.role === 'admin');
+        }
       }
 
       if (!data || !data.success) {
@@ -548,6 +569,7 @@ window.ProtecAuth = {
       game.player.id = data.user.id;
       game.player.name = data.user.username;
       game.player.role = data.user.role || 'user';
+      game.player.isAdmin = !!data.user.isAdmin;
 
       game.showToast('Connexion Réussie !', `Bienvenue Commandant ${data.user.username} ! Connexion au serveur multijoueur active.`, 'green');
       this.updateHeaderUI();
@@ -807,6 +829,11 @@ window.ProtecAuth = {
       localStorage.setItem('protec_user', JSON.stringify(data.user));
       localStorage.setItem('protec_last_login_username', username);
       localStorage.setItem('protec_last_login_password', password);
+
+      // PURGE FORMELLE DU LOCALSTORAGE : Tout nouveau compte démarre avec une sauvegarde locale vierge
+      localStorage.removeItem('protec_live_save_v4');
+      localStorage.removeItem('protec_offline_queue');
+      localStorage.removeItem('protec_admin_auth');
 
       // Si l'inscription a lieu depuis la landing page (hors simulateur), redirection immédiate vers le jeu
       if (!window.game || !document.getElementById('map')) {
@@ -1164,6 +1191,9 @@ window.ProtecAuth = {
         game.normalizeAllVehicles();
       }
 
+      if (typeof game.initReactiveResources === 'function') {
+        game.initReactiveResources();
+      }
       game.updateStatsUI();
       if (game.renderStations) game.renderStations();
       if (game.renderMissions) game.renderMissions();

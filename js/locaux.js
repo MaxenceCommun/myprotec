@@ -1701,6 +1701,10 @@ window.ProtecLocaux = {
     const scenario = scenarios[Math.floor(Math.random() * scenarios.length)];
     if (scenario.nightOnly && !isNight) return;
 
+    if (!Array.isArray(prem.securityLogs)) {
+      prem.securityLogs = [];
+    }
+
     if (scenario.isProtected) {
       // DÉFENSE RÉUSSIE !
       game.resources.reputationScore = Math.min(100, (game.resources.reputationScore || 50) + 1);
@@ -1781,6 +1785,7 @@ window.ProtecLocaux = {
     prem.securityEquipments.push(equipId);
 
     const newScore = this.getSecurityScore(prem);
+    if (!Array.isArray(prem.securityLogs)) prem.securityLogs = [];
     prem.securityLogs.unshift({
       timestamp: Date.now(),
       type: 'info',
@@ -1824,6 +1829,7 @@ window.ProtecLocaux = {
     prem.tenure = 'owned';
     prem.monthlyRent = 0;
 
+    if (!Array.isArray(prem.securityLogs)) prem.securityLogs = [];
     prem.securityLogs.unshift({
       timestamp: Date.now(),
       type: 'info',

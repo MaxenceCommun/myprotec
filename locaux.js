@@ -42,6 +42,19 @@ window.ProtecLocaux = {
 
   // Définition des types de pièces et caractéristiques
   ZONE_TYPES: {
+    libre: {
+      id: 'libre',
+      name: 'Libre (Non affectée)',
+      icon: '🚪',
+      bgClass: 'bg-slate-900 border-slate-700',
+      textClass: 'text-slate-300',
+      blueprintClass: 'bg-blue-950/80 border-blue-400 text-blue-200',
+      lightBg: 'bg-slate-100 text-slate-700 border-slate-300',
+      desc: 'Pièce disponible. Définissez son affectation pour débloquer les fonctionnalités correspondantes.',
+      costPerTile: 0,
+      workDurationSec: 0,
+      perTileStats: {}
+    },
     bureau: {
       id: 'bureau',
       name: 'Bureau & Direction',
@@ -219,48 +232,343 @@ window.ProtecLocaux = {
     }
   ],
 
-  // Catalogue de Bâtiments existants à l'achat (Pleine Propriété)
-  CATALOG_BUILDINGS: [
-    {
-      id: 'building_medium',
-      name: 'Entrepôt d’Activités Rénové',
-      type: 'Pleine Propriété',
-      price: 120000,
-      surfaceM2: 750,
-      width: 6,
-      height: 5,
-      desc: 'Bâtiment spacieux acquis en pleine propriété, idéal pour doubler la flotte et multiplier les capacités de stockage et de formation.',
-      icon: '🏢',
-      tenure: 'owned',
-      grid: [
-        'bureau', 'bureau', 'bureau', 'formation', 'formation', 'formation',
-        'vestiaires', 'detente', 'detente', 'formation', 'formation', 'formation',
-        'dortoir', 'dortoir', 'stockage', 'stockage', 'stockage', 'stockage',
-        'garage', 'garage', 'garage', 'stockage', 'stockage', 'stockage',
-        'garage', 'garage', 'garage', 'garage', 'garage', 'garage'
-      ]
-    },
-    {
-      id: 'building_large',
-      name: 'Grand Complexe Sécurité Civile',
-      type: 'Pleine Propriété',
-      price: 350000,
-      surfaceM2: 1200,
-      width: 8,
-      height: 6,
-      desc: 'Complexe ultramoderne de référence départementale : baie radio intégrée, immense hangar 8 places, 4 salles de cours et dortoirs complets.',
-      icon: '🏛️',
-      tenure: 'owned',
-      grid: [
-        'bureau', 'bureau', 'bureau', 'bureau', 'formation', 'formation', 'formation', 'formation',
-        'bureau', 'vestiaires', 'vestiaires', 'detente', 'formation', 'formation', 'formation', 'formation',
-        'dortoir', 'dortoir', 'detente', 'detente', 'stockage', 'stockage', 'stockage', 'stockage',
-        'dortoir', 'dortoir', 'stockage', 'stockage', 'stockage', 'stockage', 'stockage', 'stockage',
-        'garage', 'garage', 'garage', 'garage', 'garage', 'garage', 'garage', 'garage',
-        'garage', 'garage', 'garage', 'garage', 'garage', 'garage', 'garage', 'garage'
-      ]
+  // =========================================================================
+  // GESTION DU MARCHÉ IMMOBILIER TERRITORIAL & PLANS D'ARCHITECTE DYNAMIQUES
+  // =========================================================================
+
+  // Génération procédurale d'un modèle CAD d'architecte réaliste (pièces libres, murs, portes, parking)
+  generateProceduralArchitecture(surfaceM2, roomsCount, parkingSpots) {
+    const bldgX = 6.4;
+    const bldgY = 1.5;
+    const bW = Math.max(7.2, Math.round(Math.sqrt(surfaceM2 * 1.35) * 10) / 10);
+    const bH = Math.max(6.0, Math.round((surfaceM2 / (bW - 0.5)) * 10) / 10);
+
+    // 1. Parking extérieur avec places de stationnement délimitées
+    const parkingH = Math.max(8.0, parkingSpots * 2.2);
+    const spots = [];
+    for (let p = 0; p < parkingSpots; p++) {
+      spots.push({
+        id: `spot_${p + 1}`,
+        label: `🅿️ EMPLACEMENT LIBRE 0${p + 1}`,
+        x: 1.4,
+        y: 1.8 + p * 2.0,
+        w: 4.0,
+        d: 1.8
+      });
     }
-  ],
+
+    const parking = {
+      x: 1.0,
+      y: 1.5,
+      w: 4.8,
+      h: parkingH,
+      label: 'Parking Opérationnel Extérieur',
+      spots: spots
+    };
+
+    // 2. Découpage des pièces intérieures (toutes LIBRES par défaut)
+    const rooms = [];
+    const walls = [
+      // Murs extérieurs porteurs
+      { x1: bldgX, y1: bldgY, x2: bldgX + bW, y2: bldgY, th: 0.24, outer: true },
+      { x1: bldgX + bW, y1: bldgY, x2: bldgX + bW, y2: bldgY + bH, th: 0.24, outer: true },
+      { x1: bldgX + bW, y1: bldgY + bH, x2: bldgX, y2: bldgY + bH, th: 0.24, outer: true },
+      { x1: bldgX, y1: bldgY + bH, x2: bldgX, y2: bldgY, th: 0.24, outer: true }
+    ];
+    const doors = [
+      { id: 'd_entree', x: bldgX, y: bldgY + 1.2, len: 0.93, wall: 'W', label: 'Porte d’Entrée Principale (93cm)', isMain: true }
+    ];
+
+    if (roomsCount <= 2) {
+      // 2 pièces côte à côte
+      const w1 = Math.round(bW * 0.48 * 10) / 10;
+      const w2 = Math.round((bW - w1) * 10) / 10;
+      rooms.push({
+        id: 'room_1',
+        type: 'libre',
+        name: 'Salle 1 (Libre)\n(Non affectée)',
+        x: bldgX,
+        y: bldgY,
+        w: w1,
+        h: bH,
+        area: Math.round(w1 * bH * 10) / 10,
+        color: '#121722'
+      });
+      rooms.push({
+        id: 'room_2',
+        type: 'libre',
+        name: 'Salle 2 (Libre)\n(Non affectée)',
+        x: bldgX + w1,
+        y: bldgY,
+        w: w2,
+        h: bH,
+        area: Math.round(w2 * bH * 10) / 10,
+        color: '#121722'
+      });
+      walls.push({ x1: bldgX + w1, y1: bldgY, x2: bldgX + w1, y2: bldgY + bH, th: 0.12, outer: false });
+      doors.push({ id: 'd_room2', x: bldgX + w1, y: bldgY + 2.5, len: 0.83, wall: 'W', label: 'Porte Salle 2' });
+    } else if (roomsCount <= 4) {
+      // 3 ou 4 pièces en grille 2x2
+      const splitX = Math.round(bW * 0.5 * 10) / 10;
+      const splitY = Math.round(bH * 0.45 * 10) / 10;
+      const w1 = splitX, w2 = bW - splitX;
+      const h1 = splitY, h2 = bH - splitY;
+
+      rooms.push({ id: 'room_1', type: 'libre', name: 'Salle 1 (Libre)\n(Non affectée)', x: bldgX, y: bldgY, w: w1, h: h1, area: Math.round(w1 * h1 * 10) / 10, color: '#121722' });
+      rooms.push({ id: 'room_2', type: 'libre', name: 'Salle 2 (Libre)\n(Non affectée)', x: bldgX + w1, y: bldgY, w: w2, h: h1, area: Math.round(w2 * h1 * 10) / 10, color: '#121722' });
+
+      if (roomsCount === 3) {
+        rooms.push({ id: 'room_3', type: 'libre', name: 'Salle 3 (Libre)\n(Non affectée)', x: bldgX, y: bldgY + h1, w: bW, h: h2, area: Math.round(bW * h2 * 10) / 10, color: '#121722' });
+      } else {
+        rooms.push({ id: 'room_3', type: 'libre', name: 'Salle 3 (Libre)\n(Non affectée)', x: bldgX, y: bldgY + h1, w: w1, h: h2, area: Math.round(w1 * h2 * 10) / 10, color: '#121722' });
+        rooms.push({ id: 'room_4', type: 'libre', name: 'Salle 4 (Libre)\n(Non affectée)', x: bldgX + w1, y: bldgY + h1, w: w2, h: h2, area: Math.round(w2 * h2 * 10) / 10, color: '#121722' });
+        walls.push({ x1: bldgX + w1, y1: bldgY + h1, x2: bldgX + w1, y2: bldgY + bH, th: 0.12, outer: false });
+      }
+
+      walls.push({ x1: bldgX, y1: bldgY + h1, x2: bldgX + bW, y2: bldgY + h1, th: 0.12, outer: false });
+      walls.push({ x1: bldgX + w1, y1: bldgY, x2: bldgX + w1, y2: bldgY + h1, th: 0.12, outer: false });
+      doors.push({ id: 'd_r2', x: bldgX + w1, y: bldgY + 1.8, len: 0.83, wall: 'W', label: 'Porte Salle 2' });
+      doors.push({ id: 'd_r3', x: bldgX + 2.0, y: bldgY + h1, len: 0.83, wall: 'N', label: 'Porte Salle 3' });
+    } else {
+      // 5 à 8 pièces en 2 rangées de 3 ou 4 pièces
+      const cols = Math.ceil(roomsCount / 2);
+      const rowH = Math.round((bH / 2) * 10) / 10;
+      const colW = Math.round((bW / cols) * 10) / 10;
+
+      walls.push({ x1: bldgX, y1: bldgY + rowH, x2: bldgX + bW, y2: bldgY + rowH, th: 0.12, outer: false });
+
+      for (let r = 0; r < roomsCount; r++) {
+        const row = r < cols ? 0 : 1;
+        const col = r < cols ? r : (r - cols);
+        const rx = bldgX + col * colW;
+        const ry = bldgY + row * rowH;
+        const rw = (col === cols - 1) ? (bW - col * colW) : colW;
+        const rh = (row === 1) ? (bH - rowH) : rowH;
+
+        rooms.push({
+          id: `room_${r + 1}`,
+          type: 'libre',
+          name: `Salle ${r + 1} (Libre)\n(Non affectée)`,
+          x: rx,
+          y: ry,
+          w: Math.round(rw * 10) / 10,
+          h: Math.round(rh * 10) / 10,
+          area: Math.round(rw * rh * 10) / 10,
+          color: '#121722'
+        });
+
+        if (col > 0 && row === 0) {
+          walls.push({ x1: rx, y1: bldgY, x2: rx, y2: bldgY + rowH, th: 0.12, outer: false });
+        } else if (col > 0 && row === 1) {
+          walls.push({ x1: rx, y1: bldgY + rowH, x2: rx, y2: bldgY + bH, th: 0.12, outer: false });
+        }
+        doors.push({ id: `d_r${r + 1}`, x: rx + 0.8, y: ry + (row === 0 ? rowH : 0), len: 0.83, wall: row === 0 ? 'S' : 'N', label: `Porte Salle ${r + 1}` });
+      }
+    }
+
+    return {
+      parking: parking,
+      rooms: rooms,
+      walls: walls,
+      doors: doors,
+      windows: [],
+      fixtures: [],
+      furniture: []
+    };
+  },
+
+  // Génération dynamique des opportunités immobilières du marché qui varient chaque jour in-game
+  getDailyRealEstateOffers(game) {
+    game = game || window.game;
+    const year = game?.clock?.year || 2026;
+    const month = game?.clock?.month !== undefined ? game.clock.month : 9;
+    const day = game?.clock?.day || 5;
+    const dayKey = `${year}-${month}-${day}`;
+
+    if (this._dailyOffersCache && this._dailyOffersCacheKey === dayKey) {
+      return this._dailyOffersCache;
+    }
+
+    const station = game?.stations?.[0] || { city: 'Nancy', name: 'Antenne' };
+    const city = station.city || 'Nancy';
+
+    // Algorithme pseudo-aléatoire déterministe basé sur le jour in-game
+    let seed = ((year * 372) + ((month + 1) * 31) + day) * 2654435761;
+    const nextRandom = () => {
+      seed = (seed ^ (seed << 13)) >>> 0;
+      seed = (seed ^ (seed >> 17)) >>> 0;
+      seed = (seed ^ (seed << 5)) >>> 0;
+      return (seed >>> 0) / 4294967296;
+    };
+
+    const templates = [
+      {
+        tier: 'compact',
+        icon: '🏠',
+        namePrefixes: ['Local Artisanal Municipal', 'Ancien Atelier de Quartier', 'Dépôt Technique des Lilas', 'Annexe Communale de Proximité', 'Pavillon de Voirie'],
+        surfaceBase: 90,
+        surfaceVar: 30,
+        pricePerM2: 240,
+        roomsCount: 2,
+        parkingSpots: 2,
+        storageCap: 80,
+        desc: 'Édifice compact et économique en pleine propriété. Deux salles modulables et cour privative pour 2 véhicules.'
+      },
+      {
+        tier: 'medium',
+        icon: '🏢',
+        namePrefixes: ['Atelier d’Activités & Logistique', 'Bâtiment Polyvalent des Berges', 'Ancienne Station Municipale', 'Dépôt d’Exploitation Artisanal', 'Plateforme Technique de Secteur'],
+        surfaceBase: 180,
+        surfaceVar: 50,
+        pricePerM2: 260,
+        roomsCount: 4,
+        parkingSpots: 4,
+        storageCap: 180,
+        desc: 'Bâtiment fonctionnel de taille intermédiaire. 4 salles indépendantes libres et parking pour 4 véhicules opérationnels.'
+      },
+      {
+        tier: 'hangar',
+        icon: '🏭',
+        namePrefixes: ['Hangar Logistique & Tertiaire', 'Centre d’Intervention Opérationnel', 'Entrepôt d’Activités Rénové', 'Parc Roulant & Réserve Territoriale', 'Base Logistique d’Agglomération'],
+        surfaceBase: 380,
+        surfaceVar: 90,
+        pricePerM2: 275,
+        roomsCount: 5,
+        parkingSpots: 6,
+        storageCap: 350,
+        desc: 'Grande infrastructure avec vaste hangar de stockage et travées abritées. 5 salles libres et cour pour 6 véhicules.'
+      },
+      {
+        tier: 'caserne',
+        icon: '🏛️',
+        namePrefixes: ['Grand Centre de Secours Métropolitain', 'Complexe Territorial Sécurité Civile', 'Ancienne Caserne Départementale', 'Pôle Régional de Référence', 'Base Majeure d’Opérations'],
+        surfaceBase: 780,
+        surfaceVar: 220,
+        pricePerM2: 290,
+        roomsCount: 7,
+        parkingSpots: 10,
+        storageCap: 580,
+        desc: 'Complexe de premier plan aux normes de sécurité civile. 7 salles libres spacieuses et cour opérationnelle pour 10 véhicules.'
+      }
+    ];
+
+    const offers = templates.map((tpl, idx) => {
+      const r1 = nextRandom();
+      const r2 = nextRandom();
+      const surface = Math.round(tpl.surfaceBase + (r1 - 0.5) * tpl.surfaceVar);
+      const prefix = tpl.namePrefixes[Math.floor(nextRandom() * tpl.namePrefixes.length)];
+      const name = `${prefix} • ${city}`;
+      const price = Math.round(surface * tpl.pricePerM2 * (0.95 + r2 * 0.10) / 100) * 100;
+      const roomsCount = tpl.roomsCount;
+      const parkingSpots = tpl.parkingSpots;
+
+      const arch = this.generateProceduralArchitecture(surface, roomsCount, parkingSpots);
+
+      return {
+        id: `building_offer_${dayKey}_${idx}`,
+        name: name,
+        type: 'Pleine Propriété',
+        tier: tpl.tier,
+        icon: tpl.icon,
+        surfaceM2: surface,
+        price: price,
+        roomsCount: roomsCount,
+        vehicleCapacity: parkingSpots,
+        storageCapacity: tpl.storageCap,
+        desc: tpl.desc,
+        tenure: 'owned',
+        architecture: arch,
+        offerDayKey: dayKey
+      };
+    });
+
+    this._dailyOffersCache = offers;
+    this._dailyOffersCacheKey = dayKey;
+    return offers;
+  },
+
+  // Rendu vectoriel SVG d'architecte 2D professionnel pour prévisualiser un bâtiment en vente
+  renderBuildingPlanPreviewSVG(b) {
+    if (!b || !b.architecture) return '';
+    const arch = b.architecture;
+    const width = 640;
+    const height = 260;
+    const scale = 22;
+    const originX = 30;
+    const originY = 30;
+
+    const roomsSvg = (arch.rooms || []).map((r, i) => {
+      const rx = originX + (r.x * scale);
+      const ry = originY + (r.y * scale);
+      const rw = r.w * scale;
+      const rh = r.h * scale;
+
+      return `
+        <g>
+          <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="#111827" stroke="#334155" stroke-width="1.5" rx="3" />
+          <text x="${rx + rw / 2}" y="${ry + rh / 2 - 4}" fill="#ffffff" font-size="9" font-weight="900" text-anchor="middle">
+            Salle ${i + 1} (🚪 Libre)
+          </text>
+          <text x="${rx + rw / 2}" y="${ry + rh / 2 + 10}" fill="#38bdf8" font-size="8" font-weight="700" text-anchor="middle">
+            ${r.area} m²
+          </text>
+        </g>
+      `;
+    }).join('');
+
+    const parking = arch.parking || { x: 1, y: 1.5, w: 4.8, h: 8 };
+    const px = originX + (parking.x * scale);
+    const py = originY + (parking.y * scale);
+    const pw = parking.w * scale;
+    const ph = parking.h * scale;
+
+    const spotsSvg = (parking.spots || []).map((s, idx) => {
+      const sx = originX + (s.x * scale);
+      const sy = originY + (s.y * scale);
+      const sw = s.w * scale;
+      const sh = s.d * scale;
+      return `
+        <g>
+          <rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="rgba(245, 158, 11, 0.08)" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3 2" rx="2" />
+          <text x="${sx + sw / 2}" y="${sy + sh / 2 + 3}" fill="#fbbf24" font-size="7.5" font-weight="800" text-anchor="middle">
+            🅿️ Place 0${idx + 1}
+          </text>
+        </g>
+      `;
+    }).join('');
+
+    return `
+      <svg viewBox="0 0 ${width} ${height}" class="w-full h-auto max-h-[220px] block rounded-xl font-sans select-none shadow-inner border border-slate-800">
+        <!-- Fond sombre CAD -->
+        <rect width="${width}" height="${height}" fill="#0a0e17" />
+        
+        <!-- Grille millimétrée -->
+        <defs>
+          <pattern id="gridCAD_${b.id}" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#131c2e" stroke-width="0.8" />
+          </pattern>
+        </defs>
+        <rect width="${width}" height="${height}" fill="url(#gridCAD_${b.id})" />
+
+        <!-- Cour & Parking extérieur -->
+        <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#0d1424" stroke="#d97706" stroke-width="1.5" stroke-dasharray="4 3" rx="4" />
+        <text x="${px + pw / 2}" y="${py + 12}" fill="#fbbf24" font-size="8" font-weight="900" text-anchor="middle">COUR OPÉRATIONNELLE</text>
+        ${spotsSvg}
+
+        <!-- Pièces du Bâtiment -->
+        ${roomsSvg}
+
+        <!-- Cartouche technique d'Architecte -->
+        <rect x="${width - 240}" y="${height - 24}" width="230" height="20" fill="#0f172a" stroke="#1e293b" rx="4" />
+        <text x="${width - 125}" y="${height - 10}" fill="#94a3b8" font-size="8" font-weight="800" text-anchor="middle">
+          PLAN CAD D'ARCHITECTE • ${b.surfaceM2} m² • ${b.roomsCount} PIÈCES LIBRES
+        </text>
+      </svg>
+    `;
+  },
+
+  // Fallback rétro-compatible
+  CATALOG_BUILDINGS: [],
 
   // Catalogue de Matériel de Sécurité pour protéger les locaux
   SECURITY_CATALOG: [
@@ -1393,6 +1701,10 @@ window.ProtecLocaux = {
     const scenario = scenarios[Math.floor(Math.random() * scenarios.length)];
     if (scenario.nightOnly && !isNight) return;
 
+    if (!Array.isArray(prem.securityLogs)) {
+      prem.securityLogs = [];
+    }
+
     if (scenario.isProtected) {
       // DÉFENSE RÉUSSIE !
       game.resources.reputationScore = Math.min(100, (game.resources.reputationScore || 50) + 1);
@@ -1473,6 +1785,7 @@ window.ProtecLocaux = {
     prem.securityEquipments.push(equipId);
 
     const newScore = this.getSecurityScore(prem);
+    if (!Array.isArray(prem.securityLogs)) prem.securityLogs = [];
     prem.securityLogs.unshift({
       timestamp: Date.now(),
       type: 'info',
@@ -1516,6 +1829,7 @@ window.ProtecLocaux = {
     prem.tenure = 'owned';
     prem.monthlyRent = 0;
 
+    if (!Array.isArray(prem.securityLogs)) prem.securityLogs = [];
     prem.securityLogs.unshift({
       timestamp: Date.now(),
       type: 'info',
@@ -1709,9 +2023,10 @@ window.ProtecLocaux = {
     setTimeout(() => { this.initArchitectCanvas(); }, 200);
   },
 
-  // Achat d'un bâtiment existant (Catalogue)
+  // Achat d'un bâtiment existant (Opportunités du Marché Immobilier Quotidien)
   async buyBuilding(game, buildingId) {
-    const b = this.CATALOG_BUILDINGS.find(x => x.id === buildingId);
+    const dailyOffers = this.getDailyRealEstateOffers(game);
+    const b = dailyOffers.find(x => x.id === buildingId) || (this.CATALOG_BUILDINGS || []).find(x => x.id === buildingId);
     if (!b) return;
 
     if (game.resources.money < b.price) {
@@ -1720,8 +2035,8 @@ window.ProtecLocaux = {
     }
 
     const confirmed = await window.ProtecDialog.confirm(
-      `Confirmez-vous l'achat en PLEINE PROPRIÉTÉ de « ${b.name} » pour ${b.price.toLocaleString('fr-FR')} € ?\n\nVotre antenne déménagera dans ce nouvel édifice sans loyer et avec toute liberté d'aménagement.`,
-      'Acquisition Immobilière',
+      `Confirmez-vous l'achat en PLEINE PROPRIÉTÉ de « ${b.name} » pour ${b.price.toLocaleString('fr-FR')} € ?\n\n• Surface au sol : ${b.surfaceM2} m²\n• Salles disponibles : ${b.roomsCount || 3} pièces libres (prêtes à être affectées)\n• Emplacements véhicules : ${b.vehicleCapacity || 4} places de parking\n\nVotre antenne déménagera immédiatement dans ce nouvel édifice sans loyer et avec toute liberté d'aménagement.`,
+      'Acquisition Immobilière en Pleine Propriété',
       { confirmText: 'Acheter en Pleine Propriété', cancelText: 'Annuler' }
     );
     if (!confirmed) {
@@ -1729,8 +2044,20 @@ window.ProtecLocaux = {
     }
 
     game.resources.money -= b.price;
-    this.applyLayout(game, game.stations[0]?.id, b);
-    game.showToast('Déménagement Réussi !', `Nouvelle base d'antenne acquise en pleine propriété : ${b.name} (${b.surfaceM2} m²) !`, 'green');
+    const station = game.stations[0];
+    if (station) {
+      this.applyLayout(game, station.id, b);
+      if (b.architecture) {
+        station.premises.architecture = JSON.parse(JSON.stringify(b.architecture));
+      }
+      station.premises.tenure = 'owned';
+      station.premises.monthlyRent = 0;
+      station.premises.name = b.name;
+      station.premises.surfaceM2 = b.surfaceM2;
+      station.premises.purchasedAt = Date.now();
+    }
+
+    game.showToast('Déménagement Réussi !', `Nouvelle base d'antenne acquise en pleine propriété : ${b.name} (${b.surfaceM2} m²) ! Toutes les pièces sont libres et prêtes pour vos aménagements.`, 'green');
     game.saveGame();
     game.updateStatsUI();
     this.renderModal(game);
@@ -2222,7 +2549,7 @@ window.ProtecLocaux = {
           </button>
           <button onclick="window.ProtecLocaux.setTab('catalogue', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'catalogue' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
             <i data-lucide="building" class="w-3.5 h-3.5"></i>
-            Acheter un Bâtiment (${this.CATALOG_BUILDINGS.length})
+            Acheter un Bâtiment (${this.getDailyRealEstateOffers(game).length})
           </button>
           <button onclick="window.ProtecLocaux.setTab('construction', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'construction' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
             <i data-lucide="hammer" class="w-3.5 h-3.5"></i>
@@ -2432,9 +2759,10 @@ window.ProtecLocaux = {
         <div class="space-y-2.5">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1 pb-1 border-b border-slate-100">
             <span class="text-slate-600">Sélectionnez un mobilier à acheter et placer dans <strong>${selectedRoom?.name?.split('\n')[0] || 'la pièce'}</strong> :</span>
-            <div class="flex items-center gap-3">
-              <span class="text-xs font-bold text-slate-700">Trésorerie disponible : <strong class="text-emerald-600 font-black">${money.toLocaleString('fr-FR')} €</strong></span>
-              <span class="text-pc-blue font-bold text-[11px] hidden sm:inline">• Déplacement & rotation [R] 100% gratuits</span>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="window.game.openModule('marche_occasion')" class="px-2.5 py-1 rounded-xl bg-orange-50 hover:bg-orange-100 text-pc-orange font-bold text-[11px] border border-orange-200 transition">Bourse Occasion 🏷️</button>
+              <button type="button" onclick="window.ProtecMarcheOccasion.openSellModal('equipment')" class="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] border border-slate-300 transition">Vendre Mobilier</button>
+              <span class="text-xs font-bold text-slate-700 ml-1">Trésorerie : <strong class="text-emerald-600 font-black">${money.toLocaleString('fr-FR')} €</strong></span>
             </div>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
@@ -4470,62 +4798,94 @@ window.ProtecLocaux = {
   // =========================================================================
 
   renderCatalogueTab(game) {
+    const offers = this.getDailyRealEstateOffers(game);
+    const day = game?.clock?.day || 1;
+    const monthName = game?.clock?.monthsNames?.[game?.clock?.month || 0] || 'Mois';
+    const year = game?.clock?.year || 2026;
+
     return `
       <div class="space-y-4">
-        <div class="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 text-xs text-slate-700 flex items-center justify-between">
-          <span>Vous manquez de place ? Achetez un bâtiment plus grand en pleine propriété pour étendre votre garage et vos réserves.</span>
-          <span class="font-bold text-pc-blue">Fonds : ${game.resources.money.toLocaleString('fr-FR')} €</span>
+        <!-- Bandeau d'en-tête du Marché Immobilier Quotidien -->
+        <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-indigo-500/30">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center text-xl shadow-inner">
+              🏛️
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h4 class="text-sm sm:text-base font-black">Marché Immobilier Territorial</h4>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  Offres du ${day} ${monthName} ${year}
+                </span>
+              </div>
+              <p class="text-xs text-slate-300 mt-0.5">
+                Plans 2D vectoriels réels générés par le cadastre. Les opportunités d'achat en pleine propriété varient chaque jour selon le marché.
+              </p>
+            </div>
+          </div>
+          <div class="text-right sm:text-right shrink-0">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Trésorerie Disponible</span>
+            <span class="text-base font-black text-emerald-400 font-mono">${game.resources.money.toLocaleString('fr-FR')} €</span>
+          </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          ${this.CATALOG_BUILDINGS.map(b => {
-            const stats = this.calculatePremisesStats(b);
+        <!-- Grille des Offres Immobilières du Jour -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          ${offers.map(b => {
             const canAfford = game.resources.money >= b.price;
             return `
-              <div class="p-5 rounded-3xl glass-card border border-slate-200 flex flex-col justify-between space-y-4 hover:shadow-lg transition">
+              <div class="p-5 rounded-3xl glass-card border border-slate-200/90 flex flex-col justify-between space-y-4 hover:shadow-xl hover:border-slate-300 transition-all">
                 <div class="space-y-3">
-                  <div class="flex items-center justify-between">
-                    <span class="text-3xl">${b.icon}</span>
-                    <span class="px-2.5 py-1 rounded-xl text-xs font-black ${canAfford ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}">
+                  
+                  <!-- Titre, Icône et Prix -->
+                  <div class="flex items-center justify-between flex-wrap gap-2">
+                    <div class="flex items-center gap-2.5">
+                      <span class="text-3xl">${b.icon}</span>
+                      <div>
+                        <h4 class="text-sm sm:text-base font-black text-slate-900 leading-tight">${b.name}</h4>
+                        <span class="text-[10px] text-slate-500 font-semibold block mt-0.5">${b.roomsCount} pièces indépendantes libres • Dalle de ${b.surfaceM2} m²</span>
+                      </div>
+                    </div>
+                    <span class="px-3 py-1.5 rounded-xl text-xs font-black shadow-2xs ${canAfford ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-700 border border-red-200'}">
                       ${b.price.toLocaleString('fr-FR')} € (Pleine Propriété)
                     </span>
                   </div>
 
-                  <div>
-                    <h4 class="text-base font-black text-slate-900">${b.name}</h4>
-                    <p class="text-xs text-slate-500">${b.desc}</p>
-                  </div>
+                  <p class="text-xs text-slate-600 leading-relaxed">${b.desc}</p>
 
-                  <!-- Aperçu Plan 2D d'Architecte -->
-                  <div class="p-2 rounded-2xl bg-slate-900 shadow-inner">
-                    <div class="grid gap-0.5 aspect-video w-full" style="grid-template-columns: repeat(${b.width}, 1fr);">
-                      ${b.grid.map(tileKey => `
-                        <div class="rounded aspect-square overflow-hidden bg-slate-800">
-                          ${this.renderFurnitureSVG(tileKey)}
-                        </div>
-                      `).join('')}
+                  <!-- Plan 2D d'Architecte Vectoriel Réel -->
+                  <div class="space-y-1">
+                    <div class="flex items-center justify-between text-[10px] font-black uppercase text-slate-400 px-1">
+                      <span>Plan CAD de l'Édifice (Vue de dessus)</span>
+                      <span class="text-amber-500 font-mono">Toutes les pièces libres</span>
                     </div>
+                    ${this.renderBuildingPlanPreviewSVG(b)}
                   </div>
 
-                  <!-- Chiffres clés -->
-                  <div class="grid grid-cols-3 gap-2 text-[11px] font-bold text-center bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <!-- Chiffres clés du bâtiment -->
+                  <div class="grid grid-cols-4 gap-2 text-[11px] font-bold text-center bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
                     <div>
                       <span class="text-slate-400 block text-[9px] uppercase">Surface</span>
-                      <strong class="text-slate-800">${b.surfaceM2} m²</strong>
+                      <strong class="text-slate-900 font-mono">${b.surfaceM2} m²</strong>
+                    </div>
+                    <div>
+                      <span class="text-slate-400 block text-[9px] uppercase">Pièces</span>
+                      <strong class="text-indigo-600">${b.roomsCount} libres</strong>
+                    </div>
+                    <div>
+                      <span class="text-slate-400 block text-[9px] uppercase">Parking</span>
+                      <strong class="text-amber-600">${b.vehicleCapacity} places</strong>
                     </div>
                     <div>
                       <span class="text-slate-400 block text-[9px] uppercase">Stockage</span>
-                      <strong class="text-amber-600">${stats.storageCapacity} u.</strong>
-                    </div>
-                    <div>
-                      <span class="text-slate-400 block text-[9px] uppercase">Garage</span>
-                      <strong class="text-red-600">${stats.vehicleCapacity} places</strong>
+                      <strong class="text-slate-700">${b.storageCapacity} u.</strong>
                     </div>
                   </div>
                 </div>
 
-                <button onclick="window.ProtecLocaux.buyBuilding(window.game, '${b.id}')" ${!canAfford ? 'disabled' : ''} class="w-full py-2.5 rounded-2xl font-black text-xs shadow-md transition flex items-center justify-center gap-1.5 ${canAfford ? 'bg-pc-blue hover:bg-pc-blue-light text-white active:scale-95' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}">
-                  <span>${canAfford ? 'Acheter et Déménager l’Antenne' : 'Trésorerie Insuffisante'}</span>
+                <!-- Bouton d'Achat -->
+                <button onclick="window.ProtecLocaux.buyBuilding(window.game, '${b.id}')" ${!canAfford ? 'disabled' : ''} class="w-full py-3 rounded-2xl font-black text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer ${canAfford ? 'bg-[#ff6600] hover:bg-[#e65c00] text-white active:scale-95 shadow-orange-500/20' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}">
+                  <span>${canAfford ? 'Acheter en Pleine Propriété & Déménager l’Antenne' : 'Trésorerie Insuffisante'}</span>
                   <i data-lucide="shopping-cart" class="w-4 h-4"></i>
                 </button>
               </div>
