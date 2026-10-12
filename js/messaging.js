@@ -1,21 +1,24 @@
 /**
  * PROTEC LIVE - MESSAGERIE MULTIJOUEUR ET LIAISONS OPÉRATIONNELLES
  * 
- * 4 Canaux de communication distincts :
- * 1. National (toute la communauté des directeurs d'antenne de France)
- * 2. Régional (les 18 vraies régions administratives de France avec sélection libre et région d'antenne par défaut)
- * 3. Départemental (directeurs du département d'affectation)
- * 4. Messages Privés (MP) directs 1-à-1 entre deux directeurs d'antenne
+ * 5 Canaux de communication :
+ * 1. Convocations & Bénévoles (Interne Antenne : sollicitations, relances, ordres de mission)
+ * 2. National (toute la communauté des directeurs d'antenne de France)
+ * 3. Régional (les 18 vraies régions administratives de France)
+ * 4. Départemental (directeurs du département d'affectation)
+ * 5. Messages Privés (MP) directs 1-à-1
  */
 
 window.ProtecMessaging = {
-  currentChannel: 'national', // 'national' | 'regional' | 'departemental' | 'mp'
+  currentChannel: 'interne', // 'interne' | 'national' | 'regional' | 'departemental' | 'mp'
   selectedRegionName: null,
   selectedMpRecipientId: null,
+  filterMissionId: null,
 
   injectState(game) {
     if (!game.messagesHistory) {
       game.messagesHistory = {
+        interne: [],
         national: [
           {
             id: 'init-1',
@@ -31,16 +34,32 @@ window.ProtecMessaging = {
         departemental: [],
         mp: {} // recipientId -> [ messages ]
       };
-    } else {
-      // Assurer la compatibilité si regional était un simple tableau
-      if (Array.isArray(game.messagesHistory.regional)) {
-        const oldRegional = game.messagesHistory.regional;
-        game.messagesHistory.regional = {};
-        const myDeptCode = game.stations?.[0]?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '75';
-        const myRegion = window.ProtecDepartements?.getRegion(myDeptCode) || 'Île-de-France';
-        if (oldRegional.length > 0) {
-          game.messagesHistory.regional[myRegion] = oldRegional;
-        }
+    }
+
+    if (!Array.isArray(game.messagesHistory.interne)) {
+      game.messagesHistory.interne = [];
+    }
+
+    if (game.messagesHistory.interne.length === 0) {
+      game.messagesHistory.interne.push({
+        id: 'msg-int-init',
+        type: 'info',
+        time: '08:00',
+        date: 'Aujourd’hui',
+        senderName: 'Pôle Opérationnel & Secours',
+        recipientName: 'Tous les Bénévoles',
+        text: 'Canal interne des convocations opérationnelles ouvert. Les appels à disponibilité, relances et ordres de mission sont centralisés ici.'
+      });
+    }
+
+    // Assurer la compatibilité si regional était un simple tableau
+    if (Array.isArray(game.messagesHistory.regional)) {
+      const oldRegional = game.messagesHistory.regional;
+      game.messagesHistory.regional = {};
+      const myDeptCode = game.stations?.[0]?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '75';
+      const myRegion = window.ProtecDepartements?.getRegion(myDeptCode) || 'Île-de-France';
+      if (oldRegional.length > 0) {
+        game.messagesHistory.regional[myRegion] = oldRegional;
       }
     }
 
@@ -68,6 +87,49 @@ window.ProtecMessaging = {
     }
   },
 
+  // Enregistrer un événement dans le fil de messagerie interne fictive
+  logInternalMessage(game, data) {
+    if (!game) game = window.game;
+    if (!game) return;
+    this.injectState(game);
+
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const dateStr = game.clock ? `${game.clock.day} ${game.clock.monthsShort?.[game.clock.month] || 'Oct.'}` : 'Aujourd’hui';
+
+    const entry = {
+      id: `msg-int-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      time: timeStr,
+      date: dateStr,
+      type: data.type || 'info', // 'appel_dispo' | 'reponse_dispo' | 'reponse_indispo' | 'convocation' | 'relance' | 'info'
+      missionId: data.missionId || null,
+      missionTitle: data.missionTitle || null,
+      senderName: data.senderName || 'Pôle Opérationnel',
+      recipientName: data.recipientName || 'Bénévoles d’antenne',
+      text: data.text || '',
+      badge: data.badge || null
+    };
+
+    game.messagesHistory.interne.unshift(entry);
+    if (game.messagesHistory.interne.length > 250) {
+      game.messagesHistory.interne.length = 250;
+    }
+
+    // Si la modale est actuellement ouverte sur le canal interne, rafraîchir l'affichage
+    const histBox = document.getElementById('messaging-internal-history-box');
+    if (histBox && this.currentChannel === 'interne') {
+      this.renderModal(game);
+    }
+  },
+
+  // Ouvrir la messagerie filtrée sur un poste précis
+  openForMission(missionId, game) {
+    if (!game) game = window.game;
+    this.currentChannel = 'interne';
+    this.filterMissionId = missionId;
+    this.renderModal(game);
+  },
+
   setChannel(channelKey, game) {
     this.currentChannel = channelKey;
     this.renderModal(game);
@@ -81,6 +143,11 @@ window.ProtecMessaging = {
 
   selectMpRecipient(recipientId, game) {
     this.selectedMpRecipientId = recipientId;
+    this.renderModal(game);
+  },
+
+  setFilterMission(missionId, game) {
+    this.filterMissionId = missionId || null;
     this.renderModal(game);
   },
 
@@ -98,6 +165,20 @@ window.ProtecMessaging = {
 
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    if (this.currentChannel === 'interne') {
+      // Consigne ou note de service envoyée par le Directeur d'Antenne aux bénévoles
+      this.logInternalMessage(game, {
+        type: 'info',
+        senderName: `${game.player?.name || 'Directeur d’Antenne'} (Direction)`,
+        recipientName: 'Tous les Bénévoles de l’Antenne',
+        text: text
+      });
+      game.showToast('Note Transmise 📢', 'Votre message interne a été diffusé à l’ensemble des secouristes de l’antenne.', 'blue');
+      game.saveGame?.();
+      this.renderModal(game);
+      return;
+    }
 
     const msgObj = {
       id: `msg-${Date.now()}`,
@@ -170,7 +251,7 @@ window.ProtecMessaging = {
       }
     }
 
-    game.saveGame();
+    game.saveGame?.();
     this.renderModal(game);
   },
 
@@ -183,8 +264,8 @@ window.ProtecMessaging = {
     const body = document.getElementById('modal-body');
 
     modal.classList.remove('hidden');
-    title.textContent = 'Messagerie & Canaux Inter-Antennes';
-    subtitle.textContent = 'Échanges entre directeurs de Protection Civile : National, Régional, Départemental et Messages Privés (MP)';
+    title.textContent = 'Messagerie Interne & Liaisons Opérationnelles';
+    subtitle.textContent = 'Convocations des bénévoles, relances d’effectifs, ordres de mission et canaux inter-antennes';
     icon.setAttribute('data-lucide', 'message-square');
 
     const myDeptCode = game.stations?.[0]?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '75';
@@ -210,7 +291,14 @@ window.ProtecMessaging = {
 
     // Récupération des messages selon le canal
     let currentMessages = [];
-    if (this.currentChannel === 'mp') {
+    if (this.currentChannel === 'interne') {
+      const allInternal = game.messagesHistory.interne || [];
+      if (this.filterMissionId) {
+        currentMessages = allInternal.filter(m => m.missionId === this.filterMissionId);
+      } else {
+        currentMessages = allInternal;
+      }
+    } else if (this.currentChannel === 'mp') {
       currentMessages = (game.messagesHistory.mp && game.messagesHistory.mp[this.selectedMpRecipientId]) || [];
     } else if (this.currentChannel === 'regional') {
       currentMessages = (game.messagesHistory.regional && game.messagesHistory.regional[activeRegion]) || [];
@@ -218,11 +306,18 @@ window.ProtecMessaging = {
       currentMessages = game.messagesHistory[this.currentChannel] || [];
     }
 
+    const filteredMission = this.filterMissionId ? (game.missions || []).find(m => m.id === this.filterMissionId) : null;
+
     body.innerHTML = `
       <div class="space-y-4">
 
-        <!-- Onglets des 4 canaux officiels -->
+        <!-- Onglets des 5 canaux officiels -->
         <div class="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold overflow-x-auto custom-scrollbar">
+          <button onclick="window.ProtecMessaging.setChannel('interne', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${this.currentChannel === 'interne' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}">
+            <span>📢</span>
+            <span>Convocations & Bénévoles (Interne)</span>
+            ${(game.messagesHistory.interne || []).length > 0 ? `<span class="px-1.5 py-0.2 rounded-full text-[10px] ${this.currentChannel === 'interne' ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-800'} font-extrabold">${(game.messagesHistory.interne || []).length}</span>` : ''}
+          </button>
           <button onclick="window.ProtecMessaging.setChannel('national', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${this.currentChannel === 'national' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
             <span>🇫🇷</span>
             <span>National</span>
@@ -235,13 +330,40 @@ window.ProtecMessaging = {
             <span>📍</span>
             <span>Département (${myDeptCode})</span>
           </button>
-          <button onclick="window.ProtecMessaging.setChannel('mp', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${this.currentChannel === 'mp' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
+          <button onclick="window.ProtecMessaging.setChannel('mp', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${this.currentChannel === 'mp' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
             <span>🔒</span>
             <span>Messages Privés (MP)</span>
           </button>
         </div>
 
-        <!-- Sous-barre spécifique pour le Canal Régional : Vraies régions de France -->
+        <!-- Sous-barre spécifique pour le Canal INTERNE (Convocations & Bénévoles) -->
+        ${this.currentChannel === 'interne' ? `
+          <div class="p-3 rounded-2xl bg-indigo-50/80 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="text-base">📢</span>
+              <div>
+                <span class="font-black text-indigo-950 block">Fil Opérationnel Interne des Bénévoles</span>
+                <span class="text-[10px] text-indigo-800 font-medium">Historique des appels à dispo, confirmations d'équipes, relances et ordres de mission</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-[11px] font-bold text-slate-600 flex-shrink-0">Filtrer par poste :</label>
+              <select onchange="window.ProtecMessaging.setFilterMission(this.value, window.game)" class="px-3 py-1.5 rounded-xl bg-white border border-indigo-300 font-bold text-xs text-slate-800 focus:ring-2 focus:ring-indigo-400 max-w-[200px] truncate">
+                <option value="">Tous les postes & sollicitations</option>
+                ${(game.missions || []).map(m => `
+                  <option value="${m.id}" ${m.id === this.filterMissionId ? 'selected' : ''}>
+                    ${m.title} (${(m.registeredVolunteers || []).length}/${m.requiredVolunteers})
+                  </option>
+                `).join('')}
+              </select>
+              ${this.filterMissionId ? `
+                <button onclick="window.ProtecMessaging.setFilterMission(null, window.game)" class="px-2 py-1 rounded-lg bg-indigo-100 hover:bg-indigo-200 text-indigo-800 text-[10px] font-black" title="Voir tout">✕</button>
+              ` : ''}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Sous-barre spécifique pour le Canal Régional -->
         ${this.currentChannel === 'regional' ? `
           <div class="p-3 rounded-2xl bg-sky-50/80 border border-sky-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
             <div class="flex items-center gap-2">
@@ -266,12 +388,12 @@ window.ProtecMessaging = {
 
         <!-- Sous-barre spécifique pour les Messages Privés -->
         ${this.currentChannel === 'mp' ? `
-          <div class="p-3 rounded-2xl bg-indigo-50/60 border border-indigo-200 flex items-center justify-between gap-3 text-xs">
-            <span class="font-bold text-indigo-900 flex items-center gap-1.5">
+          <div class="p-3 rounded-2xl bg-slate-100 border border-slate-300 flex items-center justify-between gap-3 text-xs">
+            <span class="font-bold text-slate-800 flex items-center gap-1.5">
               <i data-lucide="user" class="w-4 h-4"></i>
               Discuter en privé avec :
             </span>
-            <select onchange="window.ProtecMessaging.selectMpRecipient(this.value, window.game)" class="px-3 py-1.5 rounded-xl bg-white border border-indigo-300 font-bold text-xs text-slate-800 focus:ring-2 focus:ring-indigo-400">
+            <select onchange="window.ProtecMessaging.selectMpRecipient(this.value, window.game)" class="px-3 py-1.5 rounded-xl bg-white border border-slate-300 font-bold text-xs text-slate-800 focus:ring-2 focus:ring-slate-400">
               ${availableRecipients.map(r => `
                 <option value="${r.id}" ${r.id === this.selectedMpRecipientId ? 'selected' : ''}>
                   ${r.name} (${r.city})
@@ -282,13 +404,79 @@ window.ProtecMessaging = {
         ` : ''}
 
         <!-- Zone d'affichage des messages -->
-        <div id="messaging-history-box" class="h-80 overflow-y-auto p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+        <div id="messaging-history-box" class="h-96 overflow-y-auto p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
           ${currentMessages.length === 0 ? `
             <div class="h-full flex flex-col items-center justify-center text-slate-400 text-xs space-y-1">
               <i data-lucide="message-circle" class="w-8 h-8 opacity-40"></i>
-              <span>Aucun message pour le moment sur ce canal.</span>
+              <span>${this.currentChannel === 'interne' && this.filterMissionId ? 'Aucune notification enregistrée pour ce poste.' : 'Aucun message pour le moment sur ce canal.'}</span>
             </div>
           ` : currentMessages.map(m => {
+            // Rendu dédié pour les messages internes
+            if (this.currentChannel === 'interne') {
+              let badgeColor = 'bg-slate-100 text-slate-700 border-slate-200';
+              let badgeLabel = 'Information Interne';
+              let cardBg = 'bg-white border-slate-200';
+              let icon = 'ℹ️';
+
+              if (m.type === 'appel_dispo') {
+                badgeColor = 'bg-blue-100 text-blue-900 border-blue-200';
+                badgeLabel = 'Appel à Disponibilité';
+                cardBg = 'bg-blue-50/60 border-blue-200';
+                icon = '📱';
+              } else if (m.type === 'reponse_dispo') {
+                badgeColor = 'bg-emerald-100 text-emerald-900 border-emerald-300';
+                badgeLabel = 'Disponibilité Confirmée';
+                cardBg = 'bg-emerald-50/60 border-emerald-200';
+                icon = '✅';
+              } else if (m.type === 'reponse_indispo') {
+                badgeColor = 'bg-rose-100 text-rose-900 border-rose-200';
+                badgeLabel = 'Indisponible';
+                cardBg = 'bg-rose-50/40 border-rose-200';
+                icon = '❌';
+              } else if (m.type === 'convocation') {
+                badgeColor = 'bg-indigo-100 text-indigo-900 border-indigo-300';
+                badgeLabel = 'Ordre de Mission & Convocation';
+                cardBg = 'bg-indigo-50/70 border-indigo-200 ring-1 ring-indigo-200';
+                icon = '📜';
+              } else if (m.type === 'relance') {
+                badgeColor = 'bg-amber-100 text-amber-900 border-amber-300';
+                badgeLabel = 'Relance d’Effectif';
+                cardBg = 'bg-amber-50/60 border-amber-200';
+                icon = '🔔';
+              }
+
+              return `
+                <div class="p-3.5 rounded-2xl border ${cardBg} shadow-xs space-y-1.5 transition hover:shadow-sm">
+                  <div class="flex items-center justify-between text-[11px] gap-2">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span class="text-base">${icon}</span>
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-black border ${badgeColor}">${badgeLabel}</span>
+                      ${m.missionTitle ? `
+                        <button onclick="window.ProtecMessaging.setFilterMission('${m.missionId}', window.game)" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-slate-800 border border-slate-300 hover:border-pc-blue transition truncate max-w-[200px]">
+                          🎯 ${m.missionTitle}
+                        </button>
+                      ` : ''}
+                    </div>
+                    <div class="text-[10px] text-slate-400 font-mono font-bold flex-shrink-0">
+                      ${m.date ? `${m.date} à ` : ''}${m.time || ''}
+                    </div>
+                  </div>
+
+                  <div class="flex items-start justify-between gap-3 pt-0.5">
+                    <div class="text-xs text-slate-800 font-medium leading-relaxed">
+                      ${m.text}
+                    </div>
+                  </div>
+
+                  <div class="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>Émetteur : <strong class="text-slate-600">${m.senderName}</strong></span>
+                    ${m.recipientName ? `<span>Destinataire : <strong class="text-slate-600">${m.recipientName}</strong></span>` : ''}
+                  </div>
+                </div>
+              `;
+            }
+
+            // Rendu canaux multijoueur (national, regional, dept, mp)
             const isMe = m.senderId === (game.player?.id || 'me');
             return `
               <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'}">
@@ -311,13 +499,13 @@ window.ProtecMessaging = {
           <input 
             id="messaging-input" 
             type="text" 
-            placeholder="${this.currentChannel === 'mp' ? 'Envoyer un message privé direct...' : (this.currentChannel === 'regional' ? `Transmettre sur le canal régional (${activeRegion})...` : 'Transmettre sur la fréquence du canal...')}" 
+            placeholder="${this.currentChannel === 'interne' ? 'Diffuser une consigne ou note de service aux bénévoles...' : (this.currentChannel === 'mp' ? 'Envoyer un message privé direct...' : (this.currentChannel === 'regional' ? `Transmettre sur le canal régional (${activeRegion})...` : 'Transmettre sur la fréquence du canal...'))}" 
             onkeydown="if(event.key === 'Enter') window.ProtecMessaging.sendMessage(window.game);"
             class="flex-1 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-pc-blue shadow-sm"
           />
           <button onclick="window.ProtecMessaging.sendMessage(window.game);" class="px-4 py-2.5 rounded-2xl bg-pc-blue hover:bg-pc-blue-light text-white font-extrabold text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
             <i data-lucide="send" class="w-4 h-4"></i>
-            <span>Envoyer</span>
+            <span>${this.currentChannel === 'interne' ? 'Diffuser' : 'Envoyer'}</span>
           </button>
         </div>
 
@@ -326,8 +514,14 @@ window.ProtecMessaging = {
 
     if (window.lucide) window.lucide.createIcons();
 
-    // Auto-scroll vers le bas
+    // Auto-scroll vers le bas pour les canaux de discussion, ou vers le haut pour le journal interne
     const box = document.getElementById('messaging-history-box');
-    if (box) box.scrollTop = box.scrollHeight;
+    if (box) {
+      if (this.currentChannel === 'interne') {
+        box.scrollTop = 0;
+      } else {
+        box.scrollTop = box.scrollHeight;
+      }
+    }
   }
 };

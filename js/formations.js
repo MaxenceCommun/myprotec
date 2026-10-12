@@ -677,10 +677,25 @@ window.ProtecFormations = {
     let totalRevenue = 0;
     let netGain = 0;
 
+    // Prise en compte des gammes de matériel pédagogique (Mannequin RCP & DSA Formation)
+    const mannequinTier = (game.equipmentTiers && game.equipmentTiers.mannequin_rcp_adulte) || 1;
+    const dsaTier = (game.equipmentTiers && game.equipmentTiers.dsa_formation) || 1;
+
+    let tierNotice = '';
+
     if (session.isInternal) {
       // Les externes accueillis paient le tarif public de la formation
       const revFromExternals = externalCount * (session.publicPriceForExternals || course?.basePricePublic || 60);
       totalRevenue = revFromExternals;
+
+      // Bonus matériel sur recettes externes
+      if (mannequinTier === 3) {
+        totalRevenue = Math.round(totalRevenue * 1.25); // +25% attractivité & tarifs
+        tierNotice += ' [QCPR Connecté : +25% recettes]';
+      } else if (mannequinTier === 1) {
+        totalRevenue = Math.round(totalRevenue * 0.90);
+      }
+
       game.resources.money += totalRevenue;
       netGain = totalRevenue;
 
@@ -689,24 +704,88 @@ window.ProtecFormations = {
         const v = game.volunteers.find(vol => vol.id === vid);
         if (v && course) {
           this.grantCourseQualifications(v, course);
+          // Bonus de rapidité d'apprentissage QCPR
+          if (mannequinTier === 3) {
+            v.exp = (v.exp || 0) + 15;
+          }
         }
       });
     } else {
       // Formation Grand Public
-      totalRevenue = session.finalPrice * totalCount;
+      let multiplier = 1.0;
+      if (mannequinTier === 3) {
+        multiplier = 1.25; // +25% satisfaction & valorisation tarifaire
+        tierNotice += ' [Mannequins QCPR Bluetooth : +25% satisfaction & tarif valorisé]';
+      } else if (mannequinTier === 1) {
+        multiplier = 0.90; // -10% attractivité
+      }
+
+      totalRevenue = Math.round((session.finalPrice * totalCount) * multiplier);
       const totalCost = (session.costOrganization || 25) * totalCount;
       netGain = totalRevenue - totalCost;
       game.resources.money += netGain;
-      game.resources.reputationScore += (25 + (session.relationshipBonus || 0));
+
+      let repGain = 25 + (session.relationshipBonus || 0);
+      if (dsaTier === 2) {
+        repGain += 10;
+        tierNotice += ' [DSA Connecté HF : +10 réputation]';
+      }
+      game.resources.reputationScore += repGain;
+    }
+
+    // Boost moral du formateur si matériel moderne QCPR
+    const trainer = game.volunteers.find(v => v.id === session.trainerId);
+    if (trainer) {
+      if (mannequinTier === 3) {
+        trainer.moral = Math.min(100, (trainer.moral || 75) + 15);
+        trainer.motivation = trainer.moral;
+        trainer.exp = (trainer.exp || 0) + 20;
+      } else if (mannequinTier === 2) {
+        trainer.moral = Math.min(100, (trainer.moral || 75) + 5);
+        trainer.motivation = trainer.moral;
+      }
+    }
+
+    // Sollicitation spontanée d'entreprises locales si QCPR Niveau 3
+    if (mannequinTier === 3 && Math.random() < 0.35 && game.annualContracts) {
+      const existingCorp = game.annualContracts.find(c => c.id === 'contrat_corp_sst');
+      if (!existingCorp) {
+        game.annualContracts.push({
+          id: 'contrat_corp_sst',
+          title: 'Convention Annuelle SST & Prévention Entreprise (Groupe Régional)',
+          partner: 'Industrie & PME Partenaires',
+          category: 'formation',
+          signed: true,
+          yearlyBonus: 1200,
+          frequencyDesc: '1 session SST rémunérée par trimestre',
+          desc: 'Attirée par votre dotation pédagogique connectée QCPR haut de gamme, une fédération patronale conventionne votre antenne pour former tous ses salariés SST !'
+        });
+        game.showToast(
+          '🏛️ Nouvelle Convention Entreprise !',
+          'Impressionnée par la technologie QCPR connectée, une entreprise locale signe un contrat cadre annuel de formations SST (+1 200 € / an) !',
+          'purple'
+        );
+      }
     }
 
     session.status = 'completed';
+
+    // Attribution des écussons de formation et compétences
+    if (window.ProtecEcussons) {
+      if (['PSE1', 'PSE2', 'CE', 'CD'].includes(session.courseId)) {
+        window.ProtecEcussons.attribuerEcusson('spec_pse');
+      }
+      if (['PICF', 'PAE_FPS', 'FORMATEUR_PSC', 'FORMATEUR_PSE', 'FORMATEUR_DE_FORMATEURS'].includes(session.courseId)) {
+        window.ProtecEcussons.attribuerEcusson('spec_formateur');
+      }
+    }
+
     game.saveGame();
     game.updateStatsUI();
 
     const msg = session.isInternal
-      ? `Session interne validée : ${internalCount} bénévole(s) certifié(s) « ${course?.title || session.courseId} » ! ${externalCount > 0 ? `+${totalRevenue} € encaissés via ${externalCount} stagiaire(s) extérieur(s).` : ''}`
-      : `Formation grand public validée : +${netGain} € de solde net et +${session.relationshipBonus || 15} relation publique !`;
+      ? `Session interne validée : ${internalCount} bénévole(s) certifié(s) « ${course?.title || session.courseId} » ! ${externalCount > 0 ? `+${totalRevenue} € encaissés via ${externalCount} stagiaire(s) extérieur(s).` : ''}${tierNotice}`
+      : `Formation grand public validée : +${netGain} € de solde net et +${session.relationshipBonus || 15} relation publique !${tierNotice}`;
 
     game.showToast('Formation Validée ! 🎓', msg, 'green');
     this.renderModal(game);

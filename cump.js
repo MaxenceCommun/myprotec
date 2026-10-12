@@ -189,8 +189,16 @@ window.ProtecCump = {
     };
   },
 
-  // Signature de la convention suite à la sollicitation du SAMU
-  signConvention(game) {
+  // Dépôt de demande de conventionnement CUMP
+  requestConvention(game) {
+    if (window.ProtecConventions && typeof window.ProtecConventions.requestConvention === 'function') {
+      window.ProtecConventions.requestConvention(game, 'cump');
+      this.renderCumpTab(game);
+    }
+  },
+
+  // Signature de la convention suite à la sollicitation du SAMU ou validation du dossier
+  async signConvention(game) {
     this.injectState(game);
     const prereq = this.checkPrerequisites(game);
     if (!prereq.eligible) {
@@ -254,7 +262,12 @@ window.ProtecCump = {
       return;
     }
 
-    if (!confirm('Confirmez-vous la signature de la Convention CUMP avec le SAMU 15 ?\n\n⚠️ RÈGLE OFFICIELLE : Vous disposez de 48 HEURES pour acquérir et conditionner les malles et lots d\'accueil aux normes de la CUMP.\nSi tout n\'est pas prêt sous 48h, le SAMU annulera immédiatement la convention.')) {
+    const confirmed = await window.ProtecDialog.confirm(
+      'Confirmez-vous la signature de la Convention CUMP avec le SAMU 15 ?\n\n⚠️ RÈGLE OFFICIELLE : Vous disposez de 48 HEURES pour acquérir et conditionner les malles et lots d\'accueil aux normes de la CUMP.\nSi tout n\'est pas prêt sous 48h, le SAMU annulera immédiatement la convention.',
+      'Signature Convention CUMP / SAMU 15',
+      { confirmText: 'Signer la Convention', cancelText: 'Annuler' }
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -340,11 +353,16 @@ window.ProtecCump = {
   },
 
   // Résiliation de la convention par le joueur (avec préavis officiel)
-  terminateConventionByPlayer(game) {
+  async terminateConventionByPlayer(game) {
     this.injectState(game);
     if (!game.cumpConvention.signed) return;
 
-    if (!confirm('Dénonciation de la Convention CUMP :\n\nConformément au cadre légal, la résiliation par l\'AASC est soumise à un préavis de résiliation. Confirmez-vous la transmission de votre préavis au SAMU ?')) {
+    const confirmed = await window.ProtecDialog.confirm(
+      'Dénonciation de la Convention CUMP :\n\nConformément au cadre légal, la résiliation par l\'AASC est soumise à un préavis de résiliation (-10 pts réputation).\nConfirmez-vous la transmission de votre préavis au SAMU ?',
+      'Résiliation de Convention CUMP',
+      { isDestructive: true, confirmText: 'Résilier la convention', cancelText: 'Conserver la convention' }
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -427,19 +445,28 @@ window.ProtecCump = {
           </div>
 
           ${!conv.signed ? `
-            <div class="pt-2 flex items-center justify-between">
+            <div class="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <p class="text-[11px] text-slate-500 max-w-md">
-                ${prereq.eligible 
-                  ? 'Le SAMU 15 a validé les capacités de votre antenne et propose officiellement la signature de la convention.' 
-                  : 'La CUMP ne sollicite que les antennes puissantes capables d\'armer une astreinte opérationnelle permanente.'}
+                ${conv.requestStatus === 'instruction' 
+                  ? 'Votre dossier de conventionnement CUMP est en cours d’instruction par le SAMU 15.'
+                  : conv.requestStatus === 'accepted'
+                    ? 'Le SAMU 15 a validé votre dossier et vous invite à parapher la convention CUMP !'
+                    : conv.requestStatus === 'rejected'
+                      ? `Demande ajournée par la direction : ${conv.rejectReason || 'Implantation insuffisante.'}`
+                      : 'La CUMP ne sollicite que les antennes puissantes et bien implantées pour armer l\'astreinte permanente.'}
               </p>
-              ${prereq.eligible ? `
-                <button onclick="window.ProtecCump.signConvention(window.game)" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-md transition">
-                  Accepter la Demande & Signer
+              ${conv.requestStatus === 'instruction' ? `
+                <button disabled class="px-4 py-2 rounded-xl bg-amber-100 text-amber-800 font-extrabold text-xs cursor-wait flex items-center gap-1.5 animate-pulse">
+                  <span>⏳</span>
+                  <span>Instruction en cours...</span>
+                </button>
+              ` : (conv.requestStatus === 'accepted' || conv.solicitationPending) ? `
+                <button onclick="window.ProtecCump.signConvention(window.game)" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-md transition animate-bounce cursor-pointer">
+                  ✍️ Parapher & Activer la Convention
                 </button>
               ` : `
-                <button disabled class="px-4 py-2 rounded-xl bg-slate-200 text-slate-400 font-extrabold text-xs cursor-not-allowed">
-                  Critères Insuffisants
+                <button onclick="window.ProtecCump.requestConvention(window.game)" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-md transition cursor-pointer">
+                  📑 Déposer une Demande de Conventionnement
                 </button>
               `}
             </div>

@@ -263,31 +263,66 @@ window.ProtecMultiplayer = {
         <!-- 2. PERSONNALISATION DES MOYENS MATÉRIELS & VÉHICULES -->
         <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
           <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">2. Moyens Matériels & Véhicules Demandés :</label>
-          <div class="grid grid-cols-2 gap-2 text-xs">
-            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
-              <input type="checkbox" id="renfort-veh-vpsp" ${(mission.requiredVehicles && mission.requiredVehicles.includes('VPSP')) ? 'checked' : ''} class="w-4 h-4 text-indigo-600 rounded">
-              <span class="font-bold text-slate-800">🚑 Ambulance VPSP</span>
-            </label>
-            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
-              <input type="checkbox" id="renfort-veh-vtu" class="w-4 h-4 text-indigo-600 rounded">
-              <span class="font-bold text-slate-800">🚐 Véhicule Tout Usage (VTU)</span>
-            </label>
-            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
-              <input type="checkbox" id="renfort-veh-vl" class="w-4 h-4 text-indigo-600 rounded">
-              <span class="font-bold text-slate-800">🚗 Véhicule Léger (VL)</span>
-            </label>
-            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
-              <input type="checkbox" id="renfort-mat-pma" class="w-4 h-4 text-indigo-600 rounded">
-              <span class="font-bold text-slate-800">⛺ Lot PMA / Poste Médical</span>
-            </label>
-            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
-              <input type="checkbox" id="renfort-mat-dae" class="w-4 h-4 text-indigo-600 rounded">
-              <span class="font-bold text-slate-800">⚡ Lot DAE & Réanimation</span>
-            </label>
-            <label class="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition">
-              <input type="checkbox" id="renfort-mat-tente" class="w-4 h-4 text-indigo-600 rounded">
-              <span class="font-bold text-slate-800">🎪 Tente de Secours 3x3m</span>
-            </label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+            <!-- VPSP -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              <span class="font-bold text-slate-800 truncate mr-2">🚑 Ambulance VPSP</span>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button type="button" onclick="const el=document.getElementById('renfort-veh-vpsp-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
+                <input type="number" id="renfort-veh-vpsp-count" value="${(mission.requiredVehicles && mission.requiredVehicles.includes('VPSP')) ? '1' : '0'}" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                <button type="button" onclick="const el=document.getElementById('renfort-veh-vpsp-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
+              </div>
+            </div>
+
+            <!-- VTU -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              <span class="font-bold text-slate-800 truncate mr-2">🚐 Véhicule Tout Usage (VTU)</span>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button type="button" onclick="const el=document.getElementById('renfort-veh-vtu-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
+                <input type="number" id="renfort-veh-vtu-count" value="0" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                <button type="button" onclick="const el=document.getElementById('renfort-veh-vtu-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
+              </div>
+            </div>
+
+            <!-- VL -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              <span class="font-bold text-slate-800 truncate mr-2">🚗 Véhicule Léger (VL)</span>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button type="button" onclick="const el=document.getElementById('renfort-veh-vl-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
+                <input type="number" id="renfort-veh-vl-count" value="0" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                <button type="button" onclick="const el=document.getElementById('renfort-veh-vl-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
+              </div>
+            </div>
+
+            <!-- Lot PMA -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              <span class="font-bold text-slate-800 truncate mr-2">⛺ Lot PMA / Poste Médical</span>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button type="button" onclick="const el=document.getElementById('renfort-mat-pma-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
+                <input type="number" id="renfort-mat-pma-count" value="0" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                <button type="button" onclick="const el=document.getElementById('renfort-mat-pma-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
+              </div>
+            </div>
+
+            <!-- Lot DAE -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              <span class="font-bold text-slate-800 truncate mr-2">⚡ Lot DAE & Réanimation</span>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button type="button" onclick="const el=document.getElementById('renfort-mat-dae-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
+                <input type="number" id="renfort-mat-dae-count" value="0" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                <button type="button" onclick="const el=document.getElementById('renfort-mat-dae-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
+              </div>
+            </div>
+
+            <!-- Tente -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              <span class="font-bold text-slate-800 truncate mr-2">🎪 Tente de Secours 3x3m</span>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button type="button" onclick="const el=document.getElementById('renfort-mat-tente-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
+                <input type="number" id="renfort-mat-tente-count" value="0" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                <button type="button" onclick="const el=document.getElementById('renfort-mat-tente-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -419,14 +454,21 @@ window.ProtecMultiplayer = {
     const requestedVols = customVolsInput ? (parseInt(customVolsInput.value) || defaultNeeded) : defaultNeeded;
     const requestedTariff = customTariffInput ? (parseFloat(customTariffInput.value) || (zone === 'national' ? 450 : zone === 'regional' ? 300 : 200)) : (zone === 'national' ? 450 : zone === 'regional' ? 300 : 200);
 
-    // Récupération des véhicules et matériels cochés
+    // Récupération des quantités de véhicules et matériels demandés
     const selectedVehicles = [];
-    if (document.getElementById('renfort-veh-vpsp')?.checked) selectedVehicles.push('Ambulance VPSP');
-    if (document.getElementById('renfort-veh-vtu')?.checked) selectedVehicles.push('VTU');
-    if (document.getElementById('renfort-veh-vl')?.checked) selectedVehicles.push('VL');
-    if (document.getElementById('renfort-mat-pma')?.checked) selectedVehicles.push('Lot PMA');
-    if (document.getElementById('renfort-mat-dae')?.checked) selectedVehicles.push('DAE/Oxygène');
-    if (document.getElementById('renfort-mat-tente')?.checked) selectedVehicles.push('Tente 3x3');
+    const vpspQty = parseInt(document.getElementById('renfort-veh-vpsp-count')?.value || 0);
+    const vtuQty = parseInt(document.getElementById('renfort-veh-vtu-count')?.value || 0);
+    const vlQty = parseInt(document.getElementById('renfort-veh-vl-count')?.value || 0);
+    const pmaQty = parseInt(document.getElementById('renfort-mat-pma-count')?.value || 0);
+    const daeQty = parseInt(document.getElementById('renfort-mat-dae-count')?.value || 0);
+    const tenteQty = parseInt(document.getElementById('renfort-mat-tente-count')?.value || 0);
+
+    if (vpspQty > 0) selectedVehicles.push(vpspQty > 1 ? `${vpspQty} Ambulances VPSP` : '1 Ambulance VPSP');
+    if (vtuQty > 0) selectedVehicles.push(vtuQty > 1 ? `${vtuQty} VTU` : '1 VTU');
+    if (vlQty > 0) selectedVehicles.push(vlQty > 1 ? `${vlQty} VL` : '1 VL');
+    if (pmaQty > 0) selectedVehicles.push(pmaQty > 1 ? `${pmaQty} Lots PMA` : '1 Lot PMA');
+    if (daeQty > 0) selectedVehicles.push(daeQty > 1 ? `${daeQty} Lots DAE/Oxygène` : '1 Lot DAE/Oxygène');
+    if (tenteQty > 0) selectedVehicles.push(tenteQty > 1 ? `${tenteQty} Tentes 3x3` : '1 Tente 3x3');
 
     // Gestion du quota départemental
     if (zone === 'departemental') {
@@ -2209,6 +2251,9 @@ window.ProtecMultiplayer = {
     const indemnisation = this.calculateEventIndemnisation(reqVol, durationHours, vehText);
     const rewardMoney = parseInt(rewInput?.value || indemnisation.total, 10);
 
+    const badgeNameInput = document.getElementById('badge-input-name');
+    const badgeUrlInput = document.getElementById('badge-input-image-url');
+
     // La rareté et les quotas d'unités sont déterminés par l'administration lors de la validation
     const badge = {
       id: `badge-${Date.now()}`,
@@ -2275,7 +2320,7 @@ window.ProtecMultiplayer = {
     const modal = document.getElementById('create-community-event-modal');
     if (modal) modal.classList.add('hidden');
 
-    game.showToast('Proposition Soumise aux Administrateurs !', `« ${title} » a été soumis pour validation avec l'écusson proposé (${rarity.tier}).`, 'blue');
+    game.showToast('Proposition Soumise aux Administrateurs !', `« ${title} » a été soumis pour validation avec l'écusson proposé (${badge.name}).`, 'blue');
     game.save();
     game.openModule('alliance');
   },

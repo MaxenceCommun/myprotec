@@ -1,0 +1,515 @@
+{
+  "equipmentTiersConfig": {
+    "categories": ["formation", "secours", "logistique", "tenues"],
+    "tradeInRate": 0.30
+  },
+  "crisisTemplates": {
+    "novi_attentat": {
+      "type": "novi_attentat",
+      "titre": "Plan NOVI / Attentat Urbain Multi-Sites",
+      "anticipation": "immediate",
+      "autorite_demandeur": "Préfecture & SAMU 15",
+      "autorite_code": "prefecture",
+      "niveau_alerte": "URGENCE ABSOLUE (Plan Rouge)",
+      "description": "Attaque terroriste et fusillade en zone urbaine dense. Déclenchement conjoint Plan NOVI / ORSEC par la Préfecture et le SAMU. La Protection Civile est réquisitionnée pour assurer les norias d'évacuation VPSP, le relevage des urgences relatives et le soutien CUMP.",
+      "phases": [
+        {
+          "phase_id": 1,
+          "nom": "Phase 1 : Noria d'Évacuation Initiale & Relevage Urgence",
+          "direction": "montante",
+          "ordre_radio": "CODIS / SAMU 15 : Déploiement réflexe de 2 VPSP en zone de triage PMA. Évacuation prioritaire des urgences relatives (UR) vers le CHU.",
+          "sous_missions": [
+            {
+              "id": "sub_noria_vpsp_1",
+              "type": "noria_vpsp",
+              "titre": "Noria VPSP #1 - Évacuation PMA vers CHU",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 3,
+                "ranks": ["CE", "PSE2", "PSE1"],
+                "vehicles": ["VPSP"],
+                "lots": ["lot_secours_a"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 180
+            },
+            {
+              "id": "sub_noria_vpsp_2",
+              "type": "noria_vpsp",
+              "titre": "Noria VPSP #2 - Relevage & Brancardage Sécurisé",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 3,
+                "ranks": ["PSE2", "PSE1", "PSE1"],
+                "vehicles": ["VPSP"],
+                "lots": ["lot_secours_b"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 200
+            }
+          ]
+        },
+        {
+          "phase_id": 2,
+          "nom": "Phase 2 : Escalade - Armement CAI & Renfort CUMP",
+          "direction": "montante",
+          "ordre_radio": "PRÉFECTURE (COD) : Afflux massif de familles et de témoins choqués. Ordre de monter immédiatement le Centre d'Accueil des Impliqués (CAI) sous coordination CUMP.",
+          "sous_missions": [
+            {
+              "id": "sub_montage_cai",
+              "type": "montage_cai",
+              "titre": "Déploiement CAI & Sas SINUS (Accueil Impliqués)",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 4,
+                "ranks": ["CD", "PSE2", "PSE1"],
+                "vehicles": ["VTU"],
+                "lots": ["lot_soutien_psy", "lot_secours_c"],
+                "specialite_requise": "aep"
+              },
+              "progression": 0,
+              "duree_estimee_sec": 240
+            },
+            {
+              "id": "sub_soutien_samu",
+              "type": "garde_samu_renfort",
+              "titre": "Compensatoire SUAP : Garde Régulée SAMU 15",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 3,
+                "ranks": ["CE", "PSE2", "PSE1"],
+                "vehicles": ["VPSP"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 190
+            }
+          ]
+        },
+        {
+          "phase_id": 3,
+          "nom": "Phase 3 : Stabilisation & Désengagement Partiel",
+          "direction": "descendante",
+          "ordre_radio": "MÉDECIN-CHEF SAMU / PRÉFECTURE : Évacuation terminée sur le site principal. Autorisation de libérer les VPSP de noria pour réarmement immédiat. Maintien du CAI pour le suivi des familles.",
+          "sous_missions": [
+            {
+              "id": "sub_maintien_cai",
+              "type": "veille_cai",
+              "titre": "Poursuite Accueil & Ravitaillement CAI",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 2,
+                "ranks": ["PSE1"],
+                "vehicles": ["VL"],
+                "lots": ["lot_ravitaillement"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 150
+            }
+          ]
+        }
+      ],
+      "recompenses": {
+        "reputation_prefecture": 40,
+        "reputation_samu": 35,
+        "reputation_sdis": 20,
+        "indemnite_crise": 3800
+      },
+      "penalites": {
+        "reputation_prefecture": -35,
+        "reputation_samu": -25,
+        "amende_administrative": 2500
+      }
+    },
+    "recherche_disparu": {
+      "type": "recherche_disparu",
+      "titre": "Recherche de Disparu Vulnérable en Milieu Périlleux",
+      "anticipation": "immediate",
+      "autorite_demandeur": "Gendarmerie Nationale & Préfecture",
+      "autorite_code": "gendarmerie",
+      "niveau_alerte": "ALERTE DISPARITION INQUIÉTANTE",
+      "description": "Disparition d'une personne âgée désorientée à l'orée d'un massif boisé escarpé. La Gendarmerie sollicite l'antenne pour engager le Poste de Commandement Mobile, des binômes de ratissage tout-terrain, l'équipe cynotechnique et les drones thermiques.",
+      "phases": [
+        {
+          "phase_id": 1,
+          "nom": "Phase 1 : Établissement du PC Mobile & Battue Initiale",
+          "direction": "montante",
+          "ordre_radio": "COMMANDEMENT GENDARMERIE : Déploiement du PC Mobile au carrefour forestier. Mise en place de 2 lignes de battue pédestres.",
+          "sous_missions": [
+            {
+              "id": "sub_pc_mobile",
+              "type": "poste_commandement",
+              "titre": "Armement PC Mobile & Cartographie SIG",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 2,
+                "ranks": ["CD", "CE"],
+                "vehicles": ["PCM", "VL"],
+                "lots": ["tablettes"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 160
+            },
+            {
+              "id": "sub_battue_ligne",
+              "type": "battue_pedestre",
+              "titre": "Ligne de Battue Pédestre Tout-Terrain",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 4,
+                "ranks": ["PSE2", "PSE1", "PSE1", "Secouriste"],
+                "vehicles": ["VLTT", "VTU"],
+                "lots": ["lot_eclairage"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 210
+            }
+          ]
+        },
+        {
+          "phase_id": 2,
+          "nom": "Phase 2 : Montée en Puissance Spécialistes (Drones / Cyno)",
+          "direction": "montante",
+          "ordre_radio": "GENDARMERIE : Nuit tombante et baisse des températures. Demande urgente de survol drone à caméra thermique et de chiens de quête.",
+          "sous_missions": [
+            {
+              "id": "sub_drone_thermique",
+              "type": "reconnaissance_drone",
+              "titre": "Télépilote Drone : Balayage Caméra Infrarouge",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 2,
+                "ranks": ["CE", "PSE2"],
+                "vehicles": ["VTD", "VL"],
+                "specialite_requise": "drone"
+              },
+              "progression": 0,
+              "duree_estimee_sec": 190
+            },
+            {
+              "id": "sub_equipe_cyno",
+              "type": "recherche_cyno",
+              "titre": "Maître-Chien de Recherche et Sauvetage",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 2,
+                "ranks": ["PSE2", "PSE1"],
+                "vehicles": ["VCYN", "VLTT"],
+                "specialite_requise": "cynotechnie"
+              },
+              "progression": 0,
+              "duree_estimee_sec": 180
+            }
+          ]
+        },
+        {
+          "phase_id": 3,
+          "nom": "Phase 3 : Localisation & Évacuation Médicalisée",
+          "direction": "descendante",
+          "ordre_radio": "PC GENDARMERIE : Victime repérée consciente dans un ravin ! Relevage en barquette coquille et jonction VPSP pour évacuation.",
+          "sous_missions": [
+            {
+              "id": "sub_brancardage_evac",
+              "type": "evacuation_victime",
+              "titre": "Conditionnement Coquille & Évacuation CH",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 3,
+                "ranks": ["CE", "PSE2", "PSE1"],
+                "vehicles": ["VPSP"],
+                "lots": ["lot_secours_b"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 170
+            }
+          ]
+        }
+      ],
+      "recompenses": {
+        "reputation_prefecture": 35,
+        "reputation_samu": 25,
+        "reputation_sdis": 15,
+        "indemnite_crise": 2400
+      },
+      "penalites": {
+        "reputation_prefecture": -25,
+        "reputation_samu": -15,
+        "amende_administrative": 1200
+      }
+    },
+    "greve_ambulances": {
+      "type": "greve_ambulances",
+      "titre": "Plan Blanc & Réquisition SAMU : Grève des Ambulances Privées",
+      "anticipation": "programmee",
+      "autorite_demandeur": "ARS & SAMU 15 (Préfecture)",
+      "autorite_code": "samu",
+      "niveau_alerte": "PLAN BLANC DÉPARTEMENTAL",
+      "description": "Préavis de grève illimitée déposé par les ambulanciers privés. L'ARS et la Préfecture réquisitionnent l'antenne pour armer 2 VPSP en astreinte domiciliaire et en relai direct du SAMU 15 afin de garantir la permanence des soins d'urgence.",
+      "phases": [
+        {
+          "phase_id": 1,
+          "nom": "Phase 1 : Mise en Astreinte Domicile & VPSP #1 Actif",
+          "direction": "montante",
+          "ordre_radio": "SAMU 15 : Début du mouvement de grève à 08h00. Armement du premier VPSP au local et mise en pré-alerte domicile du second équipage.",
+          "sous_missions": [
+            {
+              "id": "sub_garde_vpsp_samu_1",
+              "type": "garde_samu_urgence",
+              "titre": "Garde Urgences Réflexe SAMU 15 - VPSP Alpha",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 3,
+                "ranks": ["CE", "PSE2", "PSE1"],
+                "vehicles": ["VPSP"],
+                "lots": ["lot_secours_a", "prise_parametres"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 220
+            }
+          ]
+        },
+        {
+          "phase_id": 2,
+          "nom": "Phase 2 : Saturation 15 - Appel de la Réserve Astreinte",
+          "direction": "montante",
+          "ordre_radio": "SAMU 15 : Saturation critique des lignes 15 et pénurie de vecteurs. Mobilisation immédiate de l'équipage d'astreinte pour armer le VPSP Bravo.",
+          "sous_missions": [
+            {
+              "id": "sub_garde_vpsp_samu_2",
+              "type": "garde_samu_urgence",
+              "titre": "Garde Urgences Réflexe SAMU 15 - VPSP Bravo",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 3,
+                "ranks": ["PSE2", "PSE2", "PSE1"],
+                "vehicles": ["VPSP"],
+                "lots": ["lot_secours_a"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 240
+            }
+          ]
+        },
+        {
+          "phase_id": 3,
+          "nom": "Phase 3 : Fin de Réquisition & Réarmement Échelonné",
+          "direction": "descendante",
+          "ordre_radio": "RÉGULATION SAMU : Accord trouvé entre les syndicats et l'ARS. Reprise progressive des rotations privées. Libération du VPSP Bravo puis du VPSP Alpha.",
+          "sous_missions": [
+            {
+              "id": "sub_rearmement_flotte",
+              "type": "rearmement_general",
+              "titre": "Désinfection VPSP & Inventaire Pharmaceutique",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 2,
+                "ranks": ["PSE1"],
+                "vehicles": ["VPSP"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 140
+            }
+          ]
+        }
+      ],
+      "recompenses": {
+        "reputation_prefecture": 25,
+        "reputation_samu": 45,
+        "reputation_sdis": 15,
+        "indemnite_crise": 3200
+      },
+      "penalites": {
+        "reputation_prefecture": -25,
+        "reputation_samu": -40,
+        "amende_administrative": 1800
+      }
+    },
+    "violences_urbaines": {
+      "type": "violences_urbaines",
+      "titre": "Dispositif Anticipé : Risque de Violences Urbaines & Nuit Sensible",
+      "anticipation": "programmee",
+      "autorite_demandeur": "Préfecture & SDIS 18",
+      "autorite_code": "prefecture",
+      "niveau_alerte": "VIGILANCE SÉCURITÉ PUBLIQUE",
+      "description": "Contexte de tensions urbaines majeures attendues dans la soirée. La Préfecture ordonne la constitution d'un détachement d'astreinte renforcée en caserne pompiers et d'un binôme logistique d'évacuation préventive.",
+      "phases": [
+        {
+          "phase_id": 1,
+          "nom": "Phase 1 : Pré-positionnement en Caserne SDIS",
+          "direction": "montante",
+          "ordre_radio": "PRÉFECTURE / SDIS : Regroupement sécurisé des effectifs Protec au Centre de Secours Principal. VPSP paré sous escorte.",
+          "sous_missions": [
+            {
+              "id": "sub_garde_sdis_caserne",
+              "type": "garde_sdis_renfort",
+              "titre": "Équipage VPSP Protec en Caserne SDIS",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 3,
+                "ranks": ["CE", "PSE2", "PSE1"],
+                "vehicles": ["VPSP"],
+                "lots": ["tenues_epi", "lot_secours_a"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 200
+            }
+          ]
+        },
+        {
+          "phase_id": 2,
+          "nom": "Phase 2 : Départs Multiples & Éclairage de Zone",
+          "direction": "montante",
+          "ordre_radio": "CODIS 18 : Départs simultanés pour feux de voirie et malaises. Déploiement d'un VTU logistique avec mât d'éclairage et lot de bâchage.",
+          "sous_missions": [
+            {
+              "id": "sub_eclairage_soutien",
+              "type": "soutien_technique_sdis",
+              "titre": "Soutien Éclairage & Sécurisation Voirie",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 2,
+                "ranks": ["PSE2", "PSE1"],
+                "vehicles": ["VTU"],
+                "lots": ["lot_eclairage"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 190
+            }
+          ]
+        },
+        {
+          "phase_id": 3,
+          "nom": "Phase 3 : Calme Rétabli & Relève Finale",
+          "direction": "descendante",
+          "ordre_radio": "ÉTAT-MAJOR SÉCURITÉ CIVILE : Fin des violences urbaines. Retour au calme. Désengagement autorisé par la Préfecture.",
+          "sous_missions": [
+            {
+              "id": "sub_debreifing_securite",
+              "type": "debriefing_crise",
+              "titre": "Débriefing Sécurité & Rentrée en Base",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 2,
+                "ranks": ["CE"],
+                "vehicles": ["VL"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 120
+            }
+          ]
+        }
+      ],
+      "recompenses": {
+        "reputation_prefecture": 35,
+        "reputation_samu": 15,
+        "reputation_sdis": 35,
+        "indemnite_crise": 2900
+      },
+      "penalites": {
+        "reputation_prefecture": -30,
+        "reputation_samu": -10,
+        "amende_administrative": 1600
+      }
+    },
+    "inondation_cai": {
+      "type": "inondation_cai",
+      "titre": "Plan PCS / Inondation Majeure & Centre d'Hébergement d'Urgence",
+      "anticipation": "immediate",
+      "autorite_demandeur": "Mairie & Préfecture (SIDPC)",
+      "autorite_code": "prefecture",
+      "niveau_alerte": "VIGILANCE ROUGE CRUES",
+      "description": "Crues soudaines et submersion de quartiers d'habitation. Le Plan Communal de Sauvegarde (PCS) est activé. La Protection Civile est chargée de monter un Centre d'Hébergement d'Urgence (CHU) de 30 lits dans le gymnase municipal, de distribuer les repas chauds et d'assurer le pompage des axes prioritaires.",
+      "phases": [
+        {
+          "phase_id": 1,
+          "nom": "Phase 1 : Armement Immédiat du Gymnase (CHU)",
+          "direction": "montante",
+          "ordre_radio": "PRÉFECTURE / MAIRIE : 30 habitants évacués d'urgence de leurs maisons inondées. Déployez les 30 lits picots et le kit d'accueil dans le gymnase.",
+          "sous_missions": [
+            {
+              "id": "sub_chu_gymnase",
+              "type": "montage_chu",
+              "titre": "Armement CHU : 30 Lits de Camp & Kits Hygiène",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 4,
+                "ranks": ["CE", "PSE2", "PSE1", "Secouriste"],
+                "vehicles": ["VTU"],
+                "lots": ["lot_hebergement", "lot_secours_c"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 200
+            }
+          ]
+        },
+        {
+          "phase_id": 2,
+          "nom": "Phase 2 : Pompage, Évacuation & Cuisine de Crise",
+          "direction": "montante",
+          "ordre_radio": "CELLULE DE CRISE MAIRIE : Plusieurs caves stratégiques inondées. Déployez le lot pompage et assurez le ravitaillement chaud des sinistrés et sauveteurs.",
+          "sous_missions": [
+            {
+              "id": "sub_pompage_epuisement",
+              "type": "pompage_crise",
+              "titre": "Chantier d'Épuisement & Motopompes",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 3,
+                "ranks": ["PSE2", "PSE1", "Secouriste"],
+                "vehicles": ["VTU"],
+                "lots": ["lot_pompage"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 220
+            },
+            {
+              "id": "sub_ravitaillement_chaud",
+              "type": "ravitaillement_crise",
+              "titre": "Cuisine de Crise & Distribution Repas Chauds",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 2,
+                "ranks": ["PSE1", "Secouriste"],
+                "vehicles": ["VL"],
+                "lots": ["lot_ravitaillement"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 180
+            }
+          ]
+        },
+        {
+          "phase_id": 3,
+          "nom": "Phase 3 : Décrue & Fermeture du Centre d'Accueil",
+          "direction": "descendante",
+          "ordre_radio": "PRÉFET DE DÉPARTEMENT : Décrue confirmée par Vigicrues. Réintégration progressive des foyers sinistrés. Désarmement ordonné du gymnase.",
+          "sous_missions": [
+            {
+              "id": "sub_desarmement_chu",
+              "type": "repli_materiel",
+              "titre": "Désarmement, Pliage des Lits & Rentrée Base",
+              "statut": "en_attente",
+              "moyens_requis": {
+                "vols_count": 3,
+                "ranks": ["PSE1", "Secouriste", "Secouriste"],
+                "vehicles": ["VTU"]
+              },
+              "progression": 0,
+              "duree_estimee_sec": 150
+            }
+          ]
+        }
+      ],
+      "recompenses": {
+        "reputation_prefecture": 40,
+        "reputation_samu": 15,
+        "reputation_sdis": 25,
+        "indemnite_crise": 3400
+      },
+      "penalites": {
+        "reputation_prefecture": -35,
+        "reputation_samu": -10,
+        "amende_administrative": 2000
+      }
+    }
+  }
+}

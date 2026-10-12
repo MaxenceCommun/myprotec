@@ -424,7 +424,14 @@ window.ProtecSupabase = {
         cumpConvention: game.cumpConvention,
         jobOffers: game.jobOffers,
         adRewards: game.adRewards,
-        workplaceEquipment: game.workplaceEquipment
+        workplaceEquipment: game.workplaceEquipment,
+        annualContracts: game.annualContracts || [],
+        messagesHistory: game.messagesHistory || [],
+        monthlyEventsGenerated: game.monthlyEventsGenerated || {},
+        reputation_samu: game.reputation_samu !== undefined ? game.reputation_samu : 50,
+        reputation_sdis: game.reputation_sdis !== undefined ? game.reputation_sdis : 50,
+        reputation_prefecture: game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50,
+        reputation_villes: game.reputation_villes || {}
       };
 
       const payload = {

@@ -128,7 +128,12 @@ window.ProtecAdmin = {
   },
 
   async confirmRestoreArchive(archiveId, userId, username) {
-    if (!confirm(`Voulez-vous restaurer cette archive de sauvegarde pour le joueur « ${username} » ? Sa partie actuelle sera remplacée par cette sauvegarde.`)) {
+    const confirmed = await window.ProtecDialog.confirm(
+      `Voulez-vous restaurer cette archive de sauvegarde pour le joueur « ${username} » ? Sa partie actuelle sera remplacée par cette sauvegarde.`,
+      'Restitution de Sauvegarde',
+      { isDestructive: true, confirmText: 'Restaurer la partie', cancelText: 'Annuler' }
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -141,14 +146,14 @@ window.ProtecAdmin = {
       const data = await res.json();
       if (res.ok && data.success) {
         if (window.game) window.game.showToast('Partie Restituée !', `L'archive a été restaurée pour ${username}.`, 'green');
-        alert(`Succès : La sauvegarde a été réattribuée à ${username}. Le joueur peut recharger sa partie depuis le Cloud.`);
+        await window.ProtecDialog.alert(`Succès : La sauvegarde a été réattribuée à ${username}. Le joueur peut recharger sa partie depuis le Cloud.`, 'Sauvegarde Restituée');
         await this.loadAdminData(window.game);
         this.switchTab('joueurs');
       } else {
-        alert(data.error || 'Erreur lors de la restitution.');
+        await window.ProtecDialog.alert(data.error || 'Erreur lors de la restitution.', 'Erreur Restitution');
       }
     } catch (e) {
-      alert('Erreur réseau lors de la restauration.');
+      await window.ProtecDialog.alert('Erreur réseau lors de la restauration.', 'Erreur Réseau');
     }
   },
 
@@ -659,8 +664,13 @@ window.ProtecAdmin = {
     }
   },
 
-  promptRejectEvent(eventId) {
-    const reason = prompt("Précisez le motif du refus (ex: effectif irréaliste, intitulé non conforme...) :", "Critères de sécurité non respectés");
+  async promptRejectEvent(eventId) {
+    const reason = await window.ProtecDialog.prompt(
+      "Précisez le motif du refus (ex: effectif irréaliste, intitulé non conforme...) :",
+      "Critères de sécurité non respectés",
+      "Refus d'Événement Communautaire",
+      { confirmText: 'Refuser l’événement', isDestructive: true }
+    );
     if (reason !== null && reason.trim()) {
       if (window.ProtecMultiplayer && window.game) {
         window.ProtecMultiplayer.rejectCommunityEvent(window.game, eventId, reason.trim());
@@ -847,14 +857,24 @@ window.ProtecAdmin = {
   async promptEditMoney(userId, currentMoney) {
     const user = this.usersCache.find(u => u.id === userId);
     if (!user) return;
-    const input = prompt(`Définir la trésorerie de ${user.username} (actuel : ${currentMoney} €) :`, currentMoney);
+    const input = await window.ProtecDialog.prompt(
+      `Définir la trésorerie de ${user.username} (actuel : ${currentMoney} €) :`,
+      currentMoney,
+      'Modification Trésorerie',
+      { inputType: 'number', confirmText: 'Enregistrer' }
+    );
     if (input !== null && !isNaN(input)) {
       await this.updateUser(userId, { money: Number(input) }, `Trésorerie de ${user.username} fixée à ${input} €`);
     }
   },
 
   async promptResetPassword(userId, username) {
-    const newPwd = prompt(`Nouveau mot de passe pour ${username} (min. 4 car.) :`);
+    const newPwd = await window.ProtecDialog.prompt(
+      `Nouveau mot de passe pour ${username} (min. 4 car.) :`,
+      '',
+      'Réinitialisation Mot de Passe',
+      { inputType: 'text', placeholder: 'Nouveau mot de passe...' }
+    );
     if (newPwd && newPwd.trim().length >= 4) {
       await this.updateUser(userId, { newPassword: newPwd.trim() }, `Mot de passe de ${username} réinitialisé.`);
     }
@@ -863,7 +883,12 @@ window.ProtecAdmin = {
   async toggleBan(userId, shouldBan) {
     const user = this.usersCache.find(u => u.id === userId);
     if (!user) return;
-    if (confirm(`Confirmez-vous la suspension du compte de ${user.username} ?`)) {
+    const confirmed = await window.ProtecDialog.confirm(
+      `Confirmez-vous la suspension du compte de ${user.username} ?`,
+      'Suspension de Compte',
+      { isDestructive: true, confirmText: 'Confirmer la suspension', cancelText: 'Annuler' }
+    );
+    if (confirmed) {
       await this.updateUser(userId, { isBanned: shouldBan }, shouldBan ? `${user.username} a été banni.` : `${user.username} a été réactivé.`);
     }
   },
@@ -886,15 +911,20 @@ window.ProtecAdmin = {
         if (window.game) window.game.showToast('Administration', successToast || 'Modifications enregistrées en BDD.', 'green');
         await this.loadAdminData(window.game);
       } else {
-        alert(data.error || 'Erreur lors de la modification.');
+        await window.ProtecDialog.alert(data.error || 'Erreur lors de la modification.', 'Erreur Administration');
       }
     } catch (e) {
-      alert('Erreur réseau avec le serveur.');
+      await window.ProtecDialog.alert('Erreur réseau avec le serveur.', 'Erreur Réseau');
     }
   },
 
   async confirmDeleteUser(userId, username) {
-    if (!confirm(`ATTENTION : Voulez-vous définitivement supprimer le compte de ${username} et toutes ses données de jeu ? Cette action est irréversible.`)) {
+    const confirmed = await window.ProtecDialog.confirm(
+      `ATTENTION : Voulez-vous définitivement supprimer le compte de ${username} et toutes ses données de jeu ? Cette action est irréversible.`,
+      'Suppression Définitive de Joueur',
+      { isDestructive: true, confirmText: 'Supprimer Définitivement', cancelText: 'Annuler' }
+    );
+    if (!confirmed) {
       return;
     }
     try {
@@ -908,10 +938,10 @@ window.ProtecAdmin = {
         if (window.game) window.game.showToast('Joueur Supprimé', `Le compte de ${username} a été purgé de la BDD.`, 'blue');
         await this.loadAdminData(window.game);
       } else {
-        alert(data.error || 'Erreur lors de la suppression.');
+        await window.ProtecDialog.alert(data.error || 'Erreur lors de la suppression.', 'Erreur Suppression');
       }
     } catch (e) {
-      alert('Erreur réseau.');
+      await window.ProtecDialog.alert('Erreur réseau.', 'Erreur Réseau');
     }
   },
 
@@ -936,7 +966,7 @@ window.ProtecAdmin = {
         input.value = '';
       }
     } catch (e) {
-      alert('Erreur envoi broadcast.');
+      await window.ProtecDialog.alert('Erreur envoi broadcast.', 'Erreur Diffusion');
     }
   },
 
@@ -1078,6 +1108,54 @@ window.ProtecAdmin = {
             <div>
               <span class="font-extrabold block">🛠️ Outil de Recette & Simulation Opérationnelle</span>
               <span class="text-[11px] text-indigo-700">Déclenchez instantanément n'importe quel type de mission sur la carte pour tester l'engagement, les alertes, les effectifs et les lots.</span>
+            </div>
+          </div>
+
+          <!-- ORDRES DE MISSION NATIONAUX FNPC (DÉCLENCHEMENT EXCLUSIF ADMIN) -->
+          <div class="p-4 rounded-3xl bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-purple-500/10 border-2 border-orange-300 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">🌐</span>
+                <div>
+                  <h4 class="text-xs font-black text-slate-900 uppercase tracking-wide">Ordres de Mission Nationaux FNPC (Zone Nationale)</h4>
+                  <p class="text-[11px] text-slate-600">Réservé à l'administration : diffuse un appel national extra-départemental en temps réel à toutes les antennes connectées.</p>
+                </div>
+              </div>
+              <button onclick="window.ProtecAdmin.clearNationalRenforts()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 font-bold text-xs transition border border-slate-200">
+                Clôturer Renforts Nationaux
+              </button>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-1">
+              <button onclick="window.ProtecAdmin.triggerNationalRenfort('novi')" class="p-2.5 rounded-2xl bg-white border border-rose-200 hover:border-rose-400 hover:bg-rose-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">🚨</span>
+                <span class="text-[11px] font-black text-rose-900 leading-tight">Plan NOVI (21)</span>
+                <span class="text-[9px] text-slate-500">6 places • +920 €</span>
+              </button>
+
+              <button onclick="window.ProtecAdmin.triggerNationalRenfort('inondation')" class="p-2.5 rounded-2xl bg-white border border-cyan-200 hover:border-cyan-400 hover:bg-cyan-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">🌊</span>
+                <span class="text-[11px] font-black text-cyan-900 leading-tight">ORSEC Crues (62)</span>
+                <span class="text-[9px] text-slate-500">6 places • +780 €</span>
+              </button>
+
+              <button onclick="window.ProtecAdmin.triggerNationalRenfort('feux')" class="p-2.5 rounded-2xl bg-white border border-orange-200 hover:border-orange-400 hover:bg-orange-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">🚒</span>
+                <span class="text-[11px] font-black text-orange-900 leading-tight">Feux de Forêt (83)</span>
+                <span class="text-[9px] text-slate-500">6 places • +720 €</span>
+              </button>
+
+              <button onclick="window.ProtecAdmin.triggerNationalRenfort('festival')" class="p-2.5 rounded-2xl bg-white border border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">🎪</span>
+                <span class="text-[11px] font-black text-indigo-900 leading-tight">DPS Festival (29)</span>
+                <span class="text-[9px] text-slate-500">8 places • +840 €</span>
+              </button>
+
+              <button onclick="window.ProtecAdmin.triggerNationalRenfort('maraude')" class="p-2.5 rounded-2xl bg-white border border-sky-200 hover:border-sky-400 hover:bg-sky-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">❄️</span>
+                <span class="text-[11px] font-black text-sky-900 leading-tight">Grand Froid (59)</span>
+                <span class="text-[9px] text-slate-500">6 places • +580 €</span>
+              </button>
             </div>
           </div>
 
@@ -1693,5 +1771,165 @@ window.ProtecAdmin = {
         window.ProtecNotifications.recordNotification({ title: m.title, message: m.desc, color: 'blue' });
       }
     }
+  },
+
+  // Déclencher un Ordre de Mission National FNPC (Zone Nationale) par un Administrateur
+  triggerNationalRenfort(templateKey) {
+    const game = window.game;
+    if (!game) return;
+
+    const templates = {
+      novi: {
+        id: `renf-nat-novi-${Date.now()}`,
+        isExtraDept: true,
+        zone: 'national',
+        isNationalAdmin: true,
+        typeCategory: 'novi',
+        typeTitle: 'PLAN NOVI / CATASTROPHE ROUTIÈRE',
+        iconEmoji: '🚨',
+        colorClass: 'text-rose-700',
+        address: '21000 Dijon, Côte-d’Or (21)',
+        addressDisplay: '21000 Dijon, Rocade Est A31',
+        deptCode: '21',
+        lat: 47.322,
+        lng: 5.041,
+        needLabel: '1 VPSP + 1 PMA Mobile + 6 Secouristes',
+        demandeur: 'SAMU 21 & Cellule Zonale de Crise',
+        requiredVehType: 'VPSP',
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 920,
+        alliancePoints: 120,
+        status: 'open',
+        description: 'Accident routier collectif à nombreuses victimes. Déploiement urgent d’un Poste Médical Avancé et évacuations sanitaires.',
+        createdAt: new Date().toISOString()
+      },
+      inondation: {
+        id: `renf-nat-crue-${Date.now()}`,
+        isExtraDept: true,
+        zone: 'national',
+        isNationalAdmin: true,
+        typeCategory: 'inondation',
+        typeTitle: 'PLAN ORSEC / CRUES MAJEURES',
+        iconEmoji: '🌊',
+        colorClass: 'text-cyan-700',
+        address: '62500 Saint-Omer, Pas-de-Calais (62)',
+        addressDisplay: '62500 Saint-Omer, Bassin de l’Aa',
+        deptCode: '62',
+        lat: 50.750,
+        lng: 2.256,
+        needLabel: '1 Lot Sauvetage Aquatique + 6 Secouristes',
+        demandeur: 'Préfecture 62 & Zone Nord',
+        requiredVehType: 'VTU',
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 780,
+        alliancePoints: 100,
+        status: 'open',
+        description: 'Crue majeure et évacuation de riverains. Mise en place et armement d’un Centre d’Accueil des Impliqués (CAI).',
+        createdAt: new Date().toISOString()
+      },
+      feux: {
+        id: `renf-nat-feux-${Date.now()}`,
+        isExtraDept: true,
+        zone: 'national',
+        isNationalAdmin: true,
+        typeCategory: 'incendie',
+        typeTitle: 'INCENDIE / COLONNE FEUX DE FORÊT',
+        iconEmoji: '🚒',
+        colorClass: 'text-orange-600',
+        address: '83390 Cuers, Var (83)',
+        addressDisplay: '83390 Cuers, Massif des Maures',
+        deptCode: '83',
+        lat: 43.237,
+        lng: 6.071,
+        needLabel: '1 VTU Logistique + 6 Secouristes',
+        demandeur: 'SDIS 83 - CODIS',
+        requiredVehType: 'VTU',
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 720,
+        alliancePoints: 90,
+        status: 'open',
+        description: 'Mobilisation de la colonne Sud pour ravitaillement, soutien sanitaire et logistique des sapeurs-pompiers en ligne de feu.',
+        createdAt: new Date().toISOString()
+      },
+      festival: {
+        id: `renf-nat-fest-${Date.now()}`,
+        isExtraDept: true,
+        zone: 'national',
+        isNationalAdmin: true,
+        typeCategory: 'dps',
+        typeTitle: 'DPS RENFORT FESTIVAL NATIONAL',
+        iconEmoji: '🎪',
+        colorClass: 'text-indigo-600',
+        address: '29270 Carhaix-Plouguer, Finistère (29)',
+        addressDisplay: '29270 Carhaix-Plouguer, Site de Kerampuilh',
+        deptCode: '29',
+        lat: 48.276,
+        lng: -3.574,
+        needLabel: '2 VPSP + 8 Secouristes PSE2',
+        demandeur: 'Protection Civile 29 / FNPC',
+        requiredVehType: 'VPSP',
+        requiredVolsCount: 8,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 840,
+        alliancePoints: 110,
+        status: 'open',
+        description: 'Grand rassemblement musical national. Renfort interdépartemental pour armer les postes de secours de nuit.',
+        createdAt: new Date().toISOString()
+      },
+      maraude: {
+        id: `renf-nat-froid-${Date.now()}`,
+        isExtraDept: true,
+        zone: 'national',
+        isNationalAdmin: true,
+        typeCategory: 'maraude',
+        typeTitle: 'PLAN GRAND FROID & URGENCE SOCIALE',
+        iconEmoji: '❄️',
+        colorClass: 'text-sky-600',
+        address: '59000 Lille, Nord (59)',
+        addressDisplay: '59000 Lille, Secteur Flandres',
+        deptCode: '59',
+        lat: 50.629,
+        lng: 3.057,
+        needLabel: '1 VTU Maraude Sociale + 6 Équipiers',
+        demandeur: 'SIAO 115 & DDETS',
+        requiredVehType: 'VTU',
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 580,
+        alliancePoints: 70,
+        status: 'open',
+        description: 'Plan Grand Froid niveau 2 activé. Maraude sociale de nuit et orientation d’urgence vers les centres d’hébergement temporaires.',
+        createdAt: new Date().toISOString()
+      }
+    };
+
+    const renfort = templates[templateKey] || templates.novi;
+    if (!game.renforts) game.renforts = [];
+    game.renforts.unshift(renfort);
+
+    if (window.ProtecSupabase && window.ProtecSupabase.broadcastRenfortCreated) {
+      window.ProtecSupabase.broadcastRenfortCreated(renfort);
+    }
+
+    game.showToast('Ordre de Mission National Déclenché !', `L'ordre de mission national « ${renfort.typeTitle} » a été diffusé en direct à l'ensemble des directeurs connectés.`, 'purple');
+    game.updateStatsUI();
+  },
+
+  // Clôturer tous les renforts nationaux en cours
+  clearNationalRenforts() {
+    const game = window.game;
+    if (!game) return;
+    const count = (game.renforts || []).filter(r => r.isExtraDept || r.zone === 'national').length;
+    game.renforts = (game.renforts || []).filter(r => !r.isExtraDept && r.zone !== 'national');
+    game.showToast('Renforts Nationaux Clôturés', `${count} renfort(s) national(aux) ont été clôturés.`, 'blue');
+    game.updateStatsUI();
   }
 };

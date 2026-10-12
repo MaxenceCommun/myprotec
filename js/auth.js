@@ -815,7 +815,14 @@ window.ProtecAuth = {
           baseUpgrades: game.baseUpgrades,
           skillsTree: game.skillsTree,
           challenges: game.challenges,
-          adRewards: game.adRewards
+          adRewards: game.adRewards,
+          annualContracts: game.annualContracts || [],
+          messagesHistory: game.messagesHistory || [],
+          monthlyEventsGenerated: game.monthlyEventsGenerated || {},
+          reputation_samu: game.reputation_samu !== undefined ? game.reputation_samu : 50,
+          reputation_sdis: game.reputation_sdis !== undefined ? game.reputation_sdis : 50,
+          reputation_prefecture: game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50,
+          reputation_villes: game.reputation_villes || {}
         };
 
         await fetch('/api/game/save', {
@@ -899,6 +906,13 @@ window.ProtecAuth = {
       game.devis = Array.isArray(savedData.devis) ? savedData.devis : [];
       game.candidatures = Array.isArray(savedData.candidatures) ? savedData.candidatures : [];
       game.formations = Array.isArray(savedData.formations) ? savedData.formations : [];
+      game.annualContracts = Array.isArray(savedData.annualContracts) ? savedData.annualContracts : [];
+      if (Array.isArray(savedData.messagesHistory)) game.messagesHistory = savedData.messagesHistory;
+      if (savedData.monthlyEventsGenerated && typeof savedData.monthlyEventsGenerated === 'object') game.monthlyEventsGenerated = savedData.monthlyEventsGenerated;
+      if (savedData.reputation_samu !== undefined) game.reputation_samu = savedData.reputation_samu;
+      if (savedData.reputation_sdis !== undefined) game.reputation_sdis = savedData.reputation_sdis;
+      if (savedData.reputation_prefecture !== undefined) game.reputation_prefecture = savedData.reputation_prefecture;
+      if (savedData.reputation_villes && typeof savedData.reputation_villes === 'object') game.reputation_villes = savedData.reputation_villes;
 
       if (savedData.resources) game.resources = savedData.resources;
       if (savedData.clock) game.clock = savedData.clock;

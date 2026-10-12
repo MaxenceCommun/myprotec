@@ -1005,248 +1005,164 @@ window.ProtecSystems = {
   interpretMeteoFranceVigilance(game) {
     const w = game.weather;
     const code = w.weatherCode || 0;
-    const temp = w.temp;
+    let temp = w.temp != null ? w.temp : 18;
     const wind = w.windGusts || w.windSpeed || 0;
     const precip = w.precipitation || 0;
 
+    // Prise en compte de la saison virtuelle (mois de jeu 0 à 11)
+    const month = (game.clock && game.clock.month !== undefined) ? game.clock.month : 9; // 0=Janv, 5=Juin, 6=Juil, 7=Août, 11=Déc
+    const isSummer = (month === 5 || month === 6 || month === 7); // Juin, Juillet, Août
+    const isWinter = (month === 11 || month === 0 || month === 1); // Décembre, Janvier, Février
+    const isSpringAutumn = !isSummer && !isWinter;
+
+    // Ajustement de la température selon la saison si non connectée ou incohérente
+    if (isSummer && temp < 20) temp = Math.max(temp, 26);
+    if (isWinter && temp > 12) temp = Math.min(temp, 3);
+
     let vigilance = 'green';
-    let condition = 'sun';
+    let condition = 'ensoleille'; // 6 conditions normalisées : ensoleille, canicule, pluie_battante, orage_violent, grand_froid, neige
     let alertTitle = 'Vigilance Verte - Conditions Nominales';
-    let alertDesc = 'Aucune vigilance météorologique particulière sur le secteur. Les dispositifs de secours se déroulent normalement.';
+    let alertDesc = 'Aucune vigilance météorologique particulière. Les dispositifs de secours se déroulent normalement.';
     let phenomenon = 'nominal';
 
-    // 1. Alertes Canicule / Très fortes chaleurs
-    if (temp >= 35) {
-      vigilance = 'red';
-      condition = 'heat';
+    // 1. CANICULE (en été ou forte température)
+    if (temp >= 33 || (isSummer && temp >= 30)) {
+      vigilance = temp >= 36 ? 'red' : 'orange';
+      condition = 'canicule';
       phenomenon = 'canicule';
-      alertTitle = 'Vigilance Rouge Canicule Extrême (Météo-France)';
-      alertDesc = `Température extrême mesurée à ${temp}°C. Risque critique de malaises, déshydratations et insolations. Maraudes fraîcheur renforcées et points d'eau d'urgence requis.`;
-    } else if (temp >= 30) {
-      vigilance = 'orange';
-      condition = 'heat';
-      phenomenon = 'canicule';
-      alertTitle = 'Vigilance Orange Canicule Préfectorale';
-      alertDesc = `Fortes chaleurs mesurées à ${temp}°C. Surveillance accrue des personnes vulnérables, mise en place de tentes de déchoquage climatisées sur les DPS.`;
-    } else if (temp >= 28) {
-      vigilance = 'yellow';
-      condition = 'heat';
-      phenomenon = 'chaleur';
-      alertTitle = 'Vigilance Jaune Chaleur & Coup de Chaud';
-      alertDesc = `Température de ${temp}°C. Prévoyez des stocks d'eau supplémentaires pour les secouristes et le public.`;
+      alertTitle = temp >= 36 ? 'Vigilance Rouge Canicule Extrême' : 'Vigilance Orange Canicule Préfectorale';
+      alertDesc = `Canicule à ${Math.round(temp)}°C. Risque critique de malaises thermiques, déshydratations et insolations. Tentes climatisées et stocks de solutés obligatoires sur les DPS.`;
     }
-    // 2. Alertes Vents Violents / Tempête / Chutes d'arbres
-    else if (wind >= 90) {
-      vigilance = 'red';
-      condition = 'wind';
-      phenomenon = 'vent';
-      alertTitle = 'Vigilance Rouge Vent Violent & Tempête';
-      alertDesc = `Rafales enregistrées à plus de ${Math.round(wind)} km/h ! Chutes d'arbres sur chaussée, toitures arrachées et effondrements. Sécurisation immédiate des postes de secours.`;
-    } else if (wind >= 65) {
-      vigilance = 'orange';
-      condition = 'wind';
-      phenomenon = 'vent';
-      alertTitle = 'Vigilance Orange Vents Forts & Chutes d’Arbres';
-      alertDesc = `Rafales de vent à ${Math.round(wind)} km/h. Risque de chutes de branches, coupures de câbles électriques et accidents de la circulation.`;
-    } else if (wind >= 50) {
-      vigilance = 'yellow';
-      condition = 'wind';
-      phenomenon = 'vent';
-      alertTitle = 'Vigilance Jaune Coups de Vent';
-      alertDesc = `Rafales à ${Math.round(wind)} km/h. Attention aux barnums et structures légères sur les dispositifs extérieurs.`;
-    }
-    // 3. Alertes Pluie-Inondation / Crues / Orages violents
-    else if ([95, 96, 99].includes(code) || (precip >= 15)) {
-      vigilance = 'orange';
-      condition = 'storm';
-      phenomenon = 'inondation';
-      alertTitle = 'Vigilance Orange Orages Violents & Inondations Rapides';
-      alertDesc = 'Activité électrique intense, pluies diluviennes et risques de ruissellements urbains. Équipes en alerte pour pompage et évacuations.';
-    } else if ([65, 82].includes(code) || (precip >= 8)) {
-      vigilance = 'orange';
-      condition = 'flood';
-      phenomenon = 'inondation';
-      alertTitle = 'Vigilance Orange Crues & Inondations (PCS)';
-      alertDesc = 'Fortes précipitations continues. Déclenchement préventif du Plan Communal de Sauvegarde et préparation de Centres d’Accueil des Impliqués (CAI).';
-    } else if ([51, 53, 55, 61, 63, 80, 81].includes(code)) {
-      vigilance = 'yellow';
-      condition = 'rain';
-      phenomenon = 'pluie';
-      alertTitle = 'Vigilance Jaune Pluie & Chaussée Glissante';
-      alertDesc = 'Averses soutenues en cours. Risque d’aquaplaning et d’accidents de circulation accrus.';
-    }
-    // 4. Alertes Neige / Verglas / Grand Froid
-    else if ([71, 73, 75, 77, 85, 86].includes(code) || (temp <= -3)) {
-      vigilance = 'orange';
-      condition = 'snow';
+    // 2. GRAND FROID & NEIGE (en hiver ou températures négatives)
+    else if (temp <= -2 || (isWinter && temp <= 0)) {
+      vigilance = temp <= -6 ? 'red' : 'orange';
+      condition = 'grand_froid';
       phenomenon = 'grand_froid';
-      alertTitle = 'Vigilance Orange Neige-Verglas & Grand Froid (Plan Hivernal)';
-      alertDesc = `Chutes de neige et températures négatives (${temp}°C). Déclenchement du Plan Grand Froid : maraudes sociales nocturnes d'urgence et chaînes à neige obligatoires.`;
-    } else if (temp <= 1) {
-      vigilance = 'yellow';
-      condition = 'snow';
-      phenomenon = 'grand_froid';
-      alertTitle = 'Vigilance Jaune Grand Froid';
-      alertDesc = `Gelées matinales (${temp}°C). Maraudes renforcées pour distribuer duvets et boissons chaudes aux personnes sans abri.`;
+      alertTitle = 'Vigilance Grand Froid & Gel Sévère';
+      alertDesc = `Froid polaire (${Math.round(temp)}°C). Déclenchement du Plan Grand Froid : maraudes renforcées et accueil en gymnase d'urgence.`;
+    } else if ([71, 73, 75, 77, 85, 86].includes(code) || (isWinter && precip > 2 && temp <= 2)) {
+      vigilance = 'orange';
+      condition = 'neige';
+      phenomenon = 'neige';
+      alertTitle = 'Vigilance Orange Neige & Verglas';
+      alertDesc = 'Chutes de neige et verglas. Risque élevé de glissades, accidents de circulation et axes bloqués. Véhicules équipés et chaînes requis.';
     }
-    // 5. Conditions Claires / Nuageuses / Brouillard
-    else if ([45, 48].includes(code)) {
-      condition = 'fog';
-      alertTitle = 'Vigilance Jaune Brouillard Givrant';
-      alertDesc = 'Visibilité très réduite sur les axes routiers. Vigilance maximale pour les conducteurs de VPSP.';
-    } else if ([1, 2, 3].includes(code)) {
-      condition = 'cloud';
-    } else {
-      condition = 'sun';
+    // 3. ORAGE VIOLENT & PLUIE BATTANTE
+    else if ([95, 96, 99].includes(code) || (precip >= 15) || wind >= 70) {
+      vigilance = 'orange';
+      condition = 'orage_violent';
+      phenomenon = 'inondation';
+      alertTitle = 'Vigilance Orange Orages Violents & Rafales';
+      alertDesc = 'Forte activité orageuse, risques de ruissellement et traumatismes. Véhicules tout-chemin (VLHR) et abris fermés obligatoires pour les secouristes.';
+    } else if ([65, 82, 63, 81].includes(code) || (precip >= 7)) {
+      vigilance = 'orange';
+      condition = 'pluie_battante';
+      phenomenon = 'inondation';
+      alertTitle = 'Vigilance Orange Pluie Battante & Crues';
+      alertDesc = 'Précipitations continues intenses. Risque de glissades, hypothermie et crue de cours d\'eau. Postes ouverts interdits sans barnums étanches.';
+    }
+    // 4. CONDITIONS CLAIRES / TEMPÉRÉES
+    else {
+      condition = 'ensoleille';
+      vigilance = 'green';
+      phenomenon = 'nominal';
+      alertTitle = 'Vigilance Verte - Ensoleillé / Nominal';
+      alertDesc = 'Conditions nominales d\'intervention sur le département.';
     }
 
     const previousVigilance = w.vigilance;
     w.vigilance = vigilance;
     w.condition = condition;
+    w.temp = temp;
     w.alertTitle = alertTitle;
     w.alertDesc = alertDesc;
     w.alertPhenomenon = phenomenon;
 
     // Toast de notification si passage à une vigilance supérieure
     if (previousVigilance !== vigilance && ['yellow', 'orange', 'red'].includes(vigilance)) {
-      const color = vigilance === 'red' ? 'red' : (vigilance === 'orange' ? 'orange' : 'amber');
+      const color = vigilance === 'red' ? 'red' : 'orange';
       const vigLabels = { green: 'VERT', yellow: 'JAUNE', orange: 'ORANGE', red: 'ROUGE' };
       const vigFr = vigLabels[vigilance] || vigilance.toUpperCase();
       game.showToast(`Bulletin Météo-France (${vigFr})`, alertTitle, color);
     }
   },
-
-  // Génération automatique d'urgences réactives liées aux alertes Météo-France
-  triggerWeatherEmergencyMission(game) {
+triggerWeatherEmergencyMission(game) {
     if (!game.weather) return;
     const v = game.weather.vigilance;
-    // Règle stricte : la vigilance jaune ne déclenche aucune mission d'urgence. Seules orange (peu de chance) et rouge (moyennement) peuvent déclencher.
     if (v === 'green' || v === 'yellow') return;
 
-    // Maximum 2 missions météo actives à la fois
-    const ongoingWeatherMissions = game.missions.filter(m => m.type === 'meteo' && ['planifie', 'ongoing'].includes(m.status));
+    // Maximum 2 missions d'urgence météo/crise actives à la fois
+    const ongoingWeatherMissions = game.missions.filter(m => m.type === 'meteo' && ['planifie', 'ongoing', 'prealerte'].includes(m.status));
     if (ongoingWeatherMissions.length >= 2) return;
 
-    const base = game.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne' };
-    const meteoCoords = game.calculateRealisticMissionLocation ? game.calculateRealisticMissionLocation(base, 'meteo') : { lat: base.lat + 0.05, lng: base.lng + 0.05 };
-    const pheno = game.weather.alertPhenomenon || 'inondation';
+    const base = game.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne', city: 'Nancy' };
+    const meteoCoords = game.calculateRealisticMissionLocation ? game.calculateRealisticMissionLocation(base, 'meteo') : { lat: base.lat + 0.04, lng: base.lng + 0.04 };
+    const cond = game.weather.condition || 'pluie_battante';
+    const city = base.city || 'Nancy';
 
     let missionDef = null;
 
-    if (pheno === 'inondation' || pheno === 'pluie') {
-      const inondationVariants = [
-        {
-          title: 'Réquisition Préfecture : Évacuation & Accueil des Sinistrés (CAI)',
-          desc: `Crue subite suite aux fortes pluies (${game.weather.precipitation || 12} mm/h). Le Préfet et la Mairie activent les plans de sauvegarde. La Préfecture réquisitionne la Protection Civile (AASC) pour armer un Centre d'Accueil des Impliqués (CAI) dans un gymnase et assister les personnes évacuées.`,
-          urgency: 'haute',
-          durMin: 35,
-          reqVol: 4,
-          ranks: ['CE', 'PSE2', 'PSE1'],
-          vehs: ['VPSP', 'VL'],
-          reward: 480
-        },
-        {
-          title: 'Réquisition Préfecture : Reconnaissance Points Bas & Ravitaillement Hameaux Isolés',
-          desc: `Crue majeure constatée par le SIDPC. Des lotissements sont coupés du réseau routier. Réquisition d’un équipage AASC pour reconnaissance, transport et distribution de vivres de première urgence aux riverains sinistrés.`,
-          urgency: 'haute',
-          durMin: 40,
-          reqVol: 4,
-          ranks: ['CE', 'PSE2', 'PSE1'],
-          vehs: ['VTU', 'VPSP'],
-          reward: 520
-        }
-      ];
-      missionDef = inondationVariants[Math.floor(Math.random() * inondationVariants.length)];
-    } else if (pheno === 'vent' || pheno === 'tempete') {
-      const ventVariants = [
-        {
-          title: 'Réquisition Préfecture : Sécurisation d’Axe & Assistance Suite Tempête',
-          desc: `Rafales mesurées à ${Math.round(game.weather.windGusts || 75)} km/h. Chute d’arbre sur véhicule et axe départemental bloqué. Le Centre Opérationnel Départemental (COD) sollicite l’engagement d’un équipage AASC avec lot de balisage et secours à personnes.`,
-          urgency: 'critique',
-          durMin: 30,
-          reqVol: 3,
-          ranks: ['CE', 'PSE2', 'PSE1'],
-          vehs: ['VPSP'],
-          reward: 450
-        },
-        {
-          title: 'Réquisition Préfecture : Mise en Sécurité Riverains & Toitures Arrachées',
-          desc: `Vents violents et dégâts matériels importants. Le SIDPC demande à la Protection Civile d'assister les services municipaux pour évacuer et mettre à l'abri les habitants vers la salle polyvalente communale.`,
-          urgency: 'critique',
-          durMin: 35,
-          reqVol: 4,
-          ranks: ['CE', 'PSE2', 'PSE1'],
-          vehs: ['VTU', 'VL'],
-          reward: 480
-        }
-      ];
-      missionDef = ventVariants[Math.floor(Math.random() * ventVariants.length)];
-    } else if (pheno === 'orage' || pheno === 'foudre') {
+    if (cond === 'canicule') {
       missionDef = {
-        title: 'Réquisition Préfecture : Orages Violents & Prise en Charge d’Urgence',
-        desc: `Intense activité orageuse et foudroiement avec début d’incendie et coupure électrique générale. La Préfecture déclenche l’antenne AASC pour la prise en charge médico-psychologique de proximité et la mise à l’abri des familles.`,
-        urgency: 'critique',
-        durMin: 32,
-        reqVol: 3,
-        ranks: ['CE', 'PSE2', 'PSE1'],
-        vehs: ['VPSP'],
-        reward: 460
-      };
-    } else if (pheno === 'neige' || pheno === 'verglas') {
-      missionDef = {
-        title: 'Réquisition Préfecture : Naufragés de la Route & Épisode Hivernal',
-        desc: `Verglas généralisé et axes bloqués. Sur ordre de la Préfecture (Cellule de Crise / COD), déploiement d’un dispositif AASC pour distribution de couvertures de survie, boissons chaudes et secours aux automobilistes bloqués.`,
+        title: 'Plan Canicule Préfectoral : Maraude Sanitaire & Tentes de Déchoquage',
+        desc: `Pic de canicule extrême à ${Math.round(game.weather.temp)}°C. Réquisition préfectorale de l'antenne au titre des AASC : hydratation des personnes vulnérables, maraudes urbaines et tentes climatisées pour déchoquage des malaises thermiques.`,
         urgency: 'haute',
-        durMin: 45,
+        durMin: 35,
         reqVol: 4,
         ranks: ['CE', 'PSE2', 'PSE1'],
-        vehs: ['VTU', 'VPSP'],
-        reward: 520
+        vehs: ['VPSP', 'VL'],
+        reward: 1800,
+        typeCrise: 'canicule'
       };
-    } else if (pheno === 'canicule' || pheno === 'chaleur') {
+    } else if (cond === 'grand_froid') {
       missionDef = {
-        title: 'Réquisition Préfecture : Plan Canicule & Maraude Sanitaire d’Urgence',
-        desc: `Pic de canicule à ${Math.round(game.weather.temp)}°C. Réquisition préfectorale de l'antenne au titre des AASC : hydratation des personnes vulnérables, maraudes urbaines et premier bilan des malaises thermiques.`,
-        urgency: 'normale',
-        durMin: 40,
-        reqVol: 3,
-        ranks: ['PSE2', 'PSE1'],
-        vehs: ['VPSP'],
-        reward: 420
-      };
-    } else if (pheno === 'grand_froid') {
-      missionDef = {
-        title: 'Réquisition Préfecture : Plan Grand Froid & Hébergement d’Urgence',
-        desc: `Ressenti glacial (${Math.round(game.weather.temp)}°C). La Préfecture active le niveau 2 du Plan Grand Froid et demande à la Protection Civile de renforcer le 115 pour la mise à l’abri et l'accueil en gymnase.`,
-        urgency: 'normale',
+        title: 'Plan Grand Froid Niveau 2 : Hébergement d’Urgence en Gymnase & Lits de Camp',
+        desc: `Vague de froid polaire (${Math.round(game.weather.temp)}°C). La Préfecture et la Mairie de ${city} réquisitionnent la Protection Civile pour ouvrir un centre d'hébergement d'urgence : montage de lits de camp, distribution de duvets et accueil des sans-abris.`,
+        urgency: 'haute',
         durMin: 45,
-        reqVol: 3,
-        ranks: ['PSE2', 'PSE1'],
-        vehs: ['VL'],
-        reward: 430
+        reqVol: 5,
+        ranks: ['CE', 'PSE2', 'PSE1'],
+        vehs: ['VTU', 'VPSP'],
+        reward: 2200,
+        typeCrise: 'grand_froid'
+      };
+    } else if (cond === 'orage_violent' || cond === 'pluie_battante' || game.weather.alertPhenomenon === 'inondation') {
+      missionDef = {
+        title: 'Plan Communal de Sauvegarde (PCS) : Centre d’Accueil des Impliqués (CAI)',
+        desc: `Crue subite de rivière et inondation d'un quartier de ${city}. Le Maire déclenche le Plan Communal de Sauvegarde. Réquisition d'urgence de la Protection Civile pour armer un Centre d'Accueil des Impliqués (CAI) en salle des fêtes avec lits de camp, réconfort et bilans médico-psychologiques.`,
+        urgency: 'critique',
+        durMin: 40,
+        reqVol: 5,
+        ranks: ['CP', 'CE', 'PSE2', 'PSE1'],
+        vehs: ['VLHR', 'VPSP'],
+        reward: 2800,
+        typeCrise: 'inondation'
       };
     } else {
       missionDef = {
-        title: 'Réquisition Préfecture : Assistance AASC Intempéries Dégradées',
-        desc: `Vigilance météo départementale. La Préfecture sollicite l'antenne pour patrouilles de reconnaissance et soutien aux populations sinistrées.`,
-        urgency: 'normale',
+        title: 'Réquisition Préfectorale d’Urgence : Soutien aux Populations Sinistrées',
+        desc: `Alerte Préfecture majeure : Coup de vent et intempéries. Engagement prioritaire des secouristes pour sécurisation d'axe et assistance d'urgence.`,
+        urgency: 'haute',
         durMin: 30,
-        reqVol: 3,
-        ranks: ['PSE1'],
-        vehs: ['VL'],
-        reward: 380
+        reqVol: 4,
+        ranks: ['CE', 'PSE2', 'PSE1'],
+        vehs: ['VPSP', 'VL'],
+        reward: 1900,
+        typeCrise: 'tempete'
       };
     }
 
     const newWeatherMission = {
-      id: `m-meteo-${Date.now()}`,
+      id: `m-crise-${Date.now()}`,
       type: 'meteo',
-      categoryLabel: `Réquisition Préfectorale (AASC)`,
-      title: `[Préalerte Préfecture] ${missionDef.title}`,
-      desc: `🏛️ RÉQUISITION PRÉFECTORALE (AASC) : Face aux conditions météo (${game.weather.alertTitle}), le Préfet et le Centre Opérationnel Départemental (COD / SIDPC) sollicitent l'engagement de la Protection Civile au titre de ses agréments de Sécurité Civile. ${missionDef.desc} Mobilisez vos secouristes par SMS pour confirmer l'équipage disponible.`,
+      categoryLabel: 'Plan d’Urgence Préfecture / PCS',
+      title: `[URGENCE RÉQUISITION] ${missionDef.title}`,
+      desc: `🏛️ ALERTE PRÉFECTURE / PCS : ${missionDef.desc} Mobilisez immédiatement vos bénévoles. Succès : +20 pts Préfecture et +25 pts réputation ${city}. Échec/Refus : pénalité administrative sévère.`,
       lat: meteoCoords.lat,
       lng: meteoCoords.lng,
-      scale: `Dispositif Réquisition AASC (${missionDef.reqVol} secouristes)`,
+      commune: city,
+      city: city,
+      scale: `Dispositif d’Urgence AASC (${missionDef.reqVol} secouristes)`,
       eventDate: { ...game.clock, hour: game.clock.hour },
       durationSeconds: missionDef.durMin * 60,
       durationHours: (missionDef.durMin / 60).toFixed(1),
@@ -1254,7 +1170,7 @@ window.ProtecSystems = {
       requiredRanks: missionDef.ranks,
       requiredVehicles: missionDef.vehs,
       rewardMoney: missionDef.reward,
-      rewardReputation: 45,
+      rewardReputation: 50,
       progress: 0,
       status: 'prealerte',
       alertOrigin: 'meteo',
@@ -1263,8 +1179,23 @@ window.ProtecSystems = {
       evolutionResolved: false,
       registeredVolunteers: [],
       assignedCrew: { volunteers: [], vehicles: [] },
-      address: (game.generateRealisticStreetAddress ? game.generateRealisticStreetAddress(game.stations?.[0]?.city || 'Centre Urbain', newWeatherMission.lat, newWeatherMission.lng) : 'Poste de Commandement Météo'),
-      isSector: false
+      address: (game.generateRealisticStreetAddress ? game.generateRealisticStreetAddress(city, meteoCoords.lat, meteoCoords.lng) : `Salle Municipale / CAI - ${city}`),
+      isSector: false,
+      isEmergencyPlan: true,
+      onCompleteSuccess: () => {
+        // Impact majeur en cas de succès
+        if (window.ProtecConventions) {
+          window.ProtecConventions.adjustInstitutionalReputation(game, 'prefecture', 20, 'Plan d\'urgence mené avec succès');
+          window.ProtecConventions.adjustLocalReputation(game, city, 25, 'Déploiement exemplaire du CAI / Plan de sauvegarde');
+        }
+      },
+      onFailure: () => {
+        // Pénalité sévère en cas d'échec ou d'abandon
+        if (window.ProtecConventions) {
+          window.ProtecConventions.adjustInstitutionalReputation(game, 'prefecture', -25, 'Échec de réquisition préfectorale');
+          window.ProtecConventions.adjustLocalReputation(game, city, -30, 'Carence d\'assistance sur la commune');
+        }
+      }
     };
 
     if (game.enrichMissionLocationWithCity) {
@@ -1276,27 +1207,17 @@ window.ProtecSystems = {
     game.updateStatsUI();
     game.saveGame();
 
-    const vigLabels = { green: 'VERT', yellow: 'JAUNE', orange: 'ORANGE', red: 'ROUGE' };
-    const vigFr = vigLabels[game.weather.vigilance] || game.weather.vigilance.toUpperCase();
-
     if (window.ProtecNotifications) {
       window.ProtecNotifications.notifyCategory(
         'weather',
-        `🏛️ RÉQUISITION PRÉFECTURE (AASC - ${vigFr})`,
-        `Le Préfet requiert l'engagement de l'antenne : ${missionDef.title}. Mobilisez vos bénévoles par SMS !`,
-        `meteo-${newWeatherMission.id}`
-      );
-    } else if (window.ProtecIncidents) {
-      window.ProtecIncidents.sendSystemNotification(
-        `🟡 PRÉALERTE PRÉFECTURALE (${game.weather.vigilance.toUpperCase()})`,
-        `Vigilance Intempéries active. La Préfecture demande la pré-mobilisation d'une équipe pour : ${missionDef.title}. Lancez vos SMS !`,
+        `🏛️ RÉQUISITION PRÉFECTURE / PCS (${game.weather.vigilance.toUpperCase()})`,
+        `Le Préfet et la Mairie réquisitionnent la Protection Civile : ${missionDef.title}. Lits de camp & équipage d'urgence requis !`,
         `meteo-${newWeatherMission.id}`
       );
     }
-    game.showToast('Préalerte Préfecture', `Mise en veille : ${missionDef.title} ! Recensez vos secouristes.`, 'orange');
+    game.showToast('🚨 Réquisition Préfecture / PCS !', `Mobilisation d'urgence : ${missionDef.title} !`, 'red');
   },
-
-  updateWeatherAndDayNight(game) {
+updateWeatherAndDayNight(game) {
     const cycle = this.calculateDayNightCycle(game);
 
     // Application de l'assombrissement nocturne exclusivement sur le fond de carte (tuiles Leaflet)
@@ -1387,14 +1308,12 @@ window.ProtecSystems = {
     }
 
     if (textEl) {
-      if (game.weather.condition === 'heat') textEl.textContent = 'Canicule';
-      else if (game.weather.condition === 'flood') textEl.textContent = 'Inondation';
-      else if (game.weather.condition === 'storm') textEl.textContent = 'Orages';
-      else if (game.weather.condition === 'wind') textEl.textContent = 'Grand Vent';
-      else if (game.weather.condition === 'snow') textEl.textContent = 'Neige/Verglas';
-      else if (game.weather.condition === 'rain') textEl.textContent = 'Pluie';
-      else if (game.weather.condition === 'fog') textEl.textContent = 'Brouillard';
-      else if (game.weather.condition === 'cloud') textEl.textContent = 'Nuageux';
+      if (game.weather.condition === 'canicule') textEl.textContent = 'Canicule 🔥';
+      else if (game.weather.condition === 'grand_froid') textEl.textContent = 'Grand Froid ❄️';
+      else if (game.weather.condition === 'neige') textEl.textContent = 'Neige/Verglas 🌨️';
+      else if (game.weather.condition === 'orage_violent') textEl.textContent = 'Orage Violent ⚡';
+      else if (game.weather.condition === 'pluie_battante') textEl.textContent = 'Pluie Battante 🌧️';
+      else if (game.weather.condition === 'ensoleille') textEl.textContent = 'Ensoleillé ☀️';
       else textEl.textContent = cycle.periodLabel;
     }
 
@@ -1403,6 +1322,55 @@ window.ProtecSystems = {
       const vigFr = vigLabels[game.weather.vigilance] || 'VERTE';
       weatherWidget.setAttribute('title', `Météo : ${currentTemp}°C • Vigilance ${vigFr} (${game.weather.alertTitle})`);
     }
+
+    // Usure des véhicules stationnés dehors (au-delà de la capacité du garage)
+    this.applyWeatherImpactOnUnshelteredVehicles(game);
+  },
+
+  // Impact des intempéries sur les véhicules stationnés dehors (au-delà de la capacité du garage de remisage)
+  applyWeatherImpactOnUnshelteredVehicles(game) {
+    if (!game || !game.weather || !game.stations || !game.stations[0]) return;
+    const now = Date.now();
+    if (!game._lastShelterWeatherCheck) game._lastShelterWeatherCheck = now;
+    // Vérification toutes les 60 secondes de temps réel
+    if (now - game._lastShelterWeatherCheck < 60000) return;
+    game._lastShelterWeatherCheck = now;
+
+    const cond = game.weather.condition || 'ensoleille';
+    const isBadWeather = ['canicule', 'pluie_battante', 'orage_violent', 'grand_froid', 'neige', 'heat', 'storm', 'rain', 'snow'].includes(cond);
+    if (!isBadWeather) return;
+
+    const station = game.stations[0];
+    const shelter = (window.ProtecLocaux && typeof window.ProtecLocaux.getVehiclesShelterStatus === 'function')
+      ? window.ProtecLocaux.getVehiclesShelterStatus(game, station.id)
+      : { unshelteredVehicles: [] };
+
+    if (!shelter.unshelteredVehicles || shelter.unshelteredVehicles.length === 0) return;
+
+    shelter.unshelteredVehicles.forEach(v => {
+      // Usure accélérée de la carrosserie et mécanique/batterie
+      v.cleanliness = Math.max(10, (v.cleanliness !== undefined ? v.cleanliness : 90) - 1.5);
+      v.mechanical = Math.max(20, (v.mechanical !== undefined ? v.mechanical : 95) - 1.0);
+
+      // Risque de panne/batterie à plat si exposé et trop dégradé
+      if (v.mechanical < 45 && !v.isBrokenDown && v.status === 'dispo') {
+        v.isBrokenDown = true;
+        v.status = 'en_panne';
+        game.showToast(
+          'Panne Véhicule non Abrité ⚠️',
+          `${v.name} stationné dehors et exposé aux intempéries (${cond}) ne démarre plus ! Batterie déchargée ou mécanique endommagée. Révision garage requise.`,
+          'orange'
+        );
+        if (window.ProtecNotifications) {
+          window.ProtecNotifications.recordNotification({
+            title: `🌧️ Usure Météo : Panne ${v.name}`,
+            message: `Faute de place couverte dans le garage, le véhicule ${v.name} a subi des avaries dues aux intempéries (${cond}). Agrandissez le hangar ou engagez des réparations.`,
+            category: 'logistique',
+            level: 'warning'
+          });
+        }
+      }
+    });
   },
 
   // --- 6. VIE ASSOCIATIVE & COHÉSION ---
@@ -1444,18 +1412,52 @@ window.ProtecSystems = {
       return;
     }
 
+    const baseStation = game.stations?.[0];
+    const stationCity = baseStation ? baseStation.city : 'Nancy';
+    const repCommune = (game.reputation_villes && game.reputation_villes[stationCity] !== undefined)
+      ? game.reputation_villes[stationCity]
+      : 50;
+
+    // Règle d'ancrage local : si réputation < 25, la Mairie refuse la subvention !
+    if (repCommune < 25) {
+      game.showToast(
+        'Rejet du Conseil Municipal 🏛️',
+        `La Mairie de ${stationCity} a rejeté votre demande de subvention annuelle en raison d'une réputation locale trop dégradée (${repCommune}/100 < 25 pts). Les crédits associatifs ont été réattribués à une association concurrente. Améliorez votre ancrage communal sur les DPS.`,
+        'red'
+      );
+      return;
+    }
+
     const hours = game.grants.totalVolunteerHours || 0;
-    const estimatedAmount = Math.max(3000, Math.min(25000, Math.round(hours * 18 * 1.5)));
+    const baseEstimated = Math.max(3000, Math.min(25000, Math.round(hours * 18 * 1.5)));
+
+    // Modulation selon la réputation locale : de 0.6x (réputation 30) jusqu'à 2.0x (réputation 100)
+    const multiplier = Math.max(0.6, (repCommune / 50));
+    const estimatedAmount = Math.round(baseEstimated * multiplier);
 
     game.grants.municipalDossierSubmitted = true;
     game.grants.lastGrantAwarded = estimatedAmount;
     game.resources.money += estimatedAmount;
     game.resources.reputationScore += 35;
 
-    game.showToast('Subvention Accordée !', `La Mairie a voté une subvention de ${estimatedAmount.toLocaleString('fr-FR')} € valorisant vos ${hours}h d'engagement bénévole !`, 'green');
+    // Bonus supplémentaire de réputation locale pour vote favorable
+    if (window.ProtecConventions) {
+      window.ProtecConventions.adjustLocalReputation(game, stationCity, 5, 'Vote favorable subvention municipale');
+    }
+
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(game, estimatedAmount, `Subvention Municipale Annuelle - Ville de ${stationCity} (Réputation ${repCommune} pts)`, 'subvention');
+    }
+
+    const bonusMsg = repCommune >= 65 ? ' (Subvention bonifiée pour partenariat privilégié !)' : '';
+    game.showToast(
+      'Subvention Accordée ! 🏛️',
+      `La Mairie de ${stationCity} a voté une subvention de ${estimatedAmount.toLocaleString('fr-FR')} € valorisant vos ${hours}h d'engagement bénévole !${bonusMsg}`,
+      'green'
+    );
     game.updateStatsUI();
     game.saveGame();
-    game.openModule('devis');
+    if (game.openModule) game.openModule('devis');
   },
 
   togglePublicDonations(game) {
@@ -1467,6 +1469,458 @@ window.ProtecSystems = {
     }
     game.saveGame();
     game.openModule('devis');
+  },
+
+  // --- 8. CYCLE MENSUEL & GÉNÉRATION D'ÉVÉNEMENTS RÉELS (IA + FALLBACK HORS-LIGNE) ---
+  checkMonthlyEventsCycle(game) {
+    if (!game || !game.clock) return;
+    const year = game.clock.year || new Date().getFullYear();
+    const month = game.clock.month ?? new Date().getMonth();
+    const monthKey = `${year}-${month}`;
+
+    // Gestion mensuelle des locaux (Loyer, Fluides & Isolation, Commission ERP)
+    this.checkMonthlyPremisesCharges(game, monthKey);
+
+    if (!game.monthlyEventsGenerated) game.monthlyEventsGenerated = {};
+
+    // Vérifier si les événements du mois courant existent déjà dans le stockage (mémoire ou localStorage)
+    const localSaved = localStorage.getItem(`protec_monthly_events_${monthKey}`);
+    if (game.monthlyEventsGenerated[monthKey] || localSaved) {
+      if (!game.monthlyEventsGenerated[monthKey] && localSaved) {
+        try {
+          game.monthlyEventsGenerated[monthKey] = JSON.parse(localSaved);
+        } catch (e) {}
+      }
+      return;
+    }
+
+    // Si les événements ne sont pas présents pour le mois courant, déclencher la génération
+    this.triggerMonthlyEventsGeneration(game, monthKey);
+  },
+
+  // Gestion mensuelle des locaux : Loyer, Fluides & Énergie selon isolation, et Commission de Sécurité ERP
+  checkMonthlyPremisesCharges(game, monthKey) {
+    if (!game || !game.stations || !game.stations[0]) return;
+    if (!game.premisesChargesHistory) game.premisesChargesHistory = {};
+    if (game.premisesChargesHistory[monthKey]) return; // Déjà traité pour ce mois
+
+    const station = game.stations[0];
+    const premises = (window.ProtecLocaux && typeof window.ProtecLocaux.getStationPremises === 'function')
+      ? window.ProtecLocaux.getStationPremises(game, station.id)
+      : (station.premises || {});
+
+    if (!premises) return;
+    game.premisesChargesHistory[monthKey] = { processedAt: Date.now() };
+
+    const month = (game.clock && game.clock.month !== undefined) ? game.clock.month : (new Date().getMonth());
+    const isWinter = [10, 11, 0, 1, 2].includes(month); // Novembre à Mars
+    const city = station.city || station.commune || 'Nancy';
+    const repCity = (game.reputation_villes && game.reputation_villes[city] !== undefined) ? game.reputation_villes[city] : 50;
+
+    // 1. STATUT D'OCCUPATION & LOYER MENSUEL
+    const occType = premises.occupationType || (premises.tenure === 'owned' ? 'pleine_propriete' : 'mise_a_disposition_mairie');
+    if (occType === 'mise_a_disposition_mairie') {
+      if (repCity < 30) {
+        // La mairie impose une indemnité compensatoire et menace d'expulsion sous 30 jours !
+        premises.evictionNotice = true;
+        premises.chargesImposed = true;
+        const evictionCost = 650;
+        game.resources.money = Math.max(0, game.resources.money - evictionCost);
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(game, -evictionCost, `Indemnité d'occupation municipale imposée (Réputation ${repCity}/100 < 30) - Mairie de ${city}`, 'locaux');
+        }
+        game.showToast(
+          '⚠️ Préavis d’Expulsion & Indemnité Mairie',
+          `Votre réputation communale est tombée à ${repCity}/100 ! Le Maire exige une indemnité de 650 € et menace d'expulser l'antenne sous 30 jours si la réputation ne remonte pas.`,
+          'red'
+        );
+        if (window.ProtecNotifications) {
+          window.ProtecNotifications.recordNotification({
+            title: '🏛️ Mise en Demeure Municipale & Expulsion',
+            message: `La Mairie de ${city} met fin à la gratuité du local en raison d'un manque d'engagement associatif (${repCity}/100). Facturation de 650 € et préavis de départ actif.`,
+            category: 'general',
+            level: 'error'
+          });
+        }
+      } else {
+        premises.evictionNotice = false;
+        premises.chargesImposed = false;
+        premises.monthlyRent = 0;
+      }
+    } else if (occType === 'location_privee') {
+      const rent = premises.monthlyRent || 850;
+      game.resources.money = Math.max(0, game.resources.money - rent);
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(game, -rent, `Loyer commercial mensuel des locaux d'antenne (Bail privé indépendant)`, 'locaux');
+      }
+      game.showToast('Loyer Prélevé 🏢', `Loyer mensuel privé de ${rent} € débité. Indépendance municipale totale garantie.`, 'blue');
+    } else if (occType === 'pleine_propriete') {
+      premises.monthlyRent = 0;
+      premises.evictionNotice = false;
+      premises.chargesImposed = false;
+    }
+
+    // 2. CHARGES DE FLUIDES & ÉNERGIE (Modulées par l'isolation du bâtiment)
+    const baseFluides = premises.fluidesBaseCost || 180;
+    const isoLevel = premises.isolationLevel || 2; // 1: Passoire, 2: Standard, 3: BBC
+    let fluidesMultiplier = 1.0;
+    if (isoLevel === 1) {
+      fluidesMultiplier = isWinter ? 1.8 : 1.1; // Factures explosives en hiver pour passoire thermique
+    } else if (isoLevel === 3) {
+      fluidesMultiplier = 0.7; // Factures réduites de 30% grâce au double vitrage / BBC
+    }
+    const fluidesCost = Math.round(baseFluides * fluidesMultiplier);
+    game.resources.money = Math.max(0, game.resources.money - fluidesCost);
+    if (window.ProtecFinances) {
+      const isoLabel = isoLevel === 3 ? 'BBC (-30%)' : (isoLevel === 1 ? 'Passoire thermique (+80% en hiver)' : 'Standard');
+      window.ProtecFinances.recordTransaction(game, -fluidesCost, `Fluides & Énergie (Eau, Chauffage, Électricité) - Isolation ${isoLabel}`, 'locaux');
+    }
+
+    // Risque de gel des médicaments/sérums si passoire thermique en hiver
+    if (isoLevel === 1 && isWinter && (game.weather?.temp !== undefined && game.weather.temp <= 0)) {
+      game.showToast(
+        '❄️ Alerte Gel dans la Pharmacie !',
+        `Chute des températures sous 0°C et passoire thermique : risque de gel des solutés et consommables dans le sas pharmacie. Pensez à isoler le bâtiment !`,
+        'orange'
+      );
+    }
+
+    // 3. COMMISSION DE SÉCURITÉ ERP (Contrôle inopiné avec 30% de chance chaque mois)
+    if (Math.random() < 0.30) {
+      const erpScore = premises.erpSecurityScore !== undefined ? premises.erpSecurityScore : 90;
+      const isConforme = premises.erpStatus === 'conforme' && erpScore >= 75;
+      if (!isConforme) {
+        const fine = 500;
+        game.resources.money = Math.max(0, game.resources.money - fine);
+        premises.erpStatus = 'non_conforme';
+        premises.erpSecurityScore = Math.max(25, erpScore - 20);
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(game, -fine, `Amende administrative de non-conformité ERP - Commission de Sécurité`, 'locaux');
+        }
+        game.showToast(
+          '🚨 Contrôle de Sécurité ERP Défavorable !',
+          `La commission de sécurité municipale a constaté des infractions (extincteurs/BAES). Amende de ${fine} € et fermeture temporaire de la salle de formation PSC1 jusqu'à audit !`,
+          'red'
+        );
+        if (window.ProtecNotifications) {
+          window.ProtecNotifications.recordNotification({
+            title: '🧯 Sanction de Sécurité ERP (Amende 500 €)',
+            message: `Non-conformité relevée lors de l'inspection inopinée des locaux. Les sessions PSC1 sont suspendues. Rendez-vous dans le module Locaux pour réaliser un audit de remise aux normes (220 €).`,
+            category: 'general',
+            level: 'error'
+          });
+        }
+      } else {
+        game.showToast(
+          'Contrôle ERP Conforme ✓',
+          `La commission de sécurité a inspecté le bâtiment de l'antenne. Registre à jour et blocs de secours opérationnels : agrément ERP renouvelé avec félicitations !`,
+          'green'
+        );
+      }
+    }
+
+    // 4. MAINTENANCE & CONSOMMABLES DU PARC MATÉRIEL (Moniteurs, QCPR, Radios, Brancards)
+    const annualMaintenance = (window.ProtecEquipements && typeof window.ProtecEquipements.getTotalAnnualMaintenance === 'function')
+      ? window.ProtecEquipements.getTotalAnnualMaintenance(game)
+      : 240;
+    const monthlyMaintenance = Math.round(annualMaintenance / 12);
+    if (monthlyMaintenance > 0) {
+      game.resources.money = Math.max(0, game.resources.money - monthlyMaintenance);
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(
+          game,
+          -monthlyMaintenance,
+          `Entretien, consommables & révision réglementaire du parc matériel (${annualMaintenance} €/an)`,
+          'equipement'
+        );
+      }
+    }
+
+    game.saveGame();
+    game.updateStatsUI();
+  },
+
+  async triggerMonthlyEventsGeneration(game, monthKey) {
+    if (game._isGeneratingMonthlyEvents) return;
+    game._isGeneratingMonthlyEvents = true;
+
+    try {
+      const deptCode = game.currentDepartmentCode || game.player?.departmentCode || '75';
+      const deptInfo = (window.ProtecDepartements && typeof window.ProtecDepartements.getByCode === 'function') 
+        ? (window.ProtecDepartements.getByCode(deptCode) || { code: deptCode, name: 'France', chefLieu: 'Chef-Lieu', region: 'France' })
+        : { code: deptCode, name: 'France', chefLieu: 'Chef-Lieu', region: 'France' };
+      
+      const communes = (window.ProtecDepartements && typeof window.ProtecDepartements.getCommunesForDepartment === 'function')
+        ? window.ProtecDepartements.getCommunesForDepartment(deptCode)
+        : [{ nom: deptInfo.chefLieu, cp: `${deptCode}000`, lat: deptInfo.lat || 48.85, lng: deptInfo.lng || 2.35 }];
+
+      const month = game.clock.month ?? new Date().getMonth();
+      const year = game.clock.year || new Date().getFullYear();
+
+      console.log(`[MyProtec] Génération des événements mensuels pour ${deptInfo.name} (${deptCode}) - Mois: ${month + 1}/${year}`);
+
+      // 1. Appel API IA avec bascule transparente vers le fallback en cas d'erreur ou d'absence de réseau
+      let events = [];
+      try {
+        events = await this.fetchLlmEvents(deptInfo, communes, month, year);
+      } catch (err) {
+        console.warn('[MyProtec] Fallback hors-ligne activé pour les événements réels:', err.message);
+        events = this.generateLocalFallbackEvents(deptInfo, communes, month, year);
+      }
+
+      if (!Array.isArray(events) || events.length === 0) {
+        events = this.generateLocalFallbackEvents(deptInfo, communes, month, year);
+      }
+
+      // 2. Algorithme de filtrage de capacité opérationnelle (Conventions & DPS)
+      let injectedList = [];
+      if (window.ProtecConventions && typeof window.ProtecConventions.filterAndInjectMonthlyEvents === 'function') {
+        injectedList = window.ProtecConventions.filterAndInjectMonthlyEvents(game, events, deptInfo);
+      }
+
+      // 3. Persistance dans le stockage (gameState & localStorage)
+      game.monthlyEventsGenerated[monthKey] = {
+        generatedAt: Date.now(),
+        deptCode: deptCode,
+        totalRawEvents: events.length,
+        injectedCount: (injectedList || []).length
+      };
+      localStorage.setItem(`protec_monthly_events_${monthKey}`, JSON.stringify(game.monthlyEventsGenerated[monthKey]));
+      
+      game.saveGame();
+      game.updateStatsUI();
+
+    } catch (error) {
+      console.error('[MyProtec] Erreur lors du cycle mensuel d’événements:', error);
+    } finally {
+      game._isGeneratingMonthlyEvents = false;
+    }
+  },
+
+  async fetchLlmEvents(deptInfo, communes, monthIndex, year) {
+    const monthNames = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    const monthName = monthNames[monthIndex] || 'Mois courant';
+    const communesSample = (communes || []).slice(0, 10).map(c => c.nom).join(', ');
+
+    const systemPrompt = `Tu es un expert des dispositifs prévisionnels de secours (DPS) de la Protection Civile en France.
+Génère une liste de 5 à 8 événements réels ou typiques qui se déroulent dans le département ${deptInfo.name} (${deptInfo.code}, région ${deptInfo.region}, préfecture ${deptInfo.chefLieu}) au cours du mois de ${monthName} ${year}.
+Exemples de types d'événements : sport, festif, foire, culturel (trails, marathons, foires de printemps/automne, fêtes patronales, carnavals, festivals, concerts, brocantes).
+Communes possibles dans ce département : ${communesSample || deptInfo.chefLieu}.
+
+Tu dois impérativement et UNIQUEMENT répondre avec un tableau JSON valide au format strict suivant, sans aucun commentaire ni bloc markdown :
+[
+  {
+    "id": "evt-1",
+    "nom": "Nom réel de l'événement",
+    "commune": "Nom de la commune hôte",
+    "type": "sport",
+    "public_instantane": 2500,
+    "environnement": "ouvert_urbain",
+    "duree_heures": 5,
+    "activite_risque": "moyen",
+    "delai_acces_secours_minutes": 15,
+    "budget_max_organisateur": 650
+  }
+]
+Valeurs autorisées pour type : "sport", "festif", "foire", "culturel".
+Valeurs autorisées pour environnement : "ouvert_urbain", "ferme", "dynamique_course".
+Valeurs autorisées pour activite_risque : "faible", "moyen", "élevé".`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6500);
+
+    const apiKey = window.PROTEC_GEMINI_API_KEY || localStorage.getItem('gemini_api_key') || '';
+    let apiUrl = window.PROTEC_LLM_API_URL || '';
+
+    if (!apiUrl && apiKey) {
+      apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    }
+
+    if (!apiUrl) {
+      throw new Error('Aucune API LLM configurée (bascule automatique sur générateur local)');
+    }
+
+    let bodyPayload;
+    if (apiUrl.includes('generativelanguage.googleapis.com')) {
+      bodyPayload = {
+        contents: [{ parts: [{ text: systemPrompt }] }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0.3 }
+      };
+    } else {
+      bodyPayload = {
+        prompt: systemPrompt,
+        department: deptInfo.code,
+        month: monthIndex,
+        year: year
+      };
+    }
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyPayload),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Réponse API LLM non-OK: ${response.status}`);
+    }
+
+    const data = await response.json();
+    let textOutput = '';
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      textOutput = data.candidates[0].content.parts[0].text;
+    } else if (data.choices && data.choices[0]?.message?.content) {
+      textOutput = data.choices[0].message.content;
+    } else if (Array.isArray(data)) {
+      return data;
+    } else if (typeof data === 'string') {
+      textOutput = data;
+    } else if (data.events && Array.isArray(data.events)) {
+      return data.events;
+    }
+
+    textOutput = textOutput.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(textOutput);
+    if (!Array.isArray(parsed)) throw new Error('La réponse LLM ne contient pas un tableau JSON');
+    return parsed;
+  },
+
+  // Générateur procédural local hors-ligne résilient ancré dans le département
+  generateLocalFallbackEvents(deptInfo, communes, monthIndex, year) {
+    const commList = (communes && communes.length > 0) 
+      ? communes 
+      : [{ nom: deptInfo.chefLieu, cp: `${deptInfo.code}000`, lat: deptInfo.lat, lng: deptInfo.lng }];
+
+    const getCommune = (idx) => commList[idx % commList.length]?.nom || deptInfo.chefLieu;
+
+    // Modèles saisonniers crédibles par mois
+    const seasonalPools = {
+      0: [ // Janvier
+        { nom: `Foulées du Nouvel An de ${getCommune(0)}`, type: 'sport', pub: 1200, env: 'dynamique_course', dur: 4, risk: 'faible', delay: 10, budget: 350 },
+        { nom: `Tournoi Régional de Futsal & Sports d'Hiver`, type: 'sport', pub: 850, env: 'ferme', dur: 5, risk: 'moyen', delay: 12, budget: 280 },
+        { nom: `Fête de la Galette & Vœux Municipaux`, type: 'festif', pub: 1500, env: 'ferme', dur: 4, risk: 'faible', delay: 15, budget: 320 },
+        { nom: `Trail Nocturne des Neiges à ${getCommune(1)}`, type: 'sport', pub: 1800, env: 'dynamique_course', dur: 5, risk: 'moyen', delay: 20, budget: 480 },
+        { nom: `Brocante d'Hiver sous Halle Couverte`, type: 'foire', pub: 2200, env: 'ferme', dur: 6, risk: 'faible', delay: 10, budget: 420 },
+        { nom: `Championnat Départemental de Judo à ${getCommune(2)}`, type: 'sport', pub: 950, env: 'ferme', dur: 6, risk: 'moyen', delay: 12, budget: 360 }
+      ],
+      1: [ // Février
+        { nom: `Grand Carnaval & Défilé des Chars de ${getCommune(0)}`, type: 'festif', pub: 4500, env: 'ouvert_urbain', dur: 5, risk: 'moyen', delay: 15, budget: 550 },
+        { nom: `Course Nature de la Saint-Valentin`, type: 'sport', pub: 1100, env: 'dynamique_course', dur: 4, risk: 'faible', delay: 12, budget: 310 },
+        { nom: `Foire Agricole d'Hiver du ${deptInfo.name}`, type: 'foire', pub: 3800, env: 'ouvert_urbain', dur: 7, risk: 'faible', delay: 15, budget: 520 },
+        { nom: `Meeting Indoor d'Athlétisme à ${getCommune(1)}`, type: 'sport', pub: 1600, env: 'ferme', dur: 5, risk: 'faible', delay: 10, budget: 380 },
+        { nom: `Festival de Musique Acoustique en Salle`, type: 'culturel', pub: 1400, env: 'ferme', dur: 5, risk: 'faible', delay: 10, budget: 360 },
+        { nom: `Soirée Étudiante & Gala d'Hiver`, type: 'festif', pub: 2800, env: 'ferme', dur: 6, risk: 'moyen', delay: 12, budget: 490 }
+      ],
+      2: [ // Mars
+        { nom: `Semi-Marathon de ${getCommune(0)}`, type: 'sport', pub: 3200, env: 'dynamique_course', dur: 5, risk: 'moyen', delay: 12, budget: 580 },
+        { nom: `Carnaval de Printemps & Cavalcade à ${getCommune(1)}`, type: 'festif', pub: 5000, env: 'ouvert_urbain', dur: 6, risk: 'moyen', delay: 15, budget: 620 },
+        { nom: `Grande Foire Commerciale de Printemps`, type: 'foire', pub: 6500, env: 'ouvert_urbain', dur: 8, risk: 'faible', delay: 15, budget: 750 },
+        { nom: `Cross des Écoles & Collèges à ${getCommune(2)}`, type: 'sport', pub: 900, env: 'dynamique_course', dur: 4, risk: 'faible', delay: 10, budget: 260 },
+        { nom: `Salon des Vins et de la Gastronomie Régionale`, type: 'culturel', pub: 2400, env: 'ferme', dur: 6, risk: 'faible', delay: 12, budget: 420 },
+        { nom: `Trail des Premières Fleurs`, type: 'sport', pub: 1400, env: 'dynamique_course', dur: 5, risk: 'moyen', delay: 18, budget: 410 }
+      ],
+      3: [ // Avril
+        { nom: (deptInfo.code === '54' ? 'Foire Attractive de Nancy' : `Foire Attractive de ${getCommune(0)}`), type: 'foire', pub: 8500, env: 'ouvert_urbain', dur: 7, risk: 'moyen', delay: 15, budget: 950 },
+        { nom: `10 km sur Route de ${getCommune(1)}`, type: 'sport', pub: 2100, env: 'dynamique_course', dur: 4, risk: 'moyen', delay: 12, budget: 440 },
+        { nom: `Fête Médiévale & Chasse aux Œufs de Pâques`, type: 'festif', pub: 3400, env: 'ouvert_urbain', dur: 6, risk: 'faible', delay: 15, budget: 510 },
+        { nom: `Tournoi Pascal de Football U15 à ${getCommune(2)}`, type: 'sport', pub: 1300, env: 'ouvert_urbain', dur: 6, risk: 'moyen', delay: 10, budget: 360 },
+        { nom: `Rencontres Régionales de Danse & Spectacle`, type: 'culturel', pub: 1100, env: 'ferme', dur: 5, risk: 'faible', delay: 10, budget: 290 },
+        { nom: `Randonnée du Printemps à ${getCommune(3)}`, type: 'sport', pub: 800, env: 'dynamique_course', dur: 4, risk: 'faible', delay: 20, budget: 240 }
+      ],
+      4: [ // Mai
+        { nom: `Randonnée Cyclotouriste & Fête du Muguet`, type: 'sport', pub: 1500, env: 'dynamique_course', dur: 5, risk: 'faible', delay: 18, budget: 380 },
+        { nom: `Nuit Européenne des Musées à ${getCommune(0)}`, type: 'culturel', pub: 2800, env: 'ouvert_urbain', dur: 5, risk: 'faible', delay: 10, budget: 410 },
+        { nom: `Tournoi National de Rugby à 7 à ${getCommune(1)}`, type: 'sport', pub: 2600, env: 'ouvert_urbain', dur: 6, risk: 'moyen', delay: 12, budget: 520 },
+        { nom: `Fête Foraine & Kermesse Patronale de ${getCommune(2)}`, type: 'festif', pub: 4200, env: 'ouvert_urbain', dur: 6, risk: 'moyen', delay: 15, budget: 580 },
+        { nom: `Triathlon Régional du ${deptInfo.name}`, type: 'sport', pub: 2200, env: 'dynamique_course', dur: 6, risk: 'moyen', delay: 15, budget: 540 },
+        { nom: `Foire aux Puces & Braderie de Printemps`, type: 'foire', pub: 3900, env: 'ouvert_urbain', dur: 7, risk: 'faible', delay: 12, budget: 480 }
+      ],
+      5: [ // Juin
+        { nom: `Fête de la Musique - Scènes de ${getCommune(0)}`, type: 'festif', pub: 9500, env: 'ouvert_urbain', dur: 7, risk: 'élevé', delay: 15, budget: 1100 },
+        { nom: `Fête de la Saint-Jean & Feu Traditionnel`, type: 'festif', pub: 3800, env: 'ouvert_urbain', dur: 5, risk: 'moyen', delay: 15, budget: 530 },
+        { nom: `Marathon & Relais Entreprises de ${getCommune(1)}`, type: 'sport', pub: 4800, env: 'dynamique_course', dur: 7, risk: 'moyen', delay: 12, budget: 850 },
+        { nom: `Festival Électro & Rock en Plein Air`, type: 'culturel', pub: 6000, env: 'ouvert_urbain', dur: 8, risk: 'élevé', delay: 15, budget: 980 },
+        { nom: `Gala de Boxe & Muay-Thaï à ${getCommune(2)}`, type: 'sport', pub: 1900, env: 'ferme', dur: 5, risk: 'moyen', delay: 10, budget: 450 },
+        { nom: `Raid Aventure & Course d'Orientation`, type: 'sport', pub: 1100, env: 'dynamique_course', dur: 5, risk: 'moyen', delay: 22, budget: 360 }
+      ],
+      6: [ // Juillet
+        { nom: `Festivités du 14 Juillet & Feu d'Artifice de ${getCommune(0)}`, type: 'festif', pub: 12000, env: 'ouvert_urbain', dur: 6, risk: 'moyen', delay: 15, budget: 1250 },
+        { nom: `Bal des Pompiers & Fête Populaire à ${getCommune(1)}`, type: 'festif', pub: 3500, env: 'ouvert_urbain', dur: 6, risk: 'moyen', delay: 12, budget: 520 },
+        { nom: `Festival des Scènes d'Été & Guinguette`, type: 'culturel', pub: 4200, env: 'ouvert_urbain', dur: 6, risk: 'faible', delay: 12, budget: 540 },
+        { nom: `Critérium Cycliste Professionnel à ${getCommune(2)}`, type: 'sport', pub: 5500, env: 'dynamique_course', dur: 5, risk: 'moyen', delay: 15, budget: 780 },
+        { nom: `Traversée à la Nage en Eau Libre & Triathlon`, type: 'sport', pub: 1600, env: 'dynamique_course', dur: 5, risk: 'moyen', delay: 15, budget: 420 },
+        { nom: `Tournoi Estival de Beach-Volley`, type: 'sport', pub: 1200, env: 'ouvert_urbain', dur: 5, risk: 'faible', delay: 10, budget: 310 }
+      ],
+      7: [ // Août
+        { nom: `Fête de la Libération & Défilé Commémoratif`, type: 'festif', pub: 3600, env: 'ouvert_urbain', dur: 5, risk: 'faible', delay: 12, budget: 460 },
+        { nom: `Nuit des Étoiles & Festival Astronomique à ${getCommune(0)}`, type: 'culturel', pub: 2500, env: 'ouvert_urbain', dur: 5, risk: 'faible', delay: 18, budget: 390 },
+        { nom: `Fête Foraine Estivale de ${getCommune(1)}`, type: 'festif', pub: 5200, env: 'ouvert_urbain', dur: 7, risk: 'moyen', delay: 15, budget: 680 },
+        { nom: `Trail Estival des Forêts du ${deptInfo.name}`, type: 'sport', pub: 1700, env: 'dynamique_course', dur: 6, risk: 'moyen', delay: 20, budget: 470 },
+        { nom: `Festival International des Arts de la Rue`, type: 'culturel', pub: 6500, env: 'ouvert_urbain', dur: 7, risk: 'moyen', delay: 15, budget: 820 },
+        { nom: `Régates & Fête Nautique à ${getCommune(2)}`, type: 'sport', pub: 2200, env: 'ouvert_urbain', dur: 5, risk: 'moyen', delay: 15, budget: 440 }
+      ],
+      8: [ // Septembre
+        { nom: `Forum des Associations & Fête de la Ville de ${getCommune(0)}`, type: 'festif', pub: 4800, env: 'ouvert_urbain', dur: 6, risk: 'faible', delay: 12, budget: 550 },
+        { nom: `Journées Européennes du Patrimoine à ${getCommune(1)}`, type: 'culturel', pub: 3800, env: 'ouvert_urbain', dur: 6, risk: 'faible', delay: 10, budget: 460 },
+        { nom: `Braderie & Grande Brocante de Rentrée`, type: 'foire', pub: 7500, env: 'ouvert_urbain', dur: 8, risk: 'faible', delay: 15, budget: 890 },
+        { nom: `Fête de la Mirabelle & des Vendanges`, type: 'festif', pub: 6000, env: 'ouvert_urbain', dur: 6, risk: 'moyen', delay: 15, budget: 740 },
+        { nom: `Semi-Marathon & 10 km de Rentrée à ${getCommune(2)}`, type: 'sport', pub: 3100, env: 'dynamique_course', dur: 5, risk: 'moyen', delay: 12, budget: 560 },
+        { nom: `Tournoi Interrégional de Rugby à XV`, type: 'sport', pub: 2800, env: 'ouvert_urbain', dur: 6, risk: 'moyen', delay: 10, budget: 510 }
+      ],
+      9: [ // Octobre
+        { nom: `Course Solidaire Octobre Rose de ${getCommune(0)}`, type: 'sport', pub: 4200, env: 'dynamique_course', dur: 4, risk: 'faible', delay: 10, budget: 520 },
+        { nom: `Soirée d'Halloween & Nuit des Frissons à ${getCommune(1)}`, type: 'festif', pub: 3200, env: 'ouvert_urbain', dur: 6, risk: 'moyen', delay: 15, budget: 490 },
+        { nom: `Fête de la Châtaigne & Foire d'Automne`, type: 'foire', pub: 5100, env: 'ouvert_urbain', dur: 7, risk: 'faible', delay: 15, budget: 640 },
+        { nom: `Nuit d'Intégration Étudiante & Concert`, type: 'festif', pub: 3500, env: 'ferme', dur: 6, risk: 'élevé', delay: 12, budget: 620 },
+        { nom: `Trail Automnal des Feuilles Mortes`, type: 'sport', pub: 1600, env: 'dynamique_course', dur: 5, risk: 'moyen', delay: 18, budget: 430 },
+        { nom: `Salon Départemental de l'Habitat et du Terroir`, type: 'foire', pub: 4500, env: 'ferme', dur: 7, risk: 'faible', delay: 12, budget: 580 }
+      ],
+      10: [ // Novembre
+        { nom: `Commémorations du 11 Novembre & Défilé Solennel`, type: 'culturel', pub: 2200, env: 'ouvert_urbain', dur: 4, risk: 'faible', delay: 10, budget: 310 },
+        { nom: `Cross Départemental Scolaire et Universitaire`, type: 'sport', pub: 1900, env: 'dynamique_course', dur: 5, risk: 'faible', delay: 12, budget: 370 },
+        { nom: `Foire aux Vins & Terroirs de France à ${getCommune(0)}`, type: 'foire', pub: 4800, env: 'ferme', dur: 7, risk: 'faible', delay: 12, budget: 610 },
+        { nom: `Soirée Beaujolais & Repas Festif des Aînés`, type: 'festif', pub: 1800, env: 'ferme', dur: 5, risk: 'faible', delay: 12, budget: 350 },
+        { nom: `Open Régional de Tennis de Table à ${getCommune(1)}`, type: 'sport', pub: 850, env: 'ferme', dur: 6, risk: 'faible', delay: 10, budget: 270 },
+        { nom: `Salon Geek, Manga & Pop-Culture`, type: 'culturel', pub: 4200, env: 'ferme', dur: 7, risk: 'moyen', delay: 12, budget: 590 }
+      ],
+      11: [ // Décembre
+        { nom: (deptInfo.code === '54' ? 'Fêtes Traditionnelles de la Saint-Nicolas' : `Fêtes & Féeries de la Saint-Nicolas à ${getCommune(0)}`), type: 'festif', pub: 9800, env: 'ouvert_urbain', dur: 6, risk: 'moyen', delay: 15, budget: 1150 },
+        { nom: `Marché de Noël & Patinoire Municipale de ${getCommune(1)}`, type: 'festif', pub: 6500, env: 'ouvert_urbain', dur: 7, risk: 'faible', delay: 12, budget: 820 },
+        { nom: `Corrida Pédestre de Noël de ${getCommune(2)}`, type: 'sport', pub: 2400, env: 'dynamique_course', dur: 4, risk: 'moyen', delay: 10, budget: 460 },
+        { nom: `Manifestation & Défis Sportifs du Téléthon`, type: 'sport', pub: 1900, env: 'ouvert_urbain', dur: 6, risk: 'faible', delay: 12, budget: 360 },
+        { nom: `Concert de l'Avent & Chants Sacrés en Cathédrale`, type: 'culturel', pub: 1500, env: 'ferme', dur: 4, risk: 'faible', delay: 10, budget: 320 },
+        { nom: `Réveillon Solidaire de la Saint-Sylvestre`, type: 'festif', pub: 1200, env: 'ferme', dur: 6, risk: 'moyen', delay: 12, budget: 380 }
+      ]
+    };
+
+    const pool = seasonalPools[monthIndex % 12] || seasonalPools[5];
+    
+    // Attribution des 10 clés strictes requises pour chaque événement
+    return pool.map((item, idx) => ({
+      id: `evt-${deptInfo.code}-${monthIndex}-${idx + 1}`,
+      nom: item.nom,
+      commune: getCommune(idx),
+      type: item.type,
+      public_instantane: item.pub,
+      environnement: item.env,
+      duree_heures: item.dur,
+      activite_risque: item.risk,
+      delai_acces_secours_minutes: item.delay,
+      budget_max_organisateur: item.budget
+    }));
+  },
+
+  // Moteur d'évolution des crises majeures et plans d'urgence en temps réel
+  progressCrisesEngine(game) {
+    if (!game) game = window.game;
+    if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.updateAllCrisesTick === 'function') {
+      window.ProtecCriseLogistique.updateAllCrisesTick(game);
+    }
   }
 };
 

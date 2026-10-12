@@ -104,12 +104,12 @@ window.ProtecModals = {
               📦
             </div>
             <div>
-              <h4 class="text-sm font-black leading-tight">Matériel Opérationnel, Lots de Crise & Équipements</h4>
-              <p class="text-xs text-blue-100 mt-0.5">Lots tronçonnage, pompage, éclairage, bâchage, hébergement, ravitaillement, soutien psycho et confort du personnel</p>
+              <h4 class="text-sm font-black leading-tight">Parc Matériel, Gammes d’Équipements & Inventaire</h4>
+              <p class="text-xs text-blue-100 mt-0.5">Équipements échelonnés en gammes (Trade-in 30%), moniteurs multiparamétriques, QCPR connecté, lots de crise et tenues</p>
             </div>
           </div>
           <button onclick="window.game.openModule('equipements')" class="px-4 py-2 rounded-xl text-xs font-black bg-white text-indigo-700 hover:bg-blue-50 shadow-md transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
-            <span>Lots & Matériel</span>
+            <span>Boutique Matériel (Gammes)</span>
             <span>→</span>
           </button>
         </div>
@@ -914,6 +914,16 @@ window.ProtecQuickDispatch = {
       this.dispatchEmergencyVpsp(game);
     } else {
       game.showToast('Vecteur Armé', `${veh.name} est assigné et prêt au départ.`, 'blue');
+    }
+  },
+
+  // 7. OUVERTURE DU POSTE DE COMMANDE DE CRISE (PC CRISE)
+  openPcCrise(game, crisisId = null) {
+    if (!game) game = window.game;
+    if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openPcCriseModal === 'function') {
+      window.ProtecCriseLogistique.openPcCriseModal(game, crisisId);
+    } else {
+      game.showToast('Module PC Crise', 'Initialisation du Poste de Commandement...', 'blue');
     }
   }
 };

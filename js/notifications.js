@@ -4,6 +4,7 @@
  * - Sons opérationnels 2-tons et vibrations haptiques
  * - Alertes d'interventions en direct (SAMU 15, Pompiers, Devis DPS, Candidatures)
  * - Moteur d'incitation à la reconnexion périodique lors des absences du joueur
+ * - Résolution précise des cibles d'ouverture et masquage strict des boutons s'il n'y a rien à ouvrir.
  */
 
 window.ProtecNotifications = {
@@ -24,17 +25,13 @@ window.ProtecNotifications = {
 
   // Vérifie si le jeu est actuellement ouvert sur n'importe quel appareil (PC, téléphone ou tablette)
   isGameOpenOnAnyDevice() {
-    // 1. Cette fenêtre locale est actuellement ouverte et en cours d'exécution
     return true;
   },
 
   // Contrôle strict de l'envoi de notification système OS :
-  // RÈGLE FORMELLE : Inactivité = le joueur n'a VRAIMENT PAS le jeu ouvert (ni sur téléphone, ni sur PC ou tablette).
+  // RÈGLE FORMELLE : Inactivité = le joueur n'a VRAIMENT PAS le jeu ouvert.
   // Tant que le jeu est ouvert quelque part -> AUCUNE push notification système !
-  // Tout est géré dans le jeu (toasts, sons in-game, bandeau d'alerte, cloche de notifications).
   shouldSendSystemNotification() {
-    // Si cette méthode est appelée depuis la page web ouverte, c'est que le jeu EST OUVERT.
-    // Donc le joueur n'est PAS inactif -> Pas de push notification système !
     return false;
   },
 
@@ -54,27 +51,27 @@ window.ProtecNotifications = {
   // Scénarios d'incitation à la reconnexion lorsque le joueur a quitté le jeu
   reengagementScenarios: [
     {
-      title: '🚑 ALERTE 15 : Départ Réflexe VPSP Requis !',
+      title: 'Alerte 15 : Départ Réflexe VPSP Requis',
       body: 'Le SAMU 15 demande une ambulance de votre antenne pour un malaise grave sur la voie publique. Reconnectez-vous vite pour engager votre équipage !',
       tag: 'reengage-samu'
     },
     {
-      title: '📬 NOUVEAU DEVIS : Sollicitation DPS Urgente !',
+      title: 'Nouveau Devis : Sollicitation DPS Urgente',
       body: 'La Mairie et le Comité des Fêtes vous ont transmis un devis prioritaire pour un festival ce week-end. Répondez avant clôture des candidatures !',
       tag: 'reengage-dps'
     },
     {
-      title: '👥 RECRUTEMENT : Nouvelle Candidature Reçue !',
+      title: 'Recrutement : Nouvelle Candidature Reçue',
       body: 'Un bénévole qualifié PSE2 vient de déposer sa candidature à l’antenne. Faites-lui passer son entretien pour renforcer vos équipes !',
       tag: 'reengage-rh'
     },
     {
-      title: '⚠️ BULLETIN PRÉFECTURE : Risque Météo Majeur !',
+      title: 'Bulletin Préfecture : Risque Météo Majeur',
       body: 'Météo-France place votre département en vigilance accrue. Les services de l’État pré-alertent votre antenne de Protection Civile !',
       tag: 'reengage-meteo'
     },
     {
-      title: '🎁 CADEAU QUOTIDIEN & SUBVENTIONS DISPONIBLES !',
+      title: 'Subventions & Dotations Disponibles',
       body: 'Vos récompenses administratives et dotations de mécénat sont prêtes à être récupérées à l’antenne. Ne passez pas à côté !',
       tag: 'reengage-reward'
     }
@@ -99,7 +96,6 @@ window.ProtecNotifications = {
       try {
         const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         this.swRegistration = reg;
-        console.log('✅ Service Worker MyProtec enregistré avec succès:', reg.scope);
       } catch (err) {
         console.warn('Erreur enregistrement Service Worker:', err);
       }
@@ -108,7 +104,7 @@ window.ProtecNotifications = {
     // 3. Mise à jour des badges visuels dans l'UI
     this.updateHeaderUI();
 
-    // 4. Écoute du cycle de vie de la page pour le moteur d'incitation (Background Engagement)
+    // 4. Écoute du cycle de vie de la page pour le moteur d'incitation
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         this.onPageHidden();
@@ -134,7 +130,7 @@ window.ProtecNotifications = {
       window.addEventListener(evt, onUserActive, { passive: true });
     });
 
-    // Heartbeat régulier pour informer le smartphone si le PC est actif
+    // Heartbeat régulier
     setInterval(() => {
       if (!this.isDeviceMobile() && document.visibilityState === 'visible' && (Date.now() - this.lastUserInteraction < 45000)) {
         localStorage.setItem('protec_pc_heartbeat', Date.now().toString());
@@ -194,7 +190,7 @@ window.ProtecNotifications = {
         this.config.enabled = true;
         this.saveConfig();
         this.sendPushNotification(
-          '🔔 Notifications MyProtec Activées !',
+          'Notifications MyProtec Activées',
           'Parfait ! Vous recevrez désormais les alertes SAMU 15, SDIS, devis DPS et rappels d’intervention en direct sur votre appareil.',
           { tag: 'welcome-notification' }
         );
@@ -254,6 +250,135 @@ window.ProtecNotifications = {
     }
   },
 
+  // Résolution rigoureuse et vérification de la cible d'une notification
+  // Retourne { type: string, id: string, label: string } s'il y a quelque chose à ouvrir, ou null s'il n'y a rien.
+  resolveTarget(item, game) {
+    if (!item || !game) return null;
+
+    const title = (item.title || '').toLowerCase();
+    const msg = (item.message || '').toLowerCase();
+
+    // 0. Filtrage immédiat des notifications purement informatives sans action ni écran associé
+    const purelyInformativeWords = [
+      'relevé copié', 'sauvegarde effectuée', 'partie sauvegardée', 'action impossible',
+      'validation requise', 'limite d\'antenne', 'copié !', 'trésorerie insuffisante',
+      'antenne réinitialisée', 'partie chargée', 'jeu en pause', 'vitesse normale', 'mode autonome'
+    ];
+    if (purelyInformativeWords.some(w => title.includes(w) || msg.includes(w))) {
+      return null;
+    }
+
+    // 1. Cible explicite fournie
+    if (item.targetType === 'mission' && item.targetId) {
+      const exists = (game.missions || []).some(m => m.id === item.targetId);
+      if (exists) {
+        return { type: 'mission', id: item.targetId, label: 'Voir l\'intervention' };
+      }
+    }
+
+    if (item.targetType === 'module' && item.targetId) {
+      return { type: 'module', id: item.targetId, label: 'Consulter' };
+    }
+
+    if (item.targetType === 'station' && item.targetId) {
+      return { type: 'station', id: item.targetId, label: 'Voir l\'antenne' };
+    }
+
+    // 2. Détection intelligente contextuelle basée sur les entités réelles en jeu
+    // A. Mission active correspondante
+    if (Array.isArray(game.missions)) {
+      const matchedMission = game.missions.find(m => {
+        if (!m || !m.title) return false;
+        if (item.targetId && m.id === item.targetId) return true;
+        const mt = m.title.toLowerCase();
+        return title.includes(mt) || (mt.length > 8 && title.includes(mt.substring(0, 15)));
+      });
+      if (matchedMission) {
+        return { type: 'mission', id: matchedMission.id, label: 'Voir l\'intervention' };
+      }
+    }
+
+    // B. Devis / Sollicitations DPS
+    if (title.includes('devis') || msg.includes('devis') || title.includes('organisateur') || item.category === 'dps') {
+      return { type: 'module', id: 'devis', label: 'Consulter le devis' };
+    }
+
+    // C. Candidatures / Recrutement RH
+    if (title.includes('candidat') || title.includes('recrutement') || msg.includes('candidature') || item.category === 'rh') {
+      return { type: 'module', id: 'recrutement', label: 'Voir les candidatures' };
+    }
+
+    // D. SAMU 15 / Départs réflexes
+    if (title.includes('samu') || title.includes('15') || item.category === 'samu') {
+      const samuMission = (game.missions || []).find(m => m.type === 'samu' && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
+      if (samuMission) {
+        return { type: 'mission', id: samuMission.id, label: 'Voir la sortie 15' };
+      }
+      return { type: 'module', id: 'samu', label: 'Ouvrir le SAMU' };
+    }
+
+    // E. SDIS 18 / Pompiers
+    if (title.includes('sdis') || title.includes('pompier') || title.includes('18') || item.category === 'sdis') {
+      const sdisMission = (game.missions || []).find(m => m.type === 'pompiers' && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
+      if (sdisMission) {
+        return { type: 'mission', id: sdisMission.id, label: 'Voir la garde 18' };
+      }
+      return { type: 'module', id: 'pompiers', label: 'Ouvrir le SDIS' };
+    }
+
+    // F. Crise, NOVI, CUMP, Plan d'urgence
+    if (title.includes('crise') || title.includes('novi') || title.includes('cai') || title.includes('cump') || title.includes('catastrophe')) {
+      const crisisMission = (game.missions || []).find(m => (m.isCrisis || m.type === 'crise') && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
+      if (crisisMission) {
+        return { type: 'mission', id: crisisMission.id, label: 'Voir l\'urgence' };
+      }
+      return { type: 'module', id: 'crise', label: 'Cellule de crise' };
+    }
+
+    // G. Météo & Vigilance
+    if (title.includes('météo') || title.includes('meteo') || title.includes('vigilance') || item.category === 'weather' || item.category === 'meteo') {
+      return { type: 'module', id: 'meteo', label: 'Bulletin météo' };
+    }
+
+    // H. Trésorerie & Comptabilité
+    if (title.includes('trésorerie') || title.includes('comptable') || title.includes('finances') || title.includes('subvention') || item.category === 'finances') {
+      return { type: 'module', id: 'finances', label: 'Voir la trésorerie' };
+    }
+
+    // I. Équipements & Matériel
+    if (title.includes('équipement') || title.includes('matériel') || title.includes('qcpr') || title.includes('tenue') || item.category === 'equipements') {
+      return { type: 'module', id: 'equipements', label: 'Voir les équipements' };
+    }
+
+    // J. Locaux & Aménagement
+    if (title.includes('local') || title.includes('locaux') || title.includes('bâtiment') || title.includes('travaux') || item.category === 'locaux') {
+      return { type: 'module', id: 'locaux', label: 'Gérer les locaux' };
+    }
+
+    // K. Flotte & Véhicules
+    if (title.includes('véhicule') || title.includes('flotte') || title.includes('vpsp') || title.includes('vtu') || title.includes('réarmement')) {
+      return { type: 'module', id: 'base', label: 'Gérer la flotte' };
+    }
+
+    // L. Formations grand public & internes
+    if (title.includes('formation') || title.includes('psc1') || title.includes('sst') || item.category === 'formation') {
+      return { type: 'module', id: 'formation', label: 'Voir les formations' };
+    }
+
+    // M. Pôle Social & Maraudes
+    if (title.includes('social') || title.includes('maraude') || title.includes('115') || item.category === 'social') {
+      return { type: 'module', id: 'social', label: 'Pôle social' };
+    }
+
+    // N. Alliance & Multijoueur
+    if (title.includes('alliance') || title.includes('renfort') || title.includes('fédéral') || item.category === 'alliance') {
+      return { type: 'module', id: 'alliance', label: 'Réseau alliance' };
+    }
+
+    // Si aucune cible valide et concrète n'a été identifiée : pas de lien fantôme !
+    return null;
+  },
+
   // Enregistrement d'une notification dans l'historique
   recordNotification(data) {
     if (!data) return;
@@ -288,124 +413,24 @@ window.ProtecNotifications = {
     const item = this.history[index];
     if (!item) return;
 
-    this.closeSettingsModal();
     const game = window.game;
     if (!game) return;
 
+    const target = this.resolveTarget(item, game);
+    if (!target) {
+      // Aucune information spécifique à ouvrir : ne rien faire de trompeur
+      return;
+    }
+
+    this.closeSettingsModal();
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
 
-    // 1. Cible explicite
-    if (item.targetType === 'mission' && item.targetId) {
-      game.openMissionDetails(item.targetId);
-      return;
-    }
-    if (item.targetType === 'module' && item.targetId) {
-      game.openModule(item.targetId);
-      return;
-    }
-
-    // 2. Détection intelligente selon le texte & la catégorie
-    const title = (item.title || '').toLowerCase();
-    const msg = (item.message || '').toLowerCase();
-
-    // Recherche d'une mission correspondante dans les missions actives
-    const matchedMission = game.missions.find(m => 
-      m.id === item.targetId ||
-      title.includes(m.title.toLowerCase()) || 
-      (m.title && title.includes(m.title.toLowerCase().substring(0, 15)))
-    );
-    if (matchedMission) {
-      game.openMissionDetails(matchedMission.id);
-      return;
-    }
-
-    // Catégories thématiques et modules cibles réels
-    if (title.includes('devis') || msg.includes('devis') || item.category === 'dps') {
-      game.openModule('devis');
-      return;
-    }
-
-    if (title.includes('candidat') || title.includes('recrutement') || msg.includes('candidature') || item.category === 'rh') {
-      game.openModule('recrutement');
-      return;
-    }
-
-    if (title.includes('samu') || title.includes('15') || item.category === 'samu') {
-      const samuMission = game.missions.find(m => m.type === 'samu' && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
-      if (samuMission) {
-        game.openMissionDetails(samuMission.id);
-      } else {
-        game.openModule('samu');
-      }
-      return;
-    }
-
-    if (title.includes('sdis') || title.includes('pompier') || title.includes('18') || item.category === 'sdis') {
-      const sdisMission = game.missions.find(m => m.type === 'pompiers' && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
-      if (sdisMission) {
-        game.openMissionDetails(sdisMission.id);
-      } else {
-        game.openModule('pompiers');
-      }
-      return;
-    }
-
-    if (title.includes('crise') || title.includes('novi') || title.includes('cai') || title.includes('cump') || title.includes('sinistre') || title.includes('crash') || title.includes('catastrophe')) {
-      const crisisMission = game.missions.find(m => (m.isCrisis || m.type === 'crise') && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
-      if (crisisMission) {
-        game.openMissionDetails(crisisMission.id);
-      } else {
-        game.openModule('crise');
-      }
-      return;
-    }
-
-    if (title.includes('météo') || title.includes('meteo') || title.includes('vigilance') || title.includes('inondation') || item.category === 'weather' || item.category === 'meteo') {
-      game.openModule('meteo');
-      return;
-    }
-
-    if (title.includes('alliance') || title.includes('fédéral') || item.category === 'alliance') {
-      game.openModule('alliance');
-      return;
-    }
-
-    if (title.includes('spécialité') || title.includes('drone') || title.includes('cyno') || title.includes('bateau')) {
-      game.openModule('specialites');
-      return;
-    }
-
-    if (title.includes('pôle') || title.includes('pole')) {
-      game.openModule('poles');
-      return;
-    }
-
-    if (title.includes('local') || title.includes('bâtiment') || title.includes('sécurité') || title.includes('travaux') || title.includes('aménagement')) {
-      game.openModule('locaux');
-      return;
-    }
-
-    if (title.includes('flotte') || title.includes('véhicule') || title.includes('vpsp') || title.includes('réarmement') || title.includes('ambulance')) {
-      game.openModule('base');
-      return;
-    }
-
-    if (title.includes('social') || title.includes('maraude') || title.includes('115')) {
-      game.openModule('social');
-      return;
-    }
-
-    if (title.includes('formation') || title.includes('psc1') || title.includes('sst')) {
-      game.openModule('formation');
-      return;
-    }
-
-    // Par défaut : ouvrir le planning des missions opérationnelles
-    const firstActive = game.missions.find(m => ['declenche', 'prealerte', 'ongoing', 'planifie'].includes(m.status));
-    if (firstActive) {
-      game.openMissionDetails(firstActive.id);
-    } else {
-      game.openModule('planning');
+    if (target.type === 'mission' && target.id) {
+      game.openMissionDetails(target.id);
+    } else if (target.type === 'module' && target.id) {
+      game.openModule(target.id);
+    } else if (target.type === 'station' && target.id) {
+      game.openStationDetails(target.id);
     }
   },
 
@@ -424,13 +449,10 @@ window.ProtecNotifications = {
 
   // Envoi d'une vraie notification Push système (Arrière-plan & Écran verrouillé)
   sendPushNotification(title, body, options = {}) {
-    // 1. Enregistre TOUJOURS dans le journal in-app (consultable via la cloche d'alertes)
+    // 1. Enregistre TOUJOURS dans le journal in-app
     this.recordNotification({ title, message: body, color: 'orange', category: options.category || 'push' });
 
-    // 2. Contrôle strict de la pertinence de l'envoi système :
-    // - Aucune notif système si le joueur a les yeux sur le jeu (actif)
-    // - Sur smartphone : uniquement si inactif sur le téléphone ET jeu fermé/inactif sur PC
-    // - Sur PC : uniquement si le jeu est ouvert mais que l'utilisateur est sur une autre page / en arrière-plan
+    // 2. Contrôle strict de la pertinence de l'envoi système
     if (!this.shouldSendSystemNotification()) {
       return;
     }
@@ -454,7 +476,7 @@ window.ProtecNotifications = {
       }
     }, options);
 
-    // 2. Affichage via le Service Worker si actif (permet de fonctionner onglet masqué)
+    // Affichage via le Service Worker si actif
     if (this.swRegistration && 'showNotification' in this.swRegistration) {
       try {
         this.swRegistration.showNotification(title, notifOptions);
@@ -464,7 +486,7 @@ window.ProtecNotifications = {
       }
     }
 
-    // 3. Fallback standard via Notification API
+    // Fallback standard via Notification API
     if ('Notification' in window) {
       try {
         const notif = new Notification(title, notifOptions);
@@ -490,15 +512,13 @@ window.ProtecNotifications = {
     this.sendPushNotification(title, body, { tag: `${category}-${tag}` });
   },
 
-  // --- MOTEUR D'INCITATION À LA RECONNEXION (ENGAGEMENT SCHEDULER) ---
+  // --- MOTEUR D'INCITATION À LA RECONNEXION ---
   onPageHidden() {
     if (!this.config.inactivityEngagement || !this.config.enabled || this.permission !== 'granted') return;
 
     this.clearInactivityTimer();
 
-    // Planification d'une notification d'incitation après quelques minutes d'absence
     this.inactivityTimer = setTimeout(() => {
-      // Choisir un scénario aléatoire captivant
       const pick = this.reengagementScenarios[Math.floor(Math.random() * this.reengagementScenarios.length)];
       this.sendPushNotification(pick.title, pick.body, { tag: pick.tag });
     }, this.inactivityIntervalSec * 1000);
@@ -518,8 +538,8 @@ window.ProtecNotifications = {
   // Test immédiat de notification (Bouton dans la modale)
   testNotification() {
     this.sendPushNotification(
-      '🚨 [TEST] DÉPART RÉFLEXE VPSP !',
-      'Test opérationnel réussi : Votre appareil reçoit bien les alertes d’urgence et notifications de rappel MyProtec.',
+      'Test Opérationnel VPSP',
+      'Votre appareil reçoit bien les alertes d’urgence et notifications de rappel MyProtec.',
       { tag: 'test-direct-notif' }
     );
     if (window.game) {
@@ -562,8 +582,8 @@ window.ProtecNotifications = {
               <i data-lucide="bell" class="w-5 h-5"></i>
             </div>
             <div>
-              <h3 class="text-base font-black text-slate-900">Centre de Notifications Push</h3>
-              <p class="text-[11px] text-slate-500 font-semibold">Alertes opérationnelles en temps réel & rappels d’absence</p>
+              <h3 class="text-base font-black text-slate-900">Centre de Notifications</h3>
+              <p class="text-[11px] text-slate-500 font-semibold">Alertes opérationnelles en temps réel & journal des événements</p>
             </div>
           </div>
           <button onclick="window.ProtecNotifications.closeSettingsModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
@@ -574,6 +594,64 @@ window.ProtecNotifications = {
       </div>
     `;
     document.body.appendChild(div);
+  },
+
+  // Rendu de la liste d'historique avec conditionnement strict du bouton d'ouverture
+  renderHistoryList() {
+    const listEl = document.getElementById('notif-history-list');
+    if (!listEl) return;
+
+    if (this.history.length === 0) {
+      listEl.innerHTML = `
+        <div class="p-8 text-center glass-card rounded-2xl space-y-2">
+          <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+            <i data-lucide="inbox" class="w-5 h-5"></i>
+          </div>
+          <div class="font-bold text-slate-700 text-sm">Aucune notification dans l'historique</div>
+          <p class="text-[11px] text-slate-400 max-w-xs mx-auto">Toutes les alertes d'urgence, nouveaux devis, retours d'appels et messages reçus seront archivés ici.</p>
+        </div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+      return;
+    }
+
+    const borderColors = {
+      red: 'border-l-4 border-l-red-500 bg-red-50/20',
+      orange: 'border-l-4 border-l-amber-500 bg-amber-50/20',
+      amber: 'border-l-4 border-l-amber-500 bg-amber-50/20',
+      green: 'border-l-4 border-l-emerald-500 bg-emerald-50/20',
+      emerald: 'border-l-4 border-l-emerald-500 bg-emerald-50/20',
+      blue: 'border-l-4 border-l-pc-blue bg-blue-50/20'
+    };
+
+    listEl.innerHTML = this.history.map((item, idx) => {
+      const cardClass = borderColors[item.color] || 'border-l-4 border-l-slate-400 bg-slate-50/40';
+      const target = this.resolveTarget(item, window.game);
+      const hasTarget = !!target;
+
+      return `
+        <div ${hasTarget ? `onclick="window.ProtecNotifications.handleNotificationClick(${idx})"` : ''}
+          class="p-3 rounded-2xl glass-card border border-slate-200/80 ${cardClass} shadow-sm space-y-1 ${hasTarget ? 'cursor-pointer hover:scale-[1.01] hover:shadow-md transition active:scale-[0.99]' : 'cursor-default'}"
+          ${hasTarget ? `title="Cliquer pour ouvrir : ${target.label}"` : ''}>
+          <div class="flex items-center justify-between">
+            <span class="font-extrabold text-slate-900 text-xs flex items-center gap-2">
+              <span>${item.title}</span>
+              ${hasTarget ? `
+                <button onclick="event.stopPropagation(); window.ProtecNotifications.handleNotificationClick(${idx})"
+                  class="text-[9px] text-pc-blue font-bold px-2 py-0.5 rounded-lg bg-blue-100 hover:bg-blue-200 transition flex items-center gap-1 shadow-xs">
+                  <span>${target.label || 'Ouvrir'}</span>
+                  <i data-lucide="arrow-right" class="w-2.5 h-2.5"></i>
+                </button>
+              ` : ''}
+            </span>
+            <span class="text-[10px] font-mono font-semibold text-slate-400">${item.time}</span>
+          </div>
+          <p class="text-[11px] text-slate-600 leading-snug">${item.message}</p>
+        </div>
+      `;
+    }).join('');
+
+    if (window.lucide) window.lucide.createIcons();
   },
 
   // Rendu du corps de la modale avec onglets Historique et Paramètres
@@ -600,48 +678,15 @@ window.ProtecNotifications = {
             </button>
           </div>
           ${isHistory && this.history.length > 0 ? `
-            <button onclick="window.ProtecNotifications.clearHistory()" class="text-[11px] font-bold text-slate-400 hover:text-rose-600 transition">
-              Vider le journal
+            <button onclick="window.ProtecNotifications.clearHistory()" class="text-[11px] font-bold text-slate-400 hover:text-rose-600 transition flex items-center gap-1">
+              <i data-lucide="trash-2" class="w-3 h-3"></i> Vider le journal
             </button>
           ` : ''}
         </div>
 
         ${isHistory ? `
           <!-- VUE 1 : HISTORIQUE DES NOTIFICATIONS -->
-          <div id="notif-history-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
-            ${this.history.length === 0 ? `
-              <div class="p-8 text-center glass-card rounded-2xl space-y-2">
-                <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
-                  <i data-lucide="inbox" class="w-5 h-5"></i>
-                </div>
-                <div class="font-bold text-slate-700 text-sm">Aucune notification dans l'historique</div>
-                <p class="text-[11px] text-slate-400 max-w-xs mx-auto">Toutes les alertes d'urgence, nouveaux devis, retours d'appels et messages reçus seront archivés ici pour que vous n'en manquiez aucun.</p>
-              </div>
-            ` : this.history.map((item, idx) => {
-              const borderColors = {
-                red: 'border-l-4 border-l-red-500 bg-red-50/20',
-                orange: 'border-l-4 border-l-amber-500 bg-amber-50/20',
-                amber: 'border-l-4 border-l-amber-500 bg-amber-50/20',
-                green: 'border-l-4 border-l-emerald-500 bg-emerald-50/20',
-                emerald: 'border-l-4 border-l-emerald-500 bg-emerald-50/20',
-                blue: 'border-l-4 border-l-pc-blue bg-blue-50/20'
-              };
-              const cardClass = borderColors[item.color] || 'border-l-4 border-l-slate-400 bg-slate-50/40';
-
-              return `
-                <div onclick="window.ProtecNotifications.handleNotificationClick(${idx})" class="p-3 rounded-2xl glass-card border border-slate-200/80 ${cardClass} shadow-sm space-y-1 cursor-pointer hover:scale-[1.01] hover:shadow-md transition active:scale-[0.99]" title="Cliquer pour ouvrir directement cette information">
-                  <div class="flex items-center justify-between">
-                    <span class="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
-                      <span>${item.title}</span>
-                      <span class="text-[9px] text-pc-blue font-bold px-1.5 py-0.2 rounded bg-blue-100/70 hover:bg-blue-200">Ouvrir ➜</span>
-                    </span>
-                    <span class="text-[10px] font-mono font-semibold text-slate-400">${item.time}</span>
-                  </div>
-                  <p class="text-[11px] text-slate-600 leading-snug">${item.message}</p>
-                </div>
-              `;
-            }).join('')}
-          </div>
+          <div id="notif-history-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1"></div>
         ` : `
           <!-- VUE 2 : RÉGLAGES PUSH & SONS -->
           <div class="space-y-4">
@@ -675,7 +720,7 @@ window.ProtecNotifications = {
               <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
                 <div>
                   <span class="font-bold text-slate-800 block">Vérifier le fonctionnement</span>
-                  <span class="text-[11px] text-slate-500">Déclenche une notification test avec sonnerie d'urgence 2-tons</span>
+                  <span class="text-[11px] text-slate-500">Déclenche une notification test avec sonnerie d'urgence</span>
                 </div>
                 <button onclick="window.ProtecNotifications.testNotification()" class="px-3.5 py-1.5 rounded-xl bg-pc-orange hover:brightness-110 text-white font-extrabold shadow transition flex items-center gap-1.5">
                   <i data-lucide="bell-ring" class="w-3.5 h-3.5"></i>
@@ -758,7 +803,11 @@ window.ProtecNotifications = {
       </div>
     `;
 
-    if (window.lucide) window.lucide.createIcons();
+    if (isHistory) {
+      this.renderHistoryList();
+    } else {
+      if (window.lucide) window.lucide.createIcons();
+    }
   },
 
   // Modification d'un paramètre

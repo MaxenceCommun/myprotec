@@ -8,6 +8,81 @@ window.ProtecIncidents = {
   // Catalogue d'incidents opérationnels rares et variés
   incidentsCatalog: [
     {
+      id: 'canicule_coup_de_chaleur',
+      title: 'Canicule : Coup de Chaleur Sévère & Malaises Multiples',
+      type: 'medical',
+      severity: 'critique',
+      icon: 'flame',
+      color: 'red',
+      desc: 'Sous un soleil de plomb et une forte chaleur, 3 festivaliers s\'effondrent en hyperthermie maligne (température corporelle > 39.5°C, confusion et tachycardie).',
+      choices: [
+        {
+          text: 'Déploiement tente climatisée, brumisation intensive & solutés d\'hydratation',
+          costSupply: 'woundKits',
+          costQty: 1,
+          rewardXp: 110,
+          rewardReputation: 12,
+          outcome: 'Prise en charge thermique exemplaire ! Les victimes reprennent conscience et sont stabilisées dans la tente de repos.'
+        },
+        {
+          text: 'Appel SAMU 15 pour évacuation médicalisée SMUR sous air climatisé',
+          costSupply: null,
+          rewardXp: 70,
+          rewardReputation: 8,
+          outcome: 'Le médecin régulateur valide l\'évacuation vers le CHRU. Les secouristes ont bien géré le déchoquage thermique.'
+        }
+      ]
+    },
+    {
+      id: 'intemperies_glissade_trauma',
+      title: 'Intempéries : Chute Collective sur Terrain Glissant & Fracture',
+      type: 'operation',
+      severity: 'eleve',
+      icon: 'cloud-lightning',
+      color: 'orange',
+      desc: 'Pluie battante et orage : le terrain est devenu un bourbier. Deux participants font une violente chute avec suspicion de fracture de cheville et traumatisme crânien.',
+      choices: [
+        {
+          text: 'Pose attelle à dépression & brancardage abrité vers le VPSP',
+          costSupply: 'woundKits',
+          costQty: 2,
+          rewardXp: 95,
+          rewardReputation: 10,
+          outcome: 'Immobilisation rigoureuse et brancardage sécurisé sous la bâche étanche malgré la boue. Félicitations des familles.'
+        },
+        {
+          text: 'Engager le véhicule tout-chemin (VLHR) pour extraction directe',
+          costDelayMin: 8,
+          rewardXp: 85,
+          outcome: 'Extraction motorisée rapide et sans secousses évitant l\'aggravation des lésions traumatiques.'
+        }
+      ]
+    },
+    {
+      id: 'depart_non_rearme_rupture_o2',
+      title: 'Incident Logistique : Bouteille O2 Vide (Véhicule Non Réarmé)',
+      type: 'logistique',
+      severity: 'critique',
+      icon: 'alert-triangle',
+      color: 'red',
+      desc: 'Détresse respiratoire sur poste ! En ouvrant le manodétendeur de la bouteille d\'oxygène, l\'équipier constate un manomètre à 0 bar : le VPSP n\'avait pas été réarmé au retour de la précédente mission !',
+      choices: [
+        {
+          text: 'Ventilation manuelle BAVU à l\'air ambiant & appel SMUR en urgence absolue',
+          costReputation: -15,
+          costDelayMin: 12,
+          outcome: 'La victime est sauvée de justesse mais le médecin du SMUR dresse un rapport d\'incident grave au SAMU et à l\'ARS pour véhicule non réarmé (-15 pts réputation SAMU).'
+        },
+        {
+          text: 'Emprunter d\'urgence la bouteille de réserve du Poste Fixe (Lot A)',
+          costSupply: 'oxygenBottles',
+          costQty: 1,
+          rewardXp: 40,
+          outcome: 'Oxygénation reprise in extremis grâce au Lot A du PSA. Le Chef de Poste consigne l\'oubli de réarmement au carnet de bord.'
+        }
+      ]
+    },
+    {
       id: 'arret_respiratoire',
       title: 'Aggravation : Arrêt Cardio-Respiratoire (ACR)',
       type: 'medical',
@@ -501,7 +576,33 @@ window.ProtecIncidents = {
   // Déclencher un incident
   triggerIncident(game, mission) {
     const catalog = this.incidentsCatalog;
-    const incidentData = catalog[Math.floor(Math.random() * catalog.length)];
+    let incidentData = null;
+
+    // Détection de départ avec véhicule non réarmé
+    const assignedVehicles = mission.assignedCrew?.vehicles || [];
+    const hasUnrearmedVehicle = assignedVehicles.some(veh => veh.status === 'a_rearme' || veh.a_rearme || veh.needsRearming);
+
+    if (hasUnrearmedVehicle && Math.random() < 0.65) {
+      incidentData = catalog.find(inc => inc.id === 'depart_non_rearme_rupture_o2');
+    }
+
+    // Détection météo canicule
+    if (!incidentData && game.weather && (game.weather.condition === 'heat' || game.weather.condition === 'canicule' || (game.weather.temp && game.weather.temp >= 30))) {
+      if (Math.random() < 0.55) {
+        incidentData = catalog.find(inc => inc.id === 'canicule_coup_de_chaleur');
+      }
+    }
+
+    // Détection météo pluie battante / orage
+    if (!incidentData && game.weather && ['storm', 'rain', 'pluie_battante', 'orage_violent'].includes(game.weather.condition)) {
+      if (Math.random() < 0.55) {
+        incidentData = catalog.find(inc => inc.id === 'intemperies_glissade_trauma');
+      }
+    }
+
+    if (!incidentData) {
+      incidentData = catalog[Math.floor(Math.random() * catalog.length)];
+    }
 
     mission.currentIncident = {
       ...incidentData,

@@ -112,7 +112,7 @@ window.ProtecSocial = {
   },
 
   // Accepter un contrat de subvention
-  acceptSubvention(game, contractId) {
+  async acceptSubvention(game, contractId) {
     this.injectState(game);
     const contract = game.socialData.contracts.find(c => c.id === contractId);
     if (!contract || contract.status !== 'available') return;
@@ -132,7 +132,12 @@ window.ProtecSocial = {
     // Avertir si le joueur a déjà beaucoup de contrats actifs
     const activeContracts = game.socialData.contracts.filter(c => c.status === 'active');
     if (activeContracts.length >= 2) {
-      if (!confirm(`Attention : Vous avez déjà ${activeContracts.length} conventions d'action sociale actives en parallèle. Si vous ne terminez pas les missions à temps, des pénalités financières et de réputation vous seront appliquées. Confirmer ?`)) {
+      const confirmed = await window.ProtecDialog.confirm(
+        `Attention : Vous avez déjà ${activeContracts.length} conventions d'action sociale actives en parallèle.\n\nSi vous ne réalisez pas les maraudes et distributions dans les délais impartis, des pénalités financières et de réputation vous seront appliquées.`,
+        'Engager une Convention Supplémentaire',
+        { confirmText: 'Signer la Convention', cancelText: 'Annuler' }
+      );
+      if (!confirmed) {
         return;
       }
     }

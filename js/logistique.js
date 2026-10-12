@@ -1081,6 +1081,147 @@ window.ProtecLogistique = {
   // 8. ONGLET FLOTTE & GARAGE (MAINTENANCE, CARBURANT, DÉSINFECTION)
   // =========================================================================
 
+  // Actions de logistique post-mission, réarmement, désinfection et maintenance flotte
+  rearmAndDisinfectVehicle(game, vehicleId) {
+    const v = (game.vehicles || []).find(veh => veh.id === vehicleId);
+    if (!v) return;
+
+    const station = game.stations?.find(s => s.id === v.stationId) || game.stations?.[0];
+    const stock = (game.logistics?.stationsStock && game.logistics.stationsStock[station?.id]) || {};
+
+    // Consommables nécessaires : O2 médical, compresses stériles, gants nitrile, spray désinfectant
+    const hasO2 = (stock.oxygenBottles && stock.oxygenBottles >= 1) || (stock.medicalO2 && stock.medicalO2 >= 1);
+    const hasCompresses = (stock.woundKits && stock.woundKits >= 1) || (stock.compresses && stock.compresses >= 1);
+    const hasGloves = (stock.protectiveGloves && stock.protectiveGloves >= 1) || (stock.gants && stock.gants >= 1);
+    const hasDisinfectant = (stock.disinfectantSprays && stock.disinfectantSprays >= 1) || (stock.surfanios && stock.surfanios >= 1);
+
+    const hasWaterPoint = station?.premises?.rooms?.sas_desinfection_pharmacie?.hasWaterPoint || (station?.premises?.rooms?.sas_desinfection_pharmacie?.level >= 2);
+    const fullStock = hasO2 && hasCompresses && hasGloves && hasDisinfectant;
+
+    if (!fullStock) {
+      // Si consommables manquants au local, forfait kit réarmement pharmacie (divisé par 2 si point d'eau/centrale présente : 22 € au lieu de 45 €)
+      const cost = hasWaterPoint ? 22 : 45;
+      if (game.resources.money < cost) {
+        game.showToast('Stock insuffisant & Fonds manquants', `Le kit de réarmement (O2, compresses, gants, désinfectant) requiert ${cost} € ou les consommables en stock.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(game, -cost, `Achat Pack Réarmement & Bionettoyage VPSP ${hasWaterPoint ? '(Centrale SAS intégrée)' : ''}`, 'materiel');
+      }
+    } else {
+      // Déduire du stock de la station
+      if (stock.oxygenBottles) stock.oxygenBottles = Math.max(0, stock.oxygenBottles - 1);
+      else if (stock.medicalO2) stock.medicalO2 = Math.max(0, stock.medicalO2 - 1);
+
+      if (stock.woundKits) stock.woundKits = Math.max(0, stock.woundKits - 1);
+      else if (stock.compresses) stock.compresses = Math.max(0, stock.compresses - 1);
+
+      if (stock.protectiveGloves) stock.protectiveGloves = Math.max(0, stock.protectiveGloves - 1);
+      else if (stock.gants) stock.gants = Math.max(0, stock.gants - 1);
+
+      if (stock.disinfectantSprays) stock.disinfectantSprays = Math.max(0, stock.disinfectantSprays - 1);
+      else if (stock.surfanios) stock.surfanios = Math.max(0, stock.surfanios - 1);
+
+      this.syncToGlobalLogistics(game);
+    }
+
+    // Mobilisation d'un secouriste de l'antenne (priorité bénévole retraité ou bénévole disponible)
+    const vol = (game.volunteers || []).find(vl => vl.status === 'dispo' && (vl.profilSocial === 'retraite' || vl.dispoType === 'retraité')) ||
+                (game.volunteers || []).find(vl => vl.status === 'dispo');
+    if (vol) {
+      vol.exp = (vol.exp || 0) + 12; // Expérience logistique
+      const fatigueGain = hasWaterPoint ? 2 : 5; // Point d'eau divise la pénibilité par 2
+      vol.fatigue = Math.min(100, (vol.fatigue || 0) + fatigueGain);
+      vol.energy = Math.max(0, 100 - vol.fatigue);
+    }
+
+    v.status = 'dispo';
+    v.a_rearme = false;
+    v.needsRearming = false;
+    v.disinfectionNeeded = false;
+    v.lastDisinfectionDate = Date.now();
+
+    const waterNotice = hasWaterPoint ? ' [Centrale de bionettoyage SAS utilisée : temps & coût divisés par 2]' : '';
+    game.showToast(
+      'Véhicule Réarmé & Désinfecté ✓',
+      `${v.name} : Bouteille O2 changée, compresses et gants réapprovisionnés, bionettoyage validé${vol ? ` par ${vol.name}` : ''}.${waterNotice} Prêt pour départ opérationnel !`,
+      'green'
+    );
+
+    game.updateStatsUI();
+    game.saveGame();
+    this.renderModal(game);
+  },
+
+  // Réparation mécanique au garage agréé (ou atelier interne de l'antenne si installé)
+  repairVehicleGarage(game, vehicleId) {
+    const v = (game.vehicles || []).find(veh => veh.id === vehicleId);
+    if (!v) return;
+
+    const station = game.stations?.find(s => s.id === v.stationId) || game.stations?.[0];
+    const hasAtelier = station?.premises?.rooms?.garage_remisage?.hasAtelierMecanique;
+    // Si l'antenne a aménagé un atelier mécanique, les réparations sont faites en interne (-50% du coût)
+    const cost = hasAtelier ? 225 : 450;
+
+    if (game.resources.money < cost) {
+      game.showToast('Fonds insuffisants', `La réparation mécanique requiert ${cost} € ${hasAtelier ? '(Atelier interne -50%)' : '(Garage externe)'}.`, 'orange');
+      return;
+    }
+
+    game.resources.money -= cost;
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        game, 
+        -cost, 
+        hasAtelier ? `Réparation mécanique atelier interne antenne : ${v.name}` : `Réparation mécanique garage partenaire : ${v.name}`, 
+        'materiel'
+      );
+    }
+
+    v.mechanical = 95;
+    v.isBrokenDown = false;
+    if (v.status === 'en_panne') {
+      v.status = v.a_rearme ? 'a_rearme' : 'dispo';
+    }
+
+    const atelierNotice = hasAtelier ? ' Réparé dans l\'atelier mécanique interne de l\'antenne (-50% d\'économies).' : ' Facturé au tarif garage partenaire.';
+    game.showToast('Véhicule Réparé 🔧', `${v.name} est révisé avec succès (mécanique à 95%).${atelierNotice}`, 'green');
+    game.updateStatsUI();
+    game.saveGame();
+    this.renderModal(game);
+  },
+
+  // Passage du contrôle technique réglementaire
+  passControleTechnique(game, vehicleId) {
+    const v = (game.vehicles || []).find(veh => veh.id === vehicleId);
+    if (!v) return;
+
+    const cost = 120;
+    if (game.resources.money < cost) {
+      game.showToast('Fonds insuffisants', `Le contrôle technique réglementaire requiert ${cost} €.`, 'orange');
+      return;
+    }
+
+    game.resources.money -= cost;
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(game, -cost, `Contrôle Technique Poids Lourd / VPSP : ${v.name}`, 'materiel');
+    }
+
+    v.needsControleTechnique = false;
+    v.controleTechniqueKm = v.kilometrage || 115000;
+    v.lastControleTechniqueDate = {
+      year: game.clock?.year || 2026,
+      month: game.clock?.month || 9,
+      day: game.clock?.day || 5
+    };
+
+    game.showToast('Contrôle Technique Validé ✓', `${v.name} a passé avec succès son contrôle technique officiel (valable 1 an ou 25 000 km).`, 'green');
+    game.updateStatsUI();
+    game.saveGame();
+    this.renderModal(game);
+  },
+
   renderFlotteHTML(game, station) {
     const stationVehicles = (game.vehicles || []).filter(v => v.stationId === station?.id);
 
@@ -1088,7 +1229,7 @@ window.ProtecLogistique = {
       <div class="space-y-4">
         <div class="flex items-center justify-between text-xs font-bold text-slate-600">
           <span>Véhicules rattachés à ${station?.name || 'l\'antenne'} (${stationVehicles.length})</span>
-          <span class="text-[11px] text-slate-500">Désinfection et réarmement après transport sanitaire</span>
+          <span class="text-[11px] text-slate-500">Logistique retour, réarmement O2, désinfection et maintenance</span>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -1099,9 +1240,24 @@ window.ProtecLogistique = {
           ` : stationVehicles.map(v => {
             const fuel = v.fuel !== undefined ? v.fuel : 90;
             const mech = v.mechanical !== undefined ? v.mechanical : 95;
+            const km = v.kilometrage || v.mileage || 115000;
+            const isRearmNeeded = v.status === 'a_rearme' || v.a_rearme || v.needsRearming;
+            const isBroken = v.status === 'en_panne' || v.isBrokenDown;
+            const isCtNeeded = v.needsControleTechnique || (v.controleTechniqueKm && (km - v.controleTechniqueKm > 25000));
+
+            let statusBadge = '';
+            if (isBroken) {
+              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white animate-pulse">🚨 EN PANNE (GARAGE)</span>';
+            } else if (isRearmNeeded) {
+              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-100 text-red-800 border border-red-300 animate-pulse">⚠️ À RÉARMER & DÉSINFECTER</span>';
+            } else if (v.status === 'dispo') {
+              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200">DISPONIBLE</span>';
+            } else {
+              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-200">ENGAGÉ</span>';
+            }
 
             return `
-              <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+              <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3 ${isRearmNeeded ? 'border-red-300 ring-2 ring-red-100' : ''}">
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-3">
                     <div class="w-14 h-10 bg-slate-100 rounded-xl p-1 flex items-center justify-center flex-shrink-0 border border-slate-200 shadow-inner">
@@ -1109,16 +1265,14 @@ window.ProtecLogistique = {
                     </div>
                     <div>
                       <h5 class="text-xs font-black text-slate-900 leading-tight">${v.name}</h5>
-                      <span class="text-[10px] text-slate-500 font-semibold">${v.label || v.type}</span>
+                      <span class="text-[10px] text-slate-500 font-semibold">${v.label || v.type} • ${km.toLocaleString('fr-FR')} km</span>
                     </div>
                   </div>
                   
-                  <span class="px-2 py-0.5 rounded text-[10px] font-black border ${v.status === 'dispo' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}">
-                    ${v.status === 'dispo' ? 'DISPONIBLE' : 'ENGAGÉ'}
-                  </span>
+                  ${statusBadge}
                 </div>
 
-                <!-- Jauges Carburant & Mécanique -->
+                <!-- Jauges Carburant & Mécanique & Kilométrage -->
                 <div class="grid grid-cols-2 gap-3 text-xs">
                   <div>
                     <div class="flex justify-between text-[11px] mb-1">
@@ -1140,17 +1294,32 @@ window.ProtecLogistique = {
                   </div>
                 </div>
 
-                <!-- Actions directes de garage -->
+                ${isCtNeeded ? `
+                  <div class="p-2 rounded-xl bg-amber-50 border border-amber-200 text-[10.5px] text-amber-800 flex items-center justify-between">
+                    <span>⚠️ Contrôle Technique expiré (> 25 000 km)</span>
+                    <button onclick="window.ProtecLogistique.passControleTechnique(window.game, '${v.id}')" class="px-2 py-0.5 rounded-lg bg-amber-600 text-white font-bold hover:bg-amber-700 transition">
+                      Passer CT (120 €)
+                    </button>
+                  </div>
+                ` : ''}
+
+                <!-- Actions directes de garage et logistique post-mission -->
                 <div class="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100">
-                  <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'rearm')" class="py-1.5 rounded-xl text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
-                    Réarmer (30 €)
+                  <button onclick="window.ProtecLogistique.rearmAndDisinfectVehicle(window.game, '${v.id}')" class="py-1.5 rounded-xl text-[10px] font-extrabold ${isRearmNeeded ? 'bg-red-600 text-white hover:bg-red-700 shadow-md animate-pulse' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'} transition" title="Consomme O2, compresses, gants et désinfectant ou 45 €">
+                    ${isRearmNeeded ? 'Réarmer (O2/Stock)' : 'Réarmer ✓'}
                   </button>
-                  <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'fuel')" class="py-1.5 rounded-xl text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+                  <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'fuel')" class="py-1.5 rounded-xl text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
                     Plein (75 €)
                   </button>
-                  <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'disinfection_trimestrielle')" class="py-1.5 rounded-xl text-[10.5px] font-bold bg-teal-50 hover:bg-teal-100 text-teal-800 transition" title="Désinfection approfondie agréée ARS">
-                    Désinfecter (60 €)
-                  </button>
+                  ${isBroken || mech < 60 ? `
+                    <button onclick="window.ProtecLogistique.repairVehicleGarage(window.game, '${v.id}')" class="py-1.5 rounded-xl text-[10px] font-black bg-red-500 hover:bg-red-600 text-white transition shadow-sm" title="Réparation complète au garage">
+                      Garage (450 €)
+                    </button>
+                  ` : `
+                    <button onclick="window.ProtecLogistique.passControleTechnique(window.game, '${v.id}')" class="py-1.5 rounded-xl text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition" title="Contrôle technique périodique">
+                      CT (120 €)
+                    </button>
+                  `}
                 </div>
               </div>
             `;

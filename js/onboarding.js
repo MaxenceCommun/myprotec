@@ -743,7 +743,7 @@ window.ProtecOnboarding = {
 
     const currentMoney = 15000 - this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
     if (currentMoney < item.cost) {
-      alert("Dotation municipale insuffisante pour acheter ce meuble !");
+      window.ProtecDialog.alert("Dotation municipale insuffisante pour acheter ce meuble !", "Fonds Insuffisants");
       return;
     }
 

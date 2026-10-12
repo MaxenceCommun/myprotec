@@ -416,7 +416,7 @@ window.ProtecCommunication = {
   },
 
   // 4. LANCER UNE CAMPAGNE SPONSORISÉE PAYANTE
-  launchCampaign(game, subjectId, channelId) {
+  async launchCampaign(game, subjectId, channelId) {
     this.injectState(game);
     const sub = this.SUBJECTS.find(s => s.id === subjectId);
     const chan = this.CHANNELS.find(c => c.id === channelId);
@@ -428,7 +428,12 @@ window.ProtecCommunication = {
     }
 
     if (game.commData.activeCampaign) {
-      if (!confirm('Une campagne sponsorisée est déjà active. Remplacer par la nouvelle campagne ?')) {
+      const confirmed = await window.ProtecDialog.confirm(
+        'Une campagne sponsorisée est déjà active.\n\nSouhaitez-vous la remplacer par la nouvelle campagne ? Les effets de la précédente prendront fin immédiatement.',
+        'Remplacement de Campagne',
+        { confirmText: 'Remplacer la Campagne', cancelText: 'Annuler' }
+      );
+      if (!confirmed) {
         return;
       }
     }

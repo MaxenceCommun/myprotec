@@ -34,5 +34,9 @@
   "allianceStations": [],
   "renforts": [],
   "formationsSpeciales": [],
-  "chatMessages": []
+  "chatMessages": [],
+  "equipmentTiersConfig": {
+    "categories": ["formation", "secours", "logistique", "tenues"],
+    "tradeInRate": 0.30
+  }
 }

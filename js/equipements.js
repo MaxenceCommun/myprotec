@@ -1,28 +1,342 @@
 /**
- * PROTEC LIVE - MATÉRIEL PROFESSIONNEL, LOTS D'INTERVENTION & CONDITIONS DE TRAVAIL
+ * PROTEC LIVE - SYSTÈME D'ÉQUIPEMENT ET D'INVENTAIRE ÉCHELONNÉ EN GAMMES
  * 
- * 1. LOTS D'INTERVENTION & MATÉRIEL DE CRISE (Stockés en réserve de l'antenne) :
- *    - Lot Tronçonnage / Dégagement (Tempêtes, voiries)
- *    - Lot Épuisement / Pompage (Inondations, caves, parkings)
- *    - Lot Éclairage d'urgence (Nuit, coupures, PMA)
- *    - Lot Bâchage & Consolidation (Toitures arrachées, orages)
- *    - Lot Hébergement d'urgence (Gymnases, lits picots, sinistrés)
- *    - Lot Ravitaillement / Cuisine de crise (Repas chauds, interventions longues)
- *    - Lot Soutien psychologique & Accueil (CAI, CHU, NOVI, enfants)
+ * 1. Gammes de Matériel (Entrée de gamme / Standard / Haut de gamme & Connecté) :
+ *    - Pôle Formation : Mannequins RCP Adultes (Mousse -> Clicker mécanique -> QCPR Connecté), DSA Formation (Simple -> Connecté instructeur)
+ *    - Pôle Secours : Prise de paramètres (Manuel -> Multiparamétrique NIBP -> Moniteur Bluetooth/ECG), Brancardage & Immobilisation (Manuel -> Pompe électrique & ultraléger), Radios (Analogique -> Numérique ANTARES)
+ *    - Pôle Logistique & Tenues : Outillage (Manuel -> Électroportatif pro LED), Tenues EUP (Occasion -> Haute visibilité technique)
  * 
- * 2. CONDITIONS DE TRAVAIL & ÉQUIPEMENTS DU PERSONNEL :
- *    - Radios portatives ANTARES (fatigue réduite)
- *    - Tablettes tactiles embarquées TLO (vitesse d'intervention)
- *    - Smartphones d'astreinte sécurisés (taux de réponse SMS boosté)
- *    - Station PC & Ordinateurs Portables (vitesse administrative)
- *    - Fauteuils ergonomiques & Espace repos (récupération d'énergie)
- *    - Machine à café pro (moral des équipages)
+ * 2. Répercussions Opérationnelles Concrètes :
+ *    - Vitesse d'exécution des bilans, réarmements et montages de poste
+ *    - Qualité et précision des bilans SAMU 15 (0% erreur, valorisation réputation)
+ *    - Moral, fierté et motivation des secouristes et formateurs
+ *    - Attractivité et rentabilité des sessions de formation PSC1/SST
+ * 
+ * 3. Système de Trade-in (Reprise de l'ancien matériel à 30% de sa valeur d'achat).
+ * 4. Lots d'Intervention de Réserve & Équipements de Vie d'Antenne.
  */
 
 window.ProtecEquipements = {
-  activeTab: 'lots', // 'lots' ou 'confort'
+  activeTab: 'secours', // 'secours' | 'formation' | 'logistique' | 'tenues'
+  searchQuery: '',
 
-  // --- CATALOGUE DES LOTS D'INTERVENTION, SECOURS & MATÉRIEL DE CRISE ---
+  // =========================================================================
+  // 1. CATALOGUE DES GAMMES D'ÉQUIPEMENT ÉCHELONNÉES EN NIVEAUX (TIERS)
+  // =========================================================================
+  TIERED_EQUIPMENT_CATALOG: {
+    // A. PÔLE FORMATION GRAND PUBLIC & INTERNE
+    mannequin_rcp_adulte: {
+      id: 'mannequin_rcp_adulte',
+      category: 'formation',
+      name: 'Mannequin RCP Adulte (Massage & Insufflation)',
+      icon: '🩺',
+      desc: 'Matériel pédagogique fondamental pour les ateliers GQS, formations PSC1 et recyclages opérationnels PSE.',
+      tiers: [
+        {
+          level: 1,
+          badge: 'Niveau 1 : Entrée de Gamme',
+          badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
+          title: 'Mannequin RCP Mousse Basique',
+          price: 25,
+          maintenanceCostAnnual: 5,
+          desc: 'Structure en mousse simple avec voies respiratoires basiques. Aucun repère auditif.',
+          bullets: [
+            '⚠️ Usure rapide de la peau faciale et voies respiratoires',
+            '📉 -10% d’attractivité des formations grand public',
+            '❌ Aucun bonus de motivation pour les formateurs'
+          ],
+          stats: { attractivity: -0.10, learnSpeedBonus: 0, trainerMoralBonus: 0, publicPriceBonus: 0, satisfactionScore: 60 }
+        },
+        {
+          level: 2,
+          badge: 'Niveau 2 : Standard Réglementaire',
+          badgeColor: 'bg-blue-100 text-pc-blue border-blue-300',
+          title: 'Mannequin RCP Réaliste avec Clicker Mécanique',
+          price: 150,
+          maintenanceCostAnnual: 15,
+          desc: 'Conforme aux recommandations ERC/RNMSC. Clicker mécanique sonore confirmant la profondeur réglementaire (5-6 cm).',
+          bullets: [
+            '✓ Standard réglementaire d’apprentissage officiel',
+            '✓ Qualité d’apprentissage normale et durable',
+            '✓ +5% de vitesse d’acquisition des gestes réflexes'
+          ],
+          stats: { attractivity: 0, learnSpeedBonus: 0.05, trainerMoralBonus: 5, publicPriceBonus: 0, satisfactionScore: 80 }
+        },
+        {
+          level: 3,
+          badge: 'Niveau 3 : Haut de Gamme & Connecté',
+          badgeColor: 'bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400',
+          title: 'Mannequin Connecté QCPR (Tablette & Bluetooth)',
+          price: 450,
+          maintenanceCostAnnual: 40,
+          desc: 'Capteurs biométriques haute fidélité avec retransmission Bluetooth temps réel sur tablette (rythme, décompression, volume).',
+          bullets: [
+            '🌟 +25% de satisfaction des apprenants (+20 € tarif PSC1 autorisé)',
+            '⚡ +15% de rapidité de formation des nouveaux PSE bénévoles',
+            '💪 Boost de fierté et motivation pour les formateurs (+15 moral)',
+            '🏛️ Attire des demandes spontanées d’entreprises locales (conventions SST)'
+          ],
+          stats: { attractivity: 0.25, learnSpeedBonus: 0.25, trainerMoralBonus: 15, publicPriceBonus: 20, satisfactionScore: 100, triggerCompanyContracts: true }
+        }
+      ]
+    },
+
+    dsa_formation: {
+      id: 'dsa_formation',
+      category: 'formation',
+      name: 'Défibrillateur d’Entraînement Pédagogique (DSA)',
+      icon: '⚡',
+      desc: 'Simulateur d’arrêt cardiaque pour l’apprentissage de la défibrillation automatisée précoce.',
+      tiers: [
+        {
+          level: 1,
+          badge: 'Niveau 1 : Entrée de Gamme',
+          badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
+          title: 'Boîtier DSA Pré-programmé Basique',
+          price: 90,
+          maintenanceCostAnnual: 10,
+          desc: 'Boîtier autonome avec messages vocaux fixes et scénario pré-enregistré unique.',
+          bullets: [
+            '⚠️ Scénario unique rigide (choc recommandé uniquement)',
+            '❌ Aucun contrôle instructeur à distance'
+          ],
+          stats: { examSuccessBonus: 0, repBonus: 0 }
+        },
+        {
+          level: 2,
+          badge: 'Niveau 2 : Connecté & Pédagogique Avancé',
+          badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300 ring-1 ring-emerald-400',
+          title: 'Défibrillateur Connecté avec Télécommande Instructeur',
+          price: 320,
+          maintenanceCostAnnual: 25,
+          desc: 'Télécommande sans fil instructeur permettant d’injecter des scénarios d’arythmie avancés (asystolie, FV, électrodes décollées).',
+          bullets: [
+            '✓ Hausse de la qualité de validation PSE1 / PSC (+20% taux de réussite)',
+            '✓ Scénarios d’arythmie variés et réalistes',
+            '✓ +10 pts de réputation pédagogique d’antenne'
+          ],
+          stats: { examSuccessBonus: 0.20, repBonus: 10 }
+        }
+      ]
+    },
+
+    // B. PÔLE SECOURS & OPÉRATIONS (DPS / GARDES SAMU)
+    prise_parametres: {
+      id: 'prise_parametres',
+      category: 'secours',
+      name: 'Kit de Prise de Constantes & Paramètres Vitaux',
+      icon: '🩺',
+      desc: 'Dotation fondamentale embarquée dans les VPSP et postes de secours pour l’examen clinique.',
+      tiers: [
+        {
+          level: 1,
+          badge: 'Niveau 1 : Manuel Classique',
+          badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
+          title: 'Kit Manuel Classique (Stéthoscope + Tensiomètre Poire)',
+          price: 80,
+          maintenanceCostAnnual: 10,
+          desc: 'Tensiomètre anéroïde manuel, stéthoscope standard et saturomètre à pince d’entrée de gamme.',
+          bullets: [
+            '⚠️ Vitesse de bilan standard (mesure manuelle chronophage)',
+            '⚠️ 15% de risque d’erreur de mesure sur victime agitée ou en mouvement'
+          ],
+          stats: { speedBonus: 0, errorRisk: 0.15, samuRepBonus: 0, crewMoralBonus: 0, regulationSpeed: 1.0 }
+        },
+        {
+          level: 2,
+          badge: 'Niveau 2 : Multiparamétrique Moderne',
+          badgeColor: 'bg-blue-100 text-pc-blue border-blue-300',
+          title: 'Multiparamétrique Moderne (NIBP Auto + SpO2 + Temp IR)',
+          price: 900,
+          maintenanceCostAnnual: 60,
+          desc: 'Tensiomètre automatique oscillométrique NIBP, saturomètre de pouls à capteur silicone et thermomètre infrarouge tympanique.',
+          bullets: [
+            '⚡ Bilan secouriste 30% plus rapide en intervention',
+            '✓ 0% d’erreur de transcription ou de mesure',
+            '✓ +5 pts de réputation auprès du SAMU 15'
+          ],
+          stats: { speedBonus: 0.30, errorRisk: 0, samuRepBonus: 5, crewMoralBonus: 5, regulationSpeed: 1.3 }
+        },
+        {
+          level: 3,
+          badge: 'Niveau 3 : Moniteur Pro ECG & Bluetooth',
+          badgeColor: 'bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400',
+          title: 'Moniteur Multiparamétrique Professionnel (ECG & Bluetooth)',
+          price: 3500,
+          maintenanceCostAnnual: 150,
+          desc: 'Moniteur médical durci IP54 avec transmission Bluetooth directe des constantes et du tracé ECG vers la régulation SAMU 15.',
+          bullets: [
+            '⚡ Bilan vital instantané (-50% temps de prise en charge)',
+            '🚑 Libération accélérée du VPSP aux Urgences/SAMU (-40% attente)',
+            '🏥 +10 pts de réputation SAMU 15 lors de chaque régulation',
+            '💪 Confiance et fierté totale des secouristes (+10 moral permanent)'
+          ],
+          stats: { speedBonus: 0.50, errorRisk: 0, samuRepBonus: 10, crewMoralBonus: 10, regulationSpeed: 2.0, fastHospitalRelease: true }
+        }
+      ]
+    },
+
+    brancardage_immobilisation: {
+      id: 'brancardage_immobilisation',
+      category: 'secours',
+      name: 'Matériel d’Immobilisation & Brancardage',
+      icon: '🩼',
+      desc: 'Conditionnement des polytraumatisés, extractions et évacuations sanitaires en VPSP.',
+      tiers: [
+        {
+          level: 1,
+          badge: 'Niveau 1 : Standard Manuel',
+          badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
+          title: 'Brancard Cuillère & Matelas Coquille à Pompe Manuelle',
+          price: 350,
+          maintenanceCostAnnual: 15,
+          desc: 'Matelas coquille traditionnel avec pompe à dépression manuelle et brancard pliable en acier lourd.',
+          bullets: [
+            '⚠️ Pompage manuel éprouvant et réarmement lent',
+            '⚠️ Fatigue physique accrue des équipiers lors des portages'
+          ],
+          stats: { conditioningSpeedBonus: 0, fatigueReduction: 0 }
+        },
+        {
+          level: 2,
+          badge: 'Niveau 2 : Électrique & Ergonomique Pro',
+          badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300 ring-1 ring-emerald-400',
+          title: 'Matelas Coquille avec Pompe Électrique & Brancard Ultraléger',
+          price: 1400,
+          maintenanceCostAnnual: 50,
+          desc: 'Dépression instantanée par micro-pompe électrique 12V/230V et brancard en aluminium aéronautique avec roulettes tout-terrain.',
+          bullets: [
+            '⚡ Réduit de 40% le temps de conditionnement de la victime',
+            '💪 Préserve la santé des secouristes (-30% de fatigue sur brancardage)',
+            '✓ Manipulation douce et sécurisée pour les victimes de fractures'
+          ],
+          stats: { conditioningSpeedBonus: 0.40, fatigueReduction: 0.30 }
+        }
+      ]
+    },
+
+    radio_communication: {
+      id: 'radio_communication',
+      category: 'secours',
+      name: 'Réseau Radio & Télécommunications de Poste',
+      icon: '📻',
+      desc: 'Liaison tactique entre les binômes PAPS, les VPSP, le chef de dispositif et le CODIS/SAMU.',
+      tiers: [
+        {
+          level: 1,
+          badge: 'Niveau 1 : Analogique Basique',
+          badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
+          title: 'Talkies-Walkies Analogiques Grand Public',
+          price: 180,
+          maintenanceCostAnnual: 10,
+          desc: 'Postes PMR446 analogiques à portée limitée (1 km en milieu urbain dense).',
+          bullets: [
+            '⚠️ Risque de grésillements et perte de liaison en zone encaissée',
+            '⚠️ Aucune liaison cryptée avec les autorités'
+          ],
+          stats: { coordinationBonus: 0, prefectureRepBonus: 0 }
+        },
+        {
+          level: 2,
+          badge: 'Niveau 2 : Numérique Pro ANTARES / DMR',
+          badgeColor: 'bg-indigo-100 text-indigo-900 border-indigo-300 ring-1 ring-indigo-400',
+          title: 'Radios Numériques Professionnelles (ANTARES / Relais & Oreillettes)',
+          price: 850,
+          maintenanceCostAnnual: 40,
+          desc: 'Terminaux numériques haute puissance compatibles réseau de Sécurité Civile, micros déportés et oreillettes discrètes.',
+          bullets: [
+            '✓ Coordination fluide sans interférence sur les DPS de grande envergure',
+            '✓ +15 pts de réputation auprès de la Préfecture',
+            '✓ Moins de fatigue mentale pour les chefs d’équipe'
+          ],
+          stats: { coordinationBonus: 0.30, prefectureRepBonus: 15 }
+        }
+      ]
+    },
+
+    // C. PÔLE LOGISTIQUE & VIE ASSOCIATIVE
+    outillage_logistique: {
+      id: 'outillage_logistique',
+      category: 'logistique',
+      name: 'Outillage Logistique & Aménagement de Dispositif',
+      icon: '🧰',
+      desc: 'Montage et démontage des tentes de poste, barnums, balisages et installations de crise.',
+      tiers: [
+        {
+          level: 1,
+          badge: 'Niveau 1 : Outillage Manuel d’Appoint',
+          badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
+          title: 'Caisse d’Outillage Manuel d’Appoint',
+          price: 75,
+          maintenanceCostAnnual: 5,
+          desc: 'Tournevis, marteaux, pinces et clés plates manuelles.',
+          bullets: [
+            '⚠️ Temps de montage de poste long et manuel',
+            '⚠️ Effort physique supplémentaire avant la prise de poste'
+          ],
+          stats: { setupSpeedBonus: 0, nightFatigueReduction: 0 }
+        },
+        {
+          level: 2,
+          badge: 'Niveau 2 : Électroportatif Pro & LED Haute Puissance',
+          badgeColor: 'bg-amber-100 text-amber-900 border-amber-300 ring-1 ring-amber-400',
+          title: 'Pack Électroportatif Pro & Éclairages LED Autonomes',
+          price: 650,
+          maintenanceCostAnnual: 30,
+          desc: 'Visseuses à chocs Brushless, batteries rechargeables haute capacité et projecteurs LED autonomes 10 000 lumens.',
+          bullets: [
+            '⚡ Divise par deux le temps de montage et démontage de poste',
+            '🌙 Baisse de 25% la fatigue lors des dispositifs de nuit',
+            '✓ Efficacité logistique reconnue par les organisateurs'
+          ],
+          stats: { setupSpeedBonus: 0.50, nightFatigueReduction: 0.25 }
+        }
+      ]
+    },
+
+    vetements_eup: {
+      id: 'vetements_eup',
+      category: 'tenues',
+      name: 'Tenues Opérationnelles & Équipements de Protection (EPI)',
+      icon: '👕',
+      desc: 'Parkas de protection intempéries, pantalons F1 Protec, casques et chasubles d’intervention.',
+      tiers: [
+        {
+          level: 1,
+          badge: 'Niveau 1 : Standards Reconditionnés',
+          badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
+          title: 'Tenues Standards d’Occasion & Reconditionnées',
+          price: 60,
+          maintenanceCostAnnual: 10,
+          desc: 'Parkas et pantalons reconditionnés d’anciens stocks associatifs.',
+          bullets: [
+            '⚠️ Usure rapide et tissus vieillissants',
+            '⚪ Moral neutre pour les bénévoles'
+          ],
+          stats: { moralBonus: 0, retentionBonus: 0 }
+        },
+        {
+          level: 2,
+          badge: 'Niveau 2 : Haute Visibilité Respirantes & Neuves',
+          badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300 ring-1 ring-emerald-400',
+          title: 'Tenues Haute Visibilité Techniques & Respirantes',
+          price: 420,
+          maintenanceCostAnnual: 30,
+          desc: 'Textiles respirants déperlants, bandes rétroréfléchissantes classe 3 haute visibilité et coupe ajustée.',
+          bullets: [
+            '🌟 Gros boost de moral et d’investissement des bénévoles (+15 moral permanent)',
+            '✓ Sentiment d’appartenance et valorisation d’image renforcés',
+            '✓ Réduit significativement le taux d’attrition et départs de membres'
+          ],
+          stats: { moralBonus: 15, retentionBonus: 0.25 }
+        }
+      ]
+    }
+  },
+
+  // =========================================================================
+  // 2. LOTS D'INTERVENTION DE RÉSERVE (Rétrocompatibilité & Crise)
+  // =========================================================================
   LOTS_CATALOG: [
     {
       id: 'lot_secours_a',
@@ -136,18 +450,10 @@ window.ProtecEquipements = {
     }
   ],
 
-  // --- CATALOGUE DU MATÉRIEL DE VIE D'ANTENNE & CONDITIONS DE TRAVAIL ---
+  // =========================================================================
+  // 3. ÉQUIPEMENTS DE VIE D'ANTENNE & CONFORT RH
+  // =========================================================================
   WORKPLACE_CATALOG: [
-    {
-      id: 'radios',
-      name: 'Lot de Radios Numériques ANTARES (VHF/UHF)',
-      icon: '📻',
-      price: 450,
-      badge: 'Communication Opérationnelle',
-      badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-      desc: 'Talkies-walkies professionnels avec micros déportés pour liaison continue avec le CODIS, SAMU et chefs de dispositif.',
-      bonus: 'Réduit la fatigue mentale des chefs d’équipe (-15% perte d’énergie sur le terrain) et assure une coordination sans faille.'
-    },
     {
       id: 'tablettes',
       name: 'Tablettes Tactiles Embarquées (TLO)',
@@ -200,18 +506,21 @@ window.ProtecEquipements = {
     }
   ],
 
-  // Rétrocompatibilité CATALOG pour le code existant
   get CATALOG() {
     return [...this.LOTS_CATALOG, ...this.WORKPLACE_CATALOG];
   },
 
-  // Initialisation de l'état
+  // =========================================================================
+  // 4. GESTION DE L'ÉTAT & INITIALISATION
+  // =========================================================================
   injectState(game) {
     if (!game.workplaceEquipment) {
       game.workplaceEquipment = {};
     }
+    // Rétrocompatibilité lots et équipements
     const allKeys = [
       'radios', 'tablettes', 'phones', 'pcs', 'fauteuils', 'cafe',
+      'lot_secours_a', 'lot_secours_b', 'lot_secours_c',
       'lot_tronconnage', 'lot_pompage', 'lot_eclairage', 'lot_bachage',
       'lot_hebergement', 'lot_ravitaillement', 'lot_soutien_psy'
     ];
@@ -220,9 +529,154 @@ window.ProtecEquipements = {
         game.workplaceEquipment[k] = 0;
       }
     });
+
+    // Initialisation des niveaux d'équipement par défaut (Tier 1 pour chaque type)
+    if (!game.equipmentTiers) {
+      game.equipmentTiers = {
+        mannequin_rcp_adulte: 1,
+        dsa_formation: 1,
+        prise_parametres: 1,
+        brancardage_immobilisation: 1,
+        radio_communication: game.workplaceEquipment.radios > 0 ? 2 : 1,
+        outillage_logistique: 1,
+        vetements_eup: 1
+      };
+    } else {
+      // Vérifier chaque clé
+      const defaultTiers = {
+        mannequin_rcp_adulte: 1,
+        dsa_formation: 1,
+        prise_parametres: 1,
+        brancardage_immobilisation: 1,
+        radio_communication: 1,
+        outillage_logistique: 1,
+        vetements_eup: 1
+      };
+      Object.keys(defaultTiers).forEach(k => {
+        if (game.equipmentTiers[k] === undefined) {
+          game.equipmentTiers[k] = defaultTiers[k];
+        }
+      });
+    }
   },
 
-  // Calcul du volume total de stockage consommé par les lots d'intervention
+  // Récupérer le niveau actuel d'un équipement
+  getEquipmentTier(game, itemKey) {
+    this.injectState(game);
+    return game.equipmentTiers[itemKey] || 1;
+  },
+
+  // Calcul du coût total de maintenance annuelle du matériel possédé
+  getTotalAnnualMaintenance(game) {
+    this.injectState(game);
+    let total = 0;
+    Object.keys(this.TIERED_EQUIPMENT_CATALOG).forEach(key => {
+      const itemDef = this.TIERED_EQUIPMENT_CATALOG[key];
+      const currentTierLevel = game.equipmentTiers[key] || 1;
+      const tierDef = itemDef.tiers.find(t => t.level === currentTierLevel) || itemDef.tiers[0];
+      if (tierDef) {
+        total += tierDef.maintenanceCostAnnual || 0;
+      }
+    });
+    return total;
+  },
+
+  // Calcul du score de modernité & fierté de l'antenne (0 à 100%)
+  getEquipmentModernityScore(game) {
+    this.injectState(game);
+    let totalPoints = 0;
+    let maxPoints = 0;
+    Object.keys(this.TIERED_EQUIPMENT_CATALOG).forEach(key => {
+      const itemDef = this.TIERED_EQUIPMENT_CATALOG[key];
+      const maxTier = itemDef.tiers.length;
+      const curTier = game.equipmentTiers[key] || 1;
+      totalPoints += curTier;
+      maxPoints += maxTier;
+    });
+    return maxPoints > 0 ? Math.round((totalPoints / maxPoints) * 100) : 50;
+  },
+
+  // =========================================================================
+  // 5. ACHAT & MISE À NIVEAU (TRADE-IN AVEC REPRISE DE 30%)
+  // =========================================================================
+  async upgradeTier(game, itemKey, targetLevel) {
+    this.injectState(game);
+    const itemDef = this.TIERED_EQUIPMENT_CATALOG[itemKey];
+    if (!itemDef) return;
+
+    const currentLevel = game.equipmentTiers[itemKey] || 1;
+    if (targetLevel <= currentLevel) {
+      game.showToast('Niveau Déjà Possédé', `Votre antenne dispose déjà de ce niveau d'équipement (${itemDef.name}).`, 'blue');
+      return;
+    }
+
+    const currentTierDef = itemDef.tiers.find(t => t.level === currentLevel);
+    const targetTierDef = itemDef.tiers.find(t => t.level === targetLevel);
+    if (!targetTierDef) return;
+
+    // Reprise de l'ancien matériel à 30% de sa valeur d'achat
+    const tradeInRate = 0.30;
+    const tradeInValue = currentTierDef ? Math.round(currentTierDef.price * tradeInRate) : 0;
+    const netPrice = Math.max(0, targetTierDef.price - tradeInValue);
+
+    // Contrôle de trésorerie
+    if (game.resources.money < netPrice) {
+      game.showToast(
+        'Trésorerie Insuffisante',
+        `L’acquisition de « ${targetTierDef.title} » requiert ${netPrice.toLocaleString('fr-FR')} € ${tradeInValue > 0 ? `(après reprise de votre ancien matériel pour ${tradeInValue} €)` : ''}.`,
+        'orange'
+      );
+      return;
+    }
+
+    const confirmMsg = `ACQUISITION & MODERNISATION DE MATÉRIEL :\n\n• Nouvel Équipement : ${targetTierDef.title}\n• Prix Catalogue : ${targetTierDef.price.toLocaleString('fr-FR')} €\n• Reprise Ancien Matériel (30%) : -${tradeInValue.toLocaleString('fr-FR')} €\n• Montant Net à Régler : ${netPrice.toLocaleString('fr-FR')} €\n• Maintenance Annuelle Estimée : ~${targetTierDef.maintenanceCostAnnual} €/an\n\nConfirmez-vous cette commande ?`;
+
+    const confirmed = await window.ProtecDialog.confirm(
+      confirmMsg,
+      'Modernisation du Matériel',
+      { confirmText: `Commander (-${netPrice} €)`, cancelText: 'Annuler' }
+    );
+    if (!confirmed) return;
+
+    // Débit financier
+    game.resources.money -= netPrice;
+    game.equipmentTiers[itemKey] = targetLevel;
+
+    // Enregistrement dans les finances
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        game,
+        -netPrice,
+        `Acquisition : ${targetTierDef.title} (Reprise ancien matériel : +${tradeInValue} €)`,
+        'equipement'
+      );
+    }
+
+    // Répercussion sur le moral et motivation des bénévoles
+    const moralBoost = targetTierDef.stats.trainerMoralBonus || targetTierDef.stats.crewMoralBonus || targetTierDef.stats.moralBonus || 8;
+    if (game.volunteers && game.volunteers.length > 0) {
+      game.volunteers.forEach(v => {
+        v.moral = Math.min(100, (v.moral || 75) + Math.round(moralBoost * 0.7));
+        v.motivation = v.moral;
+        v.humeur = v.moral;
+      });
+    }
+
+    game.saveGame();
+    game.updateStatsUI();
+
+    game.showToast(
+      '🎉 Matériel Réceptionné & Armé !',
+      `« ${targetTierDef.title} » est désormais opérationnel ! Ancien matériel repris pour ${tradeInValue} €. Bénévoles fiers et motivés (+${moralBoost} moral) !`,
+      'green'
+    );
+
+    this.renderModal(game);
+  },
+
+  // =========================================================================
+  // 6. CALCUL DU VOLUME DE STOCKAGE & ACHAT DE LOTS (Rétrocompatibilité)
+  // =========================================================================
   getLotsStorageUsed(game) {
     this.injectState(game);
     let used = 0;
@@ -233,31 +687,26 @@ window.ProtecEquipements = {
     return used;
   },
 
-  // Vérifier si un équipement ou lot est possédé
   hasEquipment(game, equipId) {
     this.injectState(game);
     return (game.workplaceEquipment[equipId] || 0) > 0;
   },
 
-  // Récupérer le nombre possédé d'un équipement ou lot
   getEquipmentCount(game, equipId) {
     this.injectState(game);
     return game.workplaceEquipment[equipId] || 0;
   },
 
-  // Acheter un équipement ou lot
-  buyEquipment(game, equipId) {
+  async buyEquipment(game, equipId) {
     this.injectState(game);
     const item = this.CATALOG.find(e => e.id === equipId);
     if (!item) return;
 
-    // 1. Contrôle financier
     if (game.resources.money < item.price) {
       game.showToast('Trésorerie Insuffisante', `L’achat de « ${item.name} » nécessite ${item.price.toLocaleString('fr-FR')} €.`, 'orange');
       return;
     }
 
-    // 2. Contrôle du stockage si c'est un lot d'intervention matériel
     const isLot = this.LOTS_CATALOG.some(l => l.id === equipId);
     if (isLot && window.ProtecLocaux) {
       if (!window.ProtecLocaux.hasStorageRoom(game)) {
@@ -280,23 +729,24 @@ window.ProtecEquipements = {
     }
 
     const storageMsg = isLot ? `\n(Encombrement : ${item.storageSize || 2} unités de stockage)` : '';
-    if (!confirm(`Confirmez-vous l'achat de « ${item.name} » pour ${item.price.toLocaleString('fr-FR')} € ?${storageMsg}`)) {
-      return;
-    }
+    const confirmed = await window.ProtecDialog.confirm(
+      `Confirmez-vous l'achat de « ${item.name} » pour ${item.price.toLocaleString('fr-FR')} € ?${storageMsg}`,
+      'Achat d\'Équipement',
+      { confirmText: 'Acheter', cancelText: 'Annuler' }
+    );
+    if (!confirmed) return;
 
-    // Déduction des fonds et ajout du matériel
     game.resources.money -= item.price;
     game.workplaceEquipment[equipId] = (game.workplaceEquipment[equipId] || 0) + 1;
 
-    // Enregistrement dans les flux financiers
     if (window.ProtecFinances) {
       window.ProtecFinances.recordTransaction(game, -item.price, `Achat Matériel : ${item.name}`, 'equipement');
     }
 
-    // Effet moral immédiat si machine à café
     if (equipId === 'cafe') {
       game.volunteers.forEach(v => {
-        v.motivation = Math.min(100, (v.motivation || 70) + 10);
+        v.moral = Math.min(100, (v.moral || 70) + 10);
+        v.motivation = v.moral;
       });
     }
 
@@ -308,28 +758,99 @@ window.ProtecEquipements = {
     this.renderModal(game);
   },
 
-  searchQuery: '',
+  // =========================================================================
+  // 7. IMPACTS OPÉRATIONNELS EN MISSION (DPS, SAMU, INTEMPÉRIES)
+  // =========================================================================
+  checkMissionEquipmentTierBonus(game, mission) {
+    this.injectState(game);
+    const mText = `${mission.title || ''} ${mission.desc || ''}`.toLowerCase();
+    const crew = mission.assignedCrew?.volunteers || [];
 
-  setSearchQuery(query, game) {
-    this.searchQuery = query;
-    this.renderModal(game);
-    const input = document.getElementById('equipment-search-input');
-    if (input) {
-      input.focus();
-      input.setSelectionRange(input.value.length, input.value.length);
+    // 1. Prise de Paramètres Vitaux
+    const paramTier = game.equipmentTiers.prise_parametres || 1;
+    if (paramTier === 3) {
+      // Moniteur multiparamétrique ECG & Bluetooth
+      const bonusRepSamu = 10;
+      if (window.ProtecConventions) {
+        window.ProtecConventions.adjustInstitutionalReputation(game, 'samu', bonusRepSamu, 'Bilan ECG instantané & constantes temps réel');
+      }
+      crew.forEach(v => {
+        v.moral = Math.min(100, (v.moral || 75) + 6);
+        v.motivation = v.moral;
+      });
+      game.showToast(
+        '🩺 Bilan Vital Instantané (Moniteur ECG Pro)',
+        'Constantes NIBP/SpO2 et tracé ECG transmis par Bluetooth au SAMU 15. Régulation immédiate et prise en charge saluée par le médecin régulateur (+10 réputation SAMU) !',
+        'indigo'
+      );
+    } else if (paramTier === 2) {
+      if (window.ProtecConventions) {
+        window.ProtecConventions.adjustInstitutionalReputation(game, 'samu', 5, 'Bilan multiparamétrique automatique précis');
+      }
+    } else {
+      // Tier 1 : Risque d'erreur de mesure
+      if (Math.random() < 0.15) {
+        game.showToast(
+          'Tensionométrie Délicate ⚠️',
+          'Victime agitée : la prise de tension manuelle au stéthoscope a pris du retard. Envisagez un tensiomètre multiparamétrique automatique.',
+          'orange'
+        );
+      }
+    }
+
+    // 2. Brancardage & Immobilisation
+    const brancardTier = game.equipmentTiers.brancardage_immobilisation || 1;
+    if (brancardTier === 2) {
+      // Matelas pompe électrique & brancard ultraléger
+      crew.forEach(v => {
+        // Préservation de la fatigue (-30%)
+        v.fatigue = Math.max(0, (v.fatigue || 20) - 8);
+        v.energy = Math.min(100, 100 - v.fatigue);
+      });
+      if (mText.includes('trauma') || mText.includes('sport') || mText.includes('chute') || mission.type === 'samu') {
+        game.resources.reputationScore = (game.resources.reputationScore || 0) + 12;
+        game.showToast(
+          '🩼 Conditionnement Express & Sans Douleur',
+          'Matelas coquille mis sous dépression électrique en 20s et portage ergonomique : confort absolu pour la victime et fatigue des secouristes préservée (-30%) !',
+          'green'
+        );
+      }
+    }
+
+    // 3. Radios Numériques ANTARES
+    const radioTier = game.equipmentTiers.radio_communication || 1;
+    if (radioTier === 2 && (mission.scale?.includes('ME') || mission.scale?.includes('GE') || mission.requiredVolunteers >= 5)) {
+      if (window.ProtecConventions) {
+        window.ProtecConventions.adjustInstitutionalReputation(game, 'prefecture', 15, 'Coordination radio numérique ANTARES parfaite');
+      }
+      game.showToast(
+        '📻 Réseau ANTARES Déployé',
+        'Liaison tactique numérique sans faille entre tous les binômes et le PC régulation (+15 pts réputation Préfecture) !',
+        'blue'
+      );
+    }
+
+    // 4. Outillage Électroportatif Pro
+    const outilTier = game.equipmentTiers.outillage_logistique || 1;
+    if (outilTier === 2 && (mission.scale?.includes('ME') || mission.scale?.includes('GE') || mission.type === 'meteo')) {
+      crew.forEach(v => {
+        v.fatigue = Math.max(0, (v.fatigue || 20) - 5);
+        v.energy = Math.min(100, 100 - v.fatigue);
+      });
+      game.showToast(
+        '⚡ Montage Électroportatif Express',
+        'Poste de secours et éclairages LED montés deux fois plus vite grâce aux visseuses Brushless et projecteurs autonomes !',
+        'amber'
+      );
     }
   },
 
-  // Changement d'onglet
-  setTab(tabName, game) {
-    this.activeTab = tabName;
-    this.renderModal(game);
-  },
-
-  // Effet opérationnel des lots lors de la fin d'une mission
   checkMissionLotBonus(game, mission) {
     this.injectState(game);
     const mText = `${mission.title || ''} ${mission.desc || ''}`.toLowerCase();
+
+    // Vérification des bonus de gammes
+    this.checkMissionEquipmentTierBonus(game, mission);
 
     // 1. Lot Tronçonnage / Dégagement
     if ((mText.includes('arbre') || mText.includes('vent') || mText.includes('tempête') || mText.includes('dégagement') || mText.includes('voie')) && this.hasEquipment(game, 'lot_tronconnage')) {
@@ -369,8 +890,8 @@ window.ProtecEquipements = {
     // 6. Lot Ravitaillement / Cuisine de crise
     if ((mText.includes('ravitaillement') || mText.includes('longue durée') || (mission.durationHours && mission.durationHours >= 4)) && this.hasEquipment(game, 'lot_ravitaillement')) {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + 15;
-      const crew = mission.assignedCrew?.volunteers || [];
-      crew.forEach(v => {
+      const crewVols = mission.assignedCrew?.volunteers || [];
+      crewVols.forEach(v => {
         v.energy = Math.min(100, (v.energy || 70) + 15);
         v.motivation = Math.min(100, (v.motivation || 70) + 10);
       });
@@ -383,29 +904,42 @@ window.ProtecEquipements = {
       game.showToast('🫂 Lot Soutien Psy & Accueil (CAI) !', 'Sas confidentiel et prise en charge humaine déployés avec succès pour les familles et impliqués (+40 pts notoriété) !', 'purple');
     }
 
-    // 8. Lot A (Secours à personne standard)
+    // 8. Lot A, B, C
     if (this.hasEquipment(game, 'lot_secours_a')) {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + 15;
     }
-
-    // 9. Lot B (Immobilisation et relevage)
     if ((mission.type === 'samu' || mission.type === 'pompiers' || mText.includes('sport') || mText.includes('trail') || mText.includes('course') || mText.includes('trauma')) && this.hasEquipment(game, 'lot_secours_b')) {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + 20;
     }
-
-    // 10. Lot C (Poste de Secours fixe / Renfort)
     if ((mission.scale?.includes('ME') || mission.scale?.includes('GE') || (mission.requiredVolunteers && mission.requiredVolunteers >= 6)) && this.hasEquipment(game, 'lot_secours_c')) {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + 25;
       game.showToast('⛺ Lot C Poste Fixe Déployé !', 'Tente de poste de secours et brancards de soins armés : flux de victimes parfaitement absorbé (+25 pts réputation) !', 'purple');
     }
   },
 
-  // Alias pour app.js
+  // Navigation & onglets
+  setTab(tabName, game) {
+    this.activeTab = tabName;
+    this.renderModal(game);
+  },
+
+  setSearchQuery(query, game) {
+    this.searchQuery = query;
+    this.renderModal(game);
+    const input = document.getElementById('equipment-search-input');
+    if (input) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  },
+
   renderEquipementsModal(game) {
     this.renderModal(game);
   },
 
-  // Rendu de la modale Matériel & Lots
+  // =========================================================================
+  // 8. INTERFACE COMPLÈTE DE LA BOUTIQUE & INVENTAIRE MODULAIRE
+  // =========================================================================
   renderModal(game) {
     this.injectState(game);
     const modal = document.getElementById('main-modal');
@@ -415,14 +949,16 @@ window.ProtecEquipements = {
     const body = document.getElementById('modal-body');
 
     modal.classList.remove('hidden');
-    title.textContent = 'Matériel Opérationnel, Lots de Crise & Équipements';
-    subtitle.textContent = 'Acquisition de lots d’intervention spécialisés et amélioration des conditions de travail';
+    title.textContent = 'Parc Matériel, Gammes d’Équipements & Inventaire';
+    subtitle.textContent = 'Équipements échelonnés en gammes, vitesse d’intervention, valorisation SAMU et matériel pédagogique';
     icon.setAttribute('data-lucide', 'package-check');
 
-    const equipState = game.workplaceEquipment || {};
-    const activeTab = this.activeTab || 'lots';
+    const activeTab = this.activeTab || 'secours';
+    const annualMaintenance = this.getTotalAnnualMaintenance(game);
+    const monthlyMaintenance = Math.round(annualMaintenance / 12);
+    const modernityScore = this.getEquipmentModernityScore(game);
 
-    // Données de stockage des locaux
+    // Données de stockage
     let hasStorage = false;
     let maxStorage = 0;
     let usedStorage = 0;
@@ -434,33 +970,30 @@ window.ProtecEquipements = {
     const storagePercent = maxStorage > 0 ? Math.min(100, Math.round((usedStorage / maxStorage) * 100)) : 0;
     const sq = (this.searchQuery || '').toLowerCase().trim();
 
-    const filteredLots = sq ? this.LOTS_CATALOG.filter(l => 
-      (l.name && l.name.toLowerCase().includes(sq)) ||
-      (l.desc && l.desc.toLowerCase().includes(sq)) ||
-      (l.badge && l.badge.toLowerCase().includes(sq)) ||
-      (l.bonus && l.bonus.toLowerCase().includes(sq))
-    ) : this.LOTS_CATALOG;
-
-    const filteredWorkplace = sq ? this.WORKPLACE_CATALOG.filter(w => 
-      (w.name && w.name.toLowerCase().includes(sq)) ||
-      (w.desc && w.desc.toLowerCase().includes(sq)) ||
-      (w.badge && w.badge.toLowerCase().includes(sq)) ||
-      (w.bonus && w.bonus.toLowerCase().includes(sq))
-    ) : this.WORKPLACE_CATALOG;
+    // Liste des équipements à afficher selon l'onglet actif
+    const allTieredItems = Object.values(this.TIERED_EQUIPMENT_CATALOG);
+    const filteredTieredItems = allTieredItems.filter(item => {
+      if (item.category !== activeTab) return false;
+      if (!sq) return true;
+      return item.name.toLowerCase().includes(sq) ||
+             item.desc.toLowerCase().includes(sq) ||
+             item.tiers.some(t => t.title.toLowerCase().includes(sq) || t.desc.toLowerCase().includes(sq));
+    });
 
     body.innerHTML = `
-      <div class="space-y-6">
+      <div class="space-y-5">
         
-        <!-- En-tête : Trésorerie & Jauge Stockage -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <!-- Carte Trésorerie -->
+        <!-- En-tête : Tableau de bord Équipements & Ratios Clés -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          
+          <!-- Trésorerie Disponible -->
           <div class="p-4 rounded-3xl bg-gradient-to-r from-pc-blue to-indigo-900 text-white flex items-center justify-between shadow-md">
             <div class="flex items-center gap-3">
               <div class="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center text-2xl">
                 💶
               </div>
               <div>
-                <span class="text-[10px] uppercase font-bold text-white/70 block">Trésorerie Disponible</span>
+                <span class="text-[10px] uppercase font-bold text-white/70 block">Trésorerie Antenne</span>
                 <span class="text-lg font-black mono-num">${game.resources.money.toLocaleString('fr-FR')} €</span>
               </div>
             </div>
@@ -469,200 +1002,386 @@ window.ProtecEquipements = {
             </button>
           </div>
 
-          <!-- Carte Capacité Stockage Locaux -->
-          <div class="p-4 rounded-3xl glass-card border border-slate-200 flex items-center justify-between shadow-sm">
+          <!-- Modernité & Fierté du Matériel -->
+          <div class="p-4 rounded-3xl glass-card border border-slate-200 flex items-center justify-between shadow-xs">
             <div class="flex items-center gap-3">
-              <div class="w-11 h-11 rounded-2xl ${hasStorage ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-700'} flex items-center justify-center text-2xl">
-                📦
+              <div class="w-11 h-11 rounded-2xl ${modernityScore >= 75 ? 'bg-purple-100 text-purple-800' : (modernityScore >= 50 ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700')} flex items-center justify-center text-2xl">
+                ${modernityScore >= 75 ? '⭐' : '🛠️'}
               </div>
               <div class="space-y-0.5">
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] uppercase font-bold text-slate-500">Zone de Stockage</span>
-                  <span class="text-xs font-black mono-num ${usedStorage >= maxStorage ? 'text-red-600' : 'text-slate-800'}">
-                    ${hasStorage ? `${usedStorage} / ${maxStorage} unités` : 'Aucun stockage'}
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] uppercase font-bold text-slate-500">Modernité Flotte</span>
+                  <span class="text-xs font-black mono-num ${modernityScore >= 75 ? 'text-purple-600' : 'text-slate-800'}">
+                    ${modernityScore}%
                   </span>
                 </div>
-                <div class="w-36 h-2 bg-slate-200 rounded-full overflow-hidden">
-                  <div class="h-full ${storagePercent > 85 ? 'bg-red-500' : (storagePercent > 60 ? 'bg-amber-500' : 'bg-emerald-500')}" style="width: ${storagePercent}%"></div>
+                <div class="w-28 h-2 bg-slate-200 rounded-full overflow-hidden">
+                  <div class="h-full ${modernityScore >= 75 ? 'bg-purple-600' : (modernityScore >= 50 ? 'bg-pc-blue' : 'bg-amber-500')}" style="width: ${modernityScore}%"></div>
                 </div>
+                <p class="text-[9.5px] text-slate-400 font-semibold">
+                  ${modernityScore >= 75 ? 'Matériel connecté valorisant' : 'Matériel standard d’antenne'}
+                </p>
               </div>
             </div>
-            <button onclick="window.game.openModule('locaux')" class="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition" title="Gérer le plan des locaux">
-              Locaux
-            </button>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-lg ${modernityScore >= 75 ? 'bg-purple-50 text-purple-700' : 'bg-slate-100 text-slate-600'}">
+              Trade-in 30%
+            </span>
           </div>
+
+          <!-- Entretien & Maintenance Annuelle -->
+          <div class="p-4 rounded-3xl glass-card border border-slate-200 flex items-center justify-between shadow-xs">
+            <div class="flex items-center gap-3">
+              <div class="w-11 h-11 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-2xl">
+                🔧
+              </div>
+              <div>
+                <span class="text-[10px] uppercase font-bold text-slate-500 block">Maintenance & Entretien</span>
+                <span class="text-sm font-black text-slate-800 mono-num">${annualMaintenance} € / an</span>
+                <p class="text-[9.5px] text-slate-400 font-semibold">~${monthlyMaintenance} € / mois prélevés</p>
+              </div>
+            </div>
+            <span class="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-xl">
+              Prêt O2/CT ✓
+            </span>
+          </div>
+
         </div>
 
-        <!-- Onglets Navigation -->
-        <div class="flex p-1 bg-slate-100 rounded-2xl max-w-md mx-auto">
-          <button onclick="window.ProtecEquipements.setTab('lots', window.game)" class="flex-1 py-2 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 ${activeTab === 'lots' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-500 hover:text-slate-800'}">
+        <!-- Synthèse Visuelle des Affectations (VPSP & Salle Pédagogique) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          
+          <!-- Dotation Embarquée VPSP & Postes de Secours -->
+          <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-lg">🚑</span>
+                <div>
+                  <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide">Dotation Flotte VPSP & Postes</h5>
+                  <p class="text-[10px] text-slate-500">Matériel embarqué dans les ambulances d'antenne</p>
+                </div>
+              </div>
+              <span class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-blue-50 text-pc-blue">
+                ${game.vehicles?.filter(v => v.type === 'VPSP').length || 1} VPSP équipés
+              </span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-[10.5px]">
+              <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[9.5px] text-slate-400 block font-bold">Constantes</span>
+                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.prise_parametres} ${game.equipmentTiers.prise_parametres === 3 ? '🌟 ECG' : (game.equipmentTiers.prise_parametres === 2 ? '⚡ Auto' : 'Manuel')}</strong>
+              </div>
+              <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[9.5px] text-slate-400 block font-bold">Immobilisation</span>
+                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.brancardage_immobilisation} ${game.equipmentTiers.brancardage_immobilisation === 2 ? '⚡ Électrique' : 'Manuel'}</strong>
+              </div>
+              <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[9.5px] text-slate-400 block font-bold">Réseau Radio</span>
+                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.radio_communication} ${game.equipmentTiers.radio_communication === 2 ? '📡 ANTARES' : 'PMR446'}</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dotation Salle Pédagogique PSC1 -->
+          <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-lg">🎓</span>
+                <div>
+                  <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide">Dotation Salle Formation PSC1</h5>
+                  <p class="text-[10px] text-slate-500">Matériel pédagogique grand public et interne</p>
+                </div>
+              </div>
+              <span class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-50 text-purple-700">
+                Pôle Formation Actif
+              </span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[10.5px]">
+              <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[9.5px] text-slate-400 block font-bold">Mannequins RCP</span>
+                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.mannequin_rcp_adulte} ${game.equipmentTiers.mannequin_rcp_adulte === 3 ? '🌟 QCPR Connecté' : (game.equipmentTiers.mannequin_rcp_adulte === 2 ? '✓ Clicker' : 'Mousse')}</strong>
+              </div>
+              <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[9.5px] text-slate-400 block font-bold">Simulateur DSA</span>
+                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.dsa_formation} ${game.equipmentTiers.dsa_formation === 2 ? '⚡ Télécommande HF' : 'Pré-programmé'}</strong>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Barre de Navigation entre les 4 Pôles d'Équipement -->
+        <div class="flex p-1 bg-slate-100 rounded-2xl max-w-2xl mx-auto overflow-x-auto text-xs font-bold gap-1">
+          <button onclick="window.ProtecEquipements.setTab('secours', window.game)" class="flex-1 py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === 'secours' ? 'bg-white text-pc-blue shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'}">
+            <span>🩺</span>
+            <span>Secours & Opérations</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 text-pc-blue">3</span>
+          </button>
+          <button onclick="window.ProtecEquipements.setTab('formation', window.game)" class="flex-1 py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === 'formation' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
+            <span>🎓</span>
+            <span>Formation & Pédagogie</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-100 text-purple-700">2</span>
+          </button>
+          <button onclick="window.ProtecEquipements.setTab('logistique', window.game)" class="flex-1 py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === 'logistique' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
             <span>📦</span>
-            <span>Lots d’Intervention & Crise</span>
-            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-100 text-indigo-700">7</span>
+            <span>Logistique & Crise</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800">11</span>
           </button>
-          <button onclick="window.ProtecEquipements.setTab('confort', window.game)" class="flex-1 py-2 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 ${activeTab === 'confort' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-500 hover:text-slate-800'}">
-            <span>🛠️</span>
-            <span>Confort & Conditions RH</span>
-            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700">6</span>
+          <button onclick="window.ProtecEquipements.setTab('tenues', window.game)" class="flex-1 py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === 'tenues' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
+            <span>👕</span>
+            <span>Tenues & Confort RH</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-100 text-emerald-800">6</span>
           </button>
         </div>
 
-        <!-- Barre de Recherche Matériel & Équipements -->
+        <!-- Barre de Recherche -->
         <div class="relative max-w-xl mx-auto w-full">
           <input 
             type="text" 
             id="equipment-search-input"
             value="${this.searchQuery || ''}" 
             oninput="window.ProtecEquipements.setSearchQuery(this.value, window.game)" 
-            placeholder="🔍 Rechercher du matériel (ex: pompe, tronçonneuse, radio, sac, tente, café...)" 
-            class="w-full pl-4 pr-10 py-2.5 rounded-2xl bg-white border border-slate-300 shadow-sm font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
+            placeholder="🔍 Rechercher (ex: multiparamétrique, QCPR, brancard, radio, outillage, parka, tente...)" 
+            class="w-full pl-4 pr-10 py-2.5 rounded-2xl bg-white border border-slate-300 shadow-xs font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
           />
           ${this.searchQuery ? `
             <button onclick="window.ProtecEquipements.setSearchQuery('', window.game)" class="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
           ` : ''}
         </div>
 
-        ${activeTab === 'lots' ? `
-          <!-- ONGLET 1 : LOTS D'INTERVENTION & MATÉRIEL DE CRISE -->
-          <div class="space-y-4">
-            <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-start gap-3">
-              <span class="text-xl">⚠️</span>
-              <p class="text-xs text-amber-900 leading-relaxed">
-                Les <strong>lots d'intervention</strong> sont entreposés dans la réserve de votre antenne. Chaque lot occupe un volume spécifique dans votre zone de stockage. Ils se déploient automatiquement lors des interventions d'intempéries, inondations, tempêtes, sinistres ou déclenchements de Plan Communal de Sauvegarde (PCS).
-              </p>
-            </div>
+        <!-- CONTENU DE L'ONGLET ACTIF -->
+        <div class="space-y-6">
+          
+          <!-- SECTION 1 : ÉQUIPEMENTS ÉCHELONNÉS EN GAMMES (TIERS) -->
+          ${filteredTieredItems.length > 0 ? `
+            <div class="space-y-4">
+              <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                <span class="text-xs font-black text-slate-800 uppercase tracking-wide">
+                  Comparateur des Gammes de Matériel & Trade-in (Reprise 30%)
+                </span>
+                <span class="text-[11px] text-slate-500 font-semibold">
+                  Chaque montée de gamme améliore la rapidité, la qualité des bilans et le moral des équipiers
+                </span>
+              </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              ${filteredLots.length === 0 ? `
-                <div class="col-span-full p-8 text-center glass-card rounded-2xl text-slate-500 italic">
-                  Aucun lot matériel ne correspond à votre recherche « ${sq} ».
-                </div>
-              ` : filteredLots.map(lot => {
-                const count = equipState[lot.id] || 0;
-                const isOwned = count > 0;
-                const canAfford = game.resources.money >= lot.price;
-                const hasSpace = !hasStorage ? false : (usedStorage + lot.storageSize <= maxStorage);
+              ${filteredTieredItems.map(item => {
+                const currentLevel = game.equipmentTiers[item.id] || 1;
+                const currentTierDef = item.tiers.find(t => t.level === currentLevel) || item.tiers[0];
 
                 return `
-                  <div class="p-5 rounded-3xl glass-card border-2 ${isOwned ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200'} flex flex-col justify-between space-y-4 hover:shadow-md transition">
-                    <div class="space-y-3">
-                      <div class="flex items-start justify-between gap-2">
-                        <div class="flex items-center gap-3">
-                          <span class="text-3xl p-2 rounded-2xl bg-white shadow-sm border border-slate-100">${lot.icon}</span>
-                          <div>
-                            <h5 class="text-sm font-black text-slate-900 leading-snug">${lot.name}</h5>
-                            <div class="flex items-center gap-1.5 mt-0.5">
-                              <span class="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${lot.badgeColor}">
-                                ${lot.badge}
-                              </span>
-                              <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600">
-                                📦 ${lot.storageSize} unités
+                  <div class="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                      <div class="flex items-center gap-3">
+                        <span class="text-3xl p-2 rounded-2xl bg-slate-50 border border-slate-200">${item.icon}</span>
+                        <div>
+                          <h4 class="text-sm font-black text-slate-900 leading-tight">${item.name}</h4>
+                          <p class="text-xs text-slate-500 mt-0.5">${item.desc}</p>
+                        </div>
+                      </div>
+                      <div class="text-right">
+                        <span class="text-[10px] font-black text-slate-400 uppercase block">Dotation Actuelle</span>
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          ✓ Niveau ${currentLevel} : ${currentTierDef.title}
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- Grille Comparatrice des Niveaux de Gamme -->
+                    <div class="grid grid-cols-1 md:grid-cols-${item.tiers.length} gap-3">
+                      ${item.tiers.map(tier => {
+                        const isCurrent = tier.level === currentLevel;
+                        const isPast = tier.level < currentLevel;
+                        const isNext = tier.level > currentLevel;
+
+                        // Calcul de la reprise Trade-in (30% de l'ancien niveau)
+                        const tradeInDiscount = isNext && currentTierDef ? Math.round(currentTierDef.price * 0.30) : 0;
+                        const netPrice = Math.max(0, tier.price - tradeInDiscount);
+                        const canAfford = game.resources.money >= netPrice;
+
+                        return `
+                          <div class="p-4 rounded-2xl border-2 flex flex-col justify-between space-y-3 transition ${isCurrent ? 'border-pc-blue bg-blue-50/20 shadow-xs ring-2 ring-pc-blue/20' : (isPast ? 'border-slate-200 bg-slate-50/60 opacity-75' : 'border-slate-200 hover:border-slate-300 bg-white')}">
+                            
+                            <div class="space-y-2">
+                              <div class="flex items-center justify-between">
+                                <span class="px-2 py-0.5 rounded text-[9.5px] font-black uppercase border ${tier.badgeColor}">
+                                  ${tier.badge}
+                                </span>
+                                ${isCurrent ? '<span class="text-[10.5px] font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">✓ En service</span>' : ''}
+                              </div>
+
+                              <div>
+                                <h5 class="text-xs font-black text-slate-900 leading-tight">${tier.title}</h5>
+                                <div class="flex items-center gap-2 mt-1">
+                                  <strong class="text-sm font-mono font-black text-slate-800">${tier.price.toLocaleString('fr-FR')} €</strong>
+                                  <span class="text-[10px] text-slate-400 font-semibold">• ~${tier.maintenanceCostAnnual} €/an</span>
+                                </div>
+                              </div>
+
+                              <p class="text-[11px] text-slate-600 leading-relaxed">${tier.desc}</p>
+
+                              <!-- Avantages Clés & Modificateurs -->
+                              <div class="space-y-1 pt-1 border-t border-slate-100 text-[10.5px]">
+                                ${tier.bullets.map(b => `
+                                  <div class="text-slate-700 font-medium leading-tight">${b}</div>
+                                `).join('')}
+                              </div>
+                            </div>
+
+                            <!-- Action : Acheter ou Mettre à Niveau avec Trade-in -->
+                            <div class="pt-2 border-t border-slate-100">
+                              ${isCurrent ? `
+                                <div class="py-2 text-center text-xs font-black text-emerald-800 bg-emerald-50 rounded-xl border border-emerald-200">
+                                  ✓ Matériel Actif à l’Antenne
+                                </div>
+                              ` : (isPast ? `
+                                <div class="py-2 text-center text-[11px] font-bold text-slate-400 italic">
+                                  Gamme précédente dépassée
+                                </div>
+                              ` : `
+                                <button 
+                                  onclick="window.ProtecEquipements.upgradeTier(window.game, '${item.id}', ${tier.level})"
+                                  ${!canAfford ? 'disabled' : ''}
+                                  class="w-full py-2 px-3 rounded-xl text-xs font-black shadow-xs transition flex flex-col items-center justify-center ${canAfford ? 'bg-pc-blue hover:bg-pc-blue-light text-white active:scale-95 cursor-pointer' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}"
+                                >
+                                  <span>Mettre à niveau (${netPrice.toLocaleString('fr-FR')} €)</span>
+                                  ${tradeInDiscount > 0 ? `<span class="text-[9.5px] font-semibold text-white/80">Reprise ancien : -${tradeInDiscount} € (30%)</span>` : ''}
+                                </button>
+                              `)}
+                            </div>
+
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : ''}
+
+          <!-- SECTION 2 : LOTS DE CRISE (SI ONGLET LOGISTIQUE) -->
+          ${activeTab === 'logistique' ? `
+            <div class="space-y-4 pt-4 border-t border-slate-200">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-xs font-black text-slate-800 uppercase tracking-wide">Lots d’Intervention Spécialisés & Matériel de Crise</h4>
+                  <p class="text-[11px] text-slate-500">Stockés en réserve de l'antenne pour intempéries, inondations, tempêtes et plans PCS</p>
+                </div>
+                <span class="text-xs font-black text-amber-800 bg-amber-100 px-2.5 py-1 rounded-xl">
+                  Réserve : ${usedStorage}/${maxStorage} unités
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                ${this.LOTS_CATALOG.filter(l => !sq || l.name.toLowerCase().includes(sq) || l.desc.toLowerCase().includes(sq)).map(lot => {
+                  const count = game.workplaceEquipment[lot.id] || 0;
+                  const isOwned = count > 0;
+                  const canAfford = game.resources.money >= lot.price;
+                  const hasSpace = !hasStorage ? false : (usedStorage + lot.storageSize <= maxStorage);
+
+                  return `
+                    <div class="p-4 rounded-3xl glass-card border-2 ${isOwned ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200'} flex flex-col justify-between space-y-3">
+                      <div class="space-y-2">
+                        <div class="flex items-start justify-between gap-2">
+                          <div class="flex items-center gap-2.5">
+                            <span class="text-2xl p-1.5 rounded-xl bg-white shadow-2xs border border-slate-100">${lot.icon}</span>
+                            <div>
+                              <h5 class="text-xs font-black text-slate-900 leading-tight">${lot.name}</h5>
+                              <div class="flex items-center gap-1.5 mt-0.5">
+                                <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border ${lot.badgeColor}">
+                                  ${lot.badge}
+                                </span>
+                                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600">
+                                  📦 ${lot.storageSize} u
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="text-right">
+                            <span class="text-xs font-black text-slate-900 mono-num block">${lot.price.toLocaleString('fr-FR')} €</span>
+                            ${isOwned ? `<span class="px-1.5 py-0.2 rounded text-[9.5px] font-black bg-emerald-100 text-emerald-800">En stock (${count})</span>` : ''}
+                          </div>
+                        </div>
+
+                        <p class="text-[11px] text-slate-600 leading-relaxed">${lot.desc}</p>
+                        
+                        <div class="p-2.5 rounded-xl bg-white/90 border border-slate-200 text-[10.5px] text-slate-700">
+                          <strong class="text-pc-blue block uppercase text-[8.5px] tracking-wider">Bonus Mission :</strong>
+                          <p class="font-semibold text-slate-800">${lot.bonus}</p>
+                        </div>
+                      </div>
+
+                      <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <span class="text-[10px] text-slate-400 font-bold">${isOwned ? `Armé & disponible (x${count})` : 'Livraison réserve'}</span>
+                        <button onclick="window.ProtecEquipements.buyEquipment(window.game, '${lot.id}')" ${(!canAfford || !hasSpace) ? 'disabled' : ''} class="px-3.5 py-1.5 rounded-xl text-xs font-black shadow-xs transition flex items-center gap-1 ${(canAfford && hasSpace) ? 'bg-pc-blue hover:bg-pc-blue-light text-white active:scale-95 cursor-pointer' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}">
+                          <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i>
+                          <span>${isOwned ? 'Acheter un autre' : 'Acheter'} (${lot.price} €)</span>
+                        </button>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- SECTION 3 : ÉQUIPEMENTS DE VIE D'ANTENNE & CONFORT (SI ONGLET TENUES) -->
+          ${activeTab === 'tenues' ? `
+            <div class="space-y-4 pt-4 border-t border-slate-200">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-xs font-black text-slate-800 uppercase tracking-wide">Mobilier de Confort, Santé au Travail & Informatique</h4>
+                  <p class="text-[11px] text-slate-500">Améliore la régénération d'énergie au local, réduit la fatigue mentale et accélère la gestion</p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                ${this.WORKPLACE_CATALOG.filter(w => !sq || w.name.toLowerCase().includes(sq) || w.desc.toLowerCase().includes(sq)).map(item => {
+                  const count = game.workplaceEquipment[item.id] || 0;
+                  const isOwned = count > 0;
+                  const canAfford = game.resources.money >= item.price;
+
+                  return `
+                    <div class="p-4 rounded-3xl glass-card border-2 ${isOwned ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200'} flex flex-col justify-between space-y-3">
+                      <div class="space-y-2">
+                        <div class="flex items-start justify-between gap-2">
+                          <div class="flex items-center gap-2.5">
+                            <span class="text-2xl p-1.5 rounded-xl bg-white shadow-2xs border border-slate-100">${item.icon}</span>
+                            <div>
+                              <h5 class="text-xs font-black text-slate-900 leading-tight">${item.name}</h5>
+                              <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border ${item.badgeColor}">
+                                ${item.badge}
                               </span>
                             </div>
                           </div>
-                        </div>
-                        <div class="text-right">
-                          <span class="text-sm font-black text-slate-900 mono-num block">
-                            ${lot.price.toLocaleString('fr-FR')} €
-                          </span>
-                          ${isOwned ? `
-                            <span class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-800 inline-block mt-0.5">
-                              ✓ En stock (${count})
-                            </span>
-                          ` : ''}
-                        </div>
-                      </div>
-
-                      <p class="text-xs text-slate-600 leading-relaxed">${lot.desc}</p>
-
-                      <div class="p-3 rounded-2xl bg-white/90 border border-slate-200/80 text-[11px] font-medium text-slate-700 space-y-1">
-                        <span class="text-pc-blue block uppercase text-[9px] tracking-wider font-black">Impact Opérationnel en Mission :</span>
-                        <p class="text-slate-800 font-semibold">${lot.bonus}</p>
-                      </div>
-                    </div>
-
-                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
-                      <span class="text-[11px] font-semibold text-slate-400">
-                        ${isOwned ? `Armé & disponible (x${count})` : 'Livraison en réserve'}
-                      </span>
-                      <button onclick="window.ProtecEquipements.buyEquipment(window.game, '${lot.id}')" ${(!canAfford || !hasSpace) ? 'disabled' : ''} class="px-4 py-2 rounded-xl text-xs font-black shadow transition flex items-center gap-1.5 ${(canAfford && hasSpace) ? 'bg-pc-blue hover:bg-pc-blue-light text-white active:scale-95 cursor-pointer' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}">
-                        <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i>
-                        <span>${isOwned ? 'Acheter un autre lot' : 'Acheter le lot'} (${lot.price} €)</span>
-                      </button>
-                    </div>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          </div>
-        ` : `
-          <!-- ONGLET 2 : CONDITIONS DE TRAVAIL & CONFORT RH -->
-          <div class="space-y-4">
-            <div class="p-3.5 rounded-2xl bg-blue-50 border border-blue-200/80 flex items-start gap-3">
-              <span class="text-xl">🛠️</span>
-              <p class="text-xs text-blue-900 leading-relaxed">
-                Ces équipements permanents modernisent la vie de l'antenne, préservent la santé des secouristes, réduisent l'usure mentale et accélèrent la gestion administrative.
-              </p>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              ${filteredWorkplace.length === 0 ? `
-                <div class="col-span-full p-8 text-center glass-card rounded-2xl text-slate-500 italic">
-                  Aucun équipement de confort ne correspond à votre recherche « ${sq} ».
-                </div>
-              ` : filteredWorkplace.map(item => {
-                const count = equipState[item.id] || 0;
-                const isOwned = count > 0;
-                const canAfford = game.resources.money >= item.price;
-
-                return `
-                  <div class="p-5 rounded-3xl glass-card border-2 ${isOwned ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200'} flex flex-col justify-between space-y-4 hover:shadow-md transition">
-                    <div class="space-y-3">
-                      <div class="flex items-start justify-between gap-2">
-                        <div class="flex items-center gap-3">
-                          <span class="text-3xl p-2 rounded-2xl bg-white shadow-sm border border-slate-100">${item.icon}</span>
-                          <div>
-                            <h5 class="text-sm font-black text-slate-900 leading-snug">${item.name}</h5>
-                            <span class="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${item.badgeColor}">
-                              ${item.badge}
-                            </span>
+                          <div class="text-right">
+                            <span class="text-xs font-black text-slate-900 mono-num block">${item.price.toLocaleString('fr-FR')} €</span>
+                            ${isOwned ? `<span class="px-1.5 py-0.2 rounded text-[9.5px] font-black bg-emerald-100 text-emerald-800">Équipé (${count})</span>` : ''}
                           </div>
                         </div>
-                        <div class="text-right">
-                          <span class="text-sm font-black text-slate-900 mono-num block">
-                            ${item.price.toLocaleString('fr-FR')} €
-                          </span>
-                          ${isOwned ? `
-                            <span class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-800 inline-block mt-0.5">
-                              ✓ Équipé (${count})
-                            </span>
-                          ` : ''}
+
+                        <p class="text-[11px] text-slate-600 leading-relaxed">${item.desc}</p>
+                        
+                        <div class="p-2.5 rounded-xl bg-white/90 border border-slate-200 text-[10.5px] text-slate-700">
+                          <strong class="text-pc-blue block uppercase text-[8.5px] tracking-wider">Bonus RH & Confort :</strong>
+                          <p class="font-semibold text-slate-800">${item.bonus}</p>
                         </div>
                       </div>
 
-                      <p class="text-xs text-slate-600 leading-relaxed">${item.desc}</p>
-
-                      <div class="p-3 rounded-2xl bg-white/90 border border-slate-200/80 text-[11px] font-medium text-slate-700 space-y-1">
-                        <span class="text-pc-blue block uppercase text-[9px] tracking-wider font-black">Bonus Conditions de Travail :</span>
-                        <p class="text-slate-800 font-semibold">${item.bonus}</p>
+                      <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <span class="text-[10px] text-slate-400 font-bold">${isOwned ? 'Matériel actif au local' : 'Installation immédiate'}</span>
+                        <button onclick="window.ProtecEquipements.buyEquipment(window.game, '${item.id}')" ${!canAfford ? 'disabled' : ''} class="px-3.5 py-1.5 rounded-xl text-xs font-black shadow-xs transition flex items-center gap-1 ${canAfford ? 'bg-pc-blue hover:bg-pc-blue-light text-white active:scale-95 cursor-pointer' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}">
+                          <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i>
+                          <span>${isOwned ? 'Renouveler' : 'Acheter'} (${item.price} €)</span>
+                        </button>
                       </div>
                     </div>
-
-                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
-                      <span class="text-[11px] font-semibold text-slate-400">
-                        ${isOwned ? 'Matériel actif à l’antenne' : 'Livraison immédiate'}
-                      </span>
-                      <button onclick="window.ProtecEquipements.buyEquipment(window.game, '${item.id}')" ${!canAfford ? 'disabled' : ''} class="px-4 py-2 rounded-xl text-xs font-black shadow transition flex items-center gap-1.5 ${canAfford ? 'bg-pc-blue hover:bg-pc-blue-light text-white active:scale-95 cursor-pointer' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}">
-                        <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i>
-                        <span>${isOwned ? 'Renouveler / Améliorer' : 'Acheter'} (${item.price} €)</span>
-                      </button>
-                    </div>
-                  </div>
-                `;
-              }).join('')}
+                  `;
+                }).join('')}
+              </div>
             </div>
-          </div>
-        `}
+          ` : ''}
+
+        </div>
 
       </div>
     `;

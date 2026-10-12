@@ -22,18 +22,30 @@ window.ProtecPersonnel = {
     etudiant: {
       label: 'Étudiant(e)',
       icon: '🎓',
-      baseDispoRate: 0.72,
-      desc: 'Forte disponibilité soirs et week-ends. Enthousiaste et dynamique.',
+      baseDispoRate: 0.75,
+      desc: 'Forte disponibilité soirs (dès 17h) et week-ends. Progression d’apprentissage rapide (+50% exp), mais risque de mobilité/départ après 1 à 2 ans.',
       favDays: ['Mercredi', 'Vendredi', 'Samedi', 'Dimanche'],
-      energyDrainRatio: 0.95
+      energyDrainRatio: 0.95,
+      learningBonus: 1.5,
+      mobilityRiskYear: 1
+    },
+    actif: {
+      label: 'Actif (Salarié en entreprise)',
+      icon: '💼',
+      baseDispoRate: 0.42,
+      desc: 'Disponible principalement week-ends et soirs (dès 19h). Fatigue augmentant 50% plus vite en semaine.',
+      favDays: ['Vendredi', 'Samedi', 'Dimanche'],
+      energyDrainRatio: 1.10,
+      weekdayFatigueMultiplier: 1.5
     },
     salarie: {
       label: 'Salarié(e) temps plein',
       icon: '💼',
       baseDispoRate: 0.42,
-      desc: 'Disponible uniquement en soirée de fin de semaine et le week-end.',
+      desc: 'Disponible principalement week-ends et soirs (dès 19h). Fatigue augmentant 50% plus vite en semaine.',
       favDays: ['Vendredi', 'Samedi', 'Dimanche'],
-      energyDrainRatio: 1.10
+      energyDrainRatio: 1.10,
+      weekdayFatigueMultiplier: 1.5
     },
     chomeur: {
       label: 'En recherche d’emploi',
@@ -46,10 +58,12 @@ window.ProtecPersonnel = {
     retraite: {
       label: 'Retraité(e) actif',
       icon: '👴',
-      baseDispoRate: 0.75,
-      desc: 'Disponible en journée de semaine. Idéal pour la logistique, la pharmacie et les maraudes.',
+      baseDispoRate: 0.80,
+      desc: 'Grande disponibilité en journée de semaine (8h-20h). Idéal pour la logistique, l’administratif et formations PSC1. Fatigue modérée (-20%), indisponible la nuit.',
       favDays: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'],
-      energyDrainRatio: 1.20
+      energyDrainRatio: 0.85,
+      dayFatigueMultiplier: 0.80,
+      nightRestricted: true
     },
     service_civique: {
       label: 'Volontaire Service Civique',
@@ -68,7 +82,6 @@ window.ProtecPersonnel = {
       energyDrainRatio: 0.85
     }
   },
-
   // Traits psychologiques
   traits: {
     devoue: {
@@ -161,8 +174,7 @@ window.ProtecPersonnel = {
       game.resources.associationExp = 0;
     }
 
-    // Mise à jour de chaque secouriste existant avec les nouvelles métriques
-    // Mise à jour de chaque secouriste existant avec les nouvelles métriques
+    // Mise à jour de chaque secouriste existant avec les jauges Fatigue, Moral et Profils
     if (game.volunteers && Array.isArray(game.volunteers)) {
       game.volunteers.forEach(v => {
         if (!v.contractType) {
@@ -172,10 +184,34 @@ window.ProtecPersonnel = {
             v.contractType = 'benevole';
           }
         }
-        if (!v.profilSocial) v.profilSocial = v.dispoType === 'étudiant' ? 'etudiant' : (v.dispoType === 'salarié' || v.contractType === 'salarie' ? 'salarie_asso' : 'parent');
-        if (v.energy === undefined) v.energy = 85;
-        if (v.motivation === undefined) v.motivation = 80;
-        if (v.humeur === undefined) v.humeur = 80;
+        
+        // Typologie sociologique : etudiant, actif, retraite
+        if (!v.profilSocial) {
+          if (v.dispoType === 'étudiant' || v.dispoType === 'étudiante') {
+            v.profilSocial = 'etudiant';
+          } else if (v.age && v.age >= 62) {
+            v.profilSocial = 'retraite';
+          } else if (v.contractType === 'salarie') {
+            v.profilSocial = 'salarie_asso';
+          } else {
+            v.profilSocial = 'actif';
+          }
+        }
+        if (v.profilSocial === 'salarie') v.profilSocial = 'actif';
+
+        // Nouvelles jauges fondamentales : Fatigue (0 à 100) et Moral (0 à 100)
+        if (v.fatigue === undefined) {
+          v.fatigue = Math.max(0, 100 - (v.energy !== undefined ? v.energy : 85));
+        }
+        if (v.moral === undefined) {
+          v.moral = v.humeur !== undefined ? v.humeur : (v.motivation !== undefined ? v.motivation : 80);
+        }
+
+        // Synchronisation des indicateurs miroirs
+        v.energy = Math.max(0, 100 - v.fatigue);
+        v.motivation = v.moral;
+        v.humeur = v.moral;
+
         if (!v.trait) {
           const traitsKeys = Object.keys(this.traits);
           v.trait = traitsKeys[Math.floor(Math.random() * traitsKeys.length)];
@@ -183,6 +219,10 @@ window.ProtecPersonnel = {
         if (v.missionsCount === undefined) v.missionsCount = 0;
         if (v.consecutiveMissions === undefined) v.consecutiveMissions = 0;
         if (v.isBurnout === undefined) v.isBurnout = false;
+        if (v.lastMissionHoursElapsed === undefined) v.lastMissionHoursElapsed = game.clock?.totalHoursElapsed || 0;
+        if (!v.joinDate) {
+          v.joinDate = { year: game.clock?.year || 2026, month: game.clock?.month || 9, day: game.clock?.day || 5 };
+        }
 
         // Attributs exclusifs aux salariés sous contrat de travail
         if (v.contractType === 'salarie') {
@@ -216,6 +256,16 @@ window.ProtecPersonnel = {
       return { available: false, reason: 'Arrêt de travail / Burnout (surmenage)' };
     }
 
+    // Conséquence d'usure morale : mise en retrait
+    if (volunteer.status === 'retrait' || (volunteer.moral !== undefined && volunteer.moral < 20)) {
+      return { available: false, reason: 'En retrait associatif (moral critique < 20% : cohésion d’antenne requise)' };
+    }
+
+    // Règle d'usure stricte : fatigue > 80 = indisponibilité automatique pour repos obligatoire
+    if (volunteer.fatigue !== undefined && volunteer.fatigue > 80) {
+      return { available: false, reason: 'Fatigue critique (> 80%) : Repos obligatoire pour prévenir toute faute opérationnelle' };
+    }
+
     // --- RÈGLE DU CODE DU TRAVAIL STRICTEMENT RÉSERVÉE AUX SALARIÉS ---
     if (volunteer.contractType === 'salarie') {
       const now = Date.now();
@@ -223,13 +273,13 @@ window.ProtecPersonnel = {
         const secLeft = Math.ceil((volunteer.mandatoryRestUntil - now) / 1000);
         return {
           available: false,
-          reason: `Repos obligatoire (Code du Travail Art. L3131-1 : 11h consécutives - encore ${secLeft}s)`
+          reason: 'Repos obligatoire (Code du Travail Art. L3131-1 : 11h consécutives - encore ' + secLeft + 's)'
         };
       }
       if (volunteer.currentVacation) {
         return {
           available: false,
-          reason: `En vacation interne : « ${volunteer.currentVacation.title} »`
+          reason: 'En vacation interne : « ' + volunteer.currentVacation.title + ' »'
         };
       }
     }
@@ -244,13 +294,14 @@ window.ProtecPersonnel = {
       const secLeft = Math.ceil((volunteer.restUntil - now) / 1000);
       return {
         available: false,
-        reason: `En repos post-mission obligatoire (encore ${secLeft}s)`
+        reason: 'En repos post-mission obligatoire (encore ' + secLeft + 's)'
       };
     }
 
-    const profile = this.socialProfiles[volunteer.profilSocial] || this.socialProfiles.benevole;
+    const profileKey = volunteer.profilSocial === 'salarie' ? 'actif' : (volunteer.profilSocial || 'actif');
+    const profile = this.socialProfiles[profileKey] || this.socialProfiles.actif;
     const currentDayName = (mission && mission.eventDate?.dayName) ? mission.eventDate.dayName : game.clock.daysNames[game.clock.day % 7];
-    const missionHour = mission?.startHour || mission?.eventDate?.hour || game.clock.hour || 14;
+    const missionHour = mission?.startHour !== undefined ? mission.startHour : (mission?.eventDate?.hour !== undefined ? mission.eventDate.hour : (game.clock?.hour || 14));
     const isWeekend = currentDayName === 'Samedi' || currentDayName === 'Dimanche';
 
     // Plages horaires réalistes selon le profil socio-professionnel
@@ -263,14 +314,14 @@ window.ProtecPersonnel = {
         hourEligible = false;
         hourReason = 'En cours / amphithéâtre en journée de semaine';
       }
-    } else if (volunteer.profilSocial === 'salarie') {
+    } else if (volunteer.profilSocial === 'actif' || volunteer.profilSocial === 'salarie') {
       // Disponible uniquement en soirée (dès 19h) et le week-end
       if (!isWeekend && missionHour < 19 && missionHour >= 8) {
         hourEligible = false;
         hourReason = 'Au travail (actif en entreprise en journée de semaine)';
       }
     } else if (volunteer.profilSocial === 'retraite') {
-      // Disponible en journée de semaine, indisponible la nuit
+      // Disponible en journée de semaine (8h-20h), indisponible la nuit
       if (missionHour >= 22 || missionHour < 7) {
         hourEligible = false;
         hourReason = 'Indisponible en horaire nocturne tardif';
@@ -280,17 +331,17 @@ window.ProtecPersonnel = {
     if (!hourEligible && volunteer.contractType !== 'salarie_asso') {
       return {
         available: false,
-        reason: `${profile.label} : ${hourReason}`
+        reason: profile.label + ' : ' + hourReason
       };
     }
 
     // Vérification du jour favori selon profil social et préférences
-    const isPreferredDay = volunteer.dispoJours?.includes(currentDayName) || profile.favDays.includes(currentDayName);
+    const isPreferredDay = volunteer.dispoJours?.includes(currentDayName) || (profile.favDays && profile.favDays.includes(currentDayName));
     
     // Probabilité d'acceptation réaliste
     let chance = isPreferredDay ? (profile.baseDispoRate + 0.35) : 0.16;
-    if (volunteer.motivation > 75) chance += 0.12;
-    if (volunteer.energy > 70) chance += 0.08;
+    if (volunteer.moral > 75) chance += 0.12;
+    if (volunteer.fatigue < 40) chance += 0.08;
     if (volunteer.contractType === 'salarie' || volunteer.contractType === 'salarie_asso') chance += 0.40;
     
     // Si petit poste de secours (durée <= 4h ou PAPS/DPS-PE), plus accessible
@@ -301,100 +352,254 @@ window.ProtecPersonnel = {
     const available = Math.random() < Math.min(0.96, Math.max(0.08, chance));
     return {
       available,
-      reason: available ? 'Disponible' : `${profile.label} : indisponible sur ce créneau`
+      reason: available ? 'Disponible' : (profile.label + ' : indisponible sur ce créneau')
     };
   },
 
-  // Déduction de fatigue, repos obligatoire et risque d'usure/démission
-  applyMissionExertion(volunteer, mission, hasAep2 = false) {
-    const profile = this.socialProfiles[volunteer.profilSocial] || this.socialProfiles.benevole;
-    let drain = 20 * (profile.energyDrainRatio || 1);
+  // Déduction de fatigue horaire, intempéries, nuit, repos obligatoire et moral
+  applyMissionExertion(volunteer, mission, hasAep2 = false, weather = null) {
+    const profileKey = volunteer.profilSocial === 'salarie' ? 'actif' : (volunteer.profilSocial || 'actif');
+    const profile = this.socialProfiles[profileKey] || this.socialProfiles.actif;
 
-    // Missions de nuit ou d'urgence SAMU plus éprouvantes
-    if (mission.type === 'samu') drain += 10;
-    if (mission.type === 'social') drain += 8;
-    if (mission.durationHours && mission.durationHours > 6) drain += 12;
+    const durationHours = mission.durationHours ? parseFloat(mission.durationHours) : Math.max(2, Math.round((mission.duration || 30) / 10));
+    let fatiguePerHour = 4.5 * (profile.energyDrainRatio || 1.0);
 
-    // Trait dynamique récupère mieux
-    if (volunteer.trait === 'dynamique') drain *= 0.75;
-    if (volunteer.trait === 'sensible' && mission.type === 'samu') drain *= 1.25;
-
-    // Soutien et débriefing psychologique AEP2 (defusing d'équipage : -50% de fatigue morale et physique)
-    if (hasAep2) drain *= 0.50;
-
-    volunteer.energy = Math.max(0, Math.round(volunteer.energy - drain));
-    volunteer.missionsCount = (volunteer.missionsCount || 0) + 1;
-    volunteer.consecutiveMissions = (volunteer.consecutiveMissions || 0) + 1;
-
-    // Enclenchement d'une période de repos obligatoire post-mission (30 à 60 secondes de jeu)
-    const restDurationMs = Math.max(30000, (mission.durationHours || 4) * 8000);
-    volunteer.restUntil = Date.now() + restDurationMs;
-
-    // Si le bénévole enchaîne trop sans pause (surmenage)
-    if (volunteer.consecutiveMissions >= 3) {
-      volunteer.motivation = Math.max(5, volunteer.motivation - 16);
-      volunteer.humeur = Math.max(5, volunteer.humeur - 18);
-    } else {
-      // Mission valorisante accomplie avec succès
-      volunteer.motivation = Math.min(100, volunteer.motivation + 6);
-      volunteer.humeur = Math.min(100, volunteer.humeur + 5);
+    // 1. Bonus de fatigue de nuit (entre 21h et 06h) : +50%
+    const missionHour = mission.startHour !== undefined ? mission.startHour : (mission.eventDate?.hour !== undefined ? mission.eventDate.hour : 14);
+    const isNight = missionHour >= 21 || missionHour < 6;
+    if (isNight) {
+      fatiguePerHour *= 1.5;
     }
 
-    // Risque avéré de DÉMISSION / TURNOVER si le bénévole est sur-sollicité et épuisé
-    if (volunteer.energy < 20 && volunteer.motivation < 25 && volunteer.contractType === 'benevole') {
-      const quitChance = volunteer.consecutiveMissions >= 4 ? 0.45 : 0.20;
-      if (Math.random() < quitChance) {
+    // 2. Bonus intempéries (canicule, orage violent, pluie battante, grand froid, neige) : +50%
+    const cond = weather?.condition || window.game?.weather?.condition || 'ensoleille';
+    const isBadWeather = ['canicule', 'pluie_battante', 'orage_violent', 'grand_froid', 'neige', 'heat', 'storm', 'rain', 'snow'].includes(cond);
+    if (isBadWeather) {
+      fatiguePerHour *= 1.5;
+    }
+
+    // 3. Spécificité actif : fatigue augmentant 50% plus vite en semaine
+    const dayName = mission.eventDate?.dayName || window.game?.clock?.daysNames?.[(window.game?.clock?.day || 0) % 7] || 'Lundi';
+    const isWeekday = !['Samedi', 'Dimanche'].includes(dayName);
+    if ((volunteer.profilSocial === 'actif' || volunteer.profilSocial === 'salarie') && isWeekday) {
+      fatiguePerHour *= 1.5;
+    }
+
+    // 4. Spécificité retraité : fatigue réduite en journée
+    if (volunteer.profilSocial === 'retraite') {
+      fatiguePerHour *= 0.8;
+    }
+
+    // 5. Trait dynamique récupère mieux et fatigue moins
+    if (volunteer.trait === 'dynamique') {
+      fatiguePerHour *= 0.75;
+    }
+
+    // 6. Soutien et débriefing psychologique AEP2 (defusing d'équipage : -50% de fatigue)
+    if (hasAep2) {
+      fatiguePerHour *= 0.50;
+    }
+
+    const fatigueGained = Math.round(durationHours * fatiguePerHour);
+    volunteer.fatigue = Math.min(100, (volunteer.fatigue || 0) + fatigueGained);
+    volunteer.energy = Math.max(0, 100 - volunteer.fatigue);
+
+    volunteer.missionsCount = (volunteer.missionsCount || 0) + 1;
+    volunteer.consecutiveMissions = (volunteer.consecutiveMissions || 0) + 1;
+    volunteer.lastMissionHoursElapsed = window.game?.clock?.totalHoursElapsed || 0;
+
+    // Progression accélérée pour le profil étudiant (+50% gain d'expérience)
+    const baseExp = volunteer.profilSocial === 'etudiant' ? 25 : 15;
+    volunteer.exp = (volunteer.exp || 0) + baseExp;
+
+    // Enclenchement d'une période de repos obligatoire post-mission (30 à 60 secondes de jeu)
+    const restDurationMs = Math.max(30000, durationHours * 8000);
+    volunteer.restUntil = Date.now() + restDurationMs;
+
+    // Impact sur le moral : surmenage ou mission éprouvante
+    if (volunteer.fatigue > 70 || volunteer.consecutiveMissions >= 3) {
+      // Décroissance en cas de surmenage
+      volunteer.moral = Math.max(0, (volunteer.moral || 75) - 16);
+    } else if (mission.type === 'samu' || mission.severity === 'critique') {
+      volunteer.moral = Math.max(0, (volunteer.moral || 75) - 8);
+    } else {
+      // Mission réussie et valorisante
+      volunteer.moral = Math.min(100, (volunteer.moral || 75) + 6);
+    }
+
+    volunteer.motivation = volunteer.moral;
+    volunteer.humeur = volunteer.moral;
+
+    // Conséquence d'usure : repos obligatoire si fatigue > 80
+    if (volunteer.fatigue > 80) {
+      volunteer.status = 'repos';
+      if (window.game?.showToast) {
+        window.game.showToast('Repos Obligatoire 🛌', volunteer.name + ' dépasse 80% de fatigue (' + volunteer.fatigue + '%). Mis(e) au repos forcé pour éviter toute faute opérationnelle.', 'orange');
+      }
+    }
+
+    // Conséquence d'usure : mise en retrait puis démission définitive si moral < 20
+    if (volunteer.moral < 20 && volunteer.contractType === 'benevole') {
+      if (volunteer.status !== 'retrait') {
+        volunteer.status = 'retrait';
+        if (window.game?.showToast) {
+          window.game.showToast('Bénévole en Retrait 😟', volunteer.name + ' se met en retrait associatif (moral critique : ' + volunteer.moral + '%). Organisez un moment de cohésion pour le remobiliser.', 'orange');
+        }
+      } else {
+        // Confirmation de démission définitive si déjà en retrait
         volunteer.hasResigned = true;
         volunteer.status = 'demissionne';
         return { burnout: true, resigned: true, volunteer };
       }
     }
 
-    // Risque de burnout critique si énergie = 0 ou dépassement excessif
-    if (volunteer.energy <= 0 || (volunteer.energy < 15 && volunteer.trait === 'devoue' && volunteer.consecutiveMissions >= 4)) {
+    // Risque de burnout critique si fatigue = 100
+    if (volunteer.fatigue >= 100) {
       volunteer.isBurnout = true;
       volunteer.status = 'repos';
-      volunteer.burnoutUntil = Date.now() + (30 * 60 * 1000); // 30 minutes réelles d'arrêt forcé
+      volunteer.burnoutUntil = Date.now() + (30 * 60 * 1000);
       return { burnout: true, volunteer };
     }
 
     return { burnout: false, volunteer };
   },
 
-  // Régénération au repos
+  // Régénération au repos, surveillance de l'inactivité (> 30 jours) et mobilité étudiante
   applyRestCycle(game) {
     if (!game.volunteers) return;
     const now = Date.now();
+    const currentHours = game.clock?.totalHoursElapsed || 0;
 
     game.volunteers.forEach(v => {
       // Fin de burnout éventuelle
       if (v.isBurnout && v.burnoutUntil && now >= v.burnoutUntil) {
         v.isBurnout = false;
-        v.energy = 50;
+        v.fatigue = 40;
+        v.energy = 60;
+        v.moral = 60;
+        v.motivation = 60;
         v.humeur = 60;
+        v.status = 'dispo';
         v.consecutiveMissions = 0;
-        game.showToast('Reprise d’activité', `${v.name} a récupéré et réintègre l’effectif disponible.`, 'green');
+        game.showToast('Reprise d’activité', v.name + ' a récupéré et réintègre l’effectif disponible.', 'green');
       }
 
-      if (v.status === 'dispo') {
-        const bonusFoyer = game.stations[0]?.rooms?.foyer === 2 ? 1.5 : (game.stations[0]?.rooms?.foyer === 3 ? 2.0 : 1.0);
-        const gain = Math.round(4 * bonusFoyer * (v.trait === 'dynamique' ? 1.3 : 1.0));
-        v.energy = Math.min(100, (v.energy || 70) + gain);
+      if (v.status === 'dispo' || v.status === 'repos') {
+        const station = game.stations[0];
+        const foyerRoom = station?.premises?.rooms?.foyer_vie_associative;
+        const foyerLevel = foyerRoom?.level || (station?.rooms?.foyer === 3 ? 3 : (station?.rooms?.foyer === 2 ? 2 : 1));
+        const bonusFoyer = foyerLevel === 2 ? 1.5 : (foyerLevel === 3 ? 2.0 : 1.0);
+        const cuisineBonus = foyerRoom?.hasCuisineEquipee ? 1.25 : 1.0;
+        const recoveryGain = Math.round(5 * bonusFoyer * cuisineBonus * (v.trait === 'dynamique' ? 1.3 : 1.0));
+        
+        // Récupération de fatigue et d'énergie
+        v.fatigue = Math.max(0, (v.fatigue || 20) - recoveryGain);
+        v.energy = Math.max(0, 100 - v.fatigue);
 
-        // Si bien reposé, le moral remonte
-        if (v.energy >= 80) {
-          v.humeur = Math.min(100, (v.humeur || 70) + 2);
+        // Sortie de repos si fatigue retombée sous 50
+        if (v.status === 'repos' && v.fatigue <= 50 && !v.isBurnout) {
+          v.status = 'dispo';
         }
 
-        // Si le secouriste n'a pas fait de mission depuis longtemps, légère baisse de motivation
-        if (Math.random() < 0.05 && v.consecutiveMissions === 0 && v.motivation > 35) {
-          v.motivation = Math.max(30, v.motivation - 1);
+        // Si bien reposé, le moral remonte avec boost passif du foyer de vie associative et des équipements
+        if (v.fatigue <= 30 && v.status !== 'retrait') {
+          let moralPassiveGain = (foyerLevel >= 2 ? 2 : 1) + (foyerRoom?.hasCuisineEquipee ? 1 : 0);
+
+          // Impact des gammes d'équipements et tenues
+          const eqTiers = game.equipmentTiers || {};
+          const hasModernEup = eqTiers.vetements_eup === 2;
+          const hasHighTechEquipment = (eqTiers.prise_parametres === 3) || (eqTiers.mannequin_rcp_adulte === 3);
+          const isAllLevel1 = Object.values(eqTiers).every(t => t <= 1);
+          const isLargeStation = (game.volunteers && game.volunteers.length >= 10) || (game.vehicles && game.vehicles.length >= 3);
+
+          if (hasModernEup) {
+            moralPassiveGain += 1; // Fierté de porter des tenues de haute technicité
+          }
+          if (hasHighTechEquipment) {
+            moralPassiveGain += 1; // Fierté d'utiliser du matériel connecté
+          }
+          if (isAllLevel1 && isLargeStation) {
+            moralPassiveGain = Math.max(0, moralPassiveGain - 2); // Malus passif "manque de moyens"
+          }
+
+          v.moral = Math.min(100, (v.moral || 70) + moralPassiveGain);
+          v.motivation = v.moral;
+          v.humeur = v.moral;
+        }
+
+        // 1. INACTIVITÉ PROLONGÉE (> 30 jours sans convocation) : décroissance du moral
+        const hoursWithoutMission = currentHours - (v.lastMissionHoursElapsed || 0);
+        if (hoursWithoutMission > 720 && v.contractType === 'benevole') { // 30 jours = 720 heures
+          // Perte de moral par période d'inactivité
+          if (Math.random() < 0.10) {
+            v.moral = Math.max(5, (v.moral || 70) - 5);
+            v.motivation = v.moral;
+            v.humeur = v.moral;
+
+            if (v.moral < 20 && v.status !== 'retrait') {
+              v.status = 'retrait';
+              game.showToast('Inactivité Prolongée ⚠️', v.name + ' n’a pas été convoqué(e) depuis plus d’un mois (moral < 20%). Il se met en retrait associatif.', 'orange');
+            }
+          }
+        }
+
+        // 2. MOBILITÉ DU PROFIL ÉTUDIANT (risque de départ après 1 à 2 ans)
+        if (v.profilSocial === 'etudiant' && v.contractType === 'benevole' && v.joinDate) {
+          const yearsElapsed = (game.clock.year - v.joinDate.year) + ((game.clock.month - v.joinDate.month) / 12);
+          if (yearsElapsed >= 1.0 && Math.random() < 0.003) {
+            v.status = 'demissionne';
+            v.hasResigned = true;
+            game.showToast('Mobilité Étudiante 🎓', v.name + ' (étudiant) doit quitter l’antenne après ' + yearsElapsed.toFixed(1) + ' an(s) pour poursuivre ses études/stage dans une autre ville.', 'blue');
+          }
         }
       }
     });
   },
 
-  // Prélèvement des charges salariales et services civiques (cycle régulier)
+  // Action de cohésion associative : Moment de convivialité d'antenne
+  triggerCohesionEvent(game, eventType = 'convivialite') {
+    const cost = 250;
+    if (game.resources.money < cost) {
+      game.showToast('Fonds Insuffisants', 'L’organisation du moment de cohésion requiert ' + cost + ' €.', 'orange');
+      return;
+    }
+
+    game.resources.money -= cost;
+
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(game, -cost, 'Moment de convivialité & Cohésion d’équipe', 'autre');
+    }
+
+    let countReintegrated = 0;
+
+    game.volunteers.forEach(v => {
+      // Réduit la fatigue collective et restaure le moral
+      v.fatigue = Math.max(0, (v.fatigue || 20) - 25);
+      v.energy = Math.max(0, 100 - v.fatigue);
+      v.moral = Math.min(100, (v.moral || 60) + 30);
+      v.motivation = v.moral;
+      v.humeur = v.moral;
+
+      // Réactivation des secouristes en retrait
+      if (v.status === 'retrait') {
+        v.status = 'dispo';
+        countReintegrated++;
+      } else if (v.status === 'repos' && v.fatigue <= 60 && !v.isBurnout) {
+        v.status = 'dispo';
+      }
+    });
+
+    const msgExtra = countReintegrated > 0 ? (' ' + countReintegrated + ' bénévole(s) remobilisé(s) !') : '';
+    game.showToast(
+      '🎉 Moment de Cohésion Réussi !',
+      'Repas convivial au local : fatigue collective réduite (-25%), moral reboosté (+30 pts) !' + msgExtra,
+      'green'
+    );
+
+    game.updateStatsUI();
+    game.saveGame();
+    if (game.openModule) game.openModule('recrutement');
+  },
   processSalariesAndStipends(game) {
     if (!game.volunteers) return;
     let totalMonthlyCharges = 0;
@@ -688,6 +893,16 @@ window.ProtecPersonnel = {
       return;
     }
 
+    // Contrôle ERP pour les sessions de formation accueillant du public
+    if (task.category === 'formation') {
+      const station = game.stations[0];
+      const premises = station?.premises;
+      if (premises && premises.erpStatus === 'non_conforme') {
+        game.showToast('Salle Suspendue ERP 🧯', 'La commission de sécurité a suspendu la salle de formation PSC1 pour non-conformité. Réalisez un audit de mise aux normes dans le module Locaux !', 'red');
+        return;
+      }
+    }
+
     // Qualification formateur si requis
     if (task.trainerRank && !salarie.isTrainer) {
       if (!['CE', 'CD', 'Cadre'].includes(salarie.rank)) {
@@ -747,11 +962,29 @@ window.ProtecPersonnel = {
     }
 
     // 3. Application des bénéfices de la vacation
-    if (task.revenue) {
-      game.resources.money += task.revenue;
+    let totalRevenue = task.revenue || 0;
+    let totalRep = task.repGain || 0;
+
+    // Bonus d'équipements de la salle de formation PSC1
+    if (task.category === 'formation' || task.id === 'formation_psc1') {
+      const station = game.stations[0];
+      const psc1Room = station?.premises?.rooms?.salle_formation_psc1;
+      if (psc1Room) {
+        if (psc1Room.hasVideoprojecteur) {
+          totalRevenue += Math.round(totalRevenue * 0.20); // +20% d'inscrits grâce au vidéoprojecteur
+        }
+        if (psc1Room.hasQcprMannequins) {
+          totalRevenue += 120; // +120 € (qualité de formation & matériel connecté)
+          totalRep += 8; // +8 pts de réputation
+        }
+      }
     }
-    if (task.repGain) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + task.repGain;
+
+    if (totalRevenue > 0) {
+      game.resources.money += totalRevenue;
+    }
+    if (totalRep > 0) {
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + totalRep;
     }
     if (task.grantHoursValorisation && game.grants) {
       game.grants.totalVolunteerHours = (game.grants.totalVolunteerHours || 0) + task.grantHoursValorisation;
@@ -843,11 +1076,16 @@ window.ProtecPersonnel = {
   },
 
   // Dérogation d'urgence exceptionnelle (Crise majeure / NOVI)
-  forceDerogationRest(game, salarieId) {
+  async forceDerogationRest(game, salarieId) {
     const salarie = game.volunteers.find(v => v.id === salarieId);
     if (!salarie) return;
 
-    if (!confirm(`⚠️ DÉROGATION AU CODE DU TRAVAIL (URGENCE SÉCURITÉ CIVILE) :\n\nFaire reprendre le travail à ${salarie.name} avant la fin de ses 11h de repos obligatoire constitue une dérogation au droit commun du travail (Art. L3131-1).\n\nConséquences :\n- Prime de pénibilité exceptionnelle : -150 €\n- Avertissement Inspection du Travail & Perte de -10 pts de réputation\n- Fatigue accrue du salarié\n\nConfirmez-vous cette décision de crise ?`)) {
+    const confirmed = await window.ProtecDialog.confirm(
+      `Faire reprendre le travail à ${salarie.name} avant la fin de ses 11h de repos obligatoire constitue une dérogation au droit commun du travail (Art. L3131-1).\n\nConséquences :\n• Prime de pénibilité exceptionnelle : -150 €\n• Avertissement Inspection du Travail & Perte de -10 pts de réputation\n• Fatigue accrue du salarié\n\nConfirmez-vous cette décision de crise ?`,
+      'Dérogation au Code du Travail',
+      { isDestructive: true, confirmText: 'Forcer la reprise', cancelText: 'Respecter le repos' }
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -2305,9 +2543,12 @@ window.ProtecPersonnel = {
     volunteer.coords_domicile = volunteer.coords_domicile || geo.coords_domicile;
     volunteer.distance_base_km = volunteer.distance_base_km !== undefined ? volunteer.distance_base_km : geo.distance_base_km;
     volunteer.temps_ralliement_minutes = volunteer.temps_ralliement_minutes !== undefined ? volunteer.temps_ralliement_minutes : geo.temps_ralliement_minutes;
+    // Spécification stricte Crise : temps_trajet_base_minutes & possede_permis
+    volunteer.temps_trajet_base_minutes = volunteer.temps_trajet_base_minutes !== undefined ? volunteer.temps_trajet_base_minutes : volunteer.temps_ralliement_minutes;
     volunteer.mode_transport = volunteer.mode_transport || geo.mode_transport;
     volunteer.permis_b = volunteer.permis_b !== undefined ? volunteer.permis_b : geo.permis_b;
     volunteer.permis_moto = volunteer.permis_moto !== undefined ? volunteer.permis_moto : geo.permis_moto;
+    volunteer.possede_permis = volunteer.possede_permis !== undefined ? volunteer.possede_permis : (!!volunteer.permis_b || !!volunteer.permis_moto);
 
     // Synchroniser avec la liste des compétences si permis
     volunteer.skills = volunteer.skills || [];

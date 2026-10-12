@@ -250,10 +250,15 @@ window.ProtecAds = {
     this.startAdPlayback(spot, game);
   },
 
-  closeAdModal() {
+  async closeAdModal() {
     if (this.isPlaying) {
       // Si la pub est en cours, confirmer l'interruption
-      if (!confirm('Voulez-vous interrompre le visionnage publicitaire ? Le bonus virtuel ne sera pas attribué.')) {
+      const confirmed = await window.ProtecDialog.confirm(
+        'Voulez-vous interrompre le visionnage publicitaire ? Le bonus virtuel ne sera pas attribué.',
+        'Interrompre la Publicité',
+        { isDestructive: true, confirmText: 'Interrompre', cancelText: 'Continuer le visionnage' }
+      );
+      if (!confirmed) {
         return;
       }
     }
