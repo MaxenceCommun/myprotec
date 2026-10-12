@@ -517,8 +517,11 @@ window.ProtecAuth = {
       this.currentUser = data.user;
       localStorage.setItem('protec_auth_token', data.token);
       localStorage.setItem('protec_user', JSON.stringify(data.user));
-      localStorage.setItem('protec_last_login_username', username);
-      localStorage.setItem('protec_last_login_password', password);
+      // Si la connexion a lieu depuis la landing page (hors simulateur), redirection immédiate vers le jeu
+      if (!window.game || !document.getElementById('map')) {
+        window.location.href = '/jeu';
+        return;
+      }
 
       game.player.id = data.user.id;
       game.player.name = data.user.username;
@@ -657,6 +660,12 @@ window.ProtecAuth = {
       localStorage.setItem('protec_user', JSON.stringify(data.user));
       localStorage.setItem('protec_last_login_username', username);
       localStorage.setItem('protec_last_login_password', password);
+
+      // Si l'inscription a lieu depuis la landing page (hors simulateur), redirection immédiate vers le jeu
+      if (!window.game || !document.getElementById('map')) {
+        window.location.href = '/jeu';
+        return;
+      }
 
       game.player.id = data.user.id;
       game.player.name = data.user.username;

@@ -773,6 +773,22 @@ window.ProtecSystems = {
 
     const badge = typeof document !== 'undefined' ? document.getElementById('badge-radio-dock') : null;
     if (badge) badge.textContent = game.radioLogs.length;
+
+    // DIFFUSION RÉELLE VERS LA MAIN COURANTE GLOBALE ET LA PAGE D'ACCUEIL
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.logOperationalEvent === 'function') {
+      const currentStation = (game.stations && game.stations[0]) || {};
+      window.ProtecSupabase.logOperationalEvent({
+        playerId: window.ProtecAuth?.currentUser?.id || null,
+        stationName: currentStation.name || game.player?.stationName || 'Antenne Locale',
+        city: currentStation.city || game.player?.city || '',
+        departmentCode: currentStation.departmentCode || game.player?.departmentCode || '',
+        type: (statusNum === 3) ? 'samu' : ((statusNum === 1) ? 'logistique' : 'radio'),
+        indicatif: indicatif,
+        statusCode: statusNum,
+        message: message,
+        severity: (statusNum === 3) ? 'urgent' : (statusNum === 5 ? 'success' : 'info')
+      });
+    }
   },
 
   // --- 4. GESTION DES CONSOMMABLES ET VÉHICULES ---

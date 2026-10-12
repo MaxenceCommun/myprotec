@@ -925,6 +925,19 @@ window.ProtecSupabase = {
           timeline_phase: mission.timeline_phase ? String(mission.timeline_phase) : 'alerte',
           created_at: now.toISOString()
         }, { onConflict: 'id' });
+
+      // Diffusion automatique de l'événement opérationnel pour la main courante
+      this.logOperationalEvent({
+        playerId: String(playerId),
+        stationName: mission.stationName || 'Antenne Locale',
+        city: mission.details?.commune || mission.commune || '',
+        departmentCode: mission.departmentCode || '',
+        type: (mission.mission_type === 'samu' || mission.type === 'samu') ? 'samu' : 'dps',
+        indicatif: (mission.mission_type === 'samu' || mission.type === 'samu') ? 'SAMU 15' : 'DISPOSITIF DPS',
+        statusCode: 1,
+        message: `Déploiement opérationnel • « ${mission.title || 'Mission'} » engagée sur ${mission.details?.commune || mission.commune || 'le secteur'}.`,
+        severity: 'info'
+      });
     } catch (e) {
       console.warn('Erreur enregistrement mission serveur:', e);
     }
@@ -1116,6 +1129,341 @@ window.ProtecSupabase = {
     } catch (e) {
       console.warn('Erreur broadcast market_update:', e);
     }
+  },
+
+  // --- TÉLÉMÉTRIE & MAIN COURANTE EN DIRECT RÉELLES ---
+
+  // Diffuser un événement opérationnel (radio, mission, alerte) à l'ensemble du réseau
+  async logOperationalEvent(eventData) {
+    if (!eventData) return;
+    const now = new Date();
+    const payload = {
+      player_id: eventData.playerId || window.ProtecAuth?.currentUser?.id || null,
+      station_name: eventData.stationName || 'Antenne Locale',
+      city: eventData.city || '',
+      department_code: eventData.departmentCode || '',
+      log_type: eventData.type || 'radio',
+      indicatif: eventData.indicatif || 'RADIO',
+      status_code: eventData.statusCode || 1,
+      message: eventData.message || '',
+      severity: eventData.severity || 'info',
+      created_at: now.toISOString()
+    };
+
+    // 1. Tenter l'insertion dans operational_log
+    if (this.client) {
+      try {
+        await this.client.from('operational_log').insert(payload);
+      } catch (e) {
+        // Fallback discret si la table n'est pas encore créée
+      }
+    }
+
+    // 2. Diffuser sur Supabase Realtime (instantané < 50ms sur toutes les pages d'accueil et sessions)
+    if (this.realtimeChannel) {
+      try {
+        this.realtimeChannel.send({
+          type: 'broadcast',
+          event: 'operational_event',
+          payload: payload
+        });
+      } catch (err) {
+        console.warn('Erreur broadcast operational_event:', err);
+      }
+    }
+  },
+
+  // Récupérer la télémétrie opérationnelle collective 100% réelle
+  async getOperationalTelemetry() {
+    let volunteers = 0;
+    let dps = 0;
+    let fleet = 0;
+    let patients = 0;
+    let stations = 0;
+
+    // 1. Interroger Supabase si connecté
+    if (this.client) {
+      try {
+        // Sauvegardes de tous les directeurs inscrits
+        const { data: saves, error: sErr } = await this.client
+          .from('game_saves')
+          .select('volunteers_count, vehicles_count, stations_count, save_data');
+
+        if (!sErr && saves && saves.length > 0) {
+          saves.forEach(s => {
+            const vCount = Number(s.volunteers_count) || (s.save_data?.volunteers?.length || 0);
+            const fCount = Number(s.vehicles_count) || (s.save_data?.vehicles?.length || 0);
+            const stCount = Number(s.stations_count) || (s.save_data?.stations?.length || 0);
+
+            volunteers += vCount;
+            fleet += fCount;
+            stations += stCount;
+
+            // Bilans & prises en charge cumulés (missions terminées dans save_data)
+            const missions = s.save_data?.missions || [];
+            missions.forEach(m => {
+              if (m.status === 'completed') {
+                const careCount = m.victimsCount || m.patientsTreated || (m.type === 'dps' ? 3 : (m.type === 'samu' ? 1 : 2));
+                patients += careCount;
+              }
+            });
+          });
+        }
+
+        // Missions actives en cours sur le serveur
+        const { data: activeMissions, error: mErr } = await this.client
+          .from('active_missions')
+          .select('id, status, assigned_volunteers, assigned_vehicles')
+          .eq('status', 'ongoing');
+
+        if (!mErr && activeMissions) {
+          dps = activeMissions.length;
+        }
+
+        // Antennes déclarées
+        const { count: stationCount, error: stErr } = await this.client
+          .from('alliance_stations')
+          .select('*', { count: 'exact', head: true });
+
+        if (!stErr && stationCount !== null) {
+          stations = Math.max(stations, stationCount);
+        }
+      } catch (e) {
+        console.warn('Erreur récupération télémétrie Supabase:', e);
+      }
+    }
+
+    // 2. Si la base est vierge ou hors-ligne, vérifier la sauvegarde locale pour le joueur
+    if (volunteers === 0 && dps === 0 && fleet === 0 && patients === 0) {
+      try {
+        const localRaw = localStorage.getItem('protec_save') || localStorage.getItem('myprotec_save');
+        if (localRaw) {
+          const lSave = JSON.parse(localRaw);
+          volunteers = lSave.volunteers?.length || 0;
+          fleet = lSave.vehicles?.length || 0;
+          stations = lSave.stations?.length || 1;
+          const lMissions = lSave.missions || [];
+          dps = lMissions.filter(m => m.status === 'en_cours' || m.status === 'ongoing').length;
+          lMissions.filter(m => m.status === 'completed').forEach(m => {
+            patients += m.victimsCount || m.patientsTreated || (m.type === 'dps' ? 3 : 1);
+          });
+        }
+      } catch (err) {}
+    }
+
+    return {
+      volunteers,
+      dps,
+      fleet,
+      patients,
+      stations
+    };
+  },
+
+  // Récupérer l'historique réel des opérations pour la main courante
+  async getOperationalLogs(limit = 15) {
+    const logs = [];
+
+    // 1. Essayer de lire la table operational_log
+    if (this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('operational_log')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        if (!error && data && data.length > 0) {
+          data.forEach(item => {
+            logs.push(this.formatLogItem(item));
+          });
+          return logs;
+        }
+      } catch (e) {}
+
+      // 2. Fallback réel : Extraire depuis active_missions & server_events_log
+      try {
+        const { data: missions } = await this.client
+          .from('active_missions')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (missions && missions.length > 0) {
+          missions.forEach(m => {
+            const isCompleted = m.status === 'completed';
+            const commune = m.details?.commune || 'Secteur';
+            logs.push({
+              id: 'm-' + m.id,
+              time: this.formatTime(m.created_at || m.starts_at),
+              indicatif: m.mission_type === 'samu' ? 'SAMU 15' : 'POSTE DPS',
+              icon: m.mission_type === 'samu' ? 'activity' : 'shield-check',
+              color: m.mission_type === 'samu' ? 'text-amber-600' : 'text-blue-600',
+              bg: m.mission_type === 'samu' ? 'bg-amber-50' : 'bg-blue-50',
+              border: m.mission_type === 'samu' ? 'border-amber-200' : 'border-blue-200',
+              text: isCompleted 
+                ? `Dispositif « ${m.title} » clôturé avec succès sur ${commune}. Tous équipages réarmés.`
+                : `Engagement opérationnel • « ${m.title} » en cours sur ${commune} (${m.assigned_volunteers?.length || 0} secouristes mobilisés).`,
+              created_at: m.created_at || m.starts_at
+            });
+          });
+        }
+
+        const { data: sEvents } = await this.client
+          .from('server_events_log')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (sEvents && sEvents.length > 0) {
+          sEvents.forEach(ev => {
+            logs.push({
+              id: 'sev-' + ev.id,
+              time: this.formatTime(ev.created_at),
+              indicatif: 'REGULATION',
+              icon: ev.event_type === 'formation_completed' ? 'graduation-cap' : 'siren',
+              color: ev.event_type === 'formation_completed' ? 'text-emerald-600' : 'text-red-600',
+              bg: ev.event_type === 'formation_completed' ? 'bg-emerald-50' : 'bg-red-50',
+              border: ev.event_type === 'formation_completed' ? 'border-emerald-200' : 'border-red-200',
+              text: `${ev.title} • ${ev.message}`,
+              created_at: ev.created_at
+            });
+          });
+        }
+      } catch (e) {}
+    }
+
+    // 3. Si aucun log distant n'est trouvé, vérifier les radioLogs de la sauvegarde locale
+    if (logs.length === 0) {
+      try {
+        const localRaw = localStorage.getItem('protec_save') || localStorage.getItem('myprotec_save');
+        if (localRaw) {
+          const lSave = JSON.parse(localRaw);
+          const rLogs = lSave.radioLogs || [];
+          rLogs.slice(0, limit).forEach((rl, idx) => {
+            logs.push({
+              id: 'lrad-' + idx,
+              time: rl.time || new Date().toLocaleTimeString('fr-FR'),
+              indicatif: rl.indicatif || rl.channel || 'RADIO',
+              icon: rl.status === 3 ? 'heart-pulse' : (rl.status === 2 ? 'map-pin' : 'radio'),
+              color: 'text-blue-600',
+              bg: 'bg-blue-50',
+              border: 'border-blue-200',
+              text: `${rl.indicatif ? rl.indicatif + ' : ' : ''}${rl.message || rl.text || ''}`,
+              created_at: new Date().toISOString()
+            });
+          });
+        }
+      } catch (err) {}
+    }
+
+    // Trier par date décroissante
+    return logs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, limit);
+  },
+
+  // Formater un item venant de operational_log
+  formatLogItem(item) {
+    let icon = 'radio';
+    let color = 'text-blue-600';
+    let bg = 'bg-blue-50';
+    let border = 'border-blue-200';
+
+    if (item.log_type === 'samu' || item.status_code === 3) {
+      icon = 'heart-pulse';
+      color = 'text-amber-600';
+      bg = 'bg-amber-50';
+      border = 'border-amber-200';
+    } else if (item.log_type === 'crise' || item.severity === 'urgent') {
+      icon = 'siren';
+      color = 'text-red-600';
+      bg = 'bg-red-50';
+      border = 'border-red-200';
+    } else if (item.log_type === 'formation') {
+      icon = 'graduation-cap';
+      color = 'text-emerald-600';
+      bg = 'bg-emerald-50';
+      border = 'border-emerald-200';
+    } else if (item.log_type === 'logistique' || item.status_code === 1) {
+      icon = 'truck';
+      color = 'text-indigo-600';
+      bg = 'bg-indigo-50';
+      border = 'border-indigo-200';
+    } else if (item.severity === 'success') {
+      icon = 'shield-check';
+      color = 'text-emerald-600';
+      bg = 'bg-emerald-50';
+      border = 'border-emerald-200';
+    }
+
+    const indicatifLabel = item.indicatif ? `${item.indicatif} • ` : '';
+    const stationLabel = item.station_name ? ` (${item.station_name})` : '';
+
+    return {
+      id: item.id || `op-${Date.now()}`,
+      time: this.formatTime(item.created_at),
+      indicatif: item.indicatif || 'RADIO',
+      icon,
+      color,
+      bg,
+      border,
+      text: `${indicatifLabel}${item.message}${stationLabel}`,
+      created_at: item.created_at || new Date().toISOString()
+    };
+  },
+
+  formatTime(isoString) {
+    if (!isoString) return new Date().toLocaleTimeString('fr-FR');
+    try {
+      const d = new Date(isoString);
+      return [
+        String(d.getHours()).padStart(2, '0'),
+        String(d.getMinutes()).padStart(2, '0'),
+        String(d.getSeconds()).padStart(2, '0')
+      ].join(':');
+    } catch (e) {
+      return new Date().toLocaleTimeString('fr-FR');
+    }
+  },
+
+  // Écoute en continu de la main courante et de la télémétrie
+  subscribeOperationalStream(onTelemetryUpdate, onNewLog) {
+    if (!this.client) return null;
+
+    if (!this.realtimeChannel) {
+      this.realtimeChannel = this.client.channel('protec-live-global', {
+        config: { broadcast: { self: true } }
+      });
+      this.realtimeChannel.subscribe();
+    }
+
+    // Écoute des broadcasts d'événements opérationnels en direct
+    this.realtimeChannel.on('broadcast', { event: 'operational_event' }, (evt) => {
+      if (evt.payload && typeof onNewLog === 'function') {
+        onNewLog(this.formatLogItem(evt.payload));
+      }
+      if (typeof onTelemetryUpdate === 'function') {
+        this.getOperationalTelemetry().then(onTelemetryUpdate);
+      }
+    });
+
+    // Écoute des modifications de tables (missions, sauvegardes, operational_log)
+    this.realtimeChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'operational_log' }, (payload) => {
+      if (payload.new && typeof onNewLog === 'function') {
+        onNewLog(this.formatLogItem(payload.new));
+      }
+    });
+
+    this.realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'active_missions' }, () => {
+      if (typeof onTelemetryUpdate === 'function') {
+        this.getOperationalTelemetry().then(onTelemetryUpdate);
+      }
+    });
+
+    this.realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'game_saves' }, () => {
+      if (typeof onTelemetryUpdate === 'function') {
+        this.getOperationalTelemetry().then(onTelemetryUpdate);
+      }
+    });
   }
 };
 

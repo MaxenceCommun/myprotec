@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>MyProtec - Simulateur Opérationnel (En Ligne)</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            pc: {
+              blue: '#002E6D',
+              'blue-light': '#0B4EA2',
+              'blue-dark': '#001A3D',
+              orange: '#FF6600',
+              'orange-hover': '#E65C00',
+              'orange-soft': '#FFF1E8',
+              cyan: '#0284C7'
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Leaflet MarkerCluster CSS & JS (Regroupement des missions lors du dézoom) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <!-- Custom Styles & PWA Manifest -->
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="landing.css">
+  <link rel="icon" type="image/png" href="logo_myprotec_icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1e3a8a">
+
+  <!-- Apple iOS Safari & Modern PWA Support -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MyProtec">
+  <link rel="apple-touch-icon" href="logo_myprotec_icon.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="logo_myprotec_icon.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="logo_myprotec_icon.png">
+
+  <!-- Microsoft Windows Tile PWA -->
+  <meta name="msapplication-TileImage" content="logo_myprotec_icon.png">
+  <meta name="msapplication-TileColor" content="#002E6D">
+</head>
+<body class="h-full w-full overflow-hidden bg-slate-100 font-sans text-slate-800 antialiased select-none">
+
+  <!-- ==============================================================================
+       SIMULATEUR OPÉRATIONNEL MYPROTEC (CARTE PLEIN ÉCRAN & GESTION)
+       ============================================================================== -->
+  
+  <!-- MAP CONTAINER (Plein écran) -->
+  <div id="map" class="absolute inset-0 w-full h-full z-0"></div>
+
+  <!-- OVERLAY NUIT GÉRÉ DANS LE TILE-PANE LEAFLET UNIQUEMENT -->
+
+  <!-- OVERLAY MODE IMPLANTATION ANTENNE -->
+  <div id="antenna-placement-banner" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-30 px-6 py-3 rounded-full glass-panel-heavy border-2 border-pc-orange shadow-xl flex items-center gap-3 animate-bounce">
+    <div class="w-3 h-3 rounded-full bg-pc-orange animate-ping"></div>
+    <span class="text-sm font-bold text-pc-blue">Cliquez sur la carte pour implanter votre nouvelle Antenne</span>
+    <button onclick="window.game.cancelAntennaPlacement()" class="ml-2 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 transition">Annuler</button>
+  </div>
+
+  <!-- BANNIÈRE D'OBSERVATION D'UN AUTRE DÉPARTEMENT -->
+  <div id="inspect-dept-banner" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-30 px-5 py-2.5 rounded-full glass-panel-heavy border border-pc-blue/40 shadow-xl flex items-center gap-3 text-xs font-bold text-slate-800">
+    <span class="flex items-center gap-1.5 text-pc-blue">
+      <i data-lucide="eye" class="w-4 h-4"></i>
+      <span>Mode Observation : <strong id="inspect-dept-name">Département</strong></span>
+    </span>
+    <span class="text-[11px] text-slate-400 font-medium hidden sm:inline">(Votre antenne reste en <span id="inspect-my-dept-code">75</span>)</span>
+    <button onclick="window.game.returnToMyAntenna()" class="ml-1 px-3 py-1 rounded-full bg-pc-blue hover:bg-pc-blue-light text-white font-extrabold text-[11px] shadow transition flex items-center gap-1">
+      <i data-lucide="crosshair" class="w-3 h-3"></i>
+      Revenir à mon antenne
+    </button>
+  </div>
+
+  <!-- FLOATING TOP BAR CONTAINER (Responsive & Anti-Chevauchement) -->
+  <header class="fixed top-2 sm:top-3 left-2 sm:left-3 right-2 sm:right-3 z-20 flex flex-col gap-1.5 pointer-events-none max-w-[calc(100vw-1rem)] sm:max-w-none mx-auto">
+    
+    <!-- Ligne 1 : Navigation & Indicateurs Principaux -->
+    <div class="flex items-center justify-between gap-1.5 sm:gap-2.5 w-full pointer-events-none">
+      
+      <!-- Gauche : Brand / Logo + Antenne active -->
+      <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto flex-shrink-0">
+        <a href="/" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-xl sm:rounded-2xl flex items-center gap-1.5 text-xs font-black text-slate-700 hover:text-pc-blue hover:bg-white/95 transition shadow-sm pointer-events-auto" title="Retourner à la page d'accueil du site"><i data-lucide="home" class="w-4 h-4 text-pc-blue"></i><span class="hidden lg:inline text-[11px]">Accueil</span></a>
+        <div class="glass-panel px-2 sm:px-3.5 h-10 sm:h-12 rounded-xl sm:rounded-2xl flex items-center gap-1.5 sm:gap-2.5 cursor-pointer hover:bg-white/90 transition shadow-sm" onclick="window.game.openOverviewModal()" title="Vue d'ensemble de l'antenne">
+          <!-- Logo MyProtec -->
+          <img src="logo_myprotec.png" alt="MyProtec" class="h-5 sm:h-8 object-contain drop-shadow-sm flex-shrink-0" />
+          <div class="border-l border-slate-200/80 pl-1.5 sm:pl-2">
+            <div class="text-[10px] sm:text-xs font-black text-slate-800 flex items-center gap-1">
+              <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue"></i>
+              <span id="top-current-station-name" class="truncate max-w-[75px] xs:max-w-[120px] sm:max-w-[180px]">Antenne Locale</span>
+            </div>
+            <span class="text-[8px] sm:text-[9px] text-slate-400 font-bold block" id="top-antenna-role">Protection Civile</span>
+          </div>
+        </div>
+
+        <!-- Consultation / Observation d'un autre département (Desktop) -->
+        <div class="hidden xl:flex glass-panel px-3 h-10 sm:h-12 rounded-2xl items-center gap-2 pointer-events-auto shadow-sm">
+          <i data-lucide="eye" class="w-3.5 h-3.5 text-slate-400" title="Observer un autre département"></i>
+          <span class="text-[11px] font-semibold text-slate-500">Explorer :</span>
+          <select id="department-selector" onchange="window.game.inspectDepartment(this.value)" class="text-xs font-bold text-pc-blue bg-transparent outline-none cursor-pointer max-w-[155px]" title="Déplacer la vue pour observer un autre département">
+            <!-- Rempli dynamiquement -->
+          </select>
+          <button id="btn-return-my-antenna" onclick="window.game.returnToMyAntenna()" class="hidden px-2 py-1 rounded-xl bg-pc-blue text-white text-[10px] font-extrabold hover:bg-pc-blue-light transition shadow-sm flex items-center gap-1" title="Revenir immédiatement à mon antenne">
+            <i data-lucide="crosshair" class="w-3.5 h-3.5"></i> Mon Antenne
+          </button>
+        </div>
+      </div>
+
+      <!-- Centre Desktop : Stats Primaires (Trésorerie, Bénévoles, Récompenses, Pubs) -->
+      <div class="hidden md:flex glass-panel px-3 sm:px-4 h-10 sm:h-12 rounded-2xl items-center gap-3 sm:gap-5 overflow-x-auto no-scrollbar pointer-events-auto shadow-sm max-w-full">
+        <!-- Trésorerie -->
+        <div class="flex items-center gap-2 cursor-pointer group flex-shrink-0" onclick="window.game.openFinancesModal()" title="Trésorerie de l'association">
+          <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-100 transition">
+            <i data-lucide="euro" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+          </div>
+          <div>
+            <div class="text-[9px] uppercase font-bold tracking-wider text-slate-400">Trésorerie</div>
+            <div class="text-xs sm:text-sm font-extrabold text-slate-800 mono-num flex items-center gap-1">
+              <span id="stat-money">15 000</span> €
+            </div>
+          </div>
+        </div>
+
+        <div class="h-6 w-px bg-slate-200/80 flex-shrink-0"></div>
+
+        <!-- Bénévoles Disponibles -->
+        <div class="flex items-center gap-2 cursor-pointer group flex-shrink-0" onclick="window.game.openTeamModal()" title="Nombre de bénévoles disponibles actuellement / Effectif total de l'antenne">
+          <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-pc-blue/10 text-pc-blue flex items-center justify-center group-hover:bg-pc-blue/20 transition">
+            <i data-lucide="users" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+          </div>
+          <div>
+            <div class="text-[9px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1">
+              <span>Bénévoles</span>
+              <span class="text-[8px] font-extrabold text-pc-blue bg-blue-50 px-1 py-0.5 rounded border border-blue-200">Dispos</span>
+            </div>
+            <div class="text-xs sm:text-sm font-extrabold text-slate-800 mono-num flex items-center gap-1">
+              <span id="stat-volunteers-avail" class="text-pc-blue" title="Bénévoles disponibles">0</span>
+              <span class="text-slate-400 text-xs font-normal">/</span>
+              <span id="stat-volunteers-total" class="text-slate-600" title="Effectif total">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="h-6 w-px bg-slate-200/80 flex-shrink-0"></div>
+
+        <!-- Agrément Préfectoral -->
+        <div class="hidden lg:flex items-center gap-2 cursor-pointer group flex-shrink-0" onclick="window.game.openReputationModal()" title="Niveau de reconnaissance préfectorale">
+          <div class="w-7 h-7 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
+            <i data-lucide="award" class="w-3.5 h-3.5"></i>
+          </div>
+          <div>
+            <div class="text-[9px] uppercase font-bold tracking-wider text-slate-400">Agrément</div>
+            <div class="text-xs font-extrabold text-slate-800">
+              <span id="stat-reputation-level">Rang 1</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="h-6 w-px bg-slate-200/80 flex-shrink-0"></div>
+
+        <!-- Récompenses & Défis (Cliquable) -->
+        <div class="flex items-center gap-2 cursor-pointer group relative flex-shrink-0" onclick="window.game.openModule('recompenses')" title="Récompenses quotidiennes et défis de la semaine">
+          <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-100 transition">
+            <i data-lucide="gift" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+          </div>
+          <div>
+            <div class="text-[9px] uppercase font-bold tracking-wider text-slate-400">Défis & Cadeaux</div>
+            <div class="text-xs font-black text-slate-700 flex items-center gap-1">
+              <span id="stat-rewards-ready">Quotidien</span>
+            </div>
+          </div>
+          <span id="badge-rewards-dot" class="hidden w-2 h-2 rounded-full bg-rose-500 absolute -top-0.5 -right-0.5 animate-ping"></span>
+        </div>
+
+        <!-- Publicité Récompensée Partenaire (Désactivée temporairement) -->
+        <div id="ad-reward-separator" class="hidden h-6 w-px bg-slate-200/80 flex-shrink-0" style="display: none !important;"></div>
+
+        <div id="ad-reward-widget" class="hidden items-center gap-2 cursor-pointer group relative flex-shrink-0" onclick="window.ProtecAds?.openAdModal(window.game)" title="Annonce récompensée (+500 € virtuels)" style="display: none !important;">
+          <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-100 transition">
+            <i data-lucide="tv" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+          </div>
+          <div>
+            <div class="text-[9px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1">
+              <span>Publicité</span>
+              <span id="ad-count-badge" class="text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1 py-0.1 rounded">5/5</span>
+            </div>
+            <div class="text-xs font-black text-emerald-600 flex items-center gap-1" id="ad-timer-text">
+              +500 €
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Droite Desktop : Météo, Horloge & Actions rapides (>= 768px) -->
+      <div class="hidden md:flex items-center gap-2 pointer-events-auto flex-shrink-0">
+        <!-- Météo & Vigilance Préfectorale -->
+        <div id="weather-widget" onclick="window.game.openModule('meteo')" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-2 cursor-pointer hover:bg-white/90 transition shadow-sm pointer-events-auto" title="Bulletin Météo-France & Vigilance">
+          <span id="weather-icon" class="text-sm sm:text-base">☀️</span>
+          <div class="flex flex-col">
+            <div class="flex items-center gap-1">
+              <span id="weather-temp" class="text-xs font-extrabold text-slate-800 mono-num">21°C</span>
+              <span id="weather-vigilance-badge" class="px-1 py-0.2 rounded text-[8px] sm:text-[9px] font-black uppercase bg-emerald-100 text-emerald-800">Vert</span>
+            </div>
+            <span id="weather-status-text" class="text-[9px] sm:text-[10px] text-slate-400 font-semibold truncate max-w-[70px] sm:max-w-[90px]">Ensoleillé</span>
+          </div>
+        </div>
+
+        <!-- Live Clock -->
+        <div class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-2 shadow-sm">
+          <div class="flex items-center gap-1.5">
+            <i data-lucide="clock" class="w-3.5 h-3.5 text-pc-blue"></i>
+            <div class="flex flex-col">
+              <span id="clock-date" class="hidden sm:inline text-[9px] font-bold text-slate-400">Mercredi 7 Oct.</span>
+              <span id="clock-time" class="text-xs font-extrabold mono-num text-slate-800">20:45:00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- PC Crise Button -->
+        <button id="pc-crise-header-btn" onclick="window.ProtecModals.openPcCrise(window.game)" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-1.5 text-red-600 hover:bg-red-50/80 transition shadow-sm group font-extrabold text-xs" title="Poste de Commandement (Plans d'urgence & Gestion de Crises)">
+          <i data-lucide="radio" class="w-4 h-4 text-red-500 animate-pulse"></i>
+          <span class="hidden lg:inline">PC Crise</span>
+        </button>
+
+        <!-- Admin Panel Button -->
+        <button id="admin-header-btn" onclick="window.ProtecAdmin.openAdminModal(window.game)" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-1.5 text-indigo-700 hover:bg-indigo-50/80 transition shadow-sm group" title="Panel Administrateur">
+          <span class="text-sm">👑</span>
+          <span class="text-xs font-extrabold hidden lg:inline">Admin</span>
+        </button>
+
+        <!-- Bouton Accueil / Présentation (Landing Page) -->
+        <button id="landing-header-btn" onclick="window.MyProtecLanding && window.MyProtecLanding.showLanding()" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-1.5 text-slate-700 hover:text-pc-blue hover:bg-white/90 transition shadow-sm group font-bold text-xs" title="Afficher la page d'accueil MyProtec">
+          <i data-lucide="home" class="w-4 h-4 text-pc-blue"></i>
+          <span class="hidden xl:inline">Accueil</span>
+        </button>
+
+        <!-- Auth / Account Widget -->
+        <div id="auth-header-widget" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-2 shadow-sm cursor-pointer hover:bg-white/90 transition group" onclick="window.ProtecAuth.openAuthModal()" title="Compte Directeur & Sauvegarde">
+          <div id="auth-status-icon" class="w-6 h-6 rounded-lg bg-pc-blue/10 text-pc-blue flex items-center justify-center group-hover:bg-pc-blue group-hover:text-white transition">
+            <i data-lucide="user" class="w-3.5 h-3.5"></i>
+          </div>
+          <div class="flex flex-col text-left">
+            <span id="auth-user-label" class="text-xs font-bold text-slate-700 truncate max-w-[85px] sm:max-w-[110px]">Connexion</span>
+            <span id="auth-db-status" class="text-[8px] sm:text-[9px] font-semibold text-slate-400 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span> Non connecté
+            </span>
+          </div>
+        </div>
+
+        <!-- PWA Install Button (Desktop) -->
+        <button id="pwa-install-btn" onclick="window.ProtecPWA.promptInstall()" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-1.5 text-pc-blue hover:bg-pc-blue hover:text-white transition shadow-sm font-bold text-xs group" title="Installer l'application MyProtec sur cet appareil">
+          <i data-lucide="download" class="w-3.5 h-3.5 text-pc-orange group-hover:text-white transition-colors"></i>
+          <span class="hidden xl:inline">Installer l'App</span>
+        </button>
+
+        <!-- Push Notifications Widget (Desktop) -->
+        <button id="push-notif-btn" onclick="window.ProtecNotifications.openSettingsModal()" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-500 hover:text-pc-orange hover:bg-white/90 transition shadow-sm relative group flex items-center justify-center" title="Centre de Notifications Push & Alertes">
+          <i data-lucide="bell" id="push-notif-icon" class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+          <span id="push-notif-badge" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-300 border-2 border-white"></span>
+        </button>
+
+        <!-- Mentions Légales & Confidentialité RGPD / AdSense -->
+        <button onclick="window.ProtecPrivacy.openModal()" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-500 hover:text-pc-blue hover:bg-white/90 transition shadow-sm group flex items-center justify-center" title="Mentions Légales, Cookies & Politique de Confidentialité AdSense">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+        </button>
+
+        <!-- Reset / Options Button -->
+        <button onclick="window.game.confirmResetGame()" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-white/90 transition shadow-sm group flex items-center justify-center" title="Recommencer une nouvelle partie à zéro">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 group-hover:-rotate-90 transition-transform"></i>
+        </button>
+      </div>
+
+      <!-- Droite Mobile : Barre d'accès rapide ultra-compacte (< 768px - Anti Débordement) -->
+      <div class="flex md:hidden items-center gap-1 pointer-events-auto flex-shrink-0">
+        <!-- Trésorerie Mobile -->
+        <button onclick="window.game.openFinancesModal()" class="glass-panel px-2 h-10 rounded-xl flex items-center gap-1 text-emerald-600 font-extrabold text-[11px] shadow-sm active:scale-95 transition" title="Trésorerie de l'antenne">
+          <span class="text-xs">💶</span>
+          <span id="stat-money-mobile">15k €</span>
+        </button>
+
+        <!-- Horloge Mobile -->
+        <div class="glass-panel px-2 h-10 rounded-xl flex items-center text-slate-700 font-extrabold text-[11px] mono-num shadow-sm">
+          <span id="clock-time-mobile">08:00</span>
+        </div>
+
+        <!-- Notifications Mobile -->
+        <button onclick="window.ProtecNotifications.openSettingsModal()" class="glass-panel w-10 h-10 rounded-xl text-slate-500 active:scale-95 transition shadow-sm relative flex items-center justify-center" title="Notifications Push & Journal">
+          <i data-lucide="bell" class="w-4 h-4"></i>
+          <span id="push-notif-badge-mobile" class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-slate-300 border border-white"></span>
+        </button>
+
+        <!-- Profil Mobile -->
+        <button onclick="window.ProtecAuth.openAuthModal()" class="glass-panel w-10 h-10 rounded-xl text-pc-blue shadow-sm active:scale-95 transition flex items-center justify-center" title="Mon Compte Directeur">
+          <i data-lucide="user" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Ligne 2 : Filtres de carte & Raccourcis secondaires (Défilant fluide sans déborder) -->
+    <div class="pointer-events-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 mobile-scroll-x w-full">
+      <button onclick="window.game.setFilter('all')" id="filter-btn-all" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-bold text-pc-blue border-pc-blue/40 shadow-sm flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-pc-blue"></span>
+        Toutes (<span id="count-all">0</span>)
+      </button>
+      <button onclick="window.game.setFilter('dps')" id="filter-btn-dps" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-pc-blue transition flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-pc-blue"></span>
+        DPS (<span id="count-dps">0</span>)
+      </button>
+      <button data-feature-key="samu" onclick="window.game.setFilter('samu')" id="filter-btn-samu" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-pc-orange transition flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-pc-orange"></span>
+        SAMU 15 (<span id="count-samu">0</span>)
+      </button>
+      <button data-feature-key="pompiers" onclick="window.game.setFilter('pompiers')" id="filter-btn-pompiers" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-red-700 transition flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-red-700"></span>
+        Garde SDIS (<span id="count-pompiers">0</span>)
+      </button>
+      <button data-feature-key="social" onclick="window.game.setFilter('social')" id="filter-btn-social" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-purple-600 transition flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-purple-600"></span>
+        Social (<span id="count-social">0</span>)
+      </button>
+      <button data-feature-key="crise" onclick="window.game.setFilter('crise')" id="filter-btn-crise" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-red-600 transition flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+        Crise NOVI (<span id="count-crise">0</span>)
+      </button>
+      <button onclick="window.game.setFilter('meteo')" id="filter-btn-meteo" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-sky-600 transition flex items-center gap-1.5 flex-shrink-0" title="Réquisitions Préfectorales & Engagements AASC">
+        <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+        Préfecture AASC (<span id="count-meteo">0</span>)
+      </button>
+
+      <!-- Raccourcis utiles sur mobile avec icônes SVG propres -->
+      <!-- Bouton Publicité mobile (Désactivé temporairement) -->
+      <button id="ad-btn-mobile" onclick="window.ProtecAds?.openAdModal(window.game)" class="hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-700 items-center gap-1 flex-shrink-0" title="Publicité (+500 €)" style="display: none !important;">
+        <i data-lucide="tv" class="w-3.5 h-3.5 text-amber-600"></i>
+        <span>Pub</span>
+        <span id="ad-count-badge-mobile" class="text-[9px] font-black bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded">5/5</span>
+      </button>
+      <button onclick="window.game.openModule('meteo')" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 items-center gap-1 flex-shrink-0">
+        <i data-lucide="cloud-sun" class="w-3.5 h-3.5 text-sky-600"></i>
+        <span>Météo</span>
+      </button>
+      <button onclick="window.game.openModule('recompenses')" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 items-center gap-1 flex-shrink-0">
+        <i data-lucide="gift" class="w-3.5 h-3.5 text-rose-500"></i>
+        <span>Cadeaux</span>
+      </button>
+      <button id="pwa-install-btn-mobile" onclick="window.ProtecPWA.promptInstall()" class="flex md:hidden glass-pill px-2.5 py-1.5 rounded-xl text-xs font-bold text-pc-blue items-center gap-1 flex-shrink-0" title="Installer l'application">
+        <i data-lucide="download" class="w-3.5 h-3.5 text-pc-blue"></i>
+        <span>App</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- FLOATING NOTIFICATIONS TOAST CONTAINER (z-[100] pour rester toujours visible au-dessus du tiroir latéral) -->
+  <div id="toast-container" class="fixed top-20 right-4 z-[100] flex flex-col gap-2 max-w-sm pointer-events-none transition-all duration-300"></div>
+
+  <!-- FLOATING ACTIVE MISSIONS QUICK BAR (En bas à gauche) -->
+  <div class="absolute bottom-24 left-4 z-10 flex flex-col gap-2 max-w-xs">
+    <div id="active-missions-pills" class="flex flex-col gap-2">
+      <!-- Rempli dynamiquement -->
+    </div>
+  </div>
+
+  <!-- BOTTOM FLOATING ACTION DOCK (Responsive Mobile & Desktop) -->
+  <nav class="fixed bottom-2 sm:bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto max-w-[100vw] px-2 flex justify-center w-full">
+    
+    <!-- DESKTOP DOCK (>= 768px) : Hiérarchie par Menus & Sous-menus déverrouillés -->
+    <div class="hidden md:flex glass-panel-heavy dock-container px-3 py-2 rounded-3xl items-center gap-2 shadow-2xl border border-white/80">
+      
+      <!-- 1. MENU PRINCIPAL : MISSIONS -->
+      <div class="dock-menu-wrapper relative">
+        <button onclick="window.game.toggleDockSubmenu('missions', event)" id="dock-btn-missions" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-pc-blue/10 transition-all duration-200 flex-shrink-0" title="Toutes les missions et opérations">
+          <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-pc-blue group-hover:scale-110 transition-transform">
+            <i data-lucide="calendar" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+          </div>
+          <span class="text-[9px] sm:text-[10px] font-bold text-slate-700 group-hover:text-pc-blue tracking-tight">Missions</span>
+          <span id="badge-missions-main-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-pc-blue text-white shadow-sm">0</span>
+        </button>
+
+        <!-- Sous-menu Missions flottant -->
+        <div id="dock-submenu-missions" class="dock-submenu">
+          <div class="dock-submenu-header">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Missions & Dispositifs</span>
+            <span class="text-[9px] font-bold text-pc-blue">Menu</span>
+          </div>
+          <button onclick="window.game.openModule('planning'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
+              <span>Postes de Secours (DPS)</span>
+            </div>
+            <span id="badge-submenu-planning" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('devis'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="file-check" class="w-4 h-4 text-amber-600"></i>
+              <span>Devis DPS (Demandes reçues)</span>
+            </div>
+            <span id="badge-submenu-devis" class="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">0</span>
+          </button>
+          <button data-feature-key="samu" onclick="window.game.openModule('samu'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="activity" class="w-4 h-4 text-pc-orange"></i>
+              <span>SAMU 15 (VPSP)</span>
+            </div>
+            <span id="badge-submenu-samu" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button data-feature-key="pompiers" onclick="window.game.openModule('pompiers'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="flame" class="w-4 h-4 text-red-700"></i>
+              <span>Garde SDIS</span>
+            </div>
+            <span id="badge-submenu-pompiers" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button data-feature-key="social" onclick="window.game.openModule('social'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="heart-handshake" class="w-4 h-4 text-purple-600"></i>
+              <span>Action Sociale</span>
+            </div>
+            <span id="badge-submenu-social" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('conventions'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="award" class="w-4 h-4 text-emerald-600"></i>
+              <span>Conventions Officielles</span>
+            </div>
+          </button>
+          <button data-feature-key="crise" onclick="window.game.openModule('crise'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="siren" class="w-4 h-4 text-red-600"></i>
+              <span>Crise NOVI / ORSEC</span>
+            </div>
+            <span id="badge-submenu-crise" class="text-[9px] px-1.5 py-0.2 rounded-full bg-red-100 text-red-700 font-bold">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. MENU PRINCIPAL : EFFECTIFS & RH -->
+      <div class="dock-menu-wrapper relative">
+        <button onclick="window.game.toggleDockSubmenu('rh', event)" id="dock-btn-rh" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-indigo-50 transition-all duration-200 flex-shrink-0" title="Gestion des bénévoles et formations">
+          <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+            <i data-lucide="users" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+          </div>
+          <span class="text-[9px] sm:text-[10px] font-bold text-slate-700 group-hover:text-indigo-600 tracking-tight">Effectifs</span>
+          <span id="badge-rh-main-dock" class="absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-indigo-500 text-white shadow-sm">0</span>
+        </button>
+
+        <!-- Sous-menu RH flottant -->
+        <div id="dock-submenu-rh" class="dock-submenu">
+          <div class="dock-submenu-header">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Effectifs & Ressources</span>
+            <span class="text-[9px] font-bold text-indigo-600">RH</span>
+          </div>
+          <button onclick="window.game.openModule('recrutement'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="users" class="w-4 h-4 text-indigo-600"></i>
+              <span>Bénévoles & Équipe</span>
+            </div>
+            <span id="badge-submenu-benevoles" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('recrutement'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="user-plus" class="w-4 h-4 text-indigo-600"></i>
+              <span>Recrutement & Civiques</span>
+            </div>
+            <span id="badge-submenu-recrutement" class="text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('formation'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="graduation-cap" class="w-4 h-4 text-emerald-600"></i>
+              <span>Formations & Devis B2B</span>
+            </div>
+            <span id="badge-submenu-formations" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-700 font-bold">0</span>
+          </button>
+          <button data-feature-key="poles" onclick="window.game.openModule('poles'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="layers" class="w-4 h-4 text-indigo-600"></i>
+              <span>Pôles d'Antenne</span>
+            </div>
+          </button>
+          <button onclick="window.game.openModule('communication'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="megaphone" class="w-4 h-4 text-purple-600"></i>
+              <span>Communication & Notoriété</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. MENU PRINCIPAL : ANTENNE (Bâtiment, Flotte, Logistique) -->
+      <div class="dock-menu-wrapper relative">
+        <button onclick="window.game.toggleDockSubmenu('antenne', event)" id="dock-btn-antenne" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-slate-100 transition-all duration-200 flex-shrink-0" title="Bâtiment (Plan 2D), flotte de véhicules et logistique">
+          <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 group-hover:scale-110 transition-transform">
+            <i data-lucide="building-2" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+          </div>
+          <span class="text-[9px] sm:text-[10px] font-bold text-slate-700 group-hover:text-slate-900 tracking-tight">Antenne</span>
+          <span id="badge-antenne-main-dock" class="hidden absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-amber-500 text-white shadow-sm">!</span>
+        </button>
+
+        <!-- Sous-menu Antenne flottant -->
+        <div id="dock-submenu-antenne" class="dock-submenu">
+          <div class="dock-submenu-header">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Antenne</span>
+            <span class="text-[9px] font-bold text-slate-600">Moyens</span>
+          </div>
+          <button onclick="window.game.openModule('locaux'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="layout-grid" class="w-4 h-4 text-amber-600"></i>
+              <span>Bâtiment</span>
+            </div>
+            <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">Plan 2D</span>
+          </button>
+          <button onclick="window.game.openModule('flotte'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="truck" class="w-4 h-4 text-slate-700"></i>
+              <span>Flotte</span>
+            </div>
+            <span id="badge-submenu-vehicules" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('logistique'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="package-check" class="w-4 h-4 text-teal-600"></i>
+              <span>Logistique</span>
+            </div>
+            <span id="badge-submenu-logistique" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-700 font-bold">!</span>
+          </button>
+          <button data-feature-key="specialites" onclick="window.game.openModule('specialites'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="crosshair" class="w-4 h-4 text-sky-600"></i>
+              <span>Spécialités</span>
+            </div>
+          </button>
+          <button onclick="window.game.openModule('marche_occasion'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="tag" class="w-4 h-4 text-pc-orange"></i>
+              <span>Bourse de l'Occasion</span>
+            </div>
+            <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-orange-100 text-orange-800 font-bold">Marché</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 4. MENU PRINCIPAL : LIAISONS & RÉSEAU -->
+      <div class="dock-menu-wrapper relative">
+        <button onclick="window.game.toggleDockSubmenu('liaisons', event)" id="dock-btn-liaisons" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-sky-50 transition-all duration-200 flex-shrink-0" title="Radio, alliances et veille">
+          <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-sky-600 group-hover:scale-110 transition-transform">
+            <i data-lucide="radio" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+          </div>
+          <span class="text-[9px] sm:text-[10px] font-bold text-slate-700 group-hover:text-sky-600 tracking-tight">Liaisons</span>
+          <span id="badge-liaisons-main-dock" class="hidden absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-sky-600 text-white shadow-sm">0</span>
+        </button>
+
+        <!-- Sous-menu Liaisons flottant -->
+        <div id="dock-submenu-liaisons" class="dock-submenu">
+          <div class="dock-submenu-header">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Liaisons & Réseau</span>
+            <span class="text-[9px] font-bold text-sky-600">Radio</span>
+          </div>
+          <button onclick="window.game.openModule('radio'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="radio" class="w-4 h-4 text-sky-600"></i>
+              <span>Radio PC & Main courante</span>
+            </div>
+            <span id="badge-submenu-radio" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('tchat'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="message-square" class="w-4 h-4 text-indigo-600"></i>
+              <span>Messagerie & Tchat</span>
+            </div>
+            <span id="badge-submenu-tchat" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('alliance'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="handshake" class="w-4 h-4 text-indigo-600"></i>
+              <span>Réseau & Alliances</span>
+            </div>
+            <span id="badge-submenu-alliance" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openModule('apc'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="landmark" class="w-4 h-4 text-pc-blue"></i>
+              <span>APC Départementale</span>
+            </div>
+            <span id="badge-submenu-apc" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-blue-100 text-pc-blue font-bold">Élu</span>
+          </button>
+          <button onclick="window.ProtecVeille.renderModal(window.game); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="shield-alert" class="w-4 h-4 text-emerald-600"></i>
+              <span>Veille Opérationnelle</span>
+            </div>
+          </button>
+          <button onclick="window.game.openModule('ecussons'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="shield" class="w-4 h-4 text-amber-500"></i>
+              <span>Écussons & Traditions</span>
+            </div>
+          </button>
+          <button onclick="window.game.activeAllianceTab = 'evenements'; window.game.openModule('alliance'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="award" class="w-4 h-4 text-purple-600"></i>
+              <span>Grands Événements Fédéraux</span>
+            </div>
+          </button>
+          <button onclick="window.game.openModule('meteo'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="cloud-sun" class="w-4 h-4 text-sky-600"></i>
+              <span>Météo-France</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <div class="h-8 w-px bg-slate-200 mx-0.5 sm:mx-1 flex-shrink-0"></div>
+
+      <!-- 5. ACCÈS DIRECT FINANCES & TRÉSORERIE -->
+      <button onclick="window.game.openModule('finances')" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-emerald-50 transition-all duration-200 flex-shrink-0" title="Trésorerie, bilans comptables et subventions">
+        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+          <i data-lucide="wallet" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+        </div>
+        <span class="text-[9px] sm:text-[10px] font-bold text-slate-700 group-hover:text-emerald-600 tracking-tight">Finances</span>
+        <span id="badge-finances-dock" class="hidden absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-emerald-600 text-white shadow-sm">€</span>
+      </button>
+
+    </div>
+
+    <!-- MOBILE BOTTOM BAR (< 768px) : Dock 5 onglets fluide au pouce -->
+    <div class="flex md:hidden glass-panel-heavy dock-container safe-bottom px-1.5 py-1.5 rounded-2xl items-center justify-around gap-0.5 shadow-2xl border border-white/80 w-[calc(100vw-1rem)] max-w-sm">
+      <!-- 1. Missions -->
+      <button onclick="window.game.openModule('planning')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-pc-blue/10 min-w-0" title="Planning & Missions">
+        <div class="relative">
+          <i data-lucide="calendar" class="w-5 h-5 text-pc-blue"></i>
+          <span id="badge-missions-mobile" class="absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-pc-blue text-white min-w-[14px] text-center leading-tight">0</span>
+        </div>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Missions</span>
+      </button>
+
+      <!-- 2. Effectifs & RH -->
+      <button onclick="window.game.openModule('recrutement')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-indigo-50 min-w-0" title="Bénévoles & Recrutement">
+        <div class="relative">
+          <i data-lucide="users" class="w-5 h-5 text-indigo-600"></i>
+          <span id="badge-rh-mobile" class="absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-indigo-600 text-white min-w-[14px] text-center leading-tight">0</span>
+        </div>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Effectifs</span>
+      </button>
+
+      <!-- 3. Antenne -->
+      <button onclick="window.game.openModule('locaux')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-slate-100 min-w-0" title="Bâtiment, Flotte & Logistique">
+        <div class="relative">
+          <i data-lucide="building-2" class="w-5 h-5 text-slate-700"></i>
+          <span id="badge-materiel-mobile" class="hidden absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-amber-500 text-white min-w-[14px] text-center leading-tight">!</span>
+        </div>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Antenne</span>
+      </button>
+
+      <!-- 4. Liaisons & Radio -->
+      <button onclick="window.game.openModule('radio')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-sky-50 min-w-0" title="Radio & Liaisons">
+        <div class="relative">
+          <i data-lucide="radio" class="w-5 h-5 text-sky-600"></i>
+          <span id="badge-liaisons-mobile" class="hidden absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-sky-600 text-white min-w-[14px] text-center leading-tight">0</span>
+        </div>
+        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Liaisons</span>
+      </button>
+
+      <!-- 5. ACTION RAPIDE & DÉPARTS D'URGENCE (Quick Dispatch) -->
+      <button onclick="window.ProtecQuickDispatch ? window.ProtecQuickDispatch.open(window.game) : window.game.openModule('planning')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-orange-50 min-w-0 text-orange-600" title="Panneau d'Action Rapide & Départs d'Urgence">
+        <div class="relative">
+          <i data-lucide="zap" class="w-5 h-5 text-orange-600 animate-pulse"></i>
+          <span class="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-orange-500 animate-ping"></span>
+        </div>
+        <span class="text-[9px] font-black text-orange-700 mt-0.5 truncate max-w-full">Urgences</span>
+      </button>
+
+      <!-- 6. Tous les Modules (Menu hiérarchique) -->
+      <button onclick="window.game.openMobileMenu()" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-amber-50 min-w-0 text-pc-blue" title="Centre de Commandement">
+        <i data-lucide="layout-grid" class="w-5 h-5"></i>
+        <span class="text-[9px] font-extrabold mt-0.5 truncate max-w-full">Menu</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- MODAL VOLET RAPIDE MODULES MOBILE -->
+  <div id="mobile-modules-sheet" class="hidden fixed inset-0 z-50 items-end justify-center bg-slate-950/70 backdrop-blur-md p-2 sm:p-4 animate-in fade-in" onclick="if(event.target === this) window.game.closeMobileMenu()">
+    <div class="w-full max-w-lg rounded-t-3xl sm:rounded-3xl glass-panel-heavy border border-white/90 p-5 shadow-2xl relative max-h-[85vh] overflow-y-auto no-scrollbar space-y-4">
+      <!-- Handle bar & Header -->
+      <div class="w-12 h-1.5 rounded-full bg-slate-300 mx-auto"></div>
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200/60">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-pc-blue/10 text-pc-blue flex items-center justify-center font-bold">
+            <i data-lucide="layout-grid" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-slate-900">Centre Opérationnel</h3>
+            <p class="text-[10px] text-slate-500 font-semibold">Modules et services actifs</p>
+          </div>
+        </div>
+        <button onclick="window.game.closeMobileMenu()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Section 1 : Missions & Dispositifs -->
+      <div class="space-y-1.5">
+        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Missions & Urgences</span>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('planning')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-blue-50 text-pc-blue flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="calendar" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Planning</span>
+            <span class="text-[9px] text-slate-400">Postes DPS</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('devis')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="file-check" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Devis DPS</span>
+            <span class="text-[9px] text-slate-400">Demandes</span>
+          </button>
+          <button data-feature-key="samu" onclick="window.game.closeMobileMenu(); window.game.openModule('samu')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-orange-50 text-pc-orange flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="activity" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">SAMU 15</span>
+            <span class="text-[9px] text-slate-400">Astreinte</span>
+          </button>
+          <button data-feature-key="pompiers" onclick="window.game.closeMobileMenu(); window.game.openModule('pompiers')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-red-50 text-red-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="flame" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-red-700">Garde SDIS</span>
+            <span class="text-[9px] text-slate-400">Caserne</span>
+          </button>
+          <button data-feature-key="social" onclick="window.game.closeMobileMenu(); window.game.openModule('social')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="heart-handshake" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Social</span>
+            <span class="text-[9px] text-slate-400">Maraudes</span>
+          </button>
+          <button data-feature-key="crise" onclick="window.game.closeMobileMenu(); window.game.openModule('crise')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-red-100 text-red-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="siren" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-red-600">Crise NOVI</span>
+            <span class="text-[9px] text-slate-400">ORSEC</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('conventions')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="award" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Conventions</span>
+            <span class="text-[9px] text-slate-400">CUMP & SDIS</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('subventions')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="landmark" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Subventions</span>
+            <span class="text-[9px] text-slate-400">DDETS & CCAS</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 2 : Effectifs & RH -->
+      <div class="space-y-1.5">
+        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Effectifs & Bénévoles</span>
+        <div class="grid grid-cols-4 gap-2 text-center">
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('recrutement')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="users" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Bénévoles</span>
+            <span class="text-[9px] text-slate-400">Équipe</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('formation')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="graduation-cap" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Formations</span>
+            <span class="text-[9px] text-emerald-600 font-bold">Devis & Rangs</span>
+          </button>
+          <button data-feature-key="poles" onclick="window.game.closeMobileMenu(); window.game.openModule('poles')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="layers" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Pôles</span>
+            <span class="text-[9px] text-slate-400">Direction</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('communication')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="megaphone" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Com'</span>
+            <span class="text-[9px] text-slate-400">Campagnes</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 3 : Antenne (Bâtiment, Flotte, Logistique, Écussons, Occasion) -->
+      <div class="space-y-1.5">
+        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Antenne</span>
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center">
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('locaux')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="layout-grid" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Bâtiment</span>
+            <span class="text-[9px] text-slate-400">Plan 2D</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('flotte')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="truck" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Flotte</span>
+            <span class="text-[9px] text-slate-400">Véhicules</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('logistique')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="package-check" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Logistique</span>
+            <span class="text-[9px] text-slate-400">Lots & Stocks</span>
+          </button>
+          <button data-feature-key="specialites" onclick="window.game.closeMobileMenu(); window.game.openModule('specialites')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="crosshair" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-700">Spés</span>
+            <span class="text-[9px] text-slate-400">Drones/Cyno</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('ecussons')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="shield" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-amber-800">Écussons</span>
+            <span class="text-[9px] text-amber-600">Tableau/Troc</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('marche_occasion')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-orange-50 text-pc-orange flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="tag" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-xs font-bold text-pc-orange">Occasion</span>
+            <span class="text-[9px] text-slate-400">Bourse</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 4 : Liaisons & Réseau -->
+      <div class="space-y-1.5">
+        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Liaisons & Réseau</span>
+        <div class="grid grid-cols-4 sm:grid-cols-7 gap-1 text-center">
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('radio')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="radio" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-[11px] font-bold text-slate-700">Radio</span>
+            <span class="text-[8px] text-slate-400">En direct</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('tchat')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="message-square" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-[11px] font-bold text-slate-700">Tchat</span>
+            <span class="text-[8px] text-slate-400">Canaux</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('alliance')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-blue-50 text-pc-blue flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="handshake" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-[11px] font-bold text-slate-700">Alliances</span>
+            <span class="text-[8px] text-slate-400">Renforts</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('apc')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-blue-50 text-pc-blue flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="landmark" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-[11px] font-bold text-slate-700">APC Dép.</span>
+            <span class="text-[8px] text-pc-blue">Élections</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.ProtecVeille.renderModal(window.game);" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="shield-alert" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-[11px] font-bold text-slate-700">Veille Opé</span>
+            <span class="text-[8px] text-emerald-600">Astreintes</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.activeAllianceTab = 'evenements'; window.game.openModule('alliance');" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="award" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-[11px] font-bold text-slate-700">Événements</span>
+            <span class="text-[8px] text-purple-600">Fédéraux</span>
+          </button>
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('meteo')" class="mobile-grid-btn group">
+            <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+              <i data-lucide="cloud-sun" class="w-4.5 h-4.5"></i>
+            </div>
+            <span class="text-[11px] font-bold text-slate-700">Météo</span>
+            <span class="text-[8px] text-slate-400">Vigilance</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Actions de bas de volet -->
+      <div class="pt-4 border-t border-slate-200/60 mt-4 flex items-center justify-between gap-2">
+        <button onclick="window.game.closeMobileMenu(); window.ProtecAdmin.openAdminModal(window.game)" class="py-2.5 px-3 rounded-xl bg-indigo-50 text-indigo-700 font-bold text-xs flex items-center justify-center gap-1 active:bg-indigo-100 transition">
+          👑 Admin
+        </button>
+        <button onclick="window.game.closeMobileMenu(); window.ProtecAuth.openAuthModal()" class="flex-1 py-2.5 px-3 rounded-xl bg-pc-blue/10 text-pc-blue font-bold text-xs flex items-center justify-center gap-1.5 active:bg-pc-blue/20 transition">
+          <i data-lucide="user" class="w-4 h-4"></i> Mon Compte
+        </button>
+        <button onclick="window.game.closeMobileMenu(); window.game.confirmResetGame()" class="py-2.5 px-3 rounded-xl bg-rose-50 text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 active:bg-rose-100 transition">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reset
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDING CONTEXT DRAWER (Panneau Latéral Droit) -->
+  <aside id="context-drawer" class="fixed top-2 sm:top-4 right-2 sm:right-4 bottom-2 sm:bottom-4 w-[calc(100vw-1rem)] sm:w-[470px] md:w-[490px] z-40 hidden flex-col glass-panel-heavy rounded-3xl overflow-hidden shadow-2xl border border-white/90">
+    
+    <!-- Drawer Header -->
+    <div class="px-5 py-4 border-b border-slate-100/80 flex items-center justify-between bg-white/40">
+      <div class="flex items-center gap-2.5 flex-1 min-w-0 pr-2">
+        <div id="drawer-icon-box" class="w-9 h-9 rounded-xl bg-pc-blue/10 text-pc-blue flex items-center justify-center flex-shrink-0">
+          <i id="drawer-header-icon" data-lucide="file-text" class="w-5 h-5"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <span id="drawer-category-badge" class="text-[10px] uppercase font-bold tracking-wider text-slate-400 block truncate">FICHE MISSION</span>
+          <h2 id="drawer-title" class="text-sm font-extrabold text-slate-900 leading-tight line-clamp-2">Détail</h2>
+        </div>
+      </div>
+      <button onclick="window.game.closeDrawer()" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Drawer Content Scrollable Area -->
+    <div id="drawer-body" class="flex-1 overflow-y-auto p-5 space-y-5">
+      <!-- Injecté dynamiquement par JavaScript -->
+    </div>
+
+    <!-- Drawer Action Footer -->
+    <div id="drawer-footer" class="p-3 sm:p-4 border-t border-slate-200/80 bg-slate-50/90 flex flex-wrap items-center justify-between gap-2">
+      <!-- Boutons dynamiques (Engager, Clôturer, etc.) -->
+    </div>
+  </aside>
+
+  <!-- MODAL MULTI-USAGES (Formations, Flotte, Équipe, Finances...) -->
+  <div id="main-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-sm" onclick="if(event.target === this) window.game.handleBackdropClick(event)">
+    <div class="glass-panel-heavy rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl border border-white/90 modal-fade-in overflow-hidden">
+      <!-- Poignée tactile de glissement Bottom Sheet -->
+      <div class="bottom-sheet-handle"></div>
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white/50">
+        <div class="flex items-center gap-3">
+          <div id="modal-icon-container" class="w-10 h-10 rounded-2xl bg-pc-blue/10 text-pc-blue flex items-center justify-center">
+            <i id="modal-icon" data-lucide="info" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 id="modal-title" class="text-base font-extrabold text-slate-900">Titre Modal</h3>
+            <p id="modal-subtitle" class="text-xs text-slate-500 font-medium">Sous-titre descriptif</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button id="modal-back-btn" onclick="window.game.goBackModal()" class="hidden px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition flex items-center gap-1">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <span>Retour</span>
+          </button>
+          <button onclick="window.game.closeModal()" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition" title="Fermer">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Sous-navigation contextuelle de catégorie (Menus et sous-menus d'onglets) -->
+      <div id="modal-category-subnav" class="hidden px-6 py-2.5 border-b border-slate-200/80 bg-slate-100/80 overflow-x-auto no-scrollbar flex-shrink-0">
+        <!-- Rempli dynamiquement par renderModalCategorySubnav() -->
+      </div>
+
+      <!-- Modal Body -->
+      <div id="modal-body" class="flex-1 overflow-y-auto p-6 space-y-6">
+        <!-- Contenu dynamique -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE RÉINITIALISATION SÉCURISÉE (ANTI FAUSSE-MANIPULATION & ARCHIVAGE LOGS) -->
+  <div id="reset-confirm-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md" onclick="if(event.target === this) window.game.closeResetModal()">
+    <div class="glass-panel-heavy rounded-3xl w-full max-w-md p-6 shadow-2xl border border-red-300 modal-fade-in space-y-5">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center text-xl font-black">
+          ⚠️
+        </div>
+        <div>
+          <h3 class="text-base font-black text-slate-900">Réinitialisation d'Antenne</h3>
+          <p class="text-[11px] text-slate-500 font-semibold">Procédure de sécurité renforcée</p>
+        </div>
+      </div>
+
+      <div class="p-3.5 rounded-2xl bg-red-50/70 border border-red-200 text-xs text-red-950 space-y-2">
+        <p class="font-extrabold">Cette action réinitialise entièrement votre antenne à zéro (trésorerie, bénévoles, véhicules, missions).</p>
+        <p class="text-[11px] text-red-800">
+          🛡️ <strong>Sécurité anti fausse manipulation :</strong> Une copie intégrale de vos données est automatiquement archivée en BDD. Un administrateur pourra vous la restituer à tout moment en cas d'erreur.
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-bold text-slate-700">Pour confirmer, tapez le mot « <span class="font-mono font-black text-red-600">CONFIRMER</span> » ci-dessous :</label>
+        <input type="text" id="reset-confirm-input" placeholder="CONFIRMER" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-sm text-center uppercase tracking-wider focus:outline-none focus:border-red-500" />
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button onclick="window.game.closeResetModal()" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">
+          Annuler
+        </button>
+        <button onclick="window.game.executeSecureReset()" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/30 transition flex items-center gap-1.5">
+          <i data-lucide="alert-octagon" class="w-4 h-4"></i>
+          Réinitialiser & Archiver
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE VALIDATION D'EMPLACEMENT D'ANTENNE -->
+  <div id="placement-validation-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md" onclick="if(event.target === this) window.game.adjustPlacementMarker()">
+    <div class="glass-panel-heavy rounded-3xl w-full max-w-md p-6 shadow-2xl border border-white/95 modal-fade-in space-y-5">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-pc-blue/10 text-pc-blue flex items-center justify-center text-xl font-black">
+          📍
+        </div>
+        <div>
+          <h3 class="text-base font-black text-slate-900">Validation de l'Emplacement</h3>
+          <p class="text-[11px] text-slate-500 font-semibold">Implantation de votre Antenne</p>
+        </div>
+      </div>
+
+      <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs">
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">Département d'affectation :</span>
+          <strong id="placement-val-dept" class="text-pc-blue font-bold">Paris (75)</strong>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">Nom de l'antenne :</span>
+          <strong id="placement-val-name" class="text-slate-800 font-bold">Antenne Principale (75)</strong>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">Coordonnées GPS :</span>
+          <span id="placement-val-coords" class="font-mono text-[11px] text-slate-700 font-bold">48.8566, 2.3522</span>
+        </div>
+        <div class="flex justify-between items-center pt-2 border-t border-slate-200">
+          <span class="text-slate-500">Coût d'installation :</span>
+          <strong id="placement-val-cost" class="text-emerald-700 font-extrabold text-sm">2 500 €</strong>
+        </div>
+      </div>
+
+      <p class="text-[11px] text-slate-500 italic text-center">
+        Un repère temporaire a été positionné sur la carte. Confirmez-vous cet emplacement ou souhaitez-vous déplacer le repère ?
+      </p>
+
+      <div class="flex items-center justify-between gap-3 pt-2">
+        <button onclick="window.game.adjustPlacementMarker()" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
+          Déplacer le repère
+        </button>
+        <button onclick="window.game.confirmAntennaPlacementFinal()" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-pc-blue text-white hover:bg-pc-blue-light shadow-lg shadow-pc-blue/20 transition flex items-center justify-center gap-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          Valider l'emplacement
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ONBOARDING MODAL (Démarrage à zéro) -->
+  <div id="onboarding-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
+    <div class="glass-panel-heavy rounded-3xl w-full max-w-xl p-7 shadow-2xl border border-white/95 modal-fade-in space-y-6">
+      
+        <!-- Header avec logo MyProtec -->
+        <div class="text-center space-y-2">
+          <img src="logo_myprotec.png" alt="MyProtec" class="h-16 sm:h-20 object-contain drop-shadow-xl mx-auto" />
+          <h2 class="text-2xl font-black text-slate-900 tracking-tight">Fondez votre Antenne Départementale</h2>
+          <p class="text-xs text-slate-600 max-w-md mx-auto">
+            Bienvenue, Responsable Opérationnel. Vous êtes affecté à votre département de rattachement. Si vous êtes le premier joueur, votre antenne devient l'<strong>Antenne Principale</strong> du département. La municipalité vous octroie <strong>15 000 €</strong> de dotation initiale.
+          </p>
+        </div>
+
+        <!-- Étapes pour commencer -->
+        <div class="space-y-3">
+          <div class="p-3.5 rounded-2xl glass-card flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-pc-blue text-white flex items-center justify-center font-black text-xs">1</div>
+            <div class="flex-1 text-xs">
+              <span class="font-bold text-slate-900 block">Implantez le local dans votre département</span>
+              <span class="text-slate-500">Cliquez sur la carte à l'intérieur des limites de votre département.</span>
+            </div>
+          </div>
+
+          <div class="p-3.5 rounded-2xl glass-card flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-pc-orange text-white flex items-center justify-center font-black text-xs">2</div>
+            <div class="flex-1 text-xs">
+              <span class="font-bold text-slate-900 block">Recrutez et formez vos premiers secouristes</span>
+              <span class="text-slate-500">Constituez votre équipe (bénévoles, services civiques, salariés).</span>
+            </div>
+          </div>
+
+          <div class="p-3.5 rounded-2xl glass-card flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center font-black text-xs">3</div>
+            <div class="flex-1 text-xs">
+              <span class="font-bold text-slate-900 block">Armez votre première ambulance VPSP</span>
+              <span class="text-slate-500">Préparez vos départs pour les postes de secours et le SAMU 15.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Button -->
+        <div class="pt-2">
+          <button onclick="window.game.startFirstStationOnboarding()" class="w-full py-3.5 rounded-2xl text-xs font-extrabold bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-xl shadow-pc-blue/25 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
+            <i data-lucide="map-pin" class="w-4 h-4"></i>
+            Implanter mon antenne dans mon département
+          </button>
+        </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL AUTHENTIFICATION OBLIGATOIRE MULTIJOUEUR -->
+  <div id="auth-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/85 backdrop-blur-xl p-4 animate-in fade-in">
+    <div class="w-full max-w-md rounded-3xl glass-panel-heavy border border-white/80 p-6 shadow-2xl relative">
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-200/60 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="logo_myprotec_icon.png" alt="MyProtec" class="w-10 h-10 object-contain drop-shadow-md rounded-full bg-white p-0.5" />
+          <div>
+            <h3 class="text-base font-black text-slate-900" id="auth-modal-title">Connexion Multijoueur</h3>
+            <p class="text-[11px] text-slate-500 font-semibold" id="auth-modal-subtitle">MyProtec • Réseau Opérationnel</p>
+          </div>
+        </div>
+        <button id="auth-modal-close-btn" onclick="window.ProtecAuth.closeAuthModal()" class="hidden w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 items-center justify-center transition">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Body / Formulaire Dynamique -->
+      <div id="auth-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- MODAL PUBLICITÉ RÉCOMPENSÉE -->
+  <div id="ad-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4 animate-in fade-in" onclick="if(event.target === this) window.ProtecAds.closeAdModal()">
+    <div class="w-full max-w-lg rounded-3xl glass-panel-heavy border border-white/80 p-6 shadow-2xl relative">
+      <!-- Header (Conformité AdSense : Titre Publicité clair) -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-200/60 mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-600 flex items-center justify-center text-lg font-black">
+            <i data-lucide="tv" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-black text-slate-900">Publicité Partenaire</h3>
+            <p class="text-[11px] text-slate-500 font-semibold">Annonce récompensée • Gain virtuel en jeu</p>
+          </div>
+        </div>
+        <button onclick="window.ProtecAds.closeAdModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Body / Lecteur Vidéo Dynamique -->
+      <div id="ad-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- INFOBULLE FLOTTANTE GLOBALE DE COMPÉTENCES (Z-INDEX ABSOLU SUPÉRIEUR) -->
+  <div id="global-skills-tooltip" class="hidden fixed z-[99999] w-80 p-3.5 rounded-2xl pointer-events-auto transition-opacity duration-150" style="background-color: #0b1120 !important; color: #f8fafc !important; border: 1.5px solid #334155 !important; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08) !important;"></div>
+
+  <!-- APPLICATION LOGIC SCRIPTS -->
+  <script src="js/dialogs.js"></script>
+  <script src="js/departements.js"></script>
+  <script src="js/systems.js"></script>
+  <script src="js/modals.js"></script>
+  <script src="js/advanced_systems.js"></script>
+  <script src="js/advanced_modals.js"></script>
+  <!-- SUPABASE CLOUD DATABASE CLIENT (POSTGRESQL) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js"></script>
+
+  <script src="js/auth.js"></script>
+  <script src="js/privacy.js"></script>
+  <script src="js/ads.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/incidents.js"></script>
+  <script src="js/personnel.js"></script>
+  <script src="js/poles.js"></script>
+  <script src="js/formations.js"></script>
+  <script src="js/social.js"></script>
+  <script src="js/conventions.js"></script>
+  <script src="js/contrats_annuels.js"></script>
+  <script src="js/communication.js"></script>
+  <script src="js/messaging.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/building_engine.js"></script>
+  <script src="js/locaux.js"></script>
+  <script src="js/logistique.js"></script>
+  <script src="js/finances.js"></script>
+  <script src="js/equipements.js"></script>
+  <script src="js/cump.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/specialites.js"></script>
+  <script src="js/crise_logistique.js"></script>
+  <script src="js/pwa.js"></script>
+  <script src="js/glossaire.js"></script>
+  <script src="js/signature.js"></script>
+  <script src="js/onboarding.js"></script>
+  <script src="js/tutorial.js"></script>
+  <script src="js/veille_operationnelle.js"></script>
+  <script src="js/multijoueur.js"></script>
+  <script src="js/ecussons.js"></script>
+  <script src="js/apc.js"></script>
+  <script src="js/marche_occasion.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -30,45 +30,61 @@ window.MyProtecLanding = {
     { type: 'dps', icon: 'calendar', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', text: 'Convention Validée • Signature DPS Festival des Musiques Actuelles (3 500 spectateurs).' }
   ],
 
-  // Données des vitrines d'antennes de joueurs pour le Mur des Traditions
+  // Barème officiel des points selon le niveau de rareté
+  rarityWeights: {
+    historique: 5,
+    epique: 3,
+    rare: 2,
+    commun: 1
+  },
+
+  // Données des vitrines d'antennes de secours classées par niveau de rareté cumulé
   antennesShowcases: [
     {
       id: 'showcase-1',
       name: 'Antenne Métropolitaine de Nancy',
+      director: 'Directeur Thomas',
       department: 'Meurthe-et-Moselle (54)',
-      rankTitle: 'Antenne Historique Fondatrice',
-      prestigeLevel: 'historique', // Pour algorithme de tri en arrière-plan
       badges: [
-        { id: 'b1', code: 'renf_fondateur', name: 'Pionnier FNPC • Fondation d’Antenne', cat: 'renfort', rarity: 'historique', icon: 'crown', copies: '12 exemplaires en service', desc: 'Attribué aux directeurs pionniers ayant ouvert leur premier centre de secours territorial.' },
-        { id: 'b2', code: 'renf_colonne_crue', name: 'Colonne Nationale Crues & Inondations', cat: 'crise', rarity: 'historique', icon: 'droplets', copies: '28 exemplaires décernés', desc: 'Distinction officielle suite aux opérations majeures de pompage lourd et d’évacuation de population.' },
-        { id: 'b3', code: 'spec_pma', name: 'Poste Médical Avancé (PMA)', cat: 'specialite', rarity: 'epique', icon: 'plus-square', copies: '64 exemplaires certifiés', desc: 'Aptitude certifiée au déploiement rapide d’une chaîne médicale avancée de tri d’urgence.' },
-        { id: 'b4', code: 'dept_54', name: 'Territoire 54 • Meurthe-et-Moselle', cat: 'specialite', rarity: 'commun', icon: 'map-pin', copies: 'En dotation territoriale', desc: 'Insigne officiel des unités de secours et d’action citoyenne de Meurthe-et-Moselle.' }
+        { id: 'b1', code: 'renf_fondateur', name: 'Pionnier FNPC • Fondation d’Antenne', cat: 'renfort', rarity: 'historique', icon: 'crown', desc: 'Attribué aux directeurs pionniers ayant ouvert leur premier centre de secours territorial.' },
+        { id: 'b2', code: 'renf_colonne_crue', name: 'Colonne Nationale Crues & Inondations', cat: 'renfort', rarity: 'historique', icon: 'droplets', desc: 'Distinction officielle suite aux opérations majeures de pompage lourd et d’évacuation de population.' },
+        { id: 'b3', code: 'spec_pma', name: 'Poste Médical Avancé (PMA)', cat: 'specialite', rarity: 'epique', icon: 'plus-square', desc: 'Aptitude certifiée au déploiement rapide d’une chaîne médicale avancée de tri d’urgence.' },
+        { id: 'b4', code: 'dept_54', name: 'Territoire 54 • Meurthe-et-Moselle', cat: 'departement', rarity: 'commun', icon: 'map-pin', desc: 'Insigne officiel des unités de secours et d’action citoyenne de Meurthe-et-Moselle.' }
       ]
     },
     {
       id: 'showcase-2',
       name: 'Compagnie d’Intervention de Paris',
+      director: 'Commandant Leroy',
       department: 'Paris (75)',
-      rankTitle: 'Compagnie Opérationnelle d’Élite',
-      prestigeLevel: 'epique',
       badges: [
-        { id: 'b5', code: 'miss_14_juillet', name: 'Dispositif Fête Nationale 14 Juillet', cat: 'evenements', rarity: 'epique', icon: 'sparkles', copies: '45 exemplaires attribués', desc: 'Délivré lors du commandement des dispositifs de grande ampleur lors des célébrations républicaines.' },
-        { id: 'b6', code: 'renf_dps_ge', name: 'Grande Envergure • Renfort Inter-Antennes', cat: 'evenements', rarity: 'epique', icon: 'users', copies: '82 exemplaires en circulation', desc: 'Décerné lors de l’envoi d’équipages complets VPSP en détachement d’appui hors département.' },
-        { id: 'b7', code: 'spec_aep', name: 'Soutien Psychologique d’Urgence (AEP)', cat: 'specialite', rarity: 'rare', icon: 'heart-pulse', copies: '110 exemplaires homologués', desc: 'Cellule habilitée à la prise en charge immédiate du choc émotionnel post-catastrophe.' },
-        { id: 'b8', code: 'dept_75', name: 'Protection Civile de Paris', cat: 'specialite', rarity: 'rare', icon: 'landmark', copies: 'Corps d’intervention capitale', desc: 'Écusson territorial des brigades de secours engagées au cœur de la capitale.' }
+        { id: 'b5', code: 'miss_14_juillet', name: 'Dispositif Fête Nationale 14 Juillet', cat: 'mission', rarity: 'epique', icon: 'sparkles', desc: 'Délivré lors du commandement des dispositifs de grande ampleur lors des célébrations républicaines.' },
+        { id: 'b6', code: 'renf_dps_ge', name: 'Grande Envergure • Renfort Inter-Antennes', cat: 'renfort', rarity: 'epique', icon: 'users', desc: 'Décerné lors de l’envoi d’équipages complets VPSP en détachement d’appui hors département.' },
+        { id: 'b7', code: 'spec_aep', name: 'Soutien Psychologique d’Urgence (AEP)', cat: 'specialite', rarity: 'rare', icon: 'heart-pulse', desc: 'Cellule habilitée à la prise en charge immédiate du choc émotionnel post-catastrophe.' },
+        { id: 'b8', code: 'dept_75', name: 'Protection Civile de Paris', cat: 'departement', rarity: 'rare', icon: 'landmark', desc: 'Écusson territorial des brigades de secours engagées au cœur de la capitale.' }
       ]
     },
     {
       id: 'showcase-3',
       name: 'Unité Littorale des Bouches-du-Rhône',
+      director: 'Capitaine Marchand',
       department: 'Bouches-du-Rhône (13)',
-      rankTitle: 'Unité Spécialisée Territoriale',
-      prestigeLevel: 'rare',
       badges: [
-        { id: 'b9', code: 'spec_aqua', name: 'Sauvetage Aquatique & Inondations', cat: 'crise', rarity: 'rare', icon: 'waves', copies: '95 unités dotées', desc: 'Reconnaissance des équipages spécialisés en secours aquatique, fleuves et zones inondables.' },
-        { id: 'b10', code: 'spec_cyno', name: 'Unité Cynotechnique de Recherche', cat: 'specialite', rarity: 'rare', icon: 'paw-print', copies: '74 chiens brevetés', desc: 'Équipes de recherche de personnes égarées et victimes de décombres en zone difficile.' },
-        { id: 'b11', code: 'miss_marathon', name: 'Grands Événements Sportifs Nationaux', cat: 'evenements', rarity: 'commun', icon: 'trophy', copies: 'Dotation d’expérience', desc: 'Sécurisation et chaîne médicale continue sur marathons et courses d’endurance.' },
-        { id: 'b12', code: 'dept_13', name: 'Protection Civile 13 • Méditerranée', cat: 'specialite', rarity: 'rare', icon: 'flame', copies: 'Peloton feux et calanques', desc: 'Insigne des équipages engagés sur le littoral provençal et en veille de massifs forestiers.' }
+        { id: 'b9', code: 'spec_aqua', name: 'Sauvetage Aquatique & Inondations', cat: 'specialite', rarity: 'rare', icon: 'waves', desc: 'Reconnaissance des équipages spécialisés en secours aquatique, fleuves et zones inondables.' },
+        { id: 'b10', code: 'spec_cyno', name: 'Unité Cynotechnique de Recherche', cat: 'specialite', rarity: 'rare', icon: 'paw-print', desc: 'Équipes de recherche de personnes égarées et victimes de décombres en zone difficile.' },
+        { id: 'b11', code: 'miss_marathon', name: 'Grands Événements Sportifs Nationaux', cat: 'mission', rarity: 'commun', icon: 'trophy', desc: 'Sécurisation et chaîne médicale continue sur marathons et courses d’endurance.' },
+        { id: 'b12', code: 'dept_13', name: 'Protection Civile 13 • Méditerranée', cat: 'departement', rarity: 'rare', icon: 'flame', desc: 'Insigne des équipages engagés sur le littoral provençal et en veille de massifs forestiers.' }
+      ]
+    },
+    {
+      id: 'showcase-4',
+      name: 'Délégation Territoriale de Gironde',
+      director: 'Lieutenant Moreau',
+      department: 'Gironde (33)',
+      badges: [
+        { id: 'b13', code: 'spec_formateur', name: 'Corps National des Formateurs', cat: 'specialite', rarity: 'rare', icon: 'graduation-cap', desc: 'Distinction des antennes disposant de formateurs certifiés (PICF / PAE).' },
+        { id: 'b14', code: 'miss_festival', name: 'Sécurité Festivals & Musique', cat: 'mission', rarity: 'rare', icon: 'music', desc: 'Encadrement préventif et secours d’urgence sur événements musicaux.' },
+        { id: 'b15', code: 'dept_33', name: 'Protection Civile de Gironde', cat: 'departement', rarity: 'commun', icon: 'map-pin', desc: 'Distinction territoriale des secouristes du littoral aquitain.' }
       ]
     }
   ],
@@ -82,7 +98,9 @@ window.MyProtecLanding = {
     this.initLiveTicker();
     this.initDynamicCounters();
     this.initAccordion();
-    this.renderShowcaseGrid('all');
+    this.syncLeaderboardWithDatabase().then(() => {
+      this.renderShowcaseGrid('all');
+    });
     this.init3DTilt();
     this.initTooltip();
 
@@ -111,22 +129,7 @@ window.MyProtecLanding = {
 
   // Ouvrir le simulateur opérationnel en direct
   enterGame() {
-    const token = localStorage.getItem('protec_auth_token');
-    const user = localStorage.getItem('protec_user');
-
-    if (token && user) {
-      // Déjà connecté : transition fluide vers le simulateur
-      const landingEl = document.getElementById('myprotec-landing-page');
-      if (landingEl) {
-        landingEl.classList.add('is-hidden');
-      }
-      if (window.game && typeof window.game.renderStations === 'function') {
-        window.game.renderStations();
-      }
-    } else {
-      // Non connecté : ouvrir le sas d'authentification
-      this.openAuth('login');
-    }
+    window.location.href = '/jeu';
   },
 
   // Réafficher la landing page (ex: depuis le profil ou déconnexion)
@@ -147,19 +150,19 @@ window.MyProtecLanding = {
     }
   },
 
-  // 1. TÉLÉMÉTRIE EN DIRECT (COMPTEURS DYNAMIQUES)
-  initDynamicCounters() {
-    const updateStats = () => {
-      // Légères variations réalistes
-      this.telemetry.volunteers += Math.floor(Math.random() * 3) - 1;
-      this.telemetry.dps += Math.random() < 0.3 ? (Math.random() < 0.5 ? 1 : -1) : 0;
-      this.telemetry.fleet += Math.random() < 0.2 ? (Math.random() < 0.5 ? 1 : -1) : 0;
-      this.telemetry.patients += Math.random() < 0.6 ? 1 : 0;
+  // 1. TÉLÉMÉTRIE EN DIRECT RÉELLE (DONNÉES DU RÉSEAU SUPABASE)
+  async initDynamicCounters() {
+    const elVols = document.getElementById('lp-stat-volunteers');
+    const elDps = document.getElementById('lp-stat-dps');
+    const elFleet = document.getElementById('lp-stat-fleet');
+    const elPatients = document.getElementById('lp-stat-patients');
 
-      const elVols = document.getElementById('lp-stat-volunteers');
-      const elDps = document.getElementById('lp-stat-dps');
-      const elFleet = document.getElementById('lp-stat-fleet');
-      const elPatients = document.getElementById('lp-stat-patients');
+    const updateStatsFromData = (stats) => {
+      if (!stats) return;
+      this.telemetry.volunteers = stats.volunteers || 0;
+      this.telemetry.dps = stats.dps || 0;
+      this.telemetry.fleet = stats.fleet || 0;
+      this.telemetry.patients = stats.patients || 0;
 
       if (elVols) elVols.textContent = this.telemetry.volunteers.toLocaleString('fr-FR');
       if (elDps) elDps.textContent = this.telemetry.dps.toLocaleString('fr-FR');
@@ -167,58 +170,110 @@ window.MyProtecLanding = {
       if (elPatients) elPatients.textContent = this.telemetry.patients.toLocaleString('fr-FR');
     };
 
-    updateStats();
+    const fetchRealData = async () => {
+      if (window.ProtecSupabase && typeof window.ProtecSupabase.getOperationalTelemetry === 'function') {
+        try {
+          const stats = await window.ProtecSupabase.getOperationalTelemetry();
+          updateStatsFromData(stats);
+        } catch (e) {
+          console.warn('Erreur télémétrie réelle:', e);
+        }
+      }
+    };
+
+    // Chargement immédiat des statistiques réelles
+    await fetchRealData();
+
+    // Actualisation périodique de fond toutes les 12 secondes
     if (this.counterTimer) clearInterval(this.counterTimer);
-    this.counterTimer = setInterval(updateStats, 4500);
+    this.counterTimer = setInterval(fetchRealData, 12000);
   },
 
-  // 2. CONSOLE DE TÉLÉSCRIPTEUR (MAIN COURANTE EN DIRECT)
-  initLiveTicker() {
+  // 2. CONSOLE DE TÉLÉSCRIPTEUR (MAIN COURANTE DES OPÉRATIONS 100% RÉELLE)
+  async initLiveTicker() {
     const feed = document.getElementById('lp-ticker-feed');
     if (!feed) return;
 
-    const addTickerLine = () => {
-      const now = new Date();
-      const timeStr = [
-        String(now.getHours()).padStart(2, '0'),
-        String(now.getMinutes()).padStart(2, '0'),
-        String(now.getSeconds()).padStart(2, '0')
-      ].join(':');
-
-      const item = this.tickerLogPreset[Math.floor(Math.random() * this.tickerLogPreset.length)];
-
+    // Rendu d'une ligne de main courante réelle
+    const renderRow = (item, prepend = true) => {
+      if (!item) return;
       const row = document.createElement('div');
-      row.className = 'lp-ticker-item p-3 rounded-2xl bg-white/90 border border-slate-200/80 shadow-xs flex items-start gap-3 text-xs mb-2.5 transition';
+      row.className = 'lp-ticker-item p-3 rounded-2xl bg-white/90 border border-slate-200/80 shadow-xs flex items-start gap-3 text-xs mb-2.5 transition animate-fade-in';
       row.innerHTML = `
         <span class="font-mono text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-lg flex-shrink-0 mt-0.5">
-          ${timeStr}
+          ${item.time || new Date().toLocaleTimeString('fr-FR')}
         </span>
-        <div class="w-6 h-6 rounded-lg ${item.bg} ${item.color} border ${item.border} flex items-center justify-center flex-shrink-0 mt-0.5">
-          <i data-lucide="${item.icon}" class="w-3.5 h-3.5"></i>
+        <div class="w-6 h-6 rounded-lg ${item.bg || 'bg-blue-50'} ${item.color || 'text-blue-600'} border ${item.border || 'border-blue-200'} flex items-center justify-center flex-shrink-0 mt-0.5">
+          <i data-lucide="${item.icon || 'radio'}" class="w-3.5 h-3.5"></i>
         </div>
-        <p class="text-slate-700 leading-snug flex-1 font-medium">
-          ${item.text}
-        </p>
+        <div class="flex-1 min-w-0">
+          <p class="text-slate-700 leading-snug font-medium break-words">
+            ${item.text || ''}
+          </p>
+        </div>
       `;
 
-      feed.insertBefore(row, feed.firstChild);
+      if (prepend) {
+        // Retirer les éventuels messages d'attente initiaux si un vrai log arrive
+        const emptyNotice = feed.querySelector('.lp-ticker-empty');
+        if (emptyNotice) feed.removeChild(emptyNotice);
+
+        feed.insertBefore(row, feed.firstChild);
+      } else {
+        feed.appendChild(row);
+      }
 
       if (window.lucide) window.lucide.createIcons();
 
-      // Conserver un maximum de 12 lignes visibles
-      while (feed.children.length > 12) {
+      // Conserver un maximum de 18 lignes visibles
+      while (feed.children.length > 18) {
         feed.removeChild(feed.lastChild);
       }
     };
 
-    // Remplissage initial de 4 dépêches
     feed.innerHTML = '';
-    for (let i = 0; i < 4; i++) {
-      addTickerLine();
+
+    // Chargement initial des vrais événements opérationnels enregistrés
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.getOperationalLogs === 'function') {
+      try {
+        const logs = await window.ProtecSupabase.getOperationalLogs(15);
+        if (logs && logs.length > 0) {
+          logs.forEach(logItem => renderRow(logItem, false));
+        } else {
+          // Si aucune opération n'a encore été enregistrée dans la BDD (état vierge)
+          const nowStr = new Date().toLocaleTimeString('fr-FR');
+          feed.innerHTML = `
+            <div class="lp-ticker-empty py-8 text-center text-xs text-slate-400 font-medium">
+              Aucune transmission en cours.
+            </div>
+          `;
+          if (window.lucide) window.lucide.createIcons();
+        }
+      } catch (err) {
+        console.warn('Erreur chargement logs opérationnels réels:', err);
+      }
     }
 
-    if (this.tickerTimer) clearInterval(this.tickerTimer);
-    this.tickerTimer = setInterval(addTickerLine, 3800);
+    // Connexion au flux temps réel Supabase Realtime (< 50ms)
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.subscribeOperationalStream === 'function') {
+      window.ProtecSupabase.subscribeOperationalStream(
+        (updatedStats) => {
+          if (updatedStats) {
+            const elVols = document.getElementById('lp-stat-volunteers');
+            const elDps = document.getElementById('lp-stat-dps');
+            const elFleet = document.getElementById('lp-stat-fleet');
+            const elPatients = document.getElementById('lp-stat-patients');
+            if (elVols) elVols.textContent = (updatedStats.volunteers || 0).toLocaleString('fr-FR');
+            if (elDps) elDps.textContent = (updatedStats.dps || 0).toLocaleString('fr-FR');
+            if (elFleet) elFleet.textContent = (updatedStats.fleet || 0).toLocaleString('fr-FR');
+            if (elPatients) elPatients.textContent = (updatedStats.patients || 0).toLocaleString('fr-FR');
+          }
+        },
+        (newLogItem) => {
+          renderRow(newLogItem, true);
+        }
+      );
+    }
   },
 
   // 3. ACCORDÉON DES 6 PÔLES D'ANTENNE
@@ -242,93 +297,255 @@ window.MyProtecLanding = {
     });
   },
 
-  // 4. MUR DES COLLECTIONS : TRI PAR PRESTIGE & RENDU DE LA VITRINE
+  // Calcul du score de collection selon la somme des niveaux de rareté
+  calculateAntenneScore(badges) {
+    if (!badges || !Array.isArray(badges)) return 0;
+    return badges.reduce((sum, b) => {
+      const r = b.rarity || b.rarete || 'commun';
+      const weight = this.rarityWeights[r] || 1;
+      return sum + weight;
+    }, 0);
+  },
+
+  // Synchronisation avec la base Supabase et la partie locale si existante
+  async syncLeaderboardWithDatabase() {
+    try {
+      // 1. Vérifier si une partie locale du joueur possède des écussons
+      const localRaw = localStorage.getItem('protec_save') || localStorage.getItem('myprotec_save');
+      if (localRaw) {
+        const lSave = JSON.parse(localRaw);
+        const lEcussons = lSave.localEcussons || lSave.ecussons || [];
+        if (lEcussons.length > 0) {
+          const stationName = lSave.stations?.[0]?.name || lSave.player?.stationName || 'Mon Antenne';
+          const dept = lSave.stations?.[0]?.departmentCode || lSave.player?.departmentCode || '54';
+          const city = lSave.stations?.[0]?.city || lSave.player?.city || 'Nancy';
+          const playerName = lSave.player?.name || 'Directeur';
+
+          // Transformer les écussons locaux
+          const catalog = window.ProtecEcussons?.catalog || [];
+          const badges = lEcussons.map(le => {
+            const catItem = catalog.find(c => c.code === (le.code || le.id)) || {};
+            return {
+              id: le.id || le.code,
+              code: le.code || catItem.code,
+              name: catItem.nom || le.name || 'Écusson',
+              cat: catItem.categorie || le.cat || 'specialite',
+              rarity: catItem.rarete || le.rarity || 'commun',
+              icon: catItem.icon || le.icon || 'shield',
+              desc: catItem.description || ''
+            };
+          });
+
+          // Ajouter ou mettre à jour la vitrine du joueur dans le classement
+          const existingIdx = this.antennesShowcases.findIndex(a => a.id === 'player-station');
+          const playerShowcase = {
+            id: 'player-station',
+            name: stationName,
+            director: playerName,
+            department: `${city} (${dept})`,
+            badges: badges
+          };
+
+          if (existingIdx >= 0) {
+            this.antennesShowcases[existingIdx] = playerShowcase;
+          } else {
+            this.antennesShowcases.push(playerShowcase);
+          }
+        }
+      }
+
+      // 2. Interroger Supabase si la table antenne_ecussons a des données
+      if (window.ProtecSupabase && window.ProtecSupabase.client) {
+        const { data: supaAntennes, error } = await window.ProtecSupabase.client
+          .from('antenne_ecussons')
+          .select('antenne_id, quantite, ecusson:ecussons(*)');
+
+        if (!error && supaAntennes && supaAntennes.length > 0) {
+          // Grouper par antenne_id
+          const groups = {};
+          supaAntennes.forEach(item => {
+            if (!groups[item.antenne_id]) groups[item.antenne_id] = [];
+            if (item.ecusson) {
+              groups[item.antenne_id].push({
+                id: item.ecusson.id,
+                code: item.ecusson.code,
+                name: item.ecusson.nom,
+                cat: item.ecusson.categorie,
+                rarity: item.ecusson.rarete,
+                icon: item.ecusson.badge_url || 'shield',
+                desc: item.ecusson.description
+              });
+            }
+          });
+
+          // Mettre à jour les données réelles
+          const dynamicList = [];
+          for (const [antId, bList] of Object.entries(groups)) {
+            dynamicList.push({
+              id: `supa-${antId}`,
+              name: `Antenne Territoriale (${antId.slice(0, 8)})`,
+              director: 'Direction d’Antenne',
+              department: 'Réseau National FNPC',
+              badges: bList
+            });
+          }
+
+          if (dynamicList.length > 0) {
+            this.antennesShowcases = dynamicList;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur synchronisation classement écussons:', e);
+    }
+  },
+
+  // 4. VITRINE DES ÉCUSSONS : CLASSEMENT STRICT PAR SOMME DES NIVEAUX DE RARETÉ
   renderShowcaseGrid(filter = 'all') {
     this.activeFilter = filter;
     const container = document.getElementById('lp-showcase-grid');
     if (!container) return;
 
-    // Classement par prestige en arrière-plan (historique > epique > rare > commun)
-    // AUCUN SCORE NI CHIFFRE N'EST VISIBLE
-    const prestigeWeight = { historique: 4, epique: 3, rare: 2, commun: 1 };
-    const sorted = [...this.antennesShowcases].sort((a, b) => {
-      const wA = prestigeWeight[a.prestigeLevel] || 0;
-      const wB = prestigeWeight[b.prestigeLevel] || 0;
-      return wB - wA;
+    // 1. Calculer pour chaque antenne la somme exacte des niveaux de rareté
+    const rankedAntennes = this.antennesShowcases.map(antenne => {
+      const score = this.calculateAntenneScore(antenne.badges);
+      return {
+        ...antenne,
+        rarityScore: score
+      };
     });
 
-    // Filtre des écussons selon la catégorie
-    const htmlCards = sorted.map(antenne => {
-      const filteredBadges = antenne.badges.filter(b => {
+    // 2. Classer les joueurs / antennes par ordre strictement décroissant du score de rareté
+    rankedAntennes.sort((a, b) => b.rarityScore - a.rarityScore);
+
+    // 3. Assigner les rangs officiels
+    rankedAntennes.forEach((antenne, idx) => {
+      antenne.rank = idx + 1;
+    });
+
+    // 4. Rendu des cartes de vitrine classées
+    const htmlCards = rankedAntennes.map(antenne => {
+      // Filtrer les badges par catégorie si demandé
+      const displayBadges = antenne.badges.filter(b => {
         if (filter === 'all') return true;
         return b.cat === filter;
       });
 
-      // Si aucun écusson ne correspond au filtre, afficher les écussons généraux
-      const displayBadges = filteredBadges.length > 0 ? filteredBadges : antenne.badges;
+      // Comptage précis par palier de rareté
+      const histoCount = antenne.badges.filter(b => (b.rarity || b.rarete) === 'historique').length;
+      const epiCount = antenne.badges.filter(b => (b.rarity || b.rarete) === 'epique').length;
+      const rareCount = antenne.badges.filter(b => (b.rarity || b.rarete) === 'rare').length;
+      const comCount = antenne.badges.filter(b => (b.rarity || b.rarete) === 'commun').length;
+
+      // Badge de classement
+      let rankBadgeHTML = '';
+      if (antenne.rank === 1) {
+        rankBadgeHTML = `
+          <span class="px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow-sm">
+            🥇 1er National
+          </span>
+        `;
+      } else if (antenne.rank === 2) {
+        rankBadgeHTML = `
+          <span class="px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider bg-slate-200 text-slate-800 flex items-center gap-1.5 shadow-2xs">
+            🥈 2ème
+          </span>
+        `;
+      } else if (antenne.rank === 3) {
+        rankBadgeHTML = `
+          <span class="px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider bg-amber-700/15 text-amber-900 border border-amber-600/30 flex items-center gap-1.5">
+            🥉 3ème
+          </span>
+        `;
+      } else {
+        rankBadgeHTML = `
+          <span class="px-2.5 py-1 rounded-xl text-xs font-black bg-slate-100 text-slate-600 border border-slate-200/80">
+            Rang #${antenne.rank}
+          </span>
+        `;
+      }
 
       return `
-        <div class="showcase-grid-card" data-tilt>
-          <div class="showcase-inner-card p-6 flex flex-col justify-between h-full">
+        <div class="showcase-grid-card">
+          <div class="showcase-inner-card p-6 flex flex-col justify-between h-full bg-white/90 rounded-3xl border border-slate-200/80 shadow-md">
             
-            <!-- En-tête de la vitrine d'antenne -->
-            <div class="space-y-2 pb-4 border-b border-slate-200/60">
+            <!-- En-tête : Rang officiel & Score de rareté cumulé -->
+            <div class="space-y-3 pb-4 border-b border-slate-200/70">
               <div class="flex items-center justify-between">
-                <span class="px-2.5 py-1 rounded-xl text-[10px] font-extrabold uppercase tracking-wider ${
-                  antenne.prestigeLevel === 'historique' ? 'bg-amber-100/90 text-amber-900 border border-amber-300' :
-                  (antenne.prestigeLevel === 'epique' ? 'bg-purple-100/90 text-purple-900 border border-purple-300' :
-                  'bg-blue-100/90 text-blue-900 border border-blue-200')
-                }">
-                  ${antenne.rankTitle}
-                </span>
-                <span class="text-xs font-semibold text-slate-400">
-                  ${antenne.department}
-                </span>
-              </div>
-              <h4 class="text-base font-black text-slate-900 tracking-tight">
-                ${antenne.name}
-              </h4>
-            </div>
-
-            <!-- Grille des écussons de tradition de l'antenne -->
-            <div class="grid grid-cols-2 gap-3.5 my-6">
-              ${displayBadges.map(badge => `
-                <div 
-                  class="patch-badge-item group relative p-4 rounded-2xl bg-white/95 border border-slate-200/90 shadow-sm flex flex-col items-center text-center cursor-pointer overflow-hidden"
-                  onmouseenter="window.MyProtecLanding.showBadgeTooltip(event, '${badge.name}', '${badge.desc}', '${badge.copies}')"
-                  onmouseleave="window.MyProtecLanding.hideBadgeTooltip()"
-                >
-                  <!-- Couche Foil Holographique dynamique pour patchs rares/historiques -->
-                  <div class="foil-shiny-layer ${
-                    badge.rarity === 'historique' ? 'foil-historique' :
-                    (badge.rarity === 'epique' ? 'foil-epique' :
-                    (badge.rarity === 'rare' ? 'foil-rare' : ''))
-                  }"></div>
-
-                  <!-- Visuel vectoriel épuré de l'écusson -->
-                  <div class="w-12 h-12 rounded-2xl ${
-                    badge.rarity === 'historique' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
-                    (badge.rarity === 'epique' ? 'bg-purple-50 text-purple-600 border border-purple-200' :
-                    (badge.rarity === 'rare' ? 'bg-cyan-50 text-cyan-600 border border-cyan-200' : 'bg-slate-100 text-slate-600 border border-slate-200'))
-                  } flex items-center justify-center mb-2 shadow-xs group-hover:scale-110 transition-transform">
-                    <i data-lucide="${badge.icon}" class="w-6 h-6"></i>
+                ${rankBadgeHTML}
+                <div class="text-right">
+                  <div class="flex items-baseline justify-end gap-1">
+                    <strong class="text-xl font-black text-slate-900 mono-num">${antenne.rarityScore}</strong>
+                    <span class="text-xs font-black text-[#0055b8]">pts</span>
                   </div>
-
-                  <strong class="text-xs font-black text-slate-800 leading-tight block truncate max-w-full">
-                    ${badge.name}
-                  </strong>
-                  <span class="text-[10px] text-slate-400 font-medium mt-0.5">
-                    ${badge.copies}
-                  </span>
+                  <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Score de Rareté</span>
                 </div>
-              `).join('')}
+              </div>
+
+              <div>
+                <h4 class="text-base font-black text-slate-900 tracking-tight leading-snug">
+                  ${antenne.name}
+                </h4>
+                <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mt-0.5">
+                  <span>${antenne.director || 'Direction d’Antenne'}</span>
+                  <span>•</span>
+                  <span>${antenne.department}</span>
+                </div>
+              </div>
             </div>
 
-            <!-- Pied de carte épuré -->
-            <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
-              <span>Collection officielle vérifiée</span>
-              <span class="text-pc-blue font-bold flex items-center gap-1">
-                <i data-lucide="shield" class="w-3.5 h-3.5"></i> Actif
+            <!-- Grille des écussons de l'antenne -->
+            <div class="grid grid-cols-2 gap-3 my-5">
+              ${displayBadges.length > 0 ? displayBadges.map(badge => {
+                const r = badge.rarity || badge.rarete || 'commun';
+                const pts = this.rarityWeights[r] || 1;
+                return `
+                  <div 
+                    class="patch-badge-item group relative p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col items-center text-center cursor-pointer overflow-hidden transition hover:shadow-md"
+                    onmouseenter="window.MyProtecLanding.showBadgeTooltip(event, '${badge.name}', '${badge.desc || ''}', '${r.toUpperCase()} • Valeur : +${pts} pts')"
+                    onmouseleave="window.MyProtecLanding.hideBadgeTooltip()"
+                  >
+                    <!-- Couche Foil Holographique -->
+                    <div class="foil-shiny-layer ${
+                      r === 'historique' ? 'foil-historique' :
+                      (r === 'epique' ? 'foil-epique' :
+                      (r === 'rare' ? 'foil-rare' : ''))
+                    }"></div>
+
+                    <!-- Icône vectorielle -->
+                    <div class="w-11 h-11 rounded-xl ${
+                      r === 'historique' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
+                      (r === 'epique' ? 'bg-purple-50 text-purple-600 border border-purple-200' :
+                      (r === 'rare' ? 'bg-cyan-50 text-cyan-600 border border-cyan-200' : 'bg-slate-100 text-slate-600 border border-slate-200'))
+                    } flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
+                      <i data-lucide="${badge.icon || 'shield'}" class="w-5 h-5"></i>
+                    </div>
+
+                    <strong class="text-[11px] font-black text-slate-800 leading-tight block truncate max-w-full">
+                      ${badge.name}
+                    </strong>
+                    
+                    <span class="inline-block px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide mt-1.5 ${
+                      r === 'historique' ? 'bg-amber-100 text-amber-900' :
+                      (r === 'epique' ? 'bg-purple-100 text-purple-900' :
+                      (r === 'rare' ? 'bg-cyan-100 text-cyan-900' : 'bg-slate-100 text-slate-600'))
+                    }">
+                      ${r} (+${pts} pts)
+                    </span>
+                  </div>
+                `;
+              }).join('') : `
+                <div class="col-span-2 py-8 text-center text-xs text-slate-400 font-medium">
+                  Aucun écusson dans cette catégorie.
+                </div>
+              `}
+            </div>
+
+            <!-- Pied de carte : Répartition des distinctions -->
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-bold">
+              <span>${antenne.badges.length} écussons</span>
+              <span class="text-slate-400 font-medium">
+                ${histoCount > 0 ? `${histoCount} Hist. ` : ''}${epiCount > 0 ? `${epiCount} Épi. ` : ''}${rareCount > 0 ? `${rareCount} Rare ` : ''}${comCount > 0 ? `${comCount} Com.` : ''}
               </span>
             </div>
 
@@ -337,44 +554,7 @@ window.MyProtecLanding = {
       `;
     }).join('');
 
-    // Carte finale incitative : vitrine vide avec contours lumineux
-    const incentiveCardHTML = `
-      <div class="showcase-grid-card">
-        <div class="showcase-inner-card p-6 flex flex-col justify-between h-full bg-slate-50/70 border-dashed border-2 border-slate-300">
-          
-          <div class="space-y-2 pb-4 border-b border-slate-200/80">
-            <span class="px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-slate-200 text-slate-700">
-              Votre Future Antenne
-            </span>
-            <h4 class="text-base font-black text-slate-800 tracking-tight">
-              Emplacements disponibles
-            </h4>
-          </div>
-
-          <!-- Silhouettes d'écussons vides à forger -->
-          <div class="grid grid-cols-2 gap-3.5 my-6">
-            ${[1, 2, 3, 4].map(idx => `
-              <div class="p-4 rounded-2xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-center opacity-60 hover:opacity-100 transition py-6">
-                <div class="w-10 h-10 rounded-xl bg-slate-200/70 text-slate-400 flex items-center justify-center mb-2">
-                  <i data-lucide="plus" class="w-5 h-5"></i>
-                </div>
-                <span class="text-[10px] font-bold text-slate-400">Écusson à conquérir</span>
-              </div>
-            `).join('')}
-          </div>
-
-          <div class="pt-2 text-center">
-            <button onclick="window.MyProtecLanding.openAuth('register')" class="w-full py-3 rounded-2xl bg-pc-orange hover:bg-pc-orange-hover text-white font-black text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
-              <i data-lucide="sparkles" class="w-4 h-4"></i>
-              Forgez vos propres traditions — Créer mon antenne
-            </button>
-          </div>
-
-        </div>
-      </div>
-    `;
-
-    container.innerHTML = htmlCards + incentiveCardHTML;
+    container.innerHTML = htmlCards;
 
     // Actualiser le style des boutons de filtre
     const buttons = document.querySelectorAll('.lp-filter-btn');

@@ -827,9 +827,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // --- SERVEUR DE FICHIERS STATIQUES ---
+  // --- SERVEUR DE FICHIERS STATIQUES & ROUTES APPLICATIVES ---
   let targetFile = url === '/' ? 'index.html' : url;
-  if (url === '/privacy' || url === '/politique-confidentialite' || url === '/mentions-legales') {
+  if (url === '/jeu' || url === '/myprotec/jeu' || url === '/game' || url === '/simulateur') {
+    targetFile = 'jeu.html';
+  } else if (url === '/privacy' || url === '/politique-confidentialite' || url === '/mentions-legales') {
     targetFile = 'privacy.html';
   }
   let filePath = path.join(__dirname, targetFile);

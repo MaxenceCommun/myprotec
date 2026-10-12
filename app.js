@@ -4681,6 +4681,22 @@ class ProtecGame {
       window.ProtecFinances.recordTransaction(this, mission.rewardMoney, `Indemnité Mission : ${mission.title}`, 'prestation');
     }
 
+    // Diffusion de la clôture de mission vers la main courante réseau
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.logOperationalEvent === 'function') {
+      const currentStation = (this.stations && this.stations[0]) || {};
+      window.ProtecSupabase.logOperationalEvent({
+        playerId: window.ProtecAuth?.currentUser?.id || null,
+        stationName: currentStation.name || this.player?.stationName || 'Antenne Locale',
+        city: mission.commune || mission.city || currentStation.city || '',
+        departmentCode: currentStation.departmentCode || this.player?.departmentCode || '',
+        type: (mission.type === 'samu') ? 'samu' : 'dps',
+        indicatif: (mission.type === 'samu') ? 'SAMU 15' : 'DISPOSITIF DPS',
+        statusCode: 5,
+        message: `Dispositif « ${mission.title} » clôturé avec succès. Tous moyens réarmés et disponibles.`,
+        severity: 'success'
+      });
+    }
+
     // 2. PRISE EN CHARGE DU PÔLE SOCIAL LORS D'UNE MARAUDE
     if (mission.type === 'social' && window.ProtecSocial) {
       window.ProtecSocial.onMaraudeCompleted(this, 4);

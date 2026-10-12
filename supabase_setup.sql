@@ -162,6 +162,23 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 10. TABLE DE LA MAIN COURANTE DES OPÉRATIONS (FLUX OPÉRATIONNEL EN DIRECT ET HISTORIQUE RÉEL)
+CREATE TABLE IF NOT EXISTS operational_log (
+  id BIGSERIAL PRIMARY KEY,
+  player_id TEXT,
+  station_name TEXT,
+  city TEXT,
+  department_code TEXT,
+  log_type TEXT NOT NULL DEFAULT 'radio', -- 'radio', 'mission', 'dps', 'samu', 'sdis', 'formation', 'crise', 'logistique', 'antenne'
+  indicatif TEXT,
+  status_code INT,
+  message TEXT NOT NULL,
+  severity TEXT DEFAULT 'info', -- 'info', 'warning', 'urgent', 'success'
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_operational_log_created_at ON operational_log(created_at DESC);
+
 -- ==============================================================================
 -- CŒUR DU MONDE PERSISTANT SERVEUR : FONCTION DE BATTEMENT ET RÉSOLUTION
 -- Résout les missions et formations selon l'horloge officielle du serveur NOW()
@@ -207,7 +224,7 @@ BEGIN
     );
 
     -- Mise à jour de la sauvegarde cloud du joueur (crédit des fonds et libération des ressources)
-    SELECT * INTO v_save FROM game_saves WHERE user_id = v_mission.player_id FOR UPDATE;
+    SELECT * INTO v_save FROM game_saves WHERE user_id::text = v_mission.player_id::text FOR UPDATE;
     IF FOUND THEN
       v_save_data := v_save.save_data;
 
@@ -273,7 +290,7 @@ BEGIN
           save_data = v_save_data,
           updated_at = v_now,
           server_synced_at = v_now
-      WHERE user_id = v_mission.player_id;
+      WHERE user_id::text = v_mission.player_id::text;
     END IF;
 
     v_resolved_missions_count := v_resolved_missions_count + 1;
@@ -336,7 +353,7 @@ BEGIN
   FROM (
     SELECT id, event_type, title, message, reward_money, created_at
     FROM server_events_log
-    WHERE player_id = p_player_id AND read = FALSE
+    WHERE player_id::text = p_player_id::text AND read = FALSE
     ORDER BY created_at ASC
   ) e;
 
@@ -344,11 +361,11 @@ BEGIN
   IF v_pending_events <> '[]'::jsonb THEN
     UPDATE server_events_log
     SET read = TRUE
-    WHERE player_id = p_player_id AND read = FALSE;
+    WHERE player_id::text = p_player_id::text AND read = FALSE;
   END IF;
 
   -- 3. Récupérer la dernière sauvegarde consolidée
-  SELECT * INTO v_save_record FROM game_saves WHERE user_id = p_player_id;
+  SELECT * INTO v_save_record FROM game_saves WHERE user_id::text = p_player_id::text;
 
   RETURN jsonb_build_object(
     'server_time', v_now,
@@ -386,6 +403,7 @@ ALTER TABLE server_events_log DISABLE ROW LEVEL SECURITY;
 ALTER TABLE alliance_stations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE security_events DISABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages DISABLE ROW LEVEL SECURITY;
+ALTER TABLE operational_log DISABLE ROW LEVEL SECURITY;
 
 -- Autorisations d'exécution des fonctions publiques
 GRANT EXECUTE ON FUNCTION process_world_heartbeat() TO anon, authenticated, service_role;

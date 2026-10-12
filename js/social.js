@@ -582,15 +582,15 @@ window.ProtecSocial = {
                     <div class="p-2.5 rounded-xl bg-slate-50 text-[10px] space-y-1 font-semibold text-slate-700">
                       <div class="flex justify-between">
                         <span>🎯 Objectif Maraudes :</span>
-                        <strong>${c.currentMaraudes} / ${c.targetMaraudes} maraudes</strong>
+                        <strong>${c.status === 'active' || c.status === 'completed' ? `${c.currentMaraudes} / ${c.targetMaraudes}` : `${c.targetMaraudes}`} maraudes</strong>
                       </div>
                       <div class="flex justify-between">
                         <span>📦 Distribution Kits :</span>
-                        <strong>${c.currentKits} / ${c.targetKits} kits</strong>
+                        <strong>${c.status === 'active' || c.status === 'completed' ? `${c.currentKits} / ${c.targetKits}` : `${c.targetKits}`} kits</strong>
                       </div>
                       <div class="flex justify-between text-red-600">
                         <span>⚠️ Pénalité en cas d'échec :</span>
-                        <strong>-${c.penaltyAmount} € (-15 rép.)</strong>
+                        <strong>-${c.penaltyAmount} €</strong>
                       </div>
                     </div>
 

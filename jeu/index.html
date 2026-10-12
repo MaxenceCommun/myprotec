@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Redirection vers le jeu MyProtec</title>
+  <meta http-equiv="refresh" content="0; url=../jeu.html">
+  <script>
+    // Redirection immédiate en conservant les paramètres d'URL (ex: ?source=pwa)
+    window.location.replace('../jeu.html' + window.location.search + window.location.hash);
+  </script>
+</head>
+<body style="font-family: sans-serif; text-align: center; padding: 50px; background: #0f172a; color: white;">
+  <p>Chargement du simulateur MyProtec...</p>
+  <p><a href="../jeu.html" style="color: #ff6600;">Cliquez ici si la redirection ne démarre pas automatiquement.</a></p>
+</body>
+</html>

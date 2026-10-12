@@ -17,6 +17,9 @@ const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 const STATIC_ASSETS = [
   '/',
   '/index.html',
+  '/jeu',
+  '/jeu.html',
+  '/landing.css',
   '/styles.css',
   '/app.js',
   '/manifest.json',
