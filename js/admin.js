@@ -763,65 +763,89 @@ window.ProtecAdmin = {
         }
       } catch (e) {}
 
-      // 2. Récupération des utilisateurs (Fusion intelligente : Serveur Local + Supabase Cloud + Compte Joueur Actif)
+      // 2. Récupération et Déduplication des utilisateurs (Serveur Local + Supabase Cloud + Compte Joueur Actif)
       const usersMap = new Map();
+
+      // Fonction d'ajout ou de fusion stricte par ID ou par Pseudo insensible à la casse
+      const addOrMergeUser = (u) => {
+        if (!u) return;
+        const cleanName = (u.username || '').trim().toLowerCase();
+        const candidateId = u.id ? String(u.id).trim() : '';
+        if (!cleanName && !candidateId) return;
+
+        // Chercher une entrée existante par son ID ou son pseudo (insensible à la casse)
+        let matchedKey = null;
+        for (const [key, existing] of usersMap.entries()) {
+          const exName = (existing.username || '').trim().toLowerCase();
+          const exId = existing.id ? String(existing.id).trim() : '';
+          if ((candidateId && exId && candidateId === exId) || (cleanName && exName && cleanName === exName)) {
+            matchedKey = key;
+            break;
+          }
+        }
+
+        if (matchedKey) {
+          const ex = usersMap.get(matchedKey);
+          // Si le nouveau candidat a un vrai UUID Supabase, on remplace l'id fictif (ex: usr_admin_master)
+          const isCandidateUUID = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(candidateId);
+          const finalId = isCandidateUUID ? candidateId : (ex.id || candidateId);
+
+          usersMap.set(matchedKey, {
+            ...ex,
+            ...u,
+            id: finalId,
+            username: u.username || ex.username,
+            role: (u.role === 'admin' || ex.role === 'admin') ? 'admin' : (u.role || ex.role),
+            money: u.money !== undefined ? u.money : ex.money,
+            volunteersCount: u.volunteersCount !== undefined ? u.volunteersCount : ex.volunteersCount,
+            vehiclesCount: u.vehiclesCount !== undefined ? u.vehiclesCount : ex.vehiclesCount,
+            timeTracking: u.timeTracking || ex.timeTracking,
+            lastSaved: u.lastSaved || ex.lastSaved,
+            isLocalPlayer: ex.isLocalPlayer || u.isLocalPlayer
+          });
+        } else {
+          const entryKey = cleanName || candidateId;
+          usersMap.set(entryKey, { ...u, id: candidateId });
+        }
+      };
 
       // A. Récupération depuis le serveur local Node.js
       try {
         const usersRes = await fetch('/api/admin/users', { headers: this.getAuthHeaders() });
         if (usersRes.ok) {
           const usersData = await usersRes.json();
-          (usersData.users || []).forEach(u => {
-            if (u && u.id) usersMap.set(u.id, u);
-          });
+          (usersData.users || []).forEach(u => addOrMergeUser(u));
         }
       } catch (e) {}
 
-      // B. Récupération depuis Supabase Cloud (comptes en ligne persistés)
+      // B. Récupération depuis Supabase Cloud (comptes en ligne persistés officiels)
       if (window.ProtecSupabase && window.ProtecSupabase.getAllPlayersForAdmin) {
         try {
           const supaPlayers = await window.ProtecSupabase.getAllPlayersForAdmin();
           if (Array.isArray(supaPlayers)) {
-            supaPlayers.forEach(p => {
-              if (p && p.id) {
-                const existing = usersMap.get(p.id);
-                if (existing) {
-                  usersMap.set(p.id, { ...existing, ...p });
-                } else {
-                  usersMap.set(p.id, p);
-                }
-              }
-            });
+            supaPlayers.forEach(p => addOrMergeUser(p));
           }
         } catch (supaErr) {
           console.warn('Erreur lecture Supabase admin players:', supaErr);
         }
       }
 
-      // C. Injection du Compte Joueur Actif (pour garantir qu'il figure toujours au tableau)
+      // C. Injection / Rafraîchissement du Compte Joueur Actif de la session en cours
       const activePlayerId = game?.player?.id || window.ProtecAuth?.currentUser?.id || localStorage.getItem('protec_player_id');
       const activePlayerName = game?.player?.name || window.ProtecAuth?.currentUser?.username || localStorage.getItem('protec_player_name');
 
       if (activePlayerId || activePlayerName) {
-        let matchedKey = null;
-        for (const [id, u] of usersMap.entries()) {
-          if (id === activePlayerId || (activePlayerName && u.username && u.username.toLowerCase() === activePlayerName.toLowerCase())) {
-            matchedKey = id;
-            break;
-          }
-        }
-
         const primaryStation = (game?.stations && game.stations[0]) || null;
         const currentMoney = (game?.resources?.money !== undefined) ? game.resources.money : ((game?.resources?.budget !== undefined) ? game.resources.budget : 15000);
         const currentVolunteers = game?.volunteers?.length || 4;
         const currentVehicles = game?.vehicles?.length || 1;
         const currentMissions = game?.missions?.length || 0;
         const currentCity = primaryStation?.city || window.ProtecAuth?.currentUser?.city || game?.currentCityKey || 'Paris';
-        const currentStationName = primaryStation?.name || window.ProtecAuth?.currentUser?.stationName || 'Antenne Locale';
+        const currentStationName = primaryStation?.name || window.ProtecAuth?.currentUser?.stationName || 'Antenne Protection Civile';
         const currentDept = primaryStation?.departmentCode || game?.player?.departmentCode || window.ProtecAuth?.currentUser?.departmentCode || '75';
 
-        const localUserData = {
-          id: activePlayerId || ('usr_local_' + (activePlayerName || 'joueur')),
+        addOrMergeUser({
+          id: activePlayerId,
           username: activePlayerName || 'Directeur d’Antenne',
           role: game?.player?.role || window.ProtecAuth?.currentUser?.role || 'directeur',
           isBanned: false,
@@ -841,19 +865,7 @@ window.ProtecAdmin = {
           } : null,
           lastSaved: Date.now(),
           isLocalPlayer: true
-        };
-
-        if (matchedKey) {
-          const ex = usersMap.get(matchedKey);
-          usersMap.set(matchedKey, {
-            ...ex,
-            ...localUserData,
-            id: ex.id,
-            isLocalPlayer: true
-          });
-        } else {
-          usersMap.set(localUserData.id, localUserData);
-        }
+        });
       }
 
       this.usersCache = Array.from(usersMap.values());

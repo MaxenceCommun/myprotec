@@ -224,11 +224,38 @@ window.ProtecSystems = {
 
     game.transits.push(transit);
 
+    // Cadrage automatique de la carte Leaflet sur le trajet
+    if (game.map && polyline) {
+      try {
+        const bounds = polyline.getBounds();
+        if (bounds && bounds.isValid()) {
+          game.map.fitBounds(bounds, { padding: [70, 70], maxZoom: 15 });
+        }
+      } catch (err) {
+        console.warn('fitBounds transit error:', err);
+      }
+    }
+
+    // Démarrage de la boucle haute-fréquence (60 FPS) pour une animation fluide
+    this.ensureTransitLoop(game);
+
     // Bip radio et message de départ
     this.playRadioChirp();
     const statusLabel = isEmergency ? (statusTarget === 4 ? 'STATUT 4 : Transport CHU' : 'STATUT 2 : Départ Urgent') : (statusTarget === 6 ? 'STATUT 6 : Retour Antenne' : 'STATUT 2 : En route');
     this.addRadioLog(game, vehicle.name, statusTarget, `${statusLabel} vers ${mission ? mission.title : 'Destination'} (${distKm.toFixed(1)} km).`);
     game.showToast(statusLabel, `${vehicle.name} est en route vers les lieux (~${distKm.toFixed(1)} km).`, isEmergency ? 'orange' : 'blue');
+  },
+
+  ensureTransitLoop(game) {
+    if (this._transitLoopRunning) return;
+    this._transitLoopRunning = true;
+    const loop = () => {
+      if (game.transits && game.transits.length > 0) {
+        this.updateTransits(game);
+      }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
   },
 
   updateTransits(game) {
@@ -240,20 +267,32 @@ window.ProtecSystems = {
       const t = game.transits[i];
       const elapsed = Math.max(0, now - (t.startTime || now));
       const progress = Math.min(1, elapsed / (t.durationMs || 30000));
-      const stepIndex = Math.floor(progress * (t.routeCoords.length - 1));
-      t.currentStep = stepIndex;
 
       if (progress < 1) {
-        const nextPos = t.routeCoords[stepIndex] || t.routeCoords[0];
-        if (t.marker && nextPos) {
-          t.marker.setLatLng(nextPos);
+        // Interpolation sous-fractionnaire fluide à 60 FPS le long du tracé routier
+        const floatStep = progress * (t.routeCoords.length - 1);
+        const idx0 = Math.floor(floatStep);
+        const idx1 = Math.min(t.routeCoords.length - 1, idx0 + 1);
+        const fraction = floatStep - idx0;
+
+        const p0 = t.routeCoords[idx0] || t.routeCoords[0];
+        const p1 = t.routeCoords[idx1] || p0;
+
+        const currentPos = [
+          p0[0] + (p1[0] - p0[0]) * fraction,
+          p0[1] + (p1[1] - p0[1]) * fraction
+        ];
+        t.currentStep = idx0;
+
+        if (t.marker && currentPos) {
+          t.marker.setLatLng(currentPos);
           const remainingKm = (t.distKm * (1 - progress)).toFixed(1);
           const remainingSec = Math.max(1, Math.round((t.durationMs - elapsed) / 1000));
           t.marker.setTooltipContent(`
             <div class="text-xs space-y-0.5">
               <strong class="text-pc-blue block">${t.vehicle.name}</strong>
-              <div class="text-[10px] text-slate-600">Vitesse : <span class="font-bold text-red-600">${t.speedKmh} km/h</span> • Reste : <strong>${remainingKm} km</strong> (~${remainingSec}s)</div>
-              <div class="text-[9px] font-bold text-slate-500">${t.statusTarget === 4 ? '🚨 Transport Sanitaire vers Urgences CHU' : '🚑 Transit d\'Urgence vers l\'Intervention'}</div>
+              <div class="text-[10px] text-slate-600">Vitesse : <span class="font-bold ${t.isEmergency ? 'text-red-600' : 'text-slate-800'}">${t.speedKmh} km/h</span> • Reste : <strong>${remainingKm} km</strong> (~${remainingSec}s)</div>
+              <div class="text-[9px] font-bold text-slate-500">${t.statusTarget === 4 ? '🚨 Transport Sanitaire vers Urgences CHU' : (t.statusTarget === 6 ? '🏠 Retour vers l’Antenne' : '🚑 En route vers la Mission')}</div>
             </div>
           `);
         }
