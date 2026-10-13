@@ -206,9 +206,55 @@ window.ProtecAdvancedModals = {
   vehicleFilter: 'all',
   vehicleSort: 'price_asc',
   vehicleSearch: '',
-  shopMode: 'models', // 'models' (Mode 1: Par Porteur & Configuration) ou 'types' (Mode 2: Par Rôle Opérationnel)
+  shopMode: 'models', // 'models' (Par Porteur & Configuration) ou 'types' (Par Rôle Opérationnel)
   selectedVariants: {}, // { [chassisId]: variantId }
   selectedSerigraphies: {}, // { [groupKey]: variantId }
+  selectedVehicleOptions: {}, // { [variantIdOrCardId]: { [optionKey]: boolean } }
+
+  VEHICLE_OPTIONS: {
+    towHitch: {
+      id: 'towHitch',
+      label: 'Boule d’attelage renforcée (Remorquage)',
+      cost: 950,
+      icon: '🔗',
+      desc: 'Permet de tracter remorques lourdes, tentes PMA, lots d’éclairage et bateaux ERS.'
+    },
+    ledBar: {
+      id: 'ledBar',
+      label: 'Rampe LED Haute Puissance & Feux Calandre',
+      cost: 1250,
+      icon: '🚨',
+      desc: 'Visibilité optimale de nuit et sécurité renforcée sur voies rapides et autoroute.'
+    },
+    climatisation: {
+      id: 'climatisation',
+      label: 'Pack Climatisation Cellule & Chauffage Webasto',
+      cost: 1850,
+      icon: '❄️',
+      desc: 'Confort thermique canicule / grand froid pour les victimes et les bénévoles.'
+    },
+    converter230v: {
+      id: 'converter230v',
+      label: 'Convertisseur 230V Sinus & Maintien Charge',
+      cost: 1100,
+      icon: '⚡',
+      desc: 'Alimentation continue des DAE, électro-cardiographes, oxygène et tablettes.'
+    }
+  },
+
+  toggleVehicleOption(targetKey, optionKey, stationId) {
+    if (!this.selectedVehicleOptions) this.selectedVehicleOptions = {};
+    if (!this.selectedVehicleOptions[targetKey]) this.selectedVehicleOptions[targetKey] = {};
+    this.selectedVehicleOptions[targetKey][optionKey] = !this.selectedVehicleOptions[targetKey][optionKey];
+    if (window.game) {
+      const body = document.getElementById('modal-body');
+      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
+    }
+  },
+
+  getVehicleSelectedOptions(targetKey) {
+    return (this.selectedVehicleOptions && this.selectedVehicleOptions[targetKey]) || {};
+  },
 
   setVehicleShopMode(mode, stationId) {
     this.shopMode = mode;
@@ -284,8 +330,38 @@ window.ProtecAdvancedModals = {
       foundVariant = (window.ProtecAdvanced?.vehicleCatalog || []).find(v => v.type === vehicleType);
     }
 
+    const selOpts = this.getVehicleSelectedOptions(variantId);
+    let optionsExtraCost = 0;
+    const activeOptionsList = [];
+    const hasNativeTowHitch = Boolean(foundVariant?.hasTowHitch);
+    let finalTowHitch = hasNativeTowHitch;
+
+    if (!hasNativeTowHitch && selOpts.towHitch) {
+      optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
+      activeOptionsList.push(this.VEHICLE_OPTIONS.towHitch.label);
+      finalTowHitch = true;
+    }
+    if (selOpts.ledBar) {
+      optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
+      activeOptionsList.push(this.VEHICLE_OPTIONS.ledBar.label);
+    }
+    if (selOpts.climatisation) {
+      optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
+      activeOptionsList.push(this.VEHICLE_OPTIONS.climatisation.label);
+    }
+    if (selOpts.converter230v) {
+      optionsExtraCost += this.VEHICLE_OPTIONS.converter230v.cost;
+      activeOptionsList.push(this.VEHICLE_OPTIONS.converter230v.label);
+    }
+
+    const customOptions = Object.assign({}, foundVariant, {
+      cost: (foundVariant?.cost || 20000) + optionsExtraCost,
+      hasTowHitch: finalTowHitch,
+      installedOptions: activeOptionsList
+    });
+
     if (window.ProtecAdvanced && typeof window.ProtecAdvanced.buySpecializedVehicle === 'function') {
-      window.ProtecAdvanced.buySpecializedVehicle(window.game, stationId, vehicleType, foundVariant);
+      window.ProtecAdvanced.buySpecializedVehicle(window.game, stationId, vehicleType, customOptions);
     }
   },
 
@@ -342,7 +418,7 @@ window.ProtecAdvancedModals = {
           >
             <span class="text-base">🚗</span>
             <div class="text-left">
-              <span class="block leading-none">Mode 1 : Par Modèle & Configuration</span>
+              <span class="block leading-none">Par Modèle & Configuration</span>
               <span class="text-[10px] font-semibold text-slate-500 block mt-0.5">Master 3, Trafic, Ducato • Choix aménagement & cube</span>
             </div>
           </button>
@@ -358,7 +434,7 @@ window.ProtecAdvancedModals = {
           >
             <span class="text-base">🚑</span>
             <div class="text-left">
-              <span class="block leading-none">Mode 2 : Par Type Opérationnel</span>
+              <span class="block leading-none">Par Type Opérationnel</span>
               <span class="text-[10px] font-semibold text-slate-500 block mt-0.5">VPSP, VTU, VTP, VL, Poids Lourds • Sérigraphies regroupées</span>
             </div>
           </button>
@@ -434,6 +510,26 @@ window.ProtecAdvancedModals = {
             const isMotoLicense = currentVariant.licenseRequired === 'Moto';
             const isNoLicense = currentVariant.licenseRequired === 'None';
 
+            // Options configurables actives pour cette variante
+            const selOpts = this.getVehicleSelectedOptions(currentVariant.id);
+            let optionsExtraCost = 0;
+            const hasNativeTowHitch = Boolean(currentVariant.hasTowHitch);
+
+            if (!hasNativeTowHitch && selOpts.towHitch) {
+              optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
+            }
+            if (selOpts.ledBar) {
+              optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
+            }
+            if (selOpts.climatisation) {
+              optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
+            }
+            if (selOpts.converter230v) {
+              optionsExtraCost += this.VEHICLE_OPTIONS.converter230v.cost;
+            }
+
+            const totalConfigCost = currentVariant.cost + optionsExtraCost;
+
             return `
               <div class="p-4 rounded-2xl glass-card space-y-3.5 flex flex-col justify-between hover:shadow-xl transition border border-slate-200/80 bg-white/95">
                 <div class="space-y-3">
@@ -449,8 +545,8 @@ window.ProtecAdvancedModals = {
 
                     <!-- Prix dynamique selon la configuration active -->
                     <div class="text-right">
-                      <span class="font-mono font-black text-base text-slate-900 block">${currentVariant.cost.toLocaleString('fr-FR')} €</span>
-                      <span class="text-[9.5px] font-bold text-slate-400">TTC • Neuf d'usine</span>
+                      <span class="font-mono font-black text-base text-slate-900 block">${totalConfigCost.toLocaleString('fr-FR')} €</span>
+                      <span class="text-[9.5px] font-bold text-slate-400">${optionsExtraCost > 0 ? `(dont +${optionsExtraCost} € d'options)` : 'TTC • Neuf d\'usine'}</span>
                     </div>
                   </div>
 
@@ -528,19 +624,73 @@ window.ProtecAdvancedModals = {
                     <p class="text-[11px] text-slate-600 leading-relaxed">${currentVariant.desc}</p>
                   </div>
 
-                  <!-- Fiche Technique Rapide -->
+                  <!-- Fiche Technique Rapide (Sans vitesse max) -->
                   <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[10.5px] font-bold text-slate-700 grid grid-cols-2 gap-2">
                     <div>
                       Capacité : <strong class="text-slate-900">${currentVariant.capacity} place${currentVariant.capacity > 1 ? 's' : ''}</strong>
                     </div>
                     <div>
-                      Vitesse max : <strong class="text-slate-900">${currentVariant.speedKmH} km/h</strong>
+                      Attelage : <strong class="${hasNativeTowHitch || selOpts.towHitch ? 'text-emerald-700' : 'text-slate-400'}">${hasNativeTowHitch ? '✓ De série' : (selOpts.towHitch ? '✓ Option ajoutée' : 'Non équipé')}</strong>
                     </div>
-                    <div>
-                      Attelage : <strong class="${currentVariant.hasTowHitch ? 'text-emerald-700' : 'text-slate-400'}">${currentVariant.hasTowHitch ? '✓ Présent' : 'Non équipé'}</strong>
-                    </div>
-                    <div>
+                    <div class="col-span-2">
                       Spécialité : <strong class="text-pc-blue">${currentVariant.specialty || 'Polyvalent'}</strong>
+                    </div>
+                  </div>
+
+                  <!-- Options & Équipements Configurables -->
+                  <div class="space-y-1.5 pt-1.5 border-t border-slate-200/80">
+                    <div class="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500">
+                      <span>🛠️ Options & Équipements Configurables :</span>
+                      ${optionsExtraCost > 0 ? `<span class="text-pc-blue font-black font-mono">+${optionsExtraCost.toLocaleString('fr-FR')} €</span>` : ''}
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10.5px]">
+                      <!-- Option Boule d'attelage -->
+                      ${hasNativeTowHitch ? `
+                        <div class="p-2 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-800 font-bold flex items-center justify-between">
+                          <span class="flex items-center gap-1.5"><span>🔗</span> Boule d’attelage</span>
+                          <span class="text-[9px] font-black uppercase bg-emerald-200/70 px-1.5 py-0.5 rounded text-emerald-900">De Série</span>
+                        </div>
+                      ` : `
+                        <button 
+                          type="button" 
+                          onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'towHitch', '${st?.id}')"
+                          class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.towHitch ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                        >
+                          <span class="flex items-center gap-1.5"><span>🔗</span> Boule d’attelage</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.towHitch ? 'text-pc-blue' : 'text-slate-500'}">+950 €</span>
+                        </button>
+                      `}
+
+                      <!-- Option Rampe LED -->
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'ledBar', '${st?.id}')"
+                        class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                      >
+                        <span class="flex items-center gap-1.5"><span>🚨</span> Rampe LED & Calandre</span>
+                        <span class="font-mono font-black text-[10px] ${selOpts.ledBar ? 'text-pc-blue' : 'text-slate-500'}">+1 250 €</span>
+                      </button>
+
+                      <!-- Option Climatisation / Chauffage -->
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'climatisation', '${st?.id}')"
+                        class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.climatisation ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                      >
+                        <span class="flex items-center gap-1.5"><span>❄️</span> Pack Climatisation / Webasto</span>
+                        <span class="font-mono font-black text-[10px] ${selOpts.climatisation ? 'text-pc-blue' : 'text-slate-500'}">+1 850 €</span>
+                      </button>
+
+                      <!-- Option Convertisseur 230V -->
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'converter230v', '${st?.id}')"
+                        class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.converter230v ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                      >
+                        <span class="flex items-center gap-1.5"><span>⚡</span> Convertisseur 230V Sinus</span>
+                        <span class="font-mono font-black text-[10px] ${selOpts.converter230v ? 'text-pc-blue' : 'text-slate-500'}">+1 100 €</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -551,7 +701,7 @@ window.ProtecAdvancedModals = {
                   onclick="window.ProtecAdvancedModals.buyConfiguredVariant('${st?.id}', '${currentVariant.type}', '${model.id}', '${currentVariant.id}')" 
                   class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer mt-2"
                 >
-                  <span>Commander cette Configuration (${currentVariant.cost.toLocaleString('fr-FR')} €)</span>
+                  <span>Commander cette Configuration (${totalConfigCost.toLocaleString('fr-FR')} €)</span>
                   <span>➜</span>
                 </button>
               </div>
@@ -645,9 +795,9 @@ window.ProtecAdvancedModals = {
         serigraphies: [
           {
             key: 'logistique',
-            label: '🔵 Logistique Opérationnelle',
-            subTitle: 'VTU Fourgon Logistique Opérationnelle',
-            desc: 'Fourgon tôlé utilitaire grand volume pour transport de tentes, lits de camp, barnums et matériel de poste de secours. Crochet d’attelage inclus.',
+            label: '🔵 Logistique',
+            subTitle: 'VTU Fourgon Logistique',
+            desc: 'Fourgon tôlé utilitaire grand volume pour transport de tentes, lits de camp, barnums et matériel de poste de secours avec sérigraphie Logistique. Crochet d’attelage inclus.',
             image: 'images/vehicles/master3_vtu_log.png',
             specialty: 'Matériel PMA & Tentes'
           },
@@ -762,11 +912,11 @@ window.ProtecAdvancedModals = {
       {
         id: 'type_flit_heavy',
         type: 'FLIT',
-        title: 'FLIT - Fourgon Lourd d’Intervention Technique (> 3.5t)',
+        title: 'FLIT - Fourgon Lourd d’Intervention Technique (Poids Lourd > 12t)',
         category: 'Technique & Soutien',
         roleGroup: 'heavy',
-        desc: 'Fourgon lourd d’intervention technique pour montage rapide de PMA, groupes électrogènes et mâts d’éclairage. Conducteur Permis C obligatoire.',
-        cost: 26000,
+        desc: 'Châssis Poids Lourd lourdement équipé (type FPTL / FPTSR > 12t) avec rideaux alu, groupe électrogène haute puissance, mât d’éclairage télescopique, lot PMA et pompes d’épuisement. Conducteur Permis C obligatoire.',
+        cost: 95000,
         capacity: 3,
         speedKmH: 70,
         licenseRequired: 'C',
@@ -806,7 +956,7 @@ window.ProtecAdvancedModals = {
         capacity: 4,
         speedKmH: 45,
         licenseRequired: 'B',
-        licenseLabel: 'Permis Bateau & SSA (Tracté Permis B)',
+        licenseLabel: 'Permis Bateau & SSA',
         requiresTrailer: true,
         image: 'images/vehicles/ERS.png',
         icon: '🚤',
@@ -956,6 +1106,26 @@ window.ProtecAdvancedModals = {
               activeSerigraphieLabel = curSerig.label;
             }
 
+            // Options configurables actives pour cette carte
+            const selOpts = this.getVehicleSelectedOptions(card.id);
+            let optionsExtraCost = 0;
+            const hasNativeTowHitch = Boolean(card.hasTowHitch);
+
+            if (!hasNativeTowHitch && selOpts.towHitch) {
+              optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
+            }
+            if (selOpts.ledBar) {
+              optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
+            }
+            if (selOpts.climatisation) {
+              optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
+            }
+            if (selOpts.converter230v) {
+              optionsExtraCost += this.VEHICLE_OPTIONS.converter230v.cost;
+            }
+
+            const totalCardCost = card.cost + optionsExtraCost;
+
             return `
               <div class="p-4 rounded-2xl glass-card space-y-3 flex flex-col justify-between hover:shadow-lg transition border border-slate-200/80 bg-white/95">
                 <div class="space-y-2.5">
@@ -994,7 +1164,10 @@ window.ProtecAdvancedModals = {
                         ${card.category}
                       </span>
                     </div>
-                    <span class="font-mono font-black text-sm text-slate-900">${card.cost.toLocaleString('fr-FR')} €</span>
+                    <div class="text-right">
+                      <span class="font-mono font-black text-sm text-slate-900 block">${totalCardCost.toLocaleString('fr-FR')} €</span>
+                      ${optionsExtraCost > 0 ? `<span class="text-[9px] font-black text-pc-blue font-mono">+${optionsExtraCost} € options</span>` : ''}
+                    </div>
                   </div>
 
                   <!-- Titre et Spécialité -->
@@ -1032,18 +1205,12 @@ window.ProtecAdvancedModals = {
 
                   <p class="text-[11px] text-slate-600 leading-relaxed">${activeDesc}</p>
 
-                  <!-- Spécifications techniques -->
+                  <!-- Spécifications techniques (Sans vitesse max) -->
                   <div class="p-2.5 rounded-xl glass-card-blue text-[10px] text-pc-blue font-bold flex flex-col gap-1">
                     <div class="flex justify-between items-center">
                       <span>Capacité : <strong class="text-slate-900">${card.capacity} place${card.capacity > 1 ? 's' : ''}</strong></span>
-                      <span class="text-slate-600">Vitesse : ${card.speedKmH} km/h</span>
+                      <span>Attelage : <strong class="${hasNativeTowHitch || selOpts.towHitch ? 'text-emerald-700' : 'text-slate-500'}">${hasNativeTowHitch ? '✓ De série' : (selOpts.towHitch ? '✓ Option ajoutée' : 'Non')}</strong></span>
                     </div>
-
-                    ${card.hasTowHitch ? `
-                      <div class="text-[10.5px] text-emerald-700 font-bold flex items-center gap-1">
-                        <span>✓ Crochet d'attelage</span>
-                      </div>
-                    ` : ''}
 
                     ${card.requiresTrailer ? `
                       <div class="text-[9.5px] text-amber-800 font-semibold bg-amber-50 rounded p-1 border border-amber-200/80">
@@ -1051,15 +1218,68 @@ window.ProtecAdvancedModals = {
                       </div>
                     ` : ''}
                   </div>
+
+                  <!-- Options & Équipements Configurables -->
+                  <div class="space-y-1.5 pt-1.5 border-t border-slate-200/80">
+                    <div class="flex items-center justify-between text-[9.5px] font-black uppercase tracking-wider text-slate-500">
+                      <span>🛠️ Options au choix :</span>
+                      ${optionsExtraCost > 0 ? `<span class="text-pc-blue font-black font-mono">+${optionsExtraCost.toLocaleString('fr-FR')} €</span>` : ''}
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px]">
+                      ${hasNativeTowHitch ? `
+                        <div class="p-1.5 rounded-lg bg-emerald-50/70 border border-emerald-200 text-emerald-800 font-bold flex items-center justify-between">
+                          <span class="flex items-center gap-1"><span>🔗</span> Attelage</span>
+                          <span class="text-[8.5px] font-black uppercase bg-emerald-200/70 px-1 rounded text-emerald-900">De Série</span>
+                        </div>
+                      ` : `
+                        <button 
+                          type="button" 
+                          onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'towHitch', '${st?.id}')"
+                          class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.towHitch ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                        >
+                          <span class="flex items-center gap-1"><span>🔗</span> Attelage</span>
+                          <span class="font-mono font-black text-[9.5px] ${selOpts.towHitch ? 'text-pc-blue' : 'text-slate-500'}">+950 €</span>
+                        </button>
+                      `}
+
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'ledBar', '${st?.id}')"
+                        class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                      >
+                        <span class="flex items-center gap-1"><span>🚨</span> Rampe LED</span>
+                        <span class="font-mono font-black text-[9.5px] ${selOpts.ledBar ? 'text-pc-blue' : 'text-slate-500'}">+1 250 €</span>
+                      </button>
+
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'climatisation', '${st?.id}')"
+                        class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.climatisation ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                      >
+                        <span class="flex items-center gap-1"><span>❄️</span> Climatisation/Chauffage</span>
+                        <span class="font-mono font-black text-[9.5px] ${selOpts.climatisation ? 'text-pc-blue' : 'text-slate-500'}">+1 850 €</span>
+                      </button>
+
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'converter230v', '${st?.id}')"
+                        class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.converter230v ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                      >
+                        <span class="flex items-center gap-1"><span>⚡</span> 230V Pur Sinus</span>
+                        <span class="font-mono font-black text-[9.5px] ${selOpts.converter230v ? 'text-pc-blue' : 'text-slate-500'}">+1 100 €</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Bouton de Commande -->
                 <button 
                   type="button" 
                   onclick="window.ProtecAdvancedModals.buyFromTypeCard('${st?.id}', '${card.type}', '${card.id}')" 
-                  class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer mt-2"
                 >
-                  <span>Commander (${card.cost.toLocaleString('fr-FR')} €)</span>
+                  <span>Commander (${totalCardCost.toLocaleString('fr-FR')} €)</span>
                 </button>
               </div>
             `;
@@ -1070,20 +1290,39 @@ window.ProtecAdvancedModals = {
   },
 
   buyFromTypeCard(stationId, vehicleType, cardId) {
+    const selOpts = this.getVehicleSelectedOptions(cardId);
+    let optionsExtraCost = 0;
+    const activeOptionsList = [];
+
     if (cardId === 'type_vtu_master3_grouped') {
       const selectedSerigKey = this.selectedSerigraphies?.['vtu_master3_serigraphie'] || 'logistique';
       const isSoutienPop = selectedSerigKey === 'soutien_pop';
+
+      if (selOpts.ledBar) {
+        optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
+        activeOptionsList.push(this.VEHICLE_OPTIONS.ledBar.label);
+      }
+      if (selOpts.climatisation) {
+        optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
+        activeOptionsList.push(this.VEHICLE_OPTIONS.climatisation.label);
+      }
+      if (selOpts.converter230v) {
+        optionsExtraCost += this.VEHICLE_OPTIONS.converter230v.cost;
+        activeOptionsList.push(this.VEHICLE_OPTIONS.converter230v.label);
+      }
+
       const variantOptions = {
         id: isSoutienPop ? 'master3_vtu_pop' : 'master3_vtu_log',
-        name: isSoutienPop ? 'Renault Master III - VTU Soutien aux Populations' : 'Renault Master III - VTU Fourgon Logistique Opérationnelle',
+        name: isSoutienPop ? 'Renault Master III - VTU Soutien aux Populations' : 'Renault Master III - VTU Fourgon Logistique',
         model: isSoutienPop ? 'Renault Master III VTU Soutien Pop' : 'Renault Master III VTU Logistique',
-        cost: 17500,
+        cost: 17500 + optionsExtraCost,
         capacity: 3,
         licenseRequired: 'B',
-        hasTowHitch: true,
-        serigraphieLabel: isSoutienPop ? 'Soutien aux Populations' : 'Logistique Opérationnelle',
+        hasTowHitch: true, // De série sur VTU Master 3
+        serigraphieLabel: isSoutienPop ? 'Soutien aux Populations' : 'Logistique',
         image: isSoutienPop ? 'images/vehicles/master3_vtu_pop.png' : 'images/vehicles/master3_vtu_log.png',
-        specialty: isSoutienPop ? 'Assistance Sinistrés' : 'Transport Lots PMA & Tentes'
+        specialty: isSoutienPop ? 'Assistance Sinistrés' : 'Transport Lots PMA & Tentes',
+        installedOptions: activeOptionsList
       };
       if (window.ProtecAdvanced && typeof window.ProtecAdvanced.buySpecializedVehicle === 'function') {
         window.ProtecAdvanced.buySpecializedVehicle(window.game, stationId, vehicleType, variantOptions);
@@ -1094,6 +1333,7 @@ window.ProtecAdvancedModals = {
     // Autres cartes
     const catalogItem = (window.ProtecAdvanced?.vehicleCatalog || []).find(v => v.type === vehicleType);
     let options = null;
+
     if (cardId === 'type_vpsp_master3') {
       options = {
         id: 'master3_vpsp',
@@ -1102,6 +1342,7 @@ window.ProtecAdvancedModals = {
         cost: 28500,
         capacity: 5,
         licenseRequired: 'B',
+        hasTowHitch: false,
         image: 'images/vehicles/master3_vpsp.png'
       };
     } else if (cardId === 'type_vpsp_cube_master3') {
@@ -1112,6 +1353,7 @@ window.ProtecAdvancedModals = {
         cost: 32000,
         capacity: 5,
         licenseRequired: 'B',
+        hasTowHitch: false,
         image: 'images/vehicles/master3_vpsp_cube.png'
       };
     } else if (cardId === 'type_vtp_master3') {
@@ -1139,9 +1381,9 @@ window.ProtecAdvancedModals = {
     } else if (cardId === 'type_flit_heavy') {
       options = {
         id: 'flit_heavy',
-        name: 'FLIT - Fourgon Lourd d’Intervention Technique',
-        model: 'FLIT Poids Lourd',
-        cost: 26000,
+        name: 'FLIT - Fourgon Lourd d’Intervention Technique (Poids Lourd > 12t)',
+        model: 'FLIT Poids Lourd (Type FPTL/FPTSR)',
+        cost: 95000,
         capacity: 3,
         licenseRequired: 'C',
         hasTowHitch: true,
@@ -1155,12 +1397,52 @@ window.ProtecAdvancedModals = {
         cost: 45000,
         capacity: 3,
         licenseRequired: 'C',
+        hasTowHitch: false,
         image: 'images/vehicles/PCM.png'
+      };
+    } else if (cardId === 'type_ers_boat') {
+      options = {
+        id: 'ers_boat',
+        name: 'ERS - Embarcation de Sauvetage + Remorque',
+        model: 'ERS Pneumatique Rigide',
+        cost: 13500,
+        capacity: 4,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis Bateau & SSA',
+        requiresTrailer: true,
+        hasTowHitch: false,
+        image: 'images/vehicles/ERS.png'
       };
     }
 
+    const targetOpt = options || Object.assign({}, catalogItem);
+    const hasNativeTowHitch = Boolean(targetOpt.hasTowHitch);
+    let finalTowHitch = hasNativeTowHitch;
+
+    if (!hasNativeTowHitch && selOpts.towHitch) {
+      optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
+      activeOptionsList.push(this.VEHICLE_OPTIONS.towHitch.label);
+      finalTowHitch = true;
+    }
+    if (selOpts.ledBar) {
+      optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
+      activeOptionsList.push(this.VEHICLE_OPTIONS.ledBar.label);
+    }
+    if (selOpts.climatisation) {
+      optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
+      activeOptionsList.push(this.VEHICLE_OPTIONS.climatisation.label);
+    }
+    if (selOpts.converter230v) {
+      optionsExtraCost += this.VEHICLE_OPTIONS.converter230v.cost;
+      activeOptionsList.push(this.VEHICLE_OPTIONS.converter230v.label);
+    }
+
+    targetOpt.cost = (targetOpt.cost || 20000) + optionsExtraCost;
+    targetOpt.hasTowHitch = finalTowHitch;
+    targetOpt.installedOptions = activeOptionsList;
+
     if (window.ProtecAdvanced && typeof window.ProtecAdvanced.buySpecializedVehicle === 'function') {
-      window.ProtecAdvanced.buySpecializedVehicle(window.game, stationId, vehicleType, options || catalogItem);
+      window.ProtecAdvanced.buySpecializedVehicle(window.game, stationId, vehicleType, targetOpt);
     }
   },
 

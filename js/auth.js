@@ -761,7 +761,7 @@ window.ProtecAuth = {
     const username = document.getElementById('auth-reg-username').value.trim();
     const password = document.getElementById('auth-reg-password').value;
     const stationName = (document.getElementById('auth-reg-station')?.value || '').trim() || 'Antenne Protection Civile';
-    const departmentCode = this.regDeptCode || document.getElementById('auth-reg-dept-select')?.value || '54';
+    const departmentCode = this.regDeptCode || document.getElementById('auth-reg-dept-select')?.value || '75';
     // La commune exacte sera définie dès l'implantation physique du bâtiment sur la carte
     let city = null;
     if (stationName && stationName.length > 2 && !stationName.toLowerCase().startsWith('antenne')) {
@@ -1194,6 +1194,12 @@ window.ProtecAuth = {
 
       if (typeof game.initReactiveResources === 'function') {
         game.initReactiveResources();
+      }
+      if (typeof game.syncDepartmentFromStation === 'function') {
+        game.syncDepartmentFromStation();
+      }
+      if (typeof game.loadAllianceStations === 'function') {
+        game.loadAllianceStations();
       }
       game.updateStatsUI();
       if (game.renderStations) game.renderStations();

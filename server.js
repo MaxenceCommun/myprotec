@@ -22,28 +22,69 @@ const gameState = {
   get alliances() { return db.data.alliances; },
   get allianceStations() {
     const list = [];
-    // Fusionner UNIQUEMENT les antennes de vrais joueurs connectés ou enregistrés
+    const seenStationIds = new Set();
+    const seenPlayerIds = new Set();
+
+    // 1. Antennes des joueurs connectés en mémoire vive
     Object.values(this.players).forEach(p => {
       if (p && p.id && !p.id.startsWith('system') && p.stations && Array.isArray(p.stations)) {
+        seenPlayerIds.add(p.id);
         p.stations.forEach(st => {
-          if (st && st.id && !st.id.startsWith('station-allie')) {
+          if (st && st.id && !st.id.startsWith('station-allie') && !seenStationIds.has(st.id)) {
+            seenStationIds.add(st.id);
             list.push({
               id: st.id,
               playerId: p.id,
               playerName: p.name || 'Directeur d’Antenne',
               name: st.name,
               city: st.city,
+              departmentCode: st.departmentCode || p.departmentCode,
               lat: st.lat,
               lng: st.lng,
               level: st.level || 1,
-              vehicles: st.vehiclesCount || 1,
-              volunteers: st.volunteersCount || 4,
-              allianceId: p.allianceId || 'alliance-fnpc'
+              vehicles: (st.vehicles || []).length || st.vehiclesCount || 1,
+              volunteers: (st.volunteers || []).length || st.volunteersCount || 4,
+              allianceId: p.allianceId || 'alliance-fnpc',
+              isOnline: true
             });
           }
         });
       }
     });
+
+    // 2. Antennes des joueurs persistés en base (savedGames) - visibles même hors-ligne !
+    if (db.data && db.data.savedGames) {
+      Object.entries(db.data.savedGames).forEach(([userId, saveEntry]) => {
+        const gameData = saveEntry?.data;
+        if (!gameData || !Array.isArray(gameData.stations)) return;
+        const playerRec = Object.values(db.data.users || {}).find(u => u.id === userId);
+        const playerName = playerRec ? playerRec.username : (gameData.player?.name || 'Directeur d’Antenne');
+
+        gameData.stations.forEach(st => {
+          if (st && st.id && !st.id.startsWith('station-allie') && !seenStationIds.has(st.id)) {
+            seenStationIds.add(st.id);
+            seenPlayerIds.add(userId);
+            const isOnline = Boolean(this.players[userId] && (Date.now() - this.players[userId].lastSeen < 120000));
+            list.push({
+              id: st.id,
+              playerId: userId,
+              playerName: playerName,
+              name: st.name,
+              city: st.city,
+              departmentCode: st.departmentCode || gameData.player?.departmentCode,
+              lat: st.lat,
+              lng: st.lng,
+              level: st.level || 1,
+              vehicles: (st.vehicles || []).length || 1,
+              volunteers: (st.volunteers || []).length || 4,
+              allianceId: gameData.player?.allianceId || 'alliance-fnpc',
+              isOnline: isOnline
+            });
+          }
+        });
+      });
+    }
+
     return list;
   },
   get renforts() { return db.data.renforts; },
@@ -223,6 +264,15 @@ const server = http.createServer((req, res) => {
       try {
         const gameData = JSON.parse(body);
         db.saveGame(user.id, gameData);
+        gameState.players[user.id] = {
+          id: user.id,
+          name: user.username,
+          stations: gameData.stations || [],
+          departmentCode: user.departmentCode || (gameData.player && gameData.player.departmentCode),
+          allianceId: (gameData.player && gameData.player.allianceId) || 'alliance-fnpc',
+          lastSeen: Date.now()
+        };
+        broadcastSSE('stations_updated', { allianceStations: gameState.allianceStations });
         sendJson(res, 200, { success: true, savedAt: new Date().toISOString() });
       } catch (err) {
         sendJson(res, 400, { success: false, error: err.message });
@@ -542,16 +592,23 @@ const server = http.createServer((req, res) => {
       try {
         const data = JSON.parse(body);
         const renfortReq = {
-          id: `renfort-${Date.now()}`,
-          allianceId: data.allianceId,
-          requestingPlayerId: data.playerId,
-          requestingPlayerName: data.playerName,
-          stationName: data.stationName,
-          missionType: data.missionType || 'DPS Envergure',
-          neededType: data.neededType || 'VPSP', // VPSP, SECU, CADRE
-          neededCount: data.neededCount || 1,
-          createdAt: new Date().toISOString(),
-          status: 'pending' // pending, fulfilled
+          id: data.id || `renfort-${Date.now()}`,
+          allianceId: data.allianceId || 'alliance-fnpc',
+          allianceTag: data.allianceTag || 'UFSC',
+          missionId: data.missionId || null,
+          requesterPlayerId: data.requesterPlayerId || data.playerId || 'directeur-local',
+          requesterName: data.requesterName || data.playerName || data.requestingPlayerName || data.stationName || 'Directeur d’Antenne',
+          stationName: data.stationName || 'Antenne Locale',
+          title: data.title || `Renfort pour ${data.missionType || 'Dispositif de Secours'}`,
+          desc: data.desc || `Demande de renforts pour couverture opérationnelle.`,
+          unitRequested: data.unitRequested || (data.neededCount ? `${data.neededCount} ${data.neededType || 'VPSP'}` : '1 VPSP ou Binôme PSE'),
+          requestedVolunteersCount: data.requestedVolunteersCount || data.neededCount || 2,
+          requestedVehicles: data.requestedVehicles || [],
+          indemnite: data.indemnite || 180,
+          zone: data.zone || 'departemental',
+          zoneLabel: data.zoneLabel || 'Départementale',
+          status: data.status || 'open',
+          createdAt: data.createdAt || new Date().toISOString()
         };
         db.data.renforts.unshift(renfortReq);
         if (db.data.renforts.length > 30) db.data.renforts.pop();
@@ -580,6 +637,24 @@ const server = http.createServer((req, res) => {
           broadcastSSE('renfort_fulfilled', renfort);
         }
         sendJson(res, 200, { success: true, renfort });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 7b. Annuler / Retirer une demande de Renfort
+  if (url === '/api/alliances/renfort/cancel' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { renfortId } = JSON.parse(body);
+        db.data.renforts = (db.data.renforts || []).filter(r => r.id !== renfortId);
+        db.save();
+        broadcastSSE('renfort_cancelled', { id: renfortId });
+        sendJson(res, 200, { success: true, renfortId });
       } catch (err) {
         sendJson(res, 400, { error: err.message });
       }
@@ -820,6 +895,113 @@ const server = http.createServer((req, res) => {
         } else {
           sendJson(res, 404, { error: 'Événement introuvable' });
         }
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 19. Admin : Créer un nouvel Événement Fédéral Officiel
+  if (url === '/api/admin/events/create' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const eventData = JSON.parse(body);
+        eventData.id = eventData.id || `ev-admin-${Date.now()}`;
+        eventData.status = eventData.status || 'open';
+        eventData.createdAt = new Date().toISOString();
+        eventData.participants = eventData.participants || [];
+        db.data.communityEvents = db.data.communityEvents || [];
+        db.data.communityEvents.unshift(eventData);
+        db.save();
+        broadcastSSE('community_event_approved', { event: eventData });
+        sendJson(res, 200, { success: true, event: eventData });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 20. Admin : Supprimer un Événement
+  if (url === '/api/admin/events/delete' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { eventId } = JSON.parse(body);
+        db.data.communityEvents = (db.data.communityEvents || []).filter(e => e.id !== eventId);
+        db.save();
+        sendJson(res, 200, { success: true, eventId });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 21. Admin : Lecture des catalogues personnalisés (Véhicules, Matériel, Écussons)
+  if (url === '/api/admin/catalogs' && req.method === 'GET') {
+    sendJson(res, 200, {
+      success: true,
+      vehicles: db.data.customVehicleCatalog || null,
+      equipments: db.data.customEquipmentCatalog || null,
+      badges: db.data.customBadgesCatalog || null,
+      events: db.data.communityEvents || []
+    });
+    return;
+  }
+
+  // 22. Admin : Sauvegarde des catalogues personnalisés
+  if (url === '/api/admin/catalogs/save' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body);
+        if (payload.vehicles !== undefined) db.data.customVehicleCatalog = payload.vehicles;
+        if (payload.equipments !== undefined) db.data.customEquipmentCatalog = payload.equipments;
+        if (payload.badges !== undefined) db.data.customBadgesCatalog = payload.badges;
+        db.save();
+        broadcastSSE('catalogs_updated', {
+          vehicles: db.data.customVehicleCatalog,
+          equipments: db.data.customEquipmentCatalog,
+          badges: db.data.customBadgesCatalog
+        });
+        sendJson(res, 200, { success: true });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 23. Admin : Attribuer un Écusson à un Directeur / Joueur
+  if (url === '/api/admin/badges/award' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { userId, badge } = JSON.parse(body);
+        if (db.data.savedGames[userId]) {
+          const gameData = db.data.savedGames[userId].data;
+          if (gameData) {
+            gameData.ecussons = gameData.ecussons || [];
+            gameData.ecussons.push({
+              id: badge.id || `badge-${Date.now()}`,
+              code: badge.code,
+              nom: badge.nom || badge.name,
+              imageUrl: badge.imageUrl,
+              rarete: badge.rarete || badge.rarity || 'commun',
+              acquiredAt: new Date().toISOString()
+            });
+            db.save();
+          }
+        }
+        broadcastSSE('badge_awarded', { userId, badge });
+        sendJson(res, 200, { success: true });
       } catch (err) {
         sendJson(res, 400, { error: err.message });
       }

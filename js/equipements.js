@@ -447,6 +447,17 @@ window.ProtecEquipements = {
       badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
       desc: 'Mobilier ergonomique pliant pour sas d’accueil confidentiel, paravents acoustiques, plaids thermiques douillets, coin jeux/coloriages et peluches d’urgence pour enfants traumatisés, thermos de réconfort, fiches de traçabilité des impliqués et kits CUMP.',
       bonus: 'Déploiement du CAI lors d’accidents collectifs ou de crises NOVI. Décuple l’impact des compétences AEP, assurant l’apaisement immédiat des familles et la prise en charge du choc psychologique.'
+    },
+    {
+      id: 'lot_poste_commandement_mobile',
+      name: 'Poste de Commandement Mobile (Pack PC Embarqué)',
+      icon: '📡',
+      price: 2800,
+      storageSize: 2,
+      badge: 'Commandement & Crise (VLC)',
+      badgeColor: 'bg-indigo-950 text-indigo-200 border-indigo-700',
+      desc: 'Mallette tactique informatique et transmissions tout-en-un (ordinateur de crise cartographie SIG/SINUS, baie radio multi-bandes ANTARES/VHF/UHF, modem satellite 4G/5G sécurisé, tableau SITAC, imprimante de crise et convertisseur 12V/230V). Permet d’équiper une VL standard pour la passer en VL Commandement opérationnelle.',
+      bonus: 'Transforme une VL en VL Commandement pour piloter une cellule de crise, un plan NOVI ou un grand dispositif sous la direction d’un Chef de Dispositif ou Chef de Poste.'
     }
   ],
 
@@ -522,7 +533,8 @@ window.ProtecEquipements = {
       'radios', 'tablettes', 'phones', 'pcs', 'fauteuils', 'cafe',
       'lot_secours_a', 'lot_secours_b', 'lot_secours_c',
       'lot_tronconnage', 'lot_pompage', 'lot_eclairage', 'lot_bachage',
-      'lot_hebergement', 'lot_ravitaillement', 'lot_soutien_psy'
+      'lot_hebergement', 'lot_ravitaillement', 'lot_soutien_psy',
+      'lot_poste_commandement_mobile'
     ];
     allKeys.forEach(k => {
       if (game.workplaceEquipment[k] === undefined) {
@@ -1406,5 +1418,28 @@ window.ProtecEquipements = {
     `;
 
     if (window.lucide) window.lucide.createIcons();
+  },
+
+  // Chargement dynamique du catalogue personnalisé de matériel configuré par l'admin
+  loadCustomCatalog() {
+    try {
+      const stored = localStorage.getItem('protec_custom_equipment_catalog');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.LOTS_CATALOG = parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur chargement catalogue personnalisé matériel:', e);
+    }
   }
 };
+
+// Initialisation immédiate du catalogue personnalisé s'il existe
+try {
+  if (window.ProtecEquipements && typeof window.ProtecEquipements.loadCustomCatalog === 'function') {
+    window.ProtecEquipements.loadCustomCatalog();
+  }
+} catch (e) {}
+

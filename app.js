@@ -33,11 +33,17 @@ class ProtecGame {
       localStorage.removeItem('protec_alliance_id');
     }
 
+    let storedDept = localStorage.getItem('protec_department_code');
+    if (storedDept === '54') {
+      storedDept = '75';
+      localStorage.setItem('protec_department_code', '75');
+    }
+
     this.player = {
       id: savedPlayerId,
       name: (supaUser && supaUser.username) || localStorage.getItem('protec_player_name') || 'Directeur d’Antenne',
       allianceId: initialAllianceId,
-      departmentCode: (supaUser && (supaUser.departmentCode || supaUser.department_code)) || localStorage.getItem('protec_department_code') || '54',
+      departmentCode: (supaUser && (supaUser.departmentCode || supaUser.department_code)) || storedDept || '75',
       deptRole: localStorage.getItem('protec_dept_role') || 'antenne_principale',
       role: (supaUser && supaUser.role) || 'directeur'
     };
@@ -644,23 +650,25 @@ class ProtecGame {
 
   // --- RENDU CARTE ALLIANCE ---
   renderAllianceStations() {
+    if (!this.map || !this.markers) return;
+    if (!this.markers.allianceStations) this.markers.allianceStations = {};
     Object.values(this.markers.allianceStations).forEach(m => this.map.removeLayer(m));
     this.markers.allianceStations = {};
 
-    this.allianceStations.forEach(st => {
-      // Sécurité absolue : ignorer si antenne fictive / système ou notre propre antenne
-      if (!st || !st.id || !st.playerId) return;
-      if (st.playerId === this.player.id) return;
-      if (st.playerId.startsWith('system') || st.id.startsWith('station-allie') || st.isFictive) return;
+    (this.allianceStations || []).forEach(st => {
+      // Sécurité : ignorer si antenne fictive / système ou notre propre antenne
+      if (!st || !st.id) return;
+      if (this.player?.id && st.playerId && st.playerId === this.player.id) return;
+      if (String(st.playerId || '').startsWith('system') || String(st.id).startsWith('station-allie') || st.isFictive) return;
       if (this.stations.some(my => my.id === st.id)) return;
       if (this.stations.some(my => Math.abs(my.lat - st.lat) < 0.0003 && Math.abs(my.lng - st.lng) < 0.0003)) return;
 
       const el = document.createElement('div');
       el.className = 'custom-leaflet-marker';
       el.innerHTML = `
-        <div class="marker-inner bg-indigo-700 border-indigo-200">
+        <div class="marker-inner bg-indigo-700 border-indigo-200 shadow-md">
           <i data-lucide="shield-check" class="w-4 h-4 text-white"></i>
-          <span class="badge-counter bg-indigo-500">${st.vehicles}</span>
+          <span class="badge-counter bg-indigo-500">${st.vehicles || 1}</span>
         </div>
       `;
 
@@ -672,6 +680,21 @@ class ProtecGame {
       });
 
       const marker = L.marker([st.lat, st.lng], { icon }).addTo(this.map);
+
+      // Tooltip interactif immédiat au survol
+      const tooltipContent = `
+        <div style="font-family: inherit; font-size: 11px; line-height: 1.3;">
+          <strong style="color: #1e1b4b; font-size: 12px;">${st.name || 'Antenne Alliée'}</strong><br>
+          <span style="color: #4f46e5; font-weight: 700;">Directeur : ${st.playerName || 'Directeur d’Antenne'}</span><br>
+          <span style="color: #64748b;">${st.city || ''} • ${st.vehicles || 1} véhicule(s) • ${st.volunteers || 4} secouristes</span>
+        </div>
+      `;
+      marker.bindTooltip(tooltipContent, {
+        direction: 'top',
+        offset: [0, -18],
+        opacity: 0.95
+      });
+
       marker.on('click', () => {
         this.openAllianceStationDetails(st);
       });
@@ -757,36 +780,158 @@ class ProtecGame {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(renfortData)
     }).then(res => res.json()).then(data => {
-      this.renforts.unshift(data.renfort);
+      const saved = Object.assign({}, renfortData, (data && data.renfort) || {});
+      this.renforts.unshift(saved);
+      this.sanitizeRenforts();
       this.showToast('Appel à Renfort Transmis', `Demande envoyée à ${targetStationName}. En attente de détachement...`, 'green');
       this.updateStatsUI();
     }).catch(() => {
       // Simulation locale si serveur hors-ligne
       renfortData.id = `renf-${Date.now()}`;
       this.renforts.unshift(renfortData);
+      this.sanitizeRenforts();
       this.showToast('Appel à Renfort Transmis', `Demande transmise sur la fréquence fédérale.`, 'green');
     });
   }
 
+  sanitizeRenforts() {
+    this.renforts = (this.renforts || []).filter(r => {
+      if (!r || typeof r !== 'object') return false;
+      if (!r.id || String(r.id).startsWith('renf-offline-') || String(r.id).startsWith('renf-extra-suap') || r.id === 'renf-extra-suap-23') return false;
+      if (r.isExtraDept && !r.isNationalAdmin) return false;
+      const rawTitle = String(r.title || '').trim();
+      const rawReq = String(r.requesterName || r.requestingPlayerName || '').trim();
+      // Exclure les faux renforts corrompus avec uniquement des undefined
+      if ((rawTitle === 'undefined' || rawTitle === '') && (rawReq === 'undefined' || rawReq === '')) return false;
+      return true;
+    }).map(r => {
+      const requesterName = (r.requesterName && r.requesterName !== 'undefined') ? r.requesterName : (r.requestingPlayerName || r.stationName || 'Antenne Alliée');
+      const requesterId = r.requesterPlayerId || r.requestingPlayerId || 'directeur-local';
+      const title = (r.title && r.title !== 'undefined') ? r.title : (r.missionType ? `Renfort pour ${r.missionType}` : 'Appel à Renfort Opérationnel');
+      const desc = (r.desc && r.desc !== 'undefined') ? r.desc : 'Demande de renforts pour couverture opérationnelle.';
+      const unitRequested = (r.unitRequested && r.unitRequested !== 'undefined') ? r.unitRequested : (r.neededType ? `${r.neededCount || 1} ${r.neededType}` : '1 VPSP ou Secouristes');
+      const indemnite = Number(r.indemnite || r.rewardMoney || 180);
+      return {
+        ...r,
+        requesterName,
+        requesterPlayerId: requesterId,
+        title,
+        desc,
+        unitRequested,
+        indemnite,
+        status: r.status === 'pending' ? 'open' : (r.status || 'open')
+      };
+    });
+  }
+
+  // Synchronisation stricte et dynamique du département officiel depuis l'antenne du joueur
+  syncDepartmentFromStation() {
+    let targetDept = null;
+    if (this.stations && this.stations.length > 0) {
+      const st = this.stations[0];
+      if (st.city && String(st.city).toLowerCase().includes('paris')) {
+        targetDept = '75';
+      } else if (st.departmentCode && st.departmentCode !== 'undefined' && st.departmentCode !== '54') {
+        targetDept = String(st.departmentCode).trim();
+      } else if (st.lat && st.lng && window.ProtecDepartements && typeof window.ProtecDepartements.getDepartmentByCoordinates === 'function') {
+        const found = window.ProtecDepartements.getDepartmentByCoordinates(st.lat, st.lng);
+        if (found) targetDept = found.code;
+      }
+    }
+
+    if (!targetDept) {
+      const stored = localStorage.getItem('protec_department_code');
+      if (stored && stored !== '54') {
+        targetDept = stored;
+      } else {
+        targetDept = '75';
+      }
+    }
+
+    this.currentDepartmentCode = targetDept;
+    if (this.player) this.player.departmentCode = targetDept;
+    if (this.stations && this.stations.length > 0) {
+      this.stations.forEach(s => {
+        if (!s.departmentCode || s.departmentCode === '54') s.departmentCode = targetDept;
+      });
+    }
+    localStorage.setItem('protec_department_code', targetDept);
+    this.populateDepartmentSelector();
+  }
+
+  // Chargement en continu des antennes de tous les directeurs et confrères connectés ou enregistrés
+  loadAllianceStations() {
+    // 1. Récupération depuis le serveur
+    fetch('/api/state')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && Array.isArray(data.allianceStations)) {
+          const myId = this.player?.id;
+          const validStations = data.allianceStations.filter(st => {
+            if (!st || !st.id) return false;
+            if (myId && st.playerId === myId) return false;
+            if (String(st.playerId || '').startsWith('system') || String(st.id).startsWith('station-allie') || st.isFictive) return false;
+            if (this.stations.some(my => my.id === st.id)) return false;
+            if (this.stations.some(my => Math.abs(my.lat - st.lat) < 0.0003 && Math.abs(my.lng - st.lng) < 0.0003)) return false;
+            return true;
+          });
+          this.allianceStations = validStations;
+          this.renderAllianceStations();
+        }
+      })
+      .catch(() => {});
+
+    // 2. Synchronisation Supabase si disponible
+    if (window.ProtecSupabase && window.ProtecSupabase.client) {
+      window.ProtecSupabase.getAllianceStations(this.player?.id).then(supaStations => {
+        if (supaStations && supaStations.length > 0) {
+          const existingIds = new Set((this.allianceStations || []).map(s => s.id));
+          supaStations.forEach(st => {
+            if (!existingIds.has(st.id) && !this.stations.some(my => my.id === st.id)) {
+              this.allianceStations.push({
+                id: st.id,
+                playerId: st.player_id,
+                playerName: st.player_name || 'Directeur d’Antenne',
+                name: st.station_name,
+                city: st.city,
+                departmentCode: st.department_code,
+                lat: st.lat,
+                lng: st.lng,
+                level: st.level || 1,
+                vehicles: st.vehicles_count || 1,
+                volunteers: st.volunteers_count || 4,
+                allianceId: st.alliance_id || 'alliance-fnpc'
+              });
+            }
+          });
+          this.renderAllianceStations();
+        }
+      }).catch(() => {});
+    }
+  }
+
   init() {
     this.initMap();
-    // Purge absolue de toute antenne fictive créée par le système
-    this.allianceStations = [];
-    if (this.markers && this.markers.allianceStations) {
-      Object.values(this.markers.allianceStations).forEach(m => this.map.removeLayer(m));
-      this.markers.allianceStations = {};
-    }
+    this.syncDepartmentFromStation();
     this.renderStations();
     this.ensureMissionAddresses();
     this.disperseOverlappingMissions();
     this.renderMissions();
     
-    // Purge de tout faux renfort SUAP Creuse ou mock issu de l'ancien système d'injection
-    this.renforts = (this.renforts || []).filter(r => r && r.id && !r.id.startsWith('renf-extra-suap') && r.id !== 'renf-extra-suap-23' && (r.isExtraDept ? r.isNationalAdmin : true));
+    // Purge et assainissement complet des renforts
+    this.sanitizeRenforts();
+
+    // Chargement et affichage immédiat des antennes des autres directeurs
+    this.loadAllianceStations();
 
     this.updateStatsUI();
     this.updateDockAndFiltersVisibility();
     this.startSimulationClock();
+
+    // Actualisation périodique des antennes des joueurs (toutes les 20 secondes)
+    if (!this._alliancePollingInterval) {
+      this._alliancePollingInterval = setInterval(() => this.loadAllianceStations(), 20000);
+    }
 
     // Règle régalienne : toute antenne implantée bénéficie de sa convention AASC fondatrice (affiliation FNPC)
     if (this.stations && this.stations.length > 0) {
@@ -838,6 +983,7 @@ class ProtecGame {
         }
       }
     } else {
+      this.syncDepartmentFromStation();
       this.showToast('Partie chargée', `Bienvenue ! Votre antenne compte ${this.volunteers.length} secouristes.`, 'blue');
       if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.ensureTerritoryEvents === 'function') {
         window.ProtecEvenementsReels.ensureTerritoryEvents(this);
@@ -1122,9 +1268,11 @@ class ProtecGame {
     const sel = document.getElementById('department-selector');
     if (!sel || !window.ProtecDepartements) return;
 
+    const myDept = this.currentDepartmentCode || this.player?.departmentCode || '75';
+
     sel.innerHTML = window.ProtecDepartements.list.map(d => `
-      <option value="${d.code}" ${d.code === this.currentDepartmentCode ? 'selected' : ''}>
-        ${d.code} - ${d.name} ${d.code === this.currentDepartmentCode ? '⭐ (Mon Antenne)' : ''}
+      <option value="${d.code}" ${d.code === myDept ? 'selected' : ''}>
+        ${d.code} - ${d.name} ${d.code === myDept ? '⭐ (Mon Antenne)' : ''}
       </option>
     `).join('');
   }
@@ -1678,6 +1826,7 @@ class ProtecGame {
     }
 
     this.cancelAntennaPlacement();
+    this.syncDepartmentFromStation();
     this.renderStations();
     this.renderMissions();
     this.updateStatsUI();
@@ -2484,32 +2633,60 @@ class ProtecGame {
 
   calculateDynamicBareme(devis) {
     const ratePerHour = 18;
-    const vols = devis.configuredVolunteers || devis.requiredVolunteers || 4;
-    const dur = devis.durationHours || 4;
-    const personnelCost = vols * dur * ratePerHour;
+    let personnelCost = 0;
 
-    let vehicleCost = 0;
+    if (devis.isMultiDays) {
+      const wDays = devis.weekdayDaysCount || 20;
+      const weDays = devis.weekendDaysCount || 8;
+      const wHours = devis.weekdayHours || 6;
+      const weHours = devis.weekendHours || 10;
+
+      const wVols = (devis.configuredVolunteersWeekday !== undefined && devis.configuredVolunteersWeekday !== null)
+        ? devis.configuredVolunteersWeekday
+        : Math.max(2, Math.round((devis.requiredVolunteers || 4) * 0.5));
+      const weVols = (devis.configuredVolunteersWeekend !== undefined && devis.configuredVolunteersWeekend !== null)
+        ? devis.configuredVolunteersWeekend
+        : (devis.requiredVolunteers || 4);
+
+      const weekdayPersonnelCost = wDays * wVols * wHours * ratePerHour;
+      const weekendPersonnelCost = weDays * weVols * weHours * ratePerHour;
+      personnelCost = weekdayPersonnelCost + weekendPersonnelCost;
+    } else {
+      const vols = devis.configuredVolunteers || devis.requiredVolunteers || 4;
+      const dur = devis.durationHours || 4;
+      personnelCost = vols * dur * ratePerHour;
+    }
+
+    let dailyVehiclesCost = 0;
     const counts = this.ensureDevisVehicleCounts(devis);
     Object.entries(counts).forEach(([vType, count]) => {
       const c = Number(count) || 0;
-      if (vType === 'VPSP') vehicleCost += 110 * c;
-      else if (vType === 'VTU') vehicleCost += 55 * c;
-      else if (vType === 'VL') vehicleCost += 35 * c;
-      else if (vType === 'VTP') vehicleCost += 45 * c;
-      else if (vType === 'VPS') vehicleCost += 70 * c;
-      else if (vType === 'QUAD') vehicleCost += 50 * c;
-      else if (vType === 'MOTO') vehicleCost += 40 * c;
-      else if (vType === 'VELO') vehicleCost += 20 * c;
-      else if (vType === 'DRONE') vehicleCost += 60 * c;
-      else if (vType === 'ERS') vehicleCost += 80 * c;
-      else vehicleCost += 40 * c;
+      if (vType === 'VPSP') dailyVehiclesCost += 110 * c;
+      else if (vType === 'VTU') dailyVehiclesCost += 55 * c;
+      else if (vType === 'VL') dailyVehiclesCost += 35 * c;
+      else if (vType === 'VTP') dailyVehiclesCost += 45 * c;
+      else if (vType === 'VPS') dailyVehiclesCost += 70 * c;
+      else if (vType === 'QUAD') dailyVehiclesCost += 50 * c;
+      else if (vType === 'MOTO') dailyVehiclesCost += 40 * c;
+      else if (vType === 'VELO') dailyVehiclesCost += 20 * c;
+      else if (vType === 'DRONE') dailyVehiclesCost += 60 * c;
+      else if (vType === 'ERS') dailyVehiclesCost += 80 * c;
+      else dailyVehiclesCost += 40 * c;
     });
+
+    let vehicleCost = dailyVehiclesCost;
+    if (devis.isMultiDays) {
+      const totalDays = (devis.weekdayDaysCount || 20) + (devis.weekendDaysCount || 8);
+      vehicleCost = dailyVehiclesCost * totalDays;
+    }
 
     const scale = devis.configuredScale || devis.scale || 'DPS-PE';
     let matCost = 35;
     if (scale.includes('DPS-PE')) matCost = 65;
     if (scale.includes('DPS-ME') || scale.includes('DPS-GE')) matCost = 120;
-    const adminCost = 40;
+    if (devis.isMultiDays) matCost = matCost * 4;
+
+    const adminCost = devis.isMultiDays ? 150 : 40;
     const totalBareme = personnelCost + vehicleCost + matCost + adminCost;
 
     return {
@@ -2518,7 +2695,8 @@ class ProtecGame {
       vehicleCost,
       matCost,
       adminCost,
-      totalBareme
+      totalBareme,
+      isMultiDays: !!devis.isMultiDays
     };
   }
 
@@ -2647,38 +2825,72 @@ class ProtecGame {
     this.openModule('devis', true);
   }
 
-  // Choix manuel du type de dispositif (sans forcer l'effectif ni le tarif)
+  // Choix manuel du type de dispositif (avec recalcul automatique du barème)
   updateDevisScale(devisId, scaleType) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     devis.configuredScale = scaleType;
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
   }
 
-  // Ajustement manuel de l'effectif secouriste engagé (sans modifier le tarif)
+  // Ajustement manuel de l'effectif secouriste engagé (recalcul automatique du devis)
   adjustDevisVolunteers(devisId, delta) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const current = devis.configuredVolunteers || 0;
     devis.configuredVolunteers = Math.max(0, Math.min(48, current + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
   }
 
-  // Ajustement manuel des Chefs d'Équipe (CE)
+  // Ajustement des secouristes en Semaine pour poste multi-jours (recalcul automatique)
+  adjustDevisWeekdayVolunteers(devisId, delta) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    if (devis.configuredVolunteersWeekday === undefined || devis.configuredVolunteersWeekday === null) {
+      devis.configuredVolunteersWeekday = Math.max(2, Math.round((devis.requiredVolunteers || 4) * 0.5));
+    }
+    devis.configuredVolunteersWeekday = Math.max(1, Math.min(30, devis.configuredVolunteersWeekday + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Ajustement des secouristes en Week-end pour poste multi-jours (recalcul automatique)
+  adjustDevisWeekendVolunteers(devisId, delta) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    if (devis.configuredVolunteersWeekend === undefined || devis.configuredVolunteersWeekend === null) {
+      devis.configuredVolunteersWeekend = devis.requiredVolunteers || 4;
+    }
+    devis.configuredVolunteersWeekend = Math.max(2, Math.min(48, devis.configuredVolunteersWeekend + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Ajustement manuel des Chefs d'Équipe (CE) (recalcul automatique)
   adjustDevisCE(devisId, delta) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const current = devis.configuredCE || 0;
     devis.configuredCE = Math.max(0, Math.min(10, current + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
   }
 
-  // Ajustement manuel des Chefs de Poste (CP)
+  // Ajustement manuel des Chefs de Poste (CP) (recalcul automatique)
   adjustDevisCP(devisId, delta) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const current = devis.configuredCP || 0;
     devis.configuredCP = Math.max(0, Math.min(4, current + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
   }
 
@@ -2861,9 +3073,9 @@ class ProtecGame {
         return;
       }
 
-      // Recherche du premier véhicule disponible correspondant au type
+      // Recherche du premier véhicule disponible correspondant au type (ou VL Commandement si PCM requis)
       const match = this.vehicles.find(v =>
-        v.type === reqType &&
+        (v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit))) &&
         (v.status === 'dispo' || v.status === 'sdis_caserne') &&
         !busyVehicleIds.has(v.id) &&
         !currentAssigned.includes(v.id) &&
@@ -2899,6 +3111,8 @@ class ProtecGame {
     } else {
       devis.configuredLots.push(lotType);
     }
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
   }
 
@@ -2945,15 +3159,47 @@ class ProtecGame {
 
     const isAvailable = Math.random() <= proba;
 
-    // Délais de réponse étalés et réalistes (secondes simulées, répercutées avec l'horloge)
-    let delaySec = 0;
-    if (isAvailable && (volunteer.motivation || 70) >= 80) {
-      delaySec = 6 + Math.random() * 16; // 6 à 22 secondes (très motivé et disponible)
-    } else if (isAvailable) {
-      delaySec = 16 + Math.random() * 32; // 16 à 48 secondes
-    } else {
-      delaySec = 22 + Math.random() * 55; // 22 à 77 secondes (délai de réflexion ou empêchement)
+    // Délais de réponse étalés et réalistes (entre 30 secondes et 4 jours, au plus tard 1h avant le début du poste)
+    const now = Date.now();
+    let eventStartMs = now + (30 * 24 * 3600 * 1000);
+    if (eventDate) {
+      const eY = eventDate.year || this.clock.year;
+      const eM = (eventDate.month !== undefined) ? eventDate.month : this.clock.month;
+      const eD = eventDate.day || this.clock.day;
+      const eH = eventDate.hour || eventDate.startHour || 14;
+      const eMin = eventDate.minute || 0;
+      eventStartMs = new Date(eY, eM, eD, eH, eMin).getTime();
     }
+    const msUntilStart = Math.max(0, eventStartMs - now);
+    // Limite stricte : au plus tard 1 heure avant le début du poste
+    const maxCutoffSec = Math.max(30, Math.floor((msUntilStart - (3600 * 1000)) / 1000));
+
+    // Plafond maximum : 4 jours (4j = 345 600 secondes)
+    const MAX_TARGET_SEC = 4 * 24 * 3600;
+    const effectiveMaxSec = Math.min(MAX_TARGET_SEC, maxCutoffSec);
+
+    let delaySec = 30;
+    if (effectiveMaxSec <= 35) {
+      delaySec = Math.max(15, effectiveMaxSec - Math.random() * 5);
+    } else {
+      const motivation = volunteer.motivation || 70;
+      if (isAvailable && motivation >= 85) {
+        // Hyper motivé et dispo : réponse rapide entre 30s et 300s (ou 10% du délai max)
+        const cap = Math.min(effectiveMaxSec, Math.max(60, effectiveMaxSec * 0.10));
+        delaySec = 30 + Math.random() * (cap - 30);
+      } else if (isAvailable && motivation >= 65) {
+        // Disponible classique : 120s à 45% du délai max
+        const minVal = Math.min(effectiveMaxSec, 120);
+        const maxVal = Math.max(minVal + 10, Math.min(effectiveMaxSec, effectiveMaxSec * 0.45));
+        delaySec = minVal + Math.random() * (maxVal - minVal);
+      } else {
+        // Hésitant, occupé ou indisponible : s'étale de quelques minutes jusqu'à 4 jours
+        const minVal = Math.min(effectiveMaxSec, 300);
+        const maxVal = Math.max(minVal + 10, effectiveMaxSec);
+        delaySec = minVal + Math.random() * (maxVal - minVal);
+      }
+    }
+    delaySec = Math.max(30, Math.min(effectiveMaxSec, delaySec));
 
     let rejectReason = '';
     if (!isAvailable) {
@@ -3087,91 +3333,94 @@ class ProtecGame {
       });
     }
 
-    let pendingCount = availableVols.length;
-
+    const nowMs = Date.now();
     availableVols.forEach(vol => {
       const evalResult = this.evaluateVolunteerAvailability(vol, devis.eventDate, devis);
-      devis.previsionnelResponses[vol.id] = {
+      const respObj = {
         volunteerId: vol.id,
         volunteerName: vol.name,
         rank: vol.rank,
         status: 'pending',
         matchingDay: evalResult.isMatchingDay,
-        probability: evalResult.probability
+        probability: evalResult.probability,
+        respondAt: nowMs + (evalResult.delaySeconds * 1000),
+        preparedResult: evalResult
       };
+      devis.previsionnelResponses[vol.id] = respObj;
 
-      setTimeout(() => {
-        pendingCount--;
-        if (pendingCount <= 0) {
-          devis.sondageEnCours = false;
-        }
-
-        const curDevis = this.devis.find(d => d.id === devisId);
-        if (!curDevis || curDevis.status !== 'previsionnel') return;
-
-        if (evalResult.isAvailable) {
-          curDevis.previsionnelResponses[vol.id] = {
-            volunteerId: vol.id,
-            volunteerName: vol.name,
-            rank: vol.rank,
-            status: 'dispo',
-            matchingDay: evalResult.isMatchingDay
-          };
-          if (!curDevis.previsionnelVolunteers) curDevis.previsionnelVolunteers = [];
-          if (!curDevis.previsionnelVolunteers.includes(vol.id)) {
-            curDevis.previsionnelVolunteers.push(vol.id);
-          }
-          this.showToast('📱 Dispo Confirmée (Prévi)', `${vol.name} (${vol.rank}) : « Présent ! Je me rends disponible pour ce poste. »`, 'green');
-
-          if (window.ProtecMessaging?.logInternalMessage) {
-            window.ProtecMessaging.logInternalMessage(this, {
-              missionId: curDevis.id,
-              missionTitle: curDevis.eventName,
-              type: 'reponse_dispo',
-              senderName: `${vol.name} (${vol.rank})`,
-              recipientName: 'Pôle Opérationnel',
-              text: `✅ « Présent ! Je me rends disponible pour le poste « ${curDevis.eventName} » du ${dateStr}. »`
-            });
-          }
-        } else {
-          curDevis.previsionnelResponses[vol.id] = {
-            volunteerId: vol.id,
-            volunteerName: vol.name,
-            rank: vol.rank,
-            status: 'indispo',
-            reason: evalResult.rejectReason,
-            matchingDay: evalResult.isMatchingDay
-          };
-          if (Math.random() < 0.35) {
-            this.showToast('📱 Indisponible (Prévi)', `${vol.name} : « Malheureusement pas disponible (${evalResult.rejectReason}) »`, 'slate');
-          }
-
-          if (window.ProtecMessaging?.logInternalMessage) {
-            window.ProtecMessaging.logInternalMessage(this, {
-              missionId: curDevis.id,
-              missionTitle: curDevis.eventName,
-              type: 'reponse_indispo',
-              senderName: `${vol.name} (${vol.rank})`,
-              recipientName: 'Pôle Opérationnel',
-              text: `❌ « Indisponible (${evalResult.rejectReason}) pour le ${dateStr}. »`
-            });
-          }
-        }
-
-        this.saveGame();
-        this.updateStatsUI();
-        if (this.currentModalKey === 'devis') {
-          this.openModule('devis', true);
-        } else if (this.currentModalKey === 'planning') {
-          this.openModule('planning', true);
-        }
-      }, evalResult.delayMs);
+      // Pour les délais courts (< 45 sec), un timer léger offre une réactivité visuelle instantanée
+      if (evalResult.delaySeconds <= 45) {
+        setTimeout(() => {
+          this.applyVolunteerSurveyResponse(devisId, respObj);
+        }, evalResult.delaySeconds * 1000);
+      }
     });
 
     this.saveGame();
     this.updateStatsUI();
     if (this.currentModalKey === 'devis') {
       this.openModule('devis', true);
+    }
+  }
+
+  // Traitement officiel d'une réponse de bénévole sondé en prévisionnel
+  applyVolunteerSurveyResponse(devisOrId, resp) {
+    const devis = typeof devisOrId === 'string' ? this.devis.find(d => d.id === devisOrId) : devisOrId;
+    if (!devis || devis.status !== 'previsionnel' || !resp || resp.status !== 'pending') return;
+
+    const evalResult = resp.preparedResult || { isAvailable: false, rejectReason: 'Indisponible' };
+    const dateStr = this.formatFullDate(devis.eventDate);
+
+    if (evalResult.isAvailable) {
+      resp.status = 'dispo';
+      if (!devis.previsionnelVolunteers) devis.previsionnelVolunteers = [];
+      if (!devis.previsionnelVolunteers.includes(resp.volunteerId)) {
+        devis.previsionnelVolunteers.push(resp.volunteerId);
+      }
+      this.showToast('📱 Dispo Confirmée (Prévi)', `${resp.volunteerName} (${resp.rank || 'Secouriste'}) : « Présent ! Je me rends disponible pour ce poste. »`, 'green');
+
+      if (window.ProtecMessaging?.logInternalMessage) {
+        window.ProtecMessaging.logInternalMessage(this, {
+          missionId: devis.id,
+          missionTitle: devis.eventName,
+          type: 'reponse_dispo',
+          senderName: `${resp.volunteerName} (${resp.rank || 'Secouriste'})`,
+          recipientName: 'Pôle Opérationnel',
+          text: `✅ « Présent ! Je me rends disponible pour le poste « ${devis.eventName} » du ${dateStr}. »`
+        });
+      }
+    } else {
+      resp.status = 'indispo';
+      resp.reason = evalResult.rejectReason || 'Contrainte personnelle';
+      if (Math.random() < 0.35) {
+        this.showToast('📱 Indisponible (Prévi)', `${resp.volunteerName} : « Malheureusement pas disponible (${resp.reason}) »`, 'slate');
+      }
+
+      if (window.ProtecMessaging?.logInternalMessage) {
+        window.ProtecMessaging.logInternalMessage(this, {
+          missionId: devis.id,
+          missionTitle: devis.eventName,
+          type: 'reponse_indispo',
+          senderName: `${resp.volunteerName} (${resp.rank || 'Secouriste'})`,
+          recipientName: 'Pôle Opérationnel',
+          text: `❌ « Indisponible (${resp.reason}) pour le ${dateStr}. »`
+        });
+      }
+    }
+
+    // Vérifier si toutes les réponses sont dépilées
+    const allResponses = Object.values(devis.previsionnelResponses || {});
+    const stillPending = allResponses.some(r => r.status === 'pending');
+    if (!stillPending) {
+      devis.sondageEnCours = false;
+    }
+
+    this.saveGame();
+    this.updateStatsUI();
+    if (this.currentModalKey === 'devis') {
+      this.openModule('devis', true);
+    } else if (this.currentModalKey === 'planning') {
+      this.openModule('planning', true);
     }
   }
 
@@ -3398,23 +3647,15 @@ class ProtecGame {
       audit: hiddenAudit
     };
 
-    // 4. DÉLAI DE DÉLIBÉRATION RÉALISTE : DE PLUSIEURS HEURES À PLUSIEURS JOURS
+    // 4. DÉLAI D'ARBITRAGE ALÉATOIRE ET INVISIBLE POUR LE JOUEUR (1H À 3 JOURS)
     const todayDate = new Date(this.clock.year, this.clock.month, this.clock.day);
     const eventDateObj = new Date(devis.eventDate?.year || this.clock.year, devis.eventDate?.month ?? this.clock.month, devis.eventDate?.day || this.clock.day);
-    const diffDays = Math.max(1, Math.round((eventDateObj - todayDate) / (1000 * 3600 * 24)));
-    const daysAhead = devis.daysAhead || diffDays;
-
-    let deliberationHours = 6;
-    if (daysAhead <= 3) {
-      deliberationHours = 2 + Math.floor(Math.random() * 5);
-    } else if (daysAhead <= 7) {
-      deliberationHours = 12 + Math.floor(Math.random() * 13);
-    } else if (daysAhead <= 20) {
-      deliberationHours = 24 + Math.floor(Math.random() * 25);
-    } else {
-      deliberationHours = 48 + Math.floor(Math.random() * 49);
-    }
-
+    const diffHours = Math.max(2, Math.round((eventDateObj.getTime() - Date.now()) / (1000 * 3600)));
+    
+    // Le délai d'arbitrage varie de 1h à 72h (3 jours), tout en arrivant toujours avant le poste (au moins 2h avant)
+    const maxDeliberationHours = Math.max(1, Math.min(72, diffHours - 2));
+    const minDeliberationHours = Math.max(1, Math.min(1, maxDeliberationHours));
+    const deliberationHours = Math.max(1, Math.min(maxDeliberationHours, Math.round(minDeliberationHours + Math.random() * (maxDeliberationHours - minDeliberationHours))));
     const deliberationSeconds = deliberationHours * 3600;
 
     devis.isSubmitting = false;
@@ -3426,20 +3667,17 @@ class ProtecGame {
     devis.deliberationHours = deliberationHours;
     devis.decisionAt = Date.now() + (deliberationSeconds * 1000);
 
-    const timeText = deliberationHours >= 24 
-      ? `${Math.round(deliberationHours / 24)} jour(s) (${deliberationHours}h)`
-      : `${deliberationHours} heure(s)`;
-
+    // Message sobre et réaliste : aucune indication artificielle du compte à rebours interne
     this.showToast(
       'Offre transmise à l’organisateur 📋',
-      `Devis de ${price} € transmis pour « ${devis.eventName} » (${devis.configuredScale}, ${devis.configuredVolunteers} secouristes). Arbitrage en cours (~${timeText}).`,
+      `Devis de ${price} € transmis pour « ${devis.eventName} » (${devis.configuredScale}). Dossier en cours d'étude par l'organisateur.`,
       'blue'
     );
 
     if (window.ProtecNotifications) {
       window.ProtecNotifications.recordNotification({
-        title: '📋 Devis en Délibération',
-        message: `Proposition de ${price} € transmise pour « ${devis.eventName} ». Arbitrage organisateur et contrôle de sécurité en cours (~${timeText}).`,
+        title: '📋 Devis Déposé',
+        message: `Proposition de ${price} € transmise pour « ${devis.eventName} ». Dossier en cours d’étude par la commission et l'organisateur.`,
         category: 'dps',
         level: 'info'
       });
@@ -4346,6 +4584,16 @@ class ProtecGame {
     }
 
     this.resources.money -= cost;
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        this,
+        -cost,
+        'Droits d’enregistrement Agrément AASC Préfecture',
+        'frais',
+        'CONV-AASC',
+        'Préfecture'
+      );
+    }
     this.aascConvention = {
       signed: true,
       signedAt: Date.now(),
@@ -4436,6 +4684,16 @@ class ProtecGame {
       totalInterventions: 0
     };
     this.resources.money += 350; // Dotation de mise en route SAMU
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        this,
+        350,
+        'Dotation initiale de mise en route Convention SAMU 15',
+        'subvention',
+        'CONV-SAMU-15',
+        'ARS / SAMU 15'
+      );
+    }
     this.resources.reputationScore = (this.resources.reputationScore || 0) + 20;
     this.showToast('Convention SAMU 15 Signée ! 🚑', 'Partenariat avec la régulation départementale 15 activé (+350 € dotation). Vous pouvez désormais armer des gardes.', 'green');
     this.saveGame(true);
@@ -4501,6 +4759,16 @@ class ProtecGame {
       totalInterventions: 0
     };
     this.resources.money += 350; // Dotation de mise en route SDIS
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        this,
+        350,
+        'Dotation initiale de partenariat SDIS (Pompiers)',
+        'subvention',
+        'CONV-SDIS',
+        'SDIS'
+      );
+    }
     this.resources.reputationScore = (this.resources.reputationScore || 0) + 20;
     this.showToast('Convention SDIS Signée ! 🚒', 'Partenariat avec le Service Départemental d’Incendie et de Secours activé (+350 € dotation). Vous pouvez armer les gardes pompiers.', 'green');
     this.saveGame(true);
@@ -4560,6 +4828,16 @@ class ProtecGame {
     };
 
     this.resources.money += 400; // Dotation initiale de conventionnement
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        this,
+        400,
+        'Dotation initiale Convention Nationale SNCF (Naufragés du Rail)',
+        'subvention',
+        'CONV-SNCF',
+        'SNCF Voyageurs'
+      );
+    }
     this.resources.reputationScore += 25;
     this.showToast('Convention SNCF Signée !', 'Partenariat d’assistance voyageurs et CHU en gare activé (+400 € de dotation de conventionnement).', 'green');
     
@@ -4694,6 +4972,17 @@ class ProtecGame {
   resolvePrealertFavorable(mission) {
     mission.status = 'canceled_favorable';
     this.resources.money += 120; // Indemnité de veille républicaine
+    if (window.ProtecFinances) {
+      const originName = mission.alertOrigin === 'sncf' ? 'SNCF' : 'Préfecture';
+      window.ProtecFinances.recordTransaction(
+        this,
+        120,
+        `Indemnité de veille républicaine & préalerte levée (${originName})`,
+        'garde',
+        'VEILLE-' + mission.id,
+        originName
+      );
+    }
     this.resources.reputationScore += 10;
 
     // Libérer les personnels qui s'étaient mobilisés
@@ -4761,6 +5050,16 @@ class ProtecGame {
         return;
       }
       this.resources.money -= costWeekly;
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(
+          this,
+          -costWeekly,
+          `Campagne d’appel au bénévolat (${campaignType === 'social' ? 'Pôle Social' : 'Secourisme Général'})`,
+          'communication',
+          'CAMP-REC-' + Date.now(),
+          'Régie Publicitaire'
+        );
+      }
       this.resources.campaigns[campaignType] = true;
       this.showToast('Campagne lancée', `Campagne de communication activée.`, 'green');
     } else {
@@ -4897,7 +5196,10 @@ class ProtecGame {
     const crewVols = mission.registeredVolunteers.map(vid => this.volunteers.find(v => v.id === vid)).filter(Boolean);
     // Contrôle des Permis de Conduire des Véhicules Engagés (Permis B léger, Permis C poids lourd, P.VPSP)
     if (mission.requiredVehicles && mission.requiredVehicles.length > 0) {
-      const assignedVehs = (this.vehicles || []).filter(veh => mission.requiredVehicles.includes(veh.type));
+      const assignedVehs = (this.vehicles || []).filter(veh => 
+        mission.requiredVehicles.includes(veh.type) || 
+        (mission.requiredVehicles.includes('PCM') && (veh.isCommandement || veh.hasCommandementKit))
+      );
       const requiresHeavyLicense = mission.requiredVehicles.some(vt => ['FLIT', 'VALOG'].includes(vt)) ||
                                     assignedVehs.some(v => v.licenseRequired === 'C');
 
@@ -4991,12 +5293,12 @@ class ProtecGame {
           if (caserneVeh && caserneVeh.type === reqType) dispoVeh = caserneVeh;
         }
 
-        // Priorité 3 : Fallback vers le premier véhicule disponible du type
+        // Priorité 3 : Fallback vers le premier véhicule disponible du type (ou VL Commandement si PCM requis)
         if (!dispoVeh) {
           dispoVeh = this.vehicles.find(veh => 
             !usedVehIds.has(veh.id) && 
             (veh.status === 'dispo' || veh.status === 'sdis_caserne') && 
-            veh.type === reqType
+            (veh.type === reqType || (reqType === 'PCM' && (veh.isCommandement || veh.hasCommandementKit)))
           );
         }
 
@@ -5115,6 +5417,16 @@ class ProtecGame {
       // Déduction du coût des consommables pour l'antenne (pansements, compresses, O2)
       const consumableCost = mission.consumableCost || (mission.scale?.includes('ME') ? 60 : 25);
       this.resources.money = Math.max(0, this.resources.money - consumableCost);
+      if (consumableCost > 0 && window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(
+          this,
+          -consumableCost,
+          `Consommables & Réarmement Sanitaire : ${mission.title}`,
+          'logistique',
+          'CONS-' + mission.id,
+          'Pharmacie Centrale'
+        );
+      }
 
       if (isUnderstaffed || isUnderqualified) {
         // Catastrophe opérationnelle !
@@ -5178,11 +5490,6 @@ class ProtecGame {
     } else {
       this.resources.reputationScore += mission.rewardReputation || 15;
       this.showToast('Dispositif terminé', `« ${mission.title} » clôturé (+${mission.rewardMoney} €) !`, 'green');
-    }
-
-    // Enregistrement de la recette dans le grand livre de trésorerie
-    if (mission.rewardMoney && window.ProtecFinances) {
-      window.ProtecFinances.recordTransaction(this, mission.rewardMoney, `Indemnité Mission : ${mission.title}`, 'prestation');
     }
 
     // Diffusion de la clôture de mission vers la main courante réseau
@@ -5374,7 +5681,19 @@ class ProtecGame {
     }
     this.resources.money += finalReward;
 
-    // Déclenchement de la récurrence automatique des contrats annuels
+    // Enregistrement officiel de la recette dans le grand livre de trésorerie
+    if (finalReward > 0 && window.ProtecFinances) {
+      const cat = (mission.type === 'samu' || mission.type === 'pompiers') ? 'garde' : 'dps';
+      const payer = mission.commune || mission.city || (mission.type === 'samu' ? 'SAMU 15' : (mission.type === 'pompiers' ? 'SDIS 54' : 'Organisateur'));
+      window.ProtecFinances.recordTransaction(
+        this,
+        finalReward,
+        `Indemnité Mission Clôturée : ${mission.title}`,
+        cat,
+        'MIS-' + (mission.id || Date.now()),
+        payer
+      );
+    }
     if (window.ProtecContratsAnnuels && typeof window.ProtecContratsAnnuels.onMissionCompleted === 'function') {
       window.ProtecContratsAnnuels.onMissionCompleted(this, mission);
     }
@@ -6054,23 +6373,36 @@ class ProtecGame {
   }
 
   openMissionDetails(missionId) {
-    const mission = this.missions.find(m => m.id === missionId);
-    if (!mission) return;
+    try {
+      const mission = this.missions.find(m => m.id === missionId);
+      if (!mission) return;
 
-    this.selectedMissionId = missionId;
-    const drawer = document.getElementById('context-drawer');
-    const title = document.getElementById('drawer-title');
-    const catBadge = document.getElementById('drawer-category-badge');
-    const headerIcon = document.getElementById('drawer-header-icon');
-    const body = document.getElementById('drawer-body');
-    const footer = document.getElementById('drawer-footer');
+      if (!Array.isArray(mission.registeredVolunteers)) {
+        mission.registeredVolunteers = [];
+      }
+      if (!Array.isArray(mission.requiredVehicles)) {
+        mission.requiredVehicles = [];
+      }
+      if (!Array.isArray(mission.assignedVehicleIds)) {
+        mission.assignedVehicleIds = [];
+      }
 
-    catBadge.textContent = mission.categoryLabel;
-    title.textContent = mission.title;
-    headerIcon.setAttribute('data-lucide', 'calendar');
+      this.selectedMissionId = missionId;
+      const drawer = document.getElementById('context-drawer');
+      const title = document.getElementById('drawer-title');
+      const catBadge = document.getElementById('drawer-category-badge');
+      const headerIcon = document.getElementById('drawer-header-icon');
+      const body = document.getElementById('drawer-body');
+      const footer = document.getElementById('drawer-footer');
 
-    const registeredVols = this.volunteers.filter(v => mission.registeredVolunteers?.includes(v.id));
-    const isComplete = registeredVols.length >= mission.requiredVolunteers;
+      if (!drawer || !body || !footer) return;
+
+      catBadge.textContent = mission.categoryLabel || 'MISSION';
+      title.textContent = mission.title || 'Dispositif de Secours';
+      headerIcon.setAttribute('data-lucide', 'calendar');
+
+      const registeredVols = this.volunteers.filter(v => (mission.registeredVolunteers || []).includes(v.id));
+      const isComplete = registeredVols.length >= (mission.requiredVolunteers || 1);
 
     let progressPct = 0;
     let remainingTimeText = '';
@@ -6303,7 +6635,7 @@ class ProtecGame {
                     const alreadyAssignedIds = (mission.assignedVehicleIds || []).filter((id, idx) => idx !== slotIdx && id);
                     const extraAssignedIds = mission.extraTransportVehicles || [];
                     const dispoVehsForSlot = this.vehicles.filter(v => 
-                      v.type === reqType && 
+                      (v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit))) && 
                       (v.status === 'dispo' || v.status === 'sdis_caserne') &&
                       !alreadyAssignedIds.includes(v.id) &&
                       !extraAssignedIds.includes(v.id)
@@ -6487,7 +6819,12 @@ class ProtecGame {
               <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-200/70">
                 <button onclick="window.ProtecMessaging ? window.ProtecMessaging.openForMission('${mission.id}', window.game) : null" class="text-pc-blue hover:underline text-[11px] font-extrabold flex items-center gap-1 cursor-pointer">
                   <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
-                  <span>Fil des convocations (${(this.messagesHistory || []).filter(m => m.missionId === mission.id).length})</span>
+                  <span>Fil des convocations (${(() => {
+                    const allMsgs = Array.isArray(this.messagesHistory) 
+                      ? this.messagesHistory 
+                      : (Array.isArray(this.messagesHistory?.interne) ? this.messagesHistory.interne : []);
+                    return allMsgs.filter(m => m && m.missionId === mission.id).length;
+                  })()})</span>
                 </button>
                 ${(this.alertSubscription?.active) ? `
                   <div class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shadow-2xs" title="L'abonnement E-Alerte est actif : les relances et appels individuels sont automatisés">
@@ -6574,7 +6911,7 @@ class ProtecGame {
                 <span class="text-[10px] font-bold text-slate-400 group-open:rotate-180 transition">▼</span>
               </summary>
               <div class="mt-2 space-y-1.5 max-h-44 overflow-y-auto pt-1 border-t border-slate-200/70">
-                ${this.volunteers.filter(v => !mission.registeredVolunteers.includes(v.id)).map(v => {
+                ${this.volunteers.filter(v => !(mission.registeredVolunteers || []).includes(v.id)).map(v => {
                   const otherMission = this.missions.find(m => m.id !== mission.id && (m.registeredVolunteers || []).includes(v.id) && ['planifie', 'prealerte', 'declenche'].includes(m.status));
                   const isUrgentMission = ['samu', 'pompiers', 'crise', 'meteo'].includes(mission.type) || mission.status === 'prealerte' || mission.status === 'declenche' || mission.isCrisis || mission.urgency === 'critique';
                   const maxRallyLimit = mission.maxRallyMinutes || 20;
@@ -6719,6 +7056,10 @@ class ProtecGame {
     drawer.classList.add('flex', 'drawer-slide-in');
     this.updateToastContainerPosition();
     if (window.lucide) window.lucide.createIcons();
+    } catch (err) {
+      console.error('Erreur openMissionDetails:', err);
+      this.showToast('Affichage Mission', 'Erreur lors de l’ouverture du détail de la mission.', 'orange');
+    }
   }
 
   // Ajustement des modalités d'effectif requis pour une mission planifiée
@@ -6883,12 +7224,15 @@ class ProtecGame {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(renfortData)
     }).then(res => res.json()).then(data => {
-      this.renforts.unshift(data.renfort);
+      const saved = Object.assign({}, renfortData, (data && data.renfort) || {});
+      this.renforts.unshift(saved);
+      this.sanitizeRenforts();
       this.showToast('Appel à Renfort Diffusé', `Tous les directeurs d’antennes alliés ont reçu votre appel de détresse !`, 'green');
       this.updateStatsUI();
     }).catch(() => {
       renfortData.id = `renf-${Date.now()}`;
       this.renforts.unshift(renfortData);
+      this.sanitizeRenforts();
       this.showToast('Appel à Renfort Diffusé', `Alerte transmise sur la fréquence fédérale !`, 'green');
     });
   }
@@ -6954,18 +7298,44 @@ class ProtecGame {
             </div>
           </div>
           <div class="space-y-1.5">
-            ${stationVehicles.map(v => `
-              <div class="p-2.5 rounded-xl bg-white border border-slate-300 shadow-xs flex items-center justify-between text-xs hover:border-slate-400 transition">
+            ${stationVehicles.map(v => {
+              const isCmdEligible = window.ProtecCommandement && window.ProtecCommandement.isEligible(v);
+              const isVLC = Boolean(v.isCommandement || v.hasCommandementKit);
+              const cmdLeader = isVLC && window.ProtecCommandement ? window.ProtecCommandement.getLeader(this, v) : null;
+
+              return `
+              <div class="p-2.5 rounded-xl bg-white border ${isVLC ? 'border-indigo-300 ring-1 ring-indigo-200 shadow-sm' : 'border-slate-300'} shadow-xs flex items-center justify-between text-xs hover:border-slate-400 transition">
                 <div class="flex items-center gap-2.5">
-                  <div class="w-10 h-7 bg-slate-100 rounded-lg p-0.5 flex items-center justify-center flex-shrink-0 border border-slate-300 shadow-inner">
+                  <div class="w-10 h-7 ${isVLC ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-100 border-slate-300'} rounded-lg p-0.5 flex items-center justify-center flex-shrink-0 border shadow-inner">
                     <img src="${v.image || window.game.getVehicleImage(v.type)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='🚑'" />
                   </div>
                   <div>
-                    <span class="font-black text-slate-900 leading-tight block">${v.name}</span>
-                    <span class="text-[9.5px] text-slate-500 font-semibold">${v.label || v.type}</span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-black text-slate-900 leading-tight block">${v.name}</span>
+                      ${isVLC ? `
+                        <span class="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase bg-indigo-600 text-white tracking-wider">
+                          📡 VLC
+                        </span>
+                      ` : ''}
+                    </div>
+                    <div class="text-[9.5px] text-slate-500 font-semibold flex items-center gap-1.5">
+                      <span>${v.label || v.type}</span>
+                      ${cmdLeader ? `
+                        <span class="text-indigo-700 font-bold">• 👤 ${cmdLeader.name} (${cmdLeader.rank})</span>
+                      ` : ''}
+                    </div>
                   </div>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1.5">
+                  ${isCmdEligible ? `
+                    <button 
+                      onclick="window.ProtecCommandement.openCommandModal(window.game, '${v.id}')" 
+                      class="px-2 py-0.5 rounded text-[10px] font-bold ${isVLC ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-300' : 'bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-900 border border-slate-200'} transition cursor-pointer"
+                      title="${isVLC ? 'Gérer le Poste de Commandement Mobile et le chef en gestion' : 'Équiper le Poste de Commandement Mobile'}"
+                    >
+                      ${isVLC ? '📡 VLC' : '📡 Équiper'}
+                    </button>
+                  ` : ''}
                   ${v.status === 'dispo' ? `
                     <button onclick="window.ProtecMarcheOccasion.openSellModal('vehicle', '${v.id}')" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-pc-orange border border-slate-200 transition" title="Mettre ce véhicule en vente sur la bourse d'occasion">
                       Vendre 🏷️
@@ -6976,7 +7346,8 @@ class ProtecGame {
                   </span>
                 </div>
               </div>
-            `).join('')}
+            `;
+            }).join('')}
           </div>
         </div>
 
@@ -7056,17 +7427,39 @@ class ProtecGame {
       body: JSON.stringify(payload)
     }).then(res => res.json()).then(() => {
       renfort.status = 'fulfilled';
-      this.resources.money += renfort.indemnite || 200;
+      const renfortAmount = renfort.indemnite || 200;
+      this.resources.money += renfortAmount;
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(
+          this,
+          renfortAmount,
+          `Indemnité Renfort Inter-Antennes : ${dispoVeh.name} (${renfort.requesterName || 'Antenne Alliée'})`,
+          'renfort',
+          'RENF-' + renfort.id,
+          renfort.requesterName || 'Union Départementale'
+        );
+      }
       this.resources.alliancePoints += 35;
       if (window.ProtecEcussons) {
         window.ProtecEcussons.attribuerEcusson('renf_zonal');
       }
-      this.showToast('Renfort Dépêché !', `Votre ${dispoVeh.name} part épauler ${renfort.requesterName} ! (+${renfort.indemnite} € d’indemnité et +35 pts d’alliance)`, 'green');
+      this.showToast('Renfort Dépêché !', `Votre ${dispoVeh.name} part épauler ${renfort.requesterName} ! (+${renfortAmount} € d’indemnité et +35 pts d’alliance)`, 'green');
       this.updateStatsUI();
       this.openModule('alliance');
     }).catch(() => {
       renfort.status = 'fulfilled';
-      this.resources.money += renfort.indemnite || 200;
+      const renfortAmount = renfort.indemnite || 200;
+      this.resources.money += renfortAmount;
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(
+          this,
+          renfortAmount,
+          `Indemnité Renfort Inter-Antennes : ${dispoVeh.name} (${renfort.requesterName || 'Antenne Alliée'})`,
+          'renfort',
+          'RENF-' + renfort.id,
+          renfort.requesterName || 'Union Départementale'
+        );
+      }
       this.resources.alliancePoints += 35;
       if (window.ProtecEcussons) {
         window.ProtecEcussons.attribuerEcusson('renf_zonal');
@@ -7075,6 +7468,19 @@ class ProtecGame {
       this.updateStatsUI();
       this.openModule('alliance');
     });
+  }
+
+  cancelRenfort(renfortId) {
+    if (!renfortId) return;
+    this.renforts = (this.renforts || []).filter(r => r && r.id !== renfortId);
+    this.saveGame();
+    fetch('/api/alliances/renfort/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ renfortId })
+    }).catch(() => {});
+    this.showToast('Appel Annulé', 'Votre demande de renfort a été retirée du réseau.', 'blue');
+    this.openModule('alliance');
   }
 
   // --- RENFORTS EXTRA-DÉPARTEMENTAUX (MAQUETTE OFFICIELLE FNPC) ---
@@ -7835,6 +8241,16 @@ class ProtecGame {
     const rewardMoney = Math.round((renfort.indemnite || 520) * (actualVolIds.length >= totalRequired ? 1 : Math.max(0.4, ratio)));
     const rewardPoints = Math.round((renfort.alliancePoints || 60) * (actualVolIds.length >= totalRequired ? 1 : Math.max(0.4, ratio)));
     this.resources.money += rewardMoney;
+    if (rewardMoney > 0 && window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        this,
+        rewardMoney,
+        `Indemnité Colonne de Renfort Extra-Départementale : ${renfort.title || renfort.typeTitle || 'Mission Zonale'}`,
+        'renfort',
+        'RENF-FNPC-' + renfort.id,
+        'Zone de Défense / FNPC'
+      );
+    }
     this.resources.alliancePoints = (this.resources.alliancePoints || 0) + rewardPoints;
 
     // Fermeture modale
@@ -8006,6 +8422,16 @@ class ProtecGame {
 
     const candidate = eligibleVolunteers[0];
     this.resources.money -= form.costPerCandidate;
+    if (form.costPerCandidate > 0 && window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        this,
+        -form.costPerCandidate,
+        `Stage Spécialité Alliance : ${form.title} (${candidate.name})`,
+        'formation_interne',
+        'STAGE-' + form.id,
+        form.organizerName || 'Antenne Partenaire'
+      );
+    }
     candidate.status = 'formation';
 
     fetch('/api/alliances/formation/register', {
@@ -8551,9 +8977,9 @@ class ProtecGame {
       title.textContent = 'Fédération, Alliances & Veille Opérationnelle';
       subtitle.textContent = 'Entraide inter-antennes, détachements de renforts, astreintes et réseau fédéral';
       icon.setAttribute('data-lucide', 'handshake');
-
-      // Purge des renforts offline résiduels
-      this.renforts = (this.renforts || []).filter(r => !r.id || !r.id.startsWith('renf-offline-'));
+ 
+       // Assainissement et purge des renforts corrompus ou invalides
+       this.sanitizeRenforts();
 
       const userAllianceId = this.player?.allianceId;
       const alliance = (this.alliances || []).find(a => a.id === userAllianceId);
@@ -8703,10 +9129,16 @@ class ProtecGame {
                   </div>
 
                   ${this.renforts.filter(r => !r.isExtraDept).length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center">Aucun autre appel de renfort local actuellement.</p>' : ''}
-                  ${this.renforts.filter(r => !r.isExtraDept).map(r => `
-                    <div class="p-4 rounded-2xl glass-card flex items-center justify-between">
+                  ${this.renforts.filter(r => !r.isExtraDept).map(r => {
+                    const reqName = (r.requesterName && r.requesterName !== 'undefined') ? r.requesterName : (r.requestingPlayerName || r.stationName || 'Antenne Alliée');
+                    const titleStr = (r.title && r.title !== 'undefined') ? r.title : 'Appel à Renfort Opérationnel';
+                    const descStr = (r.desc && r.desc !== 'undefined') ? r.desc : 'Demande de moyens en renfort pour dispositif.';
+                    const unitStr = (r.unitRequested && r.unitRequested !== 'undefined') ? r.unitRequested : '1 VPSP ou Secouristes';
+                    const isMyRequest = (r.requesterPlayerId === this.player.id || r.requestingPlayerId === this.player.id || (!r.requesterPlayerId && !r.requestingPlayerId));
+                    return `
+                    <div class="p-4 rounded-2xl glass-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div class="space-y-1">
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
                           <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${r.status === 'fulfilled' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
                             ${r.status === 'fulfilled' ? 'RENFORT ASSURÉ' : 'URGENT'}
                           </span>
@@ -8719,25 +9151,32 @@ class ProtecGame {
                               ${r.zoneLabel ? r.zoneLabel.toUpperCase() : r.zone.toUpperCase()}
                             </span>
                           ` : ''}
-                          <span class="text-xs font-bold text-slate-700">Demandé par <strong>${r.requesterName}</strong></span>
+                          <span class="text-xs font-bold text-slate-700">Demandé par <strong>${reqName}</strong></span>
                         </div>
-                        <h5 class="text-sm font-extrabold text-slate-900">${r.title}</h5>
-                        <p class="text-xs text-slate-500">${r.desc} • Moyens attendus : <strong class="text-slate-800">${r.unitRequested}</strong></p>
+                        <h5 class="text-sm font-extrabold text-slate-900">${titleStr}</h5>
+                        <p class="text-xs text-slate-500">${descStr} • Moyens attendus : <strong class="text-slate-800">${unitStr}</strong></p>
                       </div>
 
-                      <div class="text-right space-y-2">
+                      <div class="text-right space-y-2 flex-shrink-0">
                         <div class="text-xs font-bold text-emerald-700 mono-num">+${r.indemnite || 180} €</div>
-                        ${r.status === 'open' && r.requesterPlayerId !== this.player.id ? `
-                          <button onclick="window.game.fulfillRenfort('${r.id}')" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
-                            <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                            Dépêcher Renfort
-                          </button>
-                        ` : `
-                          <span class="text-xs text-slate-400 font-bold">${r.status === 'fulfilled' ? 'Renfort en route' : 'Votre appel'}</span>
-                        `}
+                        <div class="flex items-center justify-end gap-2">
+                          ${r.status === 'open' && !isMyRequest ? `
+                            <button onclick="window.game.fulfillRenfort('${r.id}')" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                              Dépêcher Renfort
+                            </button>
+                          ` : `
+                            <span class="text-xs text-slate-400 font-bold">${r.status === 'fulfilled' ? 'Renfort en route' : 'Votre appel'}</span>
+                            ${isMyRequest ? `
+                              <button onclick="window.game.cancelRenfort('${r.id}')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition cursor-pointer" title="Retirer cette demande">
+                                ✕ Retirer
+                              </button>
+                            ` : ''}
+                          `}
+                        </div>
                       </div>
                     </div>
-                  `).join('')}
+                  `; }).join('')}
                 </div>
               </div>
             ` : ''}
@@ -9372,25 +9811,6 @@ class ProtecGame {
 
               <div class="space-y-3 pt-1">
                 ${inReviewDevis.map(d => {
-                  const sLeft = (d.deliberationSecondsLeft !== undefined) ? d.deliberationSecondsLeft : 60;
-                  let timeDisplay = '';
-                  if (sLeft >= 86400) {
-                    const days = Math.floor(sLeft / 86400);
-                    const hrs = Math.floor((sLeft % 86400) / 3600);
-                    timeDisplay = `${days}j ${hrs}h`;
-                  } else if (sLeft >= 3600) {
-                    const hrs = Math.floor(sLeft / 3600);
-                    const mins = Math.floor((sLeft % 3600) / 60);
-                    timeDisplay = `${hrs}h ${mins.toString().padStart(2, '0')}m`;
-                  } else {
-                    const mins = Math.floor(sLeft / 60);
-                    const secs = sLeft % 60;
-                    timeDisplay = mins > 0 ? `${mins}m ${secs.toString().padStart(2, '0')}s` : `${secs}s`;
-                  }
-
-                  const total = d.deliberationTotalSeconds || 60;
-                  const progressPct = Math.min(100, Math.max(8, Math.round(((total - sLeft) / total) * 100)));
-
                   return `
                     <div class="p-4 rounded-xl bg-white border border-indigo-100 shadow-sm space-y-3" id="devis-card-review-${d.id}">
                       <div class="flex items-start justify-between gap-3">
@@ -9408,23 +9828,20 @@ class ProtecGame {
                           </p>
                         </div>
                         <div class="text-right flex-shrink-0">
-                          <span class="text-[10px] font-extrabold uppercase text-slate-400 block">Temps d’Arbitrage</span>
-                          <span id="devis-deliberation-timer-${d.id}" class="inline-block px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-black mono-num text-indigo-700">
-                            ${timeDisplay}
+                          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs font-black text-indigo-800">
+                            <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                            En cours d'étude
                           </span>
                         </div>
                       </div>
 
-                      <!-- Barre de progression de la délibération -->
-                      <div class="space-y-1">
-                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
-                          <div id="devis-deliberation-bar-${d.id}" class="h-full bg-gradient-to-r from-indigo-500 via-blue-500 to-emerald-500 rounded-full transition-all duration-1000" style="width: ${progressPct}%"></div>
-                        </div>
-                        <div class="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5">
-                          <span class="text-emerald-700 font-bold">1. Dossier déposé ✓</span>
-                          <span class="text-indigo-600 font-black animate-pulse">2. Examen RNMSC & Sécurité ⏳</span>
-                          <span>3. Arbitrage concurrence & signature ⚖️</span>
-                        </div>
+                      <!-- Mention sobre d'instruction sans compte à rebours visible -->
+                      <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-1.5">
+                          <i data-lucide="clock" class="w-3.5 h-3.5 text-indigo-600"></i>
+                          <span>Dossier transmis. L'organisateur examine les offres reçues des associations concurrentes.</span>
+                        </span>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide shrink-0">Instruction</span>
                       </div>
 
                       <!-- Bouton de relance téléphonique organisateur -->
@@ -9616,11 +10033,6 @@ class ProtecGame {
                     <div>
                       <div class="flex items-center gap-2 flex-wrap">
                         <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${d.eventName}</span>
-                        ${d.isRealTerritoryEvent ? `
-                          <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                            📍 Ancrage Réel Territoire (${d.commune || 'Secteur'})
-                          </span>
-                        ` : ''}
                         ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3} (Annulation autre AASC)</span>` : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">📅 Planification J-${d.daysAhead || 30}</span>`}
                       </div>
                       <h4 class="text-base font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
@@ -9727,44 +10139,109 @@ class ProtecGame {
                       </div>
                     </div>
 
-                    <!-- Moyens humains : Secouristes, Chefs d'Équipe (CE), Chefs de Poste (CP) -->
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                      <!-- Secouristes / Équipiers -->
-                      <div class="p-2.5 bg-white rounded-xl border border-slate-200">
-                        <label class="block text-[11px] font-bold text-slate-600 mb-1">Secouristes Totaux :</label>
-                        <div class="flex items-center gap-1.5">
-                          <button onclick="window.game.adjustDevisVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                          <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                            <span class="text-sm font-black text-pc-blue">${d.configuredVolunteers || 0}</span>
-                          </div>
-                          <button onclick="window.game.adjustDevisVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                    <!-- Moyens humains : Secouristes (Semaine / Week-end si multi-jours), CE, CP -->
+                    ${d.isMultiDays ? `
+                      <div class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
+                        <div class="flex items-center justify-between text-xs font-black text-indigo-950">
+                          <span>📅 Poste Étalé sur un Mois (${d.durationDays || 28} jours de présence)</span>
+                          <span class="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-200">Dimensionnement Différencié</span>
                         </div>
-                      </div>
+                        <p class="text-[11px] text-indigo-800 leading-tight">
+                          L'affluence varie fortement entre semaine et week-end. Ajustez les effectifs par vacation pour optimiser votre rentabilité et mobiliser vos bénévoles au bon moment.
+                        </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          <!-- Semaine : Lundi au Vendredi -->
+                          <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
+                            <div class="flex items-center justify-between mb-1">
+                              <label class="text-[11px] font-bold text-slate-700">💼 Semaine (Lun - Ven) :</label>
+                              <span class="text-[10px] font-extrabold text-slate-500">${d.weekdayDaysCount || 20} j • ${d.weekdayHours || 6}h/j</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
+                              <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
+                                <span class="text-sm font-black text-pc-blue">${(d.configuredVolunteersWeekday !== undefined && d.configuredVolunteersWeekday !== null) ? d.configuredVolunteersWeekday : Math.max(2, Math.round((d.requiredVolunteers || 4) * 0.5))}</span>
+                                <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
+                              </div>
+                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                            </div>
+                          </div>
 
-                      <!-- Chefs d'Équipe (CE) -->
-                      <div class="p-2.5 bg-white rounded-xl border border-slate-200">
-                        <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
-                        <div class="flex items-center gap-1.5">
-                          <button onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                          <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                            <span class="text-sm font-black text-amber-600">${d.configuredCE || 0}</span>
+                          <!-- Week-end : Samedi et Dimanche -->
+                          <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
+                            <div class="flex items-center justify-between mb-1">
+                              <label class="text-[11px] font-bold text-slate-700">🎉 Week-end (Sam - Dim) :</label>
+                              <span class="text-[10px] font-extrabold text-amber-600 font-bold">${d.weekendDaysCount || 8} j • ${d.weekendHours || 10}h/j</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
+                              <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
+                                <span class="text-sm font-black text-amber-600">${(d.configuredVolunteersWeekend !== undefined && d.configuredVolunteersWeekend !== null) ? d.configuredVolunteersWeekend : (d.requiredVolunteers || 4)}</span>
+                                <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
+                              </div>
+                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                            </div>
                           </div>
-                          <button onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
                         </div>
-                      </div>
 
-                      <!-- Chefs de Poste (CP) -->
-                      <div class="p-2.5 bg-white rounded-xl border border-slate-200">
-                        <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
-                        <div class="flex items-center gap-1.5">
-                          <button onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                          <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                            <span class="text-sm font-black text-indigo-600">${d.configuredCP || 0}</span>
+                        <!-- Encadrement CE & CP pour multi-jours -->
+                        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-indigo-100">
+                          <div class="p-2 bg-white rounded-xl border border-slate-200">
+                            <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
+                            <div class="flex items-center gap-1">
+                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">-</button>
+                              <span class="flex-1 text-center text-xs font-black text-amber-600">${d.configuredCE || 0}</span>
+                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">+</button>
+                            </div>
                           </div>
-                          <button onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                          <div class="p-2 bg-white rounded-xl border border-slate-200">
+                            <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
+                            <div class="flex items-center gap-1">
+                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">-</button>
+                              <span class="flex-1 text-center text-xs font-black text-indigo-600">${d.configuredCP || 0}</span>
+                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">+</button>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ` : `
+                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                        <!-- Secouristes / Équipiers -->
+                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
+                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Secouristes Totaux :</label>
+                          <div class="flex items-center gap-1.5">
+                            <button onclick="window.game.adjustDevisVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
+                            <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
+                              <span class="text-sm font-black text-pc-blue">${d.configuredVolunteers || 0}</span>
+                            </div>
+                            <button onclick="window.game.adjustDevisVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                          </div>
+                        </div>
+
+                        <!-- Chefs d'Équipe (CE) -->
+                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
+                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
+                          <div class="flex items-center gap-1.5">
+                            <button onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
+                            <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
+                              <span class="text-sm font-black text-amber-600">${d.configuredCE || 0}</span>
+                            </div>
+                            <button onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                          </div>
+                        </div>
+
+                        <!-- Chefs de Poste (CP) -->
+                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
+                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
+                          <div class="flex items-center gap-1.5">
+                            <button onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
+                            <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
+                              <span class="text-sm font-black text-indigo-600">${d.configuredCP || 0}</span>
+                            </div>
+                            <button onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                          </div>
+                        </div>
+                      </div>
+                    `}
 
                     <!-- Moyens matériels & vecteurs : Véhicules et Lots -->
                     <div class="space-y-3 pt-1">
@@ -9849,40 +10326,57 @@ class ProtecGame {
                   </div>
 
                   <!-- 4. SAISIE DU DEVIS / TARIF FACTURÉ & ACTIONS -->
-                  <div class="p-4 rounded-xl glass-card space-y-3">
-                    <div class="flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-3">
-                      <div class="flex-1">
-                        <label class="block text-xs font-extrabold text-slate-800 mb-1">Votre Devis / Tarif Facturé à l'Organisateur (€) :</label>
-                        <div class="relative rounded-xl shadow-sm">
-                          <input 
-                            type="number" 
-                            id="devis-price-input-${d.id}" 
-                            value="${d.proposedPrice !== undefined && d.proposedPrice !== null ? d.proposedPrice : ''}" 
-                            placeholder="Tarif proposé en € (ex: 350)"
-                            min="50" 
-                            max="10000"
-                            step="10"
-                            oninput="window.game.setDevisPriceManual('${d.id}', this.value)"
-                            class="w-full px-3.5 py-2.5 rounded-xl glass-input font-mono font-extrabold text-base text-slate-900 focus:ring-2 focus:ring-pc-blue"
-                          />
-                          <span class="absolute right-3.5 top-2.5 text-slate-400 font-bold">€</span>
+                  ${(() => {
+                    const dynBareme = this.calculateDynamicBareme(d);
+                    if (d.proposedPrice === undefined || d.proposedPrice === null) {
+                      d.proposedPrice = dynBareme.totalBareme;
+                    }
+                    return `
+                      <div class="p-4 rounded-xl glass-card space-y-3">
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-3">
+                          <div class="flex-1">
+                            <div class="flex items-center justify-between mb-1">
+                              <label class="block text-xs font-extrabold text-slate-800">Votre Devis / Tarif Facturé à l'Organisateur (€) :</label>
+                              <span class="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                Calcul Automatique Réalisé
+                              </span>
+                            </div>
+                            <div class="relative rounded-xl shadow-sm">
+                              <input 
+                                type="number" 
+                                id="devis-price-input-${d.id}" 
+                                value="${d.proposedPrice !== undefined && d.proposedPrice !== null ? d.proposedPrice : dynBareme.totalBareme}" 
+                                placeholder="Tarif proposé en €"
+                                min="50" 
+                                max="100000"
+                                step="10"
+                                oninput="window.game.setDevisPriceManual('${d.id}', this.value)"
+                                class="w-full px-3.5 py-2.5 rounded-xl glass-input font-mono font-extrabold text-base text-slate-900 focus:ring-2 focus:ring-pc-blue"
+                              />
+                              <span class="absolute right-3.5 top-2.5 text-slate-400 font-bold">€</span>
+                            </div>
+                            <div class="flex items-center justify-between text-[11px] text-slate-500 mt-1.5 flex-wrap gap-1">
+                              <span>Total calculé : <strong class="text-slate-800">${dynBareme.totalBareme.toLocaleString('fr-FR')} €</strong></span>
+                              <span class="text-[10px] text-slate-400 font-medium">Personnel : ${dynBareme.personnelCost.toLocaleString('fr-FR')} € • Véhicules : ${dynBareme.vehicleCost.toLocaleString('fr-FR')} € • Matériel/Frais : ${(dynBareme.matCost + dynBareme.adminCost).toLocaleString('fr-FR')} €</span>
+                            </div>
+                          </div>
+
+                          <div class="flex items-center gap-2 pt-1 flex-wrap">
+                            <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="px-4 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95 transition flex items-center gap-1.5 cursor-pointer" title="Bloquer la date comme option et sonder les bénévoles avant de signer">
+                              <span>⏳ Mettre en Prévi</span>
+                            </button>
+                            <button onclick="window.game.submitCustomDevis('${d.id}')" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center gap-1.5 cursor-pointer">
+                              <i data-lucide="send" class="w-4 h-4"></i>
+                              <span>Soumettre l'Offre</span>
+                            </button>
+                            <button onclick="window.game.refuseDevis('${d.id}')" class="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 transition cursor-pointer" title="Refuser cette demande de devis">
+                              <span>✕ Refuser</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
-
-                      <div class="flex items-center gap-2 pt-1 flex-wrap">
-                        <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="px-4 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95 transition flex items-center gap-1.5 cursor-pointer" title="Bloquer la date comme option et sonder les bénévoles avant de signer">
-                          <span>⏳ Mettre en Prévi</span>
-                        </button>
-                        <button onclick="window.game.submitCustomDevis('${d.id}')" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center gap-1.5 cursor-pointer">
-                          <i data-lucide="send" class="w-4 h-4"></i>
-                          <span>Soumettre l'Offre</span>
-                        </button>
-                        <button onclick="window.game.refuseDevis('${d.id}')" class="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 transition cursor-pointer" title="Refuser cette demande de devis">
-                          <span>✕ Refuser</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                    `;
+                  })()}
                 </div>
               `;
             }).join('')}
@@ -11529,6 +12023,15 @@ class ProtecGame {
     if (nextRank === 'PSE2') v.role = 'Équipier Secouriste';
     if (nextRank === 'PSE1') v.role = 'Secouriste';
 
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        this,
+        -cost,
+        `Stage & Promotion Interne : ${nextRank} (${v.name})`,
+        'formation_interne'
+      );
+    }
+
     this.updateStatsUI();
     this.saveGame();
     this.showToast('Promotion validée', `${v.name} est désormais certifié ${nextRank} !`, 'green');
@@ -11825,7 +12328,7 @@ class ProtecGame {
 
   buyVehicle(stationId, type) {
     const catalogItem = window.ProtecAdvanced?.vehicleCatalog?.find(v => v.type === type);
-    const cost = catalogItem ? catalogItem.cost : (type === 'VPSP' ? 28500 : 11500);
+    const cost = catalogItem ? catalogItem.cost : (type === 'VPSP' ? 28500 : (type === 'FLIT' ? 95000 : 11500));
     if (this.resources.money < cost) {
       this.showToast('Trésorerie insuffisante', `L’achat requiert ${cost.toLocaleString('fr-FR')} €.`, 'orange');
       return;
@@ -11868,6 +12371,11 @@ class ProtecGame {
       defaultYear = 2023;
       defaultMileage = 31000;
       insuranceCost = 80;
+    } else if (type === 'FLIT') {
+      modelName = 'FLIT Poids Lourd 14t (Type FPTL/FPTSR)';
+      defaultYear = 2024;
+      defaultMileage = 9000;
+      insuranceCost = 130;
     }
 
     const newVeh = {
@@ -11898,6 +12406,17 @@ class ProtecGame {
 
     this.vehicles.push(newVeh);
     station.vehicles.push(vehId);
+
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        this,
+        -cost,
+        `Acquisition Véhicule : ${callsign} (${modelName})`,
+        'vehicule',
+        `ACHAT-${vehId}`,
+        'Concessionnaire Réseau'
+      );
+    }
 
     this.closeModal();
     this.updateStatsUI();
@@ -12296,10 +12815,10 @@ class ProtecGame {
         }
       });
 
-      // 1d. GESTION DES DEVIS : Délibération réaliste et Expiration
+      // 1d. GESTION DES DEVIS : Délibération invisible organisateur et Sondage Bénévoles persistant
       if (this.devis && this.devis.length > 0) {
         this.devis.forEach(d => {
-          // Devis transmis à l'organisateur : délibération en cours avec compte à rebours réaliste
+          // Devis transmis à l'organisateur : délibération en cours (invisible pour le joueur)
           if (d.status === 'sent') {
             if (!d.decisionAt) {
               d.deliberationTotalSeconds = 4 * 3600;
@@ -12308,39 +12827,22 @@ class ProtecGame {
             const remainingMs = d.decisionAt - currentTime;
             d.deliberationSecondsLeft = Math.max(0, Math.ceil(remainingMs / 1000));
 
-            // Mise à jour ciblée dans le DOM sans tout redessiner si l'onglet Devis est ouvert
-            const timerEl = document.getElementById(`devis-deliberation-timer-${d.id}`);
-            if (timerEl) {
-              const left = d.deliberationSecondsLeft;
-              let timeStr = '';
-              if (left >= 86400) {
-                const dj = Math.floor(left / 86400);
-                const dh = Math.floor((left % 86400) / 3600);
-                timeStr = `${dj}j ${dh > 0 ? dh + 'h' : ''}`;
-              } else if (left >= 3600) {
-                const dh = Math.floor(left / 3600);
-                const dm = Math.floor((left % 3600) / 60);
-                timeStr = `${dh}h ${dm > 0 ? dm + 'm' : ''}`;
-              } else {
-                const dm = Math.floor(left / 60);
-                const ds = left % 60;
-                timeStr = dm > 0 ? `${dm}m ${ds.toString().padStart(2, '0')}s` : `${ds}s`;
-              }
-              timerEl.textContent = timeStr;
-            }
-            const barEl = document.getElementById(`devis-deliberation-bar-${d.id}`);
-            if (barEl && d.deliberationTotalSeconds > 0) {
-              const pct = Math.min(100, Math.max(5, Math.round(((d.deliberationTotalSeconds - d.deliberationSecondsLeft) / d.deliberationTotalSeconds) * 100)));
-              barEl.style.width = `${pct}%`;
-            }
-
             // Délibération terminée : verdict officiel de l'organisateur et de la commission de sécurité
             if (currentTime >= d.decisionAt) {
               this.resolveDevisDecision(d);
             }
           }
-          // Devis en prévisionnel : augmentation progressive du risque et risque de perte spontanée
+          // Devis en prévisionnel : augmentation progressive du risque et dépilage des retours bénévoles
           else if (d.status === 'previsionnel') {
+            // Traitement automatique des réponses du sondage de bénévoles (échelonnées de 30s à 4 jours, au plus tard H-1)
+            if (d.previsionnelResponses) {
+              Object.values(d.previsionnelResponses).forEach(resp => {
+                if (resp.status === 'pending' && resp.respondAt && currentTime >= resp.respondAt) {
+                  this.applyVolunteerSurveyResponse(d, resp);
+                }
+              });
+            }
+
             d.riskRate = Math.min(80, (d.riskRate || 15) + 0.02);
 
             // Perte spontanée si l'organisateur s'impatiente et trouve un concurrent
@@ -12550,6 +13052,16 @@ class ProtecGame {
       if (this.grants && this.grants.publicDonationsActive && this.clock.second === 0 && Math.random() < 0.25) {
         const don = 25 + Math.floor(Math.random() * 50);
         this.resources.money += don;
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(
+            this,
+            don,
+            'Micro-don Citoyen en Ligne',
+            'don',
+            'DON-' + Date.now(),
+            'Donateur Particulier'
+          );
+        }
         this.showToast('Don en Ligne Reçu !', `Un citoyen reconnaissant a versé ${don} € à l’association.`, 'green');
         this.updateStatsUI();
       }

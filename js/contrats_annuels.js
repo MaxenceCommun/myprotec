@@ -123,6 +123,137 @@ window.ProtecContratsAnnuels = {
     }
   ],
 
+  // Catalogue dynamique contextualisé avec l'ancrage territorial de l'antenne
+  getContractsCatalog(game) {
+    if (!game) game = window.game;
+    const station = (game?.stations && game.stations[0]) || { name: 'Antenne', city: 'Metz', departmentCode: '57' };
+    const deptCode = String(station.departmentCode || game?.currentDepartmentCode || game?.player?.departmentCode || '75').trim().toUpperCase();
+    const deptInfo = (window.ProtecDepartements && typeof window.ProtecDepartements.getByCode === 'function')
+      ? (window.ProtecDepartements.getByCode(deptCode) || { code: deptCode, name: 'France', chefLieu: station.city || 'Chef-Lieu', region: 'France' })
+      : { code: deptCode, name: 'France', chefLieu: station.city || 'Chef-Lieu', region: 'France' };
+    const city = station.city || deptInfo.chefLieu || 'Métropole';
+
+    // 1. Club Sportif Résident du Territoire (ASNL, FC Metz, OM, OL, PSG, MHSC, etc.)
+    let realClub = null;
+    if (window.ProtecEvenementsReels && window.ProtecEvenementsReels.REAL_SPORTS_CLUBS) {
+      const clubsList = window.ProtecEvenementsReels.REAL_SPORTS_CLUBS[deptCode] || [];
+      if (clubsList.length > 0) {
+        realClub = clubsList.find(c => c.city && c.city.toLowerCase().includes(city.toLowerCase())) || clubsList[0];
+      }
+    }
+    const clubTitle = realClub ? `Club Résident : ${realClub.name} (${realClub.venue})` : `Club Résident de ${city} (Stade Municipal)`;
+    const clubClient = realClub ? (realClub.client || `${realClub.name} SASP`) : `Direction Sportive • ${city}`;
+    const clubDesc = realClub 
+      ? `Convention cadre d'exclusivité sanitaire avec le club résident ${realClub.name} au stade ${realClub.venue} (${realClub.capacity ? realClub.capacity.toLocaleString('fr-FR') : '15 000'} places). Tous les matchs officiels à domicile avec ambulance VPSP en bord de pelouse.`
+      : `Couverture sanitaire de l'ensemble des matchs officiels à domicile au stade municipal de ${city}. Rencontres un week-end sur deux avec ambulance VPSP en bord de pelouse.`;
+
+    // 2. Grande Salle de Spectacles / Zénith du Territoire
+    let venueName = `Zénith & Grande Salle de ${city}`;
+    if (['54', '57', '67', '68'].includes(deptCode)) {
+      if (deptCode === '54') venueName = 'Zénith du Grand Nancy (Maxéville)';
+      else if (deptCode === '57') venueName = 'Les Arènes de Metz & Galaxie Amnéville';
+      else if (deptCode === '67') venueName = 'Zénith de Strasbourg Europe';
+      else if (deptCode === '68') venueName = 'Parc Expo & Salle des Musiques de Colmar';
+    } else if (deptCode === '75') {
+      venueName = 'Zénith Paris - La Villette & Accor Arena';
+    } else if (deptCode === '13') {
+      venueName = 'Le Dôme de Marseille & Arena du Pays d’Aix';
+    } else if (deptCode === '69') {
+      venueName = 'Halle Tony Garnier & LDLC Arena (Lyon)';
+    } else if (deptCode === '59') {
+      venueName = 'Zénith de Lille Grand Palais';
+    } else if (deptCode === '31') {
+      venueName = 'Zénith Toulouse Métropole';
+    } else if (deptCode === '33') {
+      venueName = 'Arkéa Arena de Bordeaux (Floirac)';
+    } else if (deptCode === '44') {
+      venueName = 'Zénith Nantes Métropole';
+    } else if (deptCode === '34') {
+      venueName = 'Sud de France Arena (Montpellier)';
+    } else if (deptCode === '06') {
+      venueName = 'Palais Nikaïa de Nice';
+    } else if (deptCode === '21') {
+      venueName = 'Zénith de Dijon';
+    } else if (deptCode === '63') {
+      venueName = 'Zénith d’Auvergne (Cournon-d’Auvergne)';
+    } else if (deptCode === '76') {
+      venueName = 'Zénith de Rouen';
+    } else if (deptCode === '80') {
+      venueName = 'Zénith d’Amiens';
+    } else if (deptCode === '87') {
+      venueName = 'Zénith de Limoges';
+    } else if (deptCode === '42') {
+      venueName = 'Zénith de Saint-Étienne';
+    } else if (deptCode === '83') {
+      venueName = 'Zénith Oméga de Toulon';
+    } else if (deptCode === '30') {
+      venueName = 'Arènes & Palissades de Nîmes';
+    } else if (deptCode === '29') {
+      venueName = 'Brest Arena';
+    } else if (deptCode === '51') {
+      venueName = 'Reims Arena';
+    }
+
+    // 3. Convention Cadre Municipale
+    const mairieTitle = `Convention Cadre Municipale (Ville de ${city})`;
+    const mairieClient = `Mairie de ${city} & Direction de la Sécurité Publique`;
+    const mairieDesc = `Délégation officielle exclusive de la Mairie de ${city} pour l'ensemble des manifestations de la ville : Fête de la Musique, festivités du 14 Juillet, cérémonies républicaines, marché de saison et événements associatifs municipaux.`;
+
+    // 4. Parc des Expositions / Salons
+    let parcTitle = `Parc des Expositions de ${city}`;
+    if (deptCode === '75') parcTitle = 'Paris Expo Porte de Versailles & Villepinte';
+    else if (deptCode === '69') parcTitle = 'Eurexpo Lyon (Chassieu)';
+    else if (deptCode === '13') parcTitle = 'Parc Chanot • Marseille Palais des Congrès';
+    else if (deptCode === '59') parcTitle = 'Lille Grand Palais';
+    else if (deptCode === '33') parcTitle = 'Parc des Expositions de Bordeaux (Lac)';
+    else if (deptCode === '31') parcTitle = 'MEETT • Parc des Expositions de Toulouse';
+    else if (deptCode === '67') parcTitle = 'Parc des Expositions de Strasbourg (Wacken)';
+    else if (deptCode === '54') parcTitle = 'Parc des Expositions du Grand Nancy (Vandœuvre)';
+    else if (deptCode === '57') parcTitle = 'Metz Expo Événements (Grigy)';
+    else if (deptCode === '44') parcTitle = 'Exponantes Le Parc (Nantes)';
+
+    return [
+      {
+        ...this.CATALOG[0],
+        title: clubTitle,
+        client: clubClient,
+        desc: clubDesc,
+        city: realClub?.city || city,
+        venue: realClub?.venue || 'Stade Municipal',
+        eventsNames: realClub ? [
+          `Rencontre Officielle : ${realClub.name} (Journée {n})`,
+          `Coupe Officielle : ${realClub.name} à domicile`,
+          `Grand Match : ${realClub.name} au ${realClub.venue}`,
+          `Championnat : ${realClub.name} devant ses supporters`,
+          `Phase Décisive : ${realClub.name} à ${realClub.venue}`
+        ] : this.CATALOG[0].eventsNames
+      },
+      {
+        ...this.CATALOG[1],
+        title: venueName,
+        client: `Direction d’Exploitation • ${venueName}`,
+        desc: `Convention cadre d'exclusivité sanitaire pour la programmation artistique et culturelle de « ${venueName} ». Concerts majeurs, humoristes, festivals et tournées nationales chaque semaine.`,
+        city: city,
+        venue: venueName
+      },
+      {
+        ...this.CATALOG[2],
+        title: mairieTitle,
+        client: mairieClient,
+        desc: mairieDesc,
+        city: city
+      },
+      {
+        ...this.CATALOG[3],
+        title: parcTitle,
+        client: `Société d’Exploitation des Salons • ${parcTitle}`,
+        desc: `Couverture sanitaire de grande envergure pour les salons, foires et congrès grand public accueillis au « ${parcTitle} ». Salons de l'habitat, de l'auto, de la gastronomie et foires d'envergure.`,
+        city: city,
+        venue: parcTitle
+      }
+    ];
+  },
+
   // Initialisation de l'état
   ensureState(game) {
     if (!game) game = window.game;
@@ -186,7 +317,7 @@ window.ProtecContratsAnnuels = {
   // Signature officielle d'un contrat cadre annuel
   async signContract(game, contractId) {
     if (!game) game = window.game;
-    const item = this.CATALOG.find(c => c.id === contractId);
+    const item = this.getContractsCatalog(game).find(c => c.id === contractId);
     if (!item) return;
 
     this.ensureState(game);
@@ -343,7 +474,7 @@ window.ProtecContratsAnnuels = {
   // Planifier le prochain événement régulier au calendrier
   scheduleNextMission(game, contractId, dayOffset = null) {
     if (!game) game = window.game;
-    const item = this.CATALOG.find(c => c.id === contractId);
+    const item = this.getContractsCatalog(game).find(c => c.id === contractId);
     if (!item) return null;
 
     const contractData = this.getContractData(game, contractId);
@@ -431,8 +562,9 @@ window.ProtecContratsAnnuels = {
     const signedList = (game.annualContracts || []).filter(c => c.signed);
     if (signedList.length === 0) return;
 
+    const catalog = this.getContractsCatalog(game);
     signedList.forEach(contractRecord => {
-      const item = this.CATALOG.find(c => c.id === contractRecord.id);
+      const item = catalog.find(c => c.id === contractRecord.id);
       if (!item) return;
 
       // Y a-t-il déjà une mission planifiée ou en cours pour ce contrat ?
@@ -465,7 +597,7 @@ window.ProtecContratsAnnuels = {
       contractRecord.totalEarned = (contractRecord.totalEarned || 0) + (mission.rewardMoney || 0);
 
       // Programmer automatiquement la session suivante selon la récurrence
-      const item = this.CATALOG.find(c => c.id === mission.annualContractId);
+      const item = this.getContractsCatalog(game).find(c => c.id === mission.annualContractId);
       if (item) {
         this.scheduleNextMission(game, item.id, item.recurrenceDays);
       }
@@ -496,7 +628,7 @@ window.ProtecContratsAnnuels = {
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          ${this.CATALOG.map(item => {
+          ${this.getContractsCatalog(game).map(item => {
             const isSigned = this.isSigned(game, item.id);
             const contractData = this.getContractData(game, item.id);
             const check = this.checkEligibility(game, item);

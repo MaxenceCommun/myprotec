@@ -1763,11 +1763,20 @@ window.ProtecCriseLogistique = {
       }
     }
 
-    // 4. Vérification des véhicules
+    // 4. Vérification des véhicules (avec équivalence PCM pour VL Commandement)
     if (req.vehicles && req.vehicles.length > 0) {
       if (vehIds.length < req.vehicles.length) {
         game.showToast('Véhicule Requis', `Veuillez sélectionner le ou les véhicules nécessaires (${req.vehicles.join(', ')}).`, 'orange');
         return;
+      }
+
+      const selectedVehs = (game.vehicles || []).filter(v => vehIds.includes(v.id));
+      if (req.vehicles.includes('PCM')) {
+        const hasPCM = selectedVehs.some(v => v.type === 'PCM' || v.isCommandement || v.hasCommandementKit);
+        if (!hasPCM) {
+          game.showToast('Poste de Commandement Requis', 'Cette sous-mission requiert un PCM ou une VL Commandement équipée du Poste de Commandement Mobile.', 'orange');
+          return;
+        }
       }
     }
 
@@ -2240,16 +2249,21 @@ window.ProtecCriseLogistique = {
             2. Sélectionner le vecteur requis
           </label>
           <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-            ${availableVehicles.map(veh => `
-              <label class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 flex items-center justify-between gap-3 text-xs cursor-pointer">
+            ${availableVehicles.map(veh => {
+              const isVLC = Boolean(veh.isCommandement || veh.hasCommandementKit);
+              return `
+              <label class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 border ${isVLC ? 'border-indigo-500/70 ring-1 ring-indigo-500/30' : 'border-slate-700'} flex items-center justify-between gap-3 text-xs cursor-pointer">
                 <div class="flex items-center gap-2.5">
                   <input type="checkbox" name="sub_veh_select" value="${veh.id}" class="rounded text-sky-500 focus:ring-0">
                   <span class="font-bold text-white">${veh.name}</span>
-                  <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300">${veh.type}</span>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] ${isVLC ? 'bg-indigo-600 text-white font-black' : 'bg-slate-700 text-slate-300'}">
+                    ${isVLC ? '📡 VLC (PC Mobile)' : veh.type}
+                  </span>
                 </div>
                 <span class="text-[10px] text-slate-400">Carburant : ${veh.fuel || 100}%</span>
               </label>
-            `).join('')}
+              `;
+            }).join('')}
             ${availableVehicles.length === 0 ? '<p class="text-xs text-red-400 italic">Aucun véhicule disponible dans le garage.</p>' : ''}
           </div>
         </div>

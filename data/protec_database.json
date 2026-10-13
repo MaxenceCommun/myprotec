@@ -10,11 +10,64 @@
       "stationName": "Direction Générale Nationale",
       "city": "paris",
       "createdAt": "2026-10-07T19:45:03.260Z",
-      "lastLogin": "2026-10-07T19:45:03.261Z"
+      "lastLogin": "2026-10-07T19:45:03.261Z",
+      "departmentCode": "75"
     }
   },
   "sessions": {},
-  "savedGames": {},
+  "savedGames": {
+    "usr_admin_master": {
+      "savedAt": "2026-10-13T10:06:58.280Z",
+      "data": {
+        "player": {
+          "id": "usr_admin_master",
+          "name": "Direction Nationale FNPC",
+          "departmentCode": "75",
+          "allianceId": "alliance-fnpc"
+        },
+        "stations": [
+          {
+            "id": "station-fnpc-national-hq",
+            "name": "Direction Générale Nationale (FNPC)",
+            "city": "Paris",
+            "departmentCode": "75",
+            "lat": 48.8955,
+            "lng": 2.2905,
+            "level": 3,
+            "vehicles": [
+              {
+                "id": "v-nat-1",
+                "name": "PC Mobile FNPC",
+                "type": "PCM"
+              },
+              {
+                "id": "v-nat-2",
+                "name": "VPSP FNPC 01",
+                "type": "VPSP"
+              },
+              {
+                "id": "v-nat-3",
+                "name": "VL Commandement 01",
+                "type": "VLC"
+              }
+            ],
+            "volunteers": [
+              {
+                "id": "vol-nat-1",
+                "name": "Président FNPC",
+                "rank": "Cadre Fédéral"
+              },
+              {
+                "id": "vol-nat-2",
+                "name": "Directeur Opérationnel",
+                "rank": "Chef de Dispositif"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
   "resetArchives": [],
   "departments": {},
   "alliances": [
@@ -35,8 +88,16 @@
   "renforts": [],
   "formationsSpeciales": [],
   "chatMessages": [],
+  "marketplace": [],
+  "communityEvents": [],
+  "badgesCollection": [],
   "equipmentTiersConfig": {
-    "categories": ["formation", "secours", "logistique", "tenues"],
-    "tradeInRate": 0.30
+    "categories": [
+      "formation",
+      "secours",
+      "logistique",
+      "tenues"
+    ],
+    "tradeInRate": 0.3
   }
 }

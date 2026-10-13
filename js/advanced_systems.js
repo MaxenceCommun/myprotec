@@ -73,12 +73,12 @@ window.ProtecAdvanced = {
         {
           id: 'master3_vtu_log',
           type: 'VTU',
-          name: 'Renault Master III - VTU Fourgon Logistique Opérationnelle',
+          name: 'Renault Master III - VTU Fourgon Logistique',
           shortName: 'VTU Tôlé Logistique',
           category: 'Logistique & Événementiel',
           missionFilter: ['logistique'],
           serigraphieKey: 'logistique',
-          serigraphieLabel: 'Logistique Opérationnelle',
+          serigraphieLabel: 'Logistique',
           desc: 'Fourgon tôlé utilitaire grand volume équipé d’étagères modulaires, sangles d’arrimage et crochet d’attelage pour tentes, PMA, lits de camp et logistique.',
           cost: 17500,
           capacity: 3,
@@ -254,11 +254,11 @@ window.ProtecAdvanced = {
           id: 'flit_heavy',
           type: 'FLIT',
           name: 'FLIT - Fourgon Lourd d’Intervention Technique',
-          shortName: 'FLIT Fourgon Lourd (> 3.5t)',
+          shortName: 'FLIT Fourgon Lourd (Type FPTL/FPTSR > 12t)',
           category: 'Technique & Soutien',
           missionFilter: ['logistique', 'usar'],
-          desc: 'Poids lourd d’intervention technique pour montage rapide de Poste Médical Avancé (PMA), groupes électrogènes et mâts d’éclairage. Conducteur Permis C obligatoire.',
-          cost: 26000,
+          desc: 'Poids Lourd d’intervention technique et secours lourd (châssis type FPTL / FPTSR > 12t) : cellule avec rideaux alu, montage rapide de Poste Médical Avancé (PMA), groupes électrogènes de puissance, mâts d’éclairage télescopiques et pompes d’épuisement. Conducteur Permis C obligatoire.',
+          cost: 95000,
           capacity: 3,
           licenseRequired: 'C',
           licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
@@ -307,7 +307,7 @@ window.ProtecAdvanced = {
           requiresTrailer: true,
           hasTrailerIncluded: true,
           licenseRequired: 'B',
-          licenseLabel: 'Permis Bateau & SSA (Tracté en Permis B)',
+          licenseLabel: 'Permis Bateau & SSA',
           reqSkills: ['ssa', 'permis_bateau'],
           image: 'images/vehicles/ERS.png',
           speedKmH: 45,
@@ -469,10 +469,10 @@ window.ProtecAdvanced = {
     },
     {
       type: 'VTU',
-      name: 'Véhicule Tout Usage (VTU)',
-      category: 'Logistique & Événementiel',
+      name: 'VTU - Fourgon Tout Usage (Logistique)',
+      category: 'Logistique & Soutien',
       missionFilter: ['logistique'],
-      desc: 'Fourgon utilitaire polyvalent pour transport de tentes, lits de camp, barnums et matériel de poste de secours. Équipé d’un crochet d’attelage.',
+      desc: 'Fourgon utilitaire polyvalent pour transport de tentes, lits de camp, barnums et matériel de poste de secours ou de soutien. Équipé d’un crochet d’attelage.',
       cost: 17500,
       capacity: 3,
       hasTowHitch: true,
@@ -481,7 +481,7 @@ window.ProtecAdvanced = {
       image: 'images/vehicles/master3_vtu_log.png',
       icon: '🚐',
       speedKmH: 75,
-      specialty: 'Logistique & Ravitaillement'
+      specialty: 'Logistique & Soutien'
     },
     {
       type: 'VTP',
@@ -531,10 +531,10 @@ window.ProtecAdvanced = {
     {
       type: 'FLIT',
       name: 'FLIT - Fourgon Lourd d\'Intervention Technique',
-      category: 'Technique & Soutien',
+      category: 'Technique & Soutien Lourd',
       missionFilter: ['logistique', 'usar'],
-      desc: 'Fourgon lourd équipé pour le montage rapide de Poste Médical Avancé (PMA), groupes électrogènes, mâts d’éclairage et pompes d’épuisement. Poids Lourd > 3.5t.',
-      cost: 26000,
+      desc: 'Poids lourd d’intervention technique (type FPTL/FPTSR > 12t) équipé pour déploiement lourd de PMA, éclairage grande puissance, pompage et tronçonnage. Permis C requis.',
+      cost: 95000,
       capacity: 3,
       licenseRequired: 'C',
       licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
@@ -570,7 +570,7 @@ window.ProtecAdvanced = {
       requiresTrailer: true,
       hasTrailerIncluded: true,
       licenseRequired: 'B',
-      licenseLabel: 'Permis Bateau & SSA (Tracté Permis B)',
+      licenseLabel: 'Permis Bateau & SSA',
       reqSkills: ['ssa', 'permis_bateau'],
       image: 'images/vehicles/ERS.png',
       icon: '🚤',
@@ -1175,13 +1175,26 @@ window.ProtecAdvanced = {
       specialty: variantOptions?.specialty || cat.specialty || '',
       icon: cat.icon || '🚐',
       image: variantOptions?.image || cat.image || `images/vehicles/${vehicleType}.png`,
-      hasTowHitch: variantOptions?.hasTowHitch !== undefined ? variantOptions.hasTowHitch : (cat.hasTowHitch || false),
+      hasTowHitch: Boolean(variantOptions?.hasTowHitch !== undefined ? variantOptions.hasTowHitch : (cat.hasTowHitch || false)),
+      installedOptions: Array.isArray(variantOptions?.installedOptions) ? variantOptions.installedOptions : [],
       requiresTrailer: cat.requiresTrailer || false,
       reqSkills: cat.reqSkills || []
     };
 
     game.vehicles.push(newVeh);
     station.vehicles.push(vehId);
+
+    // Enregistrement dans le Grand Livre comptable
+    if (window.ProtecFinances && typeof window.ProtecFinances.recordTransaction === 'function') {
+      window.ProtecFinances.recordTransaction(
+        game,
+        -finalCost,
+        `Acquisition Véhicule : ${newVeh.name} (${newVeh.model})`,
+        'vehicule',
+        `ACHAT-${vehId}`,
+        'Centrale d’Achat Réseau'
+      );
+    }
 
     game.closeModal();
     game.updateStatsUI();
@@ -1273,5 +1286,28 @@ window.ProtecAdvanced = {
     game.saveGame();
     game.showToast('Manœuvre Fédérale Validée !', `Détachement engagé avec succès ! (+${man.rewardMoney} € & +${man.rewardXp} XP par participant).`, 'green');
     game.openModule('alliance');
+  },
+
+  // Chargement dynamique du catalogue personnalisé de véhicules configuré par l'admin
+  loadCustomCatalog() {
+    try {
+      const stored = localStorage.getItem('protec_custom_vehicle_catalog');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.vehicleCatalog = parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur chargement catalogue personnalisé véhicules:', e);
+    }
   }
 };
+
+// Initialisation immédiate du catalogue personnalisé s'il existe
+try {
+  if (window.ProtecAdvanced && typeof window.ProtecAdvanced.loadCustomCatalog === 'function') {
+    window.ProtecAdvanced.loadCustomCatalog();
+  }
+} catch (e) {}
+

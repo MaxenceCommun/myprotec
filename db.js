@@ -28,7 +28,10 @@ const defaultDb = {
   chatMessages: [],
   marketplace: [],
   communityEvents: [],
-  badgesCollection: []
+  badgesCollection: [],
+  customVehicleCatalog: null,
+  customEquipmentCatalog: null,
+  customBadgesCatalog: null
 };
 
 class Database {
@@ -384,14 +387,52 @@ class Database {
         salt,
         role: 'admin',
         isBanned: false,
-        stationName: 'Direction Générale Nationale',
-        city: 'paris',
+        stationName: 'Direction Nationale FNPC',
+        city: 'Paris',
+        departmentCode: '75',
         createdAt: new Date().toISOString(),
         lastLogin: new Date().toISOString()
       };
       this.save();
     } else {
       this.data.users[adminKey].role = 'admin';
+      this.data.users[adminKey].departmentCode = this.data.users[adminKey].departmentCode || '75';
+      this.save();
+    }
+
+    // Assurer la présence de l'antenne nationale de la Direction FNPC pour le multijoueur
+    if (!this.data.savedGames['usr_admin_master'] || !this.data.savedGames['usr_admin_master'].data?.stations?.length) {
+      this.data.savedGames['usr_admin_master'] = {
+        savedAt: new Date().toISOString(),
+        data: {
+          player: {
+            id: 'usr_admin_master',
+            name: 'Direction Nationale FNPC',
+            departmentCode: '75',
+            allianceId: 'alliance-fnpc'
+          },
+          stations: [
+            {
+              id: 'station-fnpc-national-hq',
+              name: 'Direction Générale Nationale (FNPC)',
+              city: 'Paris',
+              departmentCode: '75',
+              lat: 48.8955,
+              lng: 2.2905,
+              level: 3,
+              vehicles: [
+                { id: 'v-nat-1', name: 'PC Mobile FNPC', type: 'PCM' },
+                { id: 'v-nat-2', name: 'VPSP FNPC 01', type: 'VPSP' },
+                { id: 'v-nat-3', name: 'VL Commandement 01', type: 'VLC' }
+              ],
+              volunteers: [
+                { id: 'vol-nat-1', name: 'Président FNPC', rank: 'Cadre Fédéral' },
+                { id: 'vol-nat-2', name: 'Directeur Opérationnel', rank: 'Chef de Dispositif' }
+              ]
+            }
+          ]
+        }
+      };
       this.save();
     }
   }

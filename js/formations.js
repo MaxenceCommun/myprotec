@@ -459,8 +459,8 @@ window.ProtecFormations = {
 
     if (activeCount < targetPool || forceNew) {
       const needed = forceNew ? 1 : (targetPool - activeCount);
-      const station = game.stations?.[0] || { city: 'Nancy', id: 'station-1' };
-      const deptCode = game.currentDepartmentCode || game.player?.departmentCode || '54';
+      const station = game.stations?.[0] || { city: 'Paris', id: 'station-1' };
+      const deptCode = game.currentDepartmentCode || game.player?.departmentCode || '75';
 
       for (let i = 0; i < needed; i++) {
         // Choix du type de formation (Pondération : SST 40%, MAC_SST 25%, PSC 20%, GQS 15%)

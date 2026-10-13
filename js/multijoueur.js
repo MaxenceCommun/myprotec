@@ -223,7 +223,7 @@ window.ProtecMultiplayer = {
       document.body.appendChild(modal);
     }
 
-    const myDept = game.player?.departmentCode || game.stations?.[0]?.departmentCode || '54';
+    const myDept = game.currentDepartmentCode || game.player?.departmentCode || game.stations?.[0]?.departmentCode || '75';
     const zoneDef = window.ProtecDepartements?.getZoneDefense(myDept) || { name: 'Zone de Défense et de Sécurité', shortName: 'Zone Zonale' };
     const isAdmin = !!(game.player?.isAdmin || game.player?.role === 'admin' || window.ProtecAuth?.currentUser?.isAdmin || window.ProtecAuth?.currentUser?.role === 'admin');
 
@@ -479,7 +479,7 @@ window.ProtecMultiplayer = {
       game.weeklyDeptRenforts.count += 1;
     }
 
-    const myDept = game.player?.departmentCode || game.stations?.[0]?.departmentCode || '54';
+    const myDept = game.currentDepartmentCode || game.player?.departmentCode || game.stations?.[0]?.departmentCode || '75';
     const zoneDef = window.ProtecDepartements?.getZoneDefense(myDept) || { name: 'Zone de Défense', shortName: 'Zonale' };
 
     const zoneLabels = {
@@ -544,9 +544,12 @@ window.ProtecMultiplayer = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(renfortData)
     }).then(res => res.json()).then(data => {
-      game.renforts.unshift(data.renfort || renfortData);
+      const saved = Object.assign({}, renfortData, (data && data.renfort) || {});
+      game.renforts.unshift(saved);
+      if (typeof game.sanitizeRenforts === 'function') game.sanitizeRenforts();
     }).catch(() => {
       game.renforts.unshift(renfortData);
+      if (typeof game.sanitizeRenforts === 'function') game.sanitizeRenforts();
     });
 
     // Diffusion en temps réel à toutes les antennes connectées

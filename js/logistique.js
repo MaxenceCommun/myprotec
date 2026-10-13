@@ -402,6 +402,18 @@ window.ProtecLogistique = {
       desc: 'Station de recharge rapide simultanée pour 6 talkies-walkies au local d’antenne.',
       usage: 'Garantit que toutes les radios sont chargées à 100% au départ des équipages.'
     },
+    {
+      id: 'lot_poste_commandement_mobile',
+      category: 'transmissions',
+      name: 'Poste de Commandement Mobile (Pack PC Embarqué)',
+      icon: '📡',
+      price: 2800,
+      unit: 'lot complet',
+      badge: 'Commandement de Crise (VLC)',
+      badgeColor: 'bg-indigo-50 text-indigo-900 border-indigo-300',
+      desc: 'Valise tactique informatique durcie, cartographie SIG/SINUS, baie radio multi-bandes ANTARES, modem satellite 4G/5G, tableau SITAC et alimentation autonome.',
+      usage: 'À installer dans une VL pour la transformer en VL Commandement capable de piloter une crise majeure, un plan NOVI ou mise en gestion d’un Chef de Dispositif/Chef de Poste.'
+    },
 
     // --- 7. KITS PÉDAGOGIQUES OFFICIELS (FORMATIONS) ---
     {
@@ -1256,16 +1268,26 @@ window.ProtecLogistique = {
               statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-200">ENGAGÉ</span>';
             }
 
+            const isCmdEligible = window.ProtecCommandement && window.ProtecCommandement.isEligible(v);
+            const isVLC = Boolean(v.isCommandement || v.hasCommandementKit);
+            const cmdLeader = isVLC && window.ProtecCommandement ? window.ProtecCommandement.getLeader(game, v) : null;
+
             return `
-              <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3 ${isRearmNeeded ? 'border-red-300 ring-2 ring-red-100' : ''}">
+              <div class="p-4 rounded-2xl bg-white border ${isVLC ? 'border-indigo-300 ring-2 ring-indigo-50' : 'border-slate-200'} shadow-xs space-y-3 ${isRearmNeeded ? 'border-red-300 ring-2 ring-red-100' : ''}">
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-3">
-                    <div class="w-14 h-10 bg-slate-100 rounded-xl p-1 flex items-center justify-center flex-shrink-0 border border-slate-200 shadow-inner">
+                    <div class="w-14 h-10 ${isVLC ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-100 border-slate-200'} rounded-xl p-1 flex items-center justify-center flex-shrink-0 border shadow-inner">
                       <img src="${v.image || (game.getVehicleImage ? game.getVehicleImage(v.type) : `images/vehicles/${v.type}.png`)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='<span class=\\'text-xl\\'>🚑</span>'" />
                     </div>
                     <div>
-                      <h5 class="text-xs font-black text-slate-900 leading-tight">${v.name}</h5>
-                      <span class="text-[10px] text-slate-500 font-semibold">${v.label || v.type} • ${km.toLocaleString('fr-FR')} km</span>
+                      <div class="flex items-center gap-1.5">
+                        <h5 class="text-xs font-black text-slate-900 leading-tight">${v.name}</h5>
+                        ${isVLC ? '<span class="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase bg-indigo-600 text-white tracking-wider">📡 VLC</span>' : ''}
+                      </div>
+                      <span class="text-[10px] text-slate-500 font-semibold block">
+                        ${v.label || v.type} • ${km.toLocaleString('fr-FR')} km
+                        ${cmdLeader ? ` • <strong class="text-indigo-700">👤 ${cmdLeader.name} (${cmdLeader.rank})</strong>` : ''}
+                      </span>
                     </div>
                   </div>
                   
@@ -1321,6 +1343,19 @@ window.ProtecLogistique = {
                     </button>
                   `}
                 </div>
+
+                ${isCmdEligible ? `
+                  <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <span class="text-[10px] text-slate-500 font-semibold">Poste de Commandement Mobile</span>
+                    <button 
+                      type="button" 
+                      onclick="window.ProtecCommandement.openCommandModal(window.game, '${v.id}')"
+                      class="px-2.5 py-1 rounded-xl text-[10.5px] font-black ${isVLC ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200' : 'bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-900 border border-slate-200'} transition cursor-pointer"
+                    >
+                      ${isVLC ? '📡 Gérer VL Commandement' : '📡 Configurer VLC'}
+                    </button>
+                  </div>
+                ` : ''}
               </div>
             `;
           }).join('')}

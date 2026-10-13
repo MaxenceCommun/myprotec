@@ -619,6 +619,16 @@ window.ProtecPersonnel = {
     if (totalMonthlyCharges > 0 && game.clock.day === 1 && game.clock.hour === 9 && game.clock.minute === 0) {
       if (game.resources.money >= totalMonthlyCharges) {
         game.resources.money -= totalMonthlyCharges;
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(
+            game,
+            -totalMonthlyCharges,
+            `Virement Salaires & Indemnités Mensuelles (${salarieCount} salarié(s), ${serviceCiviqueCount} service(s) civique(s))`,
+            'salaires',
+            'SAL-' + (game.clock ? `${game.clock.year || 2026}-${game.clock.month || 1}` : Date.now()),
+            'Personnel & URSSAF'
+          );
+        }
         game.showToast(
           'Paiement des Salaires & Indemnités',
           `Virement mensuel : ${totalMonthlyCharges} € (${salarieCount} salarié(s), ${serviceCiviqueCount} service(s) civique(s)).`,
@@ -654,6 +664,16 @@ window.ProtecPersonnel = {
     }
 
     game.resources.money -= agr.cost;
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        game,
+        -agr.cost,
+        `Audit & Droits d'Agrément Préfectoral : ${agr.title}`,
+        'frais',
+        'AGR-' + agrementCode,
+        'Préfecture'
+      );
+    }
     game.resources.agrements[agrementCode] = true;
     game.resources.reputationScore = (game.resources.reputationScore || 0) + 50;
 
@@ -957,6 +977,16 @@ window.ProtecPersonnel = {
       const overtimeCost = Math.round(task.hours * this.laborLawConfig.overtimeRate);
       if (game.resources.money >= overtimeCost) {
         game.resources.money -= overtimeCost;
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(
+            game,
+            -overtimeCost,
+            `Heures Supplémentaires Salarié (+25%) : ${salarie.name}`,
+            'salaires',
+            'HS-' + Date.now(),
+            'Personnel Salarié'
+          );
+        }
       }
       overtimeNotice = ` ⚠️ Heures Supp' : Dépassement des 151h mensuelles (${salarie.monthlyOvertimeHours}h supp au total). Majoration légale de +25% appliquée (-${overtimeCost} €).`;
     }
@@ -982,6 +1012,16 @@ window.ProtecPersonnel = {
 
     if (totalRevenue > 0) {
       game.resources.money += totalRevenue;
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(
+          game,
+          totalRevenue,
+          `Session Formation / Prestation B2B : ${task.title}`,
+          'formation_grand_public',
+          'FORM-B2B-' + Date.now(),
+          'Clients & Entreprises'
+        );
+      }
     }
     if (totalRep > 0) {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + totalRep;
@@ -1052,6 +1092,16 @@ window.ProtecPersonnel = {
       const otCost = Math.round(missionHours * this.laborLawConfig.overtimeRate);
       if (game.resources.money >= otCost) {
         game.resources.money -= otCost;
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(
+            game,
+            -otCost,
+            `Heures Supp' Mission Salarié (+25%) : ${salarie.name}`,
+            'salaires',
+            'HS-MIS-' + Date.now(),
+            'Personnel Salarié'
+          );
+        }
       }
       overtimeMsg = ` (${salarie.monthlyOvertimeHours}h supp' au mois, majoration légale +25% appliquée)`;
     }
@@ -1090,6 +1140,16 @@ window.ProtecPersonnel = {
     }
 
     game.resources.money = Math.max(0, game.resources.money - 150);
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        game,
+        -150,
+        `Prime Exceptionnelle Pénibilité Dérogation : ${salarie.name}`,
+        'salaires',
+        'PENIB-' + Date.now(),
+        'Personnel Salarié'
+      );
+    }
     game.resources.reputationScore = Math.max(0, (game.resources.reputationScore || 50) - 10);
     salarie.mandatoryRestUntil = null;
     salarie.status = 'dispo';
@@ -1624,6 +1684,16 @@ window.ProtecPersonnel = {
     if (checkedMissions.length === 0) checkedMissions.push('operationnel');
 
     game.resources.money -= cost;
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        game,
+        -cost,
+        `Publication d'Offre RH : ${title} (${contractType})`,
+        'frais',
+        'RH-PUB-' + Date.now(),
+        isSC ? 'Agence du Service Civique' : 'France Travail / APEC'
+      );
+    }
 
     if (!game.jobOffers) game.jobOffers = [];
     const newOffer = {

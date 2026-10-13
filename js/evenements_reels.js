@@ -176,8 +176,8 @@
         { name: 'Harmonie Mutuelle Semi-Marathon de Paris', category: 'sport', pub: 40000, dur: 6, venue: 'Pont de Sully & Bois de Vincennes', city: 'Paris', month: 2, env: 'dynamique_course', client: 'A.S.O.' },
         { name: 'Festival Solidays', category: 'culturel', pub: 85000, dur: 10, venue: 'Hippodrome de ParisLongchamp', city: 'Paris', month: 5, env: 'ouvert_urbain', client: 'Solidarité Sida' },
         { name: 'Festival Rock en Seine', category: 'culturel', pub: 40000, dur: 8, venue: 'Domaine National de Saint-Cloud', city: 'Saint-Cloud', month: 7, env: 'ouvert_urbain', client: 'Rock en Seine SAS' },
-        { name: 'Salon International de l’Agriculture (SIA)', category: 'foire', pub: 60000, dur: 9, venue: 'Paris Expo Porte de Versailles', city: 'Paris', month: 1, env: 'ferme', client: 'Ceneca & Comexposium' },
-        { name: 'Foire de Paris', category: 'foire', pub: 50000, dur: 8, venue: 'Paris Expo Porte de Versailles', city: 'Paris', month: 4, env: 'ferme', client: 'Comexposium' },
+        { name: 'Salon International de l’Agriculture (SIA)', category: 'foire', pub: 60000, dur: 9, venue: 'Paris Expo Porte de Versailles', city: 'Paris', month: 1, isMultiDays: true, durationDays: 9, weekdayDaysCount: 6, weekendDaysCount: 3, weekdayHours: 8, weekendHours: 10, env: 'ferme', client: 'Ceneca & Comexposium' },
+        { name: 'Foire de Paris', category: 'foire', pub: 50000, dur: 8, venue: 'Paris Expo Porte de Versailles', city: 'Paris', month: 4, isMultiDays: true, durationDays: 12, weekdayDaysCount: 8, weekendDaysCount: 4, weekdayHours: 8, weekendHours: 10, env: 'ferme', client: 'Comexposium' },
         { name: '20 km de Paris', category: 'sport', pub: 25000, dur: 5, venue: 'Pont d’Iéna & Tour Eiffel', city: 'Paris', month: 9, env: 'dynamique_course', client: 'AS 20 km de Paris' },
         { name: 'Paris-Versailles La Grande Course', category: 'sport', pub: 25000, dur: 5, venue: 'Quai Branly vers Château de Versailles', city: 'Versailles', month: 8, env: 'dynamique_course', client: 'Paris-Versailles Association' },
         { name: 'Japan Expo Paris', category: 'culturel', pub: 65000, dur: 9, venue: 'Parc des Expositions de Paris-Nord Villepinte', city: 'Villepinte', month: 6, env: 'ferme', client: 'SEFA Event' },
@@ -185,16 +185,16 @@
         { name: 'EcoTrail Paris', category: 'sport', pub: 14000, dur: 8, venue: 'Parc de Saint-Cloud & 1er étage Tour Eiffel', city: 'Paris', month: 2, env: 'dynamique_course', client: 'EcoTrail International' }
       ],
       'Grand Est': [
-        { name: 'Foire Attractive de Nancy', category: 'foire', pub: 35000, dur: 8, venue: 'Place Carnot & Cours Léopold', city: 'Nancy', month: 3, env: 'ouvert_urbain', client: 'Comité Forain de Nancy & Mairie' },
+        { name: 'Foire Attractive de Nancy', category: 'foire', pub: 35000, dur: 8, venue: 'Place Carnot & Cours Léopold', city: 'Nancy', month: 3, isMultiDays: true, durationDays: 28, weekdayDaysCount: 20, weekendDaysCount: 8, weekdayHours: 6, weekendHours: 10, env: 'ouvert_urbain', client: 'Comité Forain de Nancy & Mairie' },
         { name: 'Fêtes Historiques de la Saint-Nicolas', category: 'festif', pub: 100000, dur: 7, venue: 'Place Stanislas & Rues Historiques', city: 'Nancy', month: 11, env: 'ouvert_urbain', client: 'Ville de Nancy' },
         { name: 'Semi-Marathon du Grand Nancy', category: 'sport', pub: 8500, dur: 5, venue: 'Stade Marcel-Picot & Boulevards', city: 'Nancy', month: 2, env: 'dynamique_course', client: 'Nancy Athlétisme Métropole' },
         { name: 'Nancy Jazz Pulsations (NJP)', category: 'culturel', pub: 18000, dur: 7, venue: 'Parc de la Pépinière & Chapiteau', city: 'Nancy', month: 9, env: 'ouvert_urbain', client: 'Association NJP' },
-        { name: 'Marché de Noël de Strasbourg (Christkindelsmärik)', category: 'festif', pub: 80000, dur: 9, venue: 'Place Kléber & Grande Île', city: 'Strasbourg', month: 11, env: 'ouvert_urbain', client: 'Ville de Strasbourg' },
-        { name: 'Foire Internationale de Metz (FIM)', category: 'foire', pub: 25000, dur: 8, venue: 'Metz Expo Événements', city: 'Metz', month: 8, env: 'ferme', client: 'Metz Événements' },
+        { name: 'Marché de Noël de Strasbourg (Christkindelsmärik)', category: 'festif', pub: 80000, dur: 9, venue: 'Place Kléber & Grande Île', city: 'Strasbourg', month: 11, isMultiDays: true, durationDays: 28, weekdayDaysCount: 20, weekendDaysCount: 8, weekdayHours: 6, weekendHours: 10, env: 'ouvert_urbain', client: 'Ville de Strasbourg' },
+        { name: 'Foire Internationale de Metz (FIM)', category: 'foire', pub: 25000, dur: 8, venue: 'Metz Expo Événements', city: 'Metz', month: 8, isMultiDays: true, durationDays: 11, weekdayDaysCount: 7, weekendDaysCount: 4, weekdayHours: 7, weekendHours: 9, env: 'ferme', client: 'Metz Événements' },
         { name: 'Fêtes de la Mirabelle de Metz', category: 'festif', pub: 60000, dur: 7, venue: 'Plan d’Eau & Esplanade', city: 'Metz', month: 7, env: 'ouvert_urbain', client: 'Ville de Metz' },
         { name: 'Festival Le Cabaret Vert', category: 'culturel', pub: 32000, dur: 9, venue: 'Square Bayard & Berges de Meuse', city: 'Charleville-Mézières', month: 7, env: 'ouvert_urbain', client: 'FLAP Asso' },
         { name: 'Triathlon International de Gérardmer', category: 'sport', pub: 7500, dur: 8, venue: 'Lac de Gérardmer', city: 'Gérardmer', month: 8, env: 'dynamique_course', client: 'Triathlon Vallée des Lacs' },
-        { name: 'Foire de Châlons-en-Champagne', category: 'foire', pub: 30000, dur: 8, venue: 'Le Capitole en Champagne', city: 'Châlons-en-Champagne', month: 8, env: 'ouvert_urbain', client: 'Comité Foire de Châlons' },
+        { name: 'Foire de Châlons-en-Champagne', category: 'foire', pub: 30000, dur: 8, venue: 'Le Capitole en Champagne', city: 'Châlons-en-Champagne', month: 8, isMultiDays: true, durationDays: 11, weekdayDaysCount: 7, weekendDaysCount: 4, weekdayHours: 7, weekendHours: 9, env: 'ouvert_urbain', client: 'Comité Foire de Châlons' },
         { name: 'Marathon du Vignoble d’Alsace', category: 'sport', pub: 6000, dur: 6, venue: 'Région de Molsheim & Vignobles', city: 'Molsheim', month: 5, env: 'dynamique_course', client: 'Marathon Vignoble Alsace' }
       ],
       'Hauts-de-France': [
@@ -203,7 +203,7 @@
         { name: 'Semi-Marathon & 10 km de Lille', category: 'sport', pub: 15000, dur: 5, venue: 'Boulevard de la Liberté', city: 'Lille', month: 2, env: 'dynamique_course', client: 'Lille Métropole Athlétisme' },
         { name: 'Main Square Festival d’Arras', category: 'culturel', pub: 42000, dur: 9, venue: 'Citadelle d’Arras', city: 'Arras', month: 6, env: 'ouvert_urbain', client: 'Live Nation France' },
         { name: 'Enduropale du Touquet-Pas-de-Calais', category: 'sport', pub: 150000, dur: 8, venue: 'Plage du Touquet & Digue', city: 'Le Touquet-Paris-Plage', month: 1, env: 'ouvert_urbain', client: 'Ville du Touquet & FFM' },
-        { name: 'Foire aux Manèges de Lille', category: 'foire', pub: 25000, dur: 7, venue: 'Champ de Mars', city: 'Lille', month: 7, env: 'ouvert_urbain', client: 'Comité Forain Lillois' },
+        { name: 'Foire aux Manèges de Lille', category: 'foire', pub: 25000, dur: 7, venue: 'Champ de Mars', city: 'Lille', month: 7, isMultiDays: true, durationDays: 28, weekdayDaysCount: 20, weekendDaysCount: 8, weekdayHours: 6, weekendHours: 10, env: 'ouvert_urbain', client: 'Comité Forain Lillois' },
         { name: 'Paris-Roubaix Challenge Cyclotourisme', category: 'sport', pub: 7000, dur: 8, venue: 'Vélodrome André-Pétrieux', city: 'Roubaix', month: 3, env: 'dynamique_course', client: 'A.S.O.' },
         { name: 'Trail de la Côte d’Opale', category: 'sport', pub: 8000, dur: 7, venue: 'Site des Deux Caps', city: 'Wissant', month: 8, env: 'dynamique_course', client: 'Trail Côte d’Opale' }
       ],
@@ -219,9 +219,9 @@
       ],
       'Provence-Alpes-Côte d’Azur': [
         { name: 'Marseille-Cassis (Classique Internationale 20 km)', category: 'sport', pub: 20000, dur: 6, venue: 'Stade Vélodrome vers Baie de Cassis (Col de la Gineste)', city: 'Marseille / Cassis', month: 9, env: 'dynamique_course', client: 'SCO Sainte-Marguerite Athlétisme' },
-        { name: 'Carnaval de Nice & Bataille de Fleurs', category: 'festif', pub: 55000, dur: 6, venue: 'Place Masséna & Promenade des Anglais', city: 'Nice', month: 1, env: 'ouvert_urbain', client: 'Ville de Nice' },
+        { name: 'Carnaval de Nice & Bataille de Fleurs', category: 'festif', pub: 55000, dur: 6, venue: 'Place Masséna & Promenade des Anglais', city: 'Nice', month: 1, isMultiDays: true, durationDays: 14, weekdayDaysCount: 10, weekendDaysCount: 4, weekdayHours: 6, weekendHours: 8, env: 'ouvert_urbain', client: 'Ville de Nice' },
         { name: 'Marathon des Alpes-Maritimes Nice-Cannes', category: 'sport', pub: 14000, dur: 7, venue: 'Promenade des Anglais vers Croisette', city: 'Nice / Cannes', month: 10, env: 'dynamique_course', client: 'Azur Sport Organisation' },
-        { name: 'Foire Internationale de Marseille', category: 'foire', pub: 40000, dur: 8, venue: 'Parc Chanot', city: 'Marseille', month: 8, env: 'ouvert_urbain', client: 'SAFIM Marseille' },
+        { name: 'Foire Internationale de Marseille', category: 'foire', pub: 40000, dur: 8, venue: 'Parc Chanot', city: 'Marseille', month: 8, isMultiDays: true, durationDays: 11, weekdayDaysCount: 7, weekendDaysCount: 4, weekdayHours: 7, weekendHours: 9, env: 'ouvert_urbain', client: 'SAFIM Marseille' },
         { name: 'Festival d’Avignon', category: 'culturel', pub: 25000, dur: 7, venue: 'Cour d’Honneur du Palais des Papes & Rues', city: 'Avignon', month: 6, env: 'ouvert_urbain', client: 'Association Festival d’Avignon' },
         { name: 'Féria Pascale d’Arles', category: 'festif', pub: 60000, dur: 7, venue: 'Arènes d’Arles & Boulevards', city: 'Arles', month: 3, env: 'ouvert_urbain', client: 'Comité de la Féria & Mairie' },
         { name: 'Festival Marsatac', category: 'culturel', pub: 20000, dur: 8, venue: 'Parc Borély', city: 'Marseille', month: 5, env: 'ouvert_urbain', client: 'Orane Organisation' }
@@ -268,7 +268,7 @@
         { name: 'L’Armada de Rouen (Grands Voiliers)', category: 'festif', pub: 400000, dur: 10, venue: 'Quais de Seine Rive Droite & Rive Gauche', city: 'Rouen', month: 5, env: 'ouvert_urbain', client: 'Association Armada de Rouen' },
         { name: 'Festival Beauregard', category: 'culturel', pub: 32000, dur: 8, venue: 'Parc du Château de Beauregard', city: 'Hérouville-Saint-Clair', month: 6, env: 'ouvert_urbain', client: 'Beauregard SAS' },
         { name: 'Marathon de la Liberté (D-Day Race)', category: 'sport', pub: 22000, dur: 7, venue: 'Plages du Débarquement vers Stade Hélitas Caen', city: 'Caen', month: 5, env: 'dynamique_course', client: 'Les Courants de la Liberté' },
-        { name: 'Foire Saint-Romain de Rouen', category: 'foire', pub: 45000, dur: 8, venue: 'Esplanade Saint-Gervais', city: 'Rouen', month: 9, env: 'ouvert_urbain', client: 'Comité de la Foire Saint-Romain' },
+        { name: 'Foire Saint-Romain de Rouen', category: 'foire', pub: 45000, dur: 8, venue: 'Esplanade Saint-Gervais', city: 'Rouen', month: 9, isMultiDays: true, durationDays: 28, weekdayDaysCount: 20, weekendDaysCount: 8, weekdayHours: 6, weekendHours: 10, env: 'ouvert_urbain', client: 'Comité de la Foire Saint-Romain' },
         { name: 'Festival Papillons de Nuit', category: 'culturel', pub: 28000, dur: 8, venue: 'Site de l’Aubinière', city: 'Saint-Laurent-de-Cuves', month: 4, env: 'ouvert_urbain', client: 'R.O.C. en Baie' }
       ],
       'Centre-Val de Loire': [
@@ -279,7 +279,7 @@
       ],
       'Bourgogne-Franche-Comté': [
         { name: 'Festival des Eurockéennes de Belfort', category: 'culturel', pub: 34000, dur: 9, venue: 'Presqu’île du Malsaucy', city: 'Belfort / Sermamagny', month: 6, env: 'ouvert_urbain', client: 'Territoire de Musiques' },
-        { name: 'Foire Internationale et Gastronomique de Dijon', category: 'foire', pub: 30000, dur: 8, venue: 'Dijon Congrexpo', city: 'Dijon', month: 10, env: 'ferme', client: 'Dijon Congrexpo' },
+        { name: 'Foire Internationale et Gastronomique de Dijon', category: 'foire', pub: 30000, dur: 8, venue: 'Dijon Congrexpo', city: 'Dijon', month: 10, isMultiDays: true, durationDays: 11, weekdayDaysCount: 7, weekendDaysCount: 4, weekdayHours: 7, weekendHours: 9, env: 'ferme', client: 'Dijon Congrexpo' },
         { name: 'Trail des Forts de Besançon', category: 'sport', pub: 6500, dur: 7, venue: 'Citadelle de Vauban & Forêts', city: 'Besançon', month: 4, env: 'dynamique_course', client: 'Besançon Triathlon & Trail' },
         { name: 'Vente des Vins des Hospices de Beaune', category: 'festif', pub: 35000, dur: 7, venue: 'Hôtel-Dieu & Place Carnot', city: 'Beaune', month: 10, env: 'ouvert_urbain', client: 'Hospices Civils de Beaune' }
       ],
@@ -519,25 +519,55 @@
     /**
      * Calcule le barème financier conforme et le budget organisateur
      */
-    calculateFinancials(minVolunteers, durationHours, requiredVehicles, scaleKey) {
+    /**
+     * Calcule le barème financier conforme et le budget organisateur
+     */
+    calculateFinancials(minVolunteers, durationHours, requiredVehicles, scaleKey, multiDaysMeta = null) {
       const ratePerHour = 18;
-      const personnelCost = minVolunteers * durationHours * ratePerHour;
+      let personnelCost = 0;
       let vehicleCost = 0;
-      (requiredVehicles || []).forEach(v => {
-        if (v === 'VPSP') vehicleCost += 110;
-        else if (v === 'VTU') vehicleCost += 55;
-        else if (v === 'VL') vehicleCost += 35;
-      });
-
       let matCost = 35;
-      if (scaleKey === 'PAPS') matCost = 25;
-      else if (scaleKey === 'DPS-PE') matCost = 65;
-      else if (scaleKey === 'DPS-ME' || scaleKey === 'DPS-GE') matCost = 130;
+      let adminCost = 40;
 
-      const adminCost = 40;
+      if (multiDaysMeta && multiDaysMeta.isMultiDays) {
+        const wDays = multiDaysMeta.weekdayDaysCount || 20;
+        const weDays = multiDaysMeta.weekendDaysCount || 8;
+        const wHours = multiDaysMeta.weekdayHours || 6;
+        const weHours = multiDaysMeta.weekendHours || 10;
+
+        // En semaine : dimensionnement allégé (environ 50% de l'effectif week-end, min 2)
+        const wVols = Math.max(2, Math.round(minVolunteers * 0.5));
+        // Le week-end : plein effectif
+        const weVols = minVolunteers;
+
+        personnelCost = (wDays * wVols * wHours * ratePerHour) + (weDays * weVols * weHours * ratePerHour);
+
+        let dailyVehWe = 0;
+        let dailyVehW = 0;
+        (requiredVehicles || []).forEach(v => {
+          let u = 35;
+          if (v === 'VPSP') u = 110;
+          else if (v === 'VTU') u = 55;
+          dailyVehWe += u;
+          dailyVehW += Math.round(u * 0.5);
+        });
+        vehicleCost = (wDays * dailyVehW) + (weDays * dailyVehWe);
+        matCost = 150;
+        adminCost = 100;
+      } else {
+        personnelCost = minVolunteers * durationHours * ratePerHour;
+        (requiredVehicles || []).forEach(v => {
+          if (v === 'VPSP') vehicleCost += 110;
+          else if (v === 'VTU') vehicleCost += 55;
+          else if (v === 'VL') vehicleCost += 35;
+        });
+
+        if (scaleKey === 'PAPS') matCost = 25;
+        else if (scaleKey === 'DPS-PE') matCost = 65;
+        else if (scaleKey === 'DPS-ME' || scaleKey === 'DPS-GE') matCost = 130;
+      }
+
       const totalBareme = personnelCost + vehicleCost + matCost + adminCost;
-
-      // Budget maximum réaliste que l'organisateur est prêt à consacrer
       const budgetMax = Math.round(totalBareme * (1.10 + Math.random() * 0.20));
 
       return {
@@ -550,6 +580,53 @@
           totalBareme
         },
         budgetMax
+      };
+    },
+
+    // Helper pour générer une date pour un événement calé sur son mois réel de calendrier
+    createEventDateForSpecificMonth(targetMonth, currentYear, currentMonth, currentDay, startHour, dur, daysNames, monthsNames, preferWeekend = true) {
+      let year = currentYear;
+      if (targetMonth < currentMonth || (targetMonth === currentMonth && currentDay >= 20)) {
+        year = currentYear + 1;
+      }
+
+      let day = 10 + Math.floor(Math.random() * 12);
+      if (targetMonth === currentMonth) {
+        day = Math.min(28, currentDay + 3 + Math.floor(Math.random() * 5));
+      }
+
+      let dObj = new Date(year, targetMonth, day);
+      if (preferWeekend) {
+        const dow = dObj.getDay();
+        if (dow !== 6 && dow !== 0) {
+          const shift = (6 - dow + 7) % 7;
+          dObj = new Date(year, targetMonth, day + shift);
+        }
+      }
+
+      const finalYear = dObj.getFullYear();
+      const finalMonth = dObj.getMonth();
+      const finalDay = dObj.getDate();
+      const dayName = (Array.isArray(daysNames) && daysNames[dObj.getDay()]) || 'Samedi';
+      const monthName = (Array.isArray(monthsNames) && monthsNames[finalMonth]) || 'Mois';
+
+      const nowMs = new Date(currentYear, currentMonth, currentDay).getTime();
+      const eventMs = new Date(finalYear, finalMonth, finalDay).getTime();
+      const daysAhead = Math.max(1, Math.round((eventMs - nowMs) / (1000 * 3600 * 24)));
+
+      return {
+        eventDate: {
+          year: finalYear,
+          month: finalMonth,
+          day: finalDay,
+          hour: startHour,
+          minute: 0,
+          startHour,
+          endHour: (startHour + dur) % 24,
+          dayName,
+          monthName
+        },
+        daysAhead
       };
     },
 
@@ -738,26 +815,35 @@
         }
       });
 
-      // --- SOUS-VIVIER B : GRANDS ÉVÉNEMENTS RÉELS DE LA RÉGION ---
+      // --- SOUS-VIVIER B : GRANDS ÉVÉNEMENTS RÉELS DE LA RÉGION (CALÉS SUR LEUR BON MOIS) ---
       const regionalPool = this.REAL_REGIONAL_EVENTS[deptInfo.region] || [];
       regionalPool.forEach((regEvt, rIdx) => {
-        if (generatedEvents.length >= 12) return; // Garder de la place pour les contextuels de commune
+        if (generatedEvents.length >= 12) return;
         if (!usedEventTitles.has(regEvt.name)) {
           usedEventTitles.add(regEvt.name);
 
           const dur = regEvt.dur || 7;
           const pub = this.roundExpectedPublic(regEvt.pub * (0.90 + Math.random() * 0.20));
           const ris = this.calculateRis(pub, regEvt.env, 'élevé', 12);
-          const fin = this.calculateFinancials(ris.minVolunteers, dur, ris.requiredVehicles, ris.scaleKey);
+          const fin = this.calculateFinancials(ris.minVolunteers, dur, ris.requiredVehicles, ris.scaleKey, regEvt);
 
           const regCommuneObj = communes.find(c => c.nom.toLowerCase().includes((regEvt.city || '').toLowerCase())) || communes[0];
           const lat = parseFloat(((regCommuneObj?.lat || station.lat) + (Math.random() - 0.5) * 0.02).toFixed(4));
           const lng = parseFloat(((regCommuneObj?.lng || station.lng) + (Math.random() - 0.5) * 0.02).toFixed(4));
 
-          // Date garantie dans le futur : échelonnée de J+6 à J+30
-          const daysAhead = 6 + (rIdx * 5) + Math.floor(Math.random() * 3);
+          // Date calée sur la BONNE PÉRIODE DE L'ANNÉE selon regEvt.month
           const startHour = regEvt.category === 'culturel' ? 18 : 14;
-          const eventDateObj = this.createFutureEventDate(currentYear, currentMonth, currentDay, daysAhead, startHour, dur, daysNames, monthsNames);
+          let eventDateObj;
+          let daysAhead;
+
+          if (regEvt.month !== undefined && regEvt.month !== null) {
+            const dateRes = this.createEventDateForSpecificMonth(regEvt.month, currentYear, currentMonth, currentDay, startHour, dur, daysNames, monthsNames, true);
+            eventDateObj = dateRes.eventDate;
+            daysAhead = dateRes.daysAhead;
+          } else {
+            daysAhead = 6 + (rIdx * 5) + Math.floor(Math.random() * 3);
+            eventDateObj = this.createFutureEventDate(currentYear, currentMonth, currentDay, daysAhead, startHour, dur, daysNames, monthsNames);
+          }
 
           generatedEvents.push({
             id: `real-reg-${deptCode}-${rIdx}-${Date.now()}`,
@@ -770,6 +856,15 @@
             address: `${regEvt.venue}, ${regEvt.city}`,
             lat,
             lng,
+            month: regEvt.month,
+            isMultiDays: !!regEvt.isMultiDays,
+            durationDays: regEvt.durationDays || (regEvt.isMultiDays ? 28 : 1),
+            weekdayDaysCount: regEvt.weekdayDaysCount || (regEvt.isMultiDays ? 20 : 0),
+            weekendDaysCount: regEvt.weekendDaysCount || (regEvt.isMultiDays ? 8 : 0),
+            weekdayHours: regEvt.weekdayHours || (regEvt.isMultiDays ? 6 : dur),
+            weekendHours: regEvt.weekendHours || (regEvt.isMultiDays ? 10 : dur),
+            configuredVolunteersWeekday: regEvt.isMultiDays ? Math.max(2, Math.round(ris.minVolunteers * 0.5)) : null,
+            configuredVolunteersWeekend: regEvt.isMultiDays ? ris.minVolunteers : null,
             eventDate: eventDateObj,
             durationHours: dur,
             publicCount: `${pub.toLocaleString('fr-FR')} participants & public`,

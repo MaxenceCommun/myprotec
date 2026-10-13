@@ -116,6 +116,14 @@ window.ProtecFinances = {
       icon: 'award',
       badgeClass: 'bg-violet-100 text-violet-800 border-violet-200'
     },
+    salaires: {
+      id: 'salaires',
+      label: 'Salariés, Indemnités & RH',
+      shortLabel: 'Salaires & RH',
+      type: 'depense',
+      icon: 'briefcase',
+      badgeClass: 'bg-teal-100 text-teal-800 border-teal-200'
+    },
     frais: {
       id: 'frais',
       label: 'Frais Généraux & Assurances',
@@ -137,23 +145,27 @@ window.ProtecFinances = {
   // Normalisation intelligente des catégories passées ou brutes
   normalizeCategory(item) {
     let cat = (item.category || '').toLowerCase().trim();
+    if (cat === 'salaires' || cat === 'personnel' || cat === 'rh') return 'salaires';
     if (cat === 'materiel' || cat === 'equipement') return 'logistique';
     if (cat === 'communication') return 'dons';
     if (cat === 'prestation' || cat === 'general' || !cat || !this.CATEGORIES[cat]) {
       const lbl = (item.label || '').toLowerCase();
+      if (lbl.includes('salaire') || lbl.includes('indemnité mensuelle') || lbl.includes('virement mensuel') || lbl.includes('service civique') || lbl.includes('rh')) {
+        return 'salaires';
+      }
       if (lbl.includes('dps') || lbl.includes('dispositif') || lbl.includes('poste') || lbl.includes('course') || lbl.includes('match') || lbl.includes('festival') || lbl.includes('trail') || lbl.includes('concert')) {
         return 'dps';
       }
       if (lbl.includes('samu') || lbl.includes('sdis') || lbl.includes('garde') || lbl.includes('pompiers')) {
         return item.amount >= 0 ? (lbl.includes('dotation') ? 'subvention' : 'garde') : 'frais';
       }
-      if (lbl.includes('formation') || lbl.includes('psc1') || lbl.includes('sst') || lbl.includes('gqs')) {
+      if (lbl.includes('formation') || lbl.includes('psc1') || lbl.includes('sst') || lbl.includes('gqs') || lbl.includes('b2b')) {
         return item.amount >= 0 ? 'formation' : 'formation_interne';
       }
       if (lbl.includes('véhicule') || lbl.includes('vpsp') || lbl.includes('vtu') || lbl.includes('vl') || lbl.includes('vtp') || lbl.includes('pma')) {
         return item.amount < 0 ? 'vehicule' : 'dps';
       }
-      if (lbl.includes('subvention') || lbl.includes('dotation') || lbl.includes('fdva') || lbl.includes('cump') || lbl.includes('conventionnement') || lbl.includes('mairie') || lbl.includes('état')) {
+      if (lbl.includes('subvention') || lbl.includes('dotation') || lbl.includes('fdva') || lbl.includes('cump') || lbl.includes('conventionnement') || lbl.includes('mairie') || lbl.includes('état') || lbl.includes('partenariat')) {
         return 'subvention';
       }
       if (lbl.includes('renfort') || lbl.includes('zonal') || lbl.includes('colonne') || lbl.includes('alliance')) {
@@ -165,126 +177,147 @@ window.ProtecFinances = {
       if (lbl.includes('pompage') || lbl.includes('épuisement') || lbl.includes('maraude')) {
         return 'prestation';
       }
-      if (lbl.includes('lot') || lbl.includes('matériel') || lbl.includes('dae') || lbl.includes('oxygène') || lbl.includes('trousse') || lbl.includes('pansement')) {
+      if (lbl.includes('lot') || lbl.includes('matériel') || lbl.includes('dae') || lbl.includes('oxygène') || lbl.includes('trousse') || lbl.includes('pansement') || lbl.includes('consommable')) {
         return 'logistique';
       }
-      if (lbl.includes('loyer') || lbl.includes('antenne') || lbl.includes('locaux') || lbl.includes('bail')) {
+      if (lbl.includes('loyer') || lbl.includes('antenne') || lbl.includes('locaux') || lbl.includes('bail') || lbl.includes('travaux') || lbl.includes('isolation')) {
         return 'locaux';
       }
-      if (lbl.includes('carburant') || lbl.includes('révision') || lbl.includes('entretien') || lbl.includes('contrôle')) {
+      if (lbl.includes('carburant') || lbl.includes('révision') || lbl.includes('entretien') || lbl.includes('contrôle') || lbl.includes('garage') || lbl.includes('ct')) {
         return 'entretien';
       }
-      if (lbl.includes('pse') || lbl.includes('chef') || lbl.includes('recyclage') || lbl.includes('stagiaire')) {
+      if (lbl.includes('pse') || lbl.includes('chef') || lbl.includes('recyclage') || lbl.includes('stagiaire') || lbl.includes('permis') || lbl.includes('promotion')) {
         return 'formation_interne';
       }
-      if (lbl.includes('assurance') || lbl.includes('cotisation') || lbl.includes('agrément') || lbl.includes('frais')) {
+      if (lbl.includes('assurance') || lbl.includes('cotisation') || lbl.includes('agrément') || lbl.includes('frais') || lbl.includes('aasc') || lbl.includes('abonnement')) {
         return 'frais';
       }
     }
     return this.CATEGORIES[cat] ? cat : (item.amount >= 0 ? 'dps' : 'logistique');
   },
 
-  // Initialisation et enrichissement réaliste si historique vide ou minimal
+  // Initialisation et assainissement 100% réel de la trésorerie (AUCUNE OPÉRATION FICTIVE)
   injectState(game) {
+    if (!game) return;
     if (!game.financesHistory || !Array.isArray(game.financesHistory)) {
       game.financesHistory = [];
     }
 
-    // Normalisation de chaque entrée existante
-    game.financesHistory.forEach((h, index) => {
-      if (!h.id) h.id = `tx-${h.timestamp || Date.now()}-${index}`;
-      h.category = this.normalizeCategory(h);
-      h.type = h.amount >= 0 ? 'recette' : 'depense';
+    // 1. Élimination impérative de toute entrée fictive résiduelle des anciennes versions/démos
+    const fakeKeywords = [
+      'foulées municipales',
+      'festival de printemps',
+      'course pédestre',
+      'station partenaire',
+      'centrale d’achats sécurité civile',
+      'centrale d\'achats',
+      'renfort opérationnel zonal soutien crues',
+      'campagne de dons citoyens & mécénat local'
+    ];
+    game.financesHistory = game.financesHistory.filter(h => {
+      if (!h) return false;
+      if (h.id && String(h.id).startsWith('tx-seed-')) return false;
+      const lbl = (h.label || '').toLowerCase();
+      if (fakeKeywords.some(kw => lbl.includes(kw))) return false;
+      return true;
     });
 
-    // Si historique trop faible (< 4 opérations), amorcer un historique comptable complet et réaliste
-    // dont le solde final coïncide rigoureusement avec le solde actuel du joueur !
-    if (game.financesHistory.length <= 1) {
-      const finalBalance = game.resources?.money || 15000;
-      const now = Date.now();
-      const oneHour = 3600 * 1000;
-      const oneDay = 24 * oneHour;
+    const currentMoney = Number(game.resources?.money) || 15000;
+    const now = Date.now();
 
-      // Séquence type d'opérations d'antenne avec libellés officiels Protection Civile
-      const seedOperations = [
-        { label: 'Dotation Initiale Préfecture & Commune', category: 'subvention', amount: 10000, daysAgo: 10, tier: 'Préfecture / Mairie', ref: 'SUBV-2026-01' },
-        { label: 'Agrément Préfectoral AASC & Frais d’immatriculation', category: 'frais', amount: -350, daysAgo: 9, tier: 'Préfecture', ref: 'ADM-PREF-04' },
-        { label: 'Achat Lot Matériel Premiers Secours (Lots A & B, DAE)', category: 'logistique', amount: -2150, daysAgo: 8, tier: 'Centrale d’Achats Sécurité Civile', ref: 'FAC-MED-102' },
-        { label: 'Assurances Nationales Bénévoles & Adhésion FNPC', category: 'frais', amount: -650, daysAgo: 7, tier: 'Fédération Nationale', ref: 'COTIS-FNPC-26' },
-        { label: 'Conventionnement Initial Régulation SAMU 15', category: 'subvention', amount: 350, daysAgo: 6, tier: 'CHRU / SAMU 15', ref: 'CONV-SAMU-01' },
-        { label: 'Session Formation Grand Public PSC1 (10 stagiaires)', category: 'formation', amount: 600, daysAgo: 5, tier: 'Inscriptions Citoyennes', ref: 'FORM-PSC1-01' },
-        { label: 'Carburant & Révision Réglementaire Flotte', category: 'entretien', amount: -180, daysAgo: 4, tier: 'Station Partenaire', ref: 'CARB-FLOTTE-11' },
-        { label: 'DPS Course Pédestre des Foulées Municipales', category: 'dps', amount: 850, daysAgo: 3, tier: 'Comité des Fêtes', ref: 'DPS-SPORT-05' },
-        { label: 'Stage Formation Interne PSE2 (2 Secouristes promus)', category: 'formation_interne', amount: -450, daysAgo: 2, tier: 'Centre National de Formation', ref: 'STG-PSE2-02' },
-        { label: 'Renfort Opérationnel Zonal Soutien Crues & Inondations', category: 'renfort', amount: 480, daysAgo: 1.5, tier: 'Zone de Défense', ref: 'RENF-ZONAL-09' },
-        { label: 'Campagne de Dons Citoyens & Mécénat Local', category: 'dons', amount: 520, daysAgo: 1, tier: 'Plateforme Dons FNPC', ref: 'DON-MECE-33' },
-        { label: 'DPS Soirée Concert & Festival de Printemps', category: 'dps', amount: 1100, daysAgo: 0.5, tier: 'Production Événementielle', ref: 'DPS-FEST-18' }
-      ];
+    // 2. Vérifier si une dotation initiale d'ouverture existe
+    const hasInitialGrant = game.financesHistory.some(h => 
+      h.ref === 'FONDS-INITIAL-PC' || h.ref === 'DOT-INIT-01' || 
+      (h.label && (h.label.toLowerCase().includes('ouverture d’antenne') || h.label.toLowerCase().includes('dotation initiale')))
+    );
 
-      // Calcul de la somme des opérations modèles
-      const seedSum = seedOperations.reduce((acc, op) => acc + op.amount, 0);
-      const adjustment = finalBalance - seedSum;
+    if (!hasInitialGrant) {
+      // Reconstitution authentique :
+      // Calcul du capital de départ pour que la balance cumulée coïncide rigoureusement avec le solde du joueur
+      const knownOperationsSum = game.financesHistory.reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
+      const startingCapital = currentMoney - knownOperationsSum;
 
-      // Première ligne d'ajustement de dotation de départ pour garantir 100% l'exactitude du solde
       const initialDotation = {
         id: `tx-init-${now}`,
-        timestamp: now - 12 * oneDay,
-        dateStr: 'Lancement de l’Antenne',
-        amount: Math.max(5000, 10000 + adjustment),
-        label: 'Fonds Propres & Dotation de Démarrage d’Antenne',
+        timestamp: now - (14 * 24 * 3600 * 1000),
+        dateStr: 'Ouverture de l’Antenne',
+        amount: Math.max(1000, startingCapital),
+        label: 'Dotation Initiale d’Ouverture d’Antenne (Fonds Propres & Commune)',
         type: 'recette',
         category: 'subvention',
-        ref: 'FONDS-INITIAL-PC',
-        tier: 'Association Protection Civile',
-        balance: Math.max(5000, 10000 + adjustment)
+        ref: 'DOT-INIT-01',
+        tier: 'Mairie & Protection Civile',
+        balance: Math.max(1000, startingCapital)
       };
 
-      let runningBalance = initialDotation.amount;
-      const history = [initialDotation];
+      game.financesHistory.unshift(initialDotation);
+    }
 
-      seedOperations.forEach((op, idx) => {
-        runningBalance += op.amount;
-        const txTime = now - Math.round(op.daysAgo * oneDay);
-        history.push({
-          id: `tx-seed-${now}-${idx}`,
-          timestamp: txTime,
-          dateStr: new Date(txTime).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
-          amount: op.amount,
-          label: op.label,
-          type: op.amount >= 0 ? 'recette' : 'depense',
-          category: op.category,
-          ref: op.ref,
-          tier: op.tier,
-          balance: runningBalance
-        });
-      });
+    // 3. Normalisation et recalcul rigoureux des soldes cumulés chronologiques (balance)
+    game.financesHistory.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 
-      // Lier la balance du dernier élément au solde réel du jeu
-      if (history.length > 0) {
-        history[history.length - 1].balance = finalBalance;
+    // Ajustement de la dotation initiale si nécessaire pour que la somme = currentMoney
+    const totalOps = game.financesHistory.reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
+    const gap = currentMoney - totalOps;
+    if (Math.abs(gap) > 0 && game.financesHistory.length > 0) {
+      game.financesHistory[0].amount += gap;
+      if (game.financesHistory[0].amount <= 0) {
+        game.financesHistory[0].amount = 15000;
       }
+    }
 
-      game.financesHistory = history;
+    let runningBalance = 0;
+    game.financesHistory.forEach((h, index) => {
+      if (!h.id) h.id = `tx-${h.timestamp || now}-${index}`;
+      h.category = this.normalizeCategory(h);
+      h.type = Number(h.amount) >= 0 ? 'recette' : 'depense';
+      runningBalance += Number(h.amount) || 0;
+      h.balance = runningBalance;
+    });
+
+    // Le dernier élément reflète le solde bancaire exact du joueur
+    if (game.financesHistory.length > 0) {
+      game.financesHistory[game.financesHistory.length - 1].balance = currentMoney;
     }
   },
 
-  // Enregistrement d'une nouvelle opération financière dans le grand livre
-  recordTransaction(game, params) {
+  // Enregistrement d'une nouvelle opération financière dans le grand livre (Support universel objet ou arguments)
+  recordTransaction(game, amountOrParams, label, category, ref, tier) {
     if (!game) return;
     this.injectState(game);
 
-    const amount = Number(params.amount) || 0;
-    const currentMoney = game.resources?.money || 0;
-    const newBalance = currentMoney; // Solde après opération
+    let amount = 0;
+    let lbl = 'Mouvement Bancaire';
+    let cat = 'general';
+    let r = null;
+    let t = null;
+
+    if (typeof amountOrParams === 'object' && amountOrParams !== null) {
+      amount = Number(amountOrParams.amount) || 0;
+      lbl = amountOrParams.label || 'Mouvement Bancaire';
+      cat = amountOrParams.category || 'general';
+      r = amountOrParams.ref || null;
+      t = amountOrParams.tier || null;
+    } else {
+      amount = Number(amountOrParams) || 0;
+      lbl = label || 'Mouvement Bancaire';
+      cat = category || (amount >= 0 ? 'dps' : 'logistique');
+      r = ref || null;
+      t = tier || null;
+    }
+
+    const currentMoney = Number(game.resources?.money) || 0;
+    const newBalance = currentMoney; // Solde officiel après opération
 
     const normalizedCat = this.normalizeCategory({
-      category: params.category,
-      label: params.label
+      category: cat,
+      label: lbl,
+      amount: amount
     });
 
     const now = Date.now();
-    const dStr = (game.clock && game.clock.day && game.clock.month) 
-      ? `Jour ${game.clock.day} M${game.clock.month}` 
+    const dStr = (game.clock && game.clock.day && game.clock.month !== undefined) 
+      ? `Jour ${game.clock.day} / ${game.clock.month + 1} (${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })})` 
       : new Date(now).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
     const entry = {
@@ -292,19 +325,19 @@ window.ProtecFinances = {
       timestamp: now,
       dateStr: dStr,
       amount: amount,
-      label: params.label || 'Mouvement Bancaire',
+      label: lbl,
       type: amount >= 0 ? 'recette' : 'depense',
       category: normalizedCat,
-      ref: params.ref || `OP-${Math.floor(1000 + Math.random() * 9000)}`,
-      tier: params.tier || (amount >= 0 ? 'Organisateur / Donateur' : 'Fournisseur AASC'),
+      ref: r || `OP-${Math.floor(1000 + Math.random() * 9000)}`,
+      tier: t || (amount >= 0 ? 'Organisateur / Donateur' : 'Fournisseur AASC'),
       balance: newBalance
     };
 
     game.financesHistory.push(entry);
 
-    // Limitation de l'historique à 120 opérations max
-    if (game.financesHistory.length > 120) {
-      game.financesHistory = game.financesHistory.slice(-120);
+    // Limitation de l'historique à 300 opérations max
+    if (game.financesHistory.length > 300) {
+      game.financesHistory = game.financesHistory.slice(-300);
     }
 
     // Si la modale Finances est actuellement ouverte, rafraîchir son affichage

@@ -159,6 +159,27 @@ window.ProtecDepartements = {
     return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
   },
 
+  // Détermine le département correspondant à des coordonnées [lat, lng]
+  getDepartmentByCoordinates(lat, lng) {
+    if (lat === undefined || lng === undefined) return null;
+    const match = this.list.find(d => {
+      if (!d.bbox) return false;
+      const [minLat, minLng, maxLat, maxLng] = d.bbox;
+      return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+    });
+    if (match) return match;
+    let closest = null;
+    let minDist = Infinity;
+    this.list.forEach(d => {
+      const dist = this.calculateDistance(lat, lng, d.lat, d.lng);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = d;
+      }
+    });
+    return closest;
+  },
+
   // Récupère la Zone de Défense et de Sécurité officielle du département
   getZoneDefense(deptCode) {
     const d = this.getByCode(deptCode);

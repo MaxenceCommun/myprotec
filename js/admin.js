@@ -9,8 +9,14 @@ window.ProtecAdmin = {
   usersCache: [],
   archivesCache: [],
   eventsCache: [],
+  vehiclesCache: [],
+  equipmentCache: [],
+  badgesCache: [],
   activeTab: 'joueurs',
   searchFilter: '',
+  vehiclesFilter: '',
+  equipmentFilter: '',
+  badgesFilter: '',
 
   getAuthHeaders() {
     const token = localStorage.getItem('protec_auth_token') || '';
@@ -55,6 +61,8 @@ window.ProtecAdmin = {
     const tabAnnouncementsBtn = document.getElementById('admin-tab-announcements-btn');
     const tabSuspicionBtn = document.getElementById('admin-tab-suspicion-btn');
     const tabSupportBtn = document.getElementById('admin-tab-support-btn');
+    const tabVehiclesBtn = document.getElementById('admin-tab-vehicles-btn');
+    const tabEquipmentBtn = document.getElementById('admin-tab-equipment-btn');
     const tabArchivesBtn = document.getElementById('admin-tab-archives-btn');
     const tabMissionsBtn = document.getElementById('admin-tab-missions-btn');
     const tabEventsBtn = document.getElementById('admin-tab-events-btn');
@@ -63,6 +71,8 @@ window.ProtecAdmin = {
     const viewAnnouncements = document.getElementById('admin-view-announcements');
     const viewSuspicion = document.getElementById('admin-view-suspicion');
     const viewSupport = document.getElementById('admin-view-support');
+    const viewVehicles = document.getElementById('admin-view-vehicules');
+    const viewEquipment = document.getElementById('admin-view-materiel');
     const viewArchives = document.getElementById('admin-view-archives');
     const viewMissions = document.getElementById('admin-view-missions');
     const viewEvents = document.getElementById('admin-view-events');
@@ -74,6 +84,8 @@ window.ProtecAdmin = {
     if (tabAnnouncementsBtn) tabAnnouncementsBtn.className = (tab === 'annonces' ? activeClass : defaultClass);
     if (tabSuspicionBtn) tabSuspicionBtn.className = (tab === 'suspicion' ? activeClass : defaultClass);
     if (tabSupportBtn) tabSupportBtn.className = (tab === 'support' ? activeClass : defaultClass);
+    if (tabVehiclesBtn) tabVehiclesBtn.className = (tab === 'vehicules' ? activeClass : defaultClass);
+    if (tabEquipmentBtn) tabEquipmentBtn.className = (tab === 'materiel' ? activeClass : defaultClass);
     if (tabArchivesBtn) tabArchivesBtn.className = (tab === 'archives' ? activeClass : defaultClass);
     if (tabMissionsBtn) tabMissionsBtn.className = (tab === 'missions' ? activeClass : defaultClass);
     if (tabEventsBtn) tabEventsBtn.className = (tab === 'events' ? activeClass : defaultClass);
@@ -82,6 +94,8 @@ window.ProtecAdmin = {
     if (viewAnnouncements) viewAnnouncements.classList.toggle('hidden', tab !== 'annonces');
     if (viewSuspicion) viewSuspicion.classList.toggle('hidden', tab !== 'suspicion');
     if (viewSupport) viewSupport.classList.toggle('hidden', tab !== 'support');
+    if (viewVehicles) viewVehicles.classList.toggle('hidden', tab !== 'vehicules');
+    if (viewEquipment) viewEquipment.classList.toggle('hidden', tab !== 'materiel');
     if (viewArchives) viewArchives.classList.toggle('hidden', tab !== 'archives');
     if (viewMissions) viewMissions.classList.toggle('hidden', tab !== 'missions');
     if (viewEvents) viewEvents.classList.toggle('hidden', tab !== 'events');
@@ -90,6 +104,11 @@ window.ProtecAdmin = {
       this.loadResetArchives();
     } else if (tab === 'events') {
       this.loadEventsData();
+      this.loadBadgesCatalogData();
+    } else if (tab === 'vehicules') {
+      this.loadVehiclesCatalogData();
+    } else if (tab === 'materiel') {
+      this.loadEquipmentCatalogData();
     } else if (tab === 'suspicion') {
       this.renderSuspiciousAlerts();
     } else if (tab === 'support') {
@@ -480,6 +499,9 @@ window.ProtecAdmin = {
                 <label class="block font-bold text-slate-700 text-[11px] mb-0.5">Lien / URL de l'image de l'écusson :</label>
                 <div class="flex gap-2 items-center">
                   <input type="url" id="adm-badge-url" value="${bImg}" placeholder="https://..." oninput="window.ProtecAdmin.previewBadgeInEditModal()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-medium text-slate-800 bg-white" />
+                  <button type="button" onclick="window.ProtecAIBadgeGenerator && window.ProtecAIBadgeGenerator.openModal('adm-badge-url', document.getElementById('adm-event-title')?.value || '${ev.title}')" class="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:brightness-110 text-white font-black text-[10px] whitespace-nowrap shadow-xs transition flex items-center gap-1 cursor-pointer" title="Créer un écusson personnalisé par IA (Imagen 3)">
+                    ✨ IA
+                  </button>
                   <div id="adm-badge-preview-thumb" class="w-9 h-9 rounded-xl bg-purple-100 border border-purple-300 flex items-center justify-center flex-shrink-0 overflow-hidden text-[9px] font-bold text-purple-700">
                     ${bImg ? `<img src="${bImg}" class="w-full h-full object-cover" onerror="this.parentElement.textContent='Erreur';" />` : 'Aperçu'}
                   </div>
@@ -1594,6 +1616,12 @@ window.ProtecAdmin = {
           <button id="admin-tab-support-btn" onclick="window.ProtecAdmin.switchTab('support')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
             🛠️ Support Flotte & Missions
           </button>
+          <button id="admin-tab-vehicles-btn" onclick="window.ProtecAdmin.switchTab('vehicules')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
+            🚑 Véhicules
+          </button>
+          <button id="admin-tab-equipment-btn" onclick="window.ProtecAdmin.switchTab('materiel')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
+            🎒 Matériel
+          </button>
           <button id="admin-tab-events-btn" onclick="window.ProtecAdmin.switchTab('events')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
             🏅 Événements & Écussons
           </button>
@@ -2136,24 +2164,121 @@ window.ProtecAdmin = {
           </div>
         </div>
 
-        <!-- Vue 4 : Modération des Événements & Écussons Proposés -->
-        <div id="admin-view-events" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-3">
-          <div class="p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-xs text-purple-900 flex items-center justify-between">
+        <!-- Vue : Gestion du Catalogue des Véhicules (Prix, Photos, Caractéristiques) -->
+        <div id="admin-view-vehicules" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-3">
+          <div class="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex items-center justify-between flex-wrap gap-2">
             <div>
-              <span class="font-extrabold block flex items-center gap-1.5">
-                <i data-lucide="award" class="w-4 h-4 text-purple-700"></i>
-                Modération Fédérale des Grands Événements & Écussons
+              <span class="font-extrabold block text-sm flex items-center gap-1.5">
+                <span>🚑</span> Gestion & Configuration de Tous les Véhicules
               </span>
-              <span class="text-[11px] text-purple-700">Examinez les propositions soumises par les directeurs d'antennes. Validez pour publier sur le réseau et débloquer les écussons, ou refusez les demandes incohérentes.</span>
+              <span class="text-[11px] text-indigo-700">Ajustez en direct les prix d'achat, les photos, capacités en équipiers, vitesses, permis requis et options (attelage, gyros) de chaque véhicule.</span>
             </div>
-            <button onclick="window.ProtecAdmin.loadEventsData()" class="px-3 py-1.5 rounded-xl bg-purple-600 text-white font-bold text-xs hover:bg-purple-700 transition cursor-pointer">
-              🔄 Actualiser
-            </button>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="window.ProtecAdmin.openCreateVehicleModal()" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <span>➕</span> Nouveau Véhicule
+              </button>
+              <button type="button" onclick="window.ProtecAdmin.resetVehiclesCatalog()" class="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs transition cursor-pointer" title="Réinitialiser au catalogue d'origine">
+                🔄 Réinitialiser
+              </button>
+            </div>
           </div>
 
-          <!-- Liste des Événements Proposés -->
-          <div id="admin-events-list-container" class="space-y-3 flex-1">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <input type="text" oninput="window.ProtecAdmin.filterVehicles(this.value)" placeholder="🔍 Rechercher un véhicule (nom, type, catégorie)..." class="w-72 px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white" />
+            <span id="admin-vehicles-count" class="text-xs font-bold text-slate-500"></span>
+          </div>
+
+          <div id="admin-vehicles-list-container" class="grid grid-cols-1 md:grid-cols-2 gap-3.5 pb-4">
             <!-- Rempli dynamiquement -->
+          </div>
+        </div>
+
+        <!-- Vue : Gestion du Catalogue de Matériel & Lots -->
+        <div id="admin-view-materiel" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-3">
+          <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <span class="font-extrabold block text-sm flex items-center gap-1.5">
+                <span>🎒</span> Gestion & Configuration de Tout le Matériel & Lots
+              </span>
+              <span class="text-[11px] text-amber-800">Modifiez les prix, les lots d'intervention (Lot A, B, C, PCM, etc.), les photos/icônes, les tailles d'encombrement et les bonus opérationnels.</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="window.ProtecAdmin.openCreateEquipmentModal()" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <span>➕</span> Nouveau Matériel / Lot
+              </button>
+              <button type="button" onclick="window.ProtecAdmin.resetEquipmentCatalog()" class="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs transition cursor-pointer" title="Réinitialiser au catalogue d'origine">
+                🔄 Réinitialiser
+              </button>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <input type="text" oninput="window.ProtecAdmin.filterEquipment(this.value)" placeholder="🔍 Rechercher un matériel (nom, id, catégorie)..." class="w-72 px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white" />
+            <span id="admin-equipment-count" class="text-xs font-bold text-slate-500"></span>
+          </div>
+
+          <div id="admin-equipment-list-container" class="grid grid-cols-1 md:grid-cols-2 gap-3.5 pb-4">
+            <!-- Rempli dynamiquement -->
+          </div>
+        </div>
+
+        <!-- Vue 4 : Modération des Événements & Écussons Proposés -->
+        <div id="admin-view-events" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4">
+          <div class="p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-xs text-purple-900 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <span class="font-extrabold block flex items-center gap-1.5 text-sm">
+                <i data-lucide="award" class="w-4 h-4 text-purple-700"></i>
+                Modération & Gestion des Événements Fédéraux
+              </span>
+              <span class="text-[11px] text-purple-700">Créez des événements officiels sur la carte, examinez les propositions des directeurs, ou validez les déploiements de crise.</span>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button type="button" onclick="window.ProtecAdmin.openCreateEventModal()" class="px-3.5 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <span>➕</span> Créer un Événement Officiel
+              </button>
+              <button type="button" onclick="window.ProtecAIBadgeGenerator && window.ProtecAIBadgeGenerator.openModal()" class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:brightness-110 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <span>🎨</span> Générateur d’Écussons IA (Gemini)
+              </button>
+              <button onclick="window.ProtecAdmin.loadEventsData()" class="px-3 py-1.5 rounded-xl bg-purple-600 text-white font-bold text-xs hover:bg-purple-700 transition cursor-pointer">
+                🔄 Actualiser
+              </button>
+            </div>
+          </div>
+
+          <!-- Liste des Événements Proposés / En Cours -->
+          <div>
+            <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <span>🎪</span> Événements Fédéraux en Cours & Proposés
+            </h4>
+            <div id="admin-events-list-container" class="space-y-3">
+              <!-- Rempli dynamiquement -->
+            </div>
+          </div>
+
+          <!-- Section 2 : Catalogue & Attribution des Écussons Officiels -->
+          <div class="pt-5 border-t border-purple-200 space-y-3">
+            <div class="p-3.5 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-900 text-white flex items-center justify-between flex-wrap gap-2 shadow-md">
+              <div>
+                <span class="font-extrabold text-sm block flex items-center gap-1.5">
+                  <span>🏅</span> Gestion de Tous les Écussons & Attribution aux Joueurs
+                </span>
+                <span class="text-[11px] text-purple-200">Gérez le catalogue officiel des écussons (images PNG, noms, raretés) et décernez-les directement aux directeurs méritants.</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="window.ProtecAdmin.openCreateBadgeModal()" class="px-3.5 py-1.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-black text-xs shadow-sm transition flex items-center gap-1 cursor-pointer">
+                  <span>➕</span> Nouvel Écusson
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <input type="text" oninput="window.ProtecAdmin.filterBadges(this.value)" placeholder="🔍 Rechercher un écusson par nom, catégorie, département..." class="w-72 px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white" />
+              <span id="admin-badges-count" class="text-xs font-bold text-slate-500"></span>
+            </div>
+
+            <div id="admin-badges-list-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pb-6">
+              <!-- Rempli dynamiquement -->
+            </div>
           </div>
         </div>
 
@@ -2611,5 +2736,1483 @@ window.ProtecAdmin = {
     game.renforts = (game.renforts || []).filter(r => !r.isExtraDept && r.zone !== 'national');
     game.showToast('Renforts Nationaux Clôturés', `${count} renfort(s) national(aux) ont été clôturés.`, 'blue');
     game.updateStatsUI();
+  },
+
+  // =========================================================================
+  // GESTION ET CONFIGURATION ADMINISTRATIVE DU CATALOGUE DES VÉHICULES
+  // =========================================================================
+  async loadVehiclesCatalogData() {
+    const container = document.getElementById('admin-vehicles-list-container');
+    if (container) {
+      container.innerHTML = `<div class="p-6 text-center text-xs text-slate-500 font-semibold animate-pulse col-span-2">Chargement du catalogue des véhicules...</div>`;
+    }
+
+    try {
+      const res = await fetch('/api/admin/catalogs', { headers: this.getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.vehicles && Array.isArray(data.vehicles) && data.vehicles.length > 0) {
+          this.vehiclesCache = data.vehicles;
+        }
+      }
+    } catch (e) {}
+
+    if (!this.vehiclesCache || this.vehiclesCache.length === 0) {
+      const local = localStorage.getItem('protec_custom_vehicle_catalog');
+      if (local) {
+        try {
+          const parsed = JSON.parse(local);
+          if (Array.isArray(parsed) && parsed.length > 0) this.vehiclesCache = parsed;
+        } catch (e) {}
+      }
+    }
+
+    if (!this.vehiclesCache || this.vehiclesCache.length === 0) {
+      const base = window.ProtecAdvanced?.vehicleCatalog || [];
+      this.vehiclesCache = JSON.parse(JSON.stringify(base));
+    }
+
+    this.renderVehiclesTable();
+  },
+
+  filterVehicles(q) {
+    this.vehiclesFilter = (q || '').toLowerCase();
+    this.renderVehiclesTable();
+  },
+
+  renderVehiclesTable() {
+    const container = document.getElementById('admin-vehicles-list-container');
+    const countEl = document.getElementById('admin-vehicles-count');
+    if (!container) return;
+
+    const list = this.vehiclesCache || [];
+    const q = this.vehiclesFilter || '';
+    const filtered = list.filter(v => 
+      !q ||
+      (v.name && v.name.toLowerCase().includes(q)) ||
+      (v.type && v.type.toLowerCase().includes(q)) ||
+      (v.category && v.category.toLowerCase().includes(q))
+    );
+
+    if (countEl) countEl.textContent = `${filtered.length} / ${list.length} véhicule(s)`;
+
+    if (filtered.length === 0) {
+      container.innerHTML = `<div class="p-8 text-center text-xs text-slate-400 col-span-2 italic">Aucun véhicule ne correspond à la recherche.</div>`;
+      return;
+    }
+
+    container.innerHTML = filtered.map((v, idx) => {
+      const realIndex = this.vehiclesCache.indexOf(v);
+      const img = v.image || 'images/vehicles/VL.png';
+      const hitch = v.hasTowHitch ? '✓ Oui' : '✕ Non';
+      return `
+        <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between space-y-3">
+          <div class="space-y-2">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="w-16 h-12 rounded-xl bg-slate-50 border border-slate-200 p-1 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <img src="${img}" alt="${v.name}" class="w-full h-full object-contain" onerror="this.src='images/vehicles/VL.png'" />
+                </div>
+                <div>
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-800 uppercase">${v.type || 'VL'}</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">${v.category || 'Général'}</span>
+                  </div>
+                  <h4 class="text-sm font-black text-slate-900 mt-0.5">${v.name}</h4>
+                </div>
+              </div>
+              <div class="text-right flex-shrink-0">
+                <span class="text-sm font-black text-emerald-700 mono-num">${Number(v.cost || 0).toLocaleString('fr-FR')} €</span>
+              </div>
+            </div>
+
+            <p class="text-[11px] text-slate-500 leading-snug line-clamp-2">${v.desc || 'Pas de description renseignée.'}</p>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-2 border-t border-slate-100 text-[10px]">
+              <div class="p-1.5 rounded-lg bg-slate-50 border border-slate-100">
+                <span class="text-slate-400 font-bold block">Capacité</span>
+                <strong class="text-slate-800">${v.capacity || 2} secouriste(s)</strong>
+              </div>
+              <div class="p-1.5 rounded-lg bg-slate-50 border border-slate-100">
+                <span class="text-slate-400 font-bold block">Vitesse max</span>
+                <strong class="text-slate-800">${v.speedKmH || 80} km/h</strong>
+              </div>
+              <div class="p-1.5 rounded-lg bg-slate-50 border border-slate-100">
+                <span class="text-slate-400 font-bold block">Permis requis</span>
+                <strong class="text-slate-800">${v.licenseLabel || v.licenseRequired || 'Permis B'}</strong>
+              </div>
+              <div class="p-1.5 rounded-lg bg-slate-50 border border-slate-100">
+                <span class="text-slate-400 font-bold block">Boule d'attelage</span>
+                <strong class="${v.hasTowHitch ? 'text-indigo-700' : 'text-slate-500'}">${hitch}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+            <span class="text-[10px] text-slate-400 truncate max-w-[200px]" title="${v.image}">📷 ${v.image}</span>
+            <div class="flex items-center gap-1.5">
+              <button onclick="window.ProtecAdmin.openEditVehicleModal(${realIndex})" class="px-2.5 py-1 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer flex items-center gap-1">
+                ✏️ Modifier
+              </button>
+              <button onclick="window.ProtecAdmin.deleteVehicle(${realIndex})" class="px-2 py-1 rounded-xl text-xs font-bold text-rose-700 hover:bg-rose-50 border border-rose-200 transition cursor-pointer" title="Supprimer">
+                🗑️
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  openEditVehicleModal(index) {
+    const v = this.vehiclesCache[index];
+    if (!v) return;
+
+    let modal = document.getElementById('admin-edit-vehicle-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'admin-edit-vehicle-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold">🚑</div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Modifier le Véhicule : ${v.name}</h3>
+              <p class="text-xs text-slate-500 font-semibold">Modifiez les tarifs, caractéristiques et photo du modèle</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('admin-edit-vehicle-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveVehicleEdit(${index});" class="space-y-3 text-xs">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Identifiant / Type :</label>
+              <input type="text" id="adm-veh-type" value="${v.type || ''}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black uppercase text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Catégorie :</label>
+              <input type="text" id="adm-veh-category" value="${v.category || 'Secours'}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Nom d'affichage complet :</label>
+            <input type="text" id="adm-veh-name" value="${v.name || ''}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Prix d'achat (€) :</label>
+              <input type="number" id="adm-veh-cost" value="${v.cost || 10000}" min="0" step="100" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-emerald-700 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Capacité (secouristes) :</label>
+              <input type="number" id="adm-veh-capacity" value="${v.capacity || 2}" min="1" max="15" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Vitesse max (km/h) :</label>
+              <input type="number" id="adm-veh-speed" value="${v.speedKmH || 80}" min="10" max="160" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Permis requis :</label>
+              <select id="adm-veh-license" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
+                <option value="B" ${v.licenseRequired === 'B' ? 'selected' : ''}>Permis B (VL Standard)</option>
+                <option value="C" ${v.licenseRequired === 'C' ? 'selected' : ''}>Permis C (Poids Lourd > 3.5t)</option>
+                <option value="Moto" ${v.licenseRequired === 'Moto' ? 'selected' : ''}>Permis Moto (MPS)</option>
+                <option value="None" ${v.licenseRequired === 'None' ? 'selected' : ''}>Aucun permis (Vélo/VTT)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Boule d'attelage remorque :</label>
+              <select id="adm-veh-hitch" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
+                <option value="true" ${v.hasTowHitch ? 'selected' : ''}>✓ Équipé d'une boule d'attelage</option>
+                <option value="false" ${!v.hasTowHitch ? 'selected' : ''}>✕ Pas d'attelage</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Chemin ou URL de l'image :</label>
+            <input type="text" id="adm-veh-image" value="${v.image || ''}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Description opérationnelle :</label>
+            <textarea id="adm-veh-desc" rows="2" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white">${v.desc || ''}</textarea>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button type="button" onclick="document.getElementById('admin-edit-vehicle-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Annuler</button>
+            <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition cursor-pointer">✓ Sauvegarder</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+  },
+
+  async saveVehicleEdit(index) {
+    const v = this.vehiclesCache[index];
+    if (!v) return;
+
+    v.type = document.getElementById('adm-veh-type').value.trim();
+    v.category = document.getElementById('adm-veh-category').value.trim();
+    v.name = document.getElementById('adm-veh-name').value.trim();
+    v.cost = parseInt(document.getElementById('adm-veh-cost').value || '10000', 10);
+    v.capacity = parseInt(document.getElementById('adm-veh-capacity').value || '2', 10);
+    v.speedKmH = parseInt(document.getElementById('adm-veh-speed').value || '80', 10);
+    v.licenseRequired = document.getElementById('adm-veh-license').value;
+    v.licenseLabel = v.licenseRequired === 'C' ? 'Permis C (Poids Lourd)' : (v.licenseRequired === 'Moto' ? 'Permis Moto' : (v.licenseRequired === 'None' ? 'Aucun Permis' : 'Permis B'));
+    v.hasTowHitch = document.getElementById('adm-veh-hitch').value === 'true';
+    v.image = document.getElementById('adm-veh-image').value.trim();
+    v.desc = document.getElementById('adm-veh-desc').value.trim();
+
+    document.getElementById('admin-edit-vehicle-modal')?.classList.add('hidden');
+    await this.saveVehiclesCatalog();
+    this.renderVehiclesTable();
+    if (window.game) window.game.showToast('Véhicule Modifié', `Les modifications sur « ${v.name} » ont été enregistrées.`, 'green');
+  },
+
+  openCreateVehicleModal() {
+    let modal = document.getElementById('admin-create-vehicle-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'admin-create-vehicle-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold">➕</div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Ajouter un Nouveau Véhicule</h3>
+              <p class="text-xs text-slate-500 font-semibold">Créez un modèle sur mesure pour la boutique du jeu</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('admin-create-vehicle-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveNewVehicle();" class="space-y-3 text-xs">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Identifiant / Type (ex: VPSP, VL, PCM) :</label>
+              <input type="text" id="adm-new-veh-type" placeholder="Ex: VLM" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black uppercase text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Catégorie :</label>
+              <input type="text" id="adm-new-veh-category" placeholder="Ex: Secours d'Urgence" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Nom d'affichage complet :</label>
+            <input type="text" id="adm-new-veh-name" placeholder="Ex: VLM - Véhicule Léger Médicalisé" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Prix d'achat (€) :</label>
+              <input type="number" id="adm-new-veh-cost" value="25000" min="0" step="100" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-emerald-700 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Capacité (secouristes) :</label>
+              <input type="number" id="adm-new-veh-capacity" value="3" min="1" max="15" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Vitesse max (km/h) :</label>
+              <input type="number" id="adm-new-veh-speed" value="90" min="10" max="160" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Permis requis :</label>
+              <select id="adm-new-veh-license" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
+                <option value="B">Permis B (VL Standard)</option>
+                <option value="C">Permis C (Poids Lourd > 3.5t)</option>
+                <option value="Moto">Permis Moto (MPS)</option>
+                <option value="None">Aucun permis (Vélo/VTT)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Boule d'attelage remorque :</label>
+              <select id="adm-new-veh-hitch" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
+                <option value="true">✓ Équipé d'une boule d'attelage</option>
+                <option value="false">✕ Pas d'attelage</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Chemin ou URL de l'image :</label>
+            <input type="text" id="adm-new-veh-image" value="images/vehicles/VL.png" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Description opérationnelle :</label>
+            <textarea id="adm-new-veh-desc" rows="2" placeholder="Décrivez le rôle et les spécificités du véhicule..." class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white"></textarea>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button type="button" onclick="document.getElementById('admin-create-vehicle-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Annuler</button>
+            <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition cursor-pointer">✓ Créer le Véhicule</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+  },
+
+  async saveNewVehicle() {
+    const lic = document.getElementById('adm-new-veh-license').value;
+    const newVeh = {
+      type: document.getElementById('adm-new-veh-type').value.trim().toUpperCase(),
+      category: document.getElementById('adm-new-veh-category').value.trim(),
+      name: document.getElementById('adm-new-veh-name').value.trim(),
+      cost: parseInt(document.getElementById('adm-new-veh-cost').value || '10000', 10),
+      capacity: parseInt(document.getElementById('adm-new-veh-capacity').value || '2', 10),
+      speedKmH: parseInt(document.getElementById('adm-new-veh-speed').value || '80', 10),
+      licenseRequired: lic,
+      licenseLabel: lic === 'C' ? 'Permis C (Poids Lourd)' : (lic === 'Moto' ? 'Permis Moto' : (lic === 'None' ? 'Aucun Permis' : 'Permis B')),
+      hasTowHitch: document.getElementById('adm-new-veh-hitch').value === 'true',
+      image: document.getElementById('adm-new-veh-image').value.trim() || 'images/vehicles/VL.png',
+      desc: document.getElementById('adm-new-veh-desc').value.trim()
+    };
+
+    this.vehiclesCache.push(newVeh);
+    document.getElementById('admin-create-vehicle-modal')?.classList.add('hidden');
+    await this.saveVehiclesCatalog();
+    this.renderVehiclesTable();
+    if (window.game) window.game.showToast('Nouveau Véhicule Créé', `« ${newVeh.name} » a été ajouté au catalogue.`, 'green');
+  },
+
+  async deleteVehicle(index) {
+    const v = this.vehiclesCache[index];
+    if (!v) return;
+
+    const ok = confirm(`Êtes-vous sûr de vouloir supprimer définitivement le véhicule « ${v.name} » ?`);
+    if (!ok) return;
+
+    this.vehiclesCache.splice(index, 1);
+    await this.saveVehiclesCatalog();
+    this.renderVehiclesTable();
+    if (window.game) window.game.showToast('Véhicule Supprimé', `Le véhicule a été retiré du catalogue.`, 'orange');
+  },
+
+  async resetVehiclesCatalog() {
+    const ok = confirm("Réinitialiser le catalogue de véhicules aux modèles d'origine du jeu ?");
+    if (!ok) return;
+
+    localStorage.removeItem('protec_custom_vehicle_catalog');
+    const base = [
+      {
+        type: 'VPSP',
+        name: 'Véhicule de Premiers Secours à Personnes (VPSP)',
+        category: 'Secours d’Urgence',
+        desc: 'Cellule sanitaire grand volume aux normes EN 1789, brancard 3 points, oxygénothérapie et armoire d’urgence SUAP.',
+        cost: 28500,
+        capacity: 5,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B (+ Habilitation P.VPSP)',
+        speedKmH: 85,
+        hasTowHitch: false,
+        image: 'images/vehicles/master3_vpsp.png'
+      },
+      {
+        type: 'VL',
+        name: 'Véhicule de Liaison (VL)',
+        category: 'Reconnaissance Rapide',
+        desc: 'Véhicule léger avec rampe lumineuse, équipement radio et crochet d’attelage pour reconnaissance, commandement et remorquage.',
+        cost: 11500,
+        capacity: 4,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        speedKmH: 100,
+        hasTowHitch: true,
+        image: 'images/vehicles/VL.png'
+      },
+      {
+        type: 'VTU',
+        name: 'Véhicule Tout Usage (VTU)',
+        category: 'Logistique & Soutien',
+        desc: 'Fourgon utilitaire tôlé grand volume pour acheminement de matériel, tentes, lits de camp et logistique de crise.',
+        cost: 17500,
+        capacity: 3,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        speedKmH: 75,
+        hasTowHitch: true,
+        image: 'images/vehicles/master3_vtu_log.png'
+      },
+      {
+        type: 'VTP',
+        name: 'Véhicule de Transport de Personnel (VTP)',
+        category: 'Transport d’Équipes',
+        desc: 'Minibus grand confort 9 places vitré pour acheminement d’équipes complètes et relèves d’astreinte.',
+        cost: 21000,
+        capacity: 9,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        speedKmH: 85,
+        hasTowHitch: true,
+        image: 'images/vehicles/master3_vtp.png'
+      },
+      {
+        type: 'VLHR',
+        name: 'Véhicule Léger Hors Route (VLHR)',
+        category: 'Tout-Terrain',
+        desc: 'Pick-up 4x4 tout-terrain pour zones accidentées, massifs forestiers, franchissement et remorquage lourd.',
+        cost: 19500,
+        capacity: 4,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        speedKmH: 90,
+        hasTowHitch: true,
+        image: 'images/vehicles/VLHR.png'
+      },
+      {
+        type: 'FLIT',
+        name: 'Fourgon Lourd d’Intervention Technique (FLIT)',
+        category: 'Technique & Soutien Lourd',
+        desc: 'Poids Lourd de soutien lourd type FPTL/FPTSR (> 12 tonnes) avec mât d’éclairage télescopique, groupe électrogène de puissance et motopompes grande capacité.',
+        cost: 95000,
+        capacity: 3,
+        licenseRequired: 'C',
+        licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
+        speedKmH: 70,
+        hasTowHitch: true,
+        image: 'images/vehicles/FLIT.png'
+      },
+      {
+        type: 'PCM',
+        name: 'Poste de Commandement Mobile (PCM)',
+        category: 'Commandement Lourd',
+        desc: 'Centre opérationnel mobile de crise avec baie de transmissions VHF/UHF, liaisons satellites et salle de crise embarquée.',
+        cost: 45000,
+        capacity: 3,
+        licenseRequired: 'C',
+        licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
+        speedKmH: 65,
+        hasTowHitch: false,
+        image: 'images/vehicles/PCM.png'
+      },
+      {
+        type: 'ERS',
+        name: 'Embarcation de Reconnaissance et Sauvetage (ERS)',
+        category: 'Sauvetage Aquatique',
+        desc: 'Bateau pneumatique rigide (4 places) avec remorque routière fournie. Se tracte avec un véhicule à attelage.',
+        cost: 13500,
+        capacity: 4,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis Bateau & SSA',
+        speedKmH: 45,
+        hasTowHitch: false,
+        image: 'images/vehicles/ERS.png'
+      },
+      {
+        type: 'MPS',
+        name: 'Moto de Premiers Secours (MPS)',
+        category: 'Vecteur Rapide',
+        desc: 'Moto de premiers secours d’urgence pour circulation rapide en trafic dense.',
+        cost: 8500,
+        capacity: 2,
+        licenseRequired: 'Moto',
+        licenseLabel: 'Permis Moto Requis 🏍️',
+        speedKmH: 110,
+        hasTowHitch: false,
+        image: 'images/vehicles/Moto.png'
+      },
+      {
+        type: 'QUAD',
+        name: 'Quad Tout-Terrain d’Intervention',
+        category: 'Tout-Terrain Agile',
+        desc: 'Quad d’intervention pour sentiers étroits avec remorque de transport fournie.',
+        cost: 7200,
+        capacity: 2,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        speedKmH: 50,
+        hasTowHitch: false,
+        image: 'images/vehicles/QUAD.png'
+      },
+      {
+        type: 'VELO',
+        name: 'Binôme Vélo / VTT Premiers Secours',
+        category: 'Dispositif Mobile',
+        desc: 'Vélos équipés de sacoches de secours et DAE pour patrouilles douces sur berges et parcs.',
+        cost: 2500,
+        capacity: 2,
+        licenseRequired: 'None',
+        licenseLabel: 'Aucun Permis Requis 🚲',
+        speedKmH: 25,
+        hasTowHitch: false,
+        image: 'images/vehicles/VELO.png'
+      },
+      {
+        type: 'VAHU',
+        name: 'Véhicule d’Accueil & Hébergement d’Urgence (VAHU)',
+        category: 'Action Sociale',
+        desc: 'Aménagé pour maraudes, collations chaudes, distribution de couvertures et écoute sociale.',
+        cost: 16000,
+        capacity: 3,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        speedKmH: 70,
+        hasTowHitch: false,
+        image: 'images/vehicles/VAHU.png'
+      },
+      {
+        type: 'VCYN',
+        name: 'Véhicule Cynotechnique USAR (VCYN)',
+        category: 'USAR / Cyno',
+        desc: 'Fourgon cynotechnique USAR avec 2 boxes canins intégrés pour chiens de sauvetage en décombres.',
+        cost: 22500,
+        capacity: 3,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        speedKmH: 80,
+        hasTowHitch: false,
+        image: 'images/vehicles/VCYN.png'
+      },
+      {
+        type: 'REM',
+        name: 'Remorque Lot PMA & Éclairage',
+        category: 'Remorque Spécialisée',
+        desc: 'Remorque équipée d’un groupe électrogène haute puissance, tente gonflable et mâts d’éclairage nocturne.',
+        cost: 4900,
+        capacity: 0,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B (Tractée avec attelage)',
+        speedKmH: 70,
+        hasTowHitch: false,
+        image: 'images/vehicles/REM.png'
+      }
+    ];
+
+    this.vehiclesCache = base;
+    await this.saveVehiclesCatalog();
+    this.renderVehiclesTable();
+    if (window.game) window.game.showToast('Catalogue Réinitialisé', 'Le catalogue des véhicules a été restauré par défaut.', 'blue');
+  },
+
+  async saveVehiclesCatalog() {
+    try {
+      localStorage.setItem('protec_custom_vehicle_catalog', JSON.stringify(this.vehiclesCache));
+      if (window.ProtecAdvanced) {
+        window.ProtecAdvanced.vehicleCatalog = this.vehiclesCache;
+      }
+      await fetch('/api/admin/catalogs/save', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ type: 'vehicles', catalog: this.vehiclesCache })
+      });
+    } catch (e) {
+      console.warn('Erreur sauvegarde catalogue véhicules:', e);
+    }
+  },
+
+  // =========================================================================
+  // GESTION ET CONFIGURATION ADMINISTRATIVE DU CATALOGUE DE MATÉRIEL
+  // =========================================================================
+  async loadEquipmentCatalogData() {
+    const container = document.getElementById('admin-equipment-list-container');
+    if (container) {
+      container.innerHTML = `<div class="p-6 text-center text-xs text-slate-500 font-semibold animate-pulse col-span-2">Chargement du catalogue de matériel...</div>`;
+    }
+
+    try {
+      const res = await fetch('/api/admin/catalogs', { headers: this.getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.equipment && Array.isArray(data.equipment) && data.equipment.length > 0) {
+          this.equipmentCache = data.equipment;
+        }
+      }
+    } catch (e) {}
+
+    if (!this.equipmentCache || this.equipmentCache.length === 0) {
+      const local = localStorage.getItem('protec_custom_equipment_catalog');
+      if (local) {
+        try {
+          const parsed = JSON.parse(local);
+          if (Array.isArray(parsed) && parsed.length > 0) this.equipmentCache = parsed;
+        } catch (e) {}
+      }
+    }
+
+    if (!this.equipmentCache || this.equipmentCache.length === 0) {
+      const base = window.ProtecEquipements?.LOTS_CATALOG || [];
+      this.equipmentCache = JSON.parse(JSON.stringify(base));
+    }
+
+    this.renderEquipmentTable();
+  },
+
+  filterEquipment(q) {
+    this.equipmentFilter = (q || '').toLowerCase();
+    this.renderEquipmentTable();
+  },
+
+  renderEquipmentTable() {
+    const container = document.getElementById('admin-equipment-list-container');
+    const countEl = document.getElementById('admin-equipment-count');
+    if (!container) return;
+
+    const list = this.equipmentCache || [];
+    const q = this.equipmentFilter || '';
+    const filtered = list.filter(item => 
+      !q ||
+      (item.name && item.name.toLowerCase().includes(q)) ||
+      (item.id && item.id.toLowerCase().includes(q)) ||
+      (item.badge && item.badge.toLowerCase().includes(q))
+    );
+
+    if (countEl) countEl.textContent = `${filtered.length} / ${list.length} matériel(s)`;
+
+    if (filtered.length === 0) {
+      container.innerHTML = `<div class="p-8 text-center text-xs text-slate-400 col-span-2 italic">Aucun matériel ne correspond à la recherche.</div>`;
+      return;
+    }
+
+    container.innerHTML = filtered.map((item, idx) => {
+      const realIndex = this.equipmentCache.indexOf(item);
+      const icon = item.icon || '🎒';
+      return `
+        <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between space-y-3">
+          <div class="space-y-2">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 text-lg flex items-center justify-center flex-shrink-0">
+                  ${icon}
+                </div>
+                <div>
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-100 text-slate-800 font-mono">${item.id}</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">${item.badge || 'Lot'}</span>
+                  </div>
+                  <h4 class="text-sm font-black text-slate-900 mt-0.5">${item.name}</h4>
+                </div>
+              </div>
+              <div class="text-right flex-shrink-0">
+                <span class="text-sm font-black text-emerald-700 mono-num">${Number(item.price || 0).toLocaleString('fr-FR')} €</span>
+                <span class="text-[10px] text-slate-400 block font-semibold">Taille: ${item.storageSize || 1} emplacement(s)</span>
+              </div>
+            </div>
+
+            <p class="text-[11px] text-slate-600 leading-snug line-clamp-3">${item.desc || 'Pas de description.'}</p>
+
+            ${item.bonus ? `
+              <div class="p-2 rounded-xl bg-amber-50/60 border border-amber-200 text-[10.5px] text-amber-950 font-medium">
+                <strong class="text-amber-900 block text-[9px] uppercase font-black">Bonus Opérationnel :</strong>
+                ${item.bonus}
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-end gap-1.5">
+            <button onclick="window.ProtecAdmin.openEditEquipmentModal(${realIndex})" class="px-2.5 py-1 rounded-xl text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition cursor-pointer flex items-center gap-1">
+              ✏️ Modifier
+            </button>
+            <button onclick="window.ProtecAdmin.deleteEquipment(${realIndex})" class="px-2 py-1 rounded-xl text-xs font-bold text-rose-700 hover:bg-rose-50 border border-rose-200 transition cursor-pointer" title="Supprimer">
+              🗑️
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  openEditEquipmentModal(index) {
+    const item = this.equipmentCache[index];
+    if (!item) return;
+
+    let modal = document.getElementById('admin-edit-equipment-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'admin-edit-equipment-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold">🎒</div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Modifier le Matériel : ${item.name}</h3>
+              <p class="text-xs text-slate-500 font-semibold">Modifiez le prix, le volume, la description et les bonus</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('admin-edit-equipment-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveEquipmentEdit(${index});" class="space-y-3 text-xs">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Identifiant unique (ID) :</label>
+              <input type="text" id="adm-eq-id" value="${item.id || ''}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Icône Emoji ou Symbole :</label>
+              <input type="text" id="adm-eq-icon" value="${item.icon || '🎒'}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Nom du Matériel ou du Lot :</label>
+            <input type="text" id="adm-eq-name" value="${item.name || ''}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Prix d'achat (€) :</label>
+              <input type="number" id="adm-eq-price" value="${item.price || 500}" min="0" step="50" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-emerald-700 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Taille / Encombrement :</label>
+              <input type="number" id="adm-eq-size" value="${item.storageSize || 1}" min="1" max="10" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Catégorie / Badge court :</label>
+            <input type="text" id="adm-eq-badge" value="${item.badge || 'Secours'}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Description détaillée :</label>
+            <textarea id="adm-eq-desc" rows="3" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white">${item.desc || ''}</textarea>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Bonus Opérationnel / Utilité en mission :</label>
+            <textarea id="adm-eq-bonus" rows="2" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white">${item.bonus || ''}</textarea>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button type="button" onclick="document.getElementById('admin-edit-equipment-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Annuler</button>
+            <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-amber-600 hover:bg-amber-700 text-white shadow-md transition cursor-pointer">✓ Sauvegarder</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+  },
+
+  async saveEquipmentEdit(index) {
+    const item = this.equipmentCache[index];
+    if (!item) return;
+
+    item.id = document.getElementById('adm-eq-id').value.trim();
+    item.icon = document.getElementById('adm-eq-icon').value.trim();
+    item.name = document.getElementById('adm-eq-name').value.trim();
+    item.price = parseInt(document.getElementById('adm-eq-price').value || '500', 10);
+    item.storageSize = parseInt(document.getElementById('adm-eq-size').value || '1', 10);
+    item.badge = document.getElementById('adm-eq-badge').value.trim();
+    item.desc = document.getElementById('adm-eq-desc').value.trim();
+    item.bonus = document.getElementById('adm-eq-bonus').value.trim();
+
+    document.getElementById('admin-edit-equipment-modal')?.classList.add('hidden');
+    await this.saveEquipmentCatalog();
+    this.renderEquipmentTable();
+    if (window.game) window.game.showToast('Matériel Mis à Jour', `« ${item.name} » a été enregistré.`, 'green');
+  },
+
+  openCreateEquipmentModal() {
+    let modal = document.getElementById('admin-create-equipment-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'admin-create-equipment-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold">➕</div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Ajouter un Nouveau Matériel / Lot</h3>
+              <p class="text-xs text-slate-500 font-semibold">Créez un nouvel équipement ou kit spécialisé pour les antennes</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('admin-create-equipment-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveNewEquipment();" class="space-y-3 text-xs">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Identifiant unique (ID) :</label>
+              <input type="text" id="adm-new-eq-id" placeholder="Ex: lot_drone_thermique" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Icône Emoji :</label>
+              <input type="text" id="adm-new-eq-icon" value="🚁" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Nom du Matériel :</label>
+            <input type="text" id="adm-new-eq-name" placeholder="Ex: Lot Drone Reconnaissance Thermique" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Prix d'achat (€) :</label>
+              <input type="number" id="adm-new-eq-price" value="2200" min="0" step="50" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-emerald-700 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Taille / Emplacements :</label>
+              <input type="number" id="adm-new-eq-size" value="2" min="1" max="10" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Catégorie / Badge :</label>
+            <input type="text" id="adm-new-eq-badge" value="Recherche & Tech" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Description complète :</label>
+            <textarea id="adm-new-eq-desc" rows="2" placeholder="Détaillez la composition et l'équipement contenu dans ce lot..." class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white" required></textarea>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Bonus Opérationnel :</label>
+            <textarea id="adm-new-eq-bonus" rows="2" placeholder="Indiquez les avantages en mission ou en gestion de crise..." class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white"></textarea>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button type="button" onclick="document.getElementById('admin-create-equipment-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Annuler</button>
+            <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-amber-600 hover:bg-amber-700 text-white shadow-md transition cursor-pointer">✓ Créer le Matériel</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+  },
+
+  async saveNewEquipment() {
+    const newItem = {
+      id: document.getElementById('adm-new-eq-id').value.trim(),
+      icon: document.getElementById('adm-new-eq-icon').value.trim() || '🎒',
+      name: document.getElementById('adm-new-eq-name').value.trim(),
+      price: parseInt(document.getElementById('adm-new-eq-price').value || '500', 10),
+      storageSize: parseInt(document.getElementById('adm-new-eq-size').value || '1', 10),
+      badge: document.getElementById('adm-new-eq-badge').value.trim(),
+      desc: document.getElementById('adm-new-eq-desc').value.trim(),
+      bonus: document.getElementById('adm-new-eq-bonus').value.trim()
+    };
+
+    this.equipmentCache.push(newItem);
+    document.getElementById('admin-create-equipment-modal')?.classList.add('hidden');
+    await this.saveEquipmentCatalog();
+    this.renderEquipmentTable();
+    if (window.game) window.game.showToast('Matériel Ajouté', `« ${newItem.name} » a été ajouté au catalogue.`, 'green');
+  },
+
+  async deleteEquipment(index) {
+    const item = this.equipmentCache[index];
+    if (!item) return;
+
+    const ok = confirm(`Supprimer définitivement le matériel « ${item.name} » ?`);
+    if (!ok) return;
+
+    this.equipmentCache.splice(index, 1);
+    await this.saveEquipmentCatalog();
+    this.renderEquipmentTable();
+    if (window.game) window.game.showToast('Matériel Supprimé', `Le lot a été retiré.`, 'orange');
+  },
+
+  async resetEquipmentCatalog() {
+    const ok = confirm("Réinitialiser le catalogue de matériel aux lots par défaut ?");
+    if (!ok) return;
+
+    localStorage.removeItem('protec_custom_equipment_catalog');
+    if (window.ProtecEquipements?.LOTS_CATALOG) {
+      this.equipmentCache = JSON.parse(JSON.stringify(window.ProtecEquipements.LOTS_CATALOG));
+    }
+    await this.saveEquipmentCatalog();
+    this.renderEquipmentTable();
+    if (window.game) window.game.showToast('Catalogue Matériel Réinitialisé', 'Les lots ont été restaurés.', 'blue');
+  },
+
+  async saveEquipmentCatalog() {
+    try {
+      localStorage.setItem('protec_custom_equipment_catalog', JSON.stringify(this.equipmentCache));
+      if (window.ProtecEquipements) {
+        window.ProtecEquipements.LOTS_CATALOG = this.equipmentCache;
+      }
+      await fetch('/api/admin/catalogs/save', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ type: 'equipment', catalog: this.equipmentCache })
+      });
+    } catch (e) {
+      console.warn('Erreur sauvegarde catalogue matériel:', e);
+    }
+  },
+
+  // =========================================================================
+  // GESTION DU CATALOGUE DES ÉCUSSONS & ATTRIBUTION AUX JOUEURS
+  // =========================================================================
+  async loadBadgesCatalogData() {
+    const container = document.getElementById('admin-badges-list-container');
+    if (container) {
+      container.innerHTML = `<div class="p-6 text-center text-xs text-slate-500 font-semibold animate-pulse col-span-3">Chargement des écussons...</div>`;
+    }
+
+    try {
+      const res = await fetch('/api/admin/catalogs', { headers: this.getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.badges && Array.isArray(data.badges) && data.badges.length > 0) {
+          this.badgesCache = data.badges;
+        }
+      }
+    } catch (e) {}
+
+    if (!this.badgesCache || this.badgesCache.length === 0) {
+      const local = localStorage.getItem('protec_custom_badges_catalog');
+      if (local) {
+        try {
+          const parsed = JSON.parse(local);
+          if (Array.isArray(parsed) && parsed.length > 0) this.badgesCache = parsed;
+        } catch (e) {}
+      }
+    }
+
+    if (!this.badgesCache || this.badgesCache.length === 0) {
+      const base = window.ProtecEcussons?.catalog || [];
+      this.badgesCache = JSON.parse(JSON.stringify(base));
+    }
+
+    this.renderBadgesCatalogTable();
+  },
+
+  filterBadges(q) {
+    this.badgesFilter = (q || '').toLowerCase();
+    this.renderBadgesCatalogTable();
+  },
+
+  renderBadgesCatalogTable() {
+    const container = document.getElementById('admin-badges-list-container');
+    const countEl = document.getElementById('admin-badges-count');
+    if (!container) return;
+
+    const list = this.badgesCache || [];
+    const q = this.badgesFilter || '';
+    const filtered = list.filter(b => 
+      !q ||
+      (b.name && b.name.toLowerCase().includes(q)) ||
+      (b.code && b.code.toLowerCase().includes(q)) ||
+      (b.category && b.category.toLowerCase().includes(q)) ||
+      (b.rarityTier && b.rarityTier.toLowerCase().includes(q))
+    );
+
+    if (countEl) countEl.textContent = `${filtered.length} / ${list.length} écusson(s)`;
+
+    if (filtered.length === 0) {
+      container.innerHTML = `<div class="p-8 text-center text-xs text-slate-400 col-span-3 italic">Aucun écusson ne correspond à la recherche.</div>`;
+      return;
+    }
+
+    container.innerHTML = filtered.map((b, idx) => {
+      const realIndex = this.badgesCache.indexOf(b);
+      const isCustomPng = !!b.imageUrl;
+      return `
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between space-y-3">
+          <div class="space-y-2">
+            <div class="flex items-center gap-3">
+              <div class="w-14 h-16 rounded-xl bg-slate-900 border border-slate-800 p-1 flex items-center justify-center overflow-hidden flex-shrink-0 relative shadow-inner">
+                ${isCustomPng ? `
+                  <img src="${b.imageUrl}" alt="${b.name}" class="w-full h-full object-contain drop-shadow" onerror="this.parentElement.innerHTML='<span class=\\'text-lg\\'>🛡️</span>'" />
+                ` : `
+                  <div class="w-full h-full flex items-center justify-center text-xl">🛡️</div>
+                `}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-indigo-100 text-indigo-800">${b.category || 'Insigne'}</span>
+                  <span class="px-1.5 py-0.2 rounded text-[9px] font-black ${b.rarityColor || 'bg-amber-100 text-amber-800'}">${b.rarityTier || 'Rare'}</span>
+                </div>
+                <h4 class="text-xs font-black text-slate-900 truncate mt-0.5">${b.name}</h4>
+                <span class="text-[10px] text-slate-400 font-mono block">Code: ${b.code}</span>
+              </div>
+            </div>
+
+            <p class="text-[10.5px] text-slate-600 leading-snug line-clamp-2">${b.desc || 'Écusson officiel.'}</p>
+          </div>
+
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5">
+            <button onclick="window.ProtecAdmin.openAwardBadgeModal('${b.code}')" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-slate-950 shadow-xs transition cursor-pointer flex items-center gap-1">
+              🎁 Attribuer
+            </button>
+            <div class="flex items-center gap-1">
+              <button onclick="window.ProtecAdmin.openEditBadgeModal(${realIndex})" class="px-2 py-1 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer">
+                ✏️
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  openEditBadgeModal(index) {
+    const b = this.badgesCache[index];
+    if (!b) return;
+
+    let modal = document.getElementById('admin-edit-badge-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'admin-edit-badge-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-bold">🏅</div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Modifier l'Écusson : ${b.name}</h3>
+              <p class="text-xs text-slate-500 font-semibold">Ajustez le visuel PNG, le titre et la rareté</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('admin-edit-badge-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveBadgeEdit(${index});" class="space-y-3 text-xs">
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Code unique :</label>
+            <input type="text" id="adm-bdg-code" value="${b.code || ''}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Nom de l'écusson :</label>
+            <input type="text" id="adm-bdg-name" value="${b.name || ''}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Catégorie :</label>
+              <input type="text" id="adm-bdg-cat" value="${b.category || 'Special'}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Rareté :</label>
+              <select id="adm-bdg-rarity" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
+                <option value="Commun" ${b.rarityTier === 'Commun' ? 'selected' : ''}>Commun</option>
+                <option value="Peu Commun" ${b.rarityTier === 'Peu Commun' ? 'selected' : ''}>Peu Commun</option>
+                <option value="Rare" ${b.rarityTier === 'Rare' ? 'selected' : ''}>Rare</option>
+                <option value="Très Rare" ${b.rarityTier === 'Très Rare' ? 'selected' : ''}>Très Rare</option>
+                <option value="Épique" ${b.rarityTier === 'Épique' ? 'selected' : ''}>Épique</option>
+                <option value="Légendaire" ${b.rarityTier === 'Légendaire' ? 'selected' : ''}>Légendaire</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Chemin ou URL de l'image (PNG découpé) :</label>
+            <input type="text" id="adm-bdg-image" value="${b.imageUrl || ''}" placeholder="Ex: images/badges/membre_fondateur.png" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" />
+            <p class="text-[10px] text-slate-400 mt-1">Vous pouvez aussi utiliser le Générateur IA pour générer un nouvel écusson et coller son chemin ici.</p>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Description & Contexte d'obtention :</label>
+            <textarea id="adm-bdg-desc" rows="3" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white">${b.desc || ''}</textarea>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button type="button" onclick="document.getElementById('admin-edit-badge-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Annuler</button>
+            <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md transition cursor-pointer">✓ Sauvegarder</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+  },
+
+  async saveBadgeEdit(index) {
+    const b = this.badgesCache[index];
+    if (!b) return;
+
+    b.code = document.getElementById('adm-bdg-code').value.trim();
+    b.name = document.getElementById('adm-bdg-name').value.trim();
+    b.category = document.getElementById('adm-bdg-cat').value.trim();
+    b.rarityTier = document.getElementById('adm-bdg-rarity').value;
+    b.imageUrl = document.getElementById('adm-bdg-image').value.trim();
+    b.desc = document.getElementById('adm-bdg-desc').value.trim();
+
+    document.getElementById('admin-edit-badge-modal')?.classList.add('hidden');
+    await this.saveBadgesCatalog();
+    this.renderBadgesCatalogTable();
+    if (window.game) window.game.showToast('Écusson Modifié', `« ${b.name} » a été mis à jour.`, 'green');
+  },
+
+  openCreateBadgeModal() {
+    let modal = document.getElementById('admin-create-badge-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'admin-create-badge-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold">➕</div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Créer un Nouvel Écusson</h3>
+              <p class="text-xs text-slate-500 font-semibold">Ajoutez un insigne commémoratif ou départemental au jeu</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('admin-create-badge-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveNewBadge();" class="space-y-3 text-xs">
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Code unique (ex: dept_75, pionnier_2026) :</label>
+            <input type="text" id="adm-new-bdg-code" placeholder="Ex: dept_54" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Nom complet de l'écusson :</label>
+            <input type="text" id="adm-new-bdg-name" placeholder="Ex: Meurthe-et-Moselle (54)" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Catégorie :</label>
+              <input type="text" id="adm-new-bdg-cat" value="Départemental" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Rareté :</label>
+              <select id="adm-new-bdg-rarity" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
+                <option value="Commun">Commun</option>
+                <option value="Peu Commun">Peu Commun</option>
+                <option value="Rare" selected>Rare</option>
+                <option value="Très Rare">Très Rare</option>
+                <option value="Légendaire">Légendaire</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Chemin ou URL de l'image PNG :</label>
+            <input type="text" id="adm-new-bdg-image" placeholder="images/badges/mon_ecusson.png" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" />
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Description :</label>
+            <textarea id="adm-new-bdg-desc" rows="2" placeholder="Description de l'insigne..." class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white" required></textarea>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button type="button" onclick="document.getElementById('admin-create-badge-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Annuler</button>
+            <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition cursor-pointer">✓ Créer l'Écusson</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+  },
+
+  async saveNewBadge() {
+    const newBadge = {
+      code: document.getElementById('adm-new-bdg-code').value.trim(),
+      name: document.getElementById('adm-new-bdg-name').value.trim(),
+      category: document.getElementById('adm-new-bdg-cat').value.trim(),
+      rarityTier: document.getElementById('adm-new-bdg-rarity').value,
+      imageUrl: document.getElementById('adm-new-bdg-image').value.trim(),
+      desc: document.getElementById('adm-new-bdg-desc').value.trim()
+    };
+
+    this.badgesCache.push(newBadge);
+    document.getElementById('admin-create-badge-modal')?.classList.add('hidden');
+    await this.saveBadgesCatalog();
+    this.renderBadgesCatalogTable();
+    if (window.game) window.game.showToast('Nouvel Écusson Créé', `« ${newBadge.name} » a rejoint le catalogue.`, 'green');
+  },
+
+  async saveBadgesCatalog() {
+    try {
+      localStorage.setItem('protec_custom_badges_catalog', JSON.stringify(this.badgesCache));
+      if (window.ProtecEcussons) {
+        window.ProtecEcussons.catalog = this.badgesCache;
+      }
+      await fetch('/api/admin/catalogs/save', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ type: 'badges', catalog: this.badgesCache })
+      });
+    } catch (e) {
+      console.warn('Erreur sauvegarde catalogue écussons:', e);
+    }
+  },
+
+  // Modal d'attribution directe d'un écusson à un directeur
+  openAwardBadgeModal(badgeCode) {
+    const badge = (this.badgesCache || []).find(b => b.code === badgeCode);
+    if (!badge) return;
+
+    let modal = document.getElementById('admin-award-badge-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'admin-award-badge-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modal);
+    }
+
+    const players = this.usersCache || [];
+
+    modal.innerHTML = `
+      <div class="glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold">🎁</div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Décerner l'Écusson</h3>
+              <p class="text-xs text-slate-500 font-semibold">Attribuez directement cet insigne à un directeur</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('admin-award-badge-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+        </div>
+
+        <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-3">
+          <div class="w-12 h-14 rounded-xl bg-slate-900 p-1 flex items-center justify-center overflow-hidden flex-shrink-0">
+            ${badge.imageUrl ? `<img src="${badge.imageUrl}" class="w-full h-full object-contain" />` : `<span>🛡️</span>`}
+          </div>
+          <div>
+            <h4 class="text-xs font-black text-slate-900">${badge.name}</h4>
+            <span class="text-[10px] text-slate-500 block">${badge.category} • ${badge.rarityTier}</span>
+          </div>
+        </div>
+
+        <form onsubmit="event.preventDefault(); window.ProtecAdmin.submitAwardBadge('${badge.code}');" class="space-y-3 text-xs">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Sélectionner le Directeur bénéficiaire :</label>
+            <select id="adm-award-user" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required>
+              <option value="">-- Choisir un directeur dans la base --</option>
+              ${players.map(p => `
+                <option value="${p.id}">${p.username} (${p.stationName || 'Antenne'} - ${p.city || 'Ville'})</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Quantité attribuée :</label>
+            <input type="number" id="adm-award-qty" value="1" min="1" max="10" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button type="button" onclick="document.getElementById('admin-award-badge-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Annuler</button>
+            <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition cursor-pointer">✓ Décerner Officiellement</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+  },
+
+  async submitAwardBadge(badgeCode) {
+    const userId = document.getElementById('adm-award-user')?.value;
+    const qty = parseInt(document.getElementById('adm-award-qty')?.value || '1', 10);
+    if (!userId) return;
+
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    const badge = (this.badgesCache || []).find(b => b.code === badgeCode);
+
+    try {
+      const res = await fetch('/api/admin/badges/award', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ userId, badgeCode, quantity: qty })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        document.getElementById('admin-award-badge-modal')?.classList.add('hidden');
+        if (window.game) window.game.showToast('Écusson Décerné !', `L'écusson « ${badge.name} » a été remis à ${user?.username || 'le joueur'}.`, 'green');
+      } else {
+        alert(data.error || "Erreur lors de l'attribution.");
+      }
+    } catch (e) {
+      alert("Erreur réseau lors de l'attribution de l'écusson.");
+    }
+  },
+
+  // =========================================================================
+  // CRÉATION D'ÉVÉNEMENT OFFICIEL DEPUIS LE PANEL ADMIN
+  // =========================================================================
+  openCreateEventModal() {
+    let modal = document.getElementById('admin-create-event-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'admin-create-event-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modal);
+    }
+
+    const badges = this.badgesCache || [];
+
+    modal.innerHTML = `
+      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-bold">🎪</div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Créer un Nouvel Événement Fédéral Officiel</h3>
+              <p class="text-xs text-slate-500 font-semibold">Publiez une mission événementielle ouverte sur la carte de France</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('admin-create-event-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveNewEvent();" class="space-y-3 text-xs">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Titre de l'événement :</label>
+              <input type="text" id="adm-new-evt-title" placeholder="Ex: Marathon International 2026" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Catégorie :</label>
+              <select id="adm-new-evt-cat" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
+                <option value="Grand Rassemblement">Grand Rassemblement</option>
+                <option value="DPS National">DPS National</option>
+                <option value="Plan NOVI">Plan NOVI / Crise</option>
+                <option value="Sportif">Événement Sportif</option>
+                <option value="Culturel">Festival / Concert</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Adresse du dispositif :</label>
+              <input type="text" id="adm-new-evt-addr" placeholder="Ex: Stade de France" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Ville & Département :</label>
+              <input type="text" id="adm-new-evt-city" placeholder="Ex: Saint-Denis (93)" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Latitude GPS :</label>
+              <input type="number" id="adm-new-evt-lat" value="48.9244" step="0.0001" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Longitude GPS :</label>
+              <input type="number" id="adm-new-evt-lng" value="2.3601" step="0.0001" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Bénévoles requis :</label>
+              <input type="number" id="adm-new-evt-vols" value="8" min="2" max="50" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Durée (heures) :</label>
+              <input type="number" id="adm-new-evt-dur" value="6" min="1" max="48" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-0.5">Indemnité (€) :</label>
+              <input type="number" id="adm-new-evt-reward" value="1200" min="100" step="50" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-black text-emerald-700 bg-white" required />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Écusson commémoratif associé :</label>
+            <select id="adm-new-evt-badge" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
+              <option value="">-- Aucun écusson particulier --</option>
+              ${badges.map(b => `<option value="${b.code}">${b.name} (${b.rarityTier})</option>`).join('')}
+            </select>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-0.5">Description et consignes fédérales :</label>
+            <textarea id="adm-new-evt-desc" rows="2" placeholder="Détaillez le dispositif et l'objectif de la mission..." class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white" required></textarea>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button type="button" onclick="document.getElementById('admin-create-event-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Annuler</button>
+            <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-purple-700 hover:bg-purple-800 text-white shadow-md transition cursor-pointer">✓ Publier l'Événement</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+  },
+
+  async saveNewEvent() {
+    const bCode = document.getElementById('adm-new-evt-badge').value;
+    const badgeObj = (this.badgesCache || []).find(b => b.code === bCode);
+
+    const newEvent = {
+      id: `evt-adm-${Date.now()}`,
+      title: document.getElementById('adm-new-evt-title').value.trim(),
+      category: document.getElementById('adm-new-evt-cat').value,
+      address: document.getElementById('adm-new-evt-addr').value.trim(),
+      city: document.getElementById('adm-new-evt-city').value.trim(),
+      lat: parseFloat(document.getElementById('adm-new-evt-lat').value || '48.8566'),
+      lng: parseFloat(document.getElementById('adm-new-evt-lng').value || '2.3522'),
+      volunteersNeeded: parseInt(document.getElementById('adm-new-evt-vols').value || '8', 10),
+      durationHours: parseInt(document.getElementById('adm-new-evt-dur').value || '6', 10),
+      indemnisation: parseInt(document.getElementById('adm-new-evt-reward').value || '1200', 10),
+      description: document.getElementById('adm-new-evt-desc').value.trim(),
+      badge: badgeObj ? {
+        name: badgeObj.name,
+        code: badgeObj.code,
+        rarityTier: badgeObj.rarityTier,
+        imageUrl: badgeObj.imageUrl
+      } : null,
+      status: 'open',
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      await fetch('/api/admin/events/create', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(newEvent)
+      });
+    } catch (e) {}
+
+    if (window.game) {
+      if (!window.game.communityEvents) window.game.communityEvents = [];
+      window.game.communityEvents.unshift(newEvent);
+      window.game.showToast('Événement Publié !', `« ${newEvent.title} » a été mis en ligne sur la carte.`, 'purple');
+    }
+
+    document.getElementById('admin-create-event-modal')?.classList.add('hidden');
+    this.loadEventsData();
   }
 };
+

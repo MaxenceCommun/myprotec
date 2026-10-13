@@ -46,7 +46,7 @@ window.MyProtecLanding = {
       director: 'Directeur Thomas',
       department: 'Meurthe-et-Moselle (54)',
       badges: [
-        { id: 'b1', code: 'renf_fondateur', name: 'Pionnier MyProtec', cat: 'renfort', rarity: 'historique', icon: 'crown', desc: 'Attribué aux directeurs pionniers ayant ouvert leur premier centre de secours territorial.' },
+        { id: 'b1', code: 'renf_fondateur', name: 'Membre Fondateur', cat: 'renfort', rarity: 'historique', icon: 'crown', desc: 'Attribué aux directeurs membres fondateurs ayant ouvert leur premier centre de secours territorial.' },
         { id: 'b2', code: 'renf_colonne_crue', name: 'Colonne Nationale Crues & Inondations', cat: 'renfort', rarity: 'historique', icon: 'droplets', desc: 'Distinction officielle suite aux opérations majeures de pompage lourd et d’évacuation de population.' },
         { id: 'b3', code: 'spec_pma', name: 'Poste Médical Avancé (PMA)', cat: 'specialite', rarity: 'epique', icon: 'plus-square', desc: 'Aptitude certifiée au déploiement rapide d’une chaîne médicale avancée de tri d’urgence.' },
         { id: 'b4', code: 'dept_54', name: 'Territoire 54 • Meurthe-et-Moselle', cat: 'departement', rarity: 'commun', icon: 'map-pin', desc: 'Insigne officiel des unités de secours et d’action citoyenne de Meurthe-et-Moselle.' }

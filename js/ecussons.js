@@ -88,7 +88,7 @@ window.ProtecEcussons = {
     { id: 'ec-miss-festival', code: 'miss_festival', nom: 'Sécurité Festivals & Musique', description: 'Encadrement préventif et secours d’urgence sur événements musicaux.', categorie: 'mission', rarete: 'rare', icon: 'music', color: '#9333ea' },
     { id: 'ec-miss-sncf', code: 'miss_sncf', nom: 'Convention Catastrophe Ferroviaire SNCF', description: 'Agrément et réactivité sur accidents et blocages majeurs du réseau ferré.', categorie: 'mission', rarete: 'historique', icon: 'train', color: '#d97706' },
 
-    { id: 'ec-dept-54', code: 'dept_54', nom: 'Protection Civile 54 • Meurthe-et-Moselle', description: 'Écusson territorial des secouristes lorrains du 54.', categorie: 'departement', rarete: 'commun', icon: 'map-pin', color: '#2563eb' },
+    { id: 'ec-dept-54', code: 'dept_54', nom: 'Protection Civile 54 • Meurthe-et-Moselle', description: 'Écusson territorial officiel des secouristes lorrains de Meurthe-et-Moselle (54).', categorie: 'departement', rarete: 'commun', icon: 'map-pin', color: '#2563eb', imageUrl: 'images/badges/badge_meurthe_et_moselle_54.png' },
     { id: 'ec-dept-75', code: 'dept_75', nom: 'Protection Civile de Paris (75)', description: 'Écusson historique de la capitale et des brigades d’intervention parisiennes.', categorie: 'departement', rarete: 'rare', icon: 'landmark', color: '#1e40af' },
     { id: 'ec-dept-69', code: 'dept_69', nom: 'Protection Civile du Rhône (69)', description: 'Insigne officiel des unités de secours de la métropole lyonnaise.', categorie: 'departement', rarete: 'commun', icon: 'map-pin', color: '#2563eb' },
     { id: 'ec-dept-13', code: 'dept_13', nom: 'Protection Civile des Bouches-du-Rhône (13)', description: 'Écusson des secouristes méditerranéens et veille feux de forêt.', categorie: 'departement', rarete: 'rare', icon: 'flame', color: '#dc2626' },
@@ -98,7 +98,7 @@ window.ProtecEcussons = {
     { id: 'ec-renf-dpsge', code: 'renf_dps_ge', nom: 'Grande Envergure • Renfort Inter-Antennes', description: 'Décerné pour l’envoi d’un équipage en renfort solidaire sur un DPS-GE.', categorie: 'renfort', rarete: 'epique', icon: 'users', color: '#4f46e5' },
     { id: 'ec-renf-crue', code: 'renf_colonne_crue', nom: 'Colonne Nationale Crues & Inondations', description: 'Insigne de prestige remis lors des déploiements majeurs de pompage et sauvetage.', categorie: 'renfort', rarete: 'historique', icon: 'droplets', color: '#0284c7' },
     { id: 'ec-renf-zonal', code: 'renf_zonal', nom: 'Solidarité Zonale de Sécurité Civile', description: 'Appui rapide et détachement de vecteurs entre départements voisins.', categorie: 'renfort', rarete: 'rare', icon: 'share-2', color: '#0d9488' },
-    { id: 'ec-renf-fondateur', code: 'renf_fondateur', nom: 'Pionnier MyProtec', description: 'Écusson commémoratif remis aux directeurs ayant fondé leur antenne locale.', categorie: 'renfort', rarete: 'historique', icon: 'crown', color: '#eab308' }
+    { id: 'ec-renf-fondateur', code: 'renf_fondateur', nom: 'Membre Fondateur', description: 'Écusson officiel prestigieux remis aux directeurs membres fondateurs de l’Union Fédérale MyProtec.', categorie: 'renfort', rarete: 'historique', icon: 'crown', color: '#eab308', imageUrl: 'images/badges/membre_fondateur.png' }
   ],
 
   // --- INITIALISATION DU MODULE & SYNCHRONISATION ---
@@ -273,8 +273,17 @@ window.ProtecEcussons = {
     }, 4200);
   },
 
-  // --- RENDU VISUEL D'UN ÉCUSSON (SVG BRODÉ HAUTE FIDÉLITÉ) ---
+  // --- RENDU VISUEL D'UN ÉCUSSON (SVG BRODÉ HAUTE FIDÉLITÉ OU IMAGE RÉELLE) ---
   renderBadgeIconSvg(badge, size = 48) {
+    if (badge && badge.imageUrl) {
+      const h = Math.round(size * 1.28);
+      return `
+        <div class="inline-flex items-center justify-center filter drop-shadow-md transition transform hover:scale-105 select-none" style="width: ${size}px; height: ${h}px;">
+          <img src="${badge.imageUrl}" alt="${badge.nom || 'Écusson'}" class="w-full h-full object-contain drop-shadow-sm pointer-events-none" onerror="this.onerror=null; this.parentElement.innerHTML='🛡️';" />
+        </div>
+      `;
+    }
+
     const rareteColors = {
       commun: { stroke: '#94a3b8', glow: 'rgba(148, 163, 184, 0.2)' },
       rare: { stroke: '#38bdf8', glow: 'rgba(56, 189, 248, 0.4)' },
@@ -1547,5 +1556,28 @@ window.ProtecEcussons = {
     game.showToast('Annonce Retirée', 'Votre écusson a réintégré votre tableau d’antenne.', 'blue');
     await this.refreshPlayerEcussons(game);
     this.renderTableauEcussons(game);
+  },
+
+  // Chargement dynamique du catalogue personnalisé d'écussons configuré par l'admin
+  loadCustomCatalog() {
+    try {
+      const stored = localStorage.getItem('protec_custom_badges_catalog');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.catalog = parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur chargement catalogue personnalisé écussons:', e);
+    }
   }
 };
+
+// Initialisation immédiate du catalogue personnalisé d'écussons s'il existe
+try {
+  if (window.ProtecEcussons && typeof window.ProtecEcussons.loadCustomCatalog === 'function') {
+    window.ProtecEcussons.loadCustomCatalog();
+  }
+} catch (e) {}
+
