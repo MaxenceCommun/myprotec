@@ -5559,13 +5559,16 @@ class ProtecGame {
       type: 'crise',
       categoryLabel: 'Convention SNCF - Assistance Voyageurs & CHU',
       title: `[Préalerte] ${pick.title}`,
-      desc: `🟡 PRÉALERTE SNCF (Convention Partenaire) : ${pick.desc} Aucun effectif n'est pré-engagé d'avance. Lancez immédiatement la mobilisation par SMS pour recenser les secouristes disponibles.`,
+      desc: `🟡 PRÉALERTE SNCF (Convention Partenaire) : ${pick.desc} Aucun effectif n'est réservé d'office. L'antenne évalue la situation et mobilise les moyens adaptés selon ses capacités disponibles.`,
       lat: sncfCoords.lat,
       lng: sncfCoords.lng,
       scale: `Dispositif CHU SNCF (${pick.reqVol} secouristes)`,
       eventDate: { ...this.clock, hour: this.clock.hour },
       durationSeconds: 40 * 60,
       durationHours: 0.7,
+      isEvolutive: true,
+      spawnedAt: Date.now(),
+      maxResponseMinutes: 25,
       requiredVolunteers: pick.reqVol,
       requiredRanks: ['CE', 'PSE2', 'PSE1'],
       requiredVehicles: pick.vehs,
@@ -5664,17 +5667,20 @@ class ProtecGame {
   resolvePrealertAggravation(mission) {
     mission.status = 'declenche';
     mission.title = mission.title.replace('[Préalerte] ', '[ALERTE ACTIVE] ');
+    mission.spawnedAt = Date.now();
+    mission.isEvolutive = true;
+    mission.maxResponseMinutes = 20; // 20 min max pour partir en intervention
     const originName = mission.alertOrigin === 'sncf' ? 'la SNCF' : 'la Préfecture';
 
     if (window.ProtecIncidents) {
       window.ProtecIncidents.sendSystemNotification(
         `🚨 PASSAGE EN ALERTE ACTIVE !`,
-        `Aggravation confirmée ! ${originName} ordonne le déploiement immédiat pour : ${mission.title}.`,
+        `Aggravation confirmée : ${originName} sollicite l'engagement opérationnel pour : ${mission.title}. Décision de mobilisation selon vos capacités disponibles.`,
         `alert-${mission.id}`
       );
     }
 
-    this.showToast('🔴 ALERTE DÉCLENCHÉE !', `Aggravation confirmée ! ${originName} ordonne le déploiement immédiat sur zone !`, 'red');
+    this.showToast('🔴 ALERTE DÉCLENCHÉE !', `Aggravation sur zone ! ${originName} sollicite l'appui opérationnel de votre antenne.`, 'red');
 
     this.saveGame();
     this.renderMissions();
@@ -7455,7 +7461,44 @@ class ProtecGame {
     const formatH = (dt) => `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
     const rdvBaseStr = (mission.status === 'ongoing' || mission.status === 'declenche') ? 'Immédiat' : formatH(rdvBaseDate);
     const debutEventStr = formatH(startDate);
-    const finEventStr = formatH(endDate);
+
+    // RÈGLE MÉTIER : Sur les alertes, pas d'heure de fin prédéterminée si situation évolutive.
+    // On ne l'affiche qu'une fois presque terminée (phase de repli / stabilisation).
+    const isEvolutiveAlert = mission.isEvolutive || 
+      mission.status === 'declenche' || 
+      mission.status === 'prealerte' || 
+      mission.type === 'crise' || 
+      mission.alertOrigin || 
+      mission.isCrisis;
+
+    const isEndingPhase = mission.status === 'ongoing' && 
+      (mission.endingPhase || (mission.durationSeconds && mission.progress >= mission.durationSeconds * 0.8));
+
+    let finEventStr = '';
+    let finEventSub = '';
+    let durationDisplay = '';
+    let missionScheduleRangeText = '';
+
+    if (isEvolutiveAlert) {
+      if (isEndingPhase) {
+        finEventStr = `~${formatH(endDate)}`;
+        finEventSub = 'Fin estimée (Stabilisation & Repli)';
+        durationDisplay = `~${this.formatHoursAndMinutes(missionSec, true)} (Phase finale)`;
+        missionScheduleRangeText = `Déclenchée à ${debutEventStr} • Fin prévisionnelle estimée à ~${formatH(endDate)}`;
+      } else {
+        finEventStr = 'Indéterminée';
+        finEventSub = 'Situation évolutive';
+        durationDisplay = (mission.status === 'ongoing') 
+          ? `En cours (${Math.floor((mission.progress || 0) / 60)} min) • Évolutive` 
+          : 'Évolutive (En cours d\'évaluation)';
+        missionScheduleRangeText = `Déclenchée à ${debutEventStr} • Durée et fin non déterminées (Situation évolutive)`;
+      }
+    } else {
+      finEventStr = formatH(endDate);
+      finEventSub = 'Fin dispositif';
+      durationDisplay = this.formatHoursAndMinutes(missionSec, true);
+      missionScheduleRangeText = missionScheduleRange;
+    }
 
     const missionBadgeClass = mission.status === 'declenche' ? 'bg-red-600 text-white animate-pulse' :
       mission.status === 'prealerte' ? 'bg-amber-400 text-amber-950' :
@@ -7547,6 +7590,17 @@ class ProtecGame {
                   <span>Laissé sur Place / Clôturer</span>
                 </button>
               </div>
+
+              <!-- Possibilité de demander / déployer des moyens supplémentaires pendant l'événement -->
+              <div class="pt-2 border-t border-blue-100 flex items-center justify-between gap-2">
+                <div class="text-[10px] text-slate-600 font-semibold leading-tight">
+                  Dispositif : ${mission.assignedCrew?.volunteers?.length || mission.registeredVolunteers?.length || 0} secouriste(s), ${mission.assignedCrew?.vehicles?.length || (mission.assignedVehicleIds || []).filter(Boolean).length || 1} véhicule(s)
+                </div>
+                <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="px-2.5 py-1.5 rounded-lg text-[10px] font-black bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 transition flex items-center gap-1 cursor-pointer border border-indigo-200" title="Demander des moyens supplémentaires (bénévoles disponibles, SDIS ou alliances)">
+                  <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                  <span>+ Demander / Déployer Moyens</span>
+                </button>
+              </div>
             </div>
           `}
         ` : ''}
@@ -7563,7 +7617,7 @@ class ProtecGame {
               </span>
             </div>
             <p class="text-[11px] text-amber-900 leading-snug">
-              ${mission.alertOrigin === 'sncf' ? 'Convention SNCF active : Mobilisez immédiatement vos secouristes par SMS ou décrétez le passage direct en alerte réelle.' : 'Mobilisez vos secouristes par SMS pour recenser les disponibilités, ou décrétez l\'alerte active.'}
+              Situation opérationnelle en cours de qualification. Vous pouvez recenser vos disponibilités par SMS ou déclarer le passage en alerte réelle selon vos effectifs.
             </p>
             <div class="flex items-center gap-2 pt-0.5">
               <button type="button" onclick="window.game.centerMapOnMission('${mission.id}')" class="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 font-extrabold text-[11px] transition shadow-2xs flex items-center gap-1 cursor-pointer">
@@ -7612,7 +7666,7 @@ class ProtecGame {
                 </span>
                 <div class="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
                   <i data-lucide="clock" class="w-3.5 h-3.5 text-pc-blue"></i>
-                  <span>Durée : <strong class="text-slate-900">${this.formatHoursAndMinutes(missionSec, true)}</strong></span>
+                  <span>Durée : <strong class="text-slate-900">${durationDisplay}</strong></span>
                 </div>
               </div>
 
@@ -7622,7 +7676,7 @@ class ProtecGame {
                   <i data-lucide="calendar" class="w-4 h-4"></i>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <span class="font-extrabold text-slate-900 text-xs">${missionScheduleRange}</span>
+                  <span class="font-extrabold text-slate-900 text-xs">${missionScheduleRangeText}</span>
                 </div>
               </div>
 
@@ -7641,7 +7695,7 @@ class ProtecGame {
                 <div class="p-2.5 rounded-xl bg-indigo-50/80 border border-indigo-200 shadow-2xs">
                   <span class="text-[9px] uppercase font-black text-indigo-800 block">🏁 Fin Événement</span>
                   <strong class="text-xs font-black text-indigo-950 block my-0.5">${finEventStr}</strong>
-                  <span class="text-[8px] text-indigo-700 block">Fin dispositif</span>
+                  <span class="text-[8px] text-indigo-700 block">${finEventSub}</span>
                 </div>
               </div>
             </div>
@@ -8680,6 +8734,222 @@ class ProtecGame {
       this.sanitizeRenforts();
       this.showToast('Appel à Renfort Diffusé', `Alerte transmise sur la fréquence fédérale !`, 'green');
     });
+  }
+
+  // --- GESTION DES MOYENS SUPPLÉMENTAIRES DURANT L'ÉVÉNEMENT (RENFORTS SUR SITE) ---
+  openMissionReinforcementsModal(missionId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+
+    const modal = document.getElementById('main-modal');
+    const title = document.getElementById('modal-title');
+    const body = document.getElementById('modal-body');
+    if (!modal || !title || !body) return;
+
+    title.innerHTML = `
+      <div class="flex items-center gap-2">
+        <i data-lucide="user-plus" class="w-5 h-5 text-indigo-600"></i>
+        <span>Moyens Supplémentaires & Renforts : ${mission.title}</span>
+      </div>
+    `;
+
+    const assignedVolIds = mission.assignedCrew?.volunteers || mission.registeredVolunteers || [];
+    const assignedVehIds = (mission.assignedCrew?.vehicles || []).map(v => typeof v === 'object' ? v.id : v).concat(mission.assignedVehicleIds || []).filter(Boolean);
+
+    const dispoVols = (this.volunteers || []).filter(v => v.status === 'dispo' && !assignedVolIds.includes(v.id));
+    const dispoVehs = (this.vehicles || []).filter(v => (v.status === 'dispo' || v.status === 'sdis_caserne') && !assignedVehIds.includes(v.id));
+
+    body.innerHTML = `
+      <div class="space-y-4">
+        <!-- Contexte & Choix d'arbitrage -->
+        <div class="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-950 space-y-1">
+          <div class="font-black flex items-center gap-1.5">
+            <span>ℹ️</span>
+            <span>Point de situation & Dimensionnement</span>
+          </div>
+          <p class="text-[11px] text-indigo-900 leading-relaxed">
+            Vous pouvez ajuster les moyens engagés selon l'évolution du terrain et les capacités actuelles de votre antenne.
+            Aucun engagement n'est imposé : décidez en fonction de vos effectifs et du niveau d'urgence.
+          </p>
+        </div>
+
+        <!-- Section 1 : Bénévoles disponibles à la base -->
+        <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+              <i data-lucide="users" class="w-4 h-4 text-pc-blue"></i>
+              <span>Secouristes Disponibles à la Base (${dispoVols.length})</span>
+            </span>
+            <span class="text-[10px] text-slate-500 font-bold">Effectif actuel : ${assignedVolIds.length}</span>
+          </div>
+
+          ${dispoVols.length > 0 ? `
+            <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              ${dispoVols.map(v => `
+                <div class="p-2 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-base">${v.av || '👤'}</span>
+                    <div class="min-w-0">
+                      <div class="font-bold text-slate-900 truncate">${v.name}</div>
+                      <div class="text-[10px] text-slate-500">${v.rank || 'Secouriste'} • ${v.skills?.join(', ') || 'PSE'}</div>
+                    </div>
+                  </div>
+                  <button 
+                    onclick="window.game.deployReinforcementVolunteer('${mission.id}', '${v.id}')"
+                    class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="send" class="w-3 h-3"></i>
+                    <span>Engager</span>
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <p class="text-[11px] text-slate-500 italic p-2 bg-slate-50 rounded-xl">
+              Aucun secouriste n'est actuellement disponible à la base.
+            </p>
+          `}
+        </div>
+
+        <!-- Section 2 : Véhicules disponibles au garage -->
+        <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+              <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
+              <span>Véhicules Disponibles au Garage (${dispoVehs.length})</span>
+            </span>
+            <span class="text-[10px] text-slate-500 font-bold">Actifs : ${assignedVehIds.length}</span>
+          </div>
+
+          ${dispoVehs.length > 0 ? `
+            <div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              ${dispoVehs.map(veh => `
+                <div class="p-2 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-base">🚑</span>
+                    <div class="min-w-0">
+                      <div class="font-bold text-slate-900 truncate">${veh.name} (${veh.type})</div>
+                      <div class="text-[10px] text-slate-500">Carburant : ${veh.fuel || 90}%</div>
+                    </div>
+                  </div>
+                  <button 
+                    onclick="window.game.deployReinforcementVehicle('${mission.id}', '${veh.id}')"
+                    class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue hover:bg-pc-blue-hover text-white shadow-xs transition flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="send" class="w-3 h-3"></i>
+                    <span>Déployer</span>
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <p class="text-[11px] text-slate-500 italic p-2 bg-slate-50 rounded-xl">
+              Tous vos véhicules sont actuellement en mission ou en atelier.
+            </p>
+          `}
+        </div>
+
+        <!-- Section 3 : Renforts Extérieurs (SDIS / Alliances) -->
+        <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+          <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+            <i data-lucide="shield" class="w-4 h-4 text-rose-600"></i>
+            <span>Moyens Extérieurs & Partenaires</span>
+          </span>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+            <button 
+              onclick="window.game.closeModal(); if (window.ProtecIncidents) window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'sdis');"
+              class="p-2.5 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-left transition cursor-pointer space-y-1">
+              <div class="font-black text-xs text-rose-950 flex items-center gap-1.5">
+                <span>🚒</span>
+                <span>Renforts SDIS (Pompiers)</span>
+              </div>
+              <p class="text-[10px] text-rose-800 leading-tight">
+                Appel au CTA-CODIS. Décharge l'équipe mais dégrade la réputation associative auprès du SDIS.
+              </p>
+            </button>
+
+            <button 
+              onclick="window.game.closeModal(); window.game.requestAllianceRenfortForMission('${mission.id}');"
+              class="p-2.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-left transition cursor-pointer space-y-1">
+              <div class="font-black text-xs text-blue-950 flex items-center gap-1.5">
+                <span>🤝</span>
+                <span>Antennes Alliées (Fédération)</span>
+              </div>
+              <p class="text-[10px] text-blue-800 leading-tight">
+                Diffusion d'une demande de mutualisation aux sections voisines du réseau.
+              </p>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button onclick="window.game.closeModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer">
+            Fermer
+          </button>
+        </div>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  deployReinforcementVolunteer(missionId, volId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    const vol = this.volunteers.find(v => v.id === volId);
+    if (!mission || !vol) return;
+
+    if (!mission.assignedCrew) mission.assignedCrew = { volunteers: [], vehicles: [] };
+    if (!Array.isArray(mission.assignedCrew.volunteers)) mission.assignedCrew.volunteers = [];
+    if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
+
+    mission.assignedCrew.volunteers.push(vol.id);
+    mission.registeredVolunteers.push(vol.id);
+    vol.status = 'mission';
+    vol.energy = Math.max(10, (vol.energy || 90) - 15);
+
+    this.showToast('Renfort Engagé ! 🏃‍♂️', `${vol.name} rejoint l'intervention en cours sur « ${mission.title} ».`, 'green');
+
+    this.saveGame();
+    this.updateStatsUI();
+    this.renderMissions();
+    this.openMissionReinforcementsModal(missionId);
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
+  }
+
+  deployReinforcementVehicle(missionId, vehId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    const veh = this.vehicles.find(v => v.id === vehId);
+    if (!mission || !veh) return;
+
+    if (!mission.assignedCrew) mission.assignedCrew = { volunteers: [], vehicles: [] };
+    if (!Array.isArray(mission.assignedCrew.vehicles)) mission.assignedCrew.vehicles = [];
+
+    mission.assignedCrew.vehicles.push(veh);
+    veh.status = 'mission';
+
+    // Si le véhicule régularise le type requis
+    if (mission.vehicleMismatch && Array.isArray(mission.requiredVehicles)) {
+      const hasRequired = mission.requiredVehicles.some(req => veh.type === req);
+      if (hasRequired) {
+        mission.vehicleMismatch = false;
+        mission.isSlowedDown = false;
+        mission.mismatchReasons = [];
+        this.showToast('Dispositif Régularisé ! ✅', `L'arrivée du ${veh.type} (${veh.name}) rétablit l'efficacité complète sur « ${mission.title} » !`, 'blue');
+      }
+    } else {
+      this.showToast('Véhicule Déployé ! 🚑', `${veh.name} (${veh.type}) est parti renforcer « ${mission.title} ».`, 'green');
+    }
+
+    this.saveGame();
+    this.updateStatsUI();
+    this.renderMissions();
+    this.openMissionReinforcementsModal(missionId);
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
   }
 
   openStationDetails(stationId) {
@@ -14452,23 +14722,129 @@ class ProtecGame {
         window.ProtecFormations.processClockTick(this);
       }
 
-      // 1b. DÉPART AUTOMATIQUE DES DPS À L'HEURE DU POSTE
+      // 1b. DÉPART ET GESTION DU TEMPS RÉEL SUR LES ALERTES ET DPS
       if (this.clock.second === 0) {
+        // 1b-1. Contrôle des alertes urgentes déclenchées non engagées (Carence / Expiration horaire)
+        this.missions.forEach(m => {
+          if (m.status === 'declenche') {
+            const spawnedTime = m.spawnedAt || (m.eventDate ? new Date(
+              m.eventDate.year || now.getFullYear(),
+              m.eventDate.month !== undefined ? m.eventDate.month : now.getMonth(),
+              m.eventDate.day || now.getDate(),
+              m.eventDate.hour || 14,
+              m.eventDate.minute || 0
+            ).getTime() : (currentTime - 1800000));
+
+            const elapsedMinutes = (currentTime - spawnedTime) / 60000;
+            const maxResponse = m.maxResponseMinutes || 25;
+            const missionDurationSec = m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 2400);
+            const isEventOverTime = (currentTime >= (spawnedTime + (missionDurationSec * 1000)));
+
+            // Si le délai maximal d'intervention est dépassé OU si l'horaire de l'événement est révolu
+            if ((elapsedMinutes > maxResponse || isEventOverTime) && !m.carenceApplied) {
+              m.carenceApplied = true;
+              m.status = 'carence';
+
+              (m.registeredVolunteers || []).forEach(id => {
+                const vol = this.volunteers.find(v => v.id === id);
+                if (vol && vol.status === 'mission') vol.status = 'dispo';
+              });
+
+              this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 0) - 25);
+              if (this.prefectureState) {
+                this.prefectureState.trustScore = Math.max(0, (this.prefectureState.trustScore || 85) - 5);
+              }
+
+              const originLabel = m.alertOrigin === 'sncf' ? 'la SNCF' : (m.type === 'samu' ? 'le SAMU 15' : (m.type === 'pompiers' ? 'le SDIS' : 'le commanditaire'));
+              const carenceMsg = `Faute de départ dans les délais impartis (${Math.round(elapsedMinutes)} min d'attente), ${originLabel} a clôturé l'alerte « ${m.title} ». Les services publics ont assuré seuls la prise en charge (-25 réputation).`;
+
+              this.showToast('⏱️ Carence Opérationnelle Constatée !', carenceMsg, 'red');
+
+              if (window.ProtecNotifications) {
+                window.ProtecNotifications.recordNotification({
+                  title: '⏱️ Carence Opérationnelle Constatée',
+                  message: `Alerte « ${m.title} » : clôturée suite au dépassement du délai de réponse opérationnelle. Sanction de carence appliquée (-25 réputation).`,
+                  category: 'operations',
+                  level: 'danger'
+                });
+              }
+
+              if (this.selectedMissionId === m.id) {
+                this.closeDrawer();
+              }
+
+              setTimeout(() => {
+                const idx = this.missions.findIndex(item => item.id === m.id);
+                if (idx !== -1) {
+                  this.missions.splice(idx, 1);
+                  this.renderMissions();
+                  this.updateStatsUI();
+                  this.saveGame();
+                }
+              }, 6000);
+            }
+          }
+        });
+
+        // 1b-2. Contrôle des DPS planifiés dont l'heure de fin est dépassée sans engagement (Défaut de présence)
         this.missions.forEach(m => {
           if (m.type === 'dps' && m.status === 'planifie') {
             const isToday = this.clock.day === m.eventDate?.day;
             const targetHour = m.startHour || m.eventDate?.hour || 14;
-            const isHourReached = isToday && this.clock.hour >= targetHour;
+            const targetMinute = m.startMinute || m.eventDate?.minute || 0;
+            const durHours = m.durationHours || (m.durationSeconds ? m.durationSeconds / 3600 : 4);
+            const plannedStartDate = new Date(m.eventDate?.year || now.getFullYear(), m.eventDate?.month !== undefined ? m.eventDate.month : now.getMonth(), m.eventDate?.day || now.getDate(), targetHour, targetMinute, 0);
+            const plannedEndDate = new Date(plannedStartDate.getTime() + (durHours * 3600 * 1000));
 
-            if (isHourReached) {
-              const registered = m.registeredVolunteers?.length || 0;
-              if (registered >= m.requiredVolunteers && !m.autoLaunched) {
-                m.autoLaunched = true;
-                this.launchScheduledMission(m.id);
-                this.showToast('Début du Poste !', `C’est l’heure ! « ${m.title} » débute sur les lieux (${registered} secouristes en mission).`, 'blue');
-              } else if (registered < m.requiredVolunteers && !m.alertLateShown) {
-                m.alertLateShown = true;
-                this.showToast('Retard Prise de Poste !', `L’heure du poste « ${m.title} » est arrivée mais l’effectif est incomplet (${registered}/${m.requiredVolunteers}) ! L’organisateur attend son dispositif.`, 'orange');
+            // Si l'heure de fin du DPS est dépassée de plus de 15 minutes sans déploiement
+            if (currentTime > (plannedEndDate.getTime() + 15 * 60 * 1000) && !m.defautPresenceApplied) {
+              m.defautPresenceApplied = true;
+              m.status = 'annule_defaut';
+
+              (m.registeredVolunteers || []).forEach(id => {
+                const vol = this.volunteers.find(v => v.id === id);
+                if (vol && vol.status === 'mission') vol.status = 'dispo';
+              });
+
+              this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 0) - 35);
+              const cancelMsg = `L'événement « ${m.title} » est terminé et vos équipes ne se sont jamais présentées ! L'organisateur a fait constater la défaillance par la Mairie (-35 réputation).`;
+
+              this.showToast('❌ DPS Expiré - Défaut de Présence', cancelMsg, 'red');
+
+              if (window.ProtecNotifications) {
+                window.ProtecNotifications.recordNotification({
+                  title: '❌ DPS Expiré : Défaut de Présence',
+                  message: `Le DPS « ${m.title} » s'est achevé sans aucun déploiement de secours. Prestation annulée.`,
+                  category: 'dps',
+                  level: 'danger'
+                });
+              }
+
+              if (this.selectedMissionId === m.id) {
+                this.closeDrawer();
+              }
+
+              setTimeout(() => {
+                const idx = this.missions.findIndex(item => item.id === m.id);
+                if (idx !== -1) {
+                  this.missions.splice(idx, 1);
+                  this.renderMissions();
+                  this.updateStatsUI();
+                  this.saveGame();
+                }
+              }, 6000);
+            } else {
+              const isHourReached = isToday && (this.clock.hour > targetHour || (this.clock.hour === targetHour && this.clock.minute >= targetMinute));
+              if (isHourReached) {
+                const registered = m.registeredVolunteers?.length || 0;
+                if (registered >= m.requiredVolunteers && !m.autoLaunched) {
+                  m.autoLaunched = true;
+                  this.launchScheduledMission(m.id);
+                  this.showToast('Début du Poste !', `C’est l’heure ! « ${m.title} » débute sur les lieux (${registered} secouristes en mission).`, 'blue');
+                } else if (registered < m.requiredVolunteers && !m.alertLateShown) {
+                  m.alertLateShown = true;
+                  this.showToast('Retard Prise de Poste !', `L’heure du poste « ${m.title} » est arrivée mais l’effectif est incomplet (${registered}/${m.requiredVolunteers}) ! L’organisateur attend son dispositif.`, 'orange');
+                }
               }
             }
           }
