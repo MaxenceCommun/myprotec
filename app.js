@@ -365,7 +365,49 @@ class ProtecGame {
   initMultiplayer() {
     this.isBackendOnline = false;
 
-    // 1. Détection de disponibilité du serveur backend optionnel
+    // Détection de l'hébergement Cloud / PWA statique (pour éviter les erreurs 404 de /api/state)
+    const isCloudStatic = typeof window !== 'undefined' && (
+      window.location.hostname.includes('render.com') ||
+      window.location.hostname.includes('github.io') ||
+      window.location.hostname.includes('vercel.app') ||
+      window.location.protocol === 'file:'
+    );
+
+    if (isCloudStatic) {
+      this.isBackendOnline = false;
+      if (window.ProtecSupabase && window.ProtecSupabase.client) {
+        window.ProtecSupabase.getAllianceStations(this.player?.id).then(supaStations => {
+          if (supaStations && supaStations.length > 0) {
+            this.allianceStations = supaStations.map(st => ({
+              id: st.id,
+              playerId: st.player_id,
+              playerName: st.player_name || 'Directeur d’Antenne',
+              name: st.station_name,
+              city: st.city,
+              lat: st.lat,
+              lng: st.lng,
+              level: st.level || 1,
+              vehicles: st.vehicles_count || 1,
+              volunteers: st.volunteers_count || 4,
+              allianceId: st.alliance_id || 'alliance-fnpc'
+            }));
+            this.renderAllianceStations();
+          }
+        }).catch(() => {});
+      }
+      if (window.ProtecSupabase && window.ProtecAuth?.currentUser) {
+        window.ProtecSupabase.startAccountWatchdog(this);
+        window.ProtecSupabase.initMultiplayerRealtime(this);
+      }
+
+      // Battement de coeur périodique pour diffuser nos antennes
+      setInterval(() => {
+        this.syncPlayerToServer();
+      }, 15000);
+      return;
+    }
+
+    // 1. Détection de disponibilité du serveur backend optionnel (sur serveur local)
     fetch('/api/state')
       .then(res => {
         if (!res.ok) throw new Error(`Backend non disponible (HTTP ${res.status})`);
@@ -861,25 +903,27 @@ class ProtecGame {
 
   // Chargement en continu des antennes de tous les directeurs et confrères connectés ou enregistrés
   loadAllianceStations() {
-    // 1. Récupération depuis le serveur
-    fetch('/api/state')
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data && Array.isArray(data.allianceStations)) {
-          const myId = this.player?.id;
-          const validStations = data.allianceStations.filter(st => {
-            if (!st || !st.id) return false;
-            if (myId && st.playerId === myId) return false;
-            if (String(st.playerId || '').startsWith('system') || String(st.id).startsWith('station-allie') || st.isFictive) return false;
-            if (this.stations.some(my => my.id === st.id)) return false;
-            if (this.stations.some(my => Math.abs(my.lat - st.lat) < 0.0003 && Math.abs(my.lng - st.lng) < 0.0003)) return false;
-            return true;
-          });
-          this.allianceStations = validStations;
-          this.renderAllianceStations();
-        }
-      })
-      .catch(() => {});
+    // 1. Récupération depuis le serveur uniquement si le backend est actif
+    if (this.isBackendOnline) {
+      fetch('/api/state')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && Array.isArray(data.allianceStations)) {
+            const myId = this.player?.id;
+            const validStations = data.allianceStations.filter(st => {
+              if (!st || !st.id) return false;
+              if (myId && st.playerId === myId) return false;
+              if (String(st.playerId || '').startsWith('system') || String(st.id).startsWith('station-allie') || st.isFictive) return false;
+              if (this.stations.some(my => my.id === st.id)) return false;
+              if (this.stations.some(my => Math.abs(my.lat - st.lat) < 0.0003 && Math.abs(my.lng - st.lng) < 0.0003)) return false;
+              return true;
+            });
+            this.allianceStations = validStations;
+            this.renderAllianceStations();
+          }
+        })
+        .catch(() => {});
+    }
 
     // 2. Synchronisation Supabase si disponible
     if (window.ProtecSupabase && window.ProtecSupabase.client) {

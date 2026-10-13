@@ -23,12 +23,28 @@ window.ProtecAudio = {
     attention: 'sons/attention.mp3'
   },
 
+  userInteracted: false,
+
   init() {
     try {
       this.muted = localStorage.getItem('protec_audio_muted') === 'true';
     } catch (e) {
       this.muted = false;
     }
+
+    // Déblocage propre de l'AudioContext au premier geste utilisateur pour éviter les warnings Chrome
+    const unlockHandler = () => {
+      this.userInteracted = true;
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+      window.removeEventListener('pointerdown', unlockHandler);
+      window.removeEventListener('keydown', unlockHandler);
+      window.removeEventListener('click', unlockHandler);
+    };
+    window.addEventListener('pointerdown', unlockHandler, { once: true, passive: true });
+    window.addEventListener('keydown', unlockHandler, { once: true, passive: true });
+    window.addEventListener('click', unlockHandler, { once: true, passive: true });
 
     // Préchargement léger des fichiers audio
     try {
@@ -51,7 +67,8 @@ window.ProtecAudio = {
       if (!this.ctx) {
         this.ctx = new AudioCtx();
       }
-      if (this.ctx.state === 'suspended') {
+      // Ne reprendre l'AudioContext que si l'utilisateur a interagi sur la page
+      if (this.ctx.state === 'suspended' && this.userInteracted) {
         this.ctx.resume().catch(() => {});
       }
       return this.ctx;
@@ -86,12 +103,16 @@ window.ProtecAudio = {
       const promise = audio.play();
       if (promise !== undefined) {
         promise.catch(() => {
-          // Si le navigateur bloque l'autoplay direct sans interaction préalable, fallback Web Audio synthétique
-          this.playSyntheticFallback(key);
+          // Si le navigateur bloque l'autoplay direct avant un premier clic, ne pas forcer Web Audio pour éviter les warnings
+          if (this.userInteracted) {
+            this.playSyntheticFallback(key);
+          }
         });
       }
     } catch (e) {
-      this.playSyntheticFallback(key);
+      if (this.userInteracted) {
+        this.playSyntheticFallback(key);
+      }
     }
   },
 

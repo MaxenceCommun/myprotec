@@ -786,19 +786,22 @@ window.ProtecSupabase = {
         last_sync: new Date().toISOString()
       };
 
-      const { error } = await this.client
+      // 1. Contrôle préalable d'existence pour éviter l'erreur HTTP 409 (Conflict) sur on_conflict
+      const { data: existing } = await this.client
         .from('alliance_stations')
-        .upsert(payload, { onConflict: 'id' });
+        .select('id')
+        .eq('id', String(station.id))
+        .maybeSingle();
 
-      if (error) {
-        // En cas de conflit, mise à jour directe
-        const { error: updErr } = await this.client
+      if (existing && existing.id) {
+        await this.client
           .from('alliance_stations')
           .update(payload)
           .eq('id', String(station.id));
-        if (updErr) {
-          await this.client.from('alliance_stations').insert([payload]);
-        }
+      } else {
+        await this.client
+          .from('alliance_stations')
+          .insert(payload);
       }
     } catch (e) {
       // Ignorer silencieusement pour éviter de polluer la console
