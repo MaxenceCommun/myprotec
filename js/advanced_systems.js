@@ -898,7 +898,7 @@ window.ProtecAdvanced = {
     game.rewards.streakDays = streak >= 7 ? 1 : streak + 1;
 
     game.updateStatsUI();
-    game.saveGame();
+    game.saveGame(true);
     game.showToast('Récompense Quotidienne Débloquée !', pick.desc, 'green');
     game.openModule('recompenses');
   },
@@ -967,13 +967,40 @@ window.ProtecAdvanced = {
   syncAdaptiveTasks(game) {
     if (!game.rewards) return;
     const currentTier = this.detectAntennaTier(game);
-    if (!game.rewards.tier || game.rewards.tier !== currentTier || !game.rewards.dailyTasks || game.rewards.dailyTasks.length === 0) {
-      const canSwitch = !game.rewards.dailyTasks || game.rewards.dailyTasks.every(t => t.done) || (game.rewards.tier && currentTier > game.rewards.tier);
-      if (canSwitch) {
-        game.rewards.tier = currentTier;
-        game.rewards.dailyTasks = this.getTasksForTier(currentTier, false);
-        game.rewards.weeklyTasks = this.getTasksForTier(currentTier, true);
-      }
+    const today = game.clock ? game.clock.day : new Date().getDate();
+    const curWeek = (window.ProtecMultiplayer && window.ProtecMultiplayer.getWeekKey) ? window.ProtecMultiplayer.getWeekKey(game.clock) : 'W';
+
+    // 1. Initialisation des clés temporelles si absentes
+    if (game.rewards.lastDailyTaskResetDay === undefined) {
+      game.rewards.lastDailyTaskResetDay = today;
+    }
+    if (game.rewards.lastWeeklyTaskResetWeek === undefined) {
+      game.rewards.lastWeeklyTaskResetWeek = curWeek;
+    }
+
+    // 2. Renouvellement lors d'un nouveau jour calendaire in-game
+    if (game.rewards.lastDailyTaskResetDay !== today) {
+      game.rewards.lastDailyTaskResetDay = today;
+      const t = game.rewards.tier || currentTier;
+      game.rewards.dailyTasks = this.getTasksForTier(t, false);
+    }
+
+    // 3. Renouvellement lors d'une nouvelle semaine
+    if (game.rewards.lastWeeklyTaskResetWeek !== curWeek) {
+      game.rewards.lastWeeklyTaskResetWeek = curWeek;
+      const t = game.rewards.tier || currentTier;
+      game.rewards.weeklyTasks = this.getTasksForTier(t, true);
+    }
+
+    // 4. Passage de palier (uniquement si toutes les tâches en cours sont terminées ou si la liste est vide)
+    if (!game.rewards.dailyTasks || game.rewards.dailyTasks.length === 0) {
+      game.rewards.tier = currentTier;
+      game.rewards.dailyTasks = this.getTasksForTier(currentTier, false);
+      game.rewards.weeklyTasks = this.getTasksForTier(currentTier, true);
+    } else if (game.rewards.tier !== currentTier && game.rewards.dailyTasks.every(t => t.done)) {
+      game.rewards.tier = currentTier;
+      game.rewards.dailyTasks = this.getTasksForTier(currentTier, false);
+      game.rewards.weeklyTasks = this.getTasksForTier(currentTier, true);
     }
   },
 
@@ -994,6 +1021,12 @@ window.ProtecAdvanced = {
 
     // Tâches quotidiennes
     (game.rewards.dailyTasks || []).forEach(t => {
+      // Si la tâche a déjà été réclamée, on préserve strictement son état
+      if (t.done) {
+        t.current = t.goal;
+        return;
+      }
+
       // 1. Tâches de démarrage (Tier 1)
       if (t.id === 'task-starter-aasc') {
         t.current = (game.aascConvention?.signed) ? 1 : 0;
@@ -1039,6 +1072,12 @@ window.ProtecAdvanced = {
 
     // Défis hebdomadaires
     (game.rewards.weeklyTasks || []).forEach(w => {
+      // Si le défi a déjà été réclamé, on préserve strictement son état
+      if (w.done) {
+        w.current = w.goal;
+        return;
+      }
+
       // 1. Défis de démarrage (Tier 1)
       if (w.id === 'w-task-starter-recrut') {
         const hasOffer = ((game.jobOffers && game.jobOffers.length > 0) || (game.candidatures && game.candidatures.length > 0)) ? 1 : 0;
@@ -1084,12 +1123,13 @@ window.ProtecAdvanced = {
     }
 
     task.done = true;
+    task.current = task.goal;
     game.resources.money += task.reward;
     const repGained = task.reward >= 1000 ? 50 : (task.reward >= 500 ? 30 : 15);
     game.resources.reputationScore += repGained;
 
     game.updateStatsUI();
-    game.saveGame();
+    game.saveGame(true);
     game.showToast('Objectif Accompli !', `+${task.reward} € et +${repGained} réputation versés à l’antenne !`, 'green');
     game.openModule('recompenses');
   },

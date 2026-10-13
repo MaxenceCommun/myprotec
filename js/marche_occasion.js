@@ -23,267 +23,8 @@ window.ProtecMarcheOccasion = {
   hasFetched: false,
   lastFetchTime: 0,
 
-  // Données d'annonces initiales de départ (Réseau Fédéral PNJ / Antennes partenaires)
-  // Permet au marché d'être vivant immédiatement même sur un nouveau serveur vide
-  INITIAL_MARKET_SEED: [
-    {
-      id: 'seed-v-1',
-      seller_user_id: 'fed-antenne-54',
-      seller_antenne_id: 'st-nancy',
-      seller_name: 'Directeur Nancy',
-      seller_station_name: 'Antenne Métropolitaine de Nancy',
-      seller_dept: '54',
-      category: 'vehicle',
-      item_type: 'VPSP',
-      item_data: {
-        name: 'VPSP 02 NANCY (Occasion Révisée)',
-        label: 'Véhicule de Premiers Secours à Personnes (VPSP)',
-        model: 'Renault Master 2.3 dCi 135 L2H2',
-        year: 2017,
-        mileage: 138500,
-        mechanical: 88,
-        ctStatus: 'valide',
-        ctDaysLeft: 140,
-        fuel: 90,
-        capacity: 5,
-        newPriceRef: 28500,
-        image: 'images/vehicles/VPSP.png',
-        options: ['Brancard auto-chargeur', 'Gyros LED bi-tons', 'Pré-câblage radio ANTARES'],
-        desc: 'Ambulance VPSP de réserve entretenue en concession. Contrôle technique vierge, brancard et support O2 inclus.'
-      },
-      price: 16800,
-      status: 'active',
-      created_at: new Date(Date.now() - 3600 * 1000 * 5).toISOString()
-    },
-    {
-      id: 'seed-v-2',
-      seller_user_id: 'fed-antenne-57',
-      seller_antenne_id: 'st-metz',
-      seller_name: 'Directeur Metz',
-      seller_station_name: 'Protection Civile de Metz',
-      seller_dept: '57',
-      category: 'vehicle',
-      item_type: 'VTU',
-      item_data: {
-        name: 'VTU 01 METZ (Fourgon Logistique)',
-        label: 'Véhicule Tout Usage & Logistique (VTU)',
-        model: 'Renault Trafic III 2.0 dCi 120',
-        year: 2016,
-        mileage: 114000,
-        mechanical: 91,
-        ctStatus: 'valide',
-        ctDaysLeft: 210,
-        fuel: 85,
-        capacity: 3,
-        newPriceRef: 21000,
-        image: 'images/vehicles/VTU.png',
-        options: ['Aménagement bois et sangles', 'Attelage remorque', 'Rampe gyrophares'],
-        desc: 'Parfait pour transporter vos barnums, lits picot, malles de formation et motopompes sur inondations.'
-      },
-      price: 11500,
-      status: 'active',
-      created_at: new Date(Date.now() - 3600 * 1000 * 12).toISOString()
-    },
-    {
-      id: 'seed-v-3',
-      seller_user_id: 'fed-antenne-75',
-      seller_antenne_id: 'st-paris',
-      seller_name: 'Directeur Paris',
-      seller_station_name: 'Protection Civile de Paris',
-      seller_dept: '75',
-      category: 'vehicle',
-      item_type: 'VL',
-      item_data: {
-        name: 'VL 03 PARIS (Liaison & Chef de Dispositif)',
-        label: 'Véhicule de Liaison & Reconnaissance (VL)',
-        model: 'Dacia Duster 1.5 Blue dCi 4x4',
-        year: 2018,
-        mileage: 89000,
-        mechanical: 94,
-        ctStatus: 'valide',
-        ctDaysLeft: 190,
-        fuel: 95,
-        capacity: 5,
-        newPriceRef: 16000,
-        image: 'images/vehicles/VL.png',
-        options: ['Transmission 4x4', 'Avertisseur 2 tons', 'Support tablette tactique'],
-        desc: 'Excellente motricité sur terrains meubles. Idéal pour chef de secteur DPS et liaisons CODIS/SAMU.'
-      },
-      price: 9200,
-      status: 'active',
-      created_at: new Date(Date.now() - 3600 * 1000 * 24).toISOString()
-    },
-    {
-      id: 'seed-v-4',
-      seller_user_id: 'fed-antenne-69',
-      seller_antenne_id: 'st-lyon',
-      seller_name: 'Directeur Lyon',
-      seller_station_name: 'Antenne du Rhône',
-      seller_dept: '69',
-      category: 'vehicle',
-      item_type: 'VELO',
-      item_data: {
-        name: 'Binôme Vélo VTT Secours (Lot de 2)',
-        label: 'Équipage Cycliste d’Intervention Rapide',
-        model: 'VTT Électrique Tout-Chemin Renforcé',
-        year: 2021,
-        mileage: 2400,
-        mechanical: 96,
-        ctStatus: 'valide',
-        ctDaysLeft: 365,
-        fuel: 100,
-        capacity: 2,
-        newPriceRef: 3200,
-        image: 'images/vehicles/VELO.png',
-        options: ['Sacoches DSA & O2', 'Éclairage stroboscopique', 'Batterie 625 Wh'],
-        desc: 'Intervention ultrarapide au cœur des marathons, fans zones piétonnes et festivals compacts.'
-      },
-      price: 1450,
-      status: 'active',
-      created_at: new Date(Date.now() - 3600 * 1000 * 36).toISOString()
-    },
-    {
-      id: 'seed-m-1',
-      seller_user_id: 'fed-antenne-54',
-      seller_antenne_id: 'st-nancy',
-      seller_name: 'Directeur Nancy',
-      seller_station_name: 'Antenne Métropolitaine de Nancy',
-      seller_dept: '54',
-      category: 'equipment',
-      item_type: 'mannequin_rcp_adulte',
-      item_data: {
-        name: 'Mannequin Connecté QCPR Adulte',
-        label: 'Mannequin RCP Haut de Gamme Bluetooth',
-        categoryType: 'formation',
-        conditionLabel: 'Excellent État (95%)',
-        newPriceRef: 450,
-        icon: '🩺',
-        tier: 3,
-        bonus: '+25% attractivité formations PSC1/SST & retours biométriques sur tablette',
-        desc: 'Capteurs de compression/ventilation temps réel. Utilisé 6 mois en salle pédagogique, désinfecté et révisé.'
-      },
-      price: 260,
-      status: 'active',
-      created_at: new Date(Date.now() - 3600 * 1000 * 8).toISOString()
-    },
-    {
-      id: 'seed-m-2',
-      seller_user_id: 'fed-antenne-13',
-      seller_antenne_id: 'st-marseille',
-      seller_name: 'Directeur Marseille',
-      seller_station_name: 'Protection Civile 13',
-      seller_dept: '13',
-      category: 'equipment',
-      item_type: 'dsa_formation',
-      item_data: {
-        name: 'Boîtier DAE d’Entraînement Pédagogique',
-        label: 'Défibrillateur Automatisé de Formation',
-        categoryType: 'formation',
-        conditionLabel: 'Très Bon État (90%)',
-        newPriceRef: 90,
-        icon: '⚡',
-        tier: 1,
-        bonus: 'Scénarios sonores officiels ERC & électrodes réutilisables neuves',
-        desc: 'Boîtier pédagogique pour ateliers GQS et cours de secourisme d’entreprise.'
-      },
-      price: 45,
-      status: 'active',
-      created_at: new Date(Date.now() - 3600 * 1000 * 14).toISOString()
-    },
-    {
-      id: 'seed-m-3',
-      seller_user_id: 'fed-antenne-75',
-      seller_antenne_id: 'st-paris',
-      seller_name: 'Directeur Paris',
-      seller_station_name: 'Protection Civile de Paris',
-      seller_dept: '75',
-      category: 'equipment',
-      item_type: 'bureau',
-      item_data: {
-        name: 'Grand Bureau de Direction & PC Tactique',
-        label: 'Mobilier de Commandement & Administration',
-        categoryType: 'mobilier',
-        conditionLabel: 'Impeccable',
-        newPriceRef: 250,
-        icon: '💼',
-        bonus: '+10 pts d’efficacité administrative d’antenne',
-        desc: 'Bureau d’architecte 1.8m x 0.9m en chêne foncé et métal avec passe-câbles pour terminaux informatiques.'
-      },
-      price: 130,
-      status: 'active',
-      created_at: new Date(Date.now() - 3600 * 1000 * 18).toISOString()
-    },
-    {
-      id: 'seed-m-4',
-      seller_user_id: 'fed-antenne-33',
-      seller_antenne_id: 'st-bordeaux',
-      seller_name: 'Directeur Bordeaux',
-      seller_station_name: 'Protection Civile de Gironde',
-      seller_dept: '33',
-      category: 'equipment',
-      item_type: 'table_formation',
-      item_data: {
-        name: 'Pack 2 Tables Pédagogiques Rabattables',
-        label: 'Mobilier Salle de Formation',
-        categoryType: 'mobilier',
-        conditionLabel: 'Bon État (85%)',
-        newPriceRef: 360,
-        icon: '🎓',
-        bonus: '+4 places de stagiaires en salle de cours',
-        desc: 'Tables modulaires sur roulettes blocables pour réagencer rapidement la salle de cours.'
-      },
-      price: 160,
-      status: 'active',
-      created_at: new Date(Date.now() - 3600 * 1000 * 30).toISOString()
-    },
-    {
-      id: 'seed-m-5',
-      seller_user_id: 'fed-antenne-59',
-      seller_antenne_id: 'st-lille',
-      seller_name: 'Directeur Lille',
-      seller_station_name: 'Protection Civile du Nord',
-      seller_dept: '59',
-      category: 'equipment',
-      item_type: 'lit_garde',
-      item_data: {
-        name: 'Lot de 2 Lits de Garde / Astreinte Pliants',
-        label: 'Mobilier Foyer & Dortoir',
-        categoryType: 'mobilier',
-        conditionLabel: 'Très Bon État',
-        newPriceRef: 440,
-        icon: '🛏️',
-        bonus: 'Récupération rapide d’énergie pour bénévoles en astreinte de nuit',
-        desc: 'Lits de repos ergonomiques avec matelas déhoussable résistant au feu M1.'
-      },
-      price: 180,
-      status: 'active',
-      created_at: new Date(Date.now() - 3600 * 1000 * 42).toISOString()
-    },
-    {
-      id: 'seed-m-6',
-      seller_user_id: 'fed-antenne-69',
-      seller_antenne_id: 'st-lyon',
-      seller_name: 'Directeur Lyon',
-      seller_station_name: 'Antenne du Rhône',
-      seller_dept: '69',
-      category: 'equipment',
-      item_type: 'outillage_logistique',
-      item_data: {
-        name: 'Pack Électroportatif Pro & Projecteurs LED',
-        label: 'Matériel Logistique & Montage de Poste',
-        categoryType: 'logistique',
-        conditionLabel: 'Excellent État',
-        newPriceRef: 650,
-        icon: '🧰',
-        tier: 2,
-        bonus: 'Divise par deux le temps de montage de poste & -25% fatigue de nuit',
-        desc: 'Visseuses brushless 18V, 4 batteries 5Ah et 2 projecteurs 10 000 lumens sur trépieds.'
-      },
-      price: 340,
-      status: 'active',
-      created_at: new Date(Date.now() - 3600 * 1000 * 50).toISOString()
-    }
-  ],
+  // Le marché de l'occasion est 100% entre joueurs (aucune annonce générée par le jeu / PNJ)
+  INITIAL_MARKET_SEED: [],
 
   // Récupération des annonces depuis Supabase ou fallback local
   async fetchListings(force = false) {
@@ -299,14 +40,21 @@ window.ProtecMarcheOccasion = {
         remoteListings = await window.ProtecSupabase.fetchMarketListings('all', 'all');
       }
 
-      // Fusionner les annonces de la BDD et le seed initial pour les annonces non existantes
-      const localSeed = this.loadLocalSeedStorage();
-      const combined = [...remoteListings];
+      // Filtrer les annonces pour garantir qu'aucun seed système résiduel ne subsiste
+      const validRemote = (Array.isArray(remoteListings) ? remoteListings : []).filter(item => 
+        !String(item.id).startsWith('seed-') && 
+        !String(item.id).startsWith('mkt-init-') && 
+        !String(item.seller_user_id).startsWith('fed-antenne-') &&
+        !String(item.seller_user_id).startsWith('system-')
+      );
 
-      // Ajouter le seed si aucune annonce correspondante n'existe déjà
-      localSeed.forEach(seedItem => {
-        if (!combined.some(item => item.id === seedItem.id)) {
-          combined.push(seedItem);
+      const localListings = this.loadLocalSeedStorage();
+      const combined = [...validRemote];
+
+      // Ajouter les annonces locales publiées par les joueurs si non déjà présentes
+      localListings.forEach(item => {
+        if (!combined.some(existing => existing.id === item.id)) {
+          combined.push(item);
         }
       });
 
@@ -325,27 +73,40 @@ window.ProtecMarcheOccasion = {
     return this.cachedListings;
   },
 
-  // Gestion du cache local de stockage
+  // Gestion du cache local de stockage (annonces créées par les joueurs en mode hors-ligne)
   loadLocalSeedStorage() {
     try {
       const raw = localStorage.getItem('protec_market_local_listings');
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.filter(item => 
+            !String(item.id).startsWith('seed-') && 
+            !String(item.id).startsWith('mkt-init-') && 
+            !String(item.seller_user_id).startsWith('fed-antenne-') &&
+            !String(item.seller_user_id).startsWith('system-')
+          );
+        }
       }
     } catch (e) {}
-    return [...this.INITIAL_MARKET_SEED];
+    return [];
   },
 
   saveLocalSeedStorage(list) {
     try {
-      localStorage.setItem('protec_market_local_listings', JSON.stringify(list));
+      const cleanList = (Array.isArray(list) ? list : []).filter(item => 
+        !String(item.id).startsWith('seed-') && 
+        !String(item.id).startsWith('mkt-init-') && 
+        !String(item.seller_user_id).startsWith('fed-antenne-') &&
+        !String(item.seller_user_id).startsWith('system-')
+      );
+      localStorage.setItem('protec_market_local_listings', JSON.stringify(cleanList));
     } catch (e) {}
   },
 
   // Événement temps réel reçu depuis Supabase Realtime
   handleRealtimeEvent(payload, game) {
-    console.log('⚡ Événement Bourse de l’Occasion reçu:', payload);
+    console.log('⚡ Événement Marché de l’Occasion reçu:', payload);
     const eventType = payload.eventType || payload.type;
     
     // Notification si une de mes annonces a été achetée par un autre joueur
@@ -396,15 +157,15 @@ window.ProtecMarcheOccasion = {
     const bodyEl = document.getElementById('modal-body');
 
     if (modal) modal.classList.remove('hidden');
-    if (titleEl) titleEl.textContent = 'Bourse de l’Occasion • Marché Inter-Antennes';
-    if (subtitleEl) subtitleEl.textContent = 'Parc roulant révisé, lots de secours et mobilier d’antenne revendus entre directeurs';
+    if (titleEl) titleEl.textContent = 'Marché de l’Occasion entre Joueurs';
+    if (subtitleEl) subtitleEl.textContent = 'Achat et vente directe de véhicules révisés et matériel entre directeurs d’antenne';
     if (iconEl) iconEl.setAttribute('data-lucide', 'tag');
 
     // Affichage temporaire de chargement
     bodyEl.innerHTML = `
       <div class="py-16 text-center space-y-3">
         <div class="w-10 h-10 border-4 border-pc-orange border-t-transparent rounded-full animate-spin mx-auto"></div>
-        <p class="text-xs font-bold text-slate-500">Connexion au réseau de revente inter-antennes...</p>
+        <p class="text-xs font-bold text-slate-500">Connexion au marché de l'occasion entre joueurs...</p>
       </div>
     `;
 
@@ -441,13 +202,12 @@ window.ProtecMarcheOccasion = {
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <h4 class="text-sm font-black tracking-wide text-white">Bourse Fédérale de l'Occasion</h4>
+                <h4 class="text-sm font-black tracking-wide text-white">Marché de l'Occasion entre Joueurs</h4>
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
                   Temps Réel Actif
                 </span>
-              </div>
               <p class="text-xs text-slate-300">
-                Trésorerie disponible : <strong class="text-emerald-400 font-mono text-sm">${money.toLocaleString('fr-FR')} €</strong> • Économisez jusqu'à <strong>50%</strong> sur vos acquisitions.
+                Trésorerie disponible : <strong class="text-emerald-400 font-mono text-sm">${money.toLocaleString('fr-FR')} €</strong> • Achetez et revendez directement entre antennes joueuses.
               </p>
             </div>
           </div>
@@ -875,7 +635,7 @@ window.ProtecMarcheOccasion = {
         <div class="py-16 text-center space-y-3 bg-white rounded-3xl border border-dashed border-slate-300 p-6">
           <span class="text-4xl block">🏷️</span>
           <h5 class="text-sm font-black text-slate-800">Vous n'avez aucune annonce en vente</h5>
-          <p class="text-xs text-slate-500 max-w-sm mx-auto">Vendez un véhicule en doublon ou du matériel excédentaire sur la bourse d'occasion pour récupérer de la trésorerie immédiate.</p>
+          <p class="text-xs text-slate-500 max-w-sm mx-auto">Vendez un véhicule en doublon ou du matériel excédentaire sur le marché de l'occasion pour récupérer de la trésorerie immédiate.</p>
           <button onclick="window.ProtecMarcheOccasion.openSellModal()" class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-pc-orange to-amber-500 hover:brightness-110 text-white font-black text-xs shadow-md transition cursor-pointer">
             + Mettre un bien en Vente Maintenant
           </button>

@@ -1448,6 +1448,7 @@ window.ProtecPersonnel = {
     const body = document.getElementById('modal-body');
 
     if (!modal || !body) return;
+    if (game) game.currentModalKey = 'job_offer_form';
 
     modal.classList.remove('hidden');
     const isSC = defaultContractType === 'service_civique';
@@ -1568,7 +1569,7 @@ window.ProtecPersonnel = {
             Frais de publication : <strong id="job-cost-display" class="text-slate-900 font-mono">${isSC ? '50 €' : '180 €'}</strong> <span id="job-cost-desc" class="text-[10px] text-slate-400">(${isSC ? 'dossier agrément Agence Service Civique' : 'diffusion nationale'})</span>
           </div>
           <div class="flex items-center gap-2">
-            <button type="button" onclick="window.game.closeModal()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Annuler</button>
+            <button type="button" onclick="window.game.openModule('recrutement', true)" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Annuler</button>
             <button type="submit" id="job-submit-btn" class="px-5 py-2.5 rounded-xl text-xs font-black ${isSC ? 'bg-gradient-to-r from-amber-600 to-orange-600' : 'bg-gradient-to-r from-indigo-600 to-blue-600'} hover:brightness-110 text-white shadow-md transition flex items-center gap-2">
               <i data-lucide="send" class="w-3.5 h-3.5"></i>
               <span>${isSC ? 'Publier la Mission (50 €)' : 'Publier l’Offre de Poste (180 €)'}</span>

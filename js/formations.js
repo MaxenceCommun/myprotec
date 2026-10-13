@@ -606,25 +606,7 @@ window.ProtecFormations = {
     if (syncSlider && document.activeElement !== syncSlider) syncSlider.value = price;
 
     const oddsData = this.calculateQuoteOdds(window.game, proposal, price);
-    const oddsBadge = document.getElementById('b2b-quote-odds-badge');
-    const oddsBar = document.getElementById('b2b-quote-odds-bar');
     const marginDisplay = document.getElementById('b2b-quote-margin-display');
-
-    if (oddsBadge) {
-      let colorClass = 'text-emerald-700 bg-emerald-100 border-emerald-300';
-      if (oddsData.odds < 40) colorClass = 'text-rose-700 bg-rose-100 border-rose-300';
-      else if (oddsData.odds < 70) colorClass = 'text-amber-800 bg-amber-100 border-amber-300';
-
-      oddsBadge.className = `px-3 py-1 rounded-xl border font-black text-sm mono-num transition ${colorClass}`;
-      oddsBadge.textContent = `${oddsData.odds}% de chance de signature`;
-    }
-
-    if (oddsBar) {
-      oddsBar.style.width = `${oddsData.odds}%`;
-      if (oddsData.odds < 40) oddsBar.className = 'h-full bg-rose-500 rounded-full transition-all duration-300';
-      else if (oddsData.odds < 70) oddsBar.className = 'h-full bg-amber-500 rounded-full transition-all duration-300';
-      else oddsBar.className = 'h-full bg-emerald-500 rounded-full transition-all duration-300';
-    }
 
     if (marginDisplay) {
       marginDisplay.textContent = `+${oddsData.marginNet.toLocaleString('fr-FR')} € net`;
@@ -1048,6 +1030,13 @@ window.ProtecFormations = {
       maxCandidates: course.capacity,
       registeredCandidates: [],
       dateDesc: `Prévue au calendrier (Durée : ${course.durationHours}h)`,
+      eventDate: {
+        day: (game.clock?.day || 1),
+        month: (game.clock?.month || 0),
+        year: (game.clock?.year || 2026),
+        hour: 9,
+        minute: 0
+      },
       status: 'open',
       createdAt: Date.now()
     };
@@ -1889,29 +1878,15 @@ window.ProtecFormations = {
             </div>
           </div>
 
-          <!-- JAUGE LIVE DE PROBABILITÉ DE SIGNATURE -->
-          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-black uppercase text-slate-700">Probabilité d’accord client :</span>
-              <span id="b2b-quote-odds-badge" class="px-3 py-1 rounded-xl border font-black text-sm mono-num transition ${
-                oddsData.odds < 40 ? 'text-rose-700 bg-rose-100 border-rose-300' :
-                (oddsData.odds < 70 ? 'text-amber-800 bg-amber-100 border-amber-300' : 'text-emerald-700 bg-emerald-100 border-emerald-300')
-              }">
-                ${oddsData.odds}% de chance de signature
-              </span>
+          <!-- BILAN FINANCIER PRÉVISIONNEL DU DEVIS -->
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+            <div>
+              <span class="text-xs font-black uppercase text-slate-700 block">Bilan Financier Prévisionnel :</span>
+              <span class="text-[11px] text-slate-500">Recette nette après déduction des coûts pédagogiques & matériel</span>
             </div>
-
-            <!-- Barre de jauge -->
-            <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
-              <div id="b2b-quote-odds-bar" class="h-full rounded-full transition-all duration-300 ${
-                oddsData.odds < 40 ? 'bg-rose-500' : (oddsData.odds < 70 ? 'bg-amber-500' : 'bg-emerald-500')
-              }" style="width: ${oddsData.odds}%;"></div>
-            </div>
-
-            <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1">
-              <span>Réputation d'antenne : <strong>+${oddsData.repBonus}%</strong></span>
-              <span>Accords APC : <strong>+${oddsData.conventionBonus}%</strong></span>
-              <span class="text-slate-600">Bénéfice net estimé : <strong id="b2b-quote-margin-display" class="text-emerald-700 font-extrabold">+${oddsData.marginNet.toLocaleString('fr-FR')} €</strong></span>
+            <div class="text-right">
+              <span class="text-[10px] text-slate-400 block font-medium">Bénéfice net estimé</span>
+              <strong id="b2b-quote-margin-display" class="text-base font-black font-mono text-emerald-700 leading-tight">+${oddsData.marginNet.toLocaleString('fr-FR')} €</strong>
             </div>
           </div>
 
@@ -2012,6 +1987,10 @@ window.ProtecFormations = {
             <i data-lucide="users" class="w-3.5 h-3.5"></i>
             <span>Grand Public & Internes</span>
             ${activeSessions.length > 0 ? `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-black ${this.mainTab === 'grand_public' ? 'bg-white text-pc-blue' : 'bg-slate-300 text-slate-800'}">${activeSessions.length}</span>` : ''}
+          </button>
+          <button onclick="window.game.openPlanningFiltered('formations')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-950 cursor-pointer border border-transparent hover:border-emerald-300" title="Consulter le calendrier complet du pôle formations">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-emerald-600"></i>
+            <span>📅 Planning des Formations</span>
           </button>
         </div>
         ${this.mainTab === 'entreprises' ? `

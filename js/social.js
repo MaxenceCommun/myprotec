@@ -476,6 +476,23 @@ window.ProtecSocial = {
     body.innerHTML = `
       <div class="space-y-6">
 
+        <!-- Barre de navigation supérieure de l'Action Sociale -->
+        <div class="flex items-center justify-between border-b border-slate-200/80 pb-3 flex-wrap gap-2">
+          <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl">
+            <button class="px-4 py-2 rounded-xl text-xs font-black bg-purple-600 text-white shadow-md flex items-center gap-2">
+              <i data-lucide="heart-handshake" class="w-3.5 h-3.5"></i>
+              <span>Gestion & Maraudes Sociales</span>
+            </button>
+            <button onclick="window.game.openPlanningFiltered('social')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 text-purple-900 hover:bg-purple-100 cursor-pointer border border-transparent hover:border-purple-300" title="Consulter le calendrier complet des maraudes et de tous les pôles">
+              <i data-lucide="calendar" class="w-3.5 h-3.5 text-purple-600"></i>
+              <span>📅 Planning Maraudes & Social</span>
+            </button>
+          </div>
+          <div class="text-xs font-bold text-slate-500 flex items-center gap-2">
+            <span>Maraudes actives : <strong>${(game.missions || []).filter(m => m.type === 'social').length}</strong></span>
+          </div>
+        </div>
+
         <!-- Bandeau d'information réglementaire -->
         <div class="p-3.5 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white shadow-md flex items-center justify-between text-xs">
           <div class="flex items-center gap-3">

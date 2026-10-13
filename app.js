@@ -147,6 +147,7 @@ class ProtecGame {
     this.badgesCollection = [];
     this.activeAllianceTab = 'membres';
     this.activePlanningTab = 'calendar';
+    this.planningPolesFilters = { dps: true, devis: true, formations: true, social: true };
     this.modalHistory = [];
     this.currentModalKey = null;
     this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
@@ -1116,6 +1117,7 @@ class ProtecGame {
             conventionRequests: this.conventionRequests,
             financesHistory: this.financesHistory || [],
             alertSubscription: this.alertSubscription,
+            rewards: this.rewards,
             savedAt: Date.now()
           };
           sessionStorage.setItem('myprotec_instant_cache', JSON.stringify(cacheData));
@@ -1168,6 +1170,7 @@ class ProtecGame {
             if (c.conventionRequests) this.conventionRequests = c.conventionRequests;
             if (c.financesHistory) this.financesHistory = c.financesHistory;
             if (c.alertSubscription) this.alertSubscription = c.alertSubscription;
+            if (c.rewards) this.rewards = c.rewards;
           }
         } catch (ce) {}
       }
@@ -2859,6 +2862,207 @@ class ProtecGame {
     this.openModule('planning', true);
   }
 
+  togglePlanningPoleFilter(poleKey) {
+    if (!this.planningPolesFilters) {
+      this.planningPolesFilters = { dps: true, devis: true, formations: true, social: true };
+    }
+    this.planningPolesFilters[poleKey] = !this.planningPolesFilters[poleKey];
+    this.openModule('planning', true);
+  }
+
+  toggleAllPlanningPoleFilters(allActive) {
+    if (!this.planningPolesFilters) {
+      this.planningPolesFilters = { dps: true, devis: true, formations: true, social: true };
+    }
+    this.planningPolesFilters = {
+      dps: !!allActive,
+      devis: !!allActive,
+      formations: !!allActive,
+      social: !!allActive
+    };
+    this.openModule('planning', true);
+  }
+
+  openPlanningFiltered(focusPole) {
+    if (!this.planningPolesFilters) {
+      this.planningPolesFilters = { dps: true, devis: true, formations: true, social: true };
+    }
+    if (focusPole) {
+      this.planningPolesFilters[focusPole] = true;
+    }
+    this.openModule('planning');
+  }
+
+  // Agrégation transversale de tous les événements de tous les pôles opérationnels
+  getAllPlanningEvents(viewingMonth = null, viewingYear = null) {
+    const events = [];
+    const targetMonth = viewingMonth !== null ? viewingMonth : this.clock.month;
+    const targetYear = viewingYear !== null ? viewingYear : (this.clock.year || 2026);
+
+    // 1. PÔLE SECOURS & DPS (DPS validés, gardes SAMU/SDIS, missions planifiées hors maraude)
+    const dpsMissions = (this.missions || []).filter(m => 
+      m.type !== 'social' && 
+      (m.status === 'planifie' || m.status === 'ongoing' || m.type === 'dps' || m.isPlanned)
+    );
+    dpsMissions.forEach(m => {
+      let eDate = m.eventDate;
+      if (!eDate) {
+        eDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: m.startHour || 14, minute: 0 };
+        m.eventDate = eDate;
+      }
+      events.push({
+        id: m.id,
+        pole: 'dps',
+        poleLabel: 'Secours & DPS',
+        poleColor: 'bg-pc-blue',
+        type: m.type === 'dps' ? 'DPS' : 'Garde',
+        badgeBg: m.type === 'dps' ? 'bg-pc-blue text-white' : 'bg-pc-orange text-white',
+        title: m.title,
+        eventDate: eDate,
+        startHour: m.startHour || eDate.hour || 14,
+        durationHours: m.durationHours || 4,
+        durationSeconds: m.durationSeconds,
+        rewardMoney: m.rewardMoney || 0,
+        registeredCount: m.registeredVolunteers?.length || 0,
+        requiredCount: m.requiredVolunteers || 4,
+        scale: m.scale || 'DPS',
+        address: m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site'),
+        raw: m
+      });
+    });
+
+    // 2. PÔLE DEVIS & PRÉVISIONNELS DPS (Devis en attente, en délibération ou mis en prévisionnel)
+    const pendingAndPrevDevis = (this.devis || []).filter(d => ['pending', 'previsionnel', 'sent'].includes(d.status));
+    pendingAndPrevDevis.forEach(d => {
+      let eDate = d.eventDate;
+      if (!eDate) {
+        eDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: 14, minute: 0 };
+        d.eventDate = eDate;
+      }
+      const isPrev = d.status === 'previsionnel';
+      const isSent = d.status === 'sent';
+      events.push({
+        id: d.id,
+        pole: 'devis',
+        poleLabel: 'Devis & Prévisionnel',
+        poleColor: 'bg-amber-500',
+        type: isPrev ? 'Prévi' : (isSent ? 'Délibération' : 'Devis'),
+        badgeBg: isPrev ? 'bg-amber-500 text-white' : (isSent ? 'bg-indigo-600 text-white' : 'bg-sky-500 text-white'),
+        title: d.eventName,
+        eventDate: eDate,
+        startHour: eDate.hour || 14,
+        durationHours: d.durationHours || 4,
+        rewardMoney: d.proposedPrice || (this.calculateDynamicBareme(d)?.totalBareme) || 0,
+        registeredCount: d.previsionnelVolunteers?.length || 0,
+        requiredCount: d.configuredVolunteers || d.requiredVolunteers || 4,
+        scale: d.scale || 'DPS',
+        address: d.address || 'Adresse sur site',
+        raw: d
+      });
+    });
+
+    // 3. PÔLE FORMATIONS (Sessions grand public & internes + Prospections/contrats B2B)
+    const formationSessions = (this.sessionsFormation || []).filter(s => s.status !== 'completed');
+    formationSessions.forEach(s => {
+      let eDate = s.eventDate;
+      if (!eDate && s.createdAt) {
+        const cd = new Date(s.createdAt);
+        eDate = { day: cd.getDate(), month: cd.getMonth(), year: cd.getFullYear(), hour: 9, minute: 0 };
+      }
+      if (!eDate) {
+        eDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: 9, minute: 0 };
+      }
+      s.eventDate = eDate;
+
+      const trainer = this.volunteers?.find(v => v.id === s.trainerId);
+      events.push({
+        id: s.id,
+        pole: 'formations',
+        poleLabel: 'Formations',
+        poleColor: 'bg-emerald-600',
+        type: s.isInternal ? 'Formation Interne' : 'Formation Grand Public',
+        badgeBg: 'bg-emerald-600 text-white',
+        title: s.title || `Session ${s.courseId}`,
+        eventDate: eDate,
+        startHour: eDate.hour || 9,
+        durationHours: 7,
+        rewardMoney: s.finalPrice ? s.finalPrice * (s.registeredCandidates?.length || 1) : null,
+        registeredCount: (s.registeredCandidates?.length || 0) + (s.externalAttendeesCount || 0),
+        requiredCount: s.maxCandidates || 8,
+        scale: s.category || 'Formation',
+        address: s.locationLabel || (s.locationType === 'antenne' ? 'Salle Pédagogique (Antenne)' : 'Délocalisée'),
+        trainerName: trainer ? trainer.name : null,
+        raw: s
+      });
+    });
+
+    const b2bProposals = (this.formationB2BProposals || []).filter(p => ['accepted', 'in_progress', 'evaluating', 'pending_quote'].includes(p.status));
+    b2bProposals.forEach(p => {
+      let bDate = p.eventDate;
+      if (!bDate && p.deadline) {
+        const cd = new Date(p.deadline);
+        bDate = { day: cd.getDate(), month: cd.getMonth(), year: cd.getFullYear(), hour: 9, minute: 0 };
+      } else if (!bDate && p.startedAt) {
+        const cd = new Date(p.startedAt);
+        bDate = { day: cd.getDate(), month: cd.getMonth(), year: cd.getFullYear(), hour: 9, minute: 0 };
+      } else if (!bDate) {
+        bDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: 9, minute: 0 };
+      }
+      p.eventDate = bDate;
+
+      events.push({
+        id: p.id,
+        pole: 'formations',
+        poleLabel: 'Formations',
+        poleColor: 'bg-teal-600',
+        type: `B2B : ${p.training_type}`,
+        badgeBg: 'bg-teal-600 text-white',
+        title: `Formation Entreprise ${p.training_type} (${p.client_name || 'Client'})`,
+        eventDate: bDate,
+        startHour: 9,
+        durationHours: 7,
+        rewardMoney: p.proposed_price || p.proposedPrice || p.client_target_budget || 0,
+        registeredCount: p.attendees_count || 10,
+        requiredCount: p.attendees_count || 10,
+        scale: 'Formation Entreprise',
+        address: p.mode === 'intra' ? `Site client : ${p.client_name}` : 'Salle Pédagogique (Antenne)',
+        raw: p
+      });
+    });
+
+    // 4. PÔLE ACTION SOCIALE (Maraudes & interventions solidaires)
+    const maraudeMissions = (this.missions || []).filter(m => m.type === 'social');
+    maraudeMissions.forEach(m => {
+      let eDate = m.eventDate;
+      if (!eDate) {
+        eDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: 19, minute: 0 };
+        m.eventDate = eDate;
+      }
+      events.push({
+        id: m.id,
+        pole: 'social',
+        poleLabel: 'Action Sociale',
+        poleColor: 'bg-purple-600',
+        type: 'Maraude',
+        badgeBg: 'bg-purple-600 text-white',
+        title: m.title,
+        eventDate: eDate,
+        startHour: m.startHour || eDate.hour || 19,
+        durationHours: m.durationHours || 2,
+        durationSeconds: m.durationSeconds,
+        rewardMoney: m.rewardMoney || 150,
+        registeredCount: m.registeredVolunteers?.length || 0,
+        requiredCount: m.requiredVolunteers || 3,
+        scale: 'Action Sociale',
+        address: m.sector || m.address || 'Secteur Maraude',
+        raw: m
+      });
+    });
+
+    return events;
+  }
+
+
   calculateDynamicBareme(devis) {
     const ratePerHour = 18;
     let personnelCost = 0;
@@ -3752,38 +3956,38 @@ class ProtecGame {
       if (ratio <= 1.15) {
         badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
         text = '🚨 Tarif d’Urgence Très Compétitif';
-        acceptRate = 'Acceptation immédiate garantie face à l’urgence de l’organisateur (~90%)';
+        acceptRate = 'Positionnement idéal face à l’urgence de l’organisateur';
       } else if (ratio <= 1.40) {
         badgeClass = 'bg-blue-100 text-pc-blue border-blue-200';
         text = '🚨 Majoration d’Urgence Tolérée';
-        acceptRate = 'L’organisateur accepte le surcoût lié au préavis très court (~70-80%)';
+        acceptRate = 'Surcoût justifié par le préavis d’urgence';
       } else if (ratio <= 1.60) {
         badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
         text = 'Tarif très élevé (limite tolérance urgence)';
-        acceptRate = 'Risque que l’organisateur annule ou sollicite une autre AASC (~40%)';
+        acceptRate = 'Risque que l’organisateur recherche un concurrent';
       } else {
         badgeClass = 'bg-rose-100 text-rose-800 border-rose-300';
         text = 'Tarif abusif malgré l’urgence';
-        acceptRate = 'Rejet très probable par l’organisateur (<15%)';
+        acceptRate = 'Refus très probable de l’organisateur';
       }
     } else {
       // Planification à long terme : concurrence stricte des autres AASC
       if (ratio <= 0.85) {
         badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
         text = 'Tarif très compétitif';
-        acceptRate = 'Très forte chance de remporter face à la concurrence (~85%)';
+        acceptRate = 'Offre attractive face à la concurrence inter-associative';
       } else if (ratio <= 1.05) {
         badgeClass = 'bg-blue-100 text-pc-blue border-blue-200';
         text = 'Tarif conforme au barème';
-        acceptRate = 'Concurrence active des AASC : chance moyenne à bonne (~45-55%)';
+        acceptRate = 'Positionnement équilibré selon les barèmes fédéraux';
       } else if (ratio <= 1.20) {
         badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
         text = 'Tarif supérieur au barème';
-        acceptRate = 'Risque fort de perdre face aux offres concurrentes (~25%)';
+        acceptRate = 'Risque de perdre l’arbitrage face à des offres concurrentes';
       } else {
         badgeClass = 'bg-rose-100 text-rose-800 border-rose-300';
         text = 'Tarif excessif';
-        acceptRate = 'Rejet très probable par l’organisateur (<10%)';
+        acceptRate = 'Refus très probable de l’organisateur';
       }
     }
 
@@ -7925,7 +8129,7 @@ class ProtecGame {
           <div class="flex items-center justify-between">
             <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider">Flotte (${stationVehicles.length})</h4>
             <div class="flex items-center gap-2.5">
-              <button onclick="window.game.openModule('marche_occasion')" class="text-xs font-extrabold text-slate-500 hover:text-pc-orange hover:underline">Bourse Occasion 🏷️</button>
+              <button onclick="window.game.openModule('marche_occasion')" class="text-xs font-extrabold text-slate-500 hover:text-pc-orange hover:underline">Marché Occasion 🏷️</button>
               <button onclick="window.game.openBuyVehicleModal('${station.id}')" class="text-xs font-extrabold text-pc-orange hover:underline">+ Acheter Neuf</button>
             </div>
           </div>
@@ -9347,14 +9551,14 @@ class ProtecGame {
         { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
         { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
         { key: 'specialites', label: 'Spécialités', icon: 'crosshair' },
-        { key: 'marche_occasion', label: 'Bourse Occasion', icon: 'tag' }
+        { key: 'marche_occasion', label: 'Marché Occasion', icon: 'tag' }
       ],
       materiel: [
         { key: 'locaux', label: 'Bâtiment (Plan 2D)', icon: 'layout-grid' },
         { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
         { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
         { key: 'specialites', label: 'Spécialités', icon: 'crosshair' },
-        { key: 'marche_occasion', label: 'Bourse Occasion', icon: 'tag' }
+        { key: 'marche_occasion', label: 'Marché Occasion', icon: 'tag' }
       ],
       rh: [
         { key: 'recrutement', label: 'Bénévoles & Équipe', icon: 'users', count: this.volunteers?.length || 0 },
@@ -9704,7 +9908,7 @@ class ProtecGame {
             </button>
             <button onclick="window.game.setAllianceTab('bourse')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'bourse' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
               <i data-lucide="repeat" class="w-3.5 h-3.5"></i>
-              Bourse & Matériel (${this.marketplace?.length || 0})
+              Marché & Matériel (${this.marketplace?.length || 0})
             </button>
             <button onclick="window.game.setAllianceTab('manoeuvres')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'manoeuvres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
               <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
@@ -9912,16 +10116,14 @@ class ProtecGame {
         setTimeout(() => this.renderChatMessages(), 50);
       }
     } else if (moduleKey === 'planning') {
-      title.textContent = 'Planning Opérationnel des Dispositifs & Missions';
-      subtitle.textContent = 'Dispositifs prévisionnels (DPS), gardes SAMU/SDIS, maraudes sociales et calendrier officiel';
+      title.textContent = 'Planning Opérationnel Multi-Pôles';
+      subtitle.textContent = 'Dispositifs prévisionnels (DPS), Formations (Grand public & B2B), Maraudes sociales et Devis';
       icon.setAttribute('data-lucide', 'calendar');
 
       // Régulariser immédiatement tout devis dont la date serait passée
       this.cleanPastDevis();
 
       const currentTab = this.activePlanningTab || 'calendar';
-      const allScheduled = this.missions.filter(m => m.status === 'planifie' || m.status === 'ongoing' || m.type === 'dps');
-      const pendingAndPrevDevis = (this.devis || []).filter(d => ['pending', 'previsionnel', 'sent'].includes(d.status));
       
       const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
       if (this.calendarViewingMonth === undefined || this.calendarViewingMonth === null) {
@@ -9941,36 +10143,115 @@ class ProtecGame {
       const daysInMonth = new Date(curYear, curViewingMonth + 1, 0).getDate();
       const firstDayIndex = (new Date(curYear, curViewingMonth, 1).getDay() + 6) % 7; // 0 = Lundi, 6 = Dimanche
 
-      const selectedDayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === selectedDay && m.eventDate.month === curViewingMonth && (m.eventDate.year == null || m.eventDate.year === curYear));
-      const selectedDayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === selectedDay && d.eventDate.month === curViewingMonth && (d.eventDate.year == null || d.eventDate.year === curYear));
+      // Agrégation transversale des événements de tous les pôles
+      const allEvents = this.getAllPlanningEvents(curViewingMonth, curYear);
+      const filters = this.planningPolesFilters || { dps: true, devis: true, formations: true, social: true };
+      this.planningPolesFilters = filters;
+
+      const poleCounts = {
+        dps: allEvents.filter(e => e.pole === 'dps').length,
+        devis: allEvents.filter(e => e.pole === 'devis').length,
+        formations: allEvents.filter(e => e.pole === 'formations').length,
+        social: allEvents.filter(e => e.pole === 'social').length
+      };
+
+      const activeEvents = allEvents.filter(e => filters[e.pole]);
+
+      // Événements pour le jour sélectionné
+      const selectedDayEvents = activeEvents.filter(e => e.eventDate && e.eventDate.day === selectedDay && e.eventDate.month === curViewingMonth && (e.eventDate.year == null || e.eventDate.year === curYear));
+      const selectedDayMissions = selectedDayEvents.filter(e => e.pole === 'dps');
+      const selectedDayDevis = selectedDayEvents.filter(e => e.pole === 'devis');
+      const selectedDayFormations = selectedDayEvents.filter(e => e.pole === 'formations');
+      const selectedDaySocial = selectedDayEvents.filter(e => e.pole === 'social');
 
       body.innerHTML = `
-        <div class="space-y-5">
-          <!-- Barre d'onglets Vue Calendrier / Vue Liste / Devis DPS -->
+        <div class="space-y-4">
+          <!-- Barre d'onglets Vue Calendrier / Vue Liste / Raccourcis Pôles -->
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-            <div class="flex items-center gap-2">
-              <button onclick="window.game.setPlanningTab('calendar')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'calendar' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button onclick="window.game.setPlanningTab('calendar')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'calendar' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
                 <i data-lucide="calendar" class="w-4 h-4"></i>
                 Vue Calendrier
               </button>
-              <button onclick="window.game.setPlanningTab('list')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'list' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
+              <button onclick="window.game.setPlanningTab('list')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'list' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
                 <i data-lucide="list" class="w-4 h-4"></i>
-                Dispositifs Validés (${allScheduled.length})
+                Vue Liste (${activeEvents.length})
               </button>
-              <button onclick="window.game.openModule('devis')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer">
+              <button onclick="window.game.openModule('devis')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Gestion des Devis DPS">
                 <i data-lucide="file-check" class="w-4 h-4 text-amber-500"></i>
-                Devis & Prévisionnels (${pendingAndPrevDevis.length})
+                Devis (${poleCounts.devis})
+              </button>
+              <button onclick="window.game.openModule('formations')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Formations">
+                <i data-lucide="graduation-cap" class="w-4 h-4 text-emerald-600"></i>
+                Formations (${poleCounts.formations})
+              </button>
+              <button onclick="window.game.openModule('social')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Action Sociale">
+                <i data-lucide="heart-handshake" class="w-4 h-4 text-purple-600"></i>
+                Social (${poleCounts.social})
               </button>
             </div>
             <div class="flex items-center gap-2">
-              <button onclick="window.ProtecAuth.openAuthModal();" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition flex items-center gap-1.5 cursor-pointer" title="Proposer un événement exceptionnel depuis le profil directeur">
-                <i data-lucide="award" class="w-4 h-4 text-amber-500"></i>
-                Événements & Écussons (Profil)
-              </button>
               <div class="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 Aujourd'hui : <strong class="text-slate-800">${this.formatFullDate(this.clock)}</strong>
               </div>
+            </div>
+          </div>
+
+          <!-- BARRE DE FILTRES INTERACTIFS PAR PÔLE (VISIBILITÉ DYNAMIQUE) -->
+          <div class="flex flex-wrap items-center justify-between gap-2.5 p-3 bg-gradient-to-r from-slate-50 to-slate-100/80 border border-slate-200/90 rounded-2xl shadow-xs">
+            <div class="flex items-center gap-1.5 text-xs font-black text-slate-800 mr-1">
+              <i data-lucide="filter" class="w-4 h-4 text-pc-blue"></i>
+              <span>Filtres par Pôle :</span>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- Filtre Pôle Secours & DPS -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('dps')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.dps ? 'bg-pc-blue text-white border-pc-blue shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                title="${filters.dps ? 'Cliquer pour masquer Secours & DPS' : 'Cliquer pour afficher Secours & DPS'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.dps ? 'bg-white' : 'bg-slate-300'}"></span>
+                <span>🔵 Secours & DPS (${poleCounts.dps})</span>
+              </button>
+
+              <!-- Filtre Pôle Devis & Prévisionnels -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('devis')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.devis ? 'bg-amber-500 text-white border-amber-600 shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                title="${filters.devis ? 'Cliquer pour masquer Devis & Prévisionnels' : 'Cliquer pour afficher Devis & Prévisionnels'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.devis ? 'bg-white' : 'bg-slate-300'}"></span>
+                <span>📋 Devis & Prévi (${poleCounts.devis})</span>
+              </button>
+
+              <!-- Filtre Pôle Formations -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('formations')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.formations ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                title="${filters.formations ? 'Cliquer pour masquer Formations' : 'Cliquer pour afficher Formations'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.formations ? 'bg-white' : 'bg-slate-300'}"></span>
+                <span>🎓 Formations (${poleCounts.formations})</span>
+              </button>
+
+              <!-- Filtre Pôle Action Sociale -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('social')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.social ? 'bg-purple-600 text-white border-purple-700 shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                title="${filters.social ? 'Cliquer pour masquer Action Sociale' : 'Cliquer pour afficher Action Sociale'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.social ? 'bg-white' : 'bg-slate-300'}"></span>
+                <span>🥫 Action Sociale (${poleCounts.social})</span>
+              </button>
+            </div>
+
+            <!-- Toggles rapides Tout Activer / Tout Masquer -->
+            <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+              <button onclick="window.game.toggleAllPlanningPoleFilters(true)" class="hover:text-pc-blue cursor-pointer underline decoration-dotted">Tout afficher</button>
+              <span>•</span>
+              <button onclick="window.game.toggleAllPlanningPoleFilters(false)" class="hover:text-rose-600 cursor-pointer underline decoration-dotted">Tout masquer</button>
             </div>
           </div>
 
@@ -9985,9 +10266,9 @@ class ProtecGame {
             <div class="space-y-4">
               <!-- Grille principale : Calendrier à gauche (lg:col-span-7) + Détails journée à droite (lg:col-span-5) -->
               <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                <!-- Colonne Gauche : Navigation Mois (pleine largeur du planning) + Grille du calendrier -->
+                <!-- Colonne Gauche : Navigation Mois + Grille du calendrier -->
                 <div class="lg:col-span-7 xl:col-span-7 space-y-3">
-                  <!-- Navigation Mois : prend STRICTEMENT la même largeur que la grille du planning (w-full) -->
+                  <!-- Navigation Mois -->
                   <div class="w-full flex items-center justify-between bg-white border border-slate-200/90 rounded-2xl p-1.5 sm:p-2 shadow-xs">
                     <button 
                       onclick="window.game.changePlanningMonth(-1)" 
@@ -10048,13 +10329,14 @@ class ProtecGame {
                           (curYear === this.clock.year && curViewingMonth < this.clock.month) ||
                           (isViewingCurrentMonth && day < todayDay);
 
-                        const dayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === day && m.eventDate.month === curViewingMonth && (m.eventDate.year == null || m.eventDate.year === curYear));
-                        const dpsCount = dayMissions.filter(m => m.type === 'dps').length;
-                        const otherCount = dayMissions.filter(m => m.type !== 'dps').length;
-
-                        const dayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === day && d.eventDate.month === curViewingMonth && (d.eventDate.year == null || d.eventDate.year === curYear));
-                        const prevCount = dayDevis.filter(d => d.status === 'previsionnel').length;
-                        const pendingCount = dayDevis.filter(d => d.status === 'pending' || d.status === 'sent').length;
+                        const dayEvents = activeEvents.filter(e => e.eventDate && e.eventDate.day === day && e.eventDate.month === curViewingMonth && (e.eventDate.year == null || e.eventDate.year === curYear));
+                        
+                        const dpsCount = dayEvents.filter(e => e.pole === 'dps' && e.type === 'DPS').length;
+                        const gardeCount = dayEvents.filter(e => e.pole === 'dps' && e.type !== 'DPS').length;
+                        const prevCount = dayEvents.filter(e => e.pole === 'devis' && e.type === 'Prévi').length;
+                        const pendingCount = dayEvents.filter(e => e.pole === 'devis' && e.type !== 'Prévi').length;
+                        const formationCount = dayEvents.filter(e => e.pole === 'formations').length;
+                        const socialCount = dayEvents.filter(e => e.pole === 'social').length;
 
                         let bgClass = 'bg-white hover:bg-slate-50 border-slate-200/80';
                         if (isSelected) {
@@ -10085,6 +10367,11 @@ class ProtecGame {
                                   DPS (${dpsCount})
                                 </div>
                               ` : ''}
+                              ${gardeCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-orange text-white truncate text-center">
+                                  Garde (${gardeCount})
+                                </div>
+                              ` : ''}
                               ${prevCount > 0 ? `
                                 <div class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-500 text-white truncate text-center border border-amber-600/30">
                                   ⏳ Prévi (${prevCount})
@@ -10095,9 +10382,14 @@ class ProtecGame {
                                   📋 Devis (${pendingCount})
                                 </div>
                               ` : ''}
-                              ${otherCount > 0 ? `
-                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-orange text-white truncate text-center">
-                                  Garde (${otherCount})
+                              ${formationCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-emerald-600 text-white truncate text-center">
+                                  🎓 Form. (${formationCount})
+                                </div>
+                              ` : ''}
+                              ${socialCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-purple-600 text-white truncate text-center">
+                                  🥫 Maraude (${socialCount})
                                 </div>
                               ` : ''}
                             </div>
@@ -10111,209 +10403,311 @@ class ProtecGame {
                 <!-- Colonne Droite : Légendes en en-tête + Détail de la journée sélectionnée -->
                 <div class="lg:col-span-5 xl:col-span-5 space-y-3 lg:sticky lg:top-2">
                   <!-- Pastilles de légendes alignées en carte -->
-                  <div class="w-full flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 bg-white border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs">
-                    <span class="flex items-center gap-1.5 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-pc-blue"></span> DPS Validé</span>
-                    <span class="flex items-center gap-1.5 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> ⏳ Prévi</span>
-                    <span class="flex items-center gap-1.5 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span> 📋 Devis</span>
-                    <span class="flex items-center gap-1.5 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-pc-orange"></span> Garde</span>
+                  <div class="w-full flex flex-wrap items-center justify-between gap-2 text-[10.5px] text-slate-600 bg-white border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs">
+                    <span class="flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-pc-blue"></span> Secours DPS</span>
+                    <span class="flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> ⏳ Prévi</span>
+                    <span class="flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span> 📋 Devis</span>
+                    <span class="flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> 🎓 Formation</span>
+                    <span class="flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-purple-600"></span> 🥫 Maraude</span>
                   </div>
 
                   <!-- Carte Détail de la journée sélectionnée -->
                   <div class="p-4 rounded-2xl glass-card space-y-4 shadow-sm max-h-[75vh] overflow-y-auto">
-                  <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <div>
-                      <h4 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                        <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue"></i>
-                        Planning du ${selectedDay} ${curMonthName} ${curYear}
-                      </h4>
-                      ${isViewingCurrentMonth && selectedDay === todayDay ? `<span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">Aujourd'hui</span>` : ''}
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <div>
+                        <h4 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                          <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue"></i>
+                          Planning du ${selectedDay} ${curMonthName} ${curYear}
+                        </h4>
+                        ${isViewingCurrentMonth && selectedDay === todayDay ? `<span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">Aujourd'hui</span>` : ''}
+                      </div>
+                      <span class="text-[11px] font-bold text-slate-500 text-right">
+                        ${selectedDayEvents.length} événement(s) au total
+                      </span>
                     </div>
-                    <span class="text-[11px] font-bold text-slate-500 text-right">${selectedDayMissions.length} mission(s)<br/>${selectedDayDevis.length} devis/option(s)</span>
-                  </div>
 
-                ${(selectedDayMissions.length === 0 && selectedDayDevis.length === 0) ? `
-                  <p class="text-xs text-slate-500 py-6 text-center italic">
-                    Aucun dispositif ni option prévisionnelle pour cette date. Consultez vos devis reçus ou activez la communication pour recevoir des sollicitations.
-                  </p>
-                ` : `
-                  <div class="space-y-4">
-                    <!-- SECTION 1 : DEMANDES EN ATTENTE & EN PRÉVISIONNEL -->
-                    ${selectedDayDevis.length > 0 ? `
-                      <div class="space-y-2.5">
-                        <div class="text-[11px] font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5">
-                          <i data-lucide="clipboard-list" class="w-3.5 h-3.5 text-amber-600"></i>
-                          <span>Devis & Options Prévisionnelles pour cette date (${selectedDayDevis.length})</span>
-                        </div>
-                        <div class="flex flex-col space-y-3">
-                          ${selectedDayDevis.map(d => {
-                            const isPrev = d.status === 'previsionnel';
-                            const isSent = d.status === 'sent';
-                            const dynBareme = this.calculateDynamicBareme(d);
-                            const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
-                            const prevVolsCount = d.previsionnelVolunteers?.length || 0;
+                    ${selectedDayEvents.length === 0 ? `
+                      <p class="text-xs text-slate-500 py-6 text-center italic">
+                        Aucun événement pour cette date sur les pôles sélectionnés. Activez plus de filtres ci-dessus ou établissez des propositions pour remplir votre planning.
+                      </p>
+                    ` : `
+                      <div class="space-y-4">
+                        <!-- SECTION 1 : FORMATIONS & STAGES PÉDAGOGIQUES -->
+                        ${filters.formations && selectedDayFormations.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-emerald-600"></i>
+                              <span>Pôle Formations & Stages (${selectedDayFormations.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDayFormations.map(e => {
+                                const f = e.raw;
+                                const isB2B = e.type.startsWith('B2B');
+                                return `
+                                  <div class="p-3.5 rounded-2xl border-2 border-emerald-300 bg-emerald-50/40 flex flex-col justify-between space-y-2.5">
+                                    <div>
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white uppercase">
+                                          ${e.type}
+                                        </span>
+                                        ${e.rewardMoney ? `<span class="text-xs font-mono font-bold text-emerald-700">+${e.rewardMoney} €</span>` : ''}
+                                      </div>
+                                      <h5 class="text-xs font-black text-slate-900 mt-1.5">${e.title}</h5>
+                                      <p class="text-[11px] text-slate-600 mt-0.5">
+                                        Lieu : <strong>${e.address}</strong> • Inscrits : <strong>${e.registeredCount} / ${e.requiredCount}</strong>
+                                      </p>
+                                      ${e.trainerName ? `
+                                        <p class="text-[11px] text-emerald-800 font-semibold mt-0.5">
+                                          Formateur : <strong>${e.trainerName}</strong>
+                                        </p>
+                                      ` : `
+                                        <p class="text-[11px] text-amber-700 font-bold mt-0.5">
+                                          ⚠️ Aucun formateur affecté
+                                        </p>
+                                      `}
+                                    </div>
 
-                            return `
-                              <div class="p-3.5 rounded-2xl border-2 ${isPrev ? 'border-amber-400 bg-amber-50/50' : isSent ? 'border-indigo-300 bg-indigo-50/40' : 'border-dashed border-sky-300 bg-sky-50/40'} flex flex-col justify-between space-y-3">
-                                <div>
-                                  <div class="flex items-center justify-between gap-2">
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-black ${isPrev ? 'bg-amber-500 text-white' : isSent ? 'bg-indigo-600 text-white' : 'bg-sky-600 text-white'} uppercase">
-                                      ${isPrev ? '⏳ En Prévisionnel' : isSent ? '⚖️ En Délibération' : '📋 Devis Reçu'}
-                                    </span>
-                                    ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
-                                    <span class="text-xs font-mono font-bold text-slate-700">${d.proposedPrice || dynBareme.totalBareme} €</span>
-                                  </div>
-                                  <h5 class="text-xs font-black text-slate-900 mt-1.5">${d.eventName}</h5>
-                                  <p class="text-[11px] text-slate-500">
-                                    ${d.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
-                                  </p>
-                                  <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
-                                    <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
-                                    <span>${d.address || 'Adresse sur site'}</span>
-                                  </p>
-                                </div>
-
-                                <!-- Bloc statut bénévoles si prévisionnel -->
-                                ${isPrev ? `
-                                  <div class="p-2.5 rounded-xl bg-white/80 border border-amber-200 text-xs space-y-1.5">
-                                    <div class="flex items-center justify-between">
-                                      <span class="font-bold text-slate-700">Disponibilités bénévoles :</span>
-                                      <span class="font-black ${prevVolsCount >= reqVols ? 'text-emerald-700' : 'text-amber-800'}">${prevVolsCount} / ${reqVols} confirmés</span>
-                                    </div>
-                                    <div class="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
-                                      <div class="h-full bg-amber-500 rounded-full transition-all" style="width: ${Math.min(100, (prevVolsCount / reqVols) * 100)}%"></div>
-                                    </div>
-                                    <div class="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
-                                      <span>Statut : <strong>${d.sollicitationSent ? `Sollicité (${d.relancesCount || 0} relance${(d.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
-                                    </div>
-                                    <div class="flex items-center justify-between text-[10px] pt-0.5">
-                                      <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="text-pc-blue font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
-                                        <i data-lucide="phone-call" class="w-3 h-3"></i> Sonder
-                                      </button>
-                                      <button onclick="window.game.manualRelancePrevisionnel('${d.id}')" class="text-amber-800 font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
-                                        <i data-lucide="bell" class="w-3 h-3"></i> Relancer (${d.relancesCount || 0})
-                                      </button>
-                                      <button onclick="window.game.openModule('devis')" class="text-slate-600 font-bold hover:underline cursor-pointer">
-                                        Devis →
+                                    <div class="pt-2 border-t border-emerald-200/60 flex items-center justify-end">
+                                      <button onclick="window.game.openModule('formations')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition flex items-center gap-1 cursor-pointer">
+                                        <span>Gérer la Formation</span>
+                                        <i data-lucide="arrow-right" class="w-3 h-3"></i>
                                       </button>
                                     </div>
                                   </div>
-                                ` : ''}
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
 
-                                <!-- Actions rapides -->
-                                <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-1.5">
-                                  ${isPrev ? `
-                                    <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-pc-blue to-pc-blue-light text-white text-[11px] font-black shadow-xs hover:brightness-110 transition">
-                                      Valider avec l'Orga
-                                    </button>
-                                    <button onclick="window.game.refuseDevis('${d.id}')" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition">
-                                      Refuser
-                                    </button>
-                                  ` : isSent ? `
-                                    <button onclick="window.game.openModule('devis')" class="w-full py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black transition">
-                                      Consulter l'arbitrage en cours
-                                    </button>
-                                  ` : `
-                                    <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="flex-1 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black shadow-xs transition" title="Mettre en prévisionnel pour sonder l'équipe">
-                                      ⏳ Mettre en Prévi
-                                    </button>
-                                    <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white text-[11px] font-black transition">
-                                      Chiffrer
-                                    </button>
-                                    <button onclick="window.game.refuseDevis('${d.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition" title="Décliner la demande">
-                                      ✕
-                                    </button>
-                                  `}
-                                </div>
-                              </div>
-                            `;
-                          }).join('')}
-                        </div>
-                      </div>
-                    ` : ''}
+                        <!-- SECTION 2 : ACTION SOCIALE & MARAUDES -->
+                        ${filters.social && selectedDaySocial.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-purple-800 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="heart-handshake" class="w-3.5 h-3.5 text-purple-600"></i>
+                              <span>Pôle Action Sociale & Maraudes (${selectedDaySocial.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDaySocial.map(e => {
+                                const m = e.raw;
+                                const regCount = m.registeredVolunteers?.length || 0;
+                                const isFull = regCount >= m.requiredVolunteers;
+                                return `
+                                  <div class="p-3.5 rounded-2xl border-2 border-purple-300 bg-purple-50/40 flex flex-col justify-between space-y-2.5">
+                                    <div>
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-600 text-white uppercase">
+                                          🥫 Maraude
+                                        </span>
+                                        <span class="text-xs font-mono font-bold text-purple-800">+${m.rewardMoney} €</span>
+                                      </div>
+                                      <h5 class="text-xs font-black text-slate-900 mt-1.5">${m.title}</h5>
+                                      <p class="text-[11px] text-slate-600 mt-0.5 flex items-center gap-1">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-purple-600"></i>
+                                        <span>${m.sector || m.address || 'Secteur de Maraude'}</span>
+                                      </p>
+                                    </div>
 
-                    <!-- SECTION 2 : DISPOSITIFS CONFIRMÉS AU PLANNING -->
-                    ${selectedDayMissions.length > 0 ? `
-                      <div class="space-y-2.5">
-                        <div class="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
-                          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-pc-blue"></i>
-                          <span>Dispositifs Confirmés & Validés (${selectedDayMissions.length})</span>
-                        </div>
-                        <div class="flex flex-col space-y-3">
-                          ${selectedDayMissions.map(m => {
-                            const regCount = m.registeredVolunteers?.length || 0;
-                            const isFull = regCount >= m.requiredVolunteers;
-                            const timeStr = `${m.startHour || m.eventDate?.hour || 14}h00 à ${(m.endHour || ((m.eventDate?.hour || 14) + (m.durationHours || 4)) % 24)}h00`;
-
-                            return `
-                              <div class="p-3.5 rounded-xl glass-card border border-slate-200/80 flex flex-col justify-between space-y-2.5">
-                                <div>
-                                  <div class="flex items-center justify-between">
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${timeStr}</span>
-                                    <span class="text-xs font-bold text-emerald-700 mono-num">+${m.rewardMoney} €</span>
+                                    <div class="pt-2 border-t border-purple-200/60 space-y-1.5">
+                                      <div class="flex items-center justify-between text-xs font-bold">
+                                        <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
+                                          ${isFull ? '✓ Équipage complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
+                                        </span>
+                                      </div>
+                                      <div class="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
+                                        <div class="h-full bg-purple-600 rounded-full" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
+                                      </div>
+                                      <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-black transition cursor-pointer">
+                                        Détail de la maraude
+                                      </button>
+                                    </div>
                                   </div>
-                                  <h5 class="text-xs font-extrabold text-slate-900 mt-1">${m.title}</h5>
-                                  <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
-                                    <i data-lucide="${m.isSector || m.type === 'social' ? 'map' : 'map-pin'}" class="w-3 h-3 ${m.isSector || m.type === 'social' ? 'text-purple-600' : 'text-pc-blue'} flex-shrink-0"></i>
-                                    <span>${m.isSector || m.type === 'social' ? (m.sector || m.address || 'Secteur de Maraude') : (m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site'))}</span>
-                                  </p>
-                                  <p class="text-[11px] text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
-                                </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
 
-                                <div class="pt-2 border-t border-slate-100 space-y-1.5">
-                                  <div class="flex items-center justify-between text-xs font-bold">
-                                    <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
-                                      ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
-                                    </span>
-                                    <div class="flex gap-2">
-                                      <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold cursor-pointer">Renfort</button>
-                                      ${!isFull ? `
-                                        <button onclick="window.game.manualRelanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold cursor-pointer" title="Relancer l'équipe">
-                                          Relancer (${m.relancesCount || 0})
+                        <!-- SECTION 3 : DEMANDES EN ATTENTE & EN PRÉVISIONNEL -->
+                        ${filters.devis && selectedDayDevis.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="clipboard-list" class="w-3.5 h-3.5 text-amber-600"></i>
+                              <span>Devis & Options Prévisionnelles (${selectedDayDevis.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDayDevis.map(e => {
+                                const d = e.raw;
+                                const isPrev = d.status === 'previsionnel';
+                                const isSent = d.status === 'sent';
+                                const dynBareme = this.calculateDynamicBareme(d);
+                                const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
+                                const prevVolsCount = d.previsionnelVolunteers?.length || 0;
+
+                                return `
+                                  <div class="p-3.5 rounded-2xl border-2 ${isPrev ? 'border-amber-400 bg-amber-50/50' : isSent ? 'border-indigo-300 bg-indigo-50/40' : 'border-dashed border-sky-300 bg-sky-50/40'} flex flex-col justify-between space-y-3">
+                                    <div>
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${isPrev ? 'bg-amber-500 text-white' : isSent ? 'bg-indigo-600 text-white' : 'bg-sky-600 text-white'} uppercase">
+                                          ${isPrev ? '⏳ En Prévisionnel' : isSent ? '⚖️ En Délibération' : '📋 Devis Reçu'}
+                                        </span>
+                                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
+                                        <span class="text-xs font-mono font-bold text-slate-700">${d.proposedPrice || dynBareme.totalBareme} €</span>
+                                      </div>
+                                      <h5 class="text-xs font-black text-slate-900 mt-1.5">${d.eventName}</h5>
+                                      <p class="text-[11px] text-slate-500">
+                                        ${d.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
+                                      </p>
+                                      <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
+                                        <span>${d.address || 'Adresse sur site'}</span>
+                                      </p>
+                                    </div>
+
+                                    <!-- Bloc statut bénévoles si prévisionnel -->
+                                    ${isPrev ? `
+                                      <div class="p-2.5 rounded-xl bg-white/80 border border-amber-200 text-xs space-y-1.5">
+                                        <div class="flex items-center justify-between">
+                                          <span class="font-bold text-slate-700">Disponibilités bénévoles :</span>
+                                          <span class="font-black ${prevVolsCount >= reqVols ? 'text-emerald-700' : 'text-amber-800'}">${prevVolsCount} / ${reqVols} confirmés</span>
+                                        </div>
+                                        <div class="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
+                                          <div class="h-full bg-amber-500 rounded-full transition-all" style="width: ${Math.min(100, (prevVolsCount / reqVols) * 100)}%"></div>
+                                        </div>
+                                        <div class="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+                                          <span>Statut : <strong>${d.sollicitationSent ? `Sollicité (${d.relancesCount || 0} relance${(d.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
+                                        </div>
+                                        <div class="flex items-center justify-between text-[10px] pt-0.5">
+                                          <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="text-pc-blue font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
+                                            <i data-lucide="phone-call" class="w-3 h-3"></i> Sonder
+                                          </button>
+                                          <button onclick="window.game.manualRelancePrevisionnel('${d.id}')" class="text-amber-800 font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
+                                            <i data-lucide="bell" class="w-3 h-3"></i> Relancer (${d.relancesCount || 0})
+                                          </button>
+                                          <button onclick="window.game.openModule('devis')" class="text-slate-600 font-bold hover:underline cursor-pointer">
+                                            Devis →
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ` : ''}
+
+                                    <!-- Actions rapides -->
+                                    <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-1.5">
+                                      ${isPrev ? `
+                                        <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-pc-blue to-pc-blue-light text-white text-[11px] font-black shadow-xs hover:brightness-110 transition">
+                                          Valider avec l'Orga
                                         </button>
-                                      ` : ''}
+                                        <button onclick="window.game.refuseDevis('${d.id}')" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition">
+                                          Refuser
+                                        </button>
+                                      ` : isSent ? `
+                                        <button onclick="window.game.openModule('devis')" class="w-full py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black transition">
+                                          Consulter l'arbitrage en cours
+                                        </button>
+                                      ` : `
+                                        <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="flex-1 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black shadow-xs transition" title="Mettre en prévisionnel pour sonder l'équipe">
+                                          ⏳ Mettre en Prévi
+                                        </button>
+                                        <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white text-[11px] font-black transition">
+                                          Chiffrer
+                                        </button>
+                                        <button onclick="window.game.refuseDevis('${d.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition" title="Décliner la demande">
+                                          ✕
+                                        </button>
+                                      `}
                                     </div>
                                   </div>
-                                  <div class="flex items-center justify-between text-[10px] text-slate-500">
-                                    <span>Statut : <strong>${m.sollicitationSent ? `Sollicité (${m.relancesCount || 0} relance${(m.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
-                                  </div>
-                                  <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
-                                    <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
-                                  </div>
-                                </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
 
-                                <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl text-xs font-bold glass-button text-slate-800 transition">
-                                  Fiche détaillée & Inscriptions
-                                </button>
-                              </div>
-                            `;
-                          }).join('')}
-                        </div>
+                        <!-- SECTION 4 : DISPOSITIFS CONFIRMÉS AU PLANNING -->
+                        ${filters.dps && selectedDayMissions.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-pc-blue"></i>
+                              <span>Dispositifs Confirmés & Validés (${selectedDayMissions.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDayMissions.map(e => {
+                                const m = e.raw;
+                                const regCount = m.registeredVolunteers?.length || 0;
+                                const isFull = regCount >= m.requiredVolunteers;
+                                const timeStr = `${m.startHour || m.eventDate?.hour || 14}h00 à ${(m.endHour || ((m.eventDate?.hour || 14) + (m.durationHours || 4)) % 24)}h00`;
+
+                                return `
+                                  <div class="p-3.5 rounded-xl glass-card border border-slate-200/80 flex flex-col justify-between space-y-2.5">
+                                    <div>
+                                      <div class="flex items-center justify-between">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${timeStr}</span>
+                                        <span class="text-xs font-bold text-emerald-700 mono-num">+${m.rewardMoney} €</span>
+                                      </div>
+                                      <h5 class="text-xs font-extrabold text-slate-900 mt-1">${m.title}</h5>
+                                      <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
+                                        <span>${m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site')}</span>
+                                      </p>
+                                      <p class="text-[11px] text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                                    </div>
+
+                                    <div class="pt-2 border-t border-slate-100 space-y-1.5">
+                                      <div class="flex items-center justify-between text-xs font-bold">
+                                        <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
+                                          ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
+                                        </span>
+                                        <div class="flex gap-2">
+                                          <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold cursor-pointer">Renfort</button>
+                                          ${!isFull ? `
+                                            <button onclick="window.game.manualRelanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold cursor-pointer" title="Relancer l'équipe">
+                                              Relancer (${m.relancesCount || 0})
+                                            </button>
+                                          ` : ''}
+                                        </div>
+                                      </div>
+                                      <div class="flex items-center justify-between text-[10px] text-slate-500">
+                                        <span>Statut : <strong>${m.sollicitationSent ? `Sollicité (${m.relancesCount || 0} relance${(m.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
+                                      </div>
+                                      <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                                        <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
+                                      </div>
+                                    </div>
+
+                                    <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl text-xs font-bold glass-button text-slate-800 transition cursor-pointer">
+                                      Fiche détaillée & Inscriptions
+                                    </button>
+                                  </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
                       </div>
-                    ` : ''}
+                    `}
                   </div>
-                `}
+                </div>
               </div>
             </div>
-          </div>
-        ` : `
-            <!-- VUE LISTE CHRONOLOGIQUE -->
+          ` : `
+            <!-- VUE LISTE CHRONOLOGIQUE TOUS PÔLES -->
             <div class="space-y-4">
               <div class="p-4 rounded-2xl glass-card-blue flex items-center justify-between text-xs text-pc-blue">
                 <div>
-                  <span class="font-bold block">Calendrier des Dispositifs :</span>
-                  Vue continue de tous les postes et interventions planifiés dans le département. Seuls les postes du jour apparaissent sur la carte tactique.
+                  <span class="font-bold block">Calendrier Transversal des Activités :</span>
+                  Vue continue de tous les événements planifiés dans le département selon les pôles sélectionnés (Secours, Devis, Formations, Action Sociale).
                 </div>
                 <div class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-white/80 border border-pc-blue/30 text-pc-blue whitespace-nowrap ml-3">
-                  ${allScheduled.length} Dispositifs
+                  ${activeEvents.length} Événement(s)
                 </div>
               </div>
 
-              <!-- Barre de Recherche des Dispositifs Planifiés -->
+              <!-- Barre de Recherche des Événements Planifiés -->
               <div class="relative">
                 <input 
                   type="text" 
                   id="planning-search-input" 
-                  placeholder="🔍 Rechercher un dispositif (ex: nom, adresse, ville, DPS, Maraude, SAMU...)" 
+                  placeholder="🔍 Rechercher un événement (ex: nom, adresse, ville, DPS, Formation, Maraude, B2B...)" 
                   oninput="window.game.filterPlanningList(this.value)"
                   class="w-full pl-4 pr-10 py-2 rounded-2xl bg-white border border-slate-300 shadow-sm font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
                 />
@@ -10321,62 +10715,55 @@ class ProtecGame {
               </div>
 
               <div id="planning-search-empty-msg" class="hidden p-6 rounded-2xl glass-card text-center text-xs text-slate-500 italic">
-                Aucun dispositif ne correspond à votre recherche.
+                Aucun événement ne correspond à votre recherche.
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                ${allScheduled.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour l’instant. Établissez des devis dans le module Devis pour remplir votre planning.</p>' : ''}
-                ${allScheduled.map(m => {
-                  const regCount = m.registeredVolunteers?.length || 0;
-                  const isFull = regCount >= m.requiredVolunteers;
-                  const dateStr = m.eventDate ? this.formatFullDate(m.eventDate) + ' à ' + (m.startHour || m.eventDate.hour || 14) + 'h00' : 'Date à confirmer';
-                  const isToday = m.eventDate ? (m.eventDate.day === this.clock.day && m.eventDate.month === this.clock.month) : false;
-                  const searchText = `${m.title || ''} ${m.type || ''} ${m.scale || ''} ${m.address || ''} ${m.sector || ''} ${m.city || ''}`.toLowerCase();
+                ${activeEvents.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour les pôles sélectionnés. Activez plus de filtres pour élargir l\'affichage.</p>' : ''}
+                ${activeEvents.map(e => {
+                  const dateStr = e.eventDate ? this.formatFullDate(e.eventDate) + ' à ' + (e.startHour || 14) + 'h00' : 'Date à confirmer';
+                  const isToday = e.eventDate ? (e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month) : false;
+                  const searchText = `${e.title || ''} ${e.type || ''} ${e.scale || ''} ${e.address || ''} ${e.poleLabel || ''}`.toLowerCase();
 
                   return `
                     <div class="planning-mission-card p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${isToday ? 'border-amber-300 ring-2 ring-amber-200' : 'border-slate-200/80'}" data-search-text="${searchText}">
                       <div class="space-y-1.5">
-                        <div class="flex items-center justify-between">
-                          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${isToday ? 'bg-amber-500 text-white' : 'bg-pc-blue text-white'}">
-                            ${dateStr} ${isToday ? '⭐ (AUJOURD’HUI)' : ''}
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${e.badgeBg}">
+                            ${e.poleLabel} • ${e.type}
                           </span>
-                          <span class="text-xs font-bold mono-num text-emerald-600">+${m.rewardMoney} €</span>
+                          ${e.rewardMoney ? `<span class="text-xs font-bold mono-num text-emerald-600">+${e.rewardMoney} €</span>` : ''}
                         </div>
-                        <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
+                        <div class="text-[11px] font-black ${isToday ? 'text-amber-600' : 'text-slate-500'}">
+                          📅 ${dateStr} ${isToday ? '⭐ (AUJOURD’HUI)' : ''}
+                        </div>
+                        <h4 class="text-sm font-extrabold text-slate-900">${e.title}</h4>
                         <p class="text-xs text-slate-700 font-semibold flex items-center gap-1">
-                          <i data-lucide="${m.isSector || m.type === 'social' ? 'map' : 'map-pin'}" class="w-3.5 h-3.5 ${m.isSector || m.type === 'social' ? 'text-purple-600' : 'text-pc-blue'} flex-shrink-0"></i>
-                          <span>${m.isSector || m.type === 'social' ? (m.sector || m.address || 'Secteur de Maraude') : (m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site'))}</span>
+                          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
+                          <span>${e.address}</span>
                         </p>
-                        <p class="text-xs text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                        <p class="text-xs text-slate-500">${e.scale || 'Activité'} • Durée : <strong>${e.durationHours || 4}h</strong> • Effectifs : <strong>${e.registeredCount}/${e.requiredCount}</strong></p>
                       </div>
 
                       <div class="space-y-1.5 pt-2 border-t border-slate-100/70">
-                        <div class="flex items-center justify-between text-xs font-bold">
-                          <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
-                            ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
-                          </span>
-                          <div class="flex gap-2">
-                            <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold cursor-pointer">
-                              Renfort Alliance
-                            </button>
-                            ${!isFull ? `
-                              <button onclick="window.game.manualRelanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold cursor-pointer" title="Relancer l'équipe">
-                                Relancer (${m.relancesCount || 0})
-                              </button>
-                            ` : ''}
-                          </div>
+                        <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                          <div class="h-full rounded-full ${e.registeredCount >= e.requiredCount ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (e.registeredCount / (e.requiredCount || 1)) * 100)}%"></div>
                         </div>
-                        <div class="flex items-center justify-between text-[10px] text-slate-500">
-                          <span>Statut : <strong>${m.sollicitationSent ? `Sollicité (${m.relancesCount || 0} relance${(m.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
-                        </div>
-                        <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden">
-                          <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
-                        </div>
-                      </div>
 
-                      <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-2 rounded-xl text-xs font-bold glass-button text-slate-800 transition">
-                        Détail du dispositif
-                      </button>
+                        ${e.pole === 'dps' || e.pole === 'social' ? `
+                          <button onclick="window.game.closeModal(); window.game.openMissionDetails('${e.id}')" class="w-full py-2 rounded-xl text-xs font-bold glass-button text-slate-800 transition cursor-pointer">
+                            ${e.pole === 'social' ? 'Fiche de la Maraude' : 'Détail du Dispositif'}
+                          </button>
+                        ` : e.pole === 'devis' ? `
+                          <button onclick="window.game.openModule('devis')" class="w-full py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition cursor-pointer">
+                            Gérer le Devis DPS
+                          </button>
+                        ` : `
+                          <button onclick="window.game.openModule('formations')" class="w-full py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer">
+                            Consulter la Formation
+                          </button>
+                        `}
+                      </div>
                     </div>
                   `;
                 }).join('')}
@@ -13184,6 +13571,18 @@ class ProtecGame {
     // Ne jamais interrompre un utilisateur en train de taper ou de modifier un champ
     const activeEl = document.activeElement;
     if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT')) {
+      return;
+    }
+
+    // Protection absolue : ne JAMAIS rafraîchir si un formulaire ou une sous-vue d'édition/création est ouverte
+    if (modal.querySelector('form') || this.currentModalKey === 'job_offer_form' || this.isSubModalOpen) {
+      return;
+    }
+
+    // Vérifier si une sous-modale contextuelle est active
+    const titleEl = document.getElementById('modal-title');
+    const currentTitle = titleEl ? (titleEl.textContent || '') : '';
+    if (currentTitle.includes('Offre de Recrutement') || currentTitle.includes('Service Civique') || currentTitle.includes('Création') || currentTitle.includes('Entretien')) {
       return;
     }
 

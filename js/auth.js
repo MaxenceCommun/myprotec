@@ -1182,6 +1182,7 @@ window.ProtecAuth = {
           baseUpgrades: game.baseUpgrades,
           skillsTree: game.skillsTree,
           challenges: game.challenges,
+          rewards: game.rewards,
           adRewards: game.adRewards,
           annualContracts: game.annualContracts || [],
           messagesHistory: game.messagesHistory || {},
@@ -1327,6 +1328,9 @@ window.ProtecAuth = {
       if (savedData.adRewards) {
         game.adRewards = savedData.adRewards;
         if (window.ProtecAds) window.ProtecAds.updateUI(game);
+      }
+      if (savedData.rewards) {
+        game.rewards = savedData.rewards;
       }
 
       // Purger immédiatement tout résidu local

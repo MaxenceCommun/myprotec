@@ -37,7 +37,13 @@ window.ProtecMultiplayer = {
     }
 
     if (!game.marketplace) {
-      game.marketplace = this.getInitialMarketplaceOffers();
+      game.marketplace = [];
+    } else {
+      // Retirer définitivement tout véhicule ou matériel généré par le jeu / PNJ
+      game.marketplace = game.marketplace.filter(o => 
+        !String(o.id).startsWith('mkt-init-') && 
+        !String(o.sellerPlayerId).startsWith('system-')
+      );
     }
 
     if (!game.badgesCollection) {
@@ -60,95 +66,9 @@ window.ProtecMultiplayer = {
     return `${y}-W${weekNum}`;
   },
 
-  // Offres de démarrage réalistes pour animer la Bourse
+  // Le marché de l'occasion est exclusivement alimenté par les joueurs
   getInitialMarketplaceOffers() {
-    return [
-      {
-        id: 'mkt-init-1',
-        sellerPlayerId: 'system-ant-lyon',
-        sellerPlayerName: 'Antenne Lyon Centre',
-        stationName: 'Protection Civile du Rhône',
-        category: 'vehicule',
-        type: 'VPSP',
-        title: 'VPSP Master Sanitaire 120 000 km',
-        desc: 'Ambulance de secours révisée, cellule capitonnée, brancard 3 points et attelage homologué.',
-        dealType: 'vente',
-        price: 5200,
-        tradeWanted: null,
-        createdAt: '08/10/2026',
-        vehicleData: {
-          name: 'VPSP Réformé Lyon',
-          type: 'VPSP',
-          icon: 'ambulance',
-          hasTowHitch: true,
-          capacity: 3,
-          fuel: 90,
-          wear: 80
-        }
-      },
-      {
-        id: 'mkt-init-2',
-        sellerPlayerId: 'system-ant-bordeaux',
-        sellerPlayerName: 'Antenne Bordeaux Métropole',
-        stationName: 'Protection Civile de Gironde',
-        category: 'materiel',
-        type: 'tente_pma',
-        title: 'Lot Poste Médical Avancé (Tente PMA 30m²)',
-        desc: 'Abri gonflable d’urgence complet avec gonfleur électrique et mât d’éclairage LED autonome.',
-        dealType: 'don',
-        price: 0,
-        tradeWanted: null,
-        createdAt: '08/10/2026',
-        materialData: {
-          itemKey: 'tente_pma',
-          label: 'Tente PMA Gonflable 30m²',
-          quantity: 1
-        }
-      },
-      {
-        id: 'mkt-init-3',
-        sellerPlayerId: 'system-ant-marseille',
-        sellerPlayerName: 'Antenne Marseille Littoral',
-        stationName: 'Protection Civile des Bouches-du-Rhône',
-        category: 'vehicule',
-        type: 'QUAD',
-        title: 'Quad Tout-Terrain d’Intervention avec Remorque',
-        desc: 'Véhicule de reconnaissance pour zones accidentées ou plages. Remorque de route incluse.',
-        dealType: 'echange',
-        price: 0,
-        tradeWanted: '1 VTU Logistique ou 2 DAE opérationnels',
-        createdAt: '07/10/2026',
-        vehicleData: {
-          name: 'Quad Reconnaissance BRS',
-          type: 'QUAD',
-          icon: 'bike',
-          hasTowHitch: false,
-          hasTrailer: true,
-          capacity: 2,
-          fuel: 100,
-          wear: 90
-        }
-      },
-      {
-        id: 'mkt-init-4',
-        sellerPlayerId: 'system-ant-lille',
-        sellerPlayerName: 'Antenne Lille Flandres',
-        stationName: 'Protection Civile du Nord',
-        category: 'materiel',
-        type: 'dae',
-        title: 'Lot de 2 Défibrillateurs DAE Zoll AED Plus',
-        desc: 'Appareils contrôlés et révisés avec électrodes adultes et sacoche de transport d’intervention.',
-        dealType: 'vente',
-        price: 750,
-        tradeWanted: null,
-        createdAt: '08/10/2026',
-        materialData: {
-          itemKey: 'dae',
-          label: 'Défibrillateur Automatisé Externe (DAE)',
-          quantity: 2
-        }
-      }
-    ];
+    return [];
   },
 
   // =========================================================================
@@ -850,15 +770,15 @@ window.ProtecMultiplayer = {
 
     return `
       <div class="space-y-4">
-        <!-- Bannière d'en-tête de la Bourse -->
+        <!-- Bannière d'en-tête du Marché -->
         <div class="p-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between shadow-md">
           <div class="space-y-1">
             <h4 class="text-sm font-black flex items-center gap-2">
               <i data-lucide="repeat" class="w-4 h-4"></i>
-              Bourse Fédérale aux Véhicules & Matériel
+              Marché de l'Occasion entre Joueurs
             </h4>
             <p class="text-xs text-white/90">
-              Cessions de matériel réformé, dons solidaires et échanges d’équipements entre antennes de la Protection Civile.
+              Cessions de matériel, véhicules révisés, dons solidaires et échanges d’équipements entre directeurs d’antenne.
             </p>
           </div>
           <button onclick="window.ProtecMultiplayer.openPublishOfferModal(window.game)" class="px-4 py-2 rounded-xl text-xs font-black bg-white text-emerald-800 hover:bg-emerald-50 transition shadow-sm flex items-center gap-1.5 cursor-pointer flex-shrink-0">
@@ -867,7 +787,7 @@ window.ProtecMultiplayer = {
           </button>
         </div>
 
-        <!-- Barre de recherche et Filtres de la bourse -->
+        <!-- Barre de recherche et Filtres du marché -->
         <div class="space-y-2 border-b border-slate-200 pb-2">
           <div class="relative">
             <input 
@@ -896,7 +816,7 @@ window.ProtecMultiplayer = {
         <div id="mkt-offers-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           ${offers.length === 0 ? `
             <div class="col-span-2 p-8 rounded-2xl glass-card text-center text-slate-500 text-xs italic">
-              Aucune annonce disponible sur la bourse actuellement. Soyez le premier à publier un véhicule ou équipement !
+              Aucun véhicule ni matériel en vente actuellement. Les annonces sont publiées exclusivement par les directeurs d'antenne joueurs. Soyez le premier à publier !
             </div>
           ` : offers.map(o => {
             const isMine = o.sellerPlayerId === myPlayerId;
@@ -1028,7 +948,7 @@ window.ProtecMultiplayer = {
               <i data-lucide="tag" class="w-5 h-5"></i>
             </div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Publier une Offre sur la Bourse</h3>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Publier une Offre sur le Marché</h3>
               <p class="text-xs text-slate-500 font-semibold">Cession, don solidaire ou échange entre antennes</p>
             </div>
           </div>
