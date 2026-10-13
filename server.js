@@ -422,6 +422,35 @@ const server = http.createServer((req, res) => {
       return;
     }
     const users = db.getAllUsersForAdmin();
+    // Compléter avec les joueurs actifs connectés (gameState.players) qui ne sont pas dans db.users
+    const seenUserIds = new Set(users.map(u => u.id));
+    if (gameState && gameState.players) {
+      Object.values(gameState.players).forEach(p => {
+        if (p && p.id && !seenUserIds.has(p.id)) {
+          seenUserIds.add(p.id);
+          const st0 = (p.stations && p.stations[0]) || null;
+          users.push({
+            id: p.id,
+            username: p.name || 'Directeur d’Antenne',
+            role: 'user',
+            isBanned: false,
+            stationName: st0?.name || 'Antenne Locale',
+            city: st0?.city || 'Paris',
+            departmentCode: st0?.departmentCode || p.departmentCode || '75',
+            createdAt: new Date().toISOString(),
+            lastLogin: new Date(p.lastSeen || Date.now()).toISOString(),
+            money: 15000,
+            volunteersCount: p.volunteersCount || 4,
+            vehiclesCount: p.vehiclesCount || 1,
+            stationsCount: (p.stations && p.stations.length) || 1,
+            missionsCount: 0,
+            reputationScore: 50,
+            timeTracking: p.timeTracking || null,
+            lastSaved: new Date().toISOString()
+          });
+        }
+      });
+    }
     sendJson(res, 200, { success: true, users });
     return;
   }

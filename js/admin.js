@@ -763,33 +763,109 @@ window.ProtecAdmin = {
         }
       } catch (e) {}
 
-      // 2. Récupération des utilisateurs
-      let usersLoaded = false;
+      // 2. Récupération des utilisateurs (Fusion intelligente : Serveur Local + Supabase Cloud + Compte Joueur Actif)
+      const usersMap = new Map();
+
+      // A. Récupération depuis le serveur local Node.js
       try {
         const usersRes = await fetch('/api/admin/users', { headers: this.getAuthHeaders() });
         if (usersRes.ok) {
           const usersData = await usersRes.json();
-          this.usersCache = usersData.users || [];
-          usersLoaded = true;
+          (usersData.users || []).forEach(u => {
+            if (u && u.id) usersMap.set(u.id, u);
+          });
         }
       } catch (e) {}
 
-      // Fallback Supabase si le backend local n'a pas répondu ou est vide
-      if (!usersLoaded && window.ProtecSupabase && window.ProtecSupabase.getAllPlayersForAdmin) {
-        const supaPlayers = await window.ProtecSupabase.getAllPlayersForAdmin();
-        if (supaPlayers && supaPlayers.length > 0) {
-          this.usersCache = supaPlayers;
-          usersLoaded = true;
-          if (!statsLoaded) {
-            this.renderStats({
-              totalUsers: supaPlayers.length,
-              activeOnline: supaPlayers.filter(p => p.timeTracking && (Date.now() - (p.timeTracking.lastSeen || 0) < 60000)).length || 1,
-              totalSavedGames: supaPlayers.filter(p => p.lastSaved).length,
-              alliancesCount: 1
+      // B. Récupération depuis Supabase Cloud (comptes en ligne persistés)
+      if (window.ProtecSupabase && window.ProtecSupabase.getAllPlayersForAdmin) {
+        try {
+          const supaPlayers = await window.ProtecSupabase.getAllPlayersForAdmin();
+          if (Array.isArray(supaPlayers)) {
+            supaPlayers.forEach(p => {
+              if (p && p.id) {
+                const existing = usersMap.get(p.id);
+                if (existing) {
+                  usersMap.set(p.id, { ...existing, ...p });
+                } else {
+                  usersMap.set(p.id, p);
+                }
+              }
             });
           }
+        } catch (supaErr) {
+          console.warn('Erreur lecture Supabase admin players:', supaErr);
         }
       }
+
+      // C. Injection du Compte Joueur Actif (pour garantir qu'il figure toujours au tableau)
+      const activePlayerId = game?.player?.id || window.ProtecAuth?.currentUser?.id || localStorage.getItem('protec_player_id');
+      const activePlayerName = game?.player?.name || window.ProtecAuth?.currentUser?.username || localStorage.getItem('protec_player_name');
+
+      if (activePlayerId || activePlayerName) {
+        let matchedKey = null;
+        for (const [id, u] of usersMap.entries()) {
+          if (id === activePlayerId || (activePlayerName && u.username && u.username.toLowerCase() === activePlayerName.toLowerCase())) {
+            matchedKey = id;
+            break;
+          }
+        }
+
+        const primaryStation = (game?.stations && game.stations[0]) || null;
+        const currentMoney = (game?.resources?.money !== undefined) ? game.resources.money : ((game?.resources?.budget !== undefined) ? game.resources.budget : 15000);
+        const currentVolunteers = game?.volunteers?.length || 4;
+        const currentVehicles = game?.vehicles?.length || 1;
+        const currentMissions = game?.missions?.length || 0;
+        const currentCity = primaryStation?.city || window.ProtecAuth?.currentUser?.city || game?.currentCityKey || 'Paris';
+        const currentStationName = primaryStation?.name || window.ProtecAuth?.currentUser?.stationName || 'Antenne Locale';
+        const currentDept = primaryStation?.departmentCode || game?.player?.departmentCode || window.ProtecAuth?.currentUser?.departmentCode || '75';
+
+        const localUserData = {
+          id: activePlayerId || ('usr_local_' + (activePlayerName || 'joueur')),
+          username: activePlayerName || 'Directeur d’Antenne',
+          role: game?.player?.role || window.ProtecAuth?.currentUser?.role || 'directeur',
+          isBanned: false,
+          stationName: currentStationName,
+          city: currentCity,
+          departmentCode: currentDept,
+          money: currentMoney,
+          volunteersCount: currentVolunteers,
+          vehiclesCount: currentVehicles,
+          stationsCount: (game?.stations && game.stations.length) || 1,
+          missionsCount: currentMissions,
+          reputationScore: game?.resources?.reputationScore || 50,
+          timeTracking: game?.connectionTimeTracker ? {
+            activeSeconds: game.connectionTimeTracker.activeSeconds || 0,
+            idleSeconds: game.connectionTimeTracker.idleSeconds || 0,
+            lastSeen: Date.now()
+          } : null,
+          lastSaved: Date.now(),
+          isLocalPlayer: true
+        };
+
+        if (matchedKey) {
+          const ex = usersMap.get(matchedKey);
+          usersMap.set(matchedKey, {
+            ...ex,
+            ...localUserData,
+            id: ex.id,
+            isLocalPlayer: true
+          });
+        } else {
+          usersMap.set(localUserData.id, localUserData);
+        }
+      }
+
+      this.usersCache = Array.from(usersMap.values());
+      const usersLoaded = this.usersCache.length > 0;
+
+      // Recalcul des statistiques avec tous les joueurs fusionnés
+      this.renderStats({
+        totalUsers: this.usersCache.length,
+        activeOnline: this.usersCache.filter(p => p.isLocalPlayer || (p.timeTracking && (Date.now() - (p.timeTracking.lastSeen || 0) < 120000))).length || 1,
+        totalSavedGames: this.usersCache.filter(p => p.lastSaved).length,
+        alliancesCount: 1
+      });
 
       if (usersLoaded) {
         this.renderUsersTable(game);
@@ -825,7 +901,7 @@ window.ProtecAdmin = {
 
     const term = (this.searchFilter || '').toLowerCase();
     const filtered = this.usersCache.filter(u =>
-      u.username.toLowerCase().includes(term) ||
+      (u.username && u.username.toLowerCase().includes(term)) ||
       (u.stationName && u.stationName.toLowerCase().includes(term)) ||
       (u.city && u.city.toLowerCase().includes(term))
     );
@@ -836,7 +912,12 @@ window.ProtecAdmin = {
     }
 
     tableBody.innerHTML = filtered.map(u => {
-      const isOnline = !!(game && game.player && game.player.id === u.id);
+      const isCurrentPlayer = !!(
+        u.isLocalPlayer ||
+        (game && game.player && (game.player.id === u.id || (game.player.name && u.username && game.player.name.toLowerCase() === u.username.toLowerCase()))) ||
+        (window.ProtecAuth?.currentUser && (window.ProtecAuth.currentUser.id === u.id || (window.ProtecAuth.currentUser.username && u.username && window.ProtecAuth.currentUser.username.toLowerCase() === u.username.toLowerCase())))
+      );
+      const isOnline = isCurrentPlayer || !!(game && game.player && game.player.id === u.id) || (u.timeTracking && (Date.now() - (u.timeTracking.lastSeen || 0) < 120000));
       const isBanned = u.isBanned;
       const isAdmin = u.role === 'admin';
 
@@ -858,20 +939,21 @@ window.ProtecAdmin = {
       const idleStr = formatSec(idleSec);
 
       return `
-        <tr class="border-b border-slate-100 hover:bg-slate-50/70 transition text-xs">
+        <tr class="border-b border-slate-100 hover:bg-slate-50/70 transition text-xs ${isCurrentPlayer ? 'bg-indigo-50/40' : ''}">
           <!-- Nom & Statut -->
           <td class="py-3 px-3">
             <div class="flex items-center gap-2">
-              <div class="w-7 h-7 rounded-xl ${isAdmin ? 'bg-indigo-100 text-indigo-700 font-black' : 'bg-slate-100 text-slate-700 font-bold'} flex items-center justify-center text-[10px]">
-                ${isAdmin ? '👑' : '👤'}
+              <div class="w-7 h-7 rounded-xl ${isAdmin ? 'bg-indigo-100 text-indigo-700 font-black' : (isCurrentPlayer ? 'bg-emerald-100 text-emerald-700 font-black' : 'bg-slate-100 text-slate-700 font-bold')} flex items-center justify-center text-[10px]">
+                ${isAdmin ? '👑' : (isCurrentPlayer ? '⭐' : '👤')}
               </div>
               <div>
-                <div class="font-extrabold text-slate-800 flex items-center gap-1">
+                <div class="font-extrabold text-slate-800 flex items-center gap-1.5 flex-wrap">
                   ${u.username}
+                  ${isCurrentPlayer ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded-full font-black">Mon Compte</span>' : ''}
                   ${isAdmin ? '<span class="text-[9px] bg-indigo-100 text-indigo-800 px-1 py-0.2 rounded font-black">ADMIN</span>' : ''}
                   ${isBanned ? '<span class="text-[9px] bg-red-100 text-red-800 px-1 py-0.2 rounded font-black">BANNI</span>' : ''}
                 </div>
-                <div class="text-[10px] text-slate-400 font-mono">ID: ${u.id.substring(0, 10)}...</div>
+                <div class="text-[10px] text-slate-400 font-mono">ID: ${u.id ? (u.id.substring(0, 12) + (u.id.length > 12 ? '...' : '')) : 'local'}</div>
               </div>
             </div>
           </td>
@@ -1057,6 +1139,31 @@ window.ProtecAdmin = {
         saveData: payload.saveData
       });
       if (supaRes.success) success = true;
+    }
+
+    // Répercussion immédiate sur l'instance de jeu locale si l'utilisateur modifié est le joueur en cours
+    if (window.game) {
+      const g = window.game;
+      const isCur = (g.player && g.player.id === userId) || (window.ProtecAuth?.currentUser && window.ProtecAuth.currentUser.id === userId);
+      if (isCur) {
+        if (payload.money !== undefined && g.resources) {
+          g.resources.money = Number(payload.money);
+          g.resources.budget = Number(payload.money);
+          g.resources.funds = Number(payload.money);
+          if (typeof g.updateHeader === 'function') g.updateHeader();
+        }
+        if (payload.newUsername && g.player) {
+          g.player.name = payload.newUsername;
+          if (window.ProtecAuth?.currentUser) window.ProtecAuth.currentUser.username = payload.newUsername;
+          if (typeof window.ProtecAuth?.updateHeaderUI === 'function') window.ProtecAuth.updateHeaderUI();
+        }
+        if (payload.role && g.player) {
+          g.player.role = payload.role;
+          if (window.ProtecAuth?.currentUser) window.ProtecAuth.currentUser.role = payload.role;
+        }
+        if (typeof g.saveGame === 'function') g.saveGame(true);
+        success = true;
+      }
     }
 
     if (success) {

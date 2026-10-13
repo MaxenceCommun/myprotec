@@ -1243,6 +1243,10 @@ class ProtecGame {
     this.populateDepartmentSelector();
 
     this.map.on('click', (e) => {
+      // Ignorer si un marqueur (mission, événement, renfort, antenne) vient d'être cliqué
+      if (this._lastMarkerClickTime && (Date.now() - this._lastMarkerClickTime < 600)) {
+        return;
+      }
       if (this.isPlacingAntenna) {
         this.confirmAntennaPlacement(e.latlng);
       } else if (this.isPickingLocation && this.onLocationPickedCallback) {
@@ -1537,7 +1541,24 @@ class ProtecGame {
       });
 
       const marker = L.marker([mission.lat, mission.lng], { icon });
-      marker.on('click', () => this.openMissionDetails(mission.id));
+
+      const handleMissionClick = (ev) => {
+        if (ev) {
+          if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+          if (ev.originalEvent && typeof ev.originalEvent.stopPropagation === 'function') {
+            ev.originalEvent.stopPropagation();
+          }
+        }
+        this._lastMarkerClickTime = Date.now();
+        this.openMissionDetails(mission.id);
+      };
+
+      if (typeof L.DomEvent !== 'undefined' && typeof L.DomEvent.disableClickPropagation === 'function') {
+        L.DomEvent.disableClickPropagation(el);
+      }
+      el.addEventListener('click', handleMissionClick);
+      marker.on('click', handleMissionClick);
+
       const tooltipText = (mission.type === 'social' || mission.isSector)
         ? `<b>${mission.title}</b><br/><span style="color:#7c3aed;">🗺️ ${mission.sector || mission.address || 'Secteur de Maraude'}</span>`
         : `<b>${mission.title}</b><br/><span>📍 ${mission.address || 'Point cartographique'}</span>`;
@@ -1549,6 +1570,110 @@ class ProtecGame {
         marker.addTo(this.map);
       }
       this.markers.missions[mission.id] = marker;
+    });
+
+    // Rendu des Événements Officiels & Communautaires (communityEvents) sur la carte
+    const openCommunityEvents = (this.communityEvents || []).filter(e => e.status === 'open' && (e.lat || e.latitude) && (e.lng || e.longitude));
+    openCommunityEvents.forEach(evt => {
+      const eLat = evt.lat || evt.latitude;
+      const eLng = evt.lng || evt.longitude;
+      if (!eLat || !eLng) return;
+
+      const evtEl = document.createElement('div');
+      evtEl.className = 'custom-leaflet-marker community-event-marker';
+      evtEl.innerHTML = `
+        <div class="radar-ping-purple"></div>
+        <div class="marker-inner bg-gradient-to-tr from-purple-700 via-indigo-600 to-amber-500 border-2 border-amber-300 shadow-lg">
+          <i data-lucide="award" class="w-4 h-4 text-amber-200"></i>
+          <span class="badge-counter bg-amber-400 text-slate-950 font-black">★</span>
+        </div>
+      `;
+
+      const evtIcon = L.divIcon({
+        className: 'clean-marker',
+        html: evtEl,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22]
+      });
+
+      const evtMarker = L.marker([eLat, eLng], { icon: evtIcon, zIndexOffset: 1000 });
+      const handleEvtClick = (ev) => {
+        if (ev) {
+          if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+          if (ev.originalEvent && typeof ev.originalEvent.stopPropagation === 'function') {
+            ev.originalEvent.stopPropagation();
+          }
+        }
+        this._lastMarkerClickTime = Date.now();
+        this.openCommunityEventDetails(evt.id);
+      };
+
+      if (typeof L.DomEvent !== 'undefined' && typeof L.DomEvent.disableClickPropagation === 'function') {
+        L.DomEvent.disableClickPropagation(evtEl);
+      }
+      evtEl.addEventListener('click', handleEvtClick);
+      evtMarker.on('click', handleEvtClick);
+
+      evtMarker.bindTooltip(`<b>⭐ ${evt.title}</b><br/><span style="color:#7c3aed;">Événement Officiel • ${evt.locationName || evt.city || 'Dispositif'}</span>`, { direction: 'top', offset: [0, -15] });
+
+      if (this.missionsClusterGroup) {
+        this.missionsClusterGroup.addLayer(evtMarker);
+      } else {
+        evtMarker.addTo(this.map);
+      }
+      this.markers.missions['evt-' + evt.id] = evtMarker;
+    });
+
+    // Rendu des Demandes de Renfort Actives sur la carte
+    const openRenforts = (this.renforts || []).filter(r => r.status === 'open' && (r.lat || r.latitude) && (r.lng || r.longitude));
+    openRenforts.forEach(renf => {
+      const rLat = renf.lat || renf.latitude;
+      const rLng = renf.lng || renf.longitude;
+      if (!rLat || !rLng) return;
+
+      const rEl = document.createElement('div');
+      rEl.className = 'custom-leaflet-marker renfort-marker';
+      rEl.innerHTML = `
+        <div class="radar-ping-orange"></div>
+        <div class="marker-inner bg-gradient-to-tr from-amber-600 to-pc-orange border-2 border-white shadow-lg">
+          <i data-lucide="handshake" class="w-4 h-4 text-white"></i>
+          <span class="badge-counter bg-pc-blue text-white font-black">${(renf.requiredVolsCount || 6) - (renf.slotsCommitted || 0)}</span>
+        </div>
+      `;
+
+      const rIcon = L.divIcon({
+        className: 'clean-marker',
+        html: rEl,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22]
+      });
+
+      const rMarker = L.marker([rLat, rLng], { icon: rIcon, zIndexOffset: 900 });
+      const handleRenfClick = (ev) => {
+        if (ev) {
+          if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+          if (ev.originalEvent && typeof ev.originalEvent.stopPropagation === 'function') {
+            ev.originalEvent.stopPropagation();
+          }
+        }
+        this._lastMarkerClickTime = Date.now();
+        this.openEngageRenfortModal(renf.id);
+      };
+
+      if (typeof L.DomEvent !== 'undefined' && typeof L.DomEvent.disableClickPropagation === 'function') {
+        L.DomEvent.disableClickPropagation(rEl);
+      }
+      rEl.addEventListener('click', handleRenfClick);
+      rMarker.on('click', handleRenfClick);
+
+      rMarker.bindTooltip(`<b>🤝 Appel à Renfort : ${renf.title || renf.typeTitle || 'Mission'}</b><br/><span style="color:#f97316;">${renf.addressDisplay || renf.address || 'Point de rassemblement'}</span>`, { direction: 'top', offset: [0, -15] });
+
+      if (this.missionsClusterGroup) {
+        this.missionsClusterGroup.addLayer(rMarker);
+      } else {
+        rMarker.addTo(this.map);
+      }
+      this.markers.missions['renf-' + renf.id] = rMarker;
     });
 
     if (window.lucide) window.lucide.createIcons();
@@ -6372,10 +6497,153 @@ class ProtecGame {
     this.updateStatsUI();
   }
 
+  openCommunityEventDetails(eventId) {
+    try {
+      this._lastMarkerClickTime = Date.now();
+      const evt = (this.communityEvents || []).find(e => e.id === eventId || e.id === 'evt-' + eventId);
+      if (!evt) return;
+
+      this.selectedMissionId = 'evt-' + evt.id;
+      const drawer = document.getElementById('context-drawer');
+      const title = document.getElementById('drawer-title');
+      const catBadge = document.getElementById('drawer-category-badge');
+      const headerIcon = document.getElementById('drawer-header-icon');
+      const body = document.getElementById('drawer-body');
+      const footer = document.getElementById('drawer-footer');
+
+      if (!drawer || !body || !footer) return;
+
+      catBadge.textContent = 'ÉVÉNEMENT COMMUNAUTAIRE OFFICIEL';
+      catBadge.className = 'text-[10px] uppercase font-black tracking-wider text-purple-700 block truncate';
+      title.textContent = evt.title || 'Grand Événement Officiel';
+      headerIcon.setAttribute('data-lucide', 'award');
+
+      const myPlayerId = this.player?.id || 'directeur-local';
+      const isAlreadyRegistered = (evt.registeredAntennas || []).some(a => a.playerId === myPlayerId);
+      const totalAntennas = (evt.registeredAntennas || []).length;
+      const badgeData = evt.badge || {};
+
+      body.innerHTML = `
+        <div class="space-y-4">
+          <!-- Carte Écusson commémoratif exclusif de l'événement -->
+          <div class="p-4 rounded-3xl bg-gradient-to-tr from-purple-900 via-indigo-900 to-slate-900 text-white shadow-xl border-2 border-amber-400/60 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-black uppercase tracking-widest text-amber-300">Écusson Commémoratif</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950">${badgeData.rarityTier || 'Épique'}</span>
+            </div>
+            <div class="flex items-center gap-3.5">
+              <div class="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 p-2 flex items-center justify-center flex-shrink-0 filter drop-shadow-md">
+                ${badgeData.imageUrl ? `
+                  <img src="${badgeData.imageUrl}" alt="${badgeData.name || 'Écusson'}" class="w-full h-full object-contain pointer-events-none" onerror="this.onerror=null; this.parentElement.innerHTML='🛡️';" />
+                ` : `
+                  <i data-lucide="${badgeData.icon || 'award'}" class="w-8 h-8 text-amber-300"></i>
+                `}
+              </div>
+              <div class="min-w-0 flex-1">
+                <h4 class="text-sm font-black text-white leading-tight truncate">${badgeData.name || evt.title}</h4>
+                <p class="text-[11px] text-slate-300 mt-0.5 line-clamp-2">${badgeData.desc || 'Débloqué sur votre profil lors du déploiement opérationnel.'}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Détails opérationnels -->
+          <div class="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5 text-xs text-slate-700">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-500">Localisation :</span>
+              <span class="font-black text-slate-900">${evt.locationName || evt.city || 'Non renseigné'} (${evt.departmentCode || 'National'})</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-500">Public attendu :</span>
+              <span class="font-black text-slate-900">${(evt.publicCount || 5000).toLocaleString('fr-FR')} personnes</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-500">Secouristes requis :</span>
+              <span class="font-black text-slate-900">${evt.requiredVolunteers || 8} intervenants</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-500">Indemnisation d'Antenne :</span>
+              <span class="font-black text-emerald-700">+${(evt.rewardMoney || 1200).toLocaleString('fr-FR')} €</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-500">Points de Réputation :</span>
+              <span class="font-black text-pc-blue">+${evt.rewardReputation || 30} pts</span>
+            </div>
+            ${evt.desc ? `
+              <div class="pt-2 border-t border-slate-100 text-[11px] text-slate-600 leading-relaxed">
+                ${evt.desc}
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Antennes déjà engagées -->
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5 text-xs">
+            <div class="flex items-center justify-between font-bold text-slate-700">
+              <span>Mobilisation Inter-Antennes :</span>
+              <span class="text-pc-blue">${totalAntennas} antenne(s) déployée(s)</span>
+            </div>
+            <p class="text-[11px] text-slate-500">
+              ${isAlreadyRegistered
+                ? '✅ Votre antenne est officiellement inscrite sur ce dispositif inter-départemental !'
+                : 'Mobilisez 2 équipiers de votre antenne pour participer à cet événement républicain et remporter l’écusson officiel.'}
+            </p>
+          </div>
+        </div>
+      `;
+
+      footer.innerHTML = `
+        <button onclick="window.game.closeDrawer()" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
+        ${isAlreadyRegistered ? `
+          <button disabled class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-emerald-600 text-white opacity-80 cursor-default flex items-center justify-center gap-1.5">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            Déjà Déployé sur l'Événement
+          </button>
+        ` : `
+          <button onclick="window.ProtecMultiplayer && window.ProtecMultiplayer.participateInCommunityEvent(window.game, '${evt.id}'); window.game.openCommunityEventDetails('${evt.id}');" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-purple-700 to-indigo-600 hover:brightness-110 active:scale-95 text-white shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
+            <i data-lucide="shield-check" class="w-4 h-4 text-amber-300"></i>
+            Déployer l'Équipe & Obtenir l'Écusson
+          </button>
+        `}
+      `;
+
+      drawer.classList.remove('hidden');
+      drawer.classList.add('flex', 'drawer-slide-in');
+      this.updateToastContainerPosition();
+      if (window.lucide) window.lucide.createIcons();
+    } catch (e) {
+      console.error('Erreur openCommunityEventDetails:', e);
+    }
+  }
+
   openMissionDetails(missionId) {
     try {
-      const mission = this.missions.find(m => m.id === missionId);
-      if (!mission) return;
+      this._lastMarkerClickTime = Date.now();
+
+      if (typeof missionId === 'string' && (missionId.startsWith('evt-') || missionId.startsWith('evt_'))) {
+        const cleanId = missionId.replace(/^evt-/, '').replace(/^evt_/, '');
+        this.openCommunityEventDetails(cleanId);
+        return;
+      }
+      if (typeof missionId === 'string' && (missionId.startsWith('renf-') || missionId.startsWith('renf_'))) {
+        const cleanId = missionId.replace(/^renf-/, '').replace(/^renf_/, '');
+        this.openEngageRenfortModal(cleanId);
+        return;
+      }
+
+      let mission = this.missions.find(m => m.id === missionId);
+      if (!mission) {
+        // Fallback de recherche dans communityEvents et renforts
+        const commEvt = (this.communityEvents || []).find(e => e.id === missionId);
+        if (commEvt) {
+          this.openCommunityEventDetails(commEvt.id);
+          return;
+        }
+        const renf = (this.renforts || []).find(r => r.id === missionId);
+        if (renf) {
+          this.openEngageRenfortModal(renf.id);
+          return;
+        }
+        return;
+      }
 
       if (!Array.isArray(mission.registeredVolunteers)) {
         mission.registeredVolunteers = [];
@@ -9329,129 +9597,143 @@ class ProtecGame {
           ${currentTab === 'calendar' ? `
             <!-- VUE CALENDRIER -->
             <div class="space-y-4">
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
-                <div class="flex flex-wrap items-center gap-2.5">
-                  <!-- Navigation Mois : ◀ Précédent / Mois Année / Suivant ▶ -->
-                  <div class="flex items-center bg-white border border-slate-200/90 rounded-2xl p-1 shadow-xs">
+              <!-- Grille principale : Calendrier à gauche (lg:col-span-7) + Détails journée à droite (lg:col-span-5) -->
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                <!-- Colonne Gauche : Navigation Mois (pleine largeur du planning) + Grille du calendrier -->
+                <div class="lg:col-span-7 xl:col-span-7 space-y-3">
+                  <!-- Navigation Mois : prend STRICTEMENT la même largeur que la grille du planning (w-full) -->
+                  <div class="w-full flex items-center justify-between bg-white border border-slate-200/90 rounded-2xl p-1.5 sm:p-2 shadow-xs">
                     <button 
                       onclick="window.game.changePlanningMonth(-1)" 
-                      class="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer"
+                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer flex-shrink-0"
                       title="Mois précédent"
                     >
-                      <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                      <i data-lucide="chevron-left" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
-                    <div class="px-3 py-0.5 text-center min-w-[130px]">
-                      <span class="text-sm font-black text-slate-900 block leading-tight">${curMonthName} ${curYear}</span>
+                    <div class="flex-1 text-center px-2 sm:px-4">
+                      <div class="flex items-center justify-center gap-2">
+                        <span class="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-tight">${curMonthName} ${curYear}</span>
+                        ${!isViewingCurrentMonth ? `
+                          <button 
+                            onclick="window.game.resetPlanningMonthToCurrent()" 
+                            class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-pc-blue text-white hover:brightness-110 active:scale-95 transition cursor-pointer flex items-center gap-1 shadow-xs"
+                            title="Revenir au mois en cours"
+                          >
+                            <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                            <span class="hidden sm:inline">Mois en cours</span>
+                          </button>
+                        ` : ''}
+                      </div>
                       ${!isViewingCurrentMonth ? `
-                        <span class="text-[9px] font-bold text-amber-600 uppercase tracking-wider block">Mois décalé</span>
+                        <span class="text-[9px] sm:text-[10px] font-extrabold text-amber-600 uppercase tracking-wider block mt-0.5">${(curYear < this.clock.year || (curYear === this.clock.year && curViewingMonth < this.clock.month)) ? 'Mois précédent' : 'Mois suivant'}</span>
                       ` : `
-                        <span class="text-[9px] font-bold text-emerald-600 uppercase tracking-wider block">Mois en cours</span>
+                        <span class="text-[9px] sm:text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider block mt-0.5">Mois en cours</span>
                       `}
                     </div>
                     <button 
                       onclick="window.game.changePlanningMonth(1)" 
-                      class="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer"
+                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer flex-shrink-0"
                       title="Mois suivant"
                     >
-                      <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                      <i data-lucide="chevron-right" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
                   </div>
 
-                  ${!isViewingCurrentMonth ? `
-                    <button 
-                      onclick="window.game.resetPlanningMonthToCurrent()" 
-                      class="px-3 py-1.5 rounded-xl text-xs font-black bg-pc-blue text-white hover:brightness-110 active:scale-95 transition cursor-pointer flex items-center gap-1.5 shadow-sm"
-                      title="Revenir au mois en cours"
-                    >
-                      <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-                      <span>Mois en cours</span>
-                    </button>
-                  ` : ''}
+                  <!-- Grille du calendrier -->
+                  <div class="glass-card rounded-2xl p-3.5 sm:p-4 shadow-sm">
+                    <!-- En-têtes des jours de la semaine -->
+                    <div class="grid grid-cols-7 gap-1 text-center text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
+                      <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
+                    </div>
+
+                    <!-- Cases des jours -->
+                    <div class="grid grid-cols-7 gap-1.5">
+                      <!-- Décalage premier jour -->
+                      ${Array.from({ length: firstDayIndex }).map(() => `
+                        <div class="h-16 rounded-xl bg-slate-50/50 opacity-30 border border-transparent"></div>
+                      `).join('')}
+
+                      <!-- Jours du mois -->
+                      ${Array.from({ length: daysInMonth }).map((_, i) => {
+                        const day = i + 1;
+                        const isToday = isViewingCurrentMonth && (day === todayDay);
+                        const isSelected = day === selectedDay;
+                        const isPast = (curYear < this.clock.year) ||
+                          (curYear === this.clock.year && curViewingMonth < this.clock.month) ||
+                          (isViewingCurrentMonth && day < todayDay);
+
+                        const dayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === day && m.eventDate.month === curViewingMonth && (m.eventDate.year == null || m.eventDate.year === curYear));
+                        const dpsCount = dayMissions.filter(m => m.type === 'dps').length;
+                        const otherCount = dayMissions.filter(m => m.type !== 'dps').length;
+
+                        const dayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === day && d.eventDate.month === curViewingMonth && (d.eventDate.year == null || d.eventDate.year === curYear));
+                        const prevCount = dayDevis.filter(d => d.status === 'previsionnel').length;
+                        const pendingCount = dayDevis.filter(d => d.status === 'pending' || d.status === 'sent').length;
+
+                        let bgClass = 'bg-white hover:bg-slate-50 border-slate-200/80';
+                        if (isSelected) {
+                          bgClass = isPast 
+                            ? 'bg-slate-200 border-pc-blue ring-2 ring-pc-blue/40' 
+                            : 'bg-pc-blue/10 border-pc-blue ring-2 ring-pc-blue/30';
+                        } else if (isToday) {
+                          bgClass = 'bg-amber-50/90 border-amber-300 ring-1 ring-amber-300';
+                        } else if (isPast) {
+                          bgClass = 'bg-slate-100/90 hover:bg-slate-200/70 border-slate-200/90';
+                        }
+
+                        return `
+                          <button 
+                            onclick="window.game.selectPlanningDay(${day})" 
+                            class="min-h-16 rounded-xl p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
+                          >
+                            <div class="flex items-center justify-between w-full">
+                              <span class="text-xs ${isToday ? 'text-amber-800 font-black' : isSelected ? 'text-pc-blue font-black' : isPast ? 'text-slate-400 font-bold' : 'text-slate-800 font-extrabold'}">
+                                ${day}
+                              </span>
+                              ${isToday ? `<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-amber-950 uppercase">Auj.</span>` : ''}
+                            </div>
+
+                            <div class="flex flex-col gap-0.5 w-full mt-1 ${isPast && !isToday ? 'opacity-65 filter saturate-50' : ''}">
+                              ${dpsCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-blue text-white truncate text-center">
+                                  DPS (${dpsCount})
+                                </div>
+                              ` : ''}
+                              ${prevCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-500 text-white truncate text-center border border-amber-600/30">
+                                  ⏳ Prévi (${prevCount})
+                                </div>
+                              ` : ''}
+                              ${pendingCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-sky-500 text-white truncate text-center">
+                                  📋 Devis (${pendingCount})
+                                </div>
+                              ` : ''}
+                              ${otherCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-orange text-white truncate text-center">
+                                  Garde (${otherCount})
+                                </div>
+                              ` : ''}
+                            </div>
+                          </button>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-2.5 text-[11px] text-slate-600">
-                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-pc-blue"></span> DPS Validé</span>
-                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> ⏳ Prévisionnel</span>
-                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span> 📋 Devis Reçu</span>
-                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-pc-orange"></span> Garde</span>
-                </div>
-              </div>
+                <!-- Colonne Droite : Légendes en en-tête + Détail de la journée sélectionnée -->
+                <div class="lg:col-span-5 xl:col-span-5 space-y-3 lg:sticky lg:top-2">
+                  <!-- Pastilles de légendes alignées en carte -->
+                  <div class="w-full flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 bg-white border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs">
+                    <span class="flex items-center gap-1.5 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-pc-blue"></span> DPS Validé</span>
+                    <span class="flex items-center gap-1.5 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> ⏳ Prévi</span>
+                    <span class="flex items-center gap-1.5 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span> 📋 Devis</span>
+                    <span class="flex items-center gap-1.5 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-pc-orange"></span> Garde</span>
+                  </div>
 
-              <!-- Grille principale : Calendrier à gauche (lg:col-span-7) + Détails journée à droite (lg:col-span-5) -->
-              <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                <!-- Grille du calendrier -->
-                <div class="lg:col-span-7 xl:col-span-7 glass-card rounded-2xl p-3.5 sm:p-4 shadow-sm">
-                <!-- En-têtes des jours de la semaine -->
-                <div class="grid grid-cols-7 gap-1 text-center text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-                  <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
-                </div>
-
-                <!-- Cases des jours -->
-                <div class="grid grid-cols-7 gap-1.5">
-                  <!-- Décalage premier jour -->
-                  ${Array.from({ length: firstDayIndex }).map(() => `
-                    <div class="h-16 rounded-xl bg-slate-50/50 opacity-30 border border-transparent"></div>
-                  `).join('')}
-
-                  <!-- Jours du mois -->
-                  ${Array.from({ length: daysInMonth }).map((_, i) => {
-                    const day = i + 1;
-                    const isToday = day === todayDay;
-                    const isSelected = day === selectedDay;
-                    const dayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === day && m.eventDate.month === curViewingMonth && (m.eventDate.year == null || m.eventDate.year === curYear));
-                    const dpsCount = dayMissions.filter(m => m.type === 'dps').length;
-                    const otherCount = dayMissions.filter(m => m.type !== 'dps').length;
-
-                    const dayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === day && d.eventDate.month === curViewingMonth && (d.eventDate.year == null || d.eventDate.year === curYear));
-                    const prevCount = dayDevis.filter(d => d.status === 'previsionnel').length;
-                    const pendingCount = dayDevis.filter(d => d.status === 'pending' || d.status === 'sent').length;
-
-                    let bgClass = 'bg-white hover:bg-slate-50 border-slate-200/80';
-                    if (isSelected) bgClass = 'bg-pc-blue/10 border-pc-blue ring-2 ring-pc-blue/30';
-                    else if (isToday) bgClass = 'bg-amber-50/80 border-amber-300';
-
-                    return `
-                      <button 
-                        onclick="window.game.selectPlanningDay(${day})" 
-                        class="min-h-16 rounded-xl p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
-                      >
-                        <div class="flex items-center justify-between w-full">
-                          <span class="text-xs font-extrabold ${isToday ? 'text-amber-800 font-black' : isSelected ? 'text-pc-blue' : 'text-slate-800'}">
-                            ${day}
-                          </span>
-                          ${isToday ? `<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-amber-950 uppercase">Auj.</span>` : ''}
-                        </div>
-
-                        <div class="flex flex-col gap-0.5 w-full mt-1">
-                          ${dpsCount > 0 ? `
-                            <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-blue text-white truncate text-center">
-                              DPS (${dpsCount})
-                            </div>
-                          ` : ''}
-                          ${prevCount > 0 ? `
-                            <div class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-500 text-white truncate text-center border border-amber-600/30">
-                              ⏳ Prévi (${prevCount})
-                            </div>
-                          ` : ''}
-                          ${pendingCount > 0 ? `
-                            <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-sky-500 text-white truncate text-center">
-                              📋 Devis (${pendingCount})
-                            </div>
-                          ` : ''}
-                          ${otherCount > 0 ? `
-                            <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-orange text-white truncate text-center">
-                              Garde (${otherCount})
-                            </div>
-                          ` : ''}
-                        </div>
-                      </button>
-                    `;
-                  }).join('')}
-                </div>
-              </div>
-
-                <!-- Colonne Droite : Détail de la journée sélectionnée -->
-                <div class="lg:col-span-5 xl:col-span-5 p-4 rounded-2xl glass-card space-y-4 shadow-sm lg:sticky lg:top-2 max-h-[75vh] overflow-y-auto">
+                  <!-- Carte Détail de la journée sélectionnée -->
+                  <div class="p-4 rounded-2xl glass-card space-y-4 shadow-sm max-h-[75vh] overflow-y-auto">
                   <div class="flex items-center justify-between border-b border-slate-100 pb-2">
                     <div>
                       <h4 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">

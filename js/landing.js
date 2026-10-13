@@ -46,10 +46,10 @@ window.MyProtecLanding = {
       director: 'Directeur Thomas',
       department: 'Meurthe-et-Moselle (54)',
       badges: [
-        { id: 'b1', code: 'renf_fondateur', name: 'Membre Fondateur', cat: 'renfort', rarity: 'historique', icon: 'crown', desc: 'Attribué aux directeurs membres fondateurs ayant ouvert leur premier centre de secours territorial.' },
+        { id: 'b1', code: 'renf_fondateur', name: 'Membre Fondateur', cat: 'renfort', rarity: 'historique', icon: 'crown', desc: 'Attribué aux directeurs membres fondateurs ayant ouvert leur premier centre de secours territorial.', imageUrl: 'images/badges/membre_fondateur.png' },
         { id: 'b2', code: 'renf_colonne_crue', name: 'Colonne Nationale Crues & Inondations', cat: 'renfort', rarity: 'historique', icon: 'droplets', desc: 'Distinction officielle suite aux opérations majeures de pompage lourd et d’évacuation de population.' },
         { id: 'b3', code: 'spec_pma', name: 'Poste Médical Avancé (PMA)', cat: 'specialite', rarity: 'epique', icon: 'plus-square', desc: 'Aptitude certifiée au déploiement rapide d’une chaîne médicale avancée de tri d’urgence.' },
-        { id: 'b4', code: 'dept_54', name: 'Territoire 54 • Meurthe-et-Moselle', cat: 'departement', rarity: 'commun', icon: 'map-pin', desc: 'Insigne officiel des unités de secours et d’action citoyenne de Meurthe-et-Moselle.' }
+        { id: 'b4', code: 'dept_54', name: 'Protection Civile 54 • Meurthe-et-Moselle', cat: 'departement', rarity: 'commun', icon: 'map-pin', desc: 'Insigne officiel des unités de secours et d’action citoyenne de Meurthe-et-Moselle.', imageUrl: 'images/badges/badge_meurthe_et_moselle_54.png' }
       ]
     },
     {
@@ -319,14 +319,27 @@ window.MyProtecLanding = {
           // Transformer les écussons locaux
           const catalog = window.ProtecEcussons?.catalog || [];
           const badges = lEcussons.map(le => {
-            const catItem = catalog.find(c => c.code === (le.code || le.id)) || {};
+            const catItem = catalog.find(c => c.code === (le.code || le.id) || c.id === (le.id || le.code)) || {};
+            let code = le.code || catItem.code;
+            let name = catItem.nom || le.name || 'Écusson';
+            let imgUrl = catItem.imageUrl || le.imageUrl;
+
+            if (code === 'renf_fondateur' || name.includes('Pionnier')) {
+              name = 'Membre Fondateur';
+              imgUrl = 'images/badges/membre_fondateur.png';
+            } else if (code === 'dept_54') {
+              name = 'Protection Civile 54 • Meurthe-et-Moselle';
+              imgUrl = 'images/badges/badge_meurthe_et_moselle_54.png';
+            }
+
             return {
               id: le.id || le.code,
-              code: le.code || catItem.code,
-              name: catItem.nom || le.name || 'Écusson',
+              code: code,
+              name: name,
               cat: catItem.categorie || le.cat || 'specialite',
               rarity: catItem.rarete || le.rarity || 'commun',
               icon: catItem.icon || le.icon || 'shield',
+              imageUrl: imgUrl,
               desc: catItem.description || ''
             };
           });
@@ -361,13 +374,29 @@ window.MyProtecLanding = {
           supaAntennes.forEach(item => {
             if (!groups[item.antenne_id]) groups[item.antenne_id] = [];
             if (item.ecusson) {
+              const code = item.ecusson.code;
+              let name = item.ecusson.nom || 'Écusson';
+              let imgUrl = item.ecusson.badge_url || item.ecusson.imageUrl;
+
+              if (code === 'renf_fondateur' || (name && name.includes('Pionnier'))) {
+                name = 'Membre Fondateur';
+                imgUrl = 'images/badges/membre_fondateur.png';
+              } else if (code === 'dept_54') {
+                name = 'Protection Civile 54 • Meurthe-et-Moselle';
+                imgUrl = 'images/badges/badge_meurthe_et_moselle_54.png';
+              } else if (!imgUrl && window.ProtecEcussons?.FALLBACK_CATALOG) {
+                const fb = window.ProtecEcussons.FALLBACK_CATALOG.find(f => f.code === code);
+                if (fb && fb.imageUrl) imgUrl = fb.imageUrl;
+              }
+
               groups[item.antenne_id].push({
                 id: item.ecusson.id,
-                code: item.ecusson.code,
-                name: item.ecusson.nom,
+                code: code,
+                name: name,
                 cat: item.ecusson.categorie,
                 rarity: item.ecusson.rarete,
-                icon: item.ecusson.badge_url || 'shield',
+                icon: item.ecusson.icon || 'shield',
+                imageUrl: imgUrl,
                 desc: item.ecusson.description
               });
             }
@@ -492,6 +521,7 @@ window.MyProtecLanding = {
             <div class="grid grid-cols-2 gap-3 my-5">
               ${displayBadges.length > 0 ? displayBadges.map(badge => {
                 const r = badge.rarity || badge.rarete || 'commun';
+                const imgSrc = badge.imageUrl || (badge.badge_url && (badge.badge_url.includes('/') || badge.badge_url.includes('.')) ? badge.badge_url : null);
                 return `
                   <div 
                     class="patch-badge-item group relative p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col items-center text-center cursor-pointer overflow-hidden transition hover:shadow-md"
@@ -505,14 +535,23 @@ window.MyProtecLanding = {
                       (r === 'rare' ? 'foil-rare' : ''))
                     }"></div>
 
-                    <!-- Icône vectorielle -->
-                    <div class="w-11 h-11 rounded-xl ${
-                      r === 'historique' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
-                      (r === 'epique' ? 'bg-purple-50 text-purple-600 border border-purple-200' :
-                      (r === 'rare' ? 'bg-cyan-50 text-cyan-600 border border-cyan-200' : 'bg-slate-100 text-slate-600 border border-slate-200'))
-                    } flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
-                      <i data-lucide="${(badge.icon && !badge.icon.includes('/') && !badge.icon.includes('.')) ? badge.icon : 'shield'}" class="w-5 h-5"></i>
-                    </div>
+                    <!-- Visuel Écusson : Image PNG Réelle ou Icône vectorielle -->
+                    ${imgSrc ? `
+                      <div class="w-14 h-16 flex items-center justify-center mb-2 filter drop-shadow-md group-hover:scale-105 transition-transform">
+                        <img src="${imgSrc}" alt="${badge.name}" class="w-full h-full object-contain pointer-events-none" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                        <div class="hidden w-11 h-11 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 items-center justify-center shadow-2xs">
+                          <i data-lucide="shield" class="w-5 h-5"></i>
+                        </div>
+                      </div>
+                    ` : `
+                      <div class="w-11 h-11 rounded-xl ${
+                        r === 'historique' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
+                        (r === 'epique' ? 'bg-purple-50 text-purple-600 border border-purple-200' :
+                        (r === 'rare' ? 'bg-cyan-50 text-cyan-600 border border-cyan-200' : 'bg-slate-100 text-slate-600 border border-slate-200'))
+                      } flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
+                        <i data-lucide="${(badge.icon && !badge.icon.includes('/') && !badge.icon.includes('.')) ? badge.icon : 'shield'}" class="w-5 h-5"></i>
+                      </div>
+                    `}
 
                     <strong class="text-[11px] font-black text-slate-800 leading-tight block truncate max-w-full">
                       ${badge.name}

@@ -115,7 +115,25 @@ window.ProtecEcussons = {
           .order('categorie', { ascending: true });
 
         if (!catErr && supaCatalog && supaCatalog.length > 0) {
-          this.catalog = supaCatalog;
+          // Fusionner intelligemment avec FALLBACK_CATALOG pour préserver les images et corrections
+          this.catalog = supaCatalog.map(item => {
+            const fb = this.FALLBACK_CATALOG.find(f => f.code === item.code || f.id === item.id) || {};
+            let img = item.badge_url || item.imageUrl || fb.imageUrl;
+            let nom = item.nom || fb.nom;
+            if (item.code === 'renf_fondateur' || (nom && nom.includes('Pionnier'))) {
+              nom = 'Membre Fondateur';
+              img = 'images/badges/membre_fondateur.png';
+            } else if (item.code === 'dept_54') {
+              nom = 'Protection Civile 54 • Meurthe-et-Moselle';
+              img = 'images/badges/badge_meurthe_et_moselle_54.png';
+            }
+            return {
+              ...fb,
+              ...item,
+              nom: nom,
+              imageUrl: img
+            };
+          });
         }
       } catch (e) {
         console.warn('Chargement catalogue écussons Supabase:', e);
@@ -141,12 +159,31 @@ window.ProtecEcussons = {
           .eq('antenne_id', antenneId);
 
         if (!error && data) {
-          this.playerEcussons = data.map(item => ({
-            antenne_id: item.antenne_id,
-            ecusson_id: item.ecusson_id,
-            quantite: item.quantite || 1,
-            ecusson: item.ecusson || this.catalog.find(c => c.id === item.ecusson_id) || {}
-          }));
+          this.playerEcussons = data.map(item => {
+            const catItem = this.catalog.find(c => c.id === item.ecusson_id || c.code === (item.ecusson && item.ecusson.code)) || {};
+            let ec = item.ecusson || catItem || {};
+            let img = ec.imageUrl || ec.badge_url || catItem.imageUrl;
+            let nom = ec.nom || catItem.nom;
+            const code = ec.code || catItem.code;
+            if (code === 'renf_fondateur' || (nom && nom.includes('Pionnier'))) {
+              nom = 'Membre Fondateur';
+              img = 'images/badges/membre_fondateur.png';
+            } else if (code === 'dept_54') {
+              nom = 'Protection Civile 54 • Meurthe-et-Moselle';
+              img = 'images/badges/badge_meurthe_et_moselle_54.png';
+            }
+            return {
+              antenne_id: item.antenne_id,
+              ecusson_id: item.ecusson_id,
+              quantite: item.quantite || 1,
+              ecusson: {
+                ...catItem,
+                ...ec,
+                nom,
+                imageUrl: img
+              }
+            };
+          });
           return;
         }
       } catch (e) {
@@ -275,11 +312,20 @@ window.ProtecEcussons = {
 
   // --- RENDU VISUEL D'UN ÉCUSSON (SVG BRODÉ HAUTE FIDÉLITÉ OU IMAGE RÉELLE) ---
   renderBadgeIconSvg(badge, size = 48) {
-    if (badge && badge.imageUrl) {
+    let imgSrc = badge && (badge.imageUrl || (badge.badge_url && (badge.badge_url.includes('/') || badge.badge_url.includes('.')) ? badge.badge_url : null));
+    if (!imgSrc && badge) {
+      if (badge.code === 'renf_fondateur' || (badge.nom && (badge.nom.includes('Fondateur') || badge.nom.includes('Pionnier')))) {
+        imgSrc = 'images/badges/membre_fondateur.png';
+      } else if (badge.code === 'dept_54' || (badge.nom && badge.nom.includes('54'))) {
+        imgSrc = 'images/badges/badge_meurthe_et_moselle_54.png';
+      }
+    }
+
+    if (imgSrc) {
       const h = Math.round(size * 1.28);
       return `
         <div class="inline-flex items-center justify-center filter drop-shadow-md transition transform hover:scale-105 select-none" style="width: ${size}px; height: ${h}px;">
-          <img src="${badge.imageUrl}" alt="${badge.nom || 'Écusson'}" class="w-full h-full object-contain drop-shadow-sm pointer-events-none" onerror="this.onerror=null; this.parentElement.innerHTML='🛡️';" />
+          <img src="${imgSrc}" alt="${badge.nom || 'Écusson'}" class="w-full h-full object-contain drop-shadow-sm pointer-events-none" onerror="this.onerror=null; this.parentElement.innerHTML='🛡️';" />
         </div>
       `;
     }

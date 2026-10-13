@@ -707,7 +707,7 @@ INSERT INTO ecussons (code, nom, description, categorie, badge_url, rarete) VALU
   ('miss_sncf', 'Convention Catastrophe Ferroviaire & SNCF', 'Attribué lors de la signature et des interventions d’urgence sur réseau ferré.', 'mission', 'images/badges/badge_sncf.png', 'historique'),
 
   -- 3. DÉPARTEMENTS & ANCRAGE TERRITORIAL
-  ('dept_54', 'Protection Civile 54 • Meurthe-et-Moselle', 'Écusson territorial des secouristes lorrains du 54.', 'departement', 'images/badges/badge_54.png', 'commun'),
+  ('dept_54', 'Protection Civile 54 • Meurthe-et-Moselle', 'Écusson territorial des secouristes lorrains du 54.', 'departement', 'images/badges/badge_meurthe_et_moselle_54.png', 'commun'),
   ('dept_75', 'Protection Civile de Paris (75)', 'Écusson historique de la capitale et des brigades d’intervention parisiennes.', 'departement', 'images/badges/badge_75.png', 'rare'),
   ('dept_69', 'Protection Civile du Rhône (69)', 'Insigne officiel des unités de secours de la métropole lyonnaise.', 'departement', 'images/badges/badge_69.png', 'commun'),
   ('dept_13', 'Protection Civile des Bouches-du-Rhône (13)', 'Écusson des secouristes méditerranéens et feux de forêt du 13.', 'departement', 'images/badges/badge_13.png', 'rare'),
@@ -718,7 +718,7 @@ INSERT INTO ecussons (code, nom, description, categorie, badge_url, rarete) VALU
   ('renf_dps_ge', 'Grande Envergure • Renfort Inter-Antennes', 'Décerné à toute antenne ayant dépêché un équipage ou VPSP en renfort sur un DPS-GE.', 'renfort', 'images/badges/badge_renfort_ge.png', 'epique'),
   ('renf_colonne_crue', 'Colonne Nationale de Secours Crues', 'Écusson de prestige remis lors des déploiements zonaux de crise hydraulique.', 'renfort', 'images/badges/badge_crue.png', 'historique'),
   ('renf_zonal', 'Solidarité Zonale de Sécurité Civile', 'Attribué pour l’appui logistique ou opérationnel rapide entre départements limitrophes.', 'renfort', 'images/badges/badge_zonal.png', 'rare'),
-  ('renf_fondateur', 'Pionnier MyProtec', 'Écusson commémoratif remis aux directeurs ayant inauguré leur bâtiment d’antenne.', 'renfort', 'images/badges/badge_fondateur.png', 'historique')
+  ('renf_fondateur', 'Membre Fondateur', 'Écusson commémoratif officiel remis aux directeurs membres fondateurs ayant ouvert leur premier centre de secours.', 'renfort', 'images/badges/membre_fondateur.png', 'historique')
 ON CONFLICT (code) DO UPDATE SET
   nom = EXCLUDED.nom,
   description = EXCLUDED.description,
