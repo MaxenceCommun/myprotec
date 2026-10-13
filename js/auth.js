@@ -618,19 +618,33 @@ window.ProtecAuth = {
               city: supaRes.user.city
             }
           };
+        } else if (supaRes && supaRes.error) {
+          data = {
+            success: false,
+            error: supaRes.error
+          };
         }
       }
 
-      // 2. Si non connecté via Supabase, tentative serveur local
+      // 2. Si Supabase n'a pas répondu, tentative serveur local
       if (!data) {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        data = await res.json();
-        if (data && data.user) {
-          data.user.isAdmin = !!(data.user.is_admin === true || data.user.role === 'admin');
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+          if (res.ok) {
+            const txt = await res.text();
+            if (txt) {
+              data = JSON.parse(txt);
+              if (data && data.user) {
+                data.user.isAdmin = !!(data.user.is_admin === true || data.user.role === 'admin');
+              }
+            }
+          }
+        } catch (fetchErr) {
+          console.warn('Serveur local /api/auth/login indisponible:', fetchErr);
         }
       }
 
@@ -918,12 +932,19 @@ window.ProtecAuth = {
 
       // 2. Si pas de réponse Supabase, appel API locale
       if (!data) {
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password, stationName, departmentCode, referralCode })
-        });
-        data = await res.json();
+        try {
+          const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, stationName, departmentCode, referralCode })
+          });
+          if (res.ok) {
+            const txt = await res.text();
+            if (txt) data = JSON.parse(txt);
+          }
+        } catch (fetchErr) {
+          console.warn('Fallback local inscription indisponible:', fetchErr);
+        }
       }
 
       if (!data || !data.success) {

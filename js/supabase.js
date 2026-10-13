@@ -596,7 +596,7 @@ window.ProtecSupabase = {
         await this.client.from('game_saves').delete().eq('username', username.trim());
       } catch (cleanErr) {}
 
-      // Création du compte joueur
+      // Création du compte joueur (uniquement les colonnes valides dans Supabase)
       const newPlayer = {
         username: username.trim(),
         password_hash: pwdHash,
@@ -606,13 +606,17 @@ window.ProtecSupabase = {
         role: 'directeur',
         is_admin: false,
         alliance_id: extraData.allianceId || null,
-        referral_code: myReferralCode,
-        referred_by: referredBy,
-        referral_suspended: false,
-        registration_ip: clientIp,
-        last_known_ips: clientIp ? [clientIp] : [],
         created_at: new Date().toISOString(),
-        last_login: new Date().toISOString()
+        last_login: new Date().toISOString(),
+        time_tracking: {
+          lastSeen: 0,
+          idleSeconds: 0,
+          activeSeconds: 0,
+          referral_code: myReferralCode,
+          referred_by: referredBy,
+          registration_ip: clientIp,
+          last_known_ips: clientIp ? [clientIp] : []
+        }
       };
 
       const { data: inserted, error: insertErr } = await this.client
@@ -715,29 +719,15 @@ window.ProtecSupabase = {
         player.password_hash = newHash;
       }
 
-      // Mise à jour de l'historique IP
-      const clientIp = await this.getClientIp();
-      const updates = { last_login: new Date().toISOString() };
-      if (clientIp) {
-        const currentIps = Array.isArray(player.last_known_ips) ? [...player.last_known_ips] : [];
-        if (!currentIps.includes(clientIp)) {
-          currentIps.push(clientIp);
-          if (currentIps.length > 20) currentIps.shift();
-          updates.last_known_ips = currentIps;
-        }
-        if (!player.registration_ip) updates.registration_ip = clientIp;
+      // Mise à jour de last_login (colonne native garantie dans Supabase)
+      try {
+        await this.client
+          .from('players')
+          .update({ last_login: new Date().toISOString() })
+          .eq('id', player.id);
+      } catch (updErr) {
+        console.warn('Update last_login différé:', updErr);
       }
-
-      // Assurer un code parrain
-      if (!player.referral_code) {
-        updates.referral_code = this.generateReferralCode(player.username);
-        player.referral_code = updates.referral_code;
-      }
-
-      await this.client
-        .from('players')
-        .update(updates)
-        .eq('id', player.id);
 
       return { user: player };
     } catch (e) {
