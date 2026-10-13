@@ -55,152 +55,58 @@ window.ProtecConventions = {
           </span>
         </div>
 
-        <!-- 3. TABLEAU DE BORD : RELATIONS INSTITUTIONNELLES & RÉPUTATION PAR COMMUNE -->
+        <!-- 3. RELATIONS DE TERRAIN & RETOURS INSTITUTIONNELS (COURRIERS PARTENAIRES) -->
         <div class="p-5 rounded-3xl glass-card border border-indigo-200/70 shadow-sm space-y-4">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span class="text-lg">🏛️</span>
+              <span class="text-lg">📬</span>
               <div>
-                <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wider">Relations Institutionnelles & Ancrage Communal</h4>
-                <p class="text-[11px] text-slate-500">Confiance des services de secours de l'État et des Mairies du département</p>
+                <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wider">Relations Institutionnelles & Retours Partenaires</h4>
+                <p class="text-[11px] text-slate-500">Coordination continue avec le SAMU 15, le SDIS 18, la SNCF, les Mairies et les Organisateurs</p>
               </div>
             </div>
-            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
-              RNMSC & Agrément Sécurité Civile
-            </span>
+            <button onclick="if (window.ProtecMessaging?.openInstitutionsChannel) { window.ProtecMessaging.openInstitutionsChannel(window.game); } else { window.game.openModule('tchat'); }" class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-pc-blue hover:bg-pc-blue-light transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="mail" class="w-3.5 h-3.5"></i>
+              <span>Boîte des Retours Officiels</span>
+            </button>
           </div>
 
-          <!-- Jauges Institutionnelles Globales (SAMU, SDIS, Préfecture) -->
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <!-- SAMU 15 -->
-            ${(() => {
-              const r = game.reputation_samu !== undefined ? game.reputation_samu : 50;
-              const emoji = r >= 70 ? '😊' : (r >= 45 ? '🙂' : (r >= 30 ? '😐' : '😟'));
-              const label = r >= 70 ? 'Très favorable' : (r >= 45 ? 'Favorable' : (r >= 30 ? 'Neutre' : 'Tendue'));
-              const color = r >= 70 ? 'bg-emerald-500' : (r >= 45 ? 'bg-sky-500' : (r >= 30 ? 'bg-amber-500' : 'bg-rose-500'));
-              const textCol = r >= 70 ? 'text-emerald-700' : (r >= 45 ? 'text-sky-700' : (r >= 30 ? 'text-amber-700' : 'text-rose-700'));
-              return `
-                <div class="p-3 rounded-2xl bg-white/80 border border-slate-200/80 space-y-2">
-                  <div class="flex items-center justify-between text-xs">
-                    <span class="font-bold text-slate-800 flex items-center gap-1.5">
-                      <span>🚑</span> SAMU 15
-                    </span>
-                    <span class="flex items-center gap-1 font-bold ${textCol}">
-                      <span class="text-sm">${emoji}</span>
-                      <span>${label}</span>
-                    </span>
-                  </div>
-                  <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full ${color} transition-all duration-500" style="width: ${Math.min(100, Math.max(5, r))}%"></div>
-                  </div>
-                  <p class="text-[10px] text-slate-500 leading-tight">
-                    ${r >= 65 ? '✓ Renforts d’urgence & gardes VPSP débloquées avec indemnités conventionnées.' : 'Relation de régulation active pour les départs réflexes et transferts sanitaires.'}
-                  </p>
-                </div>
-              `;
-            })()}
-
-            <!-- SDIS 18 -->
-            ${(() => {
-              const r = game.reputation_sdis !== undefined ? game.reputation_sdis : 50;
-              const emoji = r >= 70 ? '😊' : (r >= 45 ? '🙂' : (r >= 30 ? '😐' : '😟'));
-              const label = r >= 70 ? 'Très favorable' : (r >= 45 ? 'Favorable' : (r >= 30 ? 'Neutre' : 'Tendue'));
-              const color = r >= 70 ? 'bg-emerald-500' : (r >= 45 ? 'bg-sky-500' : (r >= 30 ? 'bg-amber-500' : 'bg-rose-500'));
-              const textCol = r >= 70 ? 'text-emerald-700' : (r >= 45 ? 'text-sky-700' : (r >= 30 ? 'text-amber-700' : 'text-rose-700'));
-              return `
-                <div class="p-3 rounded-2xl bg-white/80 border border-slate-200/80 space-y-2">
-                  <div class="flex items-center justify-between text-xs">
-                    <span class="font-bold text-slate-800 flex items-center gap-1.5">
-                      <span>🚒</span> SDIS 18
-                    </span>
-                    <span class="flex items-center gap-1 font-bold ${textCol}">
-                      <span class="text-sm">${emoji}</span>
-                      <span>${label}</span>
-                    </span>
-                  </div>
-                  <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full ${color} transition-all duration-500" style="width: ${Math.min(100, Math.max(5, r))}%"></div>
-                  </div>
-                  <p class="text-[10px] text-slate-500 leading-tight">
-                    ${r >= 60 ? '✓ Conventions casernes actives : prêt de vecteurs et formations conjointes.' : 'Coordination CTA-CODIS active pour les gardes et soutiens feux de forêt.'}
-                  </p>
-                </div>
-              `;
-            })()}
-
-            <!-- Préfecture -->
-            ${(() => {
-              const r = game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50;
-              const emoji = r >= 70 ? '😊' : (r >= 45 ? '🙂' : (r >= 30 ? '😐' : '😟'));
-              const label = r >= 70 ? 'Très favorable' : (r >= 45 ? 'Favorable' : (r >= 30 ? 'Neutre' : 'Tendue'));
-              const color = r >= 70 ? 'bg-emerald-500' : (r >= 45 ? 'bg-sky-500' : (r >= 30 ? 'bg-amber-500' : 'bg-rose-500'));
-              const textCol = r >= 70 ? 'text-emerald-700' : (r >= 45 ? 'text-sky-700' : (r >= 30 ? 'text-amber-700' : 'text-rose-700'));
-              return `
-                <div class="p-3 rounded-2xl bg-white/80 border border-slate-200/80 space-y-2">
-                  <div class="flex items-center justify-between text-xs">
-                    <span class="font-bold text-slate-800 flex items-center gap-1.5">
-                      <span>🏛️</span> Préfecture (COD)
-                    </span>
-                    <span class="flex items-center gap-1 font-bold ${textCol}">
-                      <span class="text-sm">${emoji}</span>
-                      <span>${label}</span>
-                    </span>
-                  </div>
-                  <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full ${color} transition-all duration-500" style="width: ${Math.min(100, Math.max(5, r))}%"></div>
-                  </div>
-                  <p class="text-[10px] text-slate-500 leading-tight">
-                    ${r < 40 ? '⚠️ Vigilance : risque de refus administratifs de dossiers DPS.' : 'Commissions de sécurité bienveillantes et accès aux réquisitions prioritaires.'}
-                  </p>
-                </div>
-              `;
-            })()}
-          </div>
-
-          <!-- Réputation individualisée par Mairie / Commune partenaire avec jauge et emoji -->
-          <div class="pt-3 border-t border-slate-100 space-y-2">
-            <div class="flex items-center justify-between text-xs font-bold text-slate-700">
-              <span>Communes conventionnées & Mairies partenaires</span>
-              <span class="text-[10px] text-slate-400">Impact direct sur les subventions annuelles et budgets organisateurs</span>
+          <!-- Aperçu des derniers courriers & notes reçus -->
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-extrabold text-slate-700 flex items-center gap-1.5">
+                <span>🏛️</span> Dernières liaisons & retours de terrain
+              </span>
+              <span class="text-[10px] text-slate-500 font-semibold">Évaluations après missions, DPS et gardes</span>
             </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-              ${Object.keys(game.reputation_villes || {}).map(cityName => {
-                const repScore = game.reputation_villes[cityName] !== undefined ? game.reputation_villes[cityName] : 50;
-                const isStationCity = cityName.toLowerCase() === (baseCity || '').toLowerCase();
-                const emoji = repScore >= 65 ? '😊' : (repScore >= 40 ? '🙂' : (repScore >= 25 ? '😐' : '😟'));
-                const label = repScore >= 65 ? 'Très favorable' : (repScore >= 40 ? 'Favorable' : (repScore >= 25 ? 'Neutre' : 'Tendue'));
-                const color = repScore >= 65 ? 'bg-emerald-500' : (repScore >= 40 ? 'bg-sky-500' : (repScore >= 25 ? 'bg-amber-500' : 'bg-rose-500'));
-                const textCol = repScore >= 65 ? 'text-emerald-700' : (repScore >= 40 ? 'text-sky-700' : (repScore >= 25 ? 'text-amber-700' : 'text-rose-700'));
-                let badgeHTML = '';
-
-                if (repScore >= 65) {
-                  badgeHTML = '<span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">Partenaire Privilégié</span>';
-                } else if (repScore < 25) {
-                  badgeHTML = '<span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-red-100 text-red-800 animate-pulse">Risque Concurrence</span>';
-                } else {
-                  badgeHTML = '<span class="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-slate-100 text-slate-600">Standard</span>';
+            <div class="space-y-2">
+              ${(() => {
+                const instMsgs = (game.messagesHistory?.institutions || []).slice(0, 2);
+                if (instMsgs.length === 0) {
+                  return `
+                    <div class="p-3 rounded-xl bg-white border border-slate-200 text-center text-xs text-slate-500">
+                      <span>Aucun retour institutionnel récent. Réalisez des DPS, gardes ou renforts d'urgence pour recevoir des avis de vos partenaires.</span>
+                    </div>
+                  `;
                 }
-
-                return `
-                  <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-xs space-y-1.5 ${isStationCity ? 'ring-1 ring-pc-blue/30 bg-blue-50/20' : ''}">
-                    <div class="flex items-center justify-between">
-                      <strong class="font-bold text-slate-800 truncate max-w-[130px]">${cityName}${isStationCity ? ' 📍' : ''}</strong>
-                      <span class="flex items-center gap-1 font-bold ${textCol}">
-                        <span class="text-sm">${emoji}</span>
-                        <span>${label}</span>
-                      </span>
+                return instMsgs.map(m => `
+                  <div class="p-2.5 rounded-xl bg-white border ${m.sentiment === 'negatif' ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200'} flex items-start justify-between gap-3 text-xs">
+                    <div class="min-w-0 space-y-0.5">
+                      <div class="flex items-center gap-1.5">
+                        <strong class="font-bold text-slate-800">${m.senderName || 'Partenaire'}</strong>
+                        <span class="text-[10px] text-slate-400">• ${m.date || 'Aujourd’hui'}</span>
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${m.sentiment === 'negatif' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
+                          ${m.badge || (m.sentiment === 'negatif' ? 'Rappel à l’ordre' : 'Félicitations')}
+                        </span>
+                      </div>
+                      <p class="text-[11px] text-slate-600 line-clamp-1">${m.subject ? `<strong>${m.subject} :</strong> ` : ''}${m.text}</p>
                     </div>
-                    <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                      <div class="h-full rounded-full ${color} transition-all duration-500" style="width: ${Math.min(100, Math.max(5, repScore))}%"></div>
-                    </div>
-                    <div class="flex items-center justify-between text-[10px]">
-                      ${badgeHTML}
-                      <span class="text-slate-400">${repScore >= 65 ? 'Budgets bonifiés' : (repScore < 25 ? 'Vigilance mairie' : 'Normal')}</span>
-                    </div>
+                    <button onclick="if (window.ProtecMessaging?.openInstitutionsChannel) { window.ProtecMessaging.openInstitutionsChannel(window.game); } else { window.game.openModule('tchat'); }" class="px-2 py-1 rounded-lg text-[10px] font-bold text-pc-blue bg-blue-50 hover:bg-blue-100 shrink-0 cursor-pointer">
+                      Lire
+                    </button>
                   </div>
-                `;
-              }).join('')}
+                `).join('');
+              })()}
             </div>
           </div>
         </div>
@@ -2260,7 +2166,7 @@ if (numVehicles > 0 && totalCrew > 0) {
       }
     } else if (delta < 0 && updated < 25 && current >= 25) {
       if (game.showToast) {
-        game.showToast('Alerte Concurrence ⚠️', `La Mairie de ${cityName} est mécontente (réputation < 25). Elle envisage de faire appel à une association concurrente.`, 'red');
+        game.showToast('Alerte Concurrence ⚠️', `La Mairie de ${cityName} est mécontente de vos récentes prestations. Elle envisage de faire appel à une association concurrente.`, 'red');
       }
     }
   },

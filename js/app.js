@@ -737,6 +737,7 @@ class ProtecGame {
           id: st.id,
           playerId: remotePlayer.id,
           playerName: remotePlayer.name,
+          discord: remotePlayer.discord || st.discord || null,
           name: st.name,
           city: st.city,
           lat: st.lat,
@@ -5644,6 +5645,36 @@ class ProtecGame {
           `Dispositif sous-dimensionné (${crew.length}/${minReq} requis) ou sans encadrement sur « ${mission.title} » ! Secouristes débordés, organisateur furieux et réputation en baisse (-${repLoss} pts).`,
           'red'
         );
+
+        // Envoi d'un mauvais retour de l'organisateur ou de la Mairie
+        if (window.ProtecMessaging?.logInstitutionalFeedback) {
+          const isCommuneSender = Math.random() < 0.5;
+          if (isCommuneSender) {
+            window.ProtecMessaging.logInstitutionalFeedback(this, {
+              institution: 'commune',
+              senderName: `Mairie de ${failCity}`,
+              senderRole: 'Adjoint à la Sécurité & Domaine Public',
+              sentiment: 'negatif',
+              badge: 'Avertissement Municipal',
+              subject: `Manquements sur la manifestation « ${mission.title} »`,
+              text: `Monsieur le Directeur, les rapports de police municipale font état d'une carence de secouristes lors de « ${mission.title} ». Plusieurs élus déplorent ce sous-dimensionnement. Nous exigeons un rapport d'incident sous huitaine.`,
+              missionTitle: mission.title,
+              missionId: mission.id
+            });
+          } else {
+            window.ProtecMessaging.logInstitutionalFeedback(this, {
+              institution: 'organisateur',
+              senderName: `Comité d'Organisation • ${mission.title}`,
+              senderRole: 'Direction de l’Événement',
+              sentiment: 'negatif',
+              badge: 'Réclamation Partenaire',
+              subject: `Insatisfaction sévère concernant la couverture de secours`,
+              text: `Bonjour, nous sommes scandalisés par le déroulement du dispositif de secours. Vos équipes étaient en sous-effectif flagrant (${crew.length}/${minReq} prévus) et le public a dû patienter sans soins. Nous envisageons de réclamer une indemnité et de changer de prestataire l'année prochaine.`,
+              missionTitle: mission.title,
+              missionId: mission.id
+            });
+          }
+        }
       } else {
         // Succès éclatant : Gain de réputation progressif et dégressif (plus la réputation est haute, moins elle monte vite)
         const currentRep = this.resources.reputationScore || 0;
@@ -5673,6 +5704,86 @@ class ProtecGame {
           `L’organisateur de « ${mission.title} » est comblé par le professionnalisme de vos secouristes (+${repGain} popularité, -${consumableCost} € consommables).`,
           'green'
         );
+
+        // Bon retour occasionnel des partenaires (~40% de chance, "de temps en temps")
+        if (Math.random() < 0.40 && window.ProtecMessaging?.logInstitutionalFeedback) {
+          if (mission.type === 'samu') {
+            window.ProtecMessaging.logInstitutionalFeedback(this, {
+              institution: 'samu',
+              senderName: 'SAMU 15 • Centre 15 Régulation',
+              senderRole: 'Médecin Régulateur',
+              sentiment: 'positif',
+              badge: 'Félicitations SAMU',
+              subject: `Prise en charge exemplaire sur « ${mission.title} »`,
+              text: `Le médecin régulateur du SAMU 15 félicite votre équipage pour la clarté du bilan circonstancié et la rigueur des constantes transmises. Très belle collaboration pré-hospitalière.`,
+              missionTitle: mission.title,
+              missionId: mission.id
+            });
+          } else if (mission.type === 'pompiers') {
+            window.ProtecMessaging.logInstitutionalFeedback(this, {
+              institution: 'sdis',
+              senderName: 'SDIS 18 • Coordination CTA-CODIS',
+              senderRole: 'Capitaine de Garde SDIS',
+              sentiment: 'positif',
+              badge: 'Remerciements SDIS',
+              subject: `Efficacité opérationnelle conjointe`,
+              text: `Le commandement des sapeurs-pompiers tient à souligner la réactivité et la bonne tenue de vos secouristes lors de l'opération « ${mission.title} ». Un partenariat de terrain précieux.`,
+              missionTitle: mission.title,
+              missionId: mission.id
+            });
+          } else if (mission.type === 'sncf' || (mission.title && mission.title.toLowerCase().includes('sncf'))) {
+            window.ProtecMessaging.logInstitutionalFeedback(this, {
+              institution: 'sncf',
+              senderName: 'SNCF Voyageurs • Direction Escale',
+              senderRole: 'Responsable de Crise Ferroviaire',
+              sentiment: 'positif',
+              badge: 'Reconnaissance SNCF',
+              subject: `Assistance voyageurs en gare réussie`,
+              text: `La SNCF vous remercie pour l'accueil chaleureux et le réconfort apportés aux voyageurs en gare sur « ${mission.title} ». Vos secouristes ont su rassurer et apaiser la foule avec un grand dévouement.`,
+              missionTitle: mission.title,
+              missionId: mission.id
+            });
+          } else if (mission.isEmergencyPlan) {
+            window.ProtecMessaging.logInstitutionalFeedback(this, {
+              institution: 'prefecture',
+              senderName: 'Préfecture • SIDPC',
+              senderRole: 'Chef du Service Interministériel de Sécurité Civile',
+              sentiment: 'positif',
+              badge: 'Reconnaissance de l’État',
+              subject: `Mobilisation exemplaire du plan d'urgence`,
+              text: `Le corps préfectoral salue le professionnalisme de vos secouristes déployés sur l'événement « ${mission.title} ». L'État sait pouvoir compter sur votre engagement solidaire.`,
+              missionTitle: mission.title,
+              missionId: mission.id
+            });
+          } else {
+            const isMairieFeedback = Math.random() < 0.5;
+            if (isMairieFeedback) {
+              window.ProtecMessaging.logInstitutionalFeedback(this, {
+                institution: 'commune',
+                senderName: `Mairie de ${successCity}`,
+                senderRole: 'Cabinet du Maire',
+                sentiment: 'positif',
+                badge: 'Avis Très Favorable',
+                subject: `Remerciements officiels de la municipalité`,
+                text: `Monsieur le Maire et les élus vous adressent leurs sincères félicitations pour le dispositif assuré sur « ${mission.title} ». Votre présence contribue activement au rayonnement citoyen de notre ville.`,
+                missionTitle: mission.title,
+                missionId: mission.id
+              });
+            } else {
+              window.ProtecMessaging.logInstitutionalFeedback(this, {
+                institution: 'organisateur',
+                senderName: `Organisation • ${mission.title}`,
+                senderRole: 'Présidence du Comité des Fêtes / Sport',
+                sentiment: 'positif',
+                badge: 'Félicitations Partenaire',
+                subject: `Bravo à toute votre équipe !`,
+                text: `Bonjour, un immense merci à vos bénévoles pour leur dévouement et leur bienveillance sur notre événement « ${mission.title} ». Dispositif parfaitement tenu, nous serons ravis de retravailler avec la Protection Civile l'an prochain !`,
+                missionTitle: mission.title,
+                missionId: mission.id
+              });
+            }
+          }
+        }
       }
     } else {
       this.resources.reputationScore += mission.rewardReputation || 15;
@@ -9279,7 +9390,15 @@ class ProtecGame {
                     <div class="p-4 rounded-2xl glass-card space-y-2">
                       <div class="flex items-center justify-between">
                         <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white">ALLIÉ EN LIGNE</span>
-                        <span class="text-xs font-bold text-slate-700">${st.playerName}</span>
+                        <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                          <span class="text-xs font-bold text-slate-700">${st.playerName}</span>
+                          ${st.discord?.username ? `
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-semibold bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/20" title="Discord: @${st.discord.username}">
+                              <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                              @${st.discord.username}
+                            </span>
+                          ` : ''}
+                        </div>
                       </div>
                       <h5 class="text-sm font-extrabold text-slate-900">${st.name}</h5>
                       <div class="text-xs text-slate-600 flex justify-between pt-2 border-t border-slate-100/70">

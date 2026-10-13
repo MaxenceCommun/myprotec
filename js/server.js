@@ -118,14 +118,77 @@ function getAuthUser(req) {
   return db.getUserByToken(token);
 }
 
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const list = forwarded.split(',');
+    if (list.length > 0) return list[0].trim();
+  }
+  return req.headers['x-real-ip'] || req.socket.remoteAddress || '';
+}
+
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=UTF-8',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-auth-token',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-auth-token, x-admin-key',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
   });
   res.end(JSON.stringify(data));
+}
+
+// Configuration OAuth2 Discord Officielle
+const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1559698958966857788';
+const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || 'PBVswxt7MDfJFbUMV86EI3yBMJnda9-7';
+const DISCORD_PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY || 'e3386fdde63936935ff2d3567b51a0d5717f0f822f8eec83d7f62454ac22558b';
+
+async function exchangeDiscordCode(code, redirectUri) {
+  const tokenParams = new URLSearchParams({
+    client_id: DISCORD_CLIENT_ID,
+    client_secret: DISCORD_CLIENT_SECRET,
+    grant_type: 'authorization_code',
+    code: code,
+    redirect_uri: redirectUri
+  });
+
+  const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: tokenParams.toString()
+  });
+
+  const tokenData = await tokenRes.json();
+  if (!tokenRes.ok || !tokenData.access_token) {
+    const errMsg = tokenData.error_description || tokenData.error || 'Échec de la validation OAuth Discord';
+    throw new Error(errMsg);
+  }
+
+  const userRes = await fetch('https://discord.com/api/v10/users/@me', {
+    headers: {
+      'Authorization': `Bearer ${tokenData.access_token}`
+    }
+  });
+
+  const userData = await userRes.json();
+  if (!userRes.ok || !userData.id) {
+    throw new Error('Échec de la récupération du profil utilisateur Discord');
+  }
+
+  const avatarUrl = userData.avatar
+    ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png?size=128`
+    : `https://cdn.discordapp.com/embed/avatars/${(BigInt(userData.id) >> 22n) % 6n}.png`;
+
+  return {
+    id: userData.id,
+    username: userData.username,
+    global_name: userData.global_name || userData.username,
+    discriminator: userData.discriminator || '0',
+    avatar: userData.avatar || null,
+    avatarUrl,
+    email: userData.email || null
+  };
 }
 
 const server = http.createServer((req, res) => {
@@ -135,10 +198,17 @@ const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-auth-token',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-auth-token, x-admin-key',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
     });
     res.end();
+    return;
+  }
+
+  // Obtenir l'IP client
+  if (url === '/api/client-ip' && req.method === 'GET') {
+    const rawIp = getClientIp(req);
+    sendJson(res, 200, { success: true, ip: db.normalizeIp(rawIp) });
     return;
   }
 
@@ -150,9 +220,11 @@ const server = http.createServer((req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       try {
-        const { username, password, stationName, city, departmentCode } = JSON.parse(body);
+        const { username, password, stationName, city, departmentCode, referralCode, referral_code, deviceFingerprint } = JSON.parse(body);
         const dept = departmentCode || city || '75';
-        const result = db.registerUser(username, password, stationName, dept, dept);
+        const clientIp = getClientIp(req);
+        const refCode = referralCode || referral_code || null;
+        const result = db.registerUser(username, password, stationName, dept, dept, refCode, clientIp, deviceFingerprint);
         if (result.error) {
           sendJson(res, 400, { success: false, error: result.error });
         } else {
@@ -163,6 +235,228 @@ const server = http.createServer((req, res) => {
         console.error('Erreur API Inscription:', err);
         sendJson(res, 400, { success: false, error: err.message || 'Données invalides' });
       }
+    });
+    return;
+  }
+
+  // Connexion
+  if (url === '/api/auth/login' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { username, password } = JSON.parse(body);
+        const clientIp = getClientIp(req);
+        const result = db.loginUser(username, password, clientIp);
+        if (result.error) {
+          sendJson(res, 401, { success: false, error: result.error });
+        } else {
+          sendJson(res, 200, result);
+        }
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: 'Données invalides' });
+      }
+    });
+    return;
+  }
+
+  // Vérifier Session actuelle (Me)
+  if (url === '/api/auth/me' && req.method === 'GET') {
+    const user = getAuthUser(req);
+    if (!user) {
+      sendJson(res, 401, { success: false, error: 'Non authentifié' });
+    } else {
+      const pendingAlerts = [...(user.pending_referral_alerts || [])];
+      user.pending_referral_alerts = [];
+      db.save();
+      sendJson(res, 200, {
+        success: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          role: user.role || 'user',
+          stationName: user.stationName,
+          city: user.city,
+          referral_code: user.referral_code,
+          referred_by: user.referred_by || null,
+          referral_suspended: !!user.referral_suspended,
+          discord: user.discord || null
+        },
+        pendingAlerts
+      });
+    }
+    return;
+  }
+
+  // Déconnexion
+  if (url === '/api/auth/logout' && req.method === 'POST') {
+    const authHeader = req.headers['authorization'] || req.headers['x-auth-token'];
+    let token = authHeader ? (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim()) : null;
+    db.logoutUser(token);
+    sendJson(res, 200, { success: true });
+    return;
+  }
+
+  // Obtenir la configuration Discord publique
+  if (url === '/api/auth/discord/config' && req.method === 'GET') {
+    sendJson(res, 200, { success: true, clientId: DISCORD_CLIENT_ID });
+    return;
+  }
+
+  // Callback OAuth2 Discord (Redirection depuis le portail Discord)
+  if (url === '/api/auth/discord/callback' && req.method === 'GET') {
+    const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost:8080'}`);
+    const code = urlObj.searchParams.get('code');
+    const state = urlObj.searchParams.get('state');
+    const err = urlObj.searchParams.get('error_description') || urlObj.searchParams.get('error');
+
+    if (err) {
+      res.writeHead(400, { 'Content-Type': 'text/html; charset=UTF-8' });
+      res.end(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0f172a;color:#fff;">
+        <h2 style="color:#ef4444;">Connexion Discord Annulée</h2>
+        <p>${err}</p>
+        <button onclick="window.close()" style="margin-top:16px;padding:10px 20px;border-radius:10px;background:#334155;color:#fff;border:none;cursor:pointer;">Fermer</button>
+      </body></html>`);
+      return;
+    }
+
+    if (!code) {
+      res.writeHead(400, { 'Content-Type': 'text/html; charset=UTF-8' });
+      res.end(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0f172a;color:#fff;">
+        <h2 style="color:#ef4444;">Code OAuth manquant</h2>
+        <button onclick="window.close()" style="margin-top:16px;padding:10px 20px;border-radius:10px;background:#334155;color:#fff;border:none;cursor:pointer;">Fermer</button>
+      </body></html>`);
+      return;
+    }
+
+    const redirectUri = `${urlObj.origin}/api/auth/discord/callback`;
+    const clientIp = getClientIp(req);
+
+    // Déterminer s'il s'agit d'une liaison avec un compte existant
+    let existingUserId = null;
+    if (state && state.startsWith('link:')) {
+      existingUserId = state.slice(5).trim();
+    }
+
+    exchangeDiscordCode(code, redirectUri)
+      .then(discordProfile => {
+        const result = db.loginOrLinkDiscord(discordProfile, existingUserId, clientIp);
+        if (result.error) {
+          res.writeHead(400, { 'Content-Type': 'text/html; charset=UTF-8' });
+          res.end(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0f172a;color:#fff;">
+            <h2 style="color:#ef4444;">Erreur de Liaison Discord</h2>
+            <p>${result.error}</p>
+            <button onclick="window.close()" style="margin-top:16px;padding:10px 20px;border-radius:10px;background:#334155;color:#fff;border:none;cursor:pointer;">Fermer</button>
+          </body></html>`);
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=UTF-8' });
+        res.end(`<!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"><title>Connexion Discord...</title></head>
+        <body style="font-family:sans-serif;text-align:center;padding:40px;background:#0f172a;color:#fff;">
+          <div style="font-size:48px;margin-bottom:16px;">🎮</div>
+          <h2 style="color:#5865F2;">Connexion Discord Réussie !</h2>
+          <p style="color:#94a3b8;">Bienvenue, <strong>${result.user?.discord?.global_name || result.user?.username}</strong>. Synchronisation de votre antenne...</p>
+          <script>
+            const payload = {
+              type: 'DISCORD_AUTH_SUCCESS',
+              action: '${result.action}',
+              token: '${result.token || ''}',
+              user: ${JSON.stringify(result.user || {})}
+            };
+            if (window.opener) {
+              window.opener.postMessage(payload, '*');
+              setTimeout(() => window.close(), 600);
+            } else {
+              window.location.href = '/jeu.html?discord_auth=1';
+            }
+          </script>
+        </body>
+        </html>`);
+      })
+      .catch(e => {
+        console.error('Erreur Callback Discord:', e);
+        res.writeHead(500, { 'Content-Type': 'text/html; charset=UTF-8' });
+        res.end(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0f172a;color:#fff;">
+          <h2 style="color:#ef4444;">Erreur Discord</h2>
+          <p>${e.message}</p>
+          <button onclick="window.close()" style="margin-top:16px;padding:10px 20px;border-radius:10px;background:#334155;color:#fff;border:none;cursor:pointer;">Fermer</button>
+        </body></html>`);
+      });
+    return;
+  }
+
+  // Échange de code OAuth2 Discord (Appel API direct depuis le client)
+  if (url === '/api/auth/discord/exchange' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { code, redirectUri, existingUserId } = JSON.parse(body);
+        if (!code) {
+          sendJson(res, 400, { success: false, error: 'Code OAuth manquant' });
+          return;
+        }
+        const clientIp = getClientIp(req);
+        const discordProfile = await exchangeDiscordCode(code, redirectUri);
+        const result = db.loginOrLinkDiscord(discordProfile, existingUserId, clientIp);
+        if (result.error) {
+          sendJson(res, 400, { success: false, error: result.error });
+        } else {
+          sendJson(res, 200, result);
+        }
+      } catch (err) {
+        console.error('Erreur exchange Discord:', err);
+        sendJson(res, 400, { success: false, error: err.message || 'Erreur échange Discord' });
+      }
+    });
+    return;
+  }
+
+  // Dissociation du compte Discord
+  if (url === '/api/auth/discord/unlink' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    if (!user) {
+      sendJson(res, 401, { success: false, error: 'Non authentifié' });
+      return;
+    }
+    const result = db.unlinkDiscord(user.id);
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // Validation du palier première mission terminée pour le parrainage
+  if (url === '/api/referral/claim-first-mission' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    if (!user) {
+      sendJson(res, 401, { success: false, error: 'Connexion requise.' });
+      return;
+    }
+    const result = db.claimReferralFirstMission(user.id);
+    if (result.success) {
+      broadcastSSE('referral_validated', result);
+    }
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // Statut parrainage du joueur
+  if (url === '/api/referral/status' && req.method === 'GET') {
+    const user = getAuthUser(req);
+    if (!user) {
+      sendJson(res, 401, { success: false, error: 'Connexion requise.' });
+      return;
+    }
+    const myReferrals = (db.data.referralLogs || []).filter(r => r.referrer_id === user.id);
+    sendJson(res, 200, {
+      success: true,
+      referral_code: user.referral_code,
+      referral_suspended: !!user.referral_suspended,
+      referred_by: user.referred_by || null,
+      total_referees: myReferrals.length,
+      completed_referees: myReferrals.filter(r => r.status === 'completed').length
     });
     return;
   }
@@ -202,55 +496,6 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Connexion
-  if (url === '/api/auth/login' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', () => {
-      try {
-        const { username, password } = JSON.parse(body);
-        const result = db.loginUser(username, password);
-        if (result.error) {
-          sendJson(res, 401, { success: false, error: result.error });
-        } else {
-          sendJson(res, 200, result);
-        }
-      } catch (err) {
-        sendJson(res, 400, { success: false, error: 'Données invalides' });
-      }
-    });
-    return;
-  }
-
-  // Vérifier Session actuelle (Me)
-  if (url === '/api/auth/me' && req.method === 'GET') {
-    const user = getAuthUser(req);
-    if (!user) {
-      sendJson(res, 401, { success: false, error: 'Non authentifié' });
-    } else {
-      sendJson(res, 200, {
-        success: true,
-        user: {
-          id: user.id,
-          username: user.username,
-          role: user.role || 'user',
-          stationName: user.stationName,
-          city: user.city
-        }
-      });
-    }
-    return;
-  }
-
-  // Déconnexion
-  if (url === '/api/auth/logout' && req.method === 'POST') {
-    const authHeader = req.headers['authorization'] || req.headers['x-auth-token'];
-    let token = authHeader ? (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim()) : null;
-    db.logoutUser(token);
-    sendJson(res, 200, { success: true });
-    return;
-  }
-
   // Sauvegarder la partie du joueur en BDD
   if (url === '/api/game/save' && req.method === 'POST') {
     const user = getAuthUser(req);
@@ -267,9 +512,12 @@ const server = http.createServer((req, res) => {
         gameState.players[user.id] = {
           id: user.id,
           name: user.username,
+          discord: user.discord || null,
           stations: gameData.stations || [],
           departmentCode: user.departmentCode || (gameData.player && gameData.player.departmentCode),
           allianceId: (gameData.player && gameData.player.allianceId) || 'alliance-fnpc',
+          platformStats: gameData.platformStats || null,
+          lastDevice: gameData.lastDevice || null,
           lastSeen: Date.now()
         };
         broadcastSSE('stations_updated', { allianceStations: gameState.allianceStations });
@@ -383,6 +631,15 @@ const server = http.createServer((req, res) => {
       try {
         const player = JSON.parse(body);
         player.lastSeen = Date.now();
+        const authUser = getAuthUser(req);
+        if (authUser && authUser.discord) {
+          player.discord = authUser.discord;
+        } else if (player.id && db.data.users) {
+          const matchedUser = Object.values(db.data.users).find(u => u.id === player.id);
+          if (matchedUser && matchedUser.discord) {
+            player.discord = matchedUser.discord;
+          }
+        }
         gameState.players[player.id] = player;
 
         // Si timeTracking est envoyé, le sauvegarder dans l'utilisateur en base
@@ -422,6 +679,37 @@ const server = http.createServer((req, res) => {
       return;
     }
     const users = db.getAllUsersForAdmin();
+    // Compléter avec les joueurs actifs connectés (gameState.players) qui ne sont pas dans db.users
+    const seenUserIds = new Set(users.map(u => u.id));
+    if (gameState && gameState.players) {
+      Object.values(gameState.players).forEach(p => {
+        if (p && p.id && !seenUserIds.has(p.id)) {
+          seenUserIds.add(p.id);
+          const st0 = (p.stations && p.stations[0]) || null;
+          users.push({
+            id: p.id,
+            username: p.name || 'Directeur d’Antenne',
+            role: 'user',
+            isBanned: false,
+            stationName: st0?.name || 'Antenne Locale',
+            city: st0?.city || 'Paris',
+            departmentCode: st0?.departmentCode || p.departmentCode || '75',
+            createdAt: new Date().toISOString(),
+            lastLogin: new Date(p.lastSeen || Date.now()).toISOString(),
+            money: 15000,
+            volunteersCount: p.volunteersCount || 4,
+            vehiclesCount: p.vehiclesCount || 1,
+            stationsCount: (p.stations && p.stations.length) || 1,
+            missionsCount: 0,
+            reputationScore: 50,
+            timeTracking: p.timeTracking || null,
+            platformStats: p.platformStats || null,
+            lastDevice: p.lastDevice || null,
+            lastSaved: new Date().toISOString()
+          });
+        }
+      });
+    }
     sendJson(res, 200, { success: true, users });
     return;
   }
@@ -442,6 +730,46 @@ const server = http.createServer((req, res) => {
         activeOnline: Object.keys(gameState.players).length,
         alliancesCount: db.data.alliances.length,
         totalSavedGames: Object.keys(db.data.savedGames).length
+      }
+    });
+    return;
+  }
+
+  // Admin : Sécurité & Parrainages (Logs de fraude et parrainages)
+  if (url === '/api/admin/referrals' && req.method === 'GET') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    const referralData = db.getReferralAdminData();
+    sendJson(res, 200, { success: true, ...referralData });
+    return;
+  }
+
+  // Admin : Action sur un incident de fraude ou un compte parrain
+  if (url === '/api/admin/referrals/action' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { action, targetId, extra } = JSON.parse(body);
+        const result = db.processAdminReferralAction(action, targetId, extra || {});
+        if (result.error) {
+          sendJson(res, 400, { success: false, error: result.error });
+        } else {
+          broadcastSSE('admin_referral_updated', { action, targetId });
+          sendJson(res, 200, { success: true, ...result });
+        }
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: err.message });
       }
     });
     return;
@@ -743,6 +1071,15 @@ const server = http.createServer((req, res) => {
         const msg = JSON.parse(body);
         msg.id = `msg-${Date.now()}`;
         msg.time = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const authUser = getAuthUser(req);
+        if (authUser && authUser.discord) {
+          msg.senderDiscord = authUser.discord;
+        } else if (msg.senderId && db.data.users) {
+          const matchedUser = Object.values(db.data.users).find(u => u.id === msg.senderId);
+          if (matchedUser && matchedUser.discord) {
+            msg.senderDiscord = matchedUser.discord;
+          }
+        }
         db.data.chatMessages.push(msg);
         if (db.data.chatMessages.length > 50) db.data.chatMessages.shift();
         db.save();
@@ -1105,6 +1442,8 @@ const server = http.createServer((req, res) => {
     targetFile = 'jeu.html';
   } else if (url === '/privacy' || url === '/politique-confidentialite' || url === '/mentions-legales') {
     targetFile = 'privacy.html';
+  } else if (url === '/ecussons' || url === '/collections' || url === '/badges') {
+    targetFile = 'ecussons.html';
   }
   let filePath = path.join(__dirname, targetFile);
   if (!filePath.startsWith(__dirname)) {

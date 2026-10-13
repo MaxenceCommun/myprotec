@@ -1119,13 +1119,12 @@ window.ProtecLocaux = {
             <div class="p-3 rounded-2xl ${repCity < 30 ? 'bg-red-50 border-2 border-red-300 ring-2 ring-red-100 text-red-900' : 'bg-slate-50 border border-slate-200 text-slate-700'} text-xs space-y-1.5">
               <div class="flex items-center justify-between font-bold">
                 <span class="flex items-center gap-1.5">
-                  <span>🏛️</span> Relations Mairie de ${station.city} :
-                  <strong class="${repCity < 30 ? 'text-red-700' : 'text-slate-900'} font-mono">${repCity}/100</strong>
+                  <span>🏛️</span> Relations Mairie de ${station.city}
                 </span>
-                ${repCity < 30 ? '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white animate-pulse">⚠️ PRÉAVIS EXPULSION ACTIF</span>' : '<span class="text-[10px] text-emerald-700 font-extrabold">✓ Soutien communal maintenu</span>'}
+                ${repCity < 30 ? '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white animate-pulse">⚠️ TENSIONS MUNICIPALES • PRÉAVIS EXPULSION</span>' : '<span class="text-[10px] text-emerald-700 font-extrabold">✓ Soutien communal maintenu</span>'}
               </div>
               <p class="text-[11px] ${repCity < 30 ? 'text-red-800 font-semibold' : 'text-slate-500'}">
-                ${repCity < 30 ? 'Alerte : Le Maire et les élus exigent 650 € d\'indemnité d\'occupation et menacent de reprendre les clés sous 30 jours ! Redressez votre réputation sur les DPS ou louez dans le privé.' : 'Tant que votre réputation reste au-dessus de 30 pts, la municipalité maintient la gratuité intégrale du local.'}
+                ${repCity < 30 ? 'Alerte : Le Maire et les élus exigent 650 € d\'indemnité d\'occupation et menacent de reprendre les clés sous 30 jours ! Redressez vos relations sur les DPS ou louez dans le privé.' : 'La municipalité met gracieusement à disposition votre bâtiment tant que la convention est respectée.'}
               </p>
             </div>
           ` : ''}

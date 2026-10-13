@@ -5,11 +5,67 @@ window.ProtecAuth = {
   lastSyncTime: null,
   isSyncing: false,
   pendingReferralCode: null,
+  activeProfileTab: 'identite',
+  discordConfig: {
+    clientId: '1559698958966857788'
+  },
 
   init(game = null) {
     this.token = localStorage.getItem('protec_auth_token') || null;
     this.currentUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
     this.updateHeaderUI();
+
+    // Écoute des retours OAuth2 Discord via fenêtre Popup
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'DISCORD_AUTH_SUCCESS') {
+        const { token, user, action } = event.data;
+        if (token && user) {
+          this.token = token;
+          this.currentUser = user;
+          localStorage.setItem('protec_auth_token', token);
+          localStorage.setItem('protec_user', JSON.stringify(user));
+          this.updateHeaderUI();
+          this.closeAuthModal();
+          const targetGame = game || window.game;
+          if (targetGame) {
+            if (targetGame.player) {
+              targetGame.player.id = user.id;
+              targetGame.player.name = user.username;
+              targetGame.player.role = user.role || 'user';
+              targetGame.player.discord = user.discord || null;
+            }
+            if (typeof targetGame.showToast === 'function') {
+              const name = user.discord?.global_name || user.username;
+              const msg = action === 'linked'
+                ? `Votre compte Discord (@${user.discord?.username}) est désormais associé à votre antenne !`
+                : `Bienvenue, ${name} ! Connecté via Discord avec succès.`;
+              targetGame.showToast('Connexion Discord Réussie !', msg, 'green');
+            }
+          }
+          const modal = document.getElementById('auth-modal');
+          if (modal && !modal.classList.contains('hidden')) {
+            this.renderModalContent('profile');
+          }
+        }
+      }
+    });
+
+    // Détection de retour de redirection directe Discord (?discord_token=... ou ?code=...)
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const discordToken = urlParams.get('discord_token');
+      const discordCode = urlParams.get('code');
+      if (discordToken) {
+        this.token = discordToken;
+        localStorage.setItem('protec_auth_token', discordToken);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        this.checkSession(game);
+      } else if (discordCode && (urlParams.get('state') || window.location.search.includes('discord'))) {
+        const redirectUri = window.location.origin + window.location.pathname;
+        this.exchangeDiscordCode(discordCode, redirectUri, game);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } catch (e) {}
 
     // Détection d'un lien de parrainage dans l'URL (?ref=CODE ou ?parrain=CODE) avec persistance localStorage
     try {
@@ -399,8 +455,18 @@ window.ProtecAuth = {
   },
 
   openReferralShareModal(refCode = null) {
-    const code = refCode || (this.currentUser && this.currentUser.referral_code) || '';
-    if (!code) {
+    let code = refCode;
+    if (!code || code === 'GÉNÉRATION...') {
+      code = (this.currentUser && (this.currentUser.referral_code || this.currentUser.referralCode)) || '';
+    }
+    if (!code || code === 'GÉNÉRATION...') {
+      if (this.currentUser?.username) {
+        code = 'PROT-' + this.currentUser.username.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+        this.currentUser.referral_code = code;
+        try { localStorage.setItem('protec_user', JSON.stringify(this.currentUser)); } catch (e) {}
+      }
+    }
+    if (!code || code === 'GÉNÉRATION...') {
       if (window.game && typeof window.game.showToast === 'function') {
         window.game.showToast('Connexion requise', 'Connectez-vous à votre antenne pour générer votre QR code de parrainage.', 'orange');
       }
@@ -514,6 +580,114 @@ window.ProtecAuth = {
     if (modalEl) modalEl.classList.add('hidden');
   },
 
+  setProfileTab(tabKey = 'identite') {
+    this.activeProfileTab = tabKey;
+    this.renderModalContent('profile');
+  },
+
+  // Lancer l'authentification OAuth2 Discord (popup ou redirection)
+  loginWithDiscord(mode = 'login') {
+    const clientId = (this.discordConfig && this.discordConfig.clientId) || '1559698958966857788';
+    
+    // Déterminer la redirection optimale
+    let redirectUri = `${window.location.origin}/api/auth/discord/callback`;
+    if (window.location.protocol === 'file:') {
+      redirectUri = 'http://localhost:8080/api/auth/discord/callback';
+    }
+
+    let state = `mode=${mode}&time=${Date.now()}`;
+    if (mode === 'link' && this.currentUser && this.currentUser.id) {
+      state = `link:${this.currentUser.id}`;
+    }
+
+    const oauthUrl = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=identify%20email&state=${encodeURIComponent(state)}`;
+
+    const width = 500, height = 750;
+    const left = Math.max(0, Math.floor((window.screen.width - width) / 2));
+    const top = Math.max(0, Math.floor((window.screen.height - height) / 2));
+    
+    try {
+      const popup = window.open(oauthUrl, 'DiscordAuth', `width=${width},height=${height},top=${top},left=${left},status=no,toolbar=no,menubar=no`);
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        window.location.href = oauthUrl;
+      }
+    } catch (e) {
+      window.location.href = oauthUrl;
+    }
+  },
+
+  // Échange de code OAuth Discord en direct
+  async exchangeDiscordCode(code, redirectUri, game = null) {
+    try {
+      const res = await fetch('/api/auth/discord/exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, redirectUri, existingUserId: this.currentUser?.id })
+      });
+      const data = await res.json();
+      if (data.success && data.token && data.user) {
+        this.token = data.token;
+        this.currentUser = data.user;
+        localStorage.setItem('protec_auth_token', data.token);
+        localStorage.setItem('protec_user', JSON.stringify(data.user));
+        this.updateHeaderUI();
+        this.closeAuthModal();
+        const targetGame = game || window.game;
+        if (targetGame) {
+          if (targetGame.player) {
+            targetGame.player.id = data.user.id;
+            targetGame.player.name = data.user.username;
+            targetGame.player.role = data.user.role || 'user';
+            targetGame.player.discord = data.user.discord || null;
+          }
+          if (typeof targetGame.showToast === 'function') {
+            const name = data.user.discord?.global_name || data.user.username;
+            targetGame.showToast('Connexion Discord Réussie !', `Bienvenue, ${name} ! Connecté via Discord avec succès.`, 'green');
+          }
+        }
+      } else if (data.error) {
+        const targetGame = game || window.game;
+        if (targetGame && typeof targetGame.showToast === 'function') {
+          targetGame.showToast('Erreur Discord', data.error, 'red');
+        }
+      }
+    } catch (err) {
+      console.error('Erreur exchange Discord client:', err);
+    }
+  },
+
+  // Dissocier le compte Discord de l'antenne
+  async unlinkDiscord(game = null) {
+    if (!confirm('Voulez-vous vraiment dissocier votre compte Discord de votre antenne ?')) return;
+    try {
+      const res = await fetch('/api/auth/discord/unlink', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (this.currentUser) delete this.currentUser.discord;
+        localStorage.setItem('protec_user', JSON.stringify(this.currentUser));
+        const targetGame = game || window.game;
+        if (targetGame && targetGame.player) delete targetGame.player.discord;
+        if (targetGame && typeof targetGame.showToast === 'function') {
+          targetGame.showToast('Discord Dissocié', 'Votre compte Discord a été dissocié de cette antenne.', 'blue');
+        }
+        this.renderModalContent('profile');
+      } else if (data.error) {
+        alert(data.error);
+      }
+    } catch (e) {
+      console.error('Erreur unlink Discord:', e);
+      if (this.currentUser) delete this.currentUser.discord;
+      localStorage.setItem('protec_user', JSON.stringify(this.currentUser));
+      this.renderModalContent('profile');
+    }
+  },
+
   openAuthModal(isMandatory = false) {
     const modal = document.getElementById('auth-modal');
     const closeBtn = document.getElementById('auth-modal-close-btn');
@@ -578,38 +752,161 @@ window.ProtecAuth = {
 
       const isLandingPage = !window.game || !document.getElementById('map');
 
+      // Assurer un code parrain valide et non 'GÉNÉRATION...'
+      const myRefCode = (this.currentUser.referral_code && this.currentUser.referral_code !== 'GÉNÉRATION...') 
+        ? this.currentUser.referral_code 
+        : (this.currentUser.referralCode || ('PROT-' + (this.currentUser.username || 'DIR').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)));
+      if (!this.currentUser.referral_code || this.currentUser.referral_code === 'GÉNÉRATION...') {
+        this.currentUser.referral_code = myRefCode;
+        try { localStorage.setItem('protec_user', JSON.stringify(this.currentUser)); } catch (e) {}
+      }
+      const activeTabKey = this.activeProfileTab || 'identite';
+
       container.innerHTML = `
-        <div class="space-y-4">
-          <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center gap-3.5">
-            <div class="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-emerald-500/20 flex-shrink-0">
-              <i data-lucide="radio" class="w-6 h-6"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="font-extrabold text-slate-900 text-base truncate">${this.currentUser.username}</span>
-                <span class="text-[9px] font-black uppercase tracking-wider bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded-full flex-shrink-0">Connecté</span>
-              </div>
-              <div class="text-xs text-slate-600 mt-0.5 truncate">
-                ${actualStationName} • Ville : <strong class="capitalize">${actualCity}</strong>
-              </div>
-            </div>
+        <div class="space-y-3.5">
+          <!-- Barre d'onglets du profil -->
+          <div class="grid grid-cols-3 rounded-2xl bg-slate-100 p-1 gap-1 border border-slate-200/70">
+            <button type="button" onclick="window.ProtecAuth.setProfileTab('identite')" class="py-2 px-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTabKey === 'identite' ? 'bg-white text-pc-blue shadow-xs' : 'text-slate-500 hover:text-slate-800'}">
+              <i data-lucide="user" class="w-3.5 h-3.5"></i>
+              <span class="truncate">Identité</span>
+            </button>
+            <button type="button" onclick="window.ProtecAuth.setProfileTab('ecussons')" class="py-2 px-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTabKey === 'ecussons' ? 'bg-white text-pc-blue shadow-xs' : 'text-slate-500 hover:text-slate-800'}">
+              <i data-lucide="shield" class="w-3.5 h-3.5"></i>
+              <span class="truncate">Écussons</span>
+            </button>
+            <button type="button" onclick="window.ProtecAuth.setProfileTab('parrainage')" class="py-2 px-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTabKey === 'parrainage' ? 'bg-white text-pc-blue shadow-xs' : 'text-slate-500 hover:text-slate-800'}">
+              <i data-lucide="gift" class="w-3.5 h-3.5"></i>
+              <span class="truncate">Parrainage</span>
+            </button>
           </div>
 
-          <!-- Bouton d'entrée dans le jeu immédiat si on est sur la page d'accueil -->
-          ${isLandingPage ? `
-            <div class="pt-1">
-              <button onclick="window.location.href='jeu.html'" class="w-full py-3.5 rounded-2xl bg-[#ff6600] hover:bg-[#e65c00] active:scale-98 text-white font-black text-sm shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
-                <i data-lucide="radio" class="w-4 h-4"></i>
-                <span>Rejoindre mon Antenne</span>
-                <i data-lucide="arrow-right" class="w-4 h-4"></i>
-              </button>
-            </div>
-          ` : `
-            <!-- Collection d'Écussons Commémoratifs & Rareté -->
-            ${window.ProtecMultiplayer ? window.ProtecMultiplayer.renderBadgesCollectionHTML(window.game) : ''}
+          <!-- CONTENU ONGLET 1 : IDENTITÉ & ANTENNE -->
+          ${activeTabKey === 'identite' ? `
+            <div class="space-y-3 animate-in fade-in duration-150">
+              <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center gap-3.5">
+                <div class="w-12 h-12 rounded-2xl ${this.currentUser.discord?.avatarUrl ? 'p-0.5 bg-[#5865F2]' : 'bg-emerald-500'} text-white flex items-center justify-center text-xl font-black shadow-md shadow-emerald-500/20 flex-shrink-0 overflow-hidden">
+                  ${this.currentUser.discord?.avatarUrl ? `
+                    <img src="${this.currentUser.discord.avatarUrl}" alt="Avatar Discord" class="w-full h-full object-cover rounded-xl" onerror="this.parentElement.innerHTML='<i data-lucide=\'radio\' class=\'w-6 h-6\'></i>';" />
+                  ` : `
+                    <i data-lucide="radio" class="w-6 h-6"></i>
+                  `}
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="font-extrabold text-slate-900 text-base truncate">${this.currentUser.username}</span>
+                    <span class="text-[9px] font-black uppercase tracking-wider bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded-full flex-shrink-0">Connecté</span>
+                    ${this.currentUser.discord ? `
+                      <span class="text-[9px] font-black uppercase tracking-wider bg-[#5865F2]/15 text-[#5865F2] border border-[#5865F2]/30 px-1.5 py-0.2 rounded-full flex-shrink-0" title="Compte Discord lié : @${this.currentUser.discord.username}">Discord</span>
+                    ` : ''}
+                  </div>
+                  <div class="text-xs text-slate-600 mt-0.5 truncate">
+                    ${actualStationName} • Ville : <strong class="capitalize">${actualCity}</strong>
+                  </div>
+                  <div class="text-[10px] text-emerald-700 font-semibold mt-1 flex items-center gap-1">
+                    <i data-lucide="cloud" class="w-3 h-3"></i>
+                    <span>Cloud : ${syncDate}</span>
+                  </div>
+                </div>
+              </div>
 
-            <!-- Programme de Parrainage, Lien & QR Code -->
-            <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/40 to-slate-50 border border-blue-200/80 shadow-xs space-y-3">
+              <!-- Encart Liaison Discord Officielle -->
+              ${this.currentUser.discord ? `
+                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-blue-50/40 to-slate-50 border border-indigo-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                  <div class="flex items-center gap-3 min-w-0">
+                    <img src="${this.currentUser.discord.avatarUrl}" alt="Avatar Discord" class="w-9 h-9 rounded-full border-2 border-[#5865F2] object-cover shadow-xs shrink-0" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'" />
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-black text-slate-900 truncate">${this.currentUser.discord.global_name || this.currentUser.discord.username}</span>
+                        <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full bg-[#5865F2]/15 text-[#5865F2] border border-[#5865F2]/30 shrink-0">Discord Lié</span>
+                      </div>
+                      <div class="text-[10px] text-slate-500 font-mono truncate">@${this.currentUser.discord.username} • ID : ${this.currentUser.discord.id}</div>
+                    </div>
+                  </div>
+                  <button type="button" onclick="window.ProtecAuth.unlinkDiscord(window.game)" class="text-[10px] font-extrabold text-rose-600 hover:text-rose-800 px-2.5 py-1.5 rounded-xl hover:bg-rose-50 border border-rose-200/60 transition cursor-pointer shrink-0">
+                    Dissocier
+                  </button>
+                </div>
+              ` : `
+                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/70 via-blue-50/50 to-slate-50 border border-indigo-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                  <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-8 h-8 rounded-xl bg-[#5865F2] text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <svg class="w-4 h-4 fill-current" viewBox="0 0 127.14 96.36">
+                        <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,45.91,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,45.91,96.12,53,91.08,65.69,84.69,65.69Z"/>
+                      </svg>
+                    </div>
+                    <div class="min-w-0">
+                      <div class="text-xs font-black text-slate-900 leading-tight">Liaison Discord Officielle</div>
+                      <div class="text-[10px] text-slate-500 leading-tight mt-0.5">Associez votre compte Discord pour connecter vos informations</div>
+                    </div>
+                  </div>
+                  <button type="button" onclick="window.ProtecAuth.loginWithDiscord('link')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-[#5865F2] hover:bg-[#4752C4] text-white transition cursor-pointer shrink-0 shadow-xs flex items-center gap-1.5">
+                    <span>Lier</span>
+                  </button>
+                </div>
+              `}
+
+              ${isLandingPage ? `
+                <div class="pt-1">
+                  <button onclick="window.location.href='jeu.html'" class="w-full py-3.5 rounded-2xl bg-[#ff6600] hover:bg-[#e65c00] active:scale-98 text-white font-black text-sm shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
+                    <i data-lucide="radio" class="w-4 h-4"></i>
+                    <span>Rejoindre mon Antenne</span>
+                    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                  </button>
+                </div>
+              ` : `
+                <!-- Événements exceptionnels -->
+                <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 border border-indigo-500/30 text-white shadow-lg space-y-2.5">
+                  <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-amber-400 text-slate-900 flex items-center justify-center font-black shadow-sm">
+                      <i data-lucide="sparkles" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                      <h5 class="text-xs font-black text-amber-200 uppercase tracking-wide">Événements exceptionnels</h5>
+                      <p class="text-[10px] text-slate-300">DPS d'envergure, crise majeure, exercice inter-départemental</p>
+                    </div>
+                  </div>
+                  <p class="text-[11px] text-slate-300 leading-relaxed">
+                    En tant que Directeur d'Antenne, vous pouvez proposer un événement exceptionnel (type DPS à forte affluence, gestion de crise, grand rassemblement ou exercice de sécurité civile).
+                  </p>
+                  <button onclick="window.ProtecAuth.closeAuthModal(); window.ProtecMultiplayer.openCreateCommunityEventModal(window.game);" class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-slate-950"></i>
+                    Proposer un événement exceptionnel
+                  </button>
+                </div>
+              `}
+
+              <div class="pt-1">
+                <button onclick="window.ProtecAuth.logout(window.game)" class="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition flex items-center justify-center gap-1.5 border border-rose-200/60 cursor-pointer">
+                  <i data-lucide="log-out" class="w-4 h-4"></i>
+                  Se déconnecter du serveur
+                </button>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- CONTENU ONGLET 2 : ÉCUSSONS & DISTINCTIONS -->
+          ${activeTabKey === 'ecussons' ? `
+            <div class="space-y-3 animate-in fade-in duration-150">
+              ${window.ProtecMultiplayer ? window.ProtecMultiplayer.renderBadgesCollectionHTML(window.game) : `
+                <div class="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-2">
+                  <div class="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center mx-auto">
+                    <i data-lucide="shield" class="w-5 h-5"></i>
+                  </div>
+                  <p class="text-xs text-slate-600 font-semibold">Les écussons commémoratifs sont accessibles en jeu lors des événements fédéraux et des missions.</p>
+                </div>
+              `}
+              <div class="pt-1">
+                <a href="ecussons.html" target="_blank" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition flex items-center justify-center gap-2">
+                  <i data-lucide="external-link" class="w-4 h-4 text-indigo-600"></i>
+                  <span>Consulter la Vitrine Nationale des Écussons</span>
+                </a>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- CONTENU ONGLET 3 : PARRAINAGE & QR CODE -->
+          ${activeTabKey === 'parrainage' ? `
+            <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/40 to-slate-50 border border-blue-200/80 shadow-xs space-y-3 animate-in fade-in duration-150">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <div class="w-8 h-8 rounded-xl bg-pc-blue text-white flex items-center justify-center font-black shadow-xs">
@@ -645,10 +942,10 @@ window.ProtecAuth = {
                 <div class="min-w-0">
                   <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Votre Code Parrain Unique</div>
                   <div class="font-mono font-black text-sm text-pc-blue tracking-wider truncate" id="auth-my-ref-code">
-                    ${this.currentUser.referral_code || 'GÉNÉRATION...'}
+                    ${myRefCode}
                   </div>
                 </div>
-                <button type="button" onclick="window.ProtecAuth.copyReferralCode('${this.currentUser.referral_code || ''}')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1 cursor-pointer">
+                <button type="button" onclick="window.ProtecAuth.copyReferralCode('${myRefCode}')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1 cursor-pointer">
                   <i data-lucide="copy" class="w-3 h-3"></i> Copier
                 </button>
               </div>
@@ -657,11 +954,11 @@ window.ProtecAuth = {
               <div class="space-y-1">
                 <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Lien d'invitation direct pour vos futurs filleuls</div>
                 <div class="flex items-center gap-1.5">
-                  <input type="text" readonly value="${this.getReferralLink(this.currentUser.referral_code)}" id="auth-profile-ref-link-input" class="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-mono text-[11px] text-slate-800 font-semibold focus:outline-none select-all" />
-                  <button type="button" id="auth-copy-ref-link-btn" onclick="window.ProtecAuth.copyReferralLink('${this.currentUser.referral_code || ''}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1 cursor-pointer shrink-0">
+                  <input type="text" readonly value="${this.getReferralLink(myRefCode)}" id="auth-profile-ref-link-input" class="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-mono text-[11px] text-slate-800 font-semibold focus:outline-none select-all" />
+                  <button type="button" id="auth-copy-ref-link-btn" onclick="window.ProtecAuth.copyReferralLink('${myRefCode}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1 cursor-pointer shrink-0">
                     <i data-lucide="copy" class="w-3 h-3"></i> Copier
                   </button>
-                  <button type="button" onclick="window.ProtecAuth.shareReferralLink('${this.currentUser.referral_code || ''}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition flex items-center gap-1 cursor-pointer shrink-0" title="Partager (SMS, WhatsApp...)">
+                  <button type="button" onclick="window.ProtecAuth.shareReferralLink('${myRefCode}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition flex items-center gap-1 cursor-pointer shrink-0" title="Partager (SMS, WhatsApp...)">
                     <i data-lucide="share-2" class="w-3 h-3"></i> Partager
                   </button>
                 </div>
@@ -676,10 +973,10 @@ window.ProtecAuth = {
                     Faites scanner ce code pour que votre filleul télécharge le jeu et soit affilié directement.
                   </p>
                   <div class="flex items-center gap-1.5 pt-0.5">
-                    <button type="button" onclick="window.ProtecAuth.openReferralShareModal('${this.currentUser.referral_code || ''}')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-extrabold text-[10px] transition cursor-pointer flex items-center gap-1">
+                    <button type="button" onclick="window.ProtecAuth.openReferralShareModal('${myRefCode}')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-extrabold text-[10px] transition cursor-pointer flex items-center gap-1">
                       <i data-lucide="maximize" class="w-3 h-3"></i> Agrandir
                     </button>
-                    <button type="button" onclick="window.ProtecAuth.downloadReferralQRCode('${this.currentUser.referral_code || ''}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] transition cursor-pointer flex items-center gap-1">
+                    <button type="button" onclick="window.ProtecAuth.downloadReferralQRCode('${myRefCode}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] transition cursor-pointer flex items-center gap-1">
                       <i data-lucide="download" class="w-3 h-3"></i> PNG
                     </button>
                   </div>
@@ -692,40 +989,15 @@ window.ProtecAuth = {
                 <span>👑 Parrain : <strong>+2 500 €</strong> au 1er DPS</span>
               </div>
             </div>
-
-            <!-- Événements exceptionnels -->
-            <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 border border-indigo-500/30 text-white shadow-lg space-y-2.5">
-              <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-xl bg-amber-400 text-slate-900 flex items-center justify-center font-black shadow-sm">
-                  <i data-lucide="sparkles" class="w-4 h-4"></i>
-                </div>
-                <div>
-                  <h5 class="text-xs font-black text-amber-200 uppercase tracking-wide">Événements exceptionnels</h5>
-                  <p class="text-[10px] text-slate-300">DPS d'envergure, crise majeure, exercice inter-départemental</p>
-                </div>
-              </div>
-              <p class="text-[11px] text-slate-300 leading-relaxed">
-                En tant que Directeur d'Antenne, vous pouvez proposer un événement exceptionnel (type DPS à forte affluence, gestion de crise, grand rassemblement ou exercice de sécurité civile). Votre projet permettra de mobiliser les effectifs et d'attribuer des distinctions officielles.
-              </p>
-              <button onclick="window.ProtecAuth.closeAuthModal(); window.ProtecMultiplayer.openCreateCommunityEventModal(window.game);" class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
-                <i data-lucide="sparkles" class="w-4 h-4 text-slate-950"></i>
-                Proposer un événement exceptionnel
-              </button>
-            </div>
-          `}
-
-          <div class="pt-2">
-            <button onclick="window.ProtecAuth.logout(window.game)" class="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition flex items-center justify-center gap-1.5 border border-rose-200/60 cursor-pointer">
-              <i data-lucide="log-out" class="w-4 h-4"></i>
-              Se déconnecter du serveur
-            </button>
-          </div>
+          ` : ''}
         </div>
       `;
       if (window.lucide) window.lucide.createIcons();
-      setTimeout(() => {
-        this.renderReferralQRCode('auth-profile-qrcode', this.currentUser?.referral_code, 76);
-      }, 50);
+      if (activeTabKey === 'parrainage') {
+        setTimeout(() => {
+          this.renderReferralQRCode('auth-profile-qrcode', myRefCode, 76);
+        }, 50);
+      }
       return;
     }
 
@@ -748,6 +1020,21 @@ window.ProtecAuth = {
           <button onclick="window.ProtecAuth.renderModalContent('register', true)" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'register' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-500 hover:text-slate-800'}">
             Nouveau Directeur
           </button>
+        </div>
+
+        <!-- Bouton Connexion avec Discord -->
+        <div class="pt-1">
+          <button type="button" onclick="window.ProtecAuth.loginWithDiscord('login')" class="w-full py-2.5 px-3 rounded-2xl bg-[#5865F2] hover:bg-[#4752C4] active:scale-98 text-white text-xs font-black shadow-md shadow-[#5865F2]/25 transition flex items-center justify-center gap-2 cursor-pointer">
+            <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 127.14 96.36">
+              <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,45.91,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,45.91,96.12,53,91.08,65.69,84.69,65.69Z"/>
+            </svg>
+            <span>Continuer avec Discord</span>
+          </button>
+        </div>
+
+        <div class="relative flex items-center justify-center my-1.5">
+          <div class="border-t border-slate-200/80 w-full"></div>
+          <span class="bg-white px-2.5 text-[9px] font-black text-slate-400 uppercase tracking-widest absolute">ou identifiants classiques</span>
         </div>
 
         <!-- Formulaire de Connexion -->

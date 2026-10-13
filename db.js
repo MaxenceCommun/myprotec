@@ -392,7 +392,8 @@ class Database {
         city: userRecord.city,
         referral_code: myReferralCode,
         referred_by: referredBy,
-        referral_suspended: false
+        referral_suspended: false,
+        discord: userRecord.discord || null
       }
     };
   }
@@ -469,9 +470,157 @@ class Database {
         city: userRecord.city,
         referral_code: userRecord.referral_code,
         referred_by: userRecord.referred_by || null,
-        referral_suspended: !!userRecord.referral_suspended
+        referral_suspended: !!userRecord.referral_suspended,
+        discord: userRecord.discord || null
       }
     };
+  }
+
+  // Liaison ou Connexion via Discord OAuth2
+  loginOrLinkDiscord(discordProfile, existingUserId = null, clientIpRaw = null) {
+    if (!discordProfile || !discordProfile.id) {
+      return { error: 'Profil Discord invalide.' };
+    }
+
+    const discordId = String(discordProfile.id).trim();
+    const discordUsername = (discordProfile.username || 'Directeur').trim();
+    const discordGlobalName = (discordProfile.global_name || discordUsername).trim();
+    const discordAvatarUrl = discordProfile.avatarUrl || (discordProfile.avatar 
+      ? `https://cdn.discordapp.com/avatars/${discordId}/${discordProfile.avatar}.png?size=128`
+      : `https://cdn.discordapp.com/embed/avatars/${(BigInt(discordId) >> 22n) % 6n}.png`);
+
+    const discordData = {
+      id: discordId,
+      username: discordUsername,
+      global_name: discordGlobalName,
+      discriminator: discordProfile.discriminator || '0',
+      avatar: discordProfile.avatar || null,
+      avatarUrl: discordAvatarUrl,
+      email: discordProfile.email || null,
+      linkedAt: new Date().toISOString()
+    };
+
+    // Cas 1 : Liaison à un compte utilisateur existant et connecté
+    if (existingUserId) {
+      const targetUser = Object.values(this.data.users).find(u => u.id === existingUserId);
+      if (!targetUser) {
+        return { error: 'Compte joueur introuvable pour la liaison.' };
+      }
+      // Vérifier si un autre utilisateur a déjà lié ce compte Discord
+      const alreadyLinked = Object.values(this.data.users).find(u => u.discord && u.discord.id === discordId && u.id !== existingUserId);
+      if (alreadyLinked) {
+        return { error: `Ce compte Discord est déjà lié au joueur « ${alreadyLinked.username} ».` };
+      }
+
+      targetUser.discord = discordData;
+      this.save();
+      return {
+        success: true,
+        action: 'linked',
+        user: {
+          id: targetUser.id,
+          username: targetUser.username,
+          role: targetUser.role,
+          stationName: targetUser.stationName,
+          city: targetUser.city,
+          referral_code: targetUser.referral_code,
+          discord: targetUser.discord
+        }
+      };
+    }
+
+    // Cas 2 : Connexion directe via Discord
+    // Recherche si un utilisateur possède déjà ce discord.id
+    let userRecord = Object.values(this.data.users).find(u => u.discord && u.discord.id === discordId);
+
+    if (userRecord) {
+      if (userRecord.isBanned) {
+        return { error: 'Ce compte joueur a été suspendu par un administrateur.' };
+      }
+      // Mise à jour des informations Discord fraîches
+      userRecord.discord = {
+        ...userRecord.discord,
+        ...discordData,
+        linkedAt: userRecord.discord?.linkedAt || discordData.linkedAt
+      };
+      userRecord.lastLogin = new Date().toISOString();
+
+      const token = this.generateToken();
+      this.data.sessions[token] = {
+        userId: userRecord.id,
+        username: userRecord.username,
+        role: userRecord.role || 'user',
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 30 * 24 * 3600 * 1000
+      };
+      this.save();
+
+      return {
+        success: true,
+        action: 'login',
+        token,
+        user: {
+          id: userRecord.id,
+          username: userRecord.username,
+          role: userRecord.role || 'user',
+          stationName: userRecord.stationName,
+          city: userRecord.city,
+          referral_code: userRecord.referral_code,
+          discord: userRecord.discord
+        }
+      };
+    }
+
+    // Cas 3 : Nouveau joueur arrivant via Discord -> Création automatique
+    let baseUsername = (discordGlobalName || discordUsername).replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 16);
+    if (!baseUsername || baseUsername.length < 3) baseUsername = 'Dir_' + discordUsername.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 12);
+    if (baseUsername.length < 3) baseUsername = 'Directeur_' + discordId.slice(-4);
+
+    let finalUsername = baseUsername;
+    let counter = 1;
+    while (this.data.users[finalUsername.toLowerCase()]) {
+      finalUsername = `${baseUsername.slice(0, 12)}_${counter}`;
+      counter++;
+    }
+
+    const regResult = this.registerUser(
+      finalUsername,
+      'discord_' + crypto.randomBytes(16).toString('hex'), // Mot de passe aléatoire sécurisé
+      `Antenne ${finalUsername}`,
+      'Paris',
+      '75',
+      null,
+      clientIpRaw
+    );
+
+    if (regResult.error) {
+      return { error: regResult.error };
+    }
+
+    const newUser = this.data.users[finalUsername.toLowerCase()];
+    if (newUser) {
+      newUser.discord = discordData;
+      this.save();
+      regResult.user.discord = discordData;
+    }
+
+    return {
+      success: true,
+      action: 'registered',
+      token: regResult.token,
+      user: regResult.user
+    };
+  }
+
+  // Dissocier le compte Discord
+  unlinkDiscord(userId) {
+    if (!userId) return { error: 'UserId requis' };
+    const user = Object.values(this.data.users).find(u => u.id === userId);
+    if (!user) return { error: 'Utilisateur introuvable' };
+
+    delete user.discord;
+    this.save();
+    return { success: true };
   }
 
   // Déblocage de la prime parrain lors du palier (1ère intervention terminée)

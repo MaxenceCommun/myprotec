@@ -37,13 +37,7 @@ window.ProtecMultiplayer = {
     }
 
     if (!game.marketplace) {
-      game.marketplace = [];
-    } else {
-      // Retirer définitivement tout véhicule ou matériel généré par le jeu / PNJ
-      game.marketplace = game.marketplace.filter(o => 
-        !String(o.id).startsWith('mkt-init-') && 
-        !String(o.sellerPlayerId).startsWith('system-')
-      );
+      game.marketplace = this.getInitialMarketplaceOffers();
     }
 
     if (!game.badgesCollection) {
@@ -66,9 +60,95 @@ window.ProtecMultiplayer = {
     return `${y}-W${weekNum}`;
   },
 
-  // Le marché de l'occasion est exclusivement alimenté par les joueurs
+  // Offres de démarrage réalistes pour animer la Bourse
   getInitialMarketplaceOffers() {
-    return [];
+    return [
+      {
+        id: 'mkt-init-1',
+        sellerPlayerId: 'system-ant-lyon',
+        sellerPlayerName: 'Antenne Lyon Centre',
+        stationName: 'Protection Civile du Rhône',
+        category: 'vehicule',
+        type: 'VPSP',
+        title: 'VPSP Master Sanitaire 120 000 km',
+        desc: 'Ambulance de secours révisée, cellule capitonnée, brancard 3 points et attelage homologué.',
+        dealType: 'vente',
+        price: 5200,
+        tradeWanted: null,
+        createdAt: '08/10/2026',
+        vehicleData: {
+          name: 'VPSP Réformé Lyon',
+          type: 'VPSP',
+          icon: 'ambulance',
+          hasTowHitch: true,
+          capacity: 3,
+          fuel: 90,
+          wear: 80
+        }
+      },
+      {
+        id: 'mkt-init-2',
+        sellerPlayerId: 'system-ant-bordeaux',
+        sellerPlayerName: 'Antenne Bordeaux Métropole',
+        stationName: 'Protection Civile de Gironde',
+        category: 'materiel',
+        type: 'tente_pma',
+        title: 'Lot Poste Médical Avancé (Tente PMA 30m²)',
+        desc: 'Abri gonflable d’urgence complet avec gonfleur électrique et mât d’éclairage LED autonome.',
+        dealType: 'don',
+        price: 0,
+        tradeWanted: null,
+        createdAt: '08/10/2026',
+        materialData: {
+          itemKey: 'tente_pma',
+          label: 'Tente PMA Gonflable 30m²',
+          quantity: 1
+        }
+      },
+      {
+        id: 'mkt-init-3',
+        sellerPlayerId: 'system-ant-marseille',
+        sellerPlayerName: 'Antenne Marseille Littoral',
+        stationName: 'Protection Civile des Bouches-du-Rhône',
+        category: 'vehicule',
+        type: 'QUAD',
+        title: 'Quad Tout-Terrain d’Intervention avec Remorque',
+        desc: 'Véhicule de reconnaissance pour zones accidentées ou plages. Remorque de route incluse.',
+        dealType: 'echange',
+        price: 0,
+        tradeWanted: '1 VTU Logistique ou 2 DAE opérationnels',
+        createdAt: '07/10/2026',
+        vehicleData: {
+          name: 'Quad Reconnaissance BRS',
+          type: 'QUAD',
+          icon: 'bike',
+          hasTowHitch: false,
+          hasTrailer: true,
+          capacity: 2,
+          fuel: 100,
+          wear: 90
+        }
+      },
+      {
+        id: 'mkt-init-4',
+        sellerPlayerId: 'system-ant-lille',
+        sellerPlayerName: 'Antenne Lille Flandres',
+        stationName: 'Protection Civile du Nord',
+        category: 'materiel',
+        type: 'dae',
+        title: 'Lot de 2 Défibrillateurs DAE Zoll AED Plus',
+        desc: 'Appareils contrôlés et révisés avec électrodes adultes et sacoche de transport d’intervention.',
+        dealType: 'vente',
+        price: 750,
+        tradeWanted: null,
+        createdAt: '08/10/2026',
+        materialData: {
+          itemKey: 'dae',
+          label: 'Défibrillateur Automatisé Externe (DAE)',
+          quantity: 2
+        }
+      }
+    ];
   },
 
   // =========================================================================
@@ -143,9 +223,9 @@ window.ProtecMultiplayer = {
       document.body.appendChild(modal);
     }
 
-    const myDept = game.currentDepartmentCode || game.player?.departmentCode || game.stations?.[0]?.departmentCode || '75';
+    const myDept = game.player?.departmentCode || game.stations?.[0]?.departmentCode || '54';
     const zoneDef = window.ProtecDepartements?.getZoneDefense(myDept) || { name: 'Zone de Défense et de Sécurité', shortName: 'Zone Zonale' };
-    const isAdmin = !!(game.player?.isAdmin || game.player?.role === 'admin' || window.ProtecAuth?.currentUser?.isAdmin || window.ProtecAuth?.currentUser?.role === 'admin');
+    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
 
     modal.innerHTML = `
       <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-5 bg-white border border-slate-200 text-slate-800 max-h-[90vh] overflow-y-auto">
@@ -360,7 +440,7 @@ window.ProtecMultiplayer = {
 
     this.injectState(game);
     const defaultNeeded = Math.max(1, (mission.requiredVolunteers || 4) - (mission.registeredVolunteers?.length || 0));
-    const isAdmin = !!(game.player?.isAdmin || game.player?.role === 'admin' || window.ProtecAuth?.currentUser?.isAdmin || window.ProtecAuth?.currentUser?.role === 'admin');
+    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
 
     if (zone === 'national' && !isAdmin) {
       game.showToast('Accès Restreint', 'Les renforts nationaux sont exclusivement déclenchés par les administrateurs FNPC.', 'orange');
@@ -399,7 +479,7 @@ window.ProtecMultiplayer = {
       game.weeklyDeptRenforts.count += 1;
     }
 
-    const myDept = game.currentDepartmentCode || game.player?.departmentCode || game.stations?.[0]?.departmentCode || '75';
+    const myDept = game.player?.departmentCode || game.stations?.[0]?.departmentCode || '54';
     const zoneDef = window.ProtecDepartements?.getZoneDefense(myDept) || { name: 'Zone de Défense', shortName: 'Zonale' };
 
     const zoneLabels = {
@@ -464,12 +544,9 @@ window.ProtecMultiplayer = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(renfortData)
     }).then(res => res.json()).then(data => {
-      const saved = Object.assign({}, renfortData, (data && data.renfort) || {});
-      game.renforts.unshift(saved);
-      if (typeof game.sanitizeRenforts === 'function') game.sanitizeRenforts();
+      game.renforts.unshift(data.renfort || renfortData);
     }).catch(() => {
       game.renforts.unshift(renfortData);
-      if (typeof game.sanitizeRenforts === 'function') game.sanitizeRenforts();
     });
 
     // Diffusion en temps réel à toutes les antennes connectées
@@ -770,15 +847,15 @@ window.ProtecMultiplayer = {
 
     return `
       <div class="space-y-4">
-        <!-- Bannière d'en-tête du Marché -->
+        <!-- Bannière d'en-tête de la Bourse -->
         <div class="p-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between shadow-md">
           <div class="space-y-1">
             <h4 class="text-sm font-black flex items-center gap-2">
               <i data-lucide="repeat" class="w-4 h-4"></i>
-              Marché de l'Occasion entre Joueurs
+              Bourse Fédérale aux Véhicules & Matériel
             </h4>
             <p class="text-xs text-white/90">
-              Cessions de matériel, véhicules révisés, dons solidaires et échanges d’équipements entre directeurs d’antenne.
+              Cessions de matériel réformé, dons solidaires et échanges d’équipements entre antennes de la Protection Civile.
             </p>
           </div>
           <button onclick="window.ProtecMultiplayer.openPublishOfferModal(window.game)" class="px-4 py-2 rounded-xl text-xs font-black bg-white text-emerald-800 hover:bg-emerald-50 transition shadow-sm flex items-center gap-1.5 cursor-pointer flex-shrink-0">
@@ -787,7 +864,7 @@ window.ProtecMultiplayer = {
           </button>
         </div>
 
-        <!-- Barre de recherche et Filtres du marché -->
+        <!-- Barre de recherche et Filtres de la bourse -->
         <div class="space-y-2 border-b border-slate-200 pb-2">
           <div class="relative">
             <input 
@@ -816,7 +893,7 @@ window.ProtecMultiplayer = {
         <div id="mkt-offers-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           ${offers.length === 0 ? `
             <div class="col-span-2 p-8 rounded-2xl glass-card text-center text-slate-500 text-xs italic">
-              Aucun véhicule ni matériel en vente actuellement. Les annonces sont publiées exclusivement par les directeurs d'antenne joueurs. Soyez le premier à publier !
+              Aucune annonce disponible sur la bourse actuellement. Soyez le premier à publier un véhicule ou équipement !
             </div>
           ` : offers.map(o => {
             const isMine = o.sellerPlayerId === myPlayerId;
@@ -854,8 +931,16 @@ window.ProtecMultiplayer = {
                     ` : ''}
                   </div>
 
-                  <div class="text-[10px] text-slate-400 font-semibold pt-1">
-                    Cédé par : <strong>${o.sellerPlayerName}</strong> (${o.stationName})
+                  <div class="text-[10px] text-slate-400 font-semibold pt-1 flex items-center justify-between flex-wrap gap-1">
+                    <span class="flex items-center gap-1.5 flex-wrap">
+                      <span>Cédé par : <strong class="text-slate-700">${o.sellerPlayerName}</strong> (${o.stationName})</span>
+                      ${(o.sellerDiscord?.username || (isMine && (game.player?.discord?.username || window.ProtecAuth?.currentUser?.discord?.username))) ? `
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-semibold bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/20" title="Discord: @${(o.sellerDiscord?.username || game.player?.discord?.username || window.ProtecAuth?.currentUser?.discord?.username)}">
+                          <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                          @${(o.sellerDiscord?.username || game.player?.discord?.username || window.ProtecAuth?.currentUser?.discord?.username)}
+                        </span>
+                      ` : ''}
+                    </span>
                   </div>
                 </div>
 
@@ -948,7 +1033,7 @@ window.ProtecMultiplayer = {
               <i data-lucide="tag" class="w-5 h-5"></i>
             </div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Publier une Offre sur le Marché</h3>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Publier une Offre sur la Bourse</h3>
               <p class="text-xs text-slate-500 font-semibold">Cession, don solidaire ou échange entre antennes</p>
             </div>
           </div>
@@ -1138,6 +1223,7 @@ window.ProtecMultiplayer = {
       id: `mkt-${Date.now()}`,
       sellerPlayerId: game.player?.id || 'directeur-local',
       sellerPlayerName: game.player?.name || 'Directeur d’Antenne',
+      sellerDiscord: game.player?.discord || (window.ProtecAuth?.currentUser?.discord) || null,
       stationName: game.stations?.[0]?.name || 'Antenne Locale',
       category: cat,
       title: title,
@@ -1751,12 +1837,9 @@ window.ProtecMultiplayer = {
     return `
       <div class="relative group p-3 rounded-2xl bg-gradient-to-br ${gradientClass} border-2 border-dashed shadow-md flex flex-col items-center justify-between text-center transition-all duration-200 hover:scale-105 select-none" style="min-height: 155px;">
         <!-- Badge Rareté -->
-        <div class="w-full flex items-center justify-between text-[9px] mb-1">
-          <span class="px-1.5 py-0.2 rounded-full font-black ${badge.rarityColor || 'bg-white/20 text-white'}">
-            ${badge.rarityTier || 'Badge'}
-          </span>
-          <span class="font-mono font-black text-white/90">
-            ⭐ ${badge.rarityScore}/100
+        <div class="w-full flex items-center justify-center text-[9px] mb-1">
+          <span class="px-2 py-0.5 rounded-full font-black ${badge.rarityColor || 'bg-white/20 text-white'} shadow-2xs">
+            ${badge.rarityTier || 'Commémoratif'}
           </span>
         </div>
 
@@ -1797,7 +1880,6 @@ window.ProtecMultiplayer = {
   renderBadgesCollectionHTML(game) {
     this.injectState(game);
     const badges = game.badgesCollection || [];
-    const totalRarity = badges.reduce((acc, b) => acc + (b.rarityScore || 0), 0);
 
     return `
       <div class="p-4 rounded-2xl glass-card space-y-3 border border-slate-200">
@@ -1812,8 +1894,8 @@ window.ProtecMultiplayer = {
             </div>
           </div>
           <div class="text-right">
-            <span class="text-[9px] font-bold text-slate-400 block uppercase">Prestige Fédéral</span>
-            <span class="text-xs font-black text-amber-600 mono-num">⭐ ${totalRarity} pts</span>
+            <span class="text-[9px] font-bold text-slate-400 block uppercase">Distinctions</span>
+            <span class="text-xs font-black text-indigo-700">Officielles</span>
           </div>
         </div>
 
@@ -2199,6 +2281,7 @@ window.ProtecMultiplayer = {
       id: `evt-comm-${Date.now()}`,
       organizerPlayerId: game.player?.id || 'directeur-local',
       organizerPlayerName: game.player?.name || 'Directeur d’Antenne',
+      organizerDiscord: game.player?.discord || (window.ProtecAuth?.currentUser?.discord) || null,
       stationName: game.stations?.[0]?.name || 'Antenne Locale',
       title: title,
       category: category,
@@ -2365,7 +2448,7 @@ window.ProtecMultiplayer = {
       body: JSON.stringify({ eventId, playerId: myPlayerId })
     }).catch(() => {});
 
-    game.showToast('Équipe Déployée & Écusson Obtenu !', `Votre équipe est engagée sur « ${event.title} » ! L’écusson « ${event.badge?.name} » (⭐ ${event.badge?.rarityScore}/100) a été ajouté à votre profil !`, 'green');
+    game.showToast('Équipe Déployée & Écusson Obtenu !', `Votre équipe est engagée sur « ${event.title} » ! L’écusson « ${event.badge?.name} » (${event.badge?.rarityTier || 'Commémoratif'}) a été ajouté à votre profil !`, 'green');
     game.save();
     game.updateStatsUI();
     game.openModule('alliance');
@@ -2395,7 +2478,7 @@ window.ProtecMultiplayer = {
     this.injectState(game);
     const allEvents = game.communityEvents || [];
     const myPlayerId = game.player?.id || 'directeur-local';
-    const isAdmin = !!(game.player?.isAdmin || game.player?.role === 'admin' || window.ProtecAuth?.currentUser?.isAdmin || window.ProtecAuth?.currentUser?.role === 'admin');
+    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
 
     const openEvents = allEvents.filter(e => e.status === 'open' || !e.status);
     const myPendingEvents = allEvents.filter(e => e.organizerPlayerId === myPlayerId && e.status === 'pending_approval');
@@ -2469,7 +2552,7 @@ window.ProtecMultiplayer = {
                         </div>
                         <div class="min-w-0 flex-1">
                           <span class="font-black text-purple-900 block truncate">${b.name}</span>
-                          <span class="text-[10px] font-black text-purple-700">Rareté : ${b.rarityTier || 'Badge'} (⭐ ${b.rarityScore}/100) ${b.availableUnits ? `• ${b.availableUnits} max` : ''}</span>
+                          <span class="text-[10px] font-black text-purple-700">Rareté : ${b.rarityTier || 'Commémoratif'} ${b.availableUnits ? `• ${b.availableUnits} max` : ''}</span>
                         </div>
                       </div>
                     ` : ''}
@@ -2561,14 +2644,22 @@ window.ProtecMultiplayer = {
                             <span class="text-xs font-black text-purple-950 truncate">${b.name}</span>
                             <span class="text-[9px] font-black px-1.5 py-0.2 rounded-full ${b.rarityColor || 'bg-purple-100 text-purple-800'}">${b.rarityTier}</span>
                           </div>
-                          <span class="text-[10px] text-purple-700 font-semibold block">⭐ ${b.rarityScore}/100 • ${b.availableUnits ? `${b.availableUnits} antenne(s) max` : (b.accessType === 'mission_ouverte' ? 'Mission Ouverte' : 'Événement Spécial')}</span>
+                          <span class="text-[10px] text-purple-700 font-semibold block">${b.availableUnits ? `${b.availableUnits} antenne(s) max` : (b.accessType === 'mission_ouverte' ? 'Mission Ouverte' : 'Événement Spécial')}</span>
                         </div>
                       </div>
                     </div>
                   ` : ''}
 
-                  <div class="text-[10px] text-slate-400 font-semibold pt-1 flex justify-between">
-                    <span>Organisé par : <strong>${e.organizerPlayerName}</strong></span>
+                  <div class="text-[10px] text-slate-400 font-semibold pt-1 flex justify-between items-center flex-wrap gap-1">
+                    <span class="flex items-center gap-1.5 flex-wrap">
+                      <span>Organisé par : <strong class="text-slate-700">${e.organizerPlayerName}</strong></span>
+                      ${(e.organizerDiscord?.username || (isOrganizer && (game.player?.discord?.username || window.ProtecAuth?.currentUser?.discord?.username))) ? `
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-semibold bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/20" title="Discord: @${(e.organizerDiscord?.username || game.player?.discord?.username || window.ProtecAuth?.currentUser?.discord?.username)}">
+                          <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                          @${(e.organizerDiscord?.username || game.player?.discord?.username || window.ProtecAuth?.currentUser?.discord?.username)}
+                        </span>
+                      ` : ''}
+                    </span>
                     <span>${(e.registeredAntennas || []).length} antenne(s) inscrite(s)</span>
                   </div>
                 </div>
@@ -2616,7 +2707,7 @@ window.ProtecMultiplayer = {
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 class="text-base font-black text-slate-900 leading-tight">Faire Don d'un Écusson</h3>
-            <p class="text-xs text-slate-500 font-semibold">${badge.name} (⭐ ${badge.rarityScore}/100)</p>
+            <p class="text-xs text-slate-500 font-semibold">${badge.name} (${badge.rarityTier || 'Commémoratif'})</p>
           </div>
           <button onclick="document.getElementById('give-badge-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm">✕</button>
         </div>
@@ -2704,7 +2795,7 @@ window.ProtecMultiplayer = {
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 class="text-base font-black text-slate-900 leading-tight">Proposer un Échange d'Écusson</h3>
-            <p class="text-xs text-slate-500 font-semibold">${badge.name} (⭐ ${badge.rarityScore}/100)</p>
+            <p class="text-xs text-slate-500 font-semibold">${badge.name} (${badge.rarityTier || 'Commémoratif'})</p>
           </div>
           <button onclick="document.getElementById('trade-badge-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm">✕</button>
         </div>
@@ -2715,7 +2806,7 @@ window.ProtecMultiplayer = {
 
         <div class="space-y-2 text-xs">
           <label class="block font-bold text-slate-700">Écusson ou type recherché en contrepartie :</label>
-          <input type="text" id="trade-badge-wanted" placeholder="Ex: Écusson NOVI, ou tout écusson de rareté ≥ 60" value="Tout écusson de rareté équivalente" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" />
+          <input type="text" id="trade-badge-wanted" placeholder="Ex: Écusson NOVI, ou tout écusson de rareté équivalente" value="Tout écusson de rareté équivalente" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" />
         </div>
 
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
@@ -2749,7 +2840,7 @@ window.ProtecMultiplayer = {
       stationName: game.stations?.[0]?.name || 'Antenne Locale',
       category: 'materiel',
       title: `Écusson de Collection : ${badge.name}`,
-      desc: `${badge.desc} (Score de rareté : ⭐ ${badge.rarityScore}/100 - ${badge.rarityTier})`,
+      desc: `${badge.desc} (${badge.rarityTier || 'Commémoratif'})`,
       dealType: 'echange',
       price: 0,
       tradeWanted: wanted,
