@@ -589,10 +589,10 @@ window.ProtecAuth = {
   loginWithDiscord(mode = 'login') {
     const clientId = (this.discordConfig && this.discordConfig.clientId) || '1559698958966857788';
     
-    // Déterminer la redirection optimale
-    let redirectUri = `${window.location.origin}/api/auth/discord/callback`;
+    // Déterminer la redirection vers discord_callback.html (page statique réelle sans 404)
+    let redirectUri = `${window.location.origin}/discord_callback.html`;
     if (window.location.protocol === 'file:') {
-      redirectUri = 'http://localhost:8080/api/auth/discord/callback';
+      redirectUri = 'http://localhost:8080/discord_callback.html';
     }
 
     let state = `mode=${mode}&time=${Date.now()}`;
@@ -600,7 +600,8 @@ window.ProtecAuth = {
       state = `link:${this.currentUser.id}`;
     }
 
-    const oauthUrl = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=identify%20email&state=${encodeURIComponent(state)}`;
+    // response_type=token : flux direct SPA / client-side compatible hébergement statique (Render, Cloudflare, etc.)
+    const oauthUrl = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=identify%20email&state=${encodeURIComponent(state)}`;
 
     const width = 500, height = 750;
     const left = Math.max(0, Math.floor((window.screen.width - width) / 2));

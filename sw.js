@@ -20,6 +20,7 @@ const STATIC_ASSETS = [
   'jeu',
   'jeu.html',
   'ecussons.html',
+  'discord_callback.html',
   'landing.css',
   'styles.css',
   'app.js',
