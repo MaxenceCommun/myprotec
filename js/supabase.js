@@ -222,6 +222,15 @@ window.ProtecSupabase = {
       }
     });
 
+    // Écoute 5 bis : Notification administrative ciblée de test
+    this.realtimeChannel.on('broadcast', { event: 'admin_player_notification' }, (evt) => {
+      const data = evt.payload;
+      const g = game || window.game;
+      if (g && g.handleMultiplayerEvent && data) {
+        g.handleMultiplayerEvent('admin_player_notification', data);
+      }
+    });
+
     // Écoute 6 : Synchronisation temps réel de la bourse de l'occasion (market_listings)
     this.realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'market_listings' }, (payload) => {
       const g = game || window.game;
@@ -298,6 +307,20 @@ window.ProtecSupabase = {
       });
     } catch (e) {
       console.warn('Erreur broadcast admin_user_updated:', e);
+    }
+  },
+
+  // Diffusion d'un test de notification joueur en direct sur Supabase
+  broadcastAdminPlayerNotification(notifData) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'admin_player_notification',
+        payload: notifData
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast admin_player_notification:', e);
     }
   },
 

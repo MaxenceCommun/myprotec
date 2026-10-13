@@ -17,6 +17,7 @@ window.ProtecAdmin = {
   vehiclesFilter: '',
   equipmentFilter: '',
   badgesFilter: '',
+  isAnalyticsCollapsed: false,
 
   getAuthHeaders() {
     const token = localStorage.getItem('protec_auth_token') || '';
@@ -948,6 +949,9 @@ window.ProtecAdmin = {
     const analyticsContainer = document.getElementById('admin-global-platform-analytics-container');
     if (analyticsContainer && window.ProtecPlatformAnalytics) {
       analyticsContainer.innerHTML = window.ProtecPlatformAnalytics.renderGlobalPlatformAnalyticsHTML(this.usersCache);
+      if (this.isAnalyticsCollapsed) {
+        analyticsContainer.classList.add('hidden');
+      }
     }
 
     const term = (this.searchFilter || '').toLowerCase();
@@ -1080,6 +1084,14 @@ window.ProtecAdmin = {
           <!-- Actions d'administration -->
           <td class="py-3 px-3 text-right">
             <div class="flex items-center justify-end gap-1">
+              <!-- Tester Notifications Joueur -->
+              <button onclick="window.ProtecAdmin.openNotificationTester('${u.id}')" title="Tester les Notifications du Joueur (Push OS, Toast, Son, Vibreur)" class="p-1 rounded-lg text-amber-600 hover:bg-amber-100 transition cursor-pointer font-bold">
+                🔔
+              </button>
+              <!-- Gérer & Attribuer Écussons (Admin, Zones de Défense...) -->
+              <button onclick="window.ProtecAdmin.openBadgeManagerForPlayer('${u.id}')" title="Gérer & Attribuer les Écussons (Admin, Zones de Défense...)" class="p-1 rounded-lg text-pc-blue hover:bg-blue-100 transition cursor-pointer font-bold">
+                🛡️
+              </button>
               <!-- Modifier Pseudo -->
               <button onclick="window.ProtecAdmin.promptEditUsername('${u.id}', '${u.username}')" title="Modifier le Pseudo" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition cursor-pointer">
                 ✏️
@@ -2232,18 +2244,911 @@ window.ProtecAdmin = {
     }
   },
 
+  toggleAnalytics() {
+    this.isAnalyticsCollapsed = !this.isAnalyticsCollapsed;
+    const container = document.getElementById('admin-global-platform-analytics-container');
+    const txt = document.getElementById('admin-analytics-toggle-text');
+    const icon = document.getElementById('admin-analytics-toggle-icon');
+    if (container) {
+      if (this.isAnalyticsCollapsed) {
+        container.classList.add('hidden');
+      } else {
+        container.classList.remove('hidden');
+      }
+    }
+    if (txt) txt.textContent = this.isAnalyticsCollapsed ? 'Afficher le Dashboard PWA' : 'Masquer le tableau';
+    if (icon) icon.textContent = this.isAnalyticsCollapsed ? '▼' : '▲';
+  },
+
+  notificationScenarios: {
+    samu: {
+      name: 'RÉQUISITION SAMU 15',
+      badge: 'Urgence Vitale',
+      badgeColor: 'bg-red-100 text-red-800',
+      title: '🚨 RÉQUISITION SAMU 15 : Départ Réflexe',
+      message: 'Engagement immédiat VPSP en renfort SUAP. Détresse respiratoire régulée en cours à domicile.',
+      type: 'red',
+      category: 'urgences',
+      sound: true,
+      vibrate: true,
+      push: true
+    },
+    dps_devis: {
+      name: 'DEVIS DPS VALIDÉ',
+      badge: 'Finances & Recettes',
+      badgeColor: 'bg-emerald-100 text-emerald-800',
+      title: '💶 Devis DPS Accepté (+14 500 €)',
+      message: 'L’organisateur du Festival Municipal a validé la convention de secours. Virement bancaire émis.',
+      type: 'green',
+      category: 'finances',
+      sound: true,
+      vibrate: false,
+      push: true
+    },
+    recrutement: {
+      name: 'CANDIDATURE BÉNÉVOLE',
+      badge: 'Ressources Humaines',
+      badgeColor: 'bg-blue-100 text-blue-800',
+      title: '👥 Nouvelle Recrue Bénévole',
+      message: 'Thomas L. (Diplômé PSE2, Permis B) a déposé sa candidature auprès de votre antenne.',
+      type: 'blue',
+      category: 'rh',
+      sound: true,
+      vibrate: false,
+      push: true
+    },
+    meteo: {
+      name: 'VIGILANCE MÉTÉO ORANGE',
+      badge: 'Crise & Crues',
+      badgeColor: 'bg-amber-100 text-amber-800',
+      title: '⚠️ Vigilance Météo Orange (Inondations)',
+      message: 'Météo France place votre secteur en vigilance crues. Préparez motopompes et embarcations.',
+      type: 'orange',
+      category: 'meteo',
+      sound: true,
+      vibrate: true,
+      push: true
+    },
+    ecusson: {
+      name: 'ÉCUSSON NATIONAL DÉBLOQUÉ',
+      badge: 'Fédéral FNPC',
+      badgeColor: 'bg-purple-100 text-purple-800',
+      title: '🏆 Nouvel Écusson Fédéral Débloqué !',
+      message: 'Félicitations ! Votre antenne a débloqué l’insigne d’Excellence Opérationnelle de la FNPC.',
+      type: 'purple',
+      category: 'badges',
+      sound: true,
+      vibrate: true,
+      push: true
+    },
+    ordre_mission: {
+      name: 'ORDRE NATIONAL FNPC',
+      badge: 'Alerte Extra-Dép.',
+      badgeColor: 'bg-indigo-100 text-indigo-800',
+      title: '📢 Ordre de Mission National FNPC',
+      message: 'Alerte mobilisation extra-départementale : renfort demandé pour le Plan NOVI en cours.',
+      type: 'orange',
+      category: 'fnpc',
+      sound: true,
+      vibrate: true,
+      push: true
+    }
+  },
+
+  currentTesterUserId: null,
+
+  openNotificationTester(userId = 'all') {
+    this.currentTesterUserId = userId;
+    const modalId = 'adm-notification-tester-modal';
+    let modalEl = document.getElementById(modalId);
+    if (!modalEl) {
+      modalEl = document.createElement('div');
+      modalEl.id = modalId;
+      modalEl.className = 'fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-3 sm:p-5 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modalEl);
+    }
+
+    this.renderNotificationTesterContent();
+    modalEl.classList.remove('hidden');
+    modalEl.classList.add('flex');
+  },
+
+  closeNotificationTester() {
+    const modalEl = document.getElementById('adm-notification-tester-modal');
+    if (modalEl) {
+      modalEl.classList.add('hidden');
+      modalEl.classList.remove('flex');
+    }
+  },
+
+  onTesterTargetChange(newUserId) {
+    this.currentTesterUserId = newUserId;
+    this.renderNotificationTesterContent();
+  },
+
+  renderNotificationTesterContent() {
+    const modalEl = document.getElementById('adm-notification-tester-modal');
+    if (!modalEl) return;
+
+    const users = this.usersCache || [];
+    const currentId = this.currentTesterUserId || 'all';
+    const isAll = currentId === 'all';
+    const targetUser = isAll ? null : users.find(u => u.id === currentId);
+
+    // Options pour la liste déroulante des directeurs cibles
+    const userOptions = [
+      `<option value="all" ${isAll ? 'selected' : ''}>📢 Tous les Directeurs connectés (Diffusion Globale)</option>`,
+      ...users.map(u => {
+        const isCurrent = !!(
+          u.isLocalPlayer ||
+          (window.game?.player && window.game.player.id === u.id) ||
+          (window.ProtecAuth?.currentUser && window.ProtecAuth.currentUser.id === u.id)
+        );
+        return `<option value="${u.id}" ${u.id === currentId ? 'selected' : ''}>
+          ${isCurrent ? '⭐ (Moi-même) ' : '👤 '}${u.username || 'Directeur'} — ${u.stationName || 'Antenne'} (${u.city || 'Ville'})
+        </option>`;
+      })
+    ].join('');
+
+    modalEl.innerHTML = `
+      <div class="w-full max-w-2xl rounded-3xl bg-white border-2 border-amber-400/50 p-5 sm:p-6 shadow-2xl relative text-left max-h-[90vh] flex flex-col my-auto animate-in zoom-in-95">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-3.5 border-b border-slate-100 flex-shrink-0">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center font-black text-xl shadow-lg shadow-amber-500/20">
+              🔔
+            </div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Testeur de Notifications Joueur</h3>
+              <p class="text-xs text-amber-600 font-bold">Vérification de réception en direct (Push OS, Sons, Toasts, Vibreur)</p>
+            </div>
+          </div>
+          <button onclick="window.ProtecAdmin.closeNotificationTester()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-black text-xs cursor-pointer transition">
+            ✕
+          </button>
+        </div>
+
+        <!-- Corps scrollable du testeur -->
+        <div class="overflow-y-auto pr-1 py-3 space-y-4 flex-1 min-h-0 text-xs">
+          
+          <!-- Sélecteur de Directeur Cible -->
+          <div class="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-2">
+            <div class="flex items-center justify-between flex-wrap gap-1">
+              <label for="adm-test-target-select" class="font-extrabold text-amber-950 uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                <span>🎯 Joueur / Cible du test opérationnel :</span>
+              </label>
+              ${targetUser ? `
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-white border border-amber-300 text-amber-900 shadow-2xs">
+                  ${targetUser.city || 'Secteur'} • ${targetUser.volunteersCount || 0} bénévoles
+                </span>
+              ` : `
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 shadow-2xs">
+                  Diffusion Générale Multi
+                </span>
+              `}
+            </div>
+            <select id="adm-test-target-select" onchange="window.ProtecAdmin.onTesterTargetChange(this.value)" class="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white font-bold text-slate-800 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none cursor-pointer">
+              ${userOptions}
+            </select>
+          </div>
+
+          <!-- Section 1 : Scénarios Opérationnels Prédéfinis (1 Clic) -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <span>⚡ Scénarios Prédéfinis Réalistes</span>
+              </span>
+              <span class="text-[10px] text-slate-400 font-bold">1 clic pour tester</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              ${Object.entries(this.notificationScenarios).map(([key, sc]) => `
+                <div class="p-3 rounded-2xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-amber-300 hover:shadow-xs transition space-y-2 flex flex-col justify-between">
+                  <div>
+                    <div class="flex items-center justify-between gap-1.5 mb-1">
+                      <span class="font-black text-slate-900 text-xs truncate">${sc.name}</span>
+                      <span class="px-2 py-0.5 rounded text-[9px] font-black ${sc.badgeColor} whitespace-nowrap">${sc.badge}</span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 line-clamp-2 leading-relaxed font-normal">${sc.message}</p>
+                    <div class="flex items-center gap-1.5 mt-2 flex-wrap text-[9px] font-bold text-slate-500">
+                      ${sc.sound ? '<span class="bg-slate-200/80 px-1.5 py-0.5 rounded">🔊 Son</span>' : ''}
+                      ${sc.vibrate ? '<span class="bg-slate-200/80 px-1.5 py-0.5 rounded">📳 Vibreur</span>' : ''}
+                      ${sc.push ? '<span class="bg-slate-200/80 px-1.5 py-0.5 rounded">📲 Push OS</span>' : ''}
+                      <span class="bg-slate-200/80 px-1.5 py-0.5 rounded">💬 Toast</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-1.5 pt-1 border-t border-slate-100">
+                    <button onclick="window.ProtecAdmin.sendScenarioNotification('${key}')" class="flex-1 py-1.5 px-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] transition cursor-pointer shadow-2xs text-center">
+                      📡 Envoyer au joueur
+                    </button>
+                    <button onclick="window.ProtecAdmin.previewScenarioNotification('${key}')" title="Tester le son et l'affichage sur mon propre écran" class="py-1.5 px-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[10px] transition cursor-pointer text-center">
+                      🎧 Moi
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Section 2 : Notification Sur-Mesure (Studio Personnalisé) -->
+          <div class="p-3.5 rounded-2xl border border-slate-200 bg-white space-y-3">
+            <span class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+              <span>✍️ Notification Sur-Mesure (Studio Admin)</span>
+            </span>
+
+            <div class="space-y-2">
+              <div>
+                <label for="adm-test-custom-title" class="text-[10px] font-black uppercase text-slate-500 block mb-1">Titre de la notification</label>
+                <input type="text" id="adm-test-custom-title" value="🔔 Alerte Administrateur Protec Live" placeholder="Ex: Ravitaillement Logistique, Avis de Mission..." class="w-full px-3 py-1.5 rounded-xl border border-slate-200 font-semibold text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none" />
+              </div>
+
+              <div>
+                <label for="adm-test-custom-message" class="text-[10px] font-black uppercase text-slate-500 block mb-1">Corps du message</label>
+                <textarea id="adm-test-custom-message" rows="2" placeholder="Saisissez le texte que le directeur recevra..." class="w-full px-3 py-1.5 rounded-xl border border-slate-200 font-semibold text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">Ceci est un test de notification officiel émis par l'Administration Fédérale Protec Live.</textarea>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label for="adm-test-custom-type" class="text-[10px] font-black uppercase text-slate-500 block mb-1">Couleur / Thème</label>
+                  <select id="adm-test-custom-type" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 font-bold text-xs bg-white focus:outline-none">
+                    <option value="orange">Orange (Alerte / Météo)</option>
+                    <option value="red">Rouge (Urgence Vitale)</option>
+                    <option value="green">Vert (Succès / Finances)</option>
+                    <option value="blue">Bleu (RH / Information)</option>
+                    <option value="purple">Violet (Écusson / Fédéral)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="adm-test-custom-category" class="text-[10px] font-black uppercase text-slate-500 block mb-1">Catégorie</label>
+                  <select id="adm-test-custom-category" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 font-bold text-xs bg-white focus:outline-none">
+                    <option value="admin-test">Test Administrateur</option>
+                    <option value="urgences">Urgences (SAMU/SDIS)</option>
+                    <option value="finances">Finances & Devis</option>
+                    <option value="rh">Ressources Humaines</option>
+                    <option value="meteo">Vigilance Météo</option>
+                    <option value="badges">Écussons & Succès</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Options des canaux actifs -->
+              <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 flex-wrap text-[11px] font-bold text-slate-700">
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="adm-test-chk-toast" checked class="rounded text-amber-600 focus:ring-0">
+                  <span>Toast Écran</span>
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="adm-test-chk-sound" checked class="rounded text-amber-600 focus:ring-0">
+                  <span>Audio & Carillon</span>
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="adm-test-chk-push" checked class="rounded text-amber-600 focus:ring-0">
+                  <span>Notification Push OS</span>
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="adm-test-chk-vibrate" checked class="rounded text-amber-600 focus:ring-0">
+                  <span>Vibreur Mobile</span>
+                </label>
+              </div>
+
+              <!-- Boutons de transmission sur mesure -->
+              <div class="flex items-center gap-2 pt-2">
+                <button onclick="window.ProtecAdmin.sendCustomNotification()" class="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-extrabold text-xs shadow-md transition cursor-pointer text-center">
+                  🚀 Envoyer la notification au joueur
+                </button>
+                <button onclick="window.ProtecAdmin.previewCustomNotification()" title="Tester sur mon propre écran" class="py-2 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer text-center">
+                  🎧 Tester sur moi
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between flex-shrink-0">
+          <span class="text-[10px] text-slate-400">
+            Cible : <strong>${isAll ? 'Tous les directeurs' : (targetUser?.username || 'Ce directeur')}</strong>
+          </span>
+          <button onclick="window.ProtecAdmin.closeNotificationTester()" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs cursor-pointer">
+            Fermer
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
+  async sendScenarioNotification(key) {
+    const scen = this.notificationScenarios[key];
+    if (!scen) return;
+    await this.triggerTestNotification(this.currentTesterUserId, {
+      title: scen.title,
+      message: scen.message,
+      type: scen.type,
+      category: scen.category,
+      sound: scen.sound,
+      vibrate: scen.vibrate,
+      push: scen.push
+    });
+  },
+
+  previewScenarioNotification(key) {
+    const scen = this.notificationScenarios[key];
+    if (!scen) return;
+    this.previewTestNotificationLocally({
+      title: scen.title,
+      message: scen.message,
+      type: scen.type,
+      category: scen.category,
+      sound: scen.sound,
+      vibrate: scen.vibrate,
+      push: scen.push
+    });
+  },
+
+  async sendCustomNotification() {
+    const titleInput = document.getElementById('adm-test-custom-title');
+    const msgInput = document.getElementById('adm-test-custom-message');
+    const typeSelect = document.getElementById('adm-test-custom-type');
+    const catSelect = document.getElementById('adm-test-custom-category');
+    const chkSound = document.getElementById('adm-test-chk-sound');
+    const chkVibrate = document.getElementById('adm-test-chk-vibrate');
+    const chkPush = document.getElementById('adm-test-chk-push');
+
+    const title = titleInput ? titleInput.value.trim() : '🔔 Alerte Administrateur';
+    const message = msgInput ? msgInput.value.trim() : '';
+    if (!message) {
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast('Message requis', 'Veuillez saisir un texte pour la notification.', 'red');
+      }
+      return;
+    }
+
+    await this.triggerTestNotification(this.currentTesterUserId, {
+      title: title || '🔔 Notification de test',
+      message: message,
+      type: typeSelect ? typeSelect.value : 'orange',
+      category: catSelect ? catSelect.value : 'admin-test',
+      sound: chkSound ? chkSound.checked : true,
+      vibrate: chkVibrate ? chkVibrate.checked : true,
+      push: chkPush ? chkPush.checked : true
+    });
+  },
+
+  previewCustomNotification() {
+    const titleInput = document.getElementById('adm-test-custom-title');
+    const msgInput = document.getElementById('adm-test-custom-message');
+    const typeSelect = document.getElementById('adm-test-custom-type');
+    const catSelect = document.getElementById('adm-test-custom-category');
+    const chkSound = document.getElementById('adm-test-chk-sound');
+    const chkVibrate = document.getElementById('adm-test-chk-vibrate');
+    const chkPush = document.getElementById('adm-test-chk-push');
+
+    const title = titleInput ? titleInput.value.trim() : '🔔 Alerte Administrateur';
+    const message = msgInput ? msgInput.value.trim() : 'Ceci est un test de notification officiel.';
+
+    this.previewTestNotificationLocally({
+      title: title,
+      message: message,
+      type: typeSelect ? typeSelect.value : 'orange',
+      category: catSelect ? catSelect.value : 'admin-test',
+      sound: chkSound ? chkSound.checked : true,
+      vibrate: chkVibrate ? chkVibrate.checked : true,
+      push: chkPush ? chkPush.checked : true
+    });
+  },
+
+  async triggerTestNotification(targetUserId, payload = {}) {
+    const defaultPayload = {
+      targetUserId: targetUserId || 'all',
+      title: payload.title || '🔔 Notification de test Protec Live',
+      message: payload.message || 'Ceci est un test de notification administrateur.',
+      type: payload.type || 'orange',
+      category: payload.category || 'admin-test',
+      sound: payload.sound !== false,
+      vibrate: payload.vibrate !== false,
+      push: payload.push !== false,
+      timestamp: Date.now()
+    };
+
+    // 1. Appel du backend API SSE
+    try {
+      await fetch('/api/admin/notify-player', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(defaultPayload)
+      });
+    } catch (e) {
+      console.warn('Erreur envoi notification via backend /api/admin/notify-player:', e);
+    }
+
+    // 2. Broadcast temps réel Supabase si actif
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.broadcastAdminPlayerNotification === 'function') {
+      try {
+        window.ProtecSupabase.broadcastAdminPlayerNotification(defaultPayload);
+      } catch (e) {
+        console.warn('Erreur broadcast Supabase:', e);
+      }
+    }
+
+    // 3. Déclenchement local si la cible est soi-même ou "all"
+    const isMe = !targetUserId || targetUserId === 'all' || 
+                 (window.game?.player?.id && window.game.player.id === targetUserId) ||
+                 (window.ProtecAuth?.currentUser?.id && window.ProtecAuth.currentUser.id === targetUserId);
+    if (isMe && window.game && typeof window.game.handleMultiplayerEvent === 'function') {
+      window.game.handleMultiplayerEvent('admin_player_notification', defaultPayload);
+    }
+
+    const targetName = targetUserId === 'all' 
+      ? 'tous les joueurs' 
+      : ((this.usersCache || []).find(u => u.id === targetUserId)?.username || 'ce joueur');
+
+    if (window.game && typeof window.game.showToast === 'function') {
+      window.game.showToast('Notification Émise', `Test envoyé à ${targetName}.`, 'green');
+    }
+  },
+
+  previewTestNotificationLocally(payload = {}) {
+    const notifPayload = {
+      targetUserId: window.game?.player?.id || window.ProtecAuth?.currentUser?.id || 'local',
+      title: payload.title || '🔔 Aperçu Notification (Admin)',
+      message: payload.message || 'Test direct sur votre écran et vos haut-parleurs.',
+      type: payload.type || 'orange',
+      category: payload.category || 'admin-test',
+      sound: payload.sound !== false,
+      vibrate: payload.vibrate !== false,
+      push: payload.push !== false,
+      timestamp: Date.now()
+    };
+
+    if (window.game && typeof window.game.handleMultiplayerEvent === 'function') {
+      window.game.handleMultiplayerEvent('admin_player_notification', notifPayload);
+    } else {
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast(notifPayload.title, notifPayload.message, notifPayload.type);
+      }
+      if (window.ProtecNotifications && typeof window.ProtecNotifications.sendPushNotification === 'function') {
+        window.ProtecNotifications.sendPushNotification(notifPayload.title, notifPayload.message, { category: notifPayload.category });
+      }
+    }
+  },
+
+  // =========================================================================
+  // GESTIONNAIRE D'ÉCUSSONS & DISTINCTIONS JOUEURS (Admin, Zones de Défense)
+  // =========================================================================
+  currentBadgeTargetUserId: 'all',
+
+  openBadgeManagerForPlayer(userId = 'all') {
+    this.currentBadgeTargetUserId = userId;
+    const modalId = 'adm-badge-manager-modal';
+    let modalEl = document.getElementById(modalId);
+    if (!modalEl) {
+      modalEl = document.createElement('div');
+      modalEl.id = modalId;
+      modalEl.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in';
+      document.body.appendChild(modalEl);
+    }
+
+    this.renderBadgeManagerModalContent();
+    modalEl.classList.remove('hidden');
+  },
+
+  closeBadgeManagerModal() {
+    const modalEl = document.getElementById('adm-badge-manager-modal');
+    if (modalEl) modalEl.classList.add('hidden');
+  },
+
+  onBadgeTargetChange(newUserId) {
+    this.currentBadgeTargetUserId = newUserId;
+    this.renderBadgeManagerModalContent();
+  },
+
+  renderBadgeManagerModalContent() {
+    const modalEl = document.getElementById('adm-badge-manager-modal');
+    if (!modalEl) return;
+
+    const users = this.usersCache || [];
+    let targetUser = users.find(u => u.id === this.currentBadgeTargetUserId);
+    if (!targetUser && users.length > 0 && this.currentBadgeTargetUserId !== 'all') {
+      targetUser = users[0];
+      this.currentBadgeTargetUserId = targetUser.id;
+    }
+
+    const userOptions = `
+      <option value="all" ${this.currentBadgeTargetUserId === 'all' ? 'selected' : ''}>📢 Tous les Directeurs (Attribution Globale Fédérale)</option>
+      ${users.map(u => `
+        <option value="${u.id}" ${u.id === this.currentBadgeTargetUserId ? 'selected' : ''}>
+          👤 ${u.username} (${u.stationName || 'Antenne'} • ${u.city || u.departmentCode || '75'})
+        </option>
+      `).join('')}
+    `;
+
+    // Écussons actuels du joueur
+    let ownedBadgesHTML = '';
+    if (targetUser) {
+      const sData = targetUser.saveData || {};
+      const localEcs = sData.localEcussons || [];
+      const ecsList = sData.ecussons || [];
+      
+      const catalog = (window.ProtecEcussons?.catalog?.length ? window.ProtecEcussons.catalog : (window.ProtecEcussons?.FALLBACK_CATALOG || []));
+      const badgeMap = new Map();
+      
+      localEcs.forEach(le => {
+        if (le && le.code) {
+          const catB = catalog.find(c => c.code === le.code) || {};
+          badgeMap.set(le.code, {
+            code: le.code,
+            quantite: Number(le.quantite || 1),
+            badge: catB
+          });
+        }
+      });
+
+      ecsList.forEach(ec => {
+        if (ec && ec.code && !badgeMap.has(ec.code)) {
+          const catB = catalog.find(c => c.code === ec.code) || ec;
+          badgeMap.set(ec.code, {
+            code: ec.code,
+            quantite: Number(ec.quantite || 1),
+            badge: catB
+          });
+        }
+      });
+
+      if (badgeMap.size === 0) {
+        ownedBadgesHTML = `
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500 font-medium">
+            Ce directeur ne possède aucun écusson pour l'instant. Utilisez les boutons ci-dessous pour lui en attribuer.
+          </div>
+        `;
+      } else {
+        ownedBadgesHTML = `
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+            ${Array.from(badgeMap.values()).map(item => {
+              const b = item.badge;
+              const nom = b.nom || item.code;
+              const imgSvg = window.ProtecEcussons?.renderBadgeIconSvg ? window.ProtecEcussons.renderBadgeIconSvg(b, 28) : '🛡️';
+              return `
+                <div class="p-2.5 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition flex items-center justify-between gap-2 shadow-2xs">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                      ${imgSvg}
+                    </div>
+                    <div class="min-w-0">
+                      <h5 class="text-xs font-bold text-slate-900 truncate leading-tight">${nom}</h5>
+                      <span class="text-[9px] font-black text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                        x${item.quantite} exemplaire(s)
+                      </span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button onclick="window.ProtecAdmin.updateBadgeQuantity('${targetUser.id}', '${item.code}', 1)" title="+1 exemplaire" class="w-6 h-6 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-black text-xs flex items-center justify-center cursor-pointer transition">
+                      +
+                    </button>
+                    <button onclick="window.ProtecAdmin.updateBadgeQuantity('${targetUser.id}', '${item.code}', -1)" title="-1 exemplaire" class="w-6 h-6 rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 font-black text-xs flex items-center justify-center cursor-pointer transition">
+                      -
+                    </button>
+                    <button onclick="window.ProtecAdmin.revokeBadgeFromPlayer('${targetUser.id}', '${item.code}', true)" title="Supprimer cet écusson" class="w-6 h-6 rounded-md bg-rose-50 text-rose-700 hover:bg-rose-100 font-black text-[11px] flex items-center justify-center cursor-pointer transition">
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+    } else {
+      ownedBadgesHTML = `
+        <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 font-semibold text-center">
+          Mode diffusion globale : l'écusson sélectionné sera distribué à <strong>tous les directeurs</strong> enregistrés.
+        </div>
+      `;
+    }
+
+    // Écussons spécifiques mis en avant
+    const highlightBadges = [
+      { code: 'badge_admin', name: 'Admin (État-Major National)', subtitle: 'Réservé aux administrateurs & créateurs', file: 'badge_admin.png', color: 'from-rose-500 to-red-600', badgeColor: 'bg-red-100 text-red-800' },
+      { code: 'badge_def_est', name: 'Zone EST', subtitle: 'Grand Est, Bourgogne-Franche-Comté', file: 'badge_def_est.png', color: 'from-blue-600 to-indigo-700', badgeColor: 'bg-blue-100 text-blue-800' },
+      { code: 'badge_def_nord', name: 'Zone NORD', subtitle: 'Hauts-de-France', file: 'badge_def_nord.png', color: 'from-sky-600 to-blue-700', badgeColor: 'bg-sky-100 text-sky-800' },
+      { code: 'badge_def_ouest', name: 'Zone OUEST', subtitle: 'Bretagne, Normandie, Pays de la Loire...', file: 'badge_def_ouest.png', color: 'from-teal-600 to-emerald-700', badgeColor: 'bg-teal-100 text-teal-800' },
+      { code: 'badge_def_sudest', name: 'Zone SUD-EST', subtitle: 'Auvergne-Rhône-Alpes', file: 'badge_def_sudest.png', color: 'from-indigo-600 to-purple-700', badgeColor: 'bg-indigo-100 text-indigo-800' },
+      { code: 'badge_def_sud', name: 'Zone SUD', subtitle: 'PACA, Occitanie, Corse', file: 'badge_def_sud.png', color: 'from-amber-600 to-orange-700', badgeColor: 'bg-orange-100 text-orange-800' },
+      { code: 'badge_def_paris', name: 'Zone PARIS', subtitle: 'Île-de-France & Préfecture de Police', file: 'badge_def_paris.png', color: 'from-blue-700 to-slate-800', badgeColor: 'bg-slate-100 text-slate-800' },
+      { code: 'badge_def_sudouest', name: 'Zone SUD-OUEST', subtitle: 'Nouvelle-Aquitaine', file: 'badge_def_sudouest.png', color: 'from-cyan-600 to-blue-700', badgeColor: 'bg-cyan-100 text-cyan-800' }
+    ];
+
+    // Options du catalogue complet
+    const catalog = (window.ProtecEcussons?.catalog?.length ? window.ProtecEcussons.catalog : (window.ProtecEcussons?.FALLBACK_CATALOG || []));
+    const catalogOptions = catalog.map(c => `
+      <option value="${c.code}">
+        [${(c.categorie || 'renfort').toUpperCase()}] ${c.nom} (${c.rarete || 'commun'})
+      </option>
+    `).join('');
+
+    modalEl.innerHTML = `
+      <div class="w-full max-w-2xl max-h-[92vh] flex flex-col rounded-3xl bg-white border border-slate-200 p-4 sm:p-6 shadow-2xl relative text-left overflow-hidden">
+        
+        <!-- En-tête -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-shrink-0">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-pc-blue text-white flex items-center justify-center font-black text-base shadow-md">
+              🛡️
+            </div>
+            <div>
+              <h3 class="text-sm font-black text-slate-900 leading-tight">Gestionnaire des Écussons & Distinctions</h3>
+              <p class="text-xs text-pc-blue font-bold">Attribution manuelle aux directeurs d'antennes</p>
+            </div>
+          </div>
+          <button onclick="window.ProtecAdmin.closeBadgeManagerModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-black text-xs cursor-pointer transition">
+            ✕
+          </button>
+        </div>
+
+        <!-- Corps scrollable -->
+        <div class="overflow-y-auto pr-1 py-3 space-y-4 flex-1 min-h-0 text-xs">
+          
+          <!-- Sélecteur de Joueur Cible -->
+          <div class="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-2">
+            <div class="flex items-center justify-between flex-wrap gap-1">
+              <label for="adm-badge-target-select" class="font-extrabold text-blue-950 uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                <span>🎯 Directeur d'Antenne Cible :</span>
+              </label>
+              ${targetUser ? `
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-white border border-blue-300 text-blue-900 shadow-2xs">
+                  ${targetUser.city || 'Secteur'} • ${targetUser.volunteersCount || 0} bénévoles
+                </span>
+              ` : `
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 shadow-2xs">
+                  Diffusion Fédérale Globale
+                </span>
+              `}
+            </div>
+            <select id="adm-badge-target-select" onchange="window.ProtecAdmin.onBadgeTargetChange(this.value)" class="w-full px-3 py-2 rounded-xl border border-blue-300 bg-white font-bold text-slate-800 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer">
+              ${userOptions}
+            </select>
+          </div>
+
+          <!-- Section 1 : Écussons Détenus par ce Joueur -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <span>📌 Écussons Détenus par le Directeur</span>
+              </span>
+              <span class="text-[10px] text-slate-400 font-bold">Gestion des exemplaires</span>
+            </div>
+            ${ownedBadgesHTML}
+          </div>
+
+          <!-- Section 2 : Distribution 1 Clic (Admin & Zones de Défense) -->
+          <div class="space-y-2 pt-1 border-t border-slate-100">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <span>⚡ Nouveaux Écussons : Admin & Zones de Défense</span>
+              </span>
+              <span class="text-[10px] text-amber-600 font-bold">Attribution en 1 clic</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              ${highlightBadges.map(item => `
+                <div class="p-3 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:border-blue-300 hover:shadow-xs transition space-y-2 flex flex-col justify-between">
+                  <div>
+                    <div class="flex items-center justify-between gap-1.5 mb-1">
+                      <span class="font-black text-slate-900 text-xs truncate">${item.name}</span>
+                      <span class="px-1.5 py-0.5 rounded text-[9px] font-black ${item.badgeColor} whitespace-nowrap">${item.code === 'badge_admin' ? 'HISTORIQUE' : 'ÉPIQUE'}</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500 line-clamp-1 leading-snug">${item.subtitle}</p>
+                    <div class="text-[9px] text-slate-400 font-mono mt-0.5">Fichier : ${item.file}</div>
+                  </div>
+                  <button onclick="window.ProtecAdmin.awardBadgeToPlayer('${this.currentBadgeTargetUserId}', '${item.code}')" class="w-full py-1.5 px-2.5 rounded-xl bg-gradient-to-r ${item.color} text-white font-extrabold text-[10px] hover:brightness-110 active:scale-95 transition cursor-pointer shadow-2xs text-center flex items-center justify-center gap-1">
+                    <span>➕ Décerner l'Écusson</span>
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Section 3 : Tout le Catalogue MyProtec -->
+          <div class="p-3.5 rounded-2xl border border-slate-200 bg-white space-y-3">
+            <span class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+              <span>📖 Autre Écusson du Catalogue MyProtec</span>
+            </span>
+
+            <div class="flex flex-col sm:flex-row items-center gap-2">
+              <select id="adm-badge-catalog-select" class="w-full sm:flex-1 px-3 py-2 rounded-xl border border-slate-200 font-semibold text-xs bg-white focus:outline-none">
+                ${catalogOptions}
+              </select>
+              <div class="flex items-center gap-2 w-full sm:w-auto">
+                <input type="number" id="adm-badge-catalog-qty" value="1" min="1" max="99" class="w-16 px-2.5 py-2 rounded-xl border border-slate-200 font-bold text-center text-xs" />
+                <button onclick="window.ProtecAdmin.awardCustomBadgeFromSelect()" class="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs transition cursor-pointer whitespace-nowrap">
+                  Distribuer
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 4 : Options de Transmission -->
+          <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+            <label class="flex items-center gap-2 font-bold text-slate-700 cursor-pointer">
+              <input type="checkbox" id="adm-badge-notify-check" checked class="w-4 h-4 text-pc-blue rounded cursor-pointer" />
+              <span>Diffuser une alerte en direct au joueur connecté (Toast + Son + Notification)</span>
+            </label>
+          </div>
+
+        </div>
+
+        <!-- Pied de page -->
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between flex-shrink-0">
+          <span class="text-[10px] text-slate-400">Les écussons sont enregistrés directement en base et synchronisés au tableau en liège.</span>
+          <button onclick="window.ProtecAdmin.closeBadgeManagerModal()" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs cursor-pointer">
+            Fermer
+          </button>
+        </div>
+
+      </div>
+    `;
+  },
+
+  async awardBadgeToPlayer(userId, badgeCode, quantity = 1, notify = null) {
+    if (notify === null) {
+      const check = document.getElementById('adm-badge-notify-check');
+      notify = check ? check.checked : true;
+    }
+
+    const catalog = (window.ProtecEcussons?.catalog?.length ? window.ProtecEcussons.catalog : (window.ProtecEcussons?.FALLBACK_CATALOG || []));
+    const badge = catalog.find(b => b.code === badgeCode) || {
+      code: badgeCode,
+      nom: badgeCode,
+      rarete: badgeCode === 'badge_admin' ? 'historique' : 'epique'
+    };
+
+    let success = false;
+    try {
+      const res = await fetch('/api/admin/badges/award', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          userId,
+          badge,
+          quantity: Number(quantity || 1),
+          notify: !!notify
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) success = true;
+      }
+    } catch (e) {
+      console.warn('Erreur /api/admin/badges/award:', e);
+    }
+
+    // Répercussion locale & cache
+    const users = this.usersCache || [];
+    const applyToUser = (u) => {
+      if (!u.saveData) u.saveData = {};
+      if (!u.saveData.localEcussons) u.saveData.localEcussons = [];
+      const ex = u.saveData.localEcussons.find(l => l.code === badgeCode);
+      if (ex) ex.quantite = (ex.quantite || 1) + Number(quantity || 1);
+      else u.saveData.localEcussons.push({ code: badgeCode, quantite: Number(quantity || 1) });
+    };
+
+    if (userId === 'all') {
+      users.forEach(applyToUser);
+      success = true;
+    } else {
+      const u = users.find(x => x.id === userId);
+      if (u) {
+        applyToUser(u);
+        success = true;
+      }
+    }
+
+    // Si le joueur modifié est le joueur en cours, attribuer directement dans ProtecEcussons
+    if (window.game) {
+      const g = window.game;
+      const isCur = (userId === 'all') || (g.player && g.player.id === userId) || (window.ProtecAuth?.currentUser && window.ProtecAuth.currentUser.id === userId);
+      if (isCur) {
+        if (window.ProtecEcussons && typeof window.ProtecEcussons.attribuerEcusson === 'function') {
+          await window.ProtecEcussons.attribuerEcusson(badgeCode, null, notify);
+        }
+      }
+    }
+
+    if (success) {
+      if (window.game) {
+        window.game.showToast('Écusson Distribué', `L'écusson « ${badge.nom || badgeCode} » (x${quantity}) a été décerné avec succès !`, 'green');
+      }
+      this.renderBadgeManagerModalContent();
+    } else {
+      await window.ProtecDialog.alert('Erreur lors de l’attribution de l’écusson.', 'Erreur Écusson');
+    }
+  },
+
+  async revokeBadgeFromPlayer(userId, badgeCode, removeAll = false) {
+    let success = false;
+    try {
+      const res = await fetch('/api/admin/badges/revoke', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          userId,
+          badgeCode,
+          quantity: 1,
+          removeAll: !!removeAll
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) success = true;
+      }
+    } catch (e) {
+      console.warn('Erreur /api/admin/badges/revoke:', e);
+    }
+
+    // Mise à jour cache local
+    const u = (this.usersCache || []).find(x => x.id === userId);
+    if (u && u.saveData?.localEcussons) {
+      const loc = u.saveData.localEcussons.find(l => l.code === badgeCode);
+      if (loc) {
+        if (removeAll || loc.quantite <= 1) {
+          u.saveData.localEcussons = u.saveData.localEcussons.filter(l => l.code !== badgeCode);
+        } else {
+          loc.quantite -= 1;
+        }
+      }
+      success = true;
+    }
+
+    // Si c'est le joueur en cours
+    if (window.game) {
+      const g = window.game;
+      const isCur = (g.player && g.player.id === userId) || (window.ProtecAuth?.currentUser && window.ProtecAuth.currentUser.id === userId);
+      if (isCur && g.localEcussons) {
+        if (removeAll) g.localEcussons = g.localEcussons.filter(l => l.code !== badgeCode);
+        else {
+          const l = g.localEcussons.find(x => x.code === badgeCode);
+          if (l) {
+            if (l.quantite <= 1) g.localEcussons = g.localEcussons.filter(x => x.code !== badgeCode);
+            else l.quantite -= 1;
+          }
+        }
+        if (window.ProtecEcussons?.refreshPlayerEcussons) window.ProtecEcussons.refreshPlayerEcussons(g);
+      }
+    }
+
+    if (window.game) window.game.showToast('Écusson Modifié', `L'écusson a été mis à jour pour ce directeur.`, 'blue');
+    this.renderBadgeManagerModalContent();
+  },
+
+  async updateBadgeQuantity(userId, badgeCode, delta) {
+    if (delta > 0) {
+      await this.awardBadgeToPlayer(userId, badgeCode, delta, false);
+    } else {
+      await this.revokeBadgeFromPlayer(userId, badgeCode, false);
+    }
+  },
+
+  awardCustomBadgeFromSelect() {
+    const sel = document.getElementById('adm-badge-catalog-select');
+    const qtyInput = document.getElementById('adm-badge-catalog-qty');
+    if (!sel || !sel.value) return;
+    const qty = parseInt(qtyInput?.value || '1', 10) || 1;
+    this.awardBadgeToPlayer(this.currentBadgeTargetUserId, sel.value, qty);
+  },
+
   createAdminModalDOM() {
     if (document.getElementById('admin-modal')) return;
     const div = document.createElement('div');
     div.id = 'admin-modal';
-    div.className = 'hidden fixed inset-0 z-[65] items-center justify-center bg-slate-950/80 backdrop-blur-md p-3 sm:p-6 animate-in fade-in';
+    div.className = 'hidden fixed inset-0 z-[65] items-center justify-center bg-slate-950/80 backdrop-blur-md p-2 sm:p-4 md:p-6 animate-in fade-in overflow-y-auto';
     div.innerHTML = `
-      <div class="w-full max-w-5xl rounded-3xl glass-panel-heavy border-2 border-indigo-500/50 p-5 sm:p-7 shadow-2xl relative text-left max-h-[92vh] flex flex-col">
+      <div class="w-full max-w-5xl rounded-3xl glass-panel-heavy border-2 border-indigo-500/50 p-4 sm:p-6 shadow-2xl relative text-left max-h-[92vh] flex flex-col my-auto">
         
         <!-- Header -->
-        <div class="flex items-center justify-between pb-4 border-b border-slate-200/80 mb-4 flex-shrink-0">
+        <div class="flex items-center justify-between pb-3 sm:pb-4 border-b border-slate-200/80 mb-3 sm:mb-4 flex-shrink-0">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-lg shadow-indigo-600/30">
+            <div class="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-lg shadow-indigo-600/30 text-lg">
               👑
             </div>
             <div>
@@ -2251,29 +3156,29 @@ window.ProtecAdmin = {
               <p class="text-xs text-indigo-600 font-bold">Gestion globale des Directeurs & Antennes</p>
             </div>
           </div>
-          <button onclick="window.ProtecAdmin.closeAdminModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
+          <button onclick="window.ProtecAdmin.closeAdminModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>
 
         <!-- 4 Cartes de Statistiques -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 flex-shrink-0">
-          <div class="p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-3 sm:mb-4 flex-shrink-0">
+          <div class="p-2.5 sm:p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
             <div class="text-[9px] font-black uppercase text-slate-400">Directeurs Inscrits</div>
             <div class="text-lg font-black text-slate-800" id="admin-stat-total-users">-</div>
           </div>
-          <div class="p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
+          <div class="p-2.5 sm:p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
             <div class="text-[9px] font-black uppercase text-emerald-600 flex items-center gap-1">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               En Ligne Multi
             </div>
             <div class="text-lg font-black text-emerald-600" id="admin-stat-online">-</div>
           </div>
-          <div class="p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
+          <div class="p-2.5 sm:p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
             <div class="text-[9px] font-black uppercase text-slate-400">Parties Sauvegardées</div>
             <div class="text-lg font-black text-slate-800" id="admin-stat-saves">-</div>
           </div>
-          <div class="p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
+          <div class="p-2.5 sm:p-3 rounded-2xl bg-white/70 border border-slate-200 shadow-sm">
             <div class="text-[9px] font-black uppercase text-slate-400">Alliances Actives</div>
             <div class="text-lg font-black text-indigo-600" id="admin-stat-alliances">-</div>
           </div>
@@ -2314,32 +3219,51 @@ window.ProtecAdmin = {
         </div>
 
         <!-- Vue 1 : Directeurs & Comptes -->
-        <div id="admin-view-players" class="flex flex-col flex-1 min-h-0">
+        <div id="admin-view-players" class="flex flex-col flex-1 min-h-0 overflow-y-auto pr-1 space-y-3">
           <!-- Message Flash Broadcast -->
-          <form onsubmit="window.ProtecAdmin.sendGlobalBroadcast(event)" class="mb-3 flex gap-2 flex-shrink-0">
+          <form onsubmit="window.ProtecAdmin.sendGlobalBroadcast(event)" class="flex gap-2 flex-shrink-0">
             <input type="text" id="admin-broadcast-input" placeholder="📢 Diffuser une annonce flash à tous les joueurs connectés..." 
               class="flex-1 px-4 py-2 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
-            <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition flex items-center gap-1.5 shadow-sm">
+            <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition flex items-center gap-1.5 shadow-sm cursor-pointer">
               <span>Diffuser</span>
             </button>
           </form>
 
-          <!-- Bandeau Analytics Global des Plateformes & Installations PWA -->
-          <div id="admin-global-platform-analytics-container" class="mb-3"></div>
-
-          <!-- Recherche & Barre d'outils -->
-          <div class="flex items-center justify-between gap-3 mb-2 flex-shrink-0">
-            <input type="text" oninput="window.ProtecAdmin.onSearchInput(this.value)" placeholder="🔍 Rechercher un joueur, antenne, ville..." 
-              class="w-72 px-3 py-1.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none" />
-            <button onclick="window.ProtecAdmin.loadAdminData(window.game)" class="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1 cursor-pointer">
-              🔄 Rafraîchir
-            </button>
+          <!-- Bandeau Analytics Global des Plateformes & Installations PWA (Repliable) -->
+          <div class="flex-shrink-0 border border-slate-200/80 rounded-2xl bg-white/60 p-2 shadow-2xs">
+            <div class="flex items-center justify-between px-2 py-1">
+              <span class="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <span>📊 Dashboard Matériel & PWA</span>
+              </span>
+              <button type="button" id="admin-analytics-toggle-btn" onclick="window.ProtecAdmin.toggleAnalytics()" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/60 px-2.5 py-1 rounded-xl transition cursor-pointer flex items-center gap-1">
+                <span id="admin-analytics-toggle-text">Masquer le tableau</span>
+                <span id="admin-analytics-toggle-icon">▲</span>
+              </button>
+            </div>
+            <div id="admin-global-platform-analytics-container" class="mt-1 transition-all duration-200"></div>
           </div>
 
-          <!-- Table des Joueurs (Scrollable) -->
-          <div class="overflow-y-auto overflow-x-auto flex-1 rounded-2xl border border-slate-200/80 bg-white/60 no-scrollbar">
+          <!-- Recherche & Barre d'outils -->
+          <div class="flex items-center justify-between gap-3 flex-shrink-0 pt-1">
+            <input type="text" oninput="window.ProtecAdmin.onSearchInput(this.value)" placeholder="🔍 Rechercher un joueur, antenne, ville..." 
+              class="w-72 px-3 py-1.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none" />
+            <div class="flex items-center gap-2">
+              <button onclick="window.ProtecAdmin.openNotificationTester('all')" title="Tester les notifications sur un joueur ou en global" class="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs">
+                <span>🔔 Test Notifications</span>
+              </button>
+              <button onclick="window.ProtecAdmin.openBadgeManagerForPlayer('all')" title="Gérer et distribuer des écussons aux directeurs (Admin, Zones de Défense...)" class="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-pc-blue border border-blue-300 font-extrabold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs">
+                <span>🛡️ Distribution Écussons</span>
+              </button>
+              <button onclick="window.ProtecAdmin.loadAdminData(window.game)" class="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1 cursor-pointer">
+                🔄 Rafraîchir
+              </button>
+            </div>
+          </div>
+
+          <!-- Table des Joueurs (Scrollable & Hauteur garantie) -->
+          <div class="overflow-y-auto overflow-x-auto flex-1 min-h-[360px] rounded-2xl border border-slate-200/80 bg-white/70 shadow-sm">
             <table class="w-full text-left border-collapse">
-              <thead class="sticky top-0 bg-slate-100/90 backdrop-blur-md text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">
+              <thead class="sticky top-0 bg-slate-100/95 backdrop-blur-md text-[10px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200 z-10">
                 <tr>
                   <th class="py-2.5 px-3">Joueur / Rôle</th>
                   <th class="py-2.5 px-3">Antenne & Ville</th>
@@ -2500,6 +3424,115 @@ window.ProtecAdmin = {
             <div>
               <span class="font-extrabold block">🛠️ Outil de Recette & Simulation Opérationnelle</span>
               <span class="text-[11px] text-indigo-700">Déclenchez instantanément n'importe quel type de mission sur la carte pour tester l'engagement, les alertes, les effectifs et les lots.</span>
+            </div>
+          </div>
+
+          <!-- SECTION TESTEUR DE NOTIFICATIONS ADMIN -->
+          <div class="p-4 rounded-3xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 border-2 border-amber-300 space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-black shadow-md text-base">
+                  🔔
+                </div>
+                <div>
+                  <h4 class="text-xs font-black text-slate-900 uppercase tracking-wide">Laboratoire de Recette : Notifications & Alertes Joueurs</h4>
+                  <p class="text-[11px] text-slate-600">Testez le déclenchement des push système OS, carillons audio, toasts d'écran et vibrations haptiques sur n'importe quel directeur.</p>
+                </div>
+              </div>
+              <button onclick="window.ProtecAdmin.openNotificationTester('all')" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs shadow-sm transition cursor-pointer flex items-center gap-1.5">
+                <span>🔔 Ouvrir le Studio de Test des Notifications</span>
+              </button>
+            </div>
+
+            <!-- Boutons de test rapide direct -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
+              <button onclick="window.ProtecAdmin.previewScenarioNotification('samu')" title="Aperçu direct sur mon écran" class="p-2.5 rounded-2xl bg-white border border-rose-200 hover:border-rose-400 hover:bg-rose-50/50 shadow-2xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">🚨</span>
+                <span class="text-[11px] font-black text-rose-900 leading-tight">SAMU 15</span>
+                <span class="text-[9px] text-slate-500">Urgence vitale</span>
+              </button>
+              <button onclick="window.ProtecAdmin.previewScenarioNotification('dps_devis')" title="Aperçu direct sur mon écran" class="p-2.5 rounded-2xl bg-white border border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/50 shadow-2xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">💶</span>
+                <span class="text-[11px] font-black text-emerald-900 leading-tight">Devis DPS</span>
+                <span class="text-[9px] text-slate-500">+14 500 €</span>
+              </button>
+              <button onclick="window.ProtecAdmin.previewScenarioNotification('recrutement')" title="Aperçu direct sur mon écran" class="p-2.5 rounded-2xl bg-white border border-blue-200 hover:border-blue-400 hover:bg-blue-50/50 shadow-2xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">👥</span>
+                <span class="text-[11px] font-black text-blue-900 leading-tight">Bénévole</span>
+                <span class="text-[9px] text-slate-500">Recrue PSE2</span>
+              </button>
+              <button onclick="window.ProtecAdmin.previewScenarioNotification('meteo')" title="Aperçu direct sur mon écran" class="p-2.5 rounded-2xl bg-white border border-amber-200 hover:border-amber-400 hover:bg-amber-50/50 shadow-2xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">⚠️</span>
+                <span class="text-[11px] font-black text-amber-900 leading-tight">Météo Orange</span>
+                <span class="text-[9px] text-slate-500">Crues / Crise</span>
+              </button>
+              <button onclick="window.ProtecAdmin.previewScenarioNotification('ecusson')" title="Aperçu direct sur mon écran" class="p-2.5 rounded-2xl bg-white border border-purple-200 hover:border-purple-400 hover:bg-purple-50/50 shadow-2xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">🏆</span>
+                <span class="text-[11px] font-black text-purple-900 leading-tight">Écusson</span>
+                <span class="text-[9px] text-slate-500">Déblocage FNPC</span>
+              </button>
+              <button onclick="window.ProtecAdmin.previewScenarioNotification('ordre_mission')" title="Aperçu direct sur mon écran" class="p-2.5 rounded-2xl bg-white border border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50/50 shadow-2xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+                <span class="text-lg">📢</span>
+                <span class="text-[11px] font-black text-indigo-900 leading-tight">Ordre National</span>
+                <span class="text-[9px] text-slate-500">Alerte renfort</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- SECTION DISTRIBUTION D'ÉCUSSONS & DISTINCTIONS FÉDÉRALES -->
+          <div class="p-4 rounded-3xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border-2 border-blue-300 space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-2xl bg-pc-blue text-white flex items-center justify-center font-black shadow-md text-base">
+                  🛡️
+                </div>
+                <div>
+                  <h4 class="text-xs font-black text-slate-900 uppercase tracking-wide">Attribution Fédérale d'Écussons (Admin & Zones de Défense)</h4>
+                  <p class="text-[11px] text-slate-600">Décerné à la main par l'Administration : Écusson Admin suprême et les 7 écussons territoriaux des Zones de Défense et de Sécurité.</p>
+                </div>
+              </div>
+              <button onclick="window.ProtecAdmin.openBadgeManagerForPlayer('all')" class="px-3.5 py-1.5 rounded-xl bg-pc-blue hover:bg-blue-700 text-white font-extrabold text-xs shadow-sm transition cursor-pointer flex items-center gap-1.5">
+                <span>🛡️ Ouvrir le Gestionnaire d'Écussons</span>
+              </button>
+            </div>
+
+            <!-- Raccourcis de distribution rapide en 1 clic -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-1 text-center">
+              <button onclick="window.ProtecAdmin.awardBadgeToPlayer('all', 'badge_admin')" title="Décerner l'écusson Admin à tous les directeurs" class="p-2.5 rounded-2xl bg-white border border-rose-200 hover:border-rose-400 hover:bg-rose-50/50 shadow-2xs transition flex flex-col items-center gap-1 cursor-pointer">
+                <span class="text-base">👑</span>
+                <span class="text-[10px] font-black text-rose-900 leading-tight">Admin Fédéral</span>
+                <span class="text-[8px] text-slate-500">badge_admin.png</span>
+              </button>
+              <button onclick="window.ProtecAdmin.awardBadgeToPlayer('all', 'badge_def_est')" title="Décerner Zone Est" class="p-2.5 rounded-2xl bg-white border border-blue-200 hover:border-blue-400 hover:bg-blue-50/50 shadow-2xs transition flex flex-col items-center gap-1 cursor-pointer">
+                <span class="text-base">🧭</span>
+                <span class="text-[10px] font-black text-blue-900 leading-tight">Zone EST</span>
+                <span class="text-[8px] text-slate-500">badge_def_est.png</span>
+              </button>
+              <button onclick="window.ProtecAdmin.awardBadgeToPlayer('all', 'badge_def_nord')" title="Décerner Zone Nord" class="p-2.5 rounded-2xl bg-white border border-sky-200 hover:border-sky-400 hover:bg-sky-50/50 shadow-2xs transition flex flex-col items-center gap-1 cursor-pointer">
+                <span class="text-base">🧭</span>
+                <span class="text-[10px] font-black text-sky-900 leading-tight">Zone NORD</span>
+                <span class="text-[8px] text-slate-500">badge_def_nord.png</span>
+              </button>
+              <button onclick="window.ProtecAdmin.awardBadgeToPlayer('all', 'badge_def_ouest')" title="Décerner Zone Ouest" class="p-2.5 rounded-2xl bg-white border border-teal-200 hover:border-teal-400 hover:bg-teal-50/50 shadow-2xs transition flex flex-col items-center gap-1 cursor-pointer">
+                <span class="text-base">🧭</span>
+                <span class="text-[10px] font-black text-teal-900 leading-tight">Zone OUEST</span>
+                <span class="text-[8px] text-slate-500">badge_def_ouest.png</span>
+              </button>
+              <button onclick="window.ProtecAdmin.awardBadgeToPlayer('all', 'badge_def_sudest')" title="Décerner Zone Sud-Est" class="p-2.5 rounded-2xl bg-white border border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50/50 shadow-2xs transition flex flex-col items-center gap-1 cursor-pointer">
+                <span class="text-base">🧭</span>
+                <span class="text-[10px] font-black text-indigo-900 leading-tight">Zone SUD-EST</span>
+                <span class="text-[8px] text-slate-500">badge_def_sudest.png</span>
+              </button>
+              <button onclick="window.ProtecAdmin.awardBadgeToPlayer('all', 'badge_def_sud')" title="Décerner Zone Sud" class="p-2.5 rounded-2xl bg-white border border-amber-200 hover:border-amber-400 hover:bg-amber-50/50 shadow-2xs transition flex flex-col items-center gap-1 cursor-pointer">
+                <span class="text-base">🧭</span>
+                <span class="text-[10px] font-black text-amber-900 leading-tight">Zone SUD</span>
+                <span class="text-[8px] text-slate-500">badge_def_sud.png</span>
+              </button>
+              <button onclick="window.ProtecAdmin.awardBadgeToPlayer('all', 'badge_def_paris')" title="Décerner Zone Paris" class="p-2.5 rounded-2xl bg-white border border-slate-200 hover:border-slate-400 hover:bg-slate-50/50 shadow-2xs transition flex flex-col items-center gap-1 cursor-pointer">
+                <span class="text-base">🧭</span>
+                <span class="text-[10px] font-black text-slate-900 leading-tight">Zone PARIS</span>
+                <span class="text-[8px] text-slate-500">badge_def_paris.png</span>
+              </button>
             </div>
           </div>
 

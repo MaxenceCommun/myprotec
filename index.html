@@ -38,7 +38,11 @@
   <!-- Styles Dédiés Landing Page & PWA Manifest -->
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="landing.css">
-  <link rel="icon" type="image/png" href="logo_myprotec_icon.png">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16x16.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512x512.png">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#002E6D">
 
@@ -47,7 +51,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="MyProtec">
-  <link rel="apple-touch-icon" href="logo_myprotec_icon.png">
+  <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512x512.png">
+
+  <!-- Microsoft Windows Tile PWA -->
+  <meta name="msapplication-TileImage" content="icons/icon-512x512.png">
+  <meta name="msapplication-TileColor" content="#002E6D">
 
   <style>
     /* Sur la page d'accueil, la landing page est le flux naturel du document */
@@ -81,6 +91,23 @@
     <!-- CONTENU PRINCIPAL DE LA LANDING PAGE -->
     <div class="relative z-10 flex flex-col min-h-screen">
       
+      <!-- BANDEAU DE PARRAINAGE DÉTECTÉ -->
+      <div id="landing-referral-banner" class="hidden bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 text-white px-4 py-3 text-xs sm:text-sm font-bold shadow-md z-50">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5">
+          <div class="flex items-center gap-2.5 text-center sm:text-left">
+            <span class="text-lg">🎁</span>
+            <div>
+              <span>Vous avez été invité par un directeur (Code : <strong id="landing-ref-code-label" class="font-mono bg-white/20 px-1.5 py-0.5 rounded text-amber-200 tracking-wider">PROT</strong>) !</span>
+              <span class="block sm:inline sm:ml-1 text-blue-100 font-semibold">Créez votre antenne pour recevoir immédiatement vos <strong>+1 500 €</strong> de bienvenue.</span>
+            </div>
+          </div>
+          <button onclick="window.MyProtecLanding.openAuth('register')" class="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shrink-0 transition shadow-sm cursor-pointer flex items-center gap-1.5 active:scale-95">
+            <span>Ouvrir mon antenne affiliée</span>
+            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
       <!-- 1. BARRE DE NAVIGATION VITRÉE SUPÉRIEURE -->
       <header class="sticky top-0 z-50 px-4 sm:px-8 py-3.5 backdrop-blur-md bg-white/75 border-b border-white/60 shadow-xs">
         <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
@@ -96,6 +123,15 @@
 
           <!-- Boutons d'action -->
           <div id="landing-nav-actions" class="flex items-center gap-2.5">
+            <a href="ecussons.html" class="px-3.5 py-2 rounded-xl text-xs font-extrabold text-slate-700 hover:text-slate-950 bg-white/80 hover:bg-white border border-slate-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="shield" class="w-3.5 h-3.5 text-amber-500"></i>
+              <span>Écussons</span>
+            </a>
+            <button onclick="window.ProtecPWA?.promptInstall ? window.ProtecPWA.promptInstall() : window.MyProtecLanding.openAuth('register')" title="Télécharger l'application MyProtec (PWA)" class="px-3 py-2 rounded-xl text-xs font-extrabold text-pc-blue hover:text-blue-700 bg-blue-50/80 hover:bg-blue-100 border border-blue-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span class="hidden sm:inline">Télécharger</span>
+              <span class="sm:hidden">App</span>
+            </button>
             <button onclick="window.MyProtecLanding.openAuth('login')" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-700 hover:text-slate-950 bg-white/80 hover:bg-white border border-slate-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
               <i data-lucide="log-in" class="w-3.5 h-3.5 text-[#0055b8]"></i>
               <span>Se connecter</span>
@@ -124,8 +160,12 @@
         <!-- Double CTA bien visible -->
         <div id="landing-hero-actions" class="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-2">
           <button onclick="window.MyProtecLanding.openAuth('register')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-[#ff6600] hover:bg-[#e65c00] text-white font-black text-sm shadow-xl hover:shadow-2xl transition flex items-center justify-center gap-2 cursor-pointer group">
-            <span>Ouvrir mon antenne</span>
+            <span id="landing-hero-register-text">Ouvrir mon antenne</span>
             <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+          </button>
+          <button onclick="window.ProtecPWA?.promptInstall ? window.ProtecPWA.promptInstall() : window.MyProtecLanding.openAuth('register')" title="Télécharger et installer MyProtec sur votre appareil (PWA)" class="w-full sm:w-auto px-6 py-4 rounded-2xl bg-white/95 hover:bg-white text-pc-blue font-extrabold text-sm border-2 border-blue-200/90 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
+            <i data-lucide="download" class="w-4 h-4 text-pc-blue"></i>
+            <span>Télécharger le jeu (PWA)</span>
           </button>
           <button onclick="window.MyProtecLanding.openAuth('login')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/85 hover:bg-white text-slate-800 font-extrabold text-sm border border-slate-200/90 shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
             <i data-lucide="log-in" class="w-4 h-4 text-[#0055b8]"></i>
@@ -491,44 +531,56 @@
         </div>
       </section>
 
-      <!-- 5. LE CLASSEMENT & VITRINE DES ÉCUSSONS -->
+      <!-- 5. LE CLASSEMENT & VITRINE DES ÉCUSSONS (PODIUM TOP 3) -->
       <section class="py-12 px-4 sm:px-8 max-w-7xl mx-auto w-full">
         <div class="text-center max-w-2xl mx-auto mb-8 space-y-2">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-black uppercase tracking-wider mb-1">
+            <span>🏆</span> Podium Officiel
+          </div>
           <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-            Classement des Collections d'Écussons
+            Top 3 des Collections d'Écussons
           </h2>
           <p class="text-xs sm:text-sm text-slate-500 font-medium">
-            Palmarès des directeurs d'antenne selon la rareté cumulée de leurs distinctions.
+            Les 3 meilleures antennes de France selon la rareté cumulée de leurs distinctions.
           </p>
         </div>
 
         <!-- Filtres de navigation épurés avec icônes SVG -->
         <div class="flex flex-wrap items-center justify-center gap-2 mb-8">
-          <button onclick="window.MyProtecLanding.renderShowcaseGrid('all')" data-filter="all" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer bg-slate-900 text-white shadow-sm flex items-center gap-1.5">
+          <button onclick="window.MyProtecLanding.renderShowcaseGrid('all', 3)" data-filter="all" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer bg-slate-900 text-white shadow-sm flex items-center gap-1.5">
             <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
-            <span>Toutes les collections</span>
+            <span>Toutes les distinctions</span>
           </button>
-          <button onclick="window.MyProtecLanding.renderShowcaseGrid('specialite')" data-filter="specialite" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <button onclick="window.MyProtecLanding.renderShowcaseGrid('specialite', 3)" data-filter="specialite" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
             <i data-lucide="crosshair" class="w-3.5 h-3.5 text-blue-600"></i>
             <span>Spécialités</span>
           </button>
-          <button onclick="window.MyProtecLanding.renderShowcaseGrid('mission')" data-filter="mission" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <button onclick="window.MyProtecLanding.renderShowcaseGrid('mission', 3)" data-filter="mission" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
             <i data-lucide="award" class="w-3.5 h-3.5 text-amber-500"></i>
             <span>Missions & Événements</span>
           </button>
-          <button onclick="window.MyProtecLanding.renderShowcaseGrid('renfort')" data-filter="renfort" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <button onclick="window.MyProtecLanding.renderShowcaseGrid('renfort', 3)" data-filter="renfort" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
             <i data-lucide="siren" class="w-3.5 h-3.5 text-red-600"></i>
             <span>Renforts & Crises</span>
           </button>
-          <button onclick="window.MyProtecLanding.renderShowcaseGrid('departement')" data-filter="departement" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <button onclick="window.MyProtecLanding.renderShowcaseGrid('departement', 3)" data-filter="departement" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
             <i data-lucide="map-pin" class="w-3.5 h-3.5 text-indigo-600"></i>
             <span>Territoires</span>
           </button>
         </div>
 
-        <!-- Grille des vitrines d'antennes de joueurs (3D Tilt & Foil Holographique) -->
-        <div id="lp-showcase-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Grille des vitrines d'antennes de joueurs (Limitée au Top 3 sur la page d'accueil) -->
+        <div id="lp-showcase-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-limit="3">
           <!-- Rempli dynamiquement par js/landing.js -->
+        </div>
+
+        <!-- Bouton vers la page dédiée complète -->
+        <div class="mt-10 text-center">
+          <a href="ecussons.html" class="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-pc-blue to-pc-blue-light hover:brightness-110 active:scale-95 text-white font-black text-xs sm:text-sm shadow-xl hover:shadow-2xl transition cursor-pointer">
+            <i data-lucide="shield" class="w-4 h-4 text-amber-400"></i>
+            <span>Consulter toutes les collections & le classement complet</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </a>
         </div>
       </section>
 
@@ -591,6 +643,8 @@
   <script src="js/supabase.js"></script>
   <script src="js/dialogs.js"></script>
   <script src="js/departements.js"></script>
+  <script src="js/qrcode.min.js"></script>
+  <script src="js/pwa.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/privacy.js"></script>
   <script src="js/help.js"></script>
@@ -600,6 +654,9 @@
     // Initialisation immédiate des icônes Lucide et de la landing page
     document.addEventListener('DOMContentLoaded', () => {
       if (window.lucide) window.lucide.createIcons();
+      if (window.ProtecPWA && typeof window.ProtecPWA.init === 'function') {
+        window.ProtecPWA.init();
+      }
       if (window.ProtecAuth && typeof window.ProtecAuth.init === 'function') {
         window.ProtecAuth.init();
       }

@@ -897,8 +897,37 @@ window.ProtecRNMSC = {
     };
   },
 
+  // Stockage d'état persistant des simulateurs RNMSC par préfixe
+  simulatorStates: {},
+
+  getSimulatorState(prefix = 'rnmsc') {
+    if (this.simulatorStates && this.simulatorStates[prefix]) {
+      return this.simulatorStates[prefix];
+    }
+    try {
+      const saved = localStorage.getItem(`protec_rnmsc_${prefix}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          if (!this.simulatorStates) this.simulatorStates = {};
+          this.simulatorStates[prefix] = parsed;
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return { p2: 0.30, e1: 0.30, e2: 0.30, n: 2500 };
+  },
+
   // Génération du bloc HTML officiel complet RNMSC pour les devis et conventions
   renderRNMSCSimulatorCardHTML(prefix = 'rnmsc') {
+    const state = this.getSimulatorState(prefix);
+    const p2Val = state.p2 !== undefined ? Number(state.p2) : 0.30;
+    const e1Val = state.e1 !== undefined ? Number(state.e1) : 0.30;
+    const e2Val = state.e2 !== undefined ? Number(state.e2) : 0.30;
+    const nVal = state.n !== undefined ? Number(state.n) : 2500;
+
+    const calc = this.calculateRIS({ p1: nVal, p2: p2Val, e1: e1Val, e2: e2Val });
+
     return `
       <div class="p-4 sm:p-5 rounded-3xl glass-card border border-slate-200/90 shadow-sm space-y-4">
         <!-- En-tête officiel -->
@@ -924,10 +953,10 @@ window.ProtecRNMSC = {
               <span class="text-[10px] text-slate-500 block">Comportement, posture et public</span>
             </div>
             <select id="${prefix}-p2" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 bg-white">
-              <option value="0.25">0,25 - Public assis (spectacle, cérémonie, réunion, sport)</option>
-              <option value="0.30" selected>0,30 - Public debout (exposition, foire, salon, comice)</option>
-              <option value="0.35">0,35 - Public debout statique (fête foraine, fête avec protection)</option>
-              <option value="0.40">0,40 - Public debout dynamique (danse, féria, carnaval, multi-jours)</option>
+              <option value="0.25" ${p2Val === 0.25 ? 'selected' : ''}>0,25 - Public assis (spectacle, cérémonie, réunion, sport)</option>
+              <option value="0.30" ${p2Val === 0.30 ? 'selected' : ''}>0,30 - Public debout (exposition, foire, salon, comice)</option>
+              <option value="0.35" ${p2Val === 0.35 ? 'selected' : ''}>0,35 - Public debout statique (fête foraine, fête avec protection)</option>
+              <option value="0.40" ${p2Val === 0.40 ? 'selected' : ''}>0,40 - Public debout dynamique (danse, féria, carnaval, multi-jours)</option>
             </select>
           </div>
 
@@ -938,10 +967,10 @@ window.ProtecRNMSC = {
               <span class="text-[10px] text-slate-500 block">Structure, superficie et relief</span>
             </div>
             <select id="${prefix}-e1" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 bg-white">
-              <option value="0.25">0,25 - Bâtiment en dur, rues avec accès dégagés</option>
-              <option value="0.30" selected>0,30 - Gradins/chapiteaux, terrain ≤ 2 ha, brancardage ≤ 300m</option>
-              <option value="0.35">0,35 - Espace 2 à 5 ha, brancardage 300 à 600m, pente > 150m</option>
-              <option value="0.40">0,40 - Espace > 5 ha, brancardage > 600m, talus ou escaliers</option>
+              <option value="0.25" ${e1Val === 0.25 ? 'selected' : ''}>0,25 - Bâtiment en dur, rues avec accès dégagés</option>
+              <option value="0.30" ${e1Val === 0.30 ? 'selected' : ''}>0,30 - Gradins/chapiteaux, terrain ≤ 2 ha, brancardage ≤ 300m</option>
+              <option value="0.35" ${e1Val === 0.35 ? 'selected' : ''}>0,35 - Espace 2 à 5 ha, brancardage 300 à 600m, pente > 150m</option>
+              <option value="0.40" ${e1Val === 0.40 ? 'selected' : ''}>0,40 - Espace > 5 ha, brancardage > 600m, talus ou escaliers</option>
             </select>
           </div>
 
@@ -952,10 +981,10 @@ window.ProtecRNMSC = {
               <span class="text-[10px] text-slate-500 block">Délai d'accès pompiers et SAMU</span>
             </div>
             <select id="${prefix}-e2" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 bg-white">
-              <option value="0.25">0,25 - Délais ≤ 10 minutes</option>
-              <option value="0.30" selected>0,30 - Délais de 10 à 20 minutes</option>
-              <option value="0.35">0,35 - Délais de 20 à 30 minutes</option>
-              <option value="0.40">0,40 - Délais > 30 minutes (zone isolée)</option>
+              <option value="0.25" ${e2Val === 0.25 ? 'selected' : ''}>0,25 - Délais ≤ 10 minutes</option>
+              <option value="0.30" ${e2Val === 0.30 ? 'selected' : ''}>0,30 - Délais de 10 à 20 minutes</option>
+              <option value="0.35" ${e2Val === 0.35 ? 'selected' : ''}>0,35 - Délais de 20 à 30 minutes</option>
+              <option value="0.40" ${e2Val === 0.40 ? 'selected' : ''}>0,40 - Délais > 30 minutes (zone isolée)</option>
             </select>
           </div>
         </div>
@@ -967,11 +996,19 @@ window.ProtecRNMSC = {
               <span class="text-xs font-extrabold text-slate-800 block">Effectif déclaré du public (P₁) :</span>
               <span class="text-[10px] text-slate-500">Public simultané maximal attendu</span>
             </div>
-            <input type="number" id="${prefix}-n" value="2500" min="50" max="250000" step="50" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" oninput="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-28 text-xs font-black p-2 rounded-xl border border-slate-300 bg-white font-mono text-center">
+            <input type="number" id="${prefix}-n" value="${nVal}" min="50" max="250000" step="50" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" oninput="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-28 text-xs font-black p-2 rounded-xl border border-slate-300 bg-white font-mono text-center">
           </div>
 
           <div id="${prefix}-result-box" class="flex items-center gap-3 text-xs">
-            <!-- Rempli dynamiquement -->
+            <div class="text-right">
+              <span class="text-[10px] text-slate-500 font-bold block">i = ${calc.i} • RIS = ${calc.ris}</span>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${calc.badgeColor}">
+                ${calc.label}
+              </span>
+            </div>
+            <div class="p-2.5 rounded-xl bg-pc-blue text-white text-center font-mono font-black text-xs shadow-xs">
+              ${calc.minVolunteers > 0 ? `${calc.minVolunteers} secouristes requis (pair)` : 'Aucun DPS requis'}
+            </div>
           </div>
         </div>
       </div>
@@ -980,10 +1017,21 @@ window.ProtecRNMSC = {
 
   // Mise à jour visuelle du simulateur dans la vue conventions ou la vue devis
   updateSimulatorUI(prefix = 'rnmsc') {
-    const p2 = Number(document.getElementById(`${prefix}-p2`)?.value || 0.30);
-    const e1 = Number(document.getElementById(`${prefix}-e1`)?.value || 0.30);
-    const e2 = Number(document.getElementById(`${prefix}-e2`)?.value || 0.30);
-    const n = Number(document.getElementById(`${prefix}-n`)?.value || 2500);
+    const p2Elem = document.getElementById(`${prefix}-p2`);
+    const e1Elem = document.getElementById(`${prefix}-e1`);
+    const e2Elem = document.getElementById(`${prefix}-e2`);
+    const nElem = document.getElementById(`${prefix}-n`);
+
+    const p2 = Number(p2Elem?.value || 0.30);
+    const e1 = Number(e1Elem?.value || 0.30);
+    const e2 = Number(e2Elem?.value || 0.30);
+    const n = Number(nElem?.value || 2500);
+
+    if (!this.simulatorStates) this.simulatorStates = {};
+    this.simulatorStates[prefix] = { p2, e1, e2, n };
+    try {
+      localStorage.setItem(`protec_rnmsc_${prefix}`, JSON.stringify(this.simulatorStates[prefix]));
+    } catch (e) {}
 
     const calc = this.calculateRIS({ p1: n, p2, e1, e2 });
     const box = document.getElementById(`${prefix}-result-box`);

@@ -685,6 +685,49 @@ class ProtecGame {
       if (window.ProtecAdmin && typeof window.ProtecAdmin.displayBroadcastPopup === 'function') {
         window.ProtecAdmin.displayBroadcastPopup(data);
       }
+    } else if (type === 'admin_player_notification') {
+      const isForMe = !data.targetUserId || data.targetUserId === 'all' || 
+                      (this.player && (this.player.id === data.targetUserId || this.player.name === data.targetUserId)) ||
+                      (window.ProtecAuth?.currentUser && (window.ProtecAuth.currentUser.id === data.targetUserId || window.ProtecAuth.currentUser.username === data.targetUserId));
+      if (isForMe) {
+        const notifTitle = data.title || '🔔 Notification Administrateur';
+        const notifMsg = data.message || '';
+        const notifType = data.type || 'orange';
+
+        // 1. Toast in-game
+        this.showToast(notifTitle, notifMsg, notifType);
+
+        // 2. Notification Push Système OS
+        if (window.ProtecNotifications && typeof window.ProtecNotifications.sendPushNotification === 'function') {
+          window.ProtecNotifications.sendPushNotification(notifTitle, notifMsg, { category: data.category || 'admin-test' });
+        } else if (window.ProtecIncidents && typeof window.ProtecIncidents.sendSystemNotification === 'function') {
+          window.ProtecIncidents.sendSystemNotification(notifTitle, notifMsg, 'admin-test-notif');
+        }
+
+        // 3. Audio officiel
+        if (window.ProtecAudio) {
+          if (typeof window.ProtecAudio.handleToastAudio === 'function') {
+            window.ProtecAudio.handleToastAudio(notifTitle, notifMsg, notifType);
+          } else if (typeof window.ProtecAudio.playAlertSound === 'function') {
+            window.ProtecAudio.playAlertSound();
+          }
+        }
+
+        // 4. Vibration mobile
+        if (navigator.vibrate) {
+          try { navigator.vibrate([200, 100, 200, 100, 300]); } catch (e) {}
+        }
+
+        // 5. Enregistrement dans l'historique de notifications
+        if (window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
+          window.ProtecNotifications.recordNotification({
+            title: notifTitle,
+            message: notifMsg,
+            color: notifType,
+            category: data.category || 'admin'
+          });
+        }
+      }
     } else if (type === 'admin_user_updated') {
       if (data.userId === this.player.id) {
         if (data.updates.money !== undefined) {
@@ -696,6 +739,67 @@ class ProtecGame {
           window.ProtecDialog.alert('Votre compte a été suspendu par un administrateur.', 'Compte Suspendu', { isDestructive: true }).then(() => {
             location.reload();
           });
+        }
+      }
+    } else if (type === 'badge_awarded') {
+      const isForMe = !data.userId || data.userId === 'all' ||
+                      (this.player && (this.player.id === data.userId || this.player.name === data.userId)) ||
+                      (window.ProtecAuth?.currentUser && (window.ProtecAuth.currentUser.id === data.userId || window.ProtecAuth.currentUser.username === data.userId));
+      if (isForMe && data.badge) {
+        const badge = data.badge;
+        // 1. Ajouter localement à la collection
+        if (window.ProtecEcussons && typeof window.ProtecEcussons.attribuerEcusson === 'function') {
+          window.ProtecEcussons.attribuerEcusson(badge.code, null, false);
+        } else {
+          if (!this.localEcussons) this.localEcussons = [];
+          const existing = this.localEcussons.find(l => l.code === badge.code);
+          if (existing) existing.quantite = (existing.quantite || 1) + Number(data.quantity || 1);
+          else this.localEcussons.push({ code: badge.code, quantite: Number(data.quantity || 1) });
+        }
+
+        // 2. Notification festive & son
+        if (data.notify !== false) {
+          const badgeNom = badge.nom || badge.name || 'Écusson Officiel';
+          this.showToast('🎉 Distinction Fédérale Décernée !', `L'État-Major vous a officiellement remis l'écusson « ${badgeNom} » !`, badge.rarete === 'historique' ? 'purple' : 'green');
+          if (window.ProtecAudio) {
+            try {
+              if (typeof window.ProtecAudio.playSuccessSound === 'function') window.ProtecAudio.playSuccessSound();
+              else if (typeof window.ProtecAudio.playAlertSound === 'function') window.ProtecAudio.playAlertSound();
+            } catch (e) {}
+          }
+          if (navigator.vibrate) {
+            try { navigator.vibrate([100, 50, 100, 50, 200]); } catch (e) {}
+          }
+          if (window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
+            window.ProtecNotifications.recordNotification({
+              title: `🎉 Distinction Fédérale : ${badgeNom}`,
+              message: badge.description || 'Écusson remis par l’Administration MyProtec.',
+              color: badge.rarete === 'historique' ? 'purple' : 'green',
+              category: 'ecussons'
+            });
+          }
+        }
+
+        // 3. Si la modale écussons est ouverte, actualiser en direct
+        if (this.currentModalKey === 'ecussons' && window.ProtecEcussons && typeof window.ProtecEcussons.renderTableauEcussons === 'function') {
+          const body = document.getElementById('modal-body');
+          if (body) window.ProtecEcussons.renderTableauEcussons(this, body);
+        }
+      }
+    } else if (type === 'badge_revoked') {
+      const isForMe = !data.userId || data.userId === 'all' ||
+                      (this.player && (this.player.id === data.userId || this.player.name === data.userId)) ||
+                      (window.ProtecAuth?.currentUser && (window.ProtecAuth.currentUser.id === data.userId || window.ProtecAuth.currentUser.username === data.userId));
+      if (isForMe && data.badgeCode) {
+        if (this.localEcussons) {
+          this.localEcussons = this.localEcussons.filter(l => l.code !== data.badgeCode);
+        }
+        if (window.ProtecEcussons && window.ProtecEcussons.playerEcussons) {
+          window.ProtecEcussons.playerEcussons = window.ProtecEcussons.playerEcussons.filter(pe => pe.ecusson?.code !== data.badgeCode);
+        }
+        if (this.currentModalKey === 'ecussons' && window.ProtecEcussons && typeof window.ProtecEcussons.renderTableauEcussons === 'function') {
+          const body = document.getElementById('modal-body');
+          if (body) window.ProtecEcussons.renderTableauEcussons(this, body);
         }
       }
     }
@@ -3433,7 +3537,19 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const current = devis.configuredVolunteers || 0;
-    devis.configuredVolunteers = Math.max(0, Math.min(48, current + delta));
+    devis.configuredVolunteers = Math.max(0, Math.min(999, current + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe de l'effectif secouriste engagé au clavier
+  setDevisVolunteers(devisId, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
+    devis.configuredVolunteers = count;
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -3446,7 +3562,19 @@ class ProtecGame {
     if (devis.configuredVolunteersWeekday === undefined || devis.configuredVolunteersWeekday === null) {
       devis.configuredVolunteersWeekday = Math.max(2, Math.round((devis.requiredVolunteers || 4) * 0.5));
     }
-    devis.configuredVolunteersWeekday = Math.max(1, Math.min(30, devis.configuredVolunteersWeekday + delta));
+    devis.configuredVolunteersWeekday = Math.max(0, Math.min(999, devis.configuredVolunteersWeekday + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe des secouristes en Semaine au clavier
+  setDevisWeekdayVolunteers(devisId, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
+    devis.configuredVolunteersWeekday = count;
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -3459,7 +3587,19 @@ class ProtecGame {
     if (devis.configuredVolunteersWeekend === undefined || devis.configuredVolunteersWeekend === null) {
       devis.configuredVolunteersWeekend = devis.requiredVolunteers || 4;
     }
-    devis.configuredVolunteersWeekend = Math.max(2, Math.min(48, devis.configuredVolunteersWeekend + delta));
+    devis.configuredVolunteersWeekend = Math.max(0, Math.min(999, devis.configuredVolunteersWeekend + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe des secouristes en Week-end au clavier
+  setDevisWeekendVolunteers(devisId, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
+    devis.configuredVolunteersWeekend = count;
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -3470,7 +3610,19 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const current = devis.configuredCE || 0;
-    devis.configuredCE = Math.max(0, Math.min(10, current + delta));
+    devis.configuredCE = Math.max(0, Math.min(99, current + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe des Chefs d'Équipe (CE) au clavier
+  setDevisCE(devisId, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(99, parsed));
+    devis.configuredCE = count;
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -3481,7 +3633,19 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const current = devis.configuredCP || 0;
-    devis.configuredCP = Math.max(0, Math.min(4, current + delta));
+    devis.configuredCP = Math.max(0, Math.min(50, current + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe des Chefs de Poste (CP) au clavier
+  setDevisCP(devisId, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(50, parsed));
+    devis.configuredCP = count;
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -3576,8 +3740,31 @@ class ProtecGame {
     if (!devis) return;
     const counts = this.ensureDevisVehicleCounts(devis);
     const current = counts[vehType] || 0;
-    const next = Math.max(1, Math.min(10, current + delta));
+    const next = Math.max(1, Math.min(50, current + delta));
     counts[vehType] = next;
+    this.syncDevisConfiguredVehicles(devis);
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe du compteur pour un type de véhicule coché au clavier
+  setDevisVehicleCount(devisId, vehType, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const counts = this.ensureDevisVehicleCounts(devis);
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(50, parsed));
+    if (count <= 0) {
+      delete counts[vehType];
+      if (Array.isArray(devis.configuredVehicles)) {
+        devis.configuredVehicles = devis.configuredVehicles.filter(t => t !== vehType);
+      }
+    } else {
+      counts[vehType] = count;
+      if (!Array.isArray(devis.configuredVehicles)) devis.configuredVehicles = [];
+      if (!devis.configuredVehicles.includes(vehType)) devis.configuredVehicles.push(vehType);
+    }
     this.syncDevisConfiguredVehicles(devis);
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
@@ -7333,7 +7520,25 @@ class ProtecGame {
   }
 
   setMissionDetailTab(tab) {
-    this.missionDetailActiveTab = tab;
+    if (tab === 'effectifs') {
+      this.missionDetailActiveTab = 'personnel';
+    } else if (tab === 'vehicules') {
+      this.missionDetailActiveTab = 'logistique';
+      this.missionDetailLogistiqueSubTab = 'vehicule';
+    } else if (tab === 'materiel') {
+      this.missionDetailActiveTab = 'logistique';
+      this.missionDetailLogistiqueSubTab = 'materiel';
+    } else {
+      this.missionDetailActiveTab = tab;
+    }
+    if (this.selectedMissionId) {
+      this.openMissionDetails(this.selectedMissionId);
+    }
+  }
+
+  setMissionDetailLogistiqueSubTab(subTab) {
+    this.missionDetailLogistiqueSubTab = subTab;
+    this.missionDetailActiveTab = 'logistique';
     if (this.selectedMissionId) {
       this.openMissionDetails(this.selectedMissionId);
     }
@@ -7510,8 +7715,69 @@ class ProtecGame {
       mission.type === 'crise' ? '🚨 Crise Majeure / NOVI' :
       '📋 Dispositif Opérationnel Programmé';
 
+    const eventDayStr = day.toString().padStart(2, '0');
+    const eventMonthStr = (month + 1).toString().padStart(2, '0');
+    const breadcrumbDateStr = `(du ${eventDayStr}/${eventMonthStr}/${year} au ${eventDayStr}/${eventMonthStr}/${year})`;
+
+    const getVolunteerPhone = (v) => {
+      if (v.phone) return v.phone;
+      let hash = 0;
+      const str = String(v.id || v.name || '0');
+      for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      const num = Math.abs(hash) % 100000000;
+      const s = String(num).padStart(8, '0');
+      return `06 ${s.slice(0, 2)} ${s.slice(2, 4)} ${s.slice(4, 6)} ${s.slice(6, 8)}`;
+    };
+
+    const getVehicleImmat = (veh) => {
+      if (veh.immat) return veh.immat;
+      let hash = 0;
+      const str = String(veh.id || veh.name || '0');
+      for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
+      const l1 = letters[Math.abs(hash) % letters.length];
+      const l2 = letters[Math.abs(hash >> 2) % letters.length];
+      const l3 = letters[Math.abs(hash >> 4) % letters.length];
+      const l4 = letters[Math.abs(hash >> 6) % letters.length];
+      const digits = String(Math.abs(hash >> 8) % 900 + 100);
+      return `${l1}${l2}-${digits}-${l3}${l4}`;
+    };
+
+    const getTeamLabel = (v, idx) => {
+      const role = mission.volunteerRoles?.[v.id];
+      if (role === 'chef_poste') return 'PMA / PC';
+      if (role === 'conducteur') return 'VPSP (Vecteur)';
+      if (role === 'photographe') return 'Média / Com';
+      const binomeNum = Math.floor(idx / 2) + 1;
+      return `PSA ${binomeNum}`;
+    };
+
+    const pse2Count = registeredVols.filter(v => v.rank === 'PSE2' || (v.skills || []).includes('pse2')).length;
+    const pse1Count = registeredVols.filter(v => v.rank === 'PSE1' || (v.skills || []).includes('pse1')).length;
+    const ceCount = registeredVols.filter(v => v.rank === 'CE' || (v.skills || []).includes('ce')).length;
+    const driverCount = registeredVols.filter(v => (v.skills || []).includes('permis_vpsp') || (v.skills || []).includes('pilotage')).length;
+    const chefDePoste = registeredVols.find(v => mission.volunteerRoles?.[v.id] === 'chef_poste' || mission.volunteerRoles?.[v.id] === 'chef_equipe');
+
+    const logistiqueSubTab = this.missionDetailLogistiqueSubTab || 'vehicule';
+
     body.innerHTML = `
       <div class="space-y-3">
+        <!-- BREADCRUMB & ENTÊTE EPROTEC -->
+        <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
+          <div class="flex items-center gap-1.5 min-w-0 text-[11px] text-slate-600 truncate">
+            <span class="hover:text-slate-900 cursor-pointer font-semibold" onclick="window.game.closeDrawer()">Accueil</span>
+            <span class="text-slate-400">›</span>
+            <span class="hover:text-slate-900 cursor-pointer font-semibold" onclick="window.game.setMissionDetailTab('info')">Activité</span>
+            <span class="text-slate-400">›</span>
+            <span class="text-amber-500 font-black">▲</span>
+            <span class="font-bold text-slate-900 truncate" title="${mission.title}">${mission.title}</span>
+            <span class="text-slate-500 hidden sm:inline text-[10px]">${breadcrumbDateStr}</span>
+          </div>
+          <button type="button" onclick="window.game.showToast('Note de Frais', 'Note de frais d\\'activité générée (repas et indemnités kilométriques).', 'green')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] shadow-xs flex items-center gap-1.5 transition cursor-pointer shrink-0">
+            <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
+            <span>Note de Frais</span>
+          </button>
+        </div>
         ${mission.isCumpCai ? `
           <div class="p-3.5 rounded-2xl bg-gradient-to-r from-red-600 via-rose-700 to-indigo-800 text-white shadow-md space-y-2">
             <div class="flex items-center justify-between">
@@ -7632,51 +7898,60 @@ class ProtecGame {
           </div>
         ` : ''}
 
-        <!-- BARRE D'ONGLETS DU DISPOSITIF (STYLE eBrigade / eProtec) -->
-        <div class="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-2xl border border-slate-200 shadow-2xs">
-          <button type="button" onclick="window.game.setMissionDetailTab('info')" class="py-2 px-1 rounded-xl text-xs font-black transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeTab === 'info' ? 'bg-white text-pc-blue shadow-xs border border-slate-200' : 'text-slate-600 hover:text-slate-900'}">
+        <!-- BARRE D'ONGLETS DU DISPOSITIF (STYLE eProtec) -->
+        <div class="flex items-center gap-1 border-b border-slate-200 pb-0 overflow-x-auto text-xs font-bold">
+          <button type="button" onclick="window.game.setMissionDetailTab('info')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'info' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
             <i data-lucide="info" class="w-3.5 h-3.5"></i>
-            <span>Infos</span>
+            <span>Information</span>
           </button>
-          <button type="button" onclick="window.game.setMissionDetailTab('effectifs')" class="py-2 px-1 rounded-xl text-xs font-black transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeTab === 'effectifs' ? 'bg-white text-pc-blue shadow-xs border border-slate-200' : 'text-slate-600 hover:text-slate-900'}">
+          <button type="button" onclick="window.game.setMissionDetailTab('personnel')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'personnel' || activeTab === 'effectifs' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
             <i data-lucide="users" class="w-3.5 h-3.5"></i>
-            <span>Effectifs</span>
-            <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black ${registeredVols.length < mission.requiredVolunteers ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">${registeredVols.length}/${mission.requiredVolunteers}</span>
+            <span>Personnel (${registeredVols.length})</span>
           </button>
-          <button type="button" onclick="window.game.setMissionDetailTab('vehicules')" class="py-2 px-1 rounded-xl text-xs font-black transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeTab === 'vehicules' ? 'bg-white text-pc-blue shadow-xs border border-slate-200' : 'text-slate-600 hover:text-slate-900'}">
+          <button type="button" onclick="window.game.setMissionDetailTab('logistique')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'logistique' || activeTab === 'vehicules' || activeTab === 'materiel' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
             <i data-lucide="truck" class="w-3.5 h-3.5"></i>
-            <span>Véhicules</span>
-            ${hasMissingVehicles ? '<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>' : ''}
+            <span>Logistique</span>
+            ${hasMissingVehicles ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>' : ''}
           </button>
-          <button type="button" onclick="window.game.setMissionDetailTab('materiel')" class="py-2 px-1 rounded-xl text-xs font-black transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeTab === 'materiel' ? 'bg-white text-pc-blue shadow-xs border border-slate-200' : 'text-slate-600 hover:text-slate-900'}">
-            <i data-lucide="package" class="w-3.5 h-3.5"></i>
-            <span>Matériel</span>
+          <button type="button" onclick="window.game.setMissionDetailTab('dps')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'dps' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+            <i data-lucide="calculator" class="w-3.5 h-3.5"></i>
+            <span>DPS</span>
           </button>
         </div>
 
         <!-- CONTENU DE L'ONGLET SÉLECTIONNÉ -->
         ${activeTab === 'info' ? `
-          <!-- ONGLET 1 : INFORMATIONS & HORAIRES CLÉS -->
+          <!-- ONGLET 1 : INFORMATION (eProtec 3 CARTES) -->
           <div class="space-y-3 animate-in fade-in duration-150">
-            <!-- Fiche Horaires & Statut -->
-            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
-              <div class="flex items-center justify-between gap-2 flex-wrap">
-                <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${missionBadgeClass}">
+            <!-- CARTE 1 : ACTIVITÉ N° -->
+            <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+              <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center font-black text-xs">▲</span>
+                  <h4 class="text-xs font-black text-slate-900 tracking-wide uppercase">Activité n° ${(mission.id || 'ACT').toString().slice(0, 8).toUpperCase()}</h4>
+                </div>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${missionBadgeClass}">
                   ${missionBadgeText}
                 </span>
-                <div class="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
-                  <i data-lucide="clock" class="w-3.5 h-3.5 text-pc-blue"></i>
-                  <span>Durée : <strong class="text-slate-900">${durationDisplay}</strong></span>
-                </div>
               </div>
 
-              <!-- Date & Créneau global -->
-              <div class="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                <div class="w-7 h-7 rounded-lg bg-blue-50 text-pc-blue flex items-center justify-center flex-shrink-0">
-                  <i data-lucide="calendar" class="w-4 h-4"></i>
+              <!-- Titre & Dates -->
+              <div class="space-y-1.5">
+                <h3 class="text-sm font-black text-slate-900 leading-snug">${mission.title}</h3>
+                <p class="text-xs text-slate-600 font-medium">Dispositif Prévisionnel de Secours (${mission.scale || 'DPS'})</p>
+              </div>
+
+              <!-- Dates & Horaires -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span class="text-[9px] uppercase font-black text-slate-400 block">Date & Horaires Prévisionnels</span>
+                  <strong class="text-xs font-extrabold text-slate-900 block mt-0.5">${missionScheduleRangeText}</strong>
+                  <span class="text-[10px] text-slate-500 block">Durée totale : ${durationDisplay}</span>
                 </div>
-                <div class="flex-1 min-w-0">
-                  <span class="font-extrabold text-slate-900 text-xs">${missionScheduleRangeText}</span>
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span class="text-[9px] uppercase font-black text-slate-400 block">Organisateur / Client</span>
+                  <strong class="text-xs font-extrabold text-slate-900 block mt-0.5 truncate">${mission.clientName || 'Commanditaire conventionné'}</strong>
+                  <span class="text-[10px] text-slate-500 block">Accord-cadre validé</span>
                 </div>
               </div>
 
@@ -7698,88 +7973,164 @@ class ProtecGame {
                   <span class="text-[8px] text-indigo-700 block">${finEventSub}</span>
                 </div>
               </div>
-            </div>
 
-            <!-- Lieu / Adresse -->
-            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
-              <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Lieu & Adresse du Dispositif</span>
-              <h4 class="text-xs font-black text-slate-900 leading-snug">${mission.title}</h4>
+              <!-- Lieu / Adresse -->
               <div onclick="window.game.centerMapOnMission('${mission.id}')" class="flex items-center justify-between gap-2 text-xs text-slate-800 font-bold bg-sky-50/80 hover:bg-sky-100 p-2.5 rounded-xl border border-sky-200 cursor-pointer transition shadow-2xs group" title="Cliquer pour centrer la carte sur cette adresse">
                 <div class="flex items-center gap-2 min-w-0">
                   <i data-lucide="map-pin" class="w-4 h-4 text-pc-blue flex-shrink-0 group-hover:scale-110 transition"></i>
-                  <span class="truncate">Adresse : <strong class="text-slate-900">${mission.address || (mission.lat && mission.lng ? `Point GPS: ${mission.lat.toFixed(4)}, ${mission.lng.toFixed(4)}` : 'Adresse sur site')}</strong></span>
+                  <span class="truncate">Lieu : <strong class="text-slate-900">${mission.address || (mission.lat && mission.lng ? 'Point GPS: ' + mission.lat.toFixed(4) + ', ' + mission.lng.toFixed(4) : 'Adresse sur site')}</strong></span>
                 </div>
                 <span class="text-[10px] font-black text-pc-blue bg-white px-2 py-0.5 rounded-lg border border-sky-200 group-hover:bg-pc-blue group-hover:text-white transition flex items-center gap-1 shrink-0">
                   <i data-lucide="crosshair" class="w-3 h-3"></i>
                   <span>Centrer</span>
                 </span>
               </div>
+
+              <!-- Situation / Descriptif -->
+              <div class="text-xs text-slate-700 space-y-1 pt-1">
+                <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Situation & Contexte :</span>
+                <p class="leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-200">${mission.desc}</p>
+              </div>
+
+              <!-- Missions Prévues sur le Terrain -->
+              <div class="text-xs text-slate-700 space-y-1 pt-1">
+                <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Missions Prévues sur Site :</span>
+                <ul class="text-[11px] text-slate-700 space-y-1 list-disc list-inside bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                  <li>Reconnaissance de périmètre et bilans circonstanciés</li>
+                  <li>Prise en charge des victimes et gestes de premiers secours</li>
+                  <li>Accueil, réconfort et distribution d'urgence aux impliqués</li>
+                  <li>Transmissions opérationnelles et liaisons vers les urgences (CHU)</li>
+                </ul>
+              </div>
             </div>
 
-            <!-- Situation Opérationnelle & Descriptif -->
-            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs text-xs text-slate-700 space-y-1.5">
-              <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Situation & Contexte :</span>
-              <p class="leading-relaxed">${mission.desc}</p>
-              ${mission.clientName ? `<p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100"><strong>Organisateur / Client :</strong> ${mission.clientName}</p>` : ''}
-            </div>
-
-            <!-- Missions Prévues sur le Terrain -->
-            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1.5">
-              <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Missions Prévues sur Site :</span>
-              <ul class="text-[11px] text-slate-700 space-y-1 list-disc list-inside">
-                <li>Reconnaissance de périmètre et bilans circonstanciés</li>
-                <li>Prise en charge des victimes et gestes de premiers secours</li>
-                <li>Accueil, réconfort et distribution d'urgence aux impliqués</li>
-                <li>Coordination radio PC et liaisons vers les urgences (CHU)</li>
-              </ul>
-            </div>
-
-            <!-- Personnel & Spécialités attendues -->
-            <div class="grid grid-cols-2 gap-2 text-[10px]">
-              <div class="p-2.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
-                <span class="text-slate-400 font-bold block text-[9px] uppercase">Personnel Requis</span>
-                <div class="flex items-center justify-between">
-                  <strong class="text-slate-900 text-xs">${mission.requiredVolunteers} secouristes</strong>
-                  ${mission.status === 'planifie' ? `
-                    <div class="flex items-center gap-1">
-                      <button onclick="window.game.adjustMissionRequiredVolunteers('${mission.id}', -1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black flex items-center justify-center border border-slate-300 text-xs cursor-pointer">-</button>
-                      <button onclick="window.game.adjustMissionRequiredVolunteers('${mission.id}', 1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black flex items-center justify-center border border-slate-300 text-xs cursor-pointer">+</button>
-                    </div>
-                  ` : ''}
+            <!-- CARTE 2 : PERSONNEL (QUALIFICATIONS BADGES & EFFECTIF) -->
+            <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+              <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="users" class="w-4 h-4 text-pc-blue"></i>
+                  <h4 class="text-xs font-black text-slate-900 uppercase">Personnel du Dispositif</h4>
                 </div>
-                <span class="text-slate-500 block text-[9px]">Conseillé (RNMSC) : ${mission.hiddenMinVolunteers || mission.requiredVolunteers}</span>
+                <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${registeredVols.length >= (mission.requiredVolunteers || 1) ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                  ${registeredVols.length} / ${mission.requiredVolunteers} inscrits
+                </span>
               </div>
-              <div class="p-2.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
-                <span class="text-slate-400 font-bold block text-[9px] uppercase">Spécialités Clés</span>
-                <span class="text-emerald-700 font-bold block">Chef d'Équipe (CE) requis</span>
-                <span class="text-slate-600 block text-[9px]">Chauffeur VPSP, PSE2/PSE1</span>
+
+              <!-- Badges de qualifications requises (eProtec) -->
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                  <span>🩺</span> ${pse2Count} PSE2
+                </span>
+                <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-sky-100 text-sky-800 border border-sky-200 flex items-center gap-1">
+                  <span>🩹</span> ${pse1Count} PSE1
+                </span>
+                <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
+                  <span>🛡️</span> ${ceCount} CE
+                </span>
+                <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                  <span>🚑</span> ${driverCount} Chauffeur
+                </span>
               </div>
+
+              <!-- Progression inscription -->
+              <div class="space-y-1">
+                <div class="flex items-center justify-between text-[11px] font-bold text-slate-600">
+                  <span>Taux d'armement</span>
+                  <span class="font-black text-slate-900">${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}%</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
+                  <div class="bg-gradient-to-r from-pc-blue to-emerald-500 h-full rounded-full transition-all" style="width: ${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}%"></div>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-xs text-slate-700 pt-1">
+                <span>Chef de Poste désigné :</span>
+                <strong class="text-slate-900">${chefDePoste ? chefDePoste.name : (registeredVols.length > 0 ? registeredVols[0].name : 'Non désigné')}</strong>
+              </div>
+
+              <button type="button" onclick="window.game.setMissionDetailTab('personnel')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-pc-blue font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+                <i data-lucide="users" class="w-3.5 h-3.5"></i>
+                <span>Gérer les Effectifs & Rôles (${registeredVols.length}/${mission.requiredVolunteers}) →</span>
+              </button>
+            </div>
+
+            <!-- CARTE 3 : LOGISTIQUE (VÉHICULES & MATÉRIELS) -->
+            <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+              <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
+                  <h4 class="text-xs font-black text-slate-900 uppercase">Logistique & Vecteurs</h4>
+                </div>
+                <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${assignedVehIds.length >= ((mission.requiredVehicles || []).length || 1) ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                  ${assignedVehIds.length} / ${(mission.requiredVehicles || []).length || 1} véhicule(s)
+                </span>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span class="text-[9px] uppercase font-black text-slate-400 block">Vecteurs Requis</span>
+                  <div class="flex items-center gap-1 mt-1 flex-wrap">
+                    ${(mission.requiredVehicles && mission.requiredVehicles.length > 0) ? mission.requiredVehicles.map(vType => `
+                      <span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-pc-blue border border-blue-200">${vType}</span>
+                    `).join('') : '<span class="text-[10px] text-slate-500">Poste fixe (aucun)</span>'}
+                  </div>
+                </div>
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span class="text-[9px] uppercase font-black text-slate-400 block">Lots RNMSC</span>
+                  <div class="flex items-center gap-1 mt-1 flex-wrap">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">Lot A</span>
+                    ${(mission.configuredLots || []).includes('lot_b') ? '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200">Lot B</span>' : ''}
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-200">DAE+O2</span>
+                  </div>
+                </div>
+              </div>
+
+              <button type="button" onclick="window.game.setMissionDetailTab('logistique')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-pc-blue font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+                <i data-lucide="truck" class="w-3.5 h-3.5"></i>
+                <span>Gérer les Véhicules, Matériels & Consommables →</span>
+              </button>
             </div>
 
             <!-- Indemnisation conventionnée -->
-            <div class="p-2.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between text-xs">
-              <span class="text-emerald-800 font-bold">Indemnisation conventionnée :</span>
+            <div class="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between text-xs">
+              <span class="text-emerald-800 font-bold flex items-center gap-1.5">
+                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
+                <span>Indemnisation conventionnée (Devis Organisateur) :</span>
+              </span>
               <span class="font-black text-emerald-950 mono-num text-sm">+${mission.rewardMoney} €</span>
             </div>
           </div>
-        ` : activeTab === 'effectifs' ? `
-          <!-- ONGLET 2 : EFFECTIFS DU DISPOSITIF -->
+        ` : (activeTab === 'personnel' || activeTab === 'effectifs') ? `
+          <!-- ONGLET 2 : PERSONNEL DU DISPOSITIF (TABLEAU eProtec) -->
           <div class="space-y-3 animate-in fade-in duration-150">
-            <!-- Barre d'outils effectifs -->
-            <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between gap-2">
-              <div>
-                <h4 class="text-xs font-black text-slate-800">
-                  Effectifs Inscrits : ${registeredVols.length} / ${mission.requiredVolunteers}
-                </h4>
-                <p class="text-[10px] text-slate-500">${registeredVols.length >= mission.requiredVolunteers ? 'Effectif complet pour départ' : `Manque ${mission.requiredVolunteers - registeredVols.length} secouriste(s)`}</p>
+            <!-- Barre d'outils et jauge eProtec -->
+            <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="window.game.showToast('Feuille de Route', 'Génération de l\\'ordre de mission et feuille d\\'émargement eProtec...', 'blue')" class="p-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 transition cursor-pointer" title="Imprimer la feuille de route / d'émargement">
+                  <i data-lucide="printer" class="w-4 h-4"></i>
+                </button>
+                <div class="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                  <button type="button" class="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-white text-pc-blue shadow-2xs">Liste</button>
+                  <button type="button" onclick="window.game.autoAssignMissionRoles('${mission.id}')" class="px-2.5 py-0.5 rounded-md text-[11px] font-bold text-slate-600 hover:text-slate-900 cursor-pointer">Affectations</button>
+                </div>
               </div>
+
+              <div class="flex items-center gap-2">
+                <div class="w-20 sm:w-28 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
+                  <div class="bg-emerald-500 h-full rounded-full transition-all" style="width: ${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}%"></div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${registeredVols.length < mission.requiredVolunteers ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
+                  ${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}% ${registeredVols.length}/${mission.requiredVolunteers}
+                </span>
+              </div>
+
               <div class="flex items-center gap-1.5 flex-wrap">
                 <button onclick="window.game.autoAssignMissionRoles('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue/10 hover:bg-pc-blue hover:text-white text-pc-blue transition flex items-center gap-1 cursor-pointer" title="Affecter automatiquement les rôles optimaux">
                   <i data-lucide="wand-2" class="w-3 h-3"></i>
                   <span>Auto-Rôles</span>
                 </button>
                 <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition flex items-center gap-1 cursor-pointer" title="Demander renforts aux antennes alliées">
-                  <i data-lucide="users" class="w-3 h-3"></i>
+                  <i data-lucide="users" class="w-3.5 h-3.5"></i>
                   <span>Renforts</span>
                 </button>
                 <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition flex items-center gap-1 cursor-pointer">
@@ -7789,49 +8140,80 @@ class ProtecGame {
               </div>
             </div>
 
-            ${registeredVols.some(v => (v.skills || []).includes('communication') && mission.volunteerRoles?.[v.id] === 'photographe') ? `
-              <div class="p-2.5 rounded-xl bg-pink-50 border border-pink-200 text-pink-900 text-[11px] flex items-center gap-2 font-medium">
-                <i data-lucide="camera" class="w-4 h-4 text-pink-600"></i>
-                <span><strong>Couverture Média & Pub :</strong> reportage photo/vidéo sur ce DPS (+notoriété d'antenne garantie).</span>
-              </div>
-            ` : ''}
+            <!-- TABLEAU EPROTEC DU PERSONNEL ENGAGÉ -->
+            <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500">
+                    <th class="py-2.5 px-3 w-10">Image</th>
+                    <th class="py-2.5 px-3">Personnel</th>
+                    <th class="py-2.5 px-3 hidden sm:table-cell">Téléphone</th>
+                    <th class="py-2.5 px-3">Fonction</th>
+                    <th class="py-2.5 px-3">Équipe</th>
+                    <th class="py-2.5 px-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${registeredVols.length === 0 ? `
+                    <tr>
+                      <td colspan="6" class="p-4 text-center text-xs text-amber-700 bg-amber-50/50">
+                        Aucun secouriste n’a encore validé sa disponibilité. Cliquez sur « SMS » ou utilisez l’accordéon ci-dessous pour recruter vos bénévoles.
+                      </td>
+                    </tr>
+                  ` : ''}
+                  ${registeredVols.map((v, idx) => {
+                    const currentRole = mission.volunteerRoles?.[v.id] || '';
+                    const rolesList = this.getMissionRoles();
+                    const isRoleMissing = !currentRole;
+                    const phoneStr = getVolunteerPhone(v);
+                    const teamLabel = getTeamLabel(v, idx);
 
-            <!-- Liste des secouristes inscrits -->
-            <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
-              ${registeredVols.length === 0 ? '<p class="text-xs text-amber-600 p-3 bg-amber-50 border border-amber-200 rounded-xl">Aucun secouriste n’a encore validé sa disponibilité. Cliquez sur « SMS » ou utilisez l’accordéon ci-dessous pour appeler vos effectifs.</p>' : ''}
-              ${registeredVols.map(v => {
-                const currentRole = mission.volunteerRoles?.[v.id] || '';
-                const rolesList = this.getMissionRoles();
-                const hasCom = (v.skills || []).includes('communication') && currentRole === 'photographe';
-                const isRoleMissing = !currentRole;
-
-                return `
-                <div class="p-2.5 rounded-xl bg-white border ${isRoleMissing ? 'border-amber-300 bg-amber-50/20 ring-1 ring-amber-200' : 'border-slate-200'} shadow-xs flex items-center justify-between text-xs hover:border-slate-300 transition gap-2.5">
-                  <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                    ${this.getVolunteerAvatarHTML(v, 'w-8 h-8 text-xs')}
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="font-bold text-slate-800 leading-tight truncate max-w-[130px] sm:max-w-[180px]">${v.name}</span>
-                        <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">${v.rank || 'Secouriste'}</span>
-                        ${hasCom ? '<span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-pink-100 text-pink-700">📸 Média</span>' : ''}
-                        ${isRoleMissing ? '<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 animate-pulse">⚠️ Rôle requis</span>' : ''}
-                      </div>
-                      ${this.getVolunteerSkillsPopoverHTML(v)}
-                    </div>
-                  </div>
-                  <div class="flex-shrink-0 flex items-center gap-1.5">
-                    <select onchange="window.game.setVolunteerMissionRole('${mission.id}', '${v.id}', this.value)" class="text-[11px] font-bold px-2 py-1 rounded-lg ${isRoleMissing ? 'bg-amber-100 text-amber-900 border-amber-400 ring-1 ring-amber-400' : 'bg-slate-50 hover:bg-slate-100 border-slate-300 text-slate-800'} border cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[120px] sm:max-w-[155px]">
-                      <option value="" ${!currentRole ? 'selected' : ''}>⚠️ Rôle à affecter...</option>
-                      ${rolesList.map(r => `
-                        <option value="${r.id}" ${r.id === currentRole ? 'selected' : ''}>${r.label}</option>
-                      `).join('')}
-                    </select>
-                    ${mission.status === 'planifie' ? `
-                      <button onclick="window.game.unregisterVolunteerFromMission('${mission.id}', '${v.id}')" class="w-6 h-6 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold flex items-center justify-center text-xs transition cursor-pointer" title="Désinscrire ce bénévole">✕</button>
-                    ` : ''}
-                  </div>
-                </div>
-              `;}).join('')}
+                    return `
+                      <tr class="hover:bg-slate-50/80 transition ${isRoleMissing ? 'bg-amber-50/20' : ''}">
+                        <td class="py-2 px-3">
+                          ${this.getVolunteerAvatarHTML(v, 'w-8 h-8 text-xs')}
+                        </td>
+                        <td class="py-2 px-3">
+                          <div class="font-bold text-slate-900 leading-tight">${v.name}</div>
+                          <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+                            <span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-rose-600 text-white uppercase tracking-wider flex items-center gap-0.5">
+                              Engagé <span class="opacity-80">(i)</span>
+                            </span>
+                            <span class="text-[9px] font-bold text-slate-600 px-1 py-0.2 bg-slate-100 rounded border border-slate-200">${v.rank || 'Secouriste'}</span>
+                            ${isRoleMissing ? '<span class="text-[8px] font-black text-amber-700 bg-amber-100 px-1 py-0.2 rounded">Rôle requis</span>' : ''}
+                          </div>
+                        </td>
+                        <td class="py-2 px-3 hidden sm:table-cell">
+                          <a href="tel:${phoneStr.replace(/\s/g, '')}" class="text-[11px] font-mono text-slate-700 hover:text-pc-blue font-bold flex items-center gap-1">
+                            <i data-lucide="phone" class="w-3 h-3 text-slate-400"></i>
+                            <span>${phoneStr}</span>
+                          </a>
+                        </td>
+                        <td class="py-2 px-3">
+                          <select onchange="window.game.setVolunteerMissionRole('${mission.id}', '${v.id}', this.value)" class="text-[10px] font-bold px-2 py-1 rounded-lg ${isRoleMissing ? 'bg-amber-100 text-amber-900 border-amber-400 ring-1 ring-amber-400' : 'bg-slate-50 hover:bg-slate-100 border-slate-300 text-slate-800'} border cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[130px] sm:max-w-[160px]">
+                            <option value="" ${!currentRole ? 'selected' : ''}>⚠️ Rôle à choisir...</option>
+                            ${rolesList.map(r => `
+                              <option value="${r.id}" ${r.id === currentRole ? 'selected' : ''}>${r.label}</option>
+                            `).join('')}
+                          </select>
+                        </td>
+                        <td class="py-2 px-3">
+                          <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-blue-50 text-pc-blue border border-blue-200 inline-block">
+                            ${teamLabel}
+                          </span>
+                        </td>
+                        <td class="py-2 px-2 text-right">
+                          ${mission.status === 'planifie' ? `
+                            <button onclick="window.game.unregisterVolunteerFromMission('${mission.id}', '${v.id}')" class="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600 hover:text-rose-700 font-bold transition cursor-pointer" title="Désinscrire ce bénévole">
+                              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                            </button>
+                          ` : ''}
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
             </div>
 
             <!-- Suivi des convocations et relances -->
@@ -7951,365 +8333,514 @@ class ProtecGame {
               </div>
             </details>
           </div>
-        ` : activeTab === 'vehicules' ? `
-          <!-- ONGLET 3 : VÉHICULES DU DISPOSITIF -->
+        ` : (activeTab === 'logistique' || activeTab === 'vehicules' || activeTab === 'materiel') ? `
+          <!-- ONGLET 3 : LOGISTIQUE (SOUS-ONGLETS : VÉHICULE / MATÉRIEL / CONSOMMABLE) -->
           <div class="space-y-3 animate-in fade-in duration-150">
-            <!-- Contrôles Logistique : Places Véhicules / Réarmement -->
-            ${window.ProtecCriseLogistique ? `
-              ${window.ProtecCriseLogistique.renderVehiclesCapacityAndRearmAlertHTML(this, mission)}
-            ` : ''}
+            <!-- SOUS-ONGLETS LOGISTIQUE eProtec -->
+            <div class="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 shadow-2xs">
+              <button type="button" onclick="window.game.setMissionDetailLogistiqueSubTab('vehicule')" class="flex-1 py-1.5 px-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${logistiqueSubTab === 'vehicule' ? 'bg-white text-pc-blue shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+                <i data-lucide="truck" class="w-3.5 h-3.5"></i>
+                <span>Véhicule</span>
+                ${hasMissingVehicles ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>' : ''}
+              </button>
+              <button type="button" onclick="window.game.setMissionDetailLogistiqueSubTab('materiel')" class="flex-1 py-1.5 px-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${logistiqueSubTab === 'materiel' ? 'bg-white text-pc-blue shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+                <i data-lucide="package" class="w-3.5 h-3.5"></i>
+                <span>Matériel</span>
+              </button>
+              <button type="button" onclick="window.game.setMissionDetailLogistiqueSubTab('consommable')" class="flex-1 py-1.5 px-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${logistiqueSubTab === 'consommable' ? 'bg-white text-pc-blue shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+                <i data-lucide="first-aid" class="w-3.5 h-3.5"></i>
+                <span>Consommable</span>
+              </button>
+            </div>
 
-            <!-- SECTION AFFECTATION DES VÉHICULES DU DISPOSITIF -->
-            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
-                  <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
-                  <span>Véhicules du Dispositif (Devis Organisateur)</span>
-                </span>
-                ${(Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) ? `
-                  <button 
-                    type="button" 
-                    onclick="window.game.autoAssignVehiclesToMission('${mission.id}')" 
-                    class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue/10 hover:bg-pc-blue hover:text-white text-pc-blue transition flex items-center gap-1 cursor-pointer">
-                    <i data-lucide="zap" class="w-3 h-3"></i>
-                    <span>Affectation Auto</span>
-                  </button>
+            ${logistiqueSubTab === 'vehicule' ? `
+              <!-- SOUS-ONGLET VÉHICULE : TABLEAU EPROTEC + CONFIGURATION -->
+              <div class="space-y-3">
+                <!-- TABLEAU DES VÉHICULES ENGAGÉS -->
+                <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs">
+                  <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500">
+                        <th class="py-2.5 px-3 w-12">Image</th>
+                        <th class="py-2.5 px-3">Véhicule</th>
+                        <th class="py-2.5 px-3">Statut</th>
+                        <th class="py-2.5 px-3">Indicatif</th>
+                        <th class="py-2.5 px-3 hidden sm:table-cell">Immatriculation</th>
+                        <th class="py-2.5 px-3">Fonction</th>
+                        <th class="py-2.5 px-3 hidden sm:table-cell">Kilométrage</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                      ${(() => {
+                        const assignedVehsList = (mission.assignedVehicleIds || [])
+                          .filter(Boolean)
+                          .concat(mission.extraTransportVehicles || [])
+                          .map(id => this.vehicles.find(v => v.id === id))
+                          .filter(Boolean);
+
+                        if (assignedVehsList.length === 0) {
+                          return `
+                            <tr>
+                              <td colspan="7" class="p-4 text-center text-xs text-slate-500 italic bg-slate-50/50">
+                                Aucun véhicule encore affecté à cette activité. Utilisez les sélecteurs ci-dessous pour armer le dispositif.
+                              </td>
+                            </tr>
+                          `;
+                        }
+
+                        return assignedVehsList.map(veh => {
+                          const immat = getVehicleImmat(veh);
+                          const indicatif = veh.indicatif || `${veh.type} ${veh.num || 1}`;
+                          const mileage = veh.mileage || (118000 + (veh.id.charCodeAt(0) * 137) % 35000);
+                          const fonction = veh.type === 'VPSP' ? 'Évacuation / Soins' : (veh.type === 'PCM' ? 'Poste Commandement' : 'Liaison / Transport');
+
+                          return `
+                            <tr class="hover:bg-slate-50/80 transition">
+                              <td class="py-2 px-3">
+                                <div class="w-10 h-7 rounded bg-white border border-slate-200 flex items-center justify-center p-0.5 shadow-2xs overflow-hidden">
+                                  <img src="${veh.image || this.getVehicleImage(veh.type)}" class="max-w-full max-h-full object-contain" alt="${veh.name}">
+                                </div>
+                              </td>
+                              <td class="py-2 px-3">
+                                <strong class="text-slate-900 block leading-tight">${veh.name}</strong>
+                                <span class="text-[9px] text-slate-500 font-bold">${veh.type}</span>
+                              </td>
+                              <td class="py-2 px-3">
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
+                                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Opérationnel
+                                </span>
+                              </td>
+                              <td class="py-2 px-3 font-bold text-slate-800 text-[11px]">
+                                ${indicatif}
+                              </td>
+                              <td class="py-2 px-3 hidden sm:table-cell font-mono text-[10px] text-slate-700 font-bold">
+                                ${immat}
+                              </td>
+                              <td class="py-2 px-3">
+                                <span class="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-semibold border border-slate-200">
+                                  ${fonction}
+                                </span>
+                              </td>
+                              <td class="py-2 px-3 hidden sm:table-cell font-mono text-[10px] text-slate-600">
+                                ${mileage.toLocaleString()} km
+                              </td>
+                            </tr>
+                          `;
+                        }).join('');
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Contrôles Logistique : Places Véhicules / Réarmement -->
+                ${window.ProtecCriseLogistique ? `
+                  ${window.ProtecCriseLogistique.renderVehiclesCapacityAndRearmAlertHTML(this, mission)}
                 ` : ''}
-              </div>
 
-              <!-- Slots des véhicules requis par l'organisateur -->
-              ${(Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) ? `
-                <div class="space-y-2">
-                  ${mission.requiredVehicles.map((reqType, slotIdx) => {
-                    const assignedId = (mission.assignedVehicleIds && mission.assignedVehicleIds[slotIdx]) ? mission.assignedVehicleIds[slotIdx] : null;
-                    const assignedVeh = assignedId ? this.vehicles.find(v => v.id === assignedId) : null;
-
-                    // Liste de tous les véhicules du garage non encore pris par d'autres slots de la même mission
-                    const alreadyAssignedIds = (mission.assignedVehicleIds || []).filter((id, idx) => idx !== slotIdx && id);
-                    const extraAssignedIds = mission.extraTransportVehicles || [];
-                    const allDispoVehs = this.vehicles.filter(v => 
-                      (v.status === 'dispo' || v.status === 'sdis_caserne') &&
-                      !alreadyAssignedIds.includes(v.id) &&
-                      !extraAssignedIds.includes(v.id)
-                    );
-
-                    // 1. Véhicules conformes au type requis
-                    const exactDispoVehs = allDispoVehs.filter(v => 
-                      v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit))
-                    );
-
-                    // 2. Véhicules de substitution (autre type : VPSP, VTU, VTP, VL, etc.)
-                    const substituteDispoVehs = allDispoVehs.filter(v => 
-                      !(v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit)))
-                    );
-
-                    const isMatch = assignedVeh && (assignedVeh.type === reqType || (reqType === 'PCM' && (assignedVeh.isCommandement || assignedVeh.hasCommandementKit)));
-
-                    if (assignedVeh) {
-                      const fuelPct = assignedVeh.fuel !== undefined ? assignedVeh.fuel : 90;
-                      const mechPct = assignedVeh.mechanical !== undefined ? assignedVeh.mechanical : 95;
-                      const fuelColor = fuelPct > 50 ? 'text-emerald-600' : (fuelPct > 20 ? 'text-amber-600' : 'text-red-600');
-                      const driverSkill = assignedVeh.licenseRequired === 'C' ? 'Permis C (PL)' : (assignedVeh.type === 'VPSP' ? 'P. VPSP' : 'Permis B');
-                      
-                      const otherExactVehs = exactDispoVehs.filter(v => v.id !== assignedVeh.id);
-                      const otherSubVehs = substituteDispoVehs.filter(v => v.id !== assignedVeh.id);
-                      const totalOtherCount = otherExactVehs.length + otherSubVehs.length;
-
-                      return `
-                        <div class="p-2.5 rounded-xl ${isMatch ? 'bg-slate-50 border-slate-200' : 'bg-amber-500/10 border-amber-300'} border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                          <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-0.5 flex-shrink-0 shadow-2xs overflow-hidden">
-                              <img src="${assignedVeh.image || this.getVehicleImage(assignedVeh.type)}" class="max-w-full max-h-full object-contain" alt="${assignedVeh.name}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\'><text y=\\'18\\' font-size=\\'18\\'>🚑</text></svg>'">
-                            </div>
-                            <div class="min-w-0">
-                              <div class="flex items-center gap-1.5 flex-wrap">
-                                <span class="text-xs font-black text-slate-800 truncate">${assignedVeh.name}</span>
-                                ${isMatch ? `
-                                  <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 uppercase flex items-center gap-0.5">
-                                    <span>✓</span> ${assignedVeh.type}
-                                  </span>
-                                ` : `
-                                  <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300 uppercase flex items-center gap-0.5" title="Véhicule de substitution non conforme au devis">
-                                    <span>⚠️</span> Substitution (${assignedVeh.type} / requis: ${reqType})
-                                  </span>
-                                `}
-                                ${assignedVeh.immat ? `<span class="text-[9px] font-bold text-slate-400 font-mono">${assignedVeh.immat}</span>` : ''}
-                              </div>
-                              <div class="flex items-center gap-2.5 text-[10px] text-slate-500 pt-0.5">
-                                <span class="flex items-center gap-1 ${fuelColor} font-bold">
-                                  <span>⛽</span> ${fuelPct}%
-                                </span>
-                                <span class="flex items-center gap-1 text-slate-600 font-bold">
-                                  <span>🔧</span> ${mechPct}%
-                                </span>
-                                <span class="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-bold text-[9px]">
-                                  ${driverSkill}
-                                </span>
-                              </div>
-                              ${!isMatch ? `
-                                <p class="text-[9px] text-amber-800 font-semibold pt-0.5">
-                                  ⚠️ Vecteur inadapté : si l'intervention requiert impérativement un ${reqType}, la mission avancera au ralenti et le commanditaire exprimera son mécontentement.
-                                </p>
-                              ` : ''}
-                            </div>
-                          </div>
-
-                          <div class="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-center">
-                            ${totalOtherCount > 0 ? `
-                              <select 
-                                onchange="window.game.assignVehicleToMissionSlot('${mission.id}', ${slotIdx}, this.value)" 
-                                class="text-[11px] font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-700 cursor-pointer shadow-2xs hover:border-slate-400">
-                                <option value="" disabled selected>🔄 Changer (${totalOtherCount} autre${totalOtherCount > 1 ? 's' : ''})...</option>
-                                ${otherExactVehs.length > 0 ? `
-                                  <optgroup label="✅ Conformes (${reqType})">
-                                    ${otherExactVehs.map(v => `<option value="${v.id}">↳ ${v.name} (${v.fuel || 90}% carbu)</option>`).join('')}
-                                  </optgroup>
-                                ` : ''}
-                                ${otherSubVehs.length > 0 ? `
-                                  <optgroup label="⚠️ Substitution (Autre type)">
-                                    ${otherSubVehs.map(v => `<option value="${v.id}">↳ ${v.name} (${v.type} • Non conforme)</option>`).join('')}
-                                  </optgroup>
-                                ` : ''}
-                              </select>
-                            ` : `
-                              <span class="px-2 py-1 rounded-lg text-[10px] font-bold ${isMatch ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-100 text-amber-900 border border-amber-300'}">
-                                ${isMatch ? '✅ Affecté' : '⚠️ Substitué'}
-                              </span>
-                            `}
-                            <button 
-                              type="button" 
-                              onclick="window.game.unassignVehicleFromMissionSlot('${mission.id}', ${slotIdx})" 
-                              class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition cursor-pointer flex items-center gap-1"
-                              title="Retirer ce véhicule du dispositif">
-                              <i data-lucide="x" class="w-3 h-3"></i>
-                              <span>Retirer</span>
-                            </button>
-                          </div>
-                        </div>
-                      `;
-                    } else {
-                      const hasAnyDispo = allDispoVehs.length > 0;
-                      return `
-                        <div class="p-2.5 rounded-xl bg-amber-500/5 border border-dashed border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                          <div class="flex items-center gap-2">
-                            <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 font-black text-xs flex items-center justify-center flex-shrink-0">
-                              #${slotIdx + 1}
-                            </span>
-                            <div>
-                              <p class="text-xs font-bold text-amber-900">
-                                Emplacement ${reqType} à pourvoir
-                              </p>
-                              <p class="text-[10px] text-amber-700">
-                                Prévu au devis validé (${mission.title})
-                              </p>
-                              ${exactDispoVehs.length === 0 && substituteDispoVehs.length > 0 ? `
-                                <p class="text-[9px] text-amber-800 font-bold pt-0.5">
-                                  💡 Aucun ${reqType} disponible : vous pouvez affecter un autre véhicule du garage (VPSP, VTP, VL) pour ne pas bloquer l'engagement.
-                                </p>
-                              ` : ''}
-                            </div>
-                          </div>
-
-                          <div class="flex items-center gap-1.5 flex-shrink-0">
-                            ${hasAnyDispo ? `
-                              <select 
-                                onchange="window.game.assignVehicleToMissionSlot('${mission.id}', ${slotIdx}, this.value)" 
-                                class="text-[11px] font-bold bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-slate-800 cursor-pointer shadow-2xs max-w-[260px]">
-                                <option value="" selected disabled>
-                                  ${exactDispoVehs.length > 0 ? `-- Affecter un ${reqType} (${exactDispoVehs.length} dispo) --` : `-- Choisir véhicule de substitution (${substituteDispoVehs.length} dispo) --`}
-                                </option>
-                                ${exactDispoVehs.length > 0 ? `
-                                  <optgroup label="✅ Conformes au devis (${reqType})">
-                                    ${exactDispoVehs.map(v => `<option value="${v.id}">${v.name} • ${v.fuel || 90}% carbu</option>`).join('')}
-                                  </optgroup>
-                                ` : ''}
-                                ${substituteDispoVehs.length > 0 ? `
-                                  <optgroup label="⚠️ Véhicules de substitution (Autre type disponible)">
-                                    ${substituteDispoVehs.map(v => `<option value="${v.id}">↳ ${v.name} (${v.type} • Non conforme)</option>`).join('')}
-                                  </optgroup>
-                                ` : ''}
-                              </select>
-                            ` : `
-                              <span class="px-2.5 py-1 rounded-lg bg-rose-100 text-rose-700 text-[10px] font-extrabold flex items-center gap-1">
-                                <span>⚠️</span> Aucun véhicule disponible au garage
-                              </span>
-                            `}
-                          </div>
-                        </div>
-                      `;
-                    }
-                  }).join('')}
-                </div>
-              ` : `
-                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
-                  <span>🚶</span>
-                  <span>Dispositif pédestre / poste de secours fixe (aucun véhicule requis au devis).</span>
-                </div>
-              `}
-
-              <!-- Acheminement interne des bénévoles -->
-              <div class="pt-2 border-t border-slate-100 space-y-2">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
-                  <span class="font-bold text-slate-700 flex items-center gap-1">
-                    <span>🚐</span> Véhicule de transport bénévoles (Non facturé au devis) :
-                  </span>
-                  ${(mission.extraTransportVehicles && mission.extraTransportVehicles.length > 0) ? `
-                    <span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-extrabold text-[10px]">
-                      ${mission.extraTransportVehicles.map(id => this.vehicles.find(v => v.id === id)?.name || id).join(', ')}
+                <!-- SECTION AFFECTATION DES VÉHICULES DU DISPOSITIF -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                      <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
+                      <span>Véhicules du Dispositif (Devis Organisateur)</span>
                     </span>
-                  ` : `
-                    <span class="text-slate-400 text-[10px] italic">Aucun véhicule d'acheminement ajouté</span>
-                  `}
-                </div>
-                <p class="text-[10px] text-slate-500">
-                  Vous pouvez ajouter un VTP (9 places) ou un VL pour transporter votre équipe sur le site de la mission sans modifier le devis facturé.
-                </p>
-
-                <div class="flex flex-wrap gap-1.5 pt-1">
-                  ${this.vehicles.filter(v => ['VTP', 'VL', 'VTU'].includes(v.type) && (v.status === 'dispo' || (mission.extraTransportVehicles || []).includes(v.id))).map(veh => {
-                    const isAdded = (mission.extraTransportVehicles || []).includes(veh.id);
-                    return `
+                    ${(Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) ? `
                       <button 
                         type="button" 
-                        onclick="window.game.toggleMissionExtraTransportVehicle('${mission.id}', '${veh.id}')" 
-                        class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${isAdded ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}">
-                        <span>${isAdded ? '✓ ' : '+ '}${veh.name} (${veh.type} • ${veh.seatsCount || veh.capacity || 4} pl.)</span>
+                        onclick="window.game.autoAssignVehiclesToMission('${mission.id}')" 
+                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue/10 hover:bg-pc-blue hover:text-white text-pc-blue transition flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="zap" class="w-3 h-3"></i>
+                        <span>Affectation Auto</span>
                       </button>
-                    `;
-                  }).join('')}
-                  ${this.vehicles.filter(v => ['VTP', 'VL', 'VTU'].includes(v.type)).length === 0 ? `
-                    <span class="text-[10px] text-slate-400 italic">Aucun VTP ou VL disponible dans le garage de l'antenne pour transporter les bénévoles.</span>
-                  ` : ''}
-                </div>
-              </div>
-            </div>
+                    ` : ''}
+                  </div>
 
-            ${(() => {
-              if (!window.ProtecRNMSC || registeredVols.length === 0) return '';
-              const rnmscVehs = (this.vehicles || []).filter(veh => (mission.requiredVehicles || []).includes(veh.type));
-              const comp = window.ProtecRNMSC.validateCrewCompliance(mission, registeredVols, rnmscVehs, this);
-              if (!comp.valid) {
-                return `
-                  <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 text-xs flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-1.5 min-w-0">
-                      <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 flex-shrink-0"></i>
-                      <span class="text-[11px] font-bold truncate">RNMSC : ${comp.errors[0]}</span>
+                  <!-- Slots des véhicules requis par l'organisateur -->
+                  ${(Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) ? `
+                    <div class="space-y-2">
+                      ${mission.requiredVehicles.map((reqType, slotIdx) => {
+                        const assignedId = (mission.assignedVehicleIds && mission.assignedVehicleIds[slotIdx]) ? mission.assignedVehicleIds[slotIdx] : null;
+                        const assignedVeh = assignedId ? this.vehicles.find(v => v.id === assignedId) : null;
+
+                        const alreadyAssignedIds = (mission.assignedVehicleIds || []).filter((id, idx) => idx !== slotIdx && id);
+                        const extraAssignedIds = mission.extraTransportVehicles || [];
+                        const allDispoVehs = this.vehicles.filter(v => 
+                          (v.status === 'dispo' || v.status === 'sdis_caserne') &&
+                          !alreadyAssignedIds.includes(v.id) &&
+                          !extraAssignedIds.includes(v.id)
+                        );
+
+                        const exactDispoVehs = allDispoVehs.filter(v => 
+                          v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit))
+                        );
+
+                        const substituteDispoVehs = allDispoVehs.filter(v => 
+                          !(v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit)))
+                        );
+
+                        const isMatch = assignedVeh && (assignedVeh.type === reqType || (reqType === 'PCM' && (assignedVeh.isCommandement || assignedVeh.hasCommandementKit)));
+
+                        if (assignedVeh) {
+                          const fuelPct = assignedVeh.fuel !== undefined ? assignedVeh.fuel : 90;
+                          const mechPct = assignedVeh.mechanical !== undefined ? assignedVeh.mechanical : 95;
+                          const fuelColor = fuelPct > 50 ? 'text-emerald-600' : (fuelPct > 20 ? 'text-amber-600' : 'text-red-600');
+                          const driverSkill = assignedVeh.licenseRequired === 'C' ? 'Permis C (PL)' : (assignedVeh.type === 'VPSP' ? 'P. VPSP' : 'Permis B');
+                          
+                          const otherExactVehs = exactDispoVehs.filter(v => v.id !== assignedVeh.id);
+                          const otherSubVehs = substituteDispoVehs.filter(v => v.id !== assignedVeh.id);
+                          const totalOtherCount = otherExactVehs.length + otherSubVehs.length;
+
+                          return `
+                            <div class="p-2.5 rounded-xl ${isMatch ? 'bg-slate-50 border-slate-200' : 'bg-amber-500/10 border-amber-300'} border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                              <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-0.5 flex-shrink-0 shadow-2xs overflow-hidden">
+                                  <img src="${assignedVeh.image || this.getVehicleImage(assignedVeh.type)}" class="max-w-full max-h-full object-contain" alt="${assignedVeh.name}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\'><text y=\\'18\\' font-size=\\'18\\'>🚑</text></svg>'">
+                                </div>
+                                <div class="min-w-0">
+                                  <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="text-xs font-black text-slate-800 truncate">${assignedVeh.name}</span>
+                                    ${isMatch ? `
+                                      <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 uppercase flex items-center gap-0.5">
+                                        <span>✓</span> ${assignedVeh.type}
+                                      </span>
+                                    ` : `
+                                      <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300 uppercase flex items-center gap-0.5" title="Véhicule de substitution non conforme au devis">
+                                        <span>⚠️</span> Substitution (${assignedVeh.type} / requis: ${reqType})
+                                      </span>
+                                    `}
+                                    ${assignedVeh.immat ? `<span class="text-[9px] font-bold text-slate-400 font-mono">${assignedVeh.immat}</span>` : ''}
+                                  </div>
+                                  <div class="flex items-center gap-2.5 text-[10px] text-slate-500 pt-0.5">
+                                    <span class="flex items-center gap-1 ${fuelColor} font-bold">
+                                      <span>⛽</span> ${fuelPct}%
+                                    </span>
+                                    <span class="flex items-center gap-1 text-slate-600 font-bold">
+                                      <span>🔧</span> ${mechPct}%
+                                    </span>
+                                    <span class="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-bold text-[9px]">
+                                      ${driverSkill}
+                                    </span>
+                                  </div>
+                                  ${!isMatch ? `
+                                    <p class="text-[9px] text-amber-800 font-semibold pt-0.5">
+                                      ⚠️ Vecteur inadapté : si l'intervention requiert impérativement un ${reqType}, la mission avancera au ralenti et le commanditaire exprimera son mécontentement.
+                                    </p>
+                                  ` : ''}
+                                </div>
+                              </div>
+
+                              <div class="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-center">
+                                ${totalOtherCount > 0 ? `
+                                  <select 
+                                    onchange="window.game.assignVehicleToMissionSlot('${mission.id}', ${slotIdx}, this.value)" 
+                                    class="text-[11px] font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-700 cursor-pointer shadow-2xs hover:border-slate-400">
+                                    <option value="" disabled selected>🔄 Changer (${totalOtherCount} autre${totalOtherCount > 1 ? 's' : ''})...</option>
+                                    ${otherExactVehs.length > 0 ? `
+                                      <optgroup label="✅ Conformes (${reqType})">
+                                        ${otherExactVehs.map(v => `<option value="${v.id}">↳ ${v.name} (${v.fuel || 90}% carbu)</option>`).join('')}
+                                      </optgroup>
+                                    ` : ''}
+                                    ${otherSubVehs.length > 0 ? `
+                                      <optgroup label="⚠️ Substitution (Autre type)">
+                                        ${otherSubVehs.map(v => `<option value="${v.id}">↳ ${v.name} (${v.type} • Non conforme)</option>`).join('')}
+                                      </optgroup>
+                                    ` : ''}
+                                  </select>
+                                ` : `
+                                  <span class="px-2 py-1 rounded-lg text-[10px] font-bold ${isMatch ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-100 text-amber-900 border border-amber-300'}">
+                                    ${isMatch ? '✅ Affecté' : '⚠️ Substitué'}
+                                  </span>
+                                `}
+                                <button 
+                                  type="button" 
+                                  onclick="window.game.unassignVehicleFromMissionSlot('${mission.id}', ${slotIdx})" 
+                                  class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition cursor-pointer flex items-center gap-1"
+                                  title="Retirer ce véhicule du dispositif">
+                                  <i data-lucide="x" class="w-3 h-3"></i>
+                                  <span>Retirer</span>
+                                </button>
+                              </div>
+                            </div>
+                          `;
+                        } else {
+                          const hasAnyDispo = allDispoVehs.length > 0;
+                          return `
+                            <div class="p-2.5 rounded-xl bg-amber-500/5 border border-dashed border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                              <div class="flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 font-black text-xs flex items-center justify-center flex-shrink-0">
+                                  #${slotIdx + 1}
+                                </span>
+                                <div>
+                                  <p class="text-xs font-bold text-amber-900">
+                                    Emplacement ${reqType} à pourvoir
+                                  </p>
+                                  <p class="text-[10px] text-amber-700">
+                                    Prévu au devis validé (${mission.title})
+                                  </p>
+                                  ${exactDispoVehs.length === 0 && substituteDispoVehs.length > 0 ? `
+                                    <p class="text-[9px] text-amber-800 font-bold pt-0.5">
+                                      💡 Aucun ${reqType} disponible : vous pouvez affecter un autre véhicule du garage (VPSP, VTP, VL) pour ne pas bloquer l'engagement.
+                                    </p>
+                                  ` : ''}
+                                </div>
+                              </div>
+
+                              <div class="flex items-center gap-1.5 flex-shrink-0">
+                                ${hasAnyDispo ? `
+                                  <select 
+                                    onchange="window.game.assignVehicleToMissionSlot('${mission.id}', ${slotIdx}, this.value)" 
+                                    class="text-[11px] font-bold bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-slate-800 cursor-pointer shadow-2xs max-w-[260px]">
+                                    <option value="" selected disabled>
+                                      ${exactDispoVehs.length > 0 ? `-- Affecter un ${reqType} (${exactDispoVehs.length} dispo) --` : `-- Choisir véhicule de substitution (${substituteDispoVehs.length} dispo) --`}
+                                    </option>
+                                    ${exactDispoVehs.length > 0 ? `
+                                      <optgroup label="✅ Conformes au devis (${reqType})">
+                                        ${exactDispoVehs.map(v => `<option value="${v.id}">${v.name} • ${v.fuel || 90}% carbu</option>`).join('')}
+                                      </optgroup>
+                                    ` : ''}
+                                    ${substituteDispoVehs.length > 0 ? `
+                                      <optgroup label="⚠️ Véhicules de substitution (Autre type disponible)">
+                                        ${substituteDispoVehs.map(v => `<option value="${v.id}">↳ ${v.name} (${v.type} • Non conforme)</option>`).join('')}
+                                      </optgroup>
+                                    ` : ''}
+                                  </select>
+                                ` : `
+                                  <span class="px-2.5 py-1 rounded-lg bg-rose-100 text-rose-700 text-[10px] font-extrabold flex items-center gap-1">
+                                    <span>⚠️</span> Aucun véhicule disponible au garage
+                                  </span>
+                                `}
+                              </div>
+                            </div>
+                          `;
+                        }
+                      }).join('')}
+                    </div>
+                  ` : `
+                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
+                      <span>🚶</span>
+                      <span>Dispositif pédestre / poste de secours fixe (aucun véhicule requis au devis).</span>
+                    </div>
+                  `}
+
+                  <!-- Acheminement interne des bénévoles -->
+                  <div class="pt-2 border-t border-slate-100 space-y-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
+                      <span class="font-bold text-slate-700 flex items-center gap-1">
+                        <span>🚐</span> Véhicule de transport bénévoles (Non facturé au devis) :
+                      </span>
+                      ${(mission.extraTransportVehicles && mission.extraTransportVehicles.length > 0) ? `
+                        <span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-extrabold text-[10px]">
+                          ${mission.extraTransportVehicles.map(id => this.vehicles.find(v => v.id === id)?.name || id).join(', ')}
+                        </span>
+                      ` : `
+                        <span class="text-slate-400 text-[10px] italic">Aucun véhicule d'acheminement ajouté</span>
+                      `}
+                    </div>
+                    <p class="text-[10px] text-slate-500">
+                      Vous pouvez ajouter un VTP (9 places) ou un VL pour transporter votre équipe sur le site de la mission sans modifier le devis facturé.
+                    </p>
+
+                    <div class="flex flex-wrap gap-1.5 pt-1">
+                      ${this.vehicles.filter(v => ['VTP', 'VL', 'VTU'].includes(v.type) && (v.status === 'dispo' || (mission.extraTransportVehicles || []).includes(v.id))).map(veh => {
+                        const isAdded = (mission.extraTransportVehicles || []).includes(veh.id);
+                        return `
+                          <button 
+                            type="button" 
+                            onclick="window.game.toggleMissionExtraTransportVehicle('${mission.id}', '${veh.id}')" 
+                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${isAdded ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}">
+                            <span>${isAdded ? '✓ ' : '+ '}${veh.name} (${veh.type} • ${veh.seatsCount || veh.capacity || 4} pl.)</span>
+                          </button>
+                        `;
+                      }).join('')}
+                      ${this.vehicles.filter(v => ['VTP', 'VL', 'VTU'].includes(v.type)).length === 0 ? `
+                        <span class="text-[10px] text-slate-400 italic">Aucun VTP ou VL disponible dans le garage de l'antenne pour transporter les bénévoles.</span>
+                      ` : ''}
                     </div>
                   </div>
-                `;
-              } else {
-                return `
-                  <div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 text-xs flex items-center gap-2">
-                    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
-                    <span class="text-[11px] font-bold">Dotation Véhicules RNMSC Validée ✓</span>
+                </div>
+
+                ${(() => {
+                  if (!window.ProtecRNMSC || registeredVols.length === 0) return '';
+                  const rnmscVehs = (this.vehicles || []).filter(veh => (mission.requiredVehicles || []).includes(veh.type));
+                  const comp = window.ProtecRNMSC.validateCrewCompliance(mission, registeredVols, rnmscVehs, this);
+                  if (!comp.valid) {
+                    return `
+                      <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 text-xs flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-1.5 min-w-0">
+                          <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 flex-shrink-0"></i>
+                          <span class="text-[11px] font-bold truncate">RNMSC : ${comp.errors[0]}</span>
+                        </div>
+                      </div>
+                    `;
+                  } else {
+                    return `
+                      <div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 text-xs flex items-center gap-2">
+                        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
+                        <span class="text-[11px] font-bold">Dotation Véhicules RNMSC Validée ✓</span>
+                      </div>
+                    `;
+                  }
+                })()}
+              </div>
+            ` : logistiqueSubTab === 'materiel' ? `
+              <!-- SOUS-ONGLET MATÉRIEL (eProtec STYLE) -->
+              <div class="space-y-3">
+                <!-- Callout eProtec état vide ou info -->
+                <div class="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
+                  <span class="text-base">⚠️</span>
+                  <div>
+                    <strong class="block font-black text-amber-950">Matériels d'Intervention Opérationnels</strong>
+                    <span class="text-[10px] text-amber-800">Les lots et matériels réglementaires sont armés automatiquement dans les agrès engagés.</span>
                   </div>
-                `;
-              }
-            })()}
+                </div>
+
+                <!-- Dotation réglementaire des lots opérationnels -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                      <i data-lucide="package-check" class="w-4 h-4 text-pc-blue"></i>
+                      <span>Lots Opérationnels RNMSC</span>
+                    </span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Dotation Conforme
+                    </span>
+                  </div>
+
+                  <!-- Lot A : Prompt Secours -->
+                  <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                      <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span>Lot A — Prompt Secours & Réanimation</span>
+                      </span>
+                      <span class="text-[9px] font-black px-2 py-0.5 rounded bg-blue-100 text-blue-800">Embarqué VPSP</span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 leading-relaxed">
+                      Sac d'intervention d'urgence complet : Défibrillateur DAE automatisé, aspirateur de mucosités, colliers cervicaux (pédiatrique & adulte), oxygénothérapie 5L/min, tensiomètre, saturomètre SpO2, pansements compressifs & garrot tourniquet tactique.
+                    </p>
+                  </div>
+
+                  <!-- Lot B : PMA & Soins avancés (si requis) -->
+                  <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                      <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
+                        <span>Lot B — Poste Médical Avancé & Soins</span>
+                      </span>
+                      <span class="text-[9px] font-black px-2 py-0.5 rounded ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}">
+                        ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'Dotation Active' : 'Non requis'}
+                      </span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 leading-relaxed">
+                      Tente de premiers secours pliante/gonflable, brancards de catastrophe, lits de camp picot, projecteurs autonomes LED, matériel de réchauffement actif et couvertures de survie.
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Matériel Spécifique & Dispositifs Médicaux -->
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
+                    <div class="flex items-center gap-1.5 font-extrabold text-slate-800">
+                      <i data-lucide="heart-pulse" class="w-4 h-4 text-rose-500"></i>
+                      <span>Défibrillateur DAE</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500">Électrodes adultes & pédiatriques vérifiées. Batterie 100%.</p>
+                    <span class="text-[9px] font-bold text-emerald-700 block">✓ Prêt à l'emploi</span>
+                  </div>
+
+                  <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
+                    <div class="flex items-center gap-1.5 font-extrabold text-slate-800">
+                      <i data-lucide="wind" class="w-4 h-4 text-sky-500"></i>
+                      <span>Oxygénothérapie O2</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500">2 Bouteilles 5L (200 bars). Masques haute concentration.</p>
+                    <span class="text-[9px] font-bold text-emerald-700 block">✓ Pression conforme</span>
+                  </div>
+                </div>
+
+                <!-- Matériel d'Immobilisation & Brancardage -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+                  <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                    <i data-lucide="shield" class="w-4 h-4 text-indigo-500"></i>
+                    <span>Immobilisation & Brancardage</span>
+                  </span>
+                  <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+                    <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold">Matelas Coquille (MID)</strong>
+                      <span class="text-[10px] text-slate-500">Pompe à dépression vérifiée</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold">Attelles à Dépression</strong>
+                      <span class="text-[10px] text-slate-500">Membres inf. & sup.</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold">Plan Dur & Immobilisateur</strong>
+                      <span class="text-[10px] text-slate-500">Sangles araignée complètes</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold">Chaise Portoir Pliante</strong>
+                      <span class="text-[10px] text-slate-500">Évacuation escaliers</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ` : `
+              <!-- SOUS-ONGLET CONSOMMABLE (eProtec STYLE) -->
+              <div class="space-y-3">
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                      <i data-lucide="first-aid" class="w-4 h-4 text-pc-blue"></i>
+                      <span>Consommables Sanitaires de Mission</span>
+                    </span>
+                    <span class="font-black text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 text-xs">
+                      ${mission.consumableCost || 30} € prévus
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold text-slate-800">Pansements & Compresses</strong>
+                      <span class="text-[10px] text-slate-500">Compresses stériles 10x10, bandes de gaze, sparadrap</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold text-slate-800">Protection & Hygiène</strong>
+                      <span class="text-[10px] text-slate-500">Gants nitrile (S, M, L), masques FFP2, gel hydroalcoolique</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold text-slate-800">Désinfection & Lavage</strong>
+                      <span class="text-[10px] text-slate-500">Dosettes de sérum physiologique, antiseptique dermo</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold text-slate-800">Hémorragie & Urgence</strong>
+                      <span class="text-[10px] text-slate-500">Garrots tourniquets tactiques, coussins hémostatiques</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `}
           </div>
         ` : `
-          <!-- ONGLET 4 : MATÉRIEL & LOTS DU DISPOSITIF -->
+          <!-- ONGLET 4 : DPS • GRILLE RNMSC OFFICIELLE (eProtec) -->
           <div class="space-y-3 animate-in fade-in duration-150">
-            <!-- Dotation réglementaire des lots opérationnels -->
-            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
-                  <i data-lucide="package-check" class="w-4 h-4 text-pc-blue"></i>
-                  <span>Lots Opérationnels RNMSC</span>
-                </span>
-                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">
-                  Dotation Conforme
-                </span>
-              </div>
-
-              <!-- Lot A : Prompt Secours -->
-              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
-                <div class="flex items-center justify-between">
-                  <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span>Lot A — Prompt Secours & Réanimation</span>
-                  </span>
-                  <span class="text-[9px] font-black px-2 py-0.5 rounded bg-blue-100 text-blue-800">Embarqué VPSP</span>
-                </div>
-                <p class="text-[11px] text-slate-600 leading-relaxed">
-                  Sac d'intervention d'urgence complet : Défibrillateur DAE automatisé, aspirateur de mucosités, colliers cervicaux (pédiatrique & adulte), oxygénothérapie 5L/min, tensiomètre, saturomètre SpO2, pansements compressifs & garrot tourniquet tactique.
-                </p>
-              </div>
-
-              <!-- Lot B : PMA & Soins avancés (si requis) -->
-              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
-                <div class="flex items-center justify-between">
-                  <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
-                    <span>Lot B — Poste Médical Avancé & Soins</span>
-                  </span>
-                  <span class="text-[9px] font-black px-2 py-0.5 rounded ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}">
-                    ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'Dotation Active' : 'Non requis'}
-                  </span>
-                </div>
-                <p class="text-[11px] text-slate-600 leading-relaxed">
-                  Tente de premiers secours pliante/gonflable, brancards de catastrophe, lits de camp picot, projecteurs autonomes LED, matériel de réchauffement actif et couvertures de survie.
-                </p>
-              </div>
-            </div>
-
-            <!-- Matériel Spécifique & Dispositifs Médicaux -->
-            <div class="grid grid-cols-2 gap-2 text-xs">
-              <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
-                <div class="flex items-center gap-1.5 font-extrabold text-slate-800">
-                  <i data-lucide="heart-pulse" class="w-4 h-4 text-rose-500"></i>
-                  <span>Défibrillateur DAE</span>
-                </div>
-                <p class="text-[10px] text-slate-500">Électrodes adultes & pédiatriques vérifiées. Batterie 100%.</p>
-                <span class="text-[9px] font-bold text-emerald-700 block">✓ Prêt à l'emploi</span>
-              </div>
-
-              <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
-                <div class="flex items-center gap-1.5 font-extrabold text-slate-800">
-                  <i data-lucide="wind" class="w-4 h-4 text-sky-500"></i>
-                  <span>Oxygénothérapie O2</span>
-                </div>
-                <p class="text-[10px] text-slate-500">2 Bouteilles 5L (200 bars). Masques haute concentration.</p>
-                <span class="text-[9px] font-bold text-emerald-700 block">✓ Pression conforme</span>
-              </div>
-            </div>
-
-            <!-- Matériel d'Immobilisation & Brancardage -->
-            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
-              <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
-                <i data-lucide="shield" class="w-4 h-4 text-indigo-500"></i>
-                <span>Immobilisation & Brancardage</span>
-              </span>
-              <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-700">
-                <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                  <strong class="block font-bold">Matelas Coquille (MID)</strong>
-                  <span class="text-[10px] text-slate-500">Pompe à dépression vérifiée</span>
-                </div>
-                <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                  <strong class="block font-bold">Attelles à Dépression</strong>
-                  <span class="text-[10px] text-slate-500">Membres inf. & sup.</span>
-                </div>
-                <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                  <strong class="block font-bold">Plan Dur & Immobilisateur</strong>
-                  <span class="text-[10px] text-slate-500">Sangles araignée complètes</span>
-                </div>
-                <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
-                  <strong class="block font-bold">Chaise Portoir Pliante</strong>
-                  <span class="text-[10px] text-slate-500">Évacuation escaliers</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Consommables Sanitaires -->
-            <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+            <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between">
               <div>
-                <span class="font-bold text-slate-800 block">Consommables Sanitaires de Mission</span>
-                <span class="text-[10px] text-slate-500">Pansements, compresses, gants, antiseptique</span>
+                <h4 class="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <i data-lucide="calculator" class="w-4 h-4 text-pc-blue"></i>
+                  <span>Dimensionnement RNMSC de l'Activité</span>
+                </h4>
+                <p class="text-[10px] text-slate-500">Grille officielle d'évaluation des risques et effectifs requis</p>
               </div>
-              <span class="font-black text-slate-700 bg-white px-2.5 py-1 rounded-xl border border-slate-200">
-                ${mission.consumableCost || 30} € prévus
+              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                Conforme RNMSC
               </span>
             </div>
+
+            ${window.ProtecRNMSC ? window.ProtecRNMSC.renderRNMSCSimulatorCardHTML('mission-rnmsc') : `
+              <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500">
+                Simulateur RNMSC non initialisé.
+              </div>
+            `}
           </div>
         `}
       </div>
@@ -8413,6 +8944,11 @@ class ProtecGame {
     drawer.classList.add('flex', 'drawer-slide-in');
     this.updateToastContainerPosition();
     if (window.lucide) window.lucide.createIcons();
+    if (activeTab === 'dps' && window.ProtecRNMSC) {
+      setTimeout(() => {
+        window.ProtecRNMSC.updateSimulatorUI('mission-rnmsc');
+      }, 50);
+    }
     } catch (err) {
       console.error('Erreur openMissionDetails:', err);
       this.showToast('Affichage Mission', 'Erreur lors de l’ouverture du détail de la mission.', 'orange');
@@ -9049,11 +9585,6 @@ class ProtecGame {
                       title="${isVLC ? 'Gérer le Poste de Commandement Mobile et le chef en gestion' : 'Équiper le Poste de Commandement Mobile'}"
                     >
                       ${isVLC ? '📡 VLC' : '📡 Équiper'}
-                    </button>
-                  ` : ''}
-                  ${v.status === 'dispo' ? `
-                    <button onclick="window.ProtecMarcheOccasion.openSellModal('vehicle', '${v.id}')" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-pc-orange border border-slate-200 transition" title="Mettre ce véhicule en vente sur la bourse d'occasion">
-                      Vendre 🏷️
                     </button>
                   ` : ''}
                   <span class="px-2 py-0.5 rounded text-[10px] font-black border ${v.status === 'dispo' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300'}">
@@ -10349,7 +10880,6 @@ class ProtecGame {
       'bourse': 'antenne',
       'occasion': 'antenne',
 
-      'radio': 'liaisons',
       'tchat': 'liaisons',
       'messagerie': 'liaisons',
       'alliance': 'liaisons',
@@ -10446,7 +10976,6 @@ class ProtecGame {
         { key: 'communication', label: 'Communication & Médias', icon: 'megaphone' }
       ],
       liaisons: [
-        { key: 'radio', label: 'Radio PC', icon: 'radio' },
         { key: 'tchat', label: 'Messagerie & MP', icon: 'message-square' },
         { key: 'alliance', label: 'Alliances', icon: 'handshake', count: this.renforts?.filter(r => r.status === 'open').length || 0 },
         { key: 'meteo', label: 'Météo-France', icon: 'cloud-sun' }
@@ -10497,6 +11026,15 @@ class ProtecGame {
   // --- POPUP MODULES DOCK ---
   openModule(moduleKey, isBackNavigation = false) {
     this.closeAllDockSubmenus();
+
+    if (moduleKey === 'parrainage' || moduleKey === 'referral' || moduleKey === 'filleul') {
+      if (window.ProtecAuth && typeof window.ProtecAuth.openReferralShareModal === 'function') {
+        window.ProtecAuth.openReferralShareModal();
+      } else if (window.ProtecAuth && typeof window.ProtecAuth.openAuthModal === 'function') {
+        window.ProtecAuth.openAuthModal();
+      }
+      return;
+    }
 
     const aliases = {
       'missions': 'planning',
@@ -12091,12 +12629,12 @@ class ProtecGame {
                               <span class="text-[10px] font-extrabold text-slate-500">${d.weekdayDaysCount || 20} j • ${d.weekdayHours || 6}h/j</span>
                             </div>
                             <div class="flex items-center gap-1.5">
-                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                              <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                                <span class="text-sm font-black text-pc-blue">${(d.configuredVolunteersWeekday !== undefined && d.configuredVolunteersWeekday !== null) ? d.configuredVolunteersWeekday : Math.max(2, Math.round((d.requiredVolunteers || 4) * 0.5))}</span>
+                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                              <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                                <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekday !== undefined && d.configuredVolunteersWeekday !== null) ? d.configuredVolunteersWeekday : Math.max(2, Math.round((d.requiredVolunteers || 4) * 0.5))}" onchange="window.game.setDevisWeekdayVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
                                 <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
                               </div>
-                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                             </div>
                           </div>
 
@@ -12107,12 +12645,12 @@ class ProtecGame {
                               <span class="text-[10px] font-extrabold text-amber-600 font-bold">${d.weekendDaysCount || 8} j • ${d.weekendHours || 10}h/j</span>
                             </div>
                             <div class="flex items-center gap-1.5">
-                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                              <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                                <span class="text-sm font-black text-amber-600">${(d.configuredVolunteersWeekend !== undefined && d.configuredVolunteersWeekend !== null) ? d.configuredVolunteersWeekend : (d.requiredVolunteers || 4)}</span>
+                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                              <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                                <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekend !== undefined && d.configuredVolunteersWeekend !== null) ? d.configuredVolunteersWeekend : (d.requiredVolunteers || 4)}" onchange="window.game.setDevisWeekendVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
                                 <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
                               </div>
-                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                             </div>
                           </div>
                         </div>
@@ -12122,17 +12660,17 @@ class ProtecGame {
                           <div class="p-2 bg-white rounded-xl border border-slate-200">
                             <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
                             <div class="flex items-center gap-1">
-                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">-</button>
-                              <span class="flex-1 text-center text-xs font-black text-amber-600">${d.configuredCE || 0}</span>
-                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">+</button>
+                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">-</button>
+                              <input type="number" min="0" max="99" value="${d.configuredCE || 0}" onchange="window.game.setDevisCE('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="flex-1 min-w-0 text-center text-xs font-black text-amber-600 bg-slate-50 border border-slate-300 rounded py-0.5 focus:bg-white focus:outline-none" />
+                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">+</button>
                             </div>
                           </div>
                           <div class="p-2 bg-white rounded-xl border border-slate-200">
                             <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
                             <div class="flex items-center gap-1">
-                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">-</button>
-                              <span class="flex-1 text-center text-xs font-black text-indigo-600">${d.configuredCP || 0}</span>
-                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">+</button>
+                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">-</button>
+                              <input type="number" min="0" max="50" value="${d.configuredCP || 0}" onchange="window.game.setDevisCP('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="flex-1 min-w-0 text-center text-xs font-black text-indigo-600 bg-slate-50 border border-slate-300 rounded py-0.5 focus:bg-white focus:outline-none" />
+                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">+</button>
                             </div>
                           </div>
                         </div>
@@ -12143,11 +12681,11 @@ class ProtecGame {
                         <div class="p-2.5 bg-white rounded-xl border border-slate-200">
                           <label class="block text-[11px] font-bold text-slate-600 mb-1">Secouristes Totaux :</label>
                           <div class="flex items-center gap-1.5">
-                            <button onclick="window.game.adjustDevisVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                            <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                              <span class="text-sm font-black text-pc-blue">${d.configuredVolunteers || 0}</span>
+                            <button type="button" onclick="window.game.adjustDevisVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                              <input type="number" min="0" max="999" value="${d.configuredVolunteers || 0}" onchange="window.game.setDevisVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
                             </div>
-                            <button onclick="window.game.adjustDevisVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                            <button type="button" onclick="window.game.adjustDevisVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                           </div>
                         </div>
 
@@ -12155,11 +12693,11 @@ class ProtecGame {
                         <div class="p-2.5 bg-white rounded-xl border border-slate-200">
                           <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
                           <div class="flex items-center gap-1.5">
-                            <button onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                            <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                              <span class="text-sm font-black text-amber-600">${d.configuredCE || 0}</span>
+                            <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                              <input type="number" min="0" max="99" value="${d.configuredCE || 0}" onchange="window.game.setDevisCE('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
                             </div>
-                            <button onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                            <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                           </div>
                         </div>
 
@@ -12167,11 +12705,11 @@ class ProtecGame {
                         <div class="p-2.5 bg-white rounded-xl border border-slate-200">
                           <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
                           <div class="flex items-center gap-1.5">
-                            <button onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                            <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                              <span class="text-sm font-black text-indigo-600">${d.configuredCP || 0}</span>
+                            <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                              <input type="number" min="0" max="50" value="${d.configuredCP || 0}" onchange="window.game.setDevisCP('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-indigo-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
                             </div>
-                            <button onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                            <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                           </div>
                         </div>
                       </div>
@@ -12190,7 +12728,7 @@ class ProtecGame {
                           </span>
                         </div>
                         <p class="text-[10px] text-slate-500">
-                          Cochez les catégories de véhicules souhaitées pour le dispositif puis ajustez le nombre exact avec les compteurs <strong>-</strong> et <strong>+</strong>.
+                          Cochez les catégories de véhicules souhaitées pour le dispositif puis ajustez le nombre exact avec les compteurs <strong>-</strong> et <strong>+</strong> ou saisissez-le directement au clavier.
                         </p>
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-1">
                           ${[
@@ -12219,16 +12757,24 @@ class ProtecGame {
                                   <span class="text-xs font-extrabold text-slate-800 truncate">${vItem.emoji} ${vItem.name}</span>
                                 </label>
                                 ${isChecked ? `
-                                  <div class="flex items-center gap-1 shrink-0 bg-white px-1.5 py-0.5 rounded-lg border border-indigo-200 shadow-2xs">
+                                  <div class="flex items-center gap-1 shrink-0 bg-white px-1 py-0.5 rounded-lg border border-indigo-200 shadow-2xs">
                                     <button 
                                       type="button" 
                                       onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', -1)" 
-                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">-</button>
-                                    <span class="w-5 text-center font-black text-xs text-pc-blue mono-num">${count}</span>
+                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">-</button>
+                                    <input 
+                                      type="number" 
+                                      min="0" 
+                                      max="50" 
+                                      value="${count}" 
+                                      onchange="window.game.setDevisVehicleCount('${d.id}', '${vItem.type}', this.value)" 
+                                      onkeydown="if(event.key==='Enter')this.blur()" 
+                                      class="w-9 text-center font-black text-xs text-pc-blue mono-num bg-slate-50 border border-slate-200 rounded py-0.5 px-0.5 focus:bg-white focus:outline-none" 
+                                    />
                                     <button 
                                       type="button" 
                                       onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', 1)" 
-                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">+</button>
+                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">+</button>
                                   </div>
                                 ` : ''}
                               </div>
@@ -13611,6 +14157,13 @@ class ProtecGame {
                         <span>📦</span>
                         <span>Armement</span>
                       </button>
+
+                      ${(isDispo && window.ProtecMarcheOccasion) ? `
+                        <button onclick="window.ProtecMarcheOccasion.openSellModal('vehicle', '${v.id}')" class="px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-pc-orange text-xs font-bold transition flex items-center gap-1 cursor-pointer border border-orange-200" title="Mettre ce véhicule en vente sur la bourse d'occasion">
+                          <span>🏷️</span>
+                          <span>Vendre</span>
+                        </button>
+                      ` : ''}
                     </div>
                   </div>
                 </div>
@@ -13633,12 +14186,9 @@ class ProtecGame {
         </div>
       `;
     } else if (moduleKey === 'radio') {
-      title.textContent = 'Canal Radio & Main Courante Opérationnelle';
-      subtitle.textContent = 'Fréquence inter-services, transmissions officielles et codes statuts S1 à S6';
-      icon.setAttribute('data-lucide', 'radio');
-      if (window.ProtecModals) {
-        body.innerHTML = window.ProtecModals.renderRadio(this);
-      }
+      // Le module Radio PC permanent a été retiré (la gestion de crise assure la main courante lors des sinistres)
+      this.openModule('tchat', isBackNavigation);
+      return;
     } else if (moduleKey === 'logistique') {
       if (window.ProtecLogistique) {
         window.ProtecLogistique.renderModal(this);
@@ -14474,12 +15024,7 @@ class ProtecGame {
         this.openModule('devis', true);
       } else if (this.currentModalKey === 'logistique' && window.ProtecLogistique && typeof window.ProtecLogistique.renderModal === 'function') {
         window.ProtecLogistique.renderModal(this);
-      } else if (this.currentModalKey === 'radio' && window.ProtecModals) {
-        const body = document.getElementById('modal-body');
-        if (body) {
-          body.innerHTML = window.ProtecModals.renderRadio(this);
-          if (window.lucide) window.lucide.createIcons();
-        }
+
       } else if (this.currentModalKey === 'pompiers') {
         this.openModule('pompiers', true);
       } else if (this.currentModalKey === 'samu') {
@@ -16089,9 +16634,6 @@ class ProtecGame {
 
     const bSubVeh = document.getElementById('badge-submenu-vehicules');
     if (bSubVeh) bSubVeh.textContent = this.vehicles.length;
-
-    const bSubRadio = document.getElementById('badge-submenu-radio');
-    if (bSubRadio) bSubRadio.textContent = ongoingCount;
 
     const bSubAll = document.getElementById('badge-submenu-alliance');
     if (bSubAll) {

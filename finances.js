@@ -3,6 +3,7 @@
  * Suivi comptable précis de l'antenne, grand livre des recettes et dépenses,
  * filtres multicritères avancés (DPS, Formations, Véhicules, Logistique, Gardes...)
  * et graphique vectoriel interactif SVG.
+ * Remplacement intégral des emojis par des icônes vectorielles Lucide.
  */
 
 window.ProtecFinances = {
@@ -14,7 +15,7 @@ window.ProtecFinances = {
     sortBy: 'date_desc'   // 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'
   },
 
-  // Référentiel complet des catégories budgétaires
+  // Référentiel complet des catégories budgétaires avec icônes Lucide officielles
   CATEGORIES: {
     // RECETTES (ENTRÉES)
     dps: {
@@ -23,7 +24,6 @@ window.ProtecFinances = {
       shortLabel: 'DPS',
       type: 'recette',
       icon: 'clipboard-list',
-      emoji: '📋',
       badgeClass: 'bg-amber-100 text-amber-800 border-amber-200'
     },
     formation: {
@@ -32,7 +32,6 @@ window.ProtecFinances = {
       shortLabel: 'Formations GP',
       type: 'recette',
       icon: 'graduation-cap',
-      emoji: '🎓',
       badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200'
     },
     garde: {
@@ -41,7 +40,6 @@ window.ProtecFinances = {
       shortLabel: 'Gardes 15/18',
       type: 'recette',
       icon: 'heart-pulse',
-      emoji: '🚑',
       badgeClass: 'bg-blue-100 text-blue-800 border-blue-200'
     },
     subvention: {
@@ -50,7 +48,6 @@ window.ProtecFinances = {
       shortLabel: 'Subventions',
       type: 'recette',
       icon: 'landmark',
-      emoji: '🏛️',
       badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200'
     },
     dons: {
@@ -59,7 +56,6 @@ window.ProtecFinances = {
       shortLabel: 'Dons & Mécénat',
       type: 'recette',
       icon: 'heart-handshake',
-      emoji: '💙',
       badgeClass: 'bg-pink-100 text-pink-800 border-pink-200'
     },
     renfort: {
@@ -68,7 +64,6 @@ window.ProtecFinances = {
       shortLabel: 'Renforts',
       type: 'recette',
       icon: 'users',
-      emoji: '🤝',
       badgeClass: 'bg-cyan-100 text-cyan-800 border-cyan-200'
     },
     prestation: {
@@ -77,7 +72,6 @@ window.ProtecFinances = {
       shortLabel: 'Prestations',
       type: 'recette',
       icon: 'shield',
-      emoji: '🛡️',
       badgeClass: 'bg-purple-100 text-purple-800 border-purple-200'
     },
 
@@ -88,7 +82,6 @@ window.ProtecFinances = {
       shortLabel: 'Véhicules',
       type: 'depense',
       icon: 'truck',
-      emoji: '🚐',
       badgeClass: 'bg-orange-100 text-orange-800 border-orange-200'
     },
     logistique: {
@@ -97,7 +90,6 @@ window.ProtecFinances = {
       shortLabel: 'Logistique',
       type: 'depense',
       icon: 'package',
-      emoji: '📦',
       badgeClass: 'bg-rose-100 text-rose-800 border-rose-200'
     },
     locaux: {
@@ -106,7 +98,6 @@ window.ProtecFinances = {
       shortLabel: 'Locaux',
       type: 'depense',
       icon: 'building-2',
-      emoji: '🏢',
       badgeClass: 'bg-amber-100 text-amber-900 border-amber-200'
     },
     entretien: {
@@ -115,7 +106,6 @@ window.ProtecFinances = {
       shortLabel: 'Entretien Flotte',
       type: 'depense',
       icon: 'wrench',
-      emoji: '⛽',
       badgeClass: 'bg-slate-100 text-slate-800 border-slate-200'
     },
     formation_interne: {
@@ -124,8 +114,15 @@ window.ProtecFinances = {
       shortLabel: 'Formation INT',
       type: 'depense',
       icon: 'award',
-      emoji: '🧑‍🚒',
       badgeClass: 'bg-violet-100 text-violet-800 border-violet-200'
+    },
+    salaires: {
+      id: 'salaires',
+      label: 'Salariés, Indemnités & RH',
+      shortLabel: 'Salaires & RH',
+      type: 'depense',
+      icon: 'briefcase',
+      badgeClass: 'bg-teal-100 text-teal-800 border-teal-200'
     },
     frais: {
       id: 'frais',
@@ -133,7 +130,6 @@ window.ProtecFinances = {
       shortLabel: 'Frais & Asso',
       type: 'depense',
       icon: 'file-text',
-      emoji: '📑',
       badgeClass: 'bg-stone-100 text-stone-800 border-stone-200'
     },
     general: {
@@ -142,7 +138,6 @@ window.ProtecFinances = {
       shortLabel: 'Divers',
       type: 'both',
       icon: 'coins',
-      emoji: '💶',
       badgeClass: 'bg-gray-100 text-gray-800 border-gray-200'
     }
   },
@@ -150,23 +145,27 @@ window.ProtecFinances = {
   // Normalisation intelligente des catégories passées ou brutes
   normalizeCategory(item) {
     let cat = (item.category || '').toLowerCase().trim();
+    if (cat === 'salaires' || cat === 'personnel' || cat === 'rh') return 'salaires';
     if (cat === 'materiel' || cat === 'equipement') return 'logistique';
     if (cat === 'communication') return 'dons';
     if (cat === 'prestation' || cat === 'general' || !cat || !this.CATEGORIES[cat]) {
       const lbl = (item.label || '').toLowerCase();
+      if (lbl.includes('salaire') || lbl.includes('indemnité mensuelle') || lbl.includes('virement mensuel') || lbl.includes('service civique') || lbl.includes('rh')) {
+        return 'salaires';
+      }
       if (lbl.includes('dps') || lbl.includes('dispositif') || lbl.includes('poste') || lbl.includes('course') || lbl.includes('match') || lbl.includes('festival') || lbl.includes('trail') || lbl.includes('concert')) {
         return 'dps';
       }
       if (lbl.includes('samu') || lbl.includes('sdis') || lbl.includes('garde') || lbl.includes('pompiers')) {
         return item.amount >= 0 ? (lbl.includes('dotation') ? 'subvention' : 'garde') : 'frais';
       }
-      if (lbl.includes('formation') || lbl.includes('psc1') || lbl.includes('sst') || lbl.includes('gqs')) {
+      if (lbl.includes('formation') || lbl.includes('psc1') || lbl.includes('sst') || lbl.includes('gqs') || lbl.includes('b2b')) {
         return item.amount >= 0 ? 'formation' : 'formation_interne';
       }
       if (lbl.includes('véhicule') || lbl.includes('vpsp') || lbl.includes('vtu') || lbl.includes('vl') || lbl.includes('vtp') || lbl.includes('pma')) {
         return item.amount < 0 ? 'vehicule' : 'dps';
       }
-      if (lbl.includes('subvention') || lbl.includes('dotation') || lbl.includes('fdva') || lbl.includes('cump') || lbl.includes('conventionnement') || lbl.includes('mairie') || lbl.includes('état')) {
+      if (lbl.includes('subvention') || lbl.includes('dotation') || lbl.includes('fdva') || lbl.includes('cump') || lbl.includes('conventionnement') || lbl.includes('mairie') || lbl.includes('état') || lbl.includes('partenariat')) {
         return 'subvention';
       }
       if (lbl.includes('renfort') || lbl.includes('zonal') || lbl.includes('colonne') || lbl.includes('alliance')) {
@@ -178,241 +177,396 @@ window.ProtecFinances = {
       if (lbl.includes('pompage') || lbl.includes('épuisement') || lbl.includes('maraude')) {
         return 'prestation';
       }
-      if (lbl.includes('lot') || lbl.includes('matériel') || lbl.includes('dae') || lbl.includes('oxygène') || lbl.includes('trousse') || lbl.includes('pansement')) {
+      if (lbl.includes('lot') || lbl.includes('matériel') || lbl.includes('dae') || lbl.includes('oxygène') || lbl.includes('trousse') || lbl.includes('pansement') || lbl.includes('consommable')) {
         return 'logistique';
       }
-      if (lbl.includes('loyer') || lbl.includes('antenne') || lbl.includes('locaux') || lbl.includes('bail')) {
+      if (lbl.includes('loyer') || lbl.includes('antenne') || lbl.includes('locaux') || lbl.includes('bail') || lbl.includes('travaux') || lbl.includes('isolation')) {
         return 'locaux';
       }
-      if (lbl.includes('carburant') || lbl.includes('révision') || lbl.includes('entretien') || lbl.includes('contrôle')) {
+      if (lbl.includes('carburant') || lbl.includes('révision') || lbl.includes('entretien') || lbl.includes('contrôle') || lbl.includes('garage') || lbl.includes('ct')) {
         return 'entretien';
       }
-      if (lbl.includes('pse') || lbl.includes('chef') || lbl.includes('recyclage') || lbl.includes('stagiaire')) {
+      if (lbl.includes('pse') || lbl.includes('chef') || lbl.includes('recyclage') || lbl.includes('stagiaire') || lbl.includes('permis') || lbl.includes('promotion')) {
         return 'formation_interne';
       }
-      if (lbl.includes('assurance') || lbl.includes('cotisation') || lbl.includes('agrément') || lbl.includes('frais')) {
+      if (lbl.includes('assurance') || lbl.includes('cotisation') || lbl.includes('agrément') || lbl.includes('frais') || lbl.includes('aasc') || lbl.includes('abonnement')) {
         return 'frais';
       }
     }
     return this.CATEGORIES[cat] ? cat : (item.amount >= 0 ? 'dps' : 'logistique');
   },
 
-  // Initialisation et enrichissement réaliste si historique vide ou minimal
+  // Initialisation et assainissement 100% réel de la trésorerie (AUCUNE OPÉRATION FICTIVE)
   injectState(game) {
+    if (!game) return;
     if (!game.financesHistory || !Array.isArray(game.financesHistory)) {
       game.financesHistory = [];
     }
 
-    // Normalisation de chaque entrée existante
-    game.financesHistory.forEach((h, index) => {
-      if (!h.id) h.id = `tx-${h.timestamp || Date.now()}-${index}`;
-      h.category = this.normalizeCategory(h);
-      h.type = h.amount >= 0 ? 'recette' : 'depense';
+    // 1. Élimination impérative de toute entrée fictive résiduelle des anciennes versions/démos
+    const fakeKeywords = [
+      'foulées municipales',
+      'festival de printemps',
+      'course pédestre',
+      'station partenaire',
+      'centrale d’achats sécurité civile',
+      'centrale d\'achats',
+      'renfort opérationnel zonal soutien crues',
+      'campagne de dons citoyens & mécénat local'
+    ];
+    game.financesHistory = game.financesHistory.filter(h => {
+      if (!h) return false;
+      if (h.id && String(h.id).startsWith('tx-seed-')) return false;
+      const lbl = (h.label || '').toLowerCase();
+      if (fakeKeywords.some(kw => lbl.includes(kw))) return false;
+      // Élimination des opérations à 0 € (aucun mouvement bancaire réel)
+      const amt = Number(h.amount);
+      if (isNaN(amt) || Math.abs(amt) < 0.01) return false;
+      return true;
     });
 
-    // Si historique trop faible (< 4 opérations), amorcer un historique comptable complet et réaliste
-    // dont le solde final coïncide rigoureusement avec le solde actuel du joueur !
-    if (game.financesHistory.length <= 1) {
-      const finalBalance = game.resources?.money || 15000;
-      const now = Date.now();
-      const oneHour = 3600 * 1000;
-      const oneDay = 24 * oneHour;
+    const currentMoney = Number(game.resources?.money) || 15000;
+    const now = Date.now();
 
-      // Séquence type d'opérations d'antenne avec libellés officiels Protection Civile
-      const seedOperations = [
-        { label: 'Dotation Initiale Préfecture & Commune', category: 'subvention', amount: 10000, daysAgo: 10, tier: 'Préfecture / Mairie', ref: 'SUBV-2026-01' },
-        { label: 'Agrément Préfectoral AASC & Frais d’immatriculation', category: 'frais', amount: -350, daysAgo: 9, tier: 'Préfecture', ref: 'ADM-PREF-04' },
-        { label: 'Achat Lot Matériel Premiers Secours (Lots A & B, DAE)', category: 'logistique', amount: -2150, daysAgo: 8, tier: 'Centrale d’Achats Sécurité Civile', ref: 'FAC-MED-102' },
-        { label: 'Assurances Nationales Bénévoles & Adhésion FNPC', category: 'frais', amount: -650, daysAgo: 7, tier: 'Fédération Nationale', ref: 'COTIS-FNPC-26' },
-        { label: 'Conventionnement Initial Régulation SAMU 15', category: 'subvention', amount: 350, daysAgo: 6, tier: 'CHRU / SAMU 15', ref: 'CONV-SAMU-01' },
-        { label: 'Session Formation Grand Public PSC1 (10 stagiaires)', category: 'formation', amount: 600, daysAgo: 5, tier: 'Inscriptions Citoyennes', ref: 'FORM-PSC1-01' },
-        { label: 'Carburant & Révision Réglementaire Flotte', category: 'entretien', amount: -180, daysAgo: 4, tier: 'Station Partenaire', ref: 'CARB-FLOTTE-11' },
-        { label: 'DPS Course Pédestre des Foulées Municipales', category: 'dps', amount: 850, daysAgo: 3, tier: 'Comité des Fêtes', ref: 'DPS-SPORT-05' },
-        { label: 'Stage Formation Interne PSE2 (2 Secouristes promus)', category: 'formation_interne', amount: -450, daysAgo: 2, tier: 'Centre National de Formation', ref: 'STG-PSE2-02' },
-        { label: 'Renfort Opérationnel Zonal Soutien Crues & Inondations', category: 'renfort', amount: 480, daysAgo: 1.5, tier: 'Zone de Défense', ref: 'RENF-ZONAL-09' },
-        { label: 'Campagne de Dons Citoyens & Mécénat Local', category: 'dons', amount: 520, daysAgo: 1, tier: 'Plateforme Dons FNPC', ref: 'DON-MECE-33' },
-        { label: 'DPS Soirée Concert & Festival de Printemps', category: 'dps', amount: 1100, daysAgo: 0.5, tier: 'Production Événementielle', ref: 'DPS-FEST-18' }
-      ];
+    // 2. Vérifier si une dotation initiale d'ouverture existe
+    const hasInitialGrant = game.financesHistory.some(h => 
+      h.ref === 'FONDS-INITIAL-PC' || h.ref === 'DOT-INIT-01' || 
+      (h.label && (h.label.toLowerCase().includes('ouverture d’antenne') || h.label.toLowerCase().includes('dotation initiale')))
+    );
 
-      // Calcul de la somme des opérations modèles
-      const seedSum = seedOperations.reduce((acc, op) => acc + op.amount, 0);
-      const adjustment = finalBalance - seedSum;
+    if (!hasInitialGrant) {
+      // Reconstitution authentique :
+      // Calcul du capital de départ pour que la balance cumulée coïncide rigoureusement avec le solde du joueur
+      const knownOperationsSum = game.financesHistory.reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
+      const startingCapital = currentMoney - knownOperationsSum;
 
-      // Première ligne d'ajustement de dotation de départ pour garantir 100% l'exactitude du solde
       const initialDotation = {
         id: `tx-init-${now}`,
-        timestamp: now - 12 * oneDay,
-        dateStr: 'Lancement de l’Antenne',
-        amount: Math.max(5000, 10000 + adjustment),
-        label: 'Fonds Propres & Dotation de Démarrage d’Antenne',
+        timestamp: now - (14 * 24 * 3600 * 1000),
+        dateStr: 'Ouverture de l’Antenne',
+        amount: Math.max(1000, startingCapital),
+        label: 'Dotation Initiale d’Ouverture d’Antenne (Fonds Propres & Commune)',
         type: 'recette',
         category: 'subvention',
-        ref: 'FONDS-INITIAL-PC',
-        tier: 'Association Protection Civile',
-        balance: Math.max(5000, 10000 + adjustment)
+        ref: 'DOT-INIT-01',
+        tier: 'Mairie & Protection Civile',
+        balance: Math.max(1000, startingCapital)
       };
 
-      let runningBalance = initialDotation.amount;
-      const history = [initialDotation];
+      game.financesHistory.unshift(initialDotation);
+    }
 
-      seedOperations.forEach((op, idx) => {
-        runningBalance += op.amount;
-        const txTime = now - Math.round(op.daysAgo * oneDay);
-        history.push({
-          id: `tx-seed-${idx}-${txTime}`,
-          timestamp: txTime,
-          dateStr: `J-${Math.round(op.daysAgo)} • ${idx % 2 === 0 ? '10h30' : '15h45'}`,
-          amount: op.amount,
-          label: op.label,
-          type: op.amount >= 0 ? 'recette' : 'depense',
-          category: op.category,
-          ref: op.ref,
-          tier: op.tier,
-          balance: runningBalance
-        });
-      });
+    // 3. Normalisation et recalcul rigoureux des soldes cumulés chronologiques (balance)
+    game.financesHistory.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 
-      // Si petit écart résiduel par rapport au solde actuel, dernière ligne d'ajustement
-      if (runningBalance !== finalBalance) {
-        const delta = finalBalance - runningBalance;
-        runningBalance += delta;
-        history.push({
-          id: `tx-adj-${now}`,
-          timestamp: now - 1000,
-          dateStr: 'Aujourd’hui',
-          amount: delta,
-          label: delta >= 0 ? 'Régularisation Trésorerie d’Ouverture' : 'Ajustement Comptable d’Ouverture',
-          type: delta >= 0 ? 'recette' : 'depense',
-          category: delta >= 0 ? 'subvention' : 'frais',
-          ref: 'REGUL-BANQUE-01',
-          tier: 'Banque d’Antenne',
-          balance: finalBalance
-        });
+    // Ajustement de la dotation initiale si nécessaire pour que la somme = currentMoney
+    const totalOps = game.financesHistory.reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
+    const gap = currentMoney - totalOps;
+    if (Math.abs(gap) > 0 && game.financesHistory.length > 0) {
+      game.financesHistory[0].amount += gap;
+      if (game.financesHistory[0].amount <= 0) {
+        game.financesHistory[0].amount = 15000;
       }
+    }
 
-      game.financesHistory = history;
+    let runningBalance = 0;
+    game.financesHistory.forEach((h, index) => {
+      if (!h.id) h.id = `tx-${h.timestamp || now}-${index}`;
+      h.category = this.normalizeCategory(h);
+      h.type = Number(h.amount) >= 0 ? 'recette' : 'depense';
+      runningBalance += Number(h.amount) || 0;
+      h.balance = runningBalance;
+    });
+
+    // Le dernier élément reflète le solde bancaire exact du joueur
+    if (game.financesHistory.length > 0) {
+      game.financesHistory[game.financesHistory.length - 1].balance = currentMoney;
     }
   },
 
-  // Enregistrer une nouvelle transaction financière
-  recordTransaction(game, amount, label, category = 'general', tier = null) {
+  // Enregistrement d'une nouvelle opération financière dans le grand livre (Support universel objet ou arguments)
+  recordTransaction(game, amountOrParams, label, category, ref, tier) {
     if (!game) return;
     this.injectState(game);
 
+    let amount = 0;
+    let lbl = 'Mouvement Bancaire';
+    let cat = 'general';
+    let r = null;
+    let t = null;
+
+    if (typeof amountOrParams === 'object' && amountOrParams !== null) {
+      amount = Number(amountOrParams.amount) || 0;
+      lbl = amountOrParams.label || 'Mouvement Bancaire';
+      cat = amountOrParams.category || 'general';
+      r = amountOrParams.ref || null;
+      t = amountOrParams.tier || null;
+    } else {
+      amount = Number(amountOrParams) || 0;
+      lbl = label || 'Mouvement Bancaire';
+      cat = category || (amount >= 0 ? 'dps' : 'logistique');
+      r = ref || null;
+      t = tier || null;
+    }
+
+    // Aucun mouvement bancaire si le montant est nul (0 €) : ne rien enregistrer ni afficher
+    if (!amount || Math.abs(amount) < 0.01) {
+      return;
+    }
+
+    const currentMoney = Number(game.resources?.money) || 0;
+    const newBalance = currentMoney; // Solde officiel après opération
+
+    const normalizedCat = this.normalizeCategory({
+      category: cat,
+      label: lbl,
+      amount: amount
+    });
+
     const now = Date.now();
-    const currentBalance = game.resources?.money || 0;
-    const dateStr = game.clock
-      ? `${game.clock.dayName || 'Aujourd’hui'} ${game.clock.hour || '12'}h`
-      : 'Aujourd’hui';
+    const clockDay = game.clock?.day;
+    const clockMonth = game.clock?.month;
+    const clockYear = game.clock?.year;
 
-    const normalizedCategory = this.normalizeCategory({ category, label, amount });
-    const refCode = `PC-${new Date(now).getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const dStr = (clockDay && clockMonth !== undefined) 
+      ? `Jour ${clockDay} / ${clockMonth + 1} (${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })})` 
+      : new Date(now).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-    const newTx = {
+    const entry = {
       id: `tx-${now}-${Math.floor(Math.random() * 10000)}`,
       timestamp: now,
-      dateStr: dateStr,
-      amount: Math.round(amount),
-      label: label || 'Opération Financière',
+      gameDay: clockDay,
+      gameMonth: clockMonth,
+      gameYear: clockYear,
+      dateStr: dStr,
+      amount: amount,
+      label: lbl,
       type: amount >= 0 ? 'recette' : 'depense',
-      category: normalizedCategory,
-      tier: tier || (amount >= 0 ? 'Organisateur / Donateur' : 'Fournisseur / Prestataire'),
-      ref: refCode,
-      balance: currentBalance
+      category: normalizedCat,
+      ref: r || `OP-${Math.floor(1000 + Math.random() * 9000)}`,
+      tier: t || (amount >= 0 ? 'Organisateur / Donateur' : 'Fournisseur AASC'),
+      balance: newBalance
     };
 
-    game.financesHistory.push(newTx);
+    game.financesHistory.push(entry);
 
-    // Historique étendu à 250 entrées
-    if (game.financesHistory.length > 250) {
-      game.financesHistory.shift();
+    // Limitation de l'historique à 300 opérations max
+    if (game.financesHistory.length > 300) {
+      game.financesHistory = game.financesHistory.slice(-300);
     }
 
-    // Si la modale est actuellement ouverte, rafraîchir en direct
-    if (game.currentModalKey === 'finances') {
-      this.refreshFinancesModal(game);
+    // Si la modale Finances est actuellement ouverte, rafraîchir son affichage
+    const modal = document.getElementById('main-modal');
+    if (modal && !modal.classList.contains('hidden') && window.game && window.game.currentModalKey === 'finances') {
+      this.renderModal(game);
     }
   },
 
-  // Modification des filtres
-  setFlowFilter(flow, game) {
+  // Gestion des filtres
+  setFlowFilter(flow) {
     this.filters.flow = flow;
-    this.refreshFinancesModal(game || window.game);
+    this.renderModal(window.game);
   },
 
-  setCategoryFilter(category, game) {
-    this.filters.category = category;
-    this.refreshFinancesModal(game || window.game);
+  setCategoryFilter(cat) {
+    this.filters.category = cat;
+    this.renderModal(window.game);
   },
 
-  setSortFilter(sortBy, game) {
-    this.filters.sortBy = sortBy;
-    this.refreshFinancesModal(game || window.game);
+  setSearchFilter(text) {
+    this.filters.search = (text || '').toLowerCase().trim();
+    this.renderModal(window.game);
   },
 
-  setSearchFilter(query, game) {
-    this.filters.search = query.toLowerCase().trim();
-    this.refreshFinancesModal(game || window.game);
+  setSortFilter(sort) {
+    this.filters.sortBy = sort;
+    this.renderModal(window.game);
   },
 
-  clearFilters(game) {
+  clearFilters() {
     this.filters.flow = 'all';
     this.filters.category = 'all';
     this.filters.search = '';
     this.filters.sortBy = 'date_desc';
-    this.refreshFinancesModal(game || window.game);
+    this.renderModal(window.game);
   },
 
-  // Rendu principal de la modale Finances
   renderFinancesModal(game) {
+    this.renderModal(game);
+  },
+
+  openModal(game) {
+    this.renderModal(game);
+  },
+
+  // Calcul et agrégation des soldes quotidiens (un seul point par jour, arrêté à 00h00)
+  getDailyBalances(game) {
+    if (!game) return [];
     this.injectState(game);
+
+    const validHistory = (game.financesHistory || []).filter(h => {
+      if (!h) return false;
+      const amt = Number(h.amount);
+      return !isNaN(amt) && Math.abs(amt) >= 0.01;
+    });
+
+    const currentMoney = Number(game.resources?.money) || 0;
+    const clock = game.clock || {};
+    const now = new Date();
+    const currentYear = clock.year || now.getFullYear();
+    const currentMonth = (clock.month !== undefined) ? clock.month : now.getMonth();
+    const currentDay = (clock.day !== undefined) ? clock.day : now.getDate();
+
+    const todayDate = new Date(currentYear, currentMonth, currentDay, 0, 0, 0, 0);
+    const todayMs = todayDate.getTime();
+    const oneDayMs = 24 * 3600 * 1000;
+
+    if (validHistory.length === 0) {
+      const prevDate = new Date(todayMs - oneDayMs);
+      return [
+        { dateStr: `Jour ${prevDate.getDate()}`, day: prevDate.getDate(), balance: currentMoney, timestamp: prevDate.getTime() },
+        { dateStr: `Jour ${todayDate.getDate()}`, day: todayDate.getDate(), balance: currentMoney, timestamp: todayMs }
+      ];
+    }
+
+    // Helper pour extraire le timestamp de minuit (00h00) correspondant à une transaction
+    const getTxMidnightMs = (tx) => {
+      if (tx.gameDay !== undefined) {
+        const m = tx.gameMonth ?? currentMonth;
+        const y = tx.gameYear ?? currentYear;
+        return new Date(y, m, tx.gameDay, 0, 0, 0, 0).getTime();
+      }
+      if (tx.dateStr) {
+        const match = tx.dateStr.match(/Jour\s+(\d+)(?:\s*(?:\/|M)\s*(\d+))?/i);
+        if (match) {
+          const d = parseInt(match[1], 10);
+          const m = match[2] ? parseInt(match[2], 10) - 1 : currentMonth;
+          return new Date(currentYear, m, d, 0, 0, 0, 0).getTime();
+        }
+      }
+      if (tx.timestamp) {
+        const d = new Date(tx.timestamp);
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
+      }
+      return todayMs;
+    };
+
+    // Trouver la date de début parmi les transactions opérationnelles
+    const operationalTxs = validHistory.filter(tx => 
+      tx.ref !== 'FONDS-INITIAL-PC' && 
+      tx.ref !== 'DOT-INIT-01' && 
+      !(tx.dateStr && (tx.dateStr.includes('Lancement') || tx.dateStr.includes('Ouverture')))
+    );
+
+    let startMs = todayMs - oneDayMs; // au minimum hier
+    if (operationalTxs.length > 0) {
+      const opDates = operationalTxs.map(tx => getTxMidnightMs(tx));
+      const earliestOp = Math.min(...opDates);
+      startMs = Math.min(startMs, earliestOp);
+    } else if (validHistory.length > 0) {
+      startMs = todayMs - oneDayMs;
+    }
+
+    // Limiter la fenêtre à 15 jours max pour un affichage lisible et ergonomique
+    const maxLookback = todayMs - (14 * oneDayMs);
+    if (startMs < maxLookback) {
+      startMs = maxLookback;
+    }
+
+    // Pour chaque jour de startMs à todayMs (inclus), calculer le solde arrêté à 00h00
+    const dailyPoints = [];
+    const initialBalance = validHistory[0] ? validHistory[0].balance : currentMoney;
+
+    for (let curMs = startMs; curMs <= todayMs; curMs += oneDayMs) {
+      const curDate = new Date(curMs);
+
+      // Transactions survenues strictement avant ce jour à 00h00
+      const opsBeforeThisDay = validHistory.filter(tx => {
+        const txMs = tx.timestamp || getTxMidnightMs(tx);
+        return txMs < curMs;
+      });
+
+      let balanceAt00h00;
+      if (opsBeforeThisDay.length > 0) {
+        balanceAt00h00 = opsBeforeThisDay[opsBeforeThisDay.length - 1].balance;
+      } else {
+        const firstOp = validHistory[0];
+        balanceAt00h00 = firstOp ? (firstOp.ref === 'FONDS-INITIAL-PC' || firstOp.ref === 'DOT-INIT-01' ? firstOp.balance : firstOp.balance - firstOp.amount) : initialBalance;
+      }
+
+      // Si c'est aujourd'hui, le solde correspond au solde en cours du compte
+      let pointBalance = balanceAt00h00;
+      if (curMs === todayMs) {
+        pointBalance = currentMoney;
+      }
+
+      dailyPoints.push({
+        dateStr: `Jour ${curDate.getDate()}`,
+        day: curDate.getDate(),
+        month: curDate.getMonth(),
+        year: curDate.getFullYear(),
+        timestamp: curMs,
+        balance: Math.round(pointBalance)
+      });
+    }
+
+    // Toujours garantir au moins 2 points
+    if (dailyPoints.length === 1) {
+      const single = dailyPoints[0];
+      const prevDate = new Date(single.timestamp - oneDayMs);
+      dailyPoints.unshift({
+        dateStr: `Jour ${prevDate.getDate()}`,
+        day: prevDate.getDate(),
+        month: prevDate.getMonth(),
+        year: prevDate.getFullYear(),
+        timestamp: prevDate.getTime(),
+        balance: single.balance
+      });
+    }
+
+    return dailyPoints;
+  },
+
+  // Rendu de la vue principale dans la fenêtre modale
+  renderModal(game) {
+    game = game || window.game;
     const modal = document.getElementById('main-modal');
+    const root = document.getElementById('modal-body') || document.getElementById('finances-modal-root');
     const title = document.getElementById('modal-title');
     const subtitle = document.getElementById('modal-subtitle');
     const icon = document.getElementById('modal-icon');
-    const body = document.getElementById('modal-body');
-
-    modal.classList.remove('hidden');
-    title.textContent = 'Trésorerie & Grand Livre Comptable';
-    subtitle.textContent = 'Suivi budgétaire précis, filtrage des entrées/sorties et ventilation par pôle';
-    icon.setAttribute('data-lucide', 'euro');
-
-    body.innerHTML = `
-      <div id="finances-root" class="space-y-6">
-        <!-- Rendu dynamique injecté par refreshFinancesModal -->
-      </div>
-    `;
-
-    this.refreshFinancesModal(game);
-  },
-
-  // Rafraîchissement ultra fluide du contenu sans recharger la modale entière
-  refreshFinancesModal(game) {
-    const root = document.getElementById('finances-root');
     if (!root) return;
 
+    if (modal) modal.classList.remove('hidden');
+    if (title) title.textContent = "Direction Financière & Comptabilité Réglementaire";
+    if (subtitle) subtitle.textContent = "Trésorerie d'antenne, grand livre des comptes, bilans d'exploitation et subventions";
+    if (icon) icon.setAttribute('data-lucide', 'wallet');
+
     this.injectState(game);
-    const history = game.financesHistory || [];
-    const currentMoney = game.resources?.money || 0;
+    const history = (game.financesHistory || []).filter(h => h && typeof h.amount === 'number' && Math.abs(h.amount) >= 0.01);
+    const currentMoney = Number(game.resources?.money) || 0;
 
     // Calcul des agrégats globaux
     const globalRecettes = history.filter(h => h.amount > 0).reduce((acc, h) => acc + h.amount, 0);
     const globalDepenses = Math.abs(history.filter(h => h.amount < 0).reduce((acc, h) => acc + h.amount, 0));
     const globalSoldeNet = globalRecettes - globalDepenses;
 
-    // Calcul des balances pour le graphique
-    const balances = history.map(h => h.balance);
-    const maxBalance = Math.max(...balances, currentMoney, 1000);
-    const minBalance = Math.min(...balances, currentMoney, 0);
+    // Calcul des soldes quotidiens pour le graphique (un seul point par jour, arrêté à 00h00)
+    const dailyBalances = this.getDailyBalances(game);
+    const dailyValues = dailyBalances.map(d => d.balance);
+    const maxBalance = Math.max(...dailyValues, currentMoney, 1000);
+    const minBalance = Math.min(...dailyValues, currentMoney, 0);
 
     // Filtrage des transactions selon les critères
     let filtered = [...history];
 
-    // 1. Filtre par flux (Tous / Entrées / Sorties)
+    // 1. Filtre par flux (Tous / Entrées / Sorties) : exclure strictement les montants nuls
     if (this.filters.flow === 'recette') {
-      filtered = filtered.filter(h => h.amount >= 0);
+      filtered = filtered.filter(h => Number(h.amount) > 0);
     } else if (this.filters.flow === 'depense') {
-      filtered = filtered.filter(h => h.amount < 0);
+      filtered = filtered.filter(h => Number(h.amount) < 0);
+    } else {
+      filtered = filtered.filter(h => Math.abs(Number(h.amount)) >= 0.01);
     }
 
     // 2. Filtre par catégorie
@@ -448,7 +602,6 @@ window.ProtecFinances = {
     // Totaux sur la sélection filtrée
     const filteredRecettes = filtered.filter(h => h.amount > 0).reduce((acc, h) => acc + h.amount, 0);
     const filteredDepenses = Math.abs(filtered.filter(h => h.amount < 0).reduce((acc, h) => acc + h.amount, 0));
-    const filteredNet = filteredRecettes - filteredDepenses;
 
     // Calcul de la ventilation par catégorie pour les mini-jauges
     const categoryTotals = {};
@@ -483,7 +636,7 @@ window.ProtecFinances = {
         <div class="p-4 rounded-2xl glass-card border border-emerald-300/40 bg-gradient-to-br from-emerald-50/70 to-white shadow-sm space-y-1">
           <span class="text-[10px] font-black uppercase tracking-wider text-emerald-700 flex items-center justify-between">
             <span>Entrées (Recettes)</span>
-            <span class="text-xs">↗</span>
+            <i data-lucide="arrow-up-right" class="w-4 h-4 text-emerald-600"></i>
           </span>
           <div class="text-xl sm:text-2xl font-black text-emerald-700 mono-num">
             +${globalRecettes.toLocaleString('fr-FR')} €
@@ -496,7 +649,7 @@ window.ProtecFinances = {
         <div class="p-4 rounded-2xl glass-card border border-rose-300/40 bg-gradient-to-br from-rose-50/70 to-white shadow-sm space-y-1">
           <span class="text-[10px] font-black uppercase tracking-wider text-rose-600 flex items-center justify-between">
             <span>Sorties (Dépenses)</span>
-            <span class="text-xs">↘</span>
+            <i data-lucide="arrow-down-right" class="w-4 h-4 text-rose-600"></i>
           </span>
           <div class="text-xl sm:text-2xl font-black text-rose-600 mono-num">
             -${globalDepenses.toLocaleString('fr-FR')} €
@@ -521,16 +674,83 @@ window.ProtecFinances = {
 
       </div>
 
+      <!-- 1b. SEGMENTATION RÉGLEMENTAIRE DES 3 FLUX FINANCIERS DE L'AASC -->
+      ${(() => {
+        const fluxDps = history.filter(h => h.category === 'dps').reduce((acc, h) => acc + (h.amount > 0 ? h.amount : 0), 0);
+        const fluxGarde = history.filter(h => h.category === 'garde' || h.category === 'prestation').reduce((acc, h) => acc + (h.amount > 0 ? h.amount : 0), 0);
+        const fluxSubv = history.filter(h => h.category === 'subvention').reduce((acc, h) => acc + (h.amount > 0 ? h.amount : 0), 0);
+        const totalFlux = (fluxDps + fluxGarde + fluxSubv) || 1;
+        const pctDps = Math.round((fluxDps / totalFlux) * 100);
+        const pctGarde = Math.round((fluxGarde / totalFlux) * 100);
+        const pctSubv = Math.round((fluxSubv / totalFlux) * 100);
+
+        return `
+          <div class="p-4 rounded-3xl glass-card border border-slate-200/90 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-blue-50 text-pc-blue flex items-center justify-center">
+                  <i data-lucide="scale" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Segmentation des 3 Flux de Trésorerie AASC</h4>
+                  <p class="text-[11px] text-slate-500">Traçabilité budgétaire différenciée selon les directives de sécurité civile.</p>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-pc-blue/10 text-pc-blue">
+                Répartition des Recettes
+              </span>
+            </div>
+
+            <!-- Jauge segmentée 100% -->
+            <div class="w-full h-3 rounded-full bg-slate-100 flex overflow-hidden border border-slate-200/60">
+              <div class="bg-amber-500 h-full transition-all" style="width: ${pctDps}%" title="DPS : ${pctDps}%"></div>
+              <div class="bg-sky-500 h-full transition-all" style="width: ${pctGarde}%" title="Gardes 15/18 : ${pctGarde}%"></div>
+              <div class="bg-indigo-600 h-full transition-all" style="width: ${pctSubv}%" title="Subventions : ${pctSubv}%"></div>
+            </div>
+
+            <!-- 3 Blocs de flux -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+              <div class="p-2.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold text-amber-900 text-[11px]">1. DPS Facturés</span>
+                  <span class="font-mono font-bold text-amber-800">${pctDps}%</span>
+                </div>
+                <div class="text-sm font-black text-amber-950 font-mono">+${fluxDps.toLocaleString('fr-FR')} €</div>
+                <span class="text-[10px] text-amber-700 block">Devis privés & manifestations</span>
+              </div>
+
+              <div class="p-2.5 rounded-2xl bg-sky-50/60 border border-sky-200/70 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold text-sky-900 text-[11px]">2. Gardes SAMU & SDIS</span>
+                  <span class="font-mono font-bold text-sky-800">${pctGarde}%</span>
+                </div>
+                <div class="text-sm font-black text-sky-950 font-mono">+${fluxGarde.toLocaleString('fr-FR')} €</div>
+                <span class="text-[10px] text-sky-700 block">Forfaits astreintes & sorties 15</span>
+              </div>
+
+              <div class="p-2.5 rounded-2xl bg-indigo-50/60 border border-indigo-200/70 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold text-indigo-900 text-[11px]">3. Subventions Publiques</span>
+                  <span class="font-mono font-bold text-indigo-800">${pctSubv}%</span>
+                </div>
+                <div class="text-sm font-black text-indigo-950 font-mono">+${fluxSubv.toLocaleString('fr-FR')} €</div>
+                <span class="text-[10px] text-indigo-700 block">Dotations Mairie & État FDVA</span>
+              </div>
+            </div>
+          </div>
+        `;
+      })()}
+
       <!-- 2. COURBE SVG D'ÉVOLUTION DU SOLDE BANCAIRE -->
       <div class="p-5 rounded-3xl bg-slate-900 text-white shadow-xl space-y-3">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">
-              📈
+              <i data-lucide="trending-up" class="w-4 h-4"></i>
             </div>
             <div>
               <h4 class="text-sm font-black text-white leading-tight">Courbe Chronologique du Solde</h4>
-              <p class="text-[11px] text-slate-400">Évolution du compte bancaire de l'antenne sur toute la période</p>
+              <p class="text-[11px] text-slate-400">Évolution du solde quotidien de l'antenne sur toute la période</p>
             </div>
           </div>
           <div class="flex items-center gap-3 text-xs">
@@ -541,7 +761,7 @@ window.ProtecFinances = {
         </div>
 
         <div class="w-full overflow-x-auto no-scrollbar">
-          ${this.renderSvgChart(history, minBalance, maxBalance)}
+          ${this.renderSvgChart(dailyBalances, minBalance, maxBalance)}
         </div>
       </div>
 
@@ -549,7 +769,7 @@ window.ProtecFinances = {
       <div class="p-4 rounded-2xl glass-card space-y-3 border border-slate-200">
         <div class="flex items-center justify-between">
           <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
-            <span>📊</span> Répartition des Flux par Pôle
+            <i data-lucide="pie-chart" class="w-4 h-4 text-pc-blue"></i> Répartition des Flux par Pôle
           </h4>
           <span class="text-[11px] text-slate-500">Cliquez sur un pôle pour filtrer</span>
         </div>
@@ -573,12 +793,12 @@ window.ProtecFinances = {
             <button
               onclick="window.ProtecFinances.setFlowFilter('recette')"
               class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${this.filters.flow === 'recette' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-emerald-700'}">
-              <span>↗</span> Entrées (+${globalRecettes.toLocaleString('fr-FR')} €)
+              <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i> Entrées (+${globalRecettes.toLocaleString('fr-FR')} €)
             </button>
             <button
               onclick="window.ProtecFinances.setFlowFilter('depense')"
               class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${this.filters.flow === 'depense' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-600 hover:text-rose-700'}">
-              <span>↘</span> Sorties (-${globalDepenses.toLocaleString('fr-FR')} €)
+              <i data-lucide="arrow-down-right" class="w-3.5 h-3.5"></i> Sorties (-${globalDepenses.toLocaleString('fr-FR')} €)
             </button>
           </div>
 
@@ -606,95 +826,97 @@ window.ProtecFinances = {
             placeholder="Rechercher par libellé, référence (ex: DPS, VPSP, PSC1, SAMU, matériel...)"
             class="w-full text-xs bg-white border border-slate-300 rounded-xl pl-9 pr-8 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-pc-blue focus:ring-1 focus:ring-pc-blue font-medium"
           />
-          <span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400 pointer-events-none"></i>
           ${this.filters.search ? `
-            <button onclick="window.ProtecFinances.setSearchFilter('')" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 text-xs font-bold">✕</button>
+            <button onclick="window.ProtecFinances.setSearchFilter('')" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 p-0.5">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
           ` : ''}
         </div>
 
-        <!-- Badges / Chips de catégories filtrables -->
+        <!-- Badges / Chips de catégories filtrables avec icônes Lucide -->
         <div class="space-y-1.5">
           <div class="text-[10px] font-black uppercase tracking-wider text-slate-400">Filtrer par catégorie :</div>
           <div class="flex flex-wrap gap-1.5 items-center">
             
             <button
               onclick="window.ProtecFinances.setCategoryFilter('all')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'all' ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}">
-              🌟 Toutes
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'all' ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}">
+              <i data-lucide="layers" class="w-3.5 h-3.5"></i> Toutes
             </button>
 
             <!-- Entrées -->
             <button
               onclick="window.ProtecFinances.setCategoryFilter('dps')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'dps' ? 'bg-amber-600 text-white border-amber-600 shadow-sm' : 'bg-amber-50 text-amber-800 border-amber-200 hover:border-amber-300'}">
-              📋 DPS & Postes
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'dps' ? 'bg-amber-600 text-white border-amber-600 shadow-sm' : 'bg-amber-50 text-amber-800 border-amber-200 hover:border-amber-300'}">
+              <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i> DPS & Postes
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('formation')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'formation' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:border-emerald-300'}">
-              🎓 Formations GP
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'formation' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:border-emerald-300'}">
+              <i data-lucide="graduation-cap" class="w-3.5 h-3.5"></i> Formations GP
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('garde')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'garde' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-blue-50 text-blue-800 border-blue-200 hover:border-blue-300'}">
-              🚑 Gardes SAMU/SDIS
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'garde' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-blue-50 text-blue-800 border-blue-200 hover:border-blue-300'}">
+              <i data-lucide="heart-pulse" class="w-3.5 h-3.5"></i> Gardes SAMU/SDIS
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('subvention')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'subvention' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:border-indigo-300'}">
-              🏛️ Subventions
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'subvention' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:border-indigo-300'}">
+              <i data-lucide="landmark" class="w-3.5 h-3.5"></i> Subventions
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('dons')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'dons' ? 'bg-pink-600 text-white border-pink-600 shadow-sm' : 'bg-pink-50 text-pink-800 border-pink-200 hover:border-pink-300'}">
-              💙 Dons & Mécénat
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'dons' ? 'bg-pink-600 text-white border-pink-600 shadow-sm' : 'bg-pink-50 text-pink-800 border-pink-200 hover:border-pink-300'}">
+              <i data-lucide="heart-handshake" class="w-3.5 h-3.5"></i> Dons & Mécénat
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('renfort')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'renfort' ? 'bg-cyan-600 text-white border-cyan-600 shadow-sm' : 'bg-cyan-50 text-cyan-800 border-cyan-200 hover:border-cyan-300'}">
-              🤝 Renforts
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'renfort' ? 'bg-cyan-600 text-white border-cyan-600 shadow-sm' : 'bg-cyan-50 text-cyan-800 border-cyan-200 hover:border-cyan-300'}">
+              <i data-lucide="users" class="w-3.5 h-3.5"></i> Renforts
             </button>
 
             <!-- Sorties -->
             <button
               onclick="window.ProtecFinances.setCategoryFilter('vehicule')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'vehicule' ? 'bg-orange-600 text-white border-orange-600 shadow-sm' : 'bg-orange-50 text-orange-800 border-orange-200 hover:border-orange-300'}">
-              🚐 Véhicules
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'vehicule' ? 'bg-orange-600 text-white border-orange-600 shadow-sm' : 'bg-orange-50 text-orange-800 border-orange-200 hover:border-orange-300'}">
+              <i data-lucide="truck" class="w-3.5 h-3.5"></i> Véhicules
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('logistique')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'logistique' ? 'bg-rose-600 text-white border-rose-600 shadow-sm' : 'bg-rose-50 text-rose-800 border-rose-200 hover:border-rose-300'}">
-              📦 Logistique & Matériel
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'logistique' ? 'bg-rose-600 text-white border-rose-600 shadow-sm' : 'bg-rose-50 text-rose-800 border-rose-200 hover:border-rose-300'}">
+              <i data-lucide="package" class="w-3.5 h-3.5"></i> Logistique & Matériel
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('locaux')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'locaux' ? 'bg-amber-800 text-white border-amber-800 shadow-sm' : 'bg-amber-100 text-amber-900 border-amber-200 hover:border-amber-300'}">
-              🏢 Locaux & Bâtiment
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'locaux' ? 'bg-amber-800 text-white border-amber-800 shadow-sm' : 'bg-amber-100 text-amber-900 border-amber-200 hover:border-amber-300'}">
+              <i data-lucide="building-2" class="w-3.5 h-3.5"></i> Locaux & Bâtiment
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('entretien')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'entretien' ? 'bg-slate-700 text-white border-slate-700 shadow-sm' : 'bg-slate-100 text-slate-800 border-slate-200 hover:border-slate-300'}">
-              ⛽ Entretien & Carburant
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'entretien' ? 'bg-slate-700 text-white border-slate-700 shadow-sm' : 'bg-slate-100 text-slate-800 border-slate-200 hover:border-slate-300'}">
+              <i data-lucide="wrench" class="w-3.5 h-3.5"></i> Entretien & Carburant
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('formation_interne')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'formation_interne' ? 'bg-violet-600 text-white border-violet-600 shadow-sm' : 'bg-violet-50 text-violet-800 border-violet-200 hover:border-violet-300'}">
-              🧑‍🚒 Formations Internes
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'formation_interne' ? 'bg-violet-600 text-white border-violet-600 shadow-sm' : 'bg-violet-50 text-violet-800 border-violet-200 hover:border-violet-300'}">
+              <i data-lucide="award" class="w-3.5 h-3.5"></i> Formations Internes
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('frais')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border ${this.filters.category === 'frais' ? 'bg-stone-700 text-white border-stone-700 shadow-sm' : 'bg-stone-100 text-stone-800 border-stone-200 hover:border-stone-300'}">
-              📑 Frais & Assurances
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'frais' ? 'bg-stone-700 text-white border-stone-700 shadow-sm' : 'bg-stone-100 text-stone-800 border-stone-200 hover:border-stone-300'}">
+              <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Frais & Assurances
             </button>
 
           </div>
@@ -708,7 +930,7 @@ window.ProtecFinances = {
           </div>
           ${(this.filters.flow !== 'all' || this.filters.category !== 'all' || this.filters.search) ? `
             <button onclick="window.ProtecFinances.clearFilters()" class="text-pc-blue font-bold hover:underline flex items-center gap-1">
-              <span>✕</span> Réinitialiser tous les filtres
+              <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Réinitialiser tous les filtres
             </button>
           ` : ''}
         </div>
@@ -719,18 +941,20 @@ window.ProtecFinances = {
       <div class="space-y-3">
         <div class="flex items-center justify-between">
           <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-            <span>📑</span> Mouvements Comptables Détaillés
+            <i data-lucide="receipt" class="w-4 h-4 text-pc-blue"></i> Mouvements Comptables Détaillés
           </h4>
           <button
             onclick="window.ProtecFinances.exportGrandLivre(window.game)"
-            class="text-[11px] font-bold text-pc-blue hover:text-pc-blue/80 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition flex items-center gap-1">
-            <span>📥</span> Copier le Relevé Comptable
+            class="text-[11px] font-bold text-pc-blue hover:text-pc-blue/80 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copier le Relevé Comptable
           </button>
         </div>
 
         ${filtered.length === 0 ? `
           <div class="p-8 text-center rounded-2xl glass-card border border-dashed border-slate-300 space-y-2">
-            <span class="text-3xl block">🔍</span>
+            <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-1">
+              <i data-lucide="search-x" class="w-5 h-5"></i>
+            </div>
             <p class="text-xs font-bold text-slate-700">Aucune transaction ne correspond aux filtres appliqués.</p>
             <p class="text-[11px] text-slate-400">Essayez de réinitialiser la recherche ou de sélectionner « Toutes » les catégories.</p>
             <button onclick="window.ProtecFinances.clearFilters()" class="mt-2 text-xs font-bold text-pc-blue underline">
@@ -749,7 +973,7 @@ window.ProtecFinances = {
                   <!-- Gauche : Icône, Libellé, Date & Badges -->
                   <div class="flex items-start sm:items-center gap-3 min-w-0">
                     <div class="w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center font-bold text-base shadow-sm ${isPositive ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'}">
-                      ${catObj.emoji || (isPositive ? '↗' : '↘')}
+                      <i data-lucide="${catObj.icon || (isPositive ? 'arrow-up-right' : 'arrow-down-right')}" class="w-5 h-5"></i>
                     </div>
 
                     <div class="min-w-0 space-y-1">
@@ -761,9 +985,9 @@ window.ProtecFinances = {
                       </div>
                       
                       <div class="flex flex-wrap items-center gap-3 text-[10px] text-slate-400 font-medium">
-                        <span>📅 ${item.dateStr || 'Date N/A'}</span>
-                        ${item.ref ? `<span>🔖 Réf: <span class="font-mono text-slate-600">${item.ref}</span></span>` : ''}
-                        ${item.tier ? `<span>🏢 Tiers: ${item.tier}</span>` : ''}
+                        <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3 text-slate-400"></i> ${item.dateStr || 'Date N/A'}</span>
+                        ${item.ref ? `<span class="flex items-center gap-1"><i data-lucide="tag" class="w-3 h-3 text-slate-400"></i> Réf: <span class="font-mono text-slate-600">${item.ref}</span></span>` : ''}
+                        ${item.tier ? `<span class="flex items-center gap-1"><i data-lucide="building" class="w-3 h-3 text-slate-400"></i> Tiers: ${item.tier}</span>` : ''}
                       </div>
                     </div>
                   </div>
@@ -789,7 +1013,7 @@ window.ProtecFinances = {
     if (window.lucide) window.lucide.createIcons();
   },
 
-  // Rendu des pastilles de synthèse en haut de tableau
+  // Rendu des pastilles de synthèse en haut de tableau avec icônes Lucide
   renderCategorySummaryPills(totals, totalIn, totalOut) {
     const list = [
       { key: 'dps', name: 'DPS', cat: this.CATEGORIES.dps },
@@ -811,7 +1035,9 @@ window.ProtecFinances = {
           onclick="window.ProtecFinances.setCategoryFilter('${isSelected ? 'all' : item.key}')"
           class="p-2.5 rounded-xl border text-left transition-all ${isSelected ? 'ring-2 ring-pc-blue bg-white shadow-sm' : 'bg-white/80 hover:bg-white border-slate-200'}">
           <div class="flex items-center justify-between text-[11px] mb-1">
-            <span class="font-bold text-slate-700 truncate">${item.cat.emoji} ${item.name}</span>
+            <span class="font-bold text-slate-700 truncate flex items-center gap-1.5">
+              <i data-lucide="${item.cat.icon}" class="w-3.5 h-3.5 text-slate-500"></i> ${item.name}
+            </span>
             <span class="text-[9px] text-slate-400 font-mono font-bold">${data.count} ops</span>
           </div>
           <div class="text-xs font-black mono-num ${isExpense ? 'text-rose-600' : 'text-emerald-700'}">
@@ -839,7 +1065,7 @@ window.ProtecFinances = {
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
-        game.showToast('Relevé copié ! 📋', 'Le grand livre comptable a été copié dans votre presse-papier.', 'green');
+        game.showToast('Relevé copié !', 'Le grand livre comptable a été copié dans votre presse-papier.', 'green');
       }).catch(() => {
         game.showToast('Grand Livre', 'Relevé généré avec succès.', 'blue');
       });
@@ -848,10 +1074,10 @@ window.ProtecFinances = {
     }
   },
 
-  // Génération du SVG de courbe fluide et interactive
-  renderSvgChart(history, minBalance, maxBalance) {
-    if (!history || history.length === 0) {
-      return '<div class="p-8 text-center text-xs text-slate-400">Aucune transaction enregistrée.</div>';
+  // Génération du SVG de courbe fluide et interactive (un point par jour)
+  renderSvgChart(dailyPoints, minBalance, maxBalance) {
+    if (!dailyPoints || dailyPoints.length === 0) {
+      return '<div class="p-8 text-center text-xs text-slate-400">Aucune donnée de solde disponible.</div>';
     }
 
     const width = 640;
@@ -860,23 +1086,23 @@ window.ProtecFinances = {
     const padY = 25;
 
     // Si un seul point, dupliquer pour tracer une ligne plate
-    const displayHistory = history.length === 1 ? [
-      { ...history[0], dateStr: 'Départ' },
-      { ...history[0], dateStr: 'Actuel' }
-    ] : history;
+    const displayPoints = dailyPoints.length === 1 ? [
+      { ...dailyPoints[0], dateStr: `Jour ${Math.max(1, (dailyPoints[0].day || 2) - 1)}` },
+      { ...dailyPoints[0] }
+    ] : dailyPoints;
 
     const rangeY = Math.max(1, maxBalance - minBalance);
-    const stepX = (width - padX * 2) / (displayHistory.length - 1);
+    const stepX = (width - padX * 2) / (displayPoints.length - 1);
 
     // Coordonnées des points
-    const points = displayHistory.map((item, idx) => {
+    const points = displayPoints.map((item, idx) => {
       const x = padX + (idx * stepX);
       const normY = (item.balance - minBalance) / rangeY;
       const y = (height - padY) - (normY * (height - padY * 2));
       return { x, y, item };
     });
 
-    // Construction du chemin SVG (Smooth path)
+    // Construction du chemin SVG (Smooth bezier path)
     let pathD = `M ${points[0].x} ${points[0].y}`;
     for (let i = 0; i < points.length - 1; i++) {
       const p0 = points[i];
@@ -908,9 +1134,9 @@ window.ProtecFinances = {
         <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" stroke="#334155" stroke-width="1" />
 
         <!-- Libellés Y -->
-        <text x="${padX - 8}" y="${padY + 4}" fill="#94a3b8" font-size="9" text-anchor="end" font-weight="bold">${Math.round(maxBalance)} €</text>
-        <text x="${padX - 8}" y="${height / 2 + 3}" fill="#64748b" font-size="8" text-anchor="end">${Math.round((maxBalance + minBalance) / 2)} €</text>
-        <text x="${padX - 8}" y="${height - padY + 3}" fill="#94a3b8" font-size="9" text-anchor="end" font-weight="bold">${Math.round(minBalance)} €</text>
+        <text x="${padX - 8}" y="${padY + 4}" fill="#94a3b8" font-size="9" text-anchor="end" font-weight="bold">${Math.round(maxBalance).toLocaleString('fr-FR')} €</text>
+        <text x="${padX - 8}" y="${height / 2 + 3}" fill="#64748b" font-size="8" text-anchor="end">${Math.round((maxBalance + minBalance) / 2).toLocaleString('fr-FR')} €</text>
+        <text x="${padX - 8}" y="${height - padY + 3}" fill="#94a3b8" font-size="9" text-anchor="end" font-weight="bold">${Math.round(minBalance).toLocaleString('fr-FR')} €</text>
 
         <!-- Surface dégradée -->
         <path d="${fillPathD}" fill="url(#financesGradient)" />
@@ -918,14 +1144,14 @@ window.ProtecFinances = {
         <!-- Ligne continue de solde -->
         <path d="${pathD}" fill="none" stroke="#34d399" stroke-width="3" stroke-linecap="round" />
 
-        <!-- Points de données cliquables/survolables -->
+        <!-- Points de données cliquables/survolables (un point par jour) -->
         ${points.map((p, i) => `
           <g class="cursor-pointer group">
             <circle cx="${p.x}" cy="${p.y}" r="4" fill="#10b981" stroke="#ffffff" stroke-width="2" class="hover:r-6 transition-all" />
-            <!-- Étiquette au survol -->
-            <title>${p.item.dateStr || ''} : ${p.item.balance.toLocaleString('fr-FR')} €\n${p.item.label} (${p.item.amount >= 0 ? '+' : ''}${p.item.amount} €)</title>
-            <!-- Date en bas -->
-            ${i % Math.ceil(points.length / 7) === 0 || i === points.length - 1 ? `
+            <!-- Étiquette au survol (solde quotidien propre sans mentionner 00h00) -->
+            <title>${p.item.dateStr || ''} : ${(p.item.balance || 0).toLocaleString('fr-FR')} €\nSolde quotidien</title>
+            <!-- Libellé du jour en bas -->
+            ${i % Math.ceil(points.length / 8) === 0 || i === points.length - 1 ? `
               <text x="${p.x}" y="${height - 6}" fill="#94a3b8" font-size="8" text-anchor="middle" font-weight="600">${p.item.dateStr}</text>
             ` : ''}
           </g>

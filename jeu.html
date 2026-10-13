@@ -47,21 +47,25 @@
   <!-- Custom Styles & PWA Manifest -->
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="landing.css">
-  <link rel="icon" type="image/png" href="logo_myprotec_icon.png">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16x16.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512x512.png">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#1e3a8a">
+  <meta name="theme-color" content="#002E6D">
 
   <!-- Apple iOS Safari & Modern PWA Support -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="MyProtec">
-  <link rel="apple-touch-icon" href="logo_myprotec_icon.png">
-  <link rel="apple-touch-icon" sizes="192x192" href="logo_myprotec_icon.png">
-  <link rel="apple-touch-icon" sizes="512x512" href="logo_myprotec_icon.png">
+  <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512x512.png">
 
   <!-- Microsoft Windows Tile PWA -->
-  <meta name="msapplication-TileImage" content="logo_myprotec_icon.png">
+  <meta name="msapplication-TileImage" content="icons/icon-512x512.png">
   <meta name="msapplication-TileColor" content="#002E6D">
 </head>
 <body class="h-full w-full overflow-hidden bg-slate-100 font-sans text-slate-800 antialiased select-none">
@@ -567,15 +571,8 @@
         <div id="dock-submenu-liaisons" class="dock-submenu">
           <div class="dock-submenu-header">
             <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Liaisons & Réseau</span>
-            <span class="text-[9px] font-bold text-sky-600">Radio</span>
+            <span class="text-[9px] font-bold text-sky-600">Réseau</span>
           </div>
-          <button onclick="window.game.openModule('radio'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
-            <div class="flex items-center gap-2">
-              <i data-lucide="radio" class="w-4 h-4 text-sky-600"></i>
-              <span>Radio PC & Main courante</span>
-            </div>
-            <span id="badge-submenu-radio" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
-          </button>
           <button onclick="window.game.openModule('tchat'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="message-square" class="w-4 h-4 text-indigo-600"></i>
@@ -620,6 +617,13 @@
               <i data-lucide="cloud-sun" class="w-4 h-4 text-sky-600"></i>
               <span>Météo-France</span>
             </div>
+          </button>
+          <button onclick="window.ProtecAuth.openReferralShareModal(); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="gift" class="w-4 h-4 text-rose-500"></i>
+              <span>Parrainage & QR Code</span>
+            </div>
+            <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 font-bold">+2 500 €</span>
           </button>
         </div>
       </div>
@@ -666,11 +670,11 @@
         <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Antenne</span>
       </button>
 
-      <!-- 4. Liaisons & Radio -->
-      <button onclick="window.game.openModule('radio')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-sky-50 min-w-0" title="Radio & Liaisons">
+      <!-- 4. Liaisons & Messagerie -->
+      <button onclick="window.game.openModule('tchat')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-sky-50 min-w-0" title="Messagerie & Liaisons">
         <div class="relative">
-          <i data-lucide="radio" class="w-5 h-5 text-sky-600"></i>
-          <span id="badge-liaisons-mobile" class="hidden absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-sky-600 text-white min-w-[14px] text-center leading-tight">0</span>
+          <i data-lucide="message-square" class="w-5 h-5 text-indigo-600"></i>
+          <span id="badge-liaisons-mobile" class="hidden absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-indigo-600 text-white min-w-[14px] text-center leading-tight">0</span>
         </div>
         <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Liaisons</span>
       </button>
@@ -863,13 +867,6 @@
       <div class="space-y-1.5">
         <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Liaisons & Réseau</span>
         <div class="grid grid-cols-4 sm:grid-cols-7 gap-1 text-center">
-          <button onclick="window.game.closeMobileMenu(); window.game.openModule('radio')" class="mobile-grid-btn group">
-            <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
-              <i data-lucide="radio" class="w-4.5 h-4.5"></i>
-            </div>
-            <span class="text-[11px] font-bold text-slate-700">Radio</span>
-            <span class="text-[8px] text-slate-400">En direct</span>
-          </button>
           <button onclick="window.game.closeMobileMenu(); window.game.openModule('tchat')" class="mobile-grid-btn group">
             <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
               <i data-lucide="message-square" class="w-4.5 h-4.5"></i>
@@ -922,6 +919,9 @@
         </button>
         <button onclick="window.game.closeMobileMenu(); window.ProtecAuth.openAuthModal()" class="flex-1 py-2.5 px-3 rounded-xl bg-pc-blue/10 text-pc-blue font-bold text-xs flex items-center justify-center gap-1.5 active:bg-pc-blue/20 transition">
           <i data-lucide="user" class="w-4 h-4"></i> Mon Compte
+        </button>
+        <button onclick="window.game.closeMobileMenu(); window.ProtecAuth.openReferralShareModal()" class="py-2.5 px-3 rounded-xl bg-amber-50 text-amber-800 font-bold text-xs flex items-center justify-center gap-1.5 active:bg-amber-100 transition" title="Parrainage & QR Code">
+          <i data-lucide="gift" class="w-4 h-4 text-amber-600"></i> Parrainage
         </button>
         <button onclick="window.game.closeMobileMenu(); window.game.confirmResetGame()" class="py-2.5 px-3 rounded-xl bg-rose-50 text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 active:bg-rose-100 transition">
           <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reset
@@ -1196,6 +1196,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase.js"></script>
 
+  <script src="js/qrcode.min.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/privacy.js"></script>
   <script src="js/help.js"></script>

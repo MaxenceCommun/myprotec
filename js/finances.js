@@ -219,6 +219,9 @@ window.ProtecFinances = {
       if (h.id && String(h.id).startsWith('tx-seed-')) return false;
       const lbl = (h.label || '').toLowerCase();
       if (fakeKeywords.some(kw => lbl.includes(kw))) return false;
+      // Élimination des opérations à 0 € (aucun mouvement bancaire réel)
+      const amt = Number(h.amount);
+      if (isNaN(amt) || Math.abs(amt) < 0.01) return false;
       return true;
     });
 
@@ -306,6 +309,11 @@ window.ProtecFinances = {
       t = tier || null;
     }
 
+    // Aucun mouvement bancaire si le montant est nul (0 €) : ne rien enregistrer ni afficher
+    if (!amount || Math.abs(amount) < 0.01) {
+      return;
+    }
+
     const currentMoney = Number(game.resources?.money) || 0;
     const newBalance = currentMoney; // Solde officiel après opération
 
@@ -316,13 +324,20 @@ window.ProtecFinances = {
     });
 
     const now = Date.now();
-    const dStr = (game.clock && game.clock.day && game.clock.month !== undefined) 
-      ? `Jour ${game.clock.day} / ${game.clock.month + 1} (${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })})` 
+    const clockDay = game.clock?.day;
+    const clockMonth = game.clock?.month;
+    const clockYear = game.clock?.year;
+
+    const dStr = (clockDay && clockMonth !== undefined) 
+      ? `Jour ${clockDay} / ${clockMonth + 1} (${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })})` 
       : new Date(now).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
     const entry = {
       id: `tx-${now}-${Math.floor(Math.random() * 10000)}`,
       timestamp: now,
+      gameDay: clockDay,
+      gameMonth: clockMonth,
+      gameYear: clockYear,
       dateStr: dStr,
       amount: amount,
       label: lbl,
@@ -384,6 +399,134 @@ window.ProtecFinances = {
     this.renderModal(game);
   },
 
+  // Calcul et agrégation des soldes quotidiens (un seul point par jour, arrêté à 00h00)
+  getDailyBalances(game) {
+    if (!game) return [];
+    this.injectState(game);
+
+    const validHistory = (game.financesHistory || []).filter(h => {
+      if (!h) return false;
+      const amt = Number(h.amount);
+      return !isNaN(amt) && Math.abs(amt) >= 0.01;
+    });
+
+    const currentMoney = Number(game.resources?.money) || 0;
+    const clock = game.clock || {};
+    const now = new Date();
+    const currentYear = clock.year || now.getFullYear();
+    const currentMonth = (clock.month !== undefined) ? clock.month : now.getMonth();
+    const currentDay = (clock.day !== undefined) ? clock.day : now.getDate();
+
+    const todayDate = new Date(currentYear, currentMonth, currentDay, 0, 0, 0, 0);
+    const todayMs = todayDate.getTime();
+    const oneDayMs = 24 * 3600 * 1000;
+
+    if (validHistory.length === 0) {
+      const prevDate = new Date(todayMs - oneDayMs);
+      return [
+        { dateStr: `Jour ${prevDate.getDate()}`, day: prevDate.getDate(), balance: currentMoney, timestamp: prevDate.getTime() },
+        { dateStr: `Jour ${todayDate.getDate()}`, day: todayDate.getDate(), balance: currentMoney, timestamp: todayMs }
+      ];
+    }
+
+    // Helper pour extraire le timestamp de minuit (00h00) correspondant à une transaction
+    const getTxMidnightMs = (tx) => {
+      if (tx.gameDay !== undefined) {
+        const m = tx.gameMonth ?? currentMonth;
+        const y = tx.gameYear ?? currentYear;
+        return new Date(y, m, tx.gameDay, 0, 0, 0, 0).getTime();
+      }
+      if (tx.dateStr) {
+        const match = tx.dateStr.match(/Jour\s+(\d+)(?:\s*(?:\/|M)\s*(\d+))?/i);
+        if (match) {
+          const d = parseInt(match[1], 10);
+          const m = match[2] ? parseInt(match[2], 10) - 1 : currentMonth;
+          return new Date(currentYear, m, d, 0, 0, 0, 0).getTime();
+        }
+      }
+      if (tx.timestamp) {
+        const d = new Date(tx.timestamp);
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
+      }
+      return todayMs;
+    };
+
+    // Trouver la date de début parmi les transactions opérationnelles
+    const operationalTxs = validHistory.filter(tx => 
+      tx.ref !== 'FONDS-INITIAL-PC' && 
+      tx.ref !== 'DOT-INIT-01' && 
+      !(tx.dateStr && (tx.dateStr.includes('Lancement') || tx.dateStr.includes('Ouverture')))
+    );
+
+    let startMs = todayMs - oneDayMs; // au minimum hier
+    if (operationalTxs.length > 0) {
+      const opDates = operationalTxs.map(tx => getTxMidnightMs(tx));
+      const earliestOp = Math.min(...opDates);
+      startMs = Math.min(startMs, earliestOp);
+    } else if (validHistory.length > 0) {
+      startMs = todayMs - oneDayMs;
+    }
+
+    // Limiter la fenêtre à 15 jours max pour un affichage lisible et ergonomique
+    const maxLookback = todayMs - (14 * oneDayMs);
+    if (startMs < maxLookback) {
+      startMs = maxLookback;
+    }
+
+    // Pour chaque jour de startMs à todayMs (inclus), calculer le solde arrêté à 00h00
+    const dailyPoints = [];
+    const initialBalance = validHistory[0] ? validHistory[0].balance : currentMoney;
+
+    for (let curMs = startMs; curMs <= todayMs; curMs += oneDayMs) {
+      const curDate = new Date(curMs);
+
+      // Transactions survenues strictement avant ce jour à 00h00
+      const opsBeforeThisDay = validHistory.filter(tx => {
+        const txMs = tx.timestamp || getTxMidnightMs(tx);
+        return txMs < curMs;
+      });
+
+      let balanceAt00h00;
+      if (opsBeforeThisDay.length > 0) {
+        balanceAt00h00 = opsBeforeThisDay[opsBeforeThisDay.length - 1].balance;
+      } else {
+        const firstOp = validHistory[0];
+        balanceAt00h00 = firstOp ? (firstOp.ref === 'FONDS-INITIAL-PC' || firstOp.ref === 'DOT-INIT-01' ? firstOp.balance : firstOp.balance - firstOp.amount) : initialBalance;
+      }
+
+      // Si c'est aujourd'hui, le solde correspond au solde en cours du compte
+      let pointBalance = balanceAt00h00;
+      if (curMs === todayMs) {
+        pointBalance = currentMoney;
+      }
+
+      dailyPoints.push({
+        dateStr: `Jour ${curDate.getDate()}`,
+        day: curDate.getDate(),
+        month: curDate.getMonth(),
+        year: curDate.getFullYear(),
+        timestamp: curMs,
+        balance: Math.round(pointBalance)
+      });
+    }
+
+    // Toujours garantir au moins 2 points
+    if (dailyPoints.length === 1) {
+      const single = dailyPoints[0];
+      const prevDate = new Date(single.timestamp - oneDayMs);
+      dailyPoints.unshift({
+        dateStr: `Jour ${prevDate.getDate()}`,
+        day: prevDate.getDate(),
+        month: prevDate.getMonth(),
+        year: prevDate.getFullYear(),
+        timestamp: prevDate.getTime(),
+        balance: single.balance
+      });
+    }
+
+    return dailyPoints;
+  },
+
   // Rendu de la vue principale dans la fenêtre modale
   renderModal(game) {
     game = game || window.game;
@@ -400,27 +543,30 @@ window.ProtecFinances = {
     if (icon) icon.setAttribute('data-lucide', 'wallet');
 
     this.injectState(game);
-    const history = game.financesHistory || [];
-    const currentMoney = game.resources?.money || 0;
+    const history = (game.financesHistory || []).filter(h => h && typeof h.amount === 'number' && Math.abs(h.amount) >= 0.01);
+    const currentMoney = Number(game.resources?.money) || 0;
 
     // Calcul des agrégats globaux
     const globalRecettes = history.filter(h => h.amount > 0).reduce((acc, h) => acc + h.amount, 0);
     const globalDepenses = Math.abs(history.filter(h => h.amount < 0).reduce((acc, h) => acc + h.amount, 0));
     const globalSoldeNet = globalRecettes - globalDepenses;
 
-    // Calcul des balances pour le graphique
-    const balances = history.map(h => h.balance);
-    const maxBalance = Math.max(...balances, currentMoney, 1000);
-    const minBalance = Math.min(...balances, currentMoney, 0);
+    // Calcul des soldes quotidiens pour le graphique (un seul point par jour, arrêté à 00h00)
+    const dailyBalances = this.getDailyBalances(game);
+    const dailyValues = dailyBalances.map(d => d.balance);
+    const maxBalance = Math.max(...dailyValues, currentMoney, 1000);
+    const minBalance = Math.min(...dailyValues, currentMoney, 0);
 
     // Filtrage des transactions selon les critères
     let filtered = [...history];
 
-    // 1. Filtre par flux (Tous / Entrées / Sorties)
+    // 1. Filtre par flux (Tous / Entrées / Sorties) : exclure strictement les montants nuls
     if (this.filters.flow === 'recette') {
-      filtered = filtered.filter(h => h.amount >= 0);
+      filtered = filtered.filter(h => Number(h.amount) > 0);
     } else if (this.filters.flow === 'depense') {
-      filtered = filtered.filter(h => h.amount < 0);
+      filtered = filtered.filter(h => Number(h.amount) < 0);
+    } else {
+      filtered = filtered.filter(h => Math.abs(Number(h.amount)) >= 0.01);
     }
 
     // 2. Filtre par catégorie
@@ -604,7 +750,7 @@ window.ProtecFinances = {
             </div>
             <div>
               <h4 class="text-sm font-black text-white leading-tight">Courbe Chronologique du Solde</h4>
-              <p class="text-[11px] text-slate-400">Évolution du compte bancaire de l'antenne sur toute la période</p>
+              <p class="text-[11px] text-slate-400">Évolution du solde quotidien de l'antenne sur toute la période</p>
             </div>
           </div>
           <div class="flex items-center gap-3 text-xs">
@@ -615,7 +761,7 @@ window.ProtecFinances = {
         </div>
 
         <div class="w-full overflow-x-auto no-scrollbar">
-          ${this.renderSvgChart(history, minBalance, maxBalance)}
+          ${this.renderSvgChart(dailyBalances, minBalance, maxBalance)}
         </div>
       </div>
 
@@ -928,10 +1074,10 @@ window.ProtecFinances = {
     }
   },
 
-  // Génération du SVG de courbe fluide et interactive
-  renderSvgChart(history, minBalance, maxBalance) {
-    if (!history || history.length === 0) {
-      return '<div class="p-8 text-center text-xs text-slate-400">Aucune transaction enregistrée.</div>';
+  // Génération du SVG de courbe fluide et interactive (un point par jour)
+  renderSvgChart(dailyPoints, minBalance, maxBalance) {
+    if (!dailyPoints || dailyPoints.length === 0) {
+      return '<div class="p-8 text-center text-xs text-slate-400">Aucune donnée de solde disponible.</div>';
     }
 
     const width = 640;
@@ -940,23 +1086,23 @@ window.ProtecFinances = {
     const padY = 25;
 
     // Si un seul point, dupliquer pour tracer une ligne plate
-    const displayHistory = history.length === 1 ? [
-      { ...history[0], dateStr: 'Départ' },
-      { ...history[0], dateStr: 'Actuel' }
-    ] : history;
+    const displayPoints = dailyPoints.length === 1 ? [
+      { ...dailyPoints[0], dateStr: `Jour ${Math.max(1, (dailyPoints[0].day || 2) - 1)}` },
+      { ...dailyPoints[0] }
+    ] : dailyPoints;
 
     const rangeY = Math.max(1, maxBalance - minBalance);
-    const stepX = (width - padX * 2) / (displayHistory.length - 1);
+    const stepX = (width - padX * 2) / (displayPoints.length - 1);
 
     // Coordonnées des points
-    const points = displayHistory.map((item, idx) => {
+    const points = displayPoints.map((item, idx) => {
       const x = padX + (idx * stepX);
       const normY = (item.balance - minBalance) / rangeY;
       const y = (height - padY) - (normY * (height - padY * 2));
       return { x, y, item };
     });
 
-    // Construction du chemin SVG (Smooth path)
+    // Construction du chemin SVG (Smooth bezier path)
     let pathD = `M ${points[0].x} ${points[0].y}`;
     for (let i = 0; i < points.length - 1; i++) {
       const p0 = points[i];
@@ -988,9 +1134,9 @@ window.ProtecFinances = {
         <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" stroke="#334155" stroke-width="1" />
 
         <!-- Libellés Y -->
-        <text x="${padX - 8}" y="${padY + 4}" fill="#94a3b8" font-size="9" text-anchor="end" font-weight="bold">${Math.round(maxBalance)} €</text>
-        <text x="${padX - 8}" y="${height / 2 + 3}" fill="#64748b" font-size="8" text-anchor="end">${Math.round((maxBalance + minBalance) / 2)} €</text>
-        <text x="${padX - 8}" y="${height - padY + 3}" fill="#94a3b8" font-size="9" text-anchor="end" font-weight="bold">${Math.round(minBalance)} €</text>
+        <text x="${padX - 8}" y="${padY + 4}" fill="#94a3b8" font-size="9" text-anchor="end" font-weight="bold">${Math.round(maxBalance).toLocaleString('fr-FR')} €</text>
+        <text x="${padX - 8}" y="${height / 2 + 3}" fill="#64748b" font-size="8" text-anchor="end">${Math.round((maxBalance + minBalance) / 2).toLocaleString('fr-FR')} €</text>
+        <text x="${padX - 8}" y="${height - padY + 3}" fill="#94a3b8" font-size="9" text-anchor="end" font-weight="bold">${Math.round(minBalance).toLocaleString('fr-FR')} €</text>
 
         <!-- Surface dégradée -->
         <path d="${fillPathD}" fill="url(#financesGradient)" />
@@ -998,14 +1144,14 @@ window.ProtecFinances = {
         <!-- Ligne continue de solde -->
         <path d="${pathD}" fill="none" stroke="#34d399" stroke-width="3" stroke-linecap="round" />
 
-        <!-- Points de données cliquables/survolables -->
+        <!-- Points de données cliquables/survolables (un point par jour) -->
         ${points.map((p, i) => `
           <g class="cursor-pointer group">
             <circle cx="${p.x}" cy="${p.y}" r="4" fill="#10b981" stroke="#ffffff" stroke-width="2" class="hover:r-6 transition-all" />
-            <!-- Étiquette au survol -->
-            <title>${p.item.dateStr || ''} : ${p.item.balance.toLocaleString('fr-FR')} €\n${p.item.label} (${p.item.amount >= 0 ? '+' : ''}${p.item.amount} €)</title>
-            <!-- Date en bas -->
-            ${i % Math.ceil(points.length / 7) === 0 || i === points.length - 1 ? `
+            <!-- Étiquette au survol (solde quotidien propre sans mentionner 00h00) -->
+            <title>${p.item.dateStr || ''} : ${(p.item.balance || 0).toLocaleString('fr-FR')} €\nSolde quotidien</title>
+            <!-- Libellé du jour en bas -->
+            ${i % Math.ceil(points.length / 8) === 0 || i === points.length - 1 ? `
               <text x="${p.x}" y="${height - 6}" fill="#94a3b8" font-size="8" text-anchor="middle" font-weight="600">${p.item.dateStr}</text>
             ` : ''}
           </g>

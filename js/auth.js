@@ -11,13 +11,19 @@ window.ProtecAuth = {
     this.currentUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
     this.updateHeaderUI();
 
-    // Détection d'un lien de parrainage dans l'URL (?ref=CODE ou ?parrain=CODE)
+    // Détection d'un lien de parrainage dans l'URL (?ref=CODE ou ?parrain=CODE) avec persistance localStorage
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const refParam = urlParams.get('ref') || urlParams.get('parrain');
       if (refParam) {
         this.pendingReferralCode = refParam.trim().toUpperCase();
+        try { localStorage.setItem('protec_pending_ref', this.pendingReferralCode); } catch (e) {}
         console.log('🎁 Code parrain détecté depuis l’URL :', this.pendingReferralCode);
+      } else {
+        try {
+          const storedRef = localStorage.getItem('protec_pending_ref');
+          if (storedRef) this.pendingReferralCode = storedRef.trim().toUpperCase();
+        } catch (e) {}
       }
     } catch (e) {}
 
@@ -244,6 +250,270 @@ window.ProtecAuth = {
     }
   },
 
+  // =========================================================================
+  // GESTION DU PARRAINAGE, LIENS D'INVITATION & QR CODE D'AFFILIATION
+  // =========================================================================
+
+  getReferralLink(refCode = null) {
+    const code = refCode || (this.currentUser && this.currentUser.referral_code) || '';
+    const base = (window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file'))
+      ? window.location.origin
+      : 'https://myprotec.fr';
+    return `${base}/?ref=${encodeURIComponent(code)}`;
+  },
+
+  async copyReferralCode(refCode = null) {
+    const code = refCode || (this.currentUser && this.currentUser.referral_code) || '';
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast('Code Copié !', `Votre code de parrainage (${code}) a été copié dans le presse-papier.`, 'blue');
+      }
+    } catch (e) {
+      console.warn('Erreur copie code:', e);
+    }
+  },
+
+  async copyReferralLink(refCode = null) {
+    const code = refCode || (this.currentUser && this.currentUser.referral_code) || '';
+    const url = this.getReferralLink(code);
+    try {
+      await navigator.clipboard.writeText(url);
+      const copyBtns = [
+        document.getElementById('auth-copy-ref-link-btn'),
+        document.getElementById('auth-modal-copy-ref-link-btn')
+      ].filter(Boolean);
+      
+      copyBtns.forEach(btn => {
+        const origText = btn.innerHTML;
+        btn.innerHTML = `✓ Copié !`;
+        btn.classList.add('bg-emerald-600', 'text-white');
+        setTimeout(() => {
+          btn.innerHTML = origText;
+          btn.classList.remove('bg-emerald-600');
+        }, 2000);
+      });
+
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast('Lien de Parrainage Copié !', 'Le lien d’affiliation a été copié dans le presse-papier. Envoyez-le à vos futurs filleuls !', 'blue');
+      }
+    } catch (e) {
+      console.warn('Erreur copie lien:', e);
+    }
+  },
+
+  async shareReferralLink(refCode = null) {
+    const code = refCode || (this.currentUser && this.currentUser.referral_code) || '';
+    const url = this.getReferralLink(code);
+    const shareData = {
+      title: 'Rejoins-moi sur MyProtec !',
+      text: `Rejoins-moi sur MyProtec, le jeu de simulation de la Protection Civile ! Crée ton antenne de premiers secours et reçois immédiatement +1 500 € de dotation de bienvenue (Code parrain : ${code}) :`,
+      url: url
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err) {
+        if (err.name !== 'AbortError') console.warn('Share error:', err);
+      }
+    }
+    // Fallback : copie du lien
+    await this.copyReferralLink(code);
+  },
+
+  renderReferralQRCode(containerId, refCode = null, size = 140) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const code = refCode || (this.currentUser && this.currentUser.referral_code) || 'MYPROTEC';
+    const url = this.getReferralLink(code);
+
+    container.innerHTML = '';
+
+    if (typeof QRCode !== 'undefined') {
+      try {
+        new QRCode(container, {
+          text: url,
+          width: size,
+          height: size,
+          colorDark: '#003366',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.H
+        });
+        return;
+      } catch (e) {
+        console.warn('Erreur rendu QRCode:', e);
+      }
+    }
+
+    // Fallback si la librairie QRCode n'est pas disponible
+    container.innerHTML = `
+      <div class="w-full h-full min-h-[100px] flex flex-col items-center justify-center p-2 text-center bg-slate-50 border border-slate-200 rounded-xl">
+        <span class="text-2xl">📱</span>
+        <span class="text-[9px] font-mono font-bold text-slate-500 mt-1">${code}</span>
+      </div>
+    `;
+  },
+
+  downloadReferralQRCode(refCode = null) {
+    const code = refCode || (this.currentUser && this.currentUser.referral_code) || 'MYPROTEC';
+    const url = this.getReferralLink(code);
+
+    // Générer un canvas haute définition (512x512)
+    const tempDiv = document.createElement('div');
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.left = '-9999px';
+    document.body.appendChild(tempDiv);
+
+    if (typeof QRCode !== 'undefined') {
+      try {
+        new QRCode(tempDiv, {
+          text: url,
+          width: 512,
+          height: 512,
+          colorDark: '#003366',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.H
+        });
+
+        setTimeout(() => {
+          const canvas = tempDiv.querySelector('canvas');
+          if (canvas) {
+            const link = document.createElement('a');
+            link.download = `myprotec-parrainage-${code}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            if (window.game && typeof window.game.showToast === 'function') {
+              window.game.showToast('QR Code Téléchargé !', `L'image QR Code HD (${code}) a été enregistrée sur votre appareil.`, 'green');
+            }
+          }
+          if (tempDiv.parentNode) document.body.removeChild(tempDiv);
+        }, 120);
+        return;
+      } catch (e) {
+        console.warn('Erreur download QRCode:', e);
+        if (tempDiv.parentNode) document.body.removeChild(tempDiv);
+      }
+    }
+  },
+
+  openReferralShareModal(refCode = null) {
+    const code = refCode || (this.currentUser && this.currentUser.referral_code) || '';
+    if (!code) {
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast('Connexion requise', 'Connectez-vous à votre antenne pour générer votre QR code de parrainage.', 'orange');
+      }
+      this.openAuthModal(false);
+      return;
+    }
+
+    const modalId = 'auth-referral-share-modal';
+    let modalEl = document.getElementById(modalId);
+    if (!modalEl) {
+      modalEl = document.createElement('div');
+      modalEl.id = modalId;
+      modalEl.className = 'fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-3 sm:p-4 animate-in fade-in';
+      document.body.appendChild(modalEl);
+    }
+
+    const url = this.getReferralLink(code);
+
+    modalEl.innerHTML = `
+      <div class="w-full max-w-md rounded-3xl bg-white border border-slate-200 p-5 sm:p-6 shadow-2xl relative text-left space-y-4 max-h-[95vh] overflow-y-auto">
+        
+        <!-- En-tête -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-shrink-0">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center font-black shadow-md text-base">
+              🎁
+            </div>
+            <div>
+              <h3 class="text-sm font-black text-slate-900 leading-tight">Fiche Officielle de Parrainage</h3>
+              <p class="text-[11px] text-pc-blue font-bold">Affiliation Directe & Téléchargement du Jeu</p>
+            </div>
+          </div>
+          <button onclick="window.ProtecAuth.closeReferralShareModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-black text-xs cursor-pointer transition">
+            ✕
+          </button>
+        </div>
+
+        <!-- Instructions pour le parrain -->
+        <div class="p-3 rounded-2xl bg-blue-50/80 border border-blue-200/80 text-xs text-blue-950 space-y-1">
+          <p class="font-bold flex items-center gap-1.5 text-pc-blue">
+            <span>📲</span> Faites scanner ce QR Code à votre futur filleul
+          </p>
+          <p class="text-[11px] text-slate-600 leading-relaxed">
+            Son smartphone ouvrira automatiquement MyProtec avec votre affiliation enregistrée. Dès qu'il crée son antenne, il reçoit immédiatement son bonus de <strong>1 500 €</strong> !
+          </p>
+        </div>
+
+        <!-- Grand QR Code centré avec style officiel -->
+        <div class="flex flex-col items-center justify-center p-4 rounded-3xl bg-gradient-to-b from-slate-50 to-white border-2 border-slate-200 shadow-inner">
+          <div id="auth-modal-large-qrcode" class="p-3 bg-white rounded-2xl border border-slate-200 shadow-md flex items-center justify-center min-w-[200px] min-h-[200px]"></div>
+          
+          <div class="mt-3 text-center space-y-0.5">
+            <span class="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Votre Code Parrain</span>
+            <div class="font-mono font-black text-lg text-pc-blue tracking-widest">
+              ${code}
+            </div>
+          </div>
+        </div>
+
+        <!-- Champ du lien complet copiable -->
+        <div class="space-y-1.5">
+          <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500">Lien d'invitation direct pour vos filleuls :</label>
+          <div class="flex items-center gap-1.5">
+            <input type="text" readonly value="${url}" id="auth-modal-ref-link-input" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-mono text-xs text-slate-800 font-semibold focus:outline-none select-all" />
+            <button id="auth-modal-copy-ref-link-btn" onclick="window.ProtecAuth.copyReferralLink('${code}')" class="px-3.5 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs transition cursor-pointer shadow-xs flex items-center gap-1 shrink-0">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span>Copier</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Rappel des bonus -->
+        <div class="grid grid-cols-2 gap-2 text-center text-xs">
+          <div class="p-2.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900">
+            <span class="text-[10px] font-black uppercase block text-emerald-700">Bonus Filleul</span>
+            <strong class="text-sm font-black">+1 500 €</strong>
+            <span class="text-[9px] block text-emerald-600 mt-0.5">Dès l'inscription</span>
+          </div>
+          <div class="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900">
+            <span class="text-[10px] font-black uppercase block text-amber-700">Prime Parrain</span>
+            <strong class="text-sm font-black">+2 500 €</strong>
+            <span class="text-[9px] block text-amber-600 mt-0.5">Au 1er DPS terminé</span>
+          </div>
+        </div>
+
+        <!-- Boutons d'action -->
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button onclick="window.ProtecAuth.downloadReferralQRCode('${code}')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Télécharger PNG</span>
+          </button>
+          <button onclick="window.ProtecAuth.shareReferralLink('${code}')" class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-pc-blue to-pc-blue-light hover:brightness-110 text-white font-black text-xs transition cursor-pointer shadow-md flex items-center justify-center gap-1.5">
+            <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+            <span>Partager le lien</span>
+          </button>
+        </div>
+
+      </div>
+    `;
+
+    modalEl.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
+
+    setTimeout(() => {
+      this.renderReferralQRCode('auth-modal-large-qrcode', code, 200);
+    }, 50);
+  },
+
+  closeReferralShareModal() {
+    const modalEl = document.getElementById('auth-referral-share-modal');
+    if (modalEl) modalEl.classList.add('hidden');
+  },
+
   openAuthModal(isMandatory = false) {
     const modal = document.getElementById('auth-modal');
     const closeBtn = document.getElementById('auth-modal-close-btn');
@@ -335,32 +605,19 @@ window.ProtecAuth = {
               </button>
             </div>
           ` : `
-            <div class="p-4 rounded-2xl glass-card space-y-2 text-xs text-slate-700">
-              <div class="flex justify-between items-center py-1 border-b border-slate-100">
-                <span class="text-slate-500 font-medium">Mode de Jeu</span>
-                <span class="font-bold text-pc-blue flex items-center gap-1.5">
-                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Multijoueur
-                </span>
-              </div>
-              <div class="flex justify-between items-center py-1">
-                <span class="text-slate-500 font-medium">Synchronisation Réseau</span>
-                <span class="font-mono font-bold text-slate-800" id="auth-sync-date">${syncDate}</span>
-              </div>
-            </div>
-
             <!-- Collection d'Écussons Commémoratifs & Rareté -->
             ${window.ProtecMultiplayer ? window.ProtecMultiplayer.renderBadgesCollectionHTML(window.game) : ''}
 
-            <!-- Programme de Parrainage & Sécurité -->
+            <!-- Programme de Parrainage, Lien & QR Code -->
             <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/40 to-slate-50 border border-blue-200/80 shadow-xs space-y-3">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                  <div class="w-7 h-7 rounded-lg bg-pc-blue text-white flex items-center justify-center font-black">
+                  <div class="w-8 h-8 rounded-xl bg-pc-blue text-white flex items-center justify-center font-black shadow-xs">
                     <i data-lucide="gift" class="w-4 h-4"></i>
                   </div>
                   <div>
                     <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide">Programme de Parrainage</h5>
-                    <p class="text-[10px] text-slate-500">Invitez de nouveaux directeurs & gagnez +2 500 €</p>
+                    <p class="text-[10px] text-slate-500">Recrutez de nouveaux directeurs d'antennes</p>
                   </div>
                 </div>
                 ${this.currentUser.referral_suspended ? `
@@ -383,45 +640,76 @@ window.ProtecAuth = {
                 </div>
               ` : ''}
 
-              <div class="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between gap-2">
+              <!-- Code Parrain Unique -->
+              <div class="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between gap-2 shadow-2xs">
                 <div class="min-w-0">
                   <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Votre Code Parrain Unique</div>
                   <div class="font-mono font-black text-sm text-pc-blue tracking-wider truncate" id="auth-my-ref-code">
                     ${this.currentUser.referral_code || 'GÉNÉRATION...'}
                   </div>
                 </div>
-                <div class="flex items-center gap-1.5 flex-shrink-0">
-                  <button type="button" onclick="navigator.clipboard.writeText('${this.currentUser.referral_code || ''}'); window.game?.showToast?.('Code Copié !', 'Votre code de parrainage a été copié.', 'blue');" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1 cursor-pointer">
+                <button type="button" onclick="window.ProtecAuth.copyReferralCode('${this.currentUser.referral_code || ''}')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1 cursor-pointer">
+                  <i data-lucide="copy" class="w-3 h-3"></i> Copier
+                </button>
+              </div>
+
+              <!-- Lien de Parrainage Direct -->
+              <div class="space-y-1">
+                <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Lien d'invitation direct pour vos futurs filleuls</div>
+                <div class="flex items-center gap-1.5">
+                  <input type="text" readonly value="${this.getReferralLink(this.currentUser.referral_code)}" id="auth-profile-ref-link-input" class="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-mono text-[11px] text-slate-800 font-semibold focus:outline-none select-all" />
+                  <button type="button" id="auth-copy-ref-link-btn" onclick="window.ProtecAuth.copyReferralLink('${this.currentUser.referral_code || ''}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1 cursor-pointer shrink-0">
                     <i data-lucide="copy" class="w-3 h-3"></i> Copier
                   </button>
-                  <button type="button" onclick="const url = window.location.origin + window.location.pathname + '?ref=' + ('${this.currentUser.referral_code || ''}'); navigator.clipboard.writeText(url); window.game?.showToast?.('Lien Copié !', 'Lien d’invitation copié dans le presse-papier.', 'blue');" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1 cursor-pointer">
-                    <i data-lucide="link" class="w-3 h-3"></i> Lien
+                  <button type="button" onclick="window.ProtecAuth.shareReferralLink('${this.currentUser.referral_code || ''}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition flex items-center gap-1 cursor-pointer shrink-0" title="Partager (SMS, WhatsApp...)">
+                    <i data-lucide="share-2" class="w-3 h-3"></i> Partager
                   </button>
                 </div>
               </div>
-              <div class="text-[10px] text-slate-500 flex items-center justify-between">
-                <span>Bonus Filleul à l'inscription : <strong>+1 500 €</strong></span>
-                <span>Prime Parrain au 1er DPS : <strong>+2 500 €</strong></span>
+
+              <!-- Bloc QR Code & Téléchargement -->
+              <div class="p-3 rounded-xl bg-white border border-slate-200 flex items-center gap-3 shadow-2xs">
+                <div id="auth-profile-qrcode" class="w-[84px] h-[84px] bg-slate-50 border border-slate-200 rounded-xl p-1 flex items-center justify-center shrink-0 min-w-[84px] min-h-[84px]"></div>
+                <div class="space-y-1.5 min-w-0 flex-1 text-xs">
+                  <h6 class="font-black text-slate-900 leading-tight">QR Code d'Affiliation & Téléchargement</h6>
+                  <p class="text-[10px] text-slate-500 leading-snug">
+                    Faites scanner ce code pour que votre filleul télécharge le jeu et soit affilié directement.
+                  </p>
+                  <div class="flex items-center gap-1.5 pt-0.5">
+                    <button type="button" onclick="window.ProtecAuth.openReferralShareModal('${this.currentUser.referral_code || ''}')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-extrabold text-[10px] transition cursor-pointer flex items-center gap-1">
+                      <i data-lucide="maximize" class="w-3 h-3"></i> Agrandir
+                    </button>
+                    <button type="button" onclick="window.ProtecAuth.downloadReferralQRCode('${this.currentUser.referral_code || ''}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] transition cursor-pointer flex items-center gap-1">
+                      <i data-lucide="download" class="w-3 h-3"></i> PNG
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Barème des gains -->
+              <div class="text-[10px] text-slate-600 flex items-center justify-between p-2 rounded-xl bg-blue-50/50 border border-blue-100">
+                <span>🎁 Filleul : <strong>+1 500 €</strong> à l'inscription</span>
+                <span>👑 Parrain : <strong>+2 500 €</strong> au 1er DPS</span>
               </div>
             </div>
 
-            <!-- Initiative d'Événement Fédéral Exceptionnel -->
+            <!-- Événements exceptionnels -->
             <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 border border-indigo-500/30 text-white shadow-lg space-y-2.5">
               <div class="flex items-center gap-2.5">
                 <div class="w-8 h-8 rounded-xl bg-amber-400 text-slate-900 flex items-center justify-center font-black shadow-sm">
-                  <i data-lucide="crown" class="w-4 h-4"></i>
+                  <i data-lucide="sparkles" class="w-4 h-4"></i>
                 </div>
                 <div>
-                  <h5 class="text-xs font-black text-amber-200 uppercase tracking-wide">Initiative Fédérale Exceptionnelle</h5>
-                  <p class="text-[10px] text-slate-300">Organisation de Grand Rassemblement & DPS National</p>
+                  <h5 class="text-xs font-black text-amber-200 uppercase tracking-wide">Événements exceptionnels</h5>
+                  <p class="text-[10px] text-slate-300">DPS d'envergure, crise majeure, exercice inter-départemental</p>
                 </div>
               </div>
               <p class="text-[11px] text-slate-300 leading-relaxed">
-                En tant que Directeur d'Antenne, vous pouvez soumettre un dossier à caractère exceptionnel pour créer un événement public d'envergure nationale ou inter-départementale doté d'un écusson officiel. Tout dossier est rigoureusement audité et validé par l'administration fédérale avant déploiement.
+                En tant que Directeur d'Antenne, vous pouvez proposer un événement exceptionnel (type DPS à forte affluence, gestion de crise, grand rassemblement ou exercice de sécurité civile). Votre projet permettra de mobiliser les effectifs et d'attribuer des distinctions officielles.
               </p>
               <button onclick="window.ProtecAuth.closeAuthModal(); window.ProtecMultiplayer.openCreateCommunityEventModal(window.game);" class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
                 <i data-lucide="sparkles" class="w-4 h-4 text-slate-950"></i>
-                Proposer un Événement Fédéral (Dossier Exceptionnel)
+                Proposer un événement exceptionnel
               </button>
             </div>
           `}
@@ -435,6 +723,9 @@ window.ProtecAuth = {
         </div>
       `;
       if (window.lucide) window.lucide.createIcons();
+      setTimeout(() => {
+        this.renderReferralQRCode('auth-profile-qrcode', this.currentUser?.referral_code, 76);
+      }, 50);
       return;
     }
 
@@ -507,13 +798,21 @@ window.ProtecAuth = {
             </div>
 
             <!-- Code de Parrainage (Optionnel) -->
-            <div>
-              <div class="flex items-center justify-between mb-1">
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between mb-0.5">
                 <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">Code Parrain (Facultatif)</label>
                 <span class="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <i data-lucide="sparkles" class="w-3 h-3"></i> +1 500 € offerts
                 </span>
               </div>
+              ${this.pendingReferralCode ? `
+                <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-center gap-2 shadow-2xs">
+                  <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
+                  <div class="text-[11px] leading-snug">
+                    <strong>Parrainage actif :</strong> Affilié au parrain <span class="font-mono font-black text-emerald-800">${this.pendingReferralCode}</span>. Vous recevrez <strong>+1 500 €</strong> de dotation de bienvenue !
+                  </div>
+                </div>
+              ` : ''}
               <div class="relative">
                 <i data-lucide="gift" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
                 <input type="text" id="auth-reg-referral" value="${this.pendingReferralCode || ''}" placeholder="Ex: PROT-A1B2 ou Pseudo de votre parrain" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-bold uppercase focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue placeholder:normal-case placeholder:font-normal" />
@@ -972,6 +1271,8 @@ window.ProtecAuth = {
       localStorage.removeItem('protec_live_save_v4');
       localStorage.removeItem('protec_offline_queue');
       localStorage.removeItem('protec_admin_auth');
+      localStorage.removeItem('protec_pending_ref');
+      this.pendingReferralCode = null;
 
       // Si l'inscription a lieu depuis la landing page (hors simulateur), redirection immédiate vers le jeu
       if (!window.game || !document.getElementById('map')) {

@@ -26,7 +26,7 @@ window.ProtecHelp = {
 
   switchTab(tabId) {
     this.currentTab = tabId;
-    const tabs = ['debuter', 'missions', 'regles', 'faq'];
+    const tabs = ['debuter', 'missions', 'regles', 'faq', 'glossaire'];
     tabs.forEach(t => {
       const btn = document.getElementById(`help-tab-btn-${t}`);
       const content = document.getElementById(`help-tab-content-${t}`);
@@ -40,6 +40,9 @@ window.ProtecHelp = {
         }
       }
     });
+    if (tabId === 'glossaire') {
+      this.renderGlossaryContent();
+    }
     if (window.lucide) window.lucide.createIcons();
   },
 
@@ -86,6 +89,10 @@ window.ProtecHelp = {
           <button id="help-tab-btn-faq" onclick="window.ProtecHelp.switchTab('faq')">
             <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
             <span>Questions Fréquentes</span>
+          </button>
+          <button id="help-tab-btn-glossaire" onclick="window.ProtecHelp.switchTab('glossaire')">
+            <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+            <span>Glossaire des Sigles</span>
           </button>
         </div>
 
@@ -247,6 +254,42 @@ window.ProtecHelp = {
             </div>
           </div>
 
+          <!-- ================= TAB 5 : GLOSSAIRE DES SIGLES ================= -->
+          <div id="help-tab-content-glossaire" class="hidden space-y-3">
+            <div class="p-3 rounded-2xl bg-blue-50/70 border border-blue-200/80 flex items-center justify-between gap-3">
+              <div>
+                <h4 class="font-black text-pc-blue text-xs flex items-center gap-1.5">
+                  <i data-lucide="book-open" class="w-4 h-4 text-pc-blue"></i>
+                  <span>Glossaire Opérationnel de la Protection Civile</span>
+                </h4>
+                <p class="text-[11px] text-slate-600 mt-0.5">
+                  Consultez la signification de tous les sigles, acronymes et codes radio utilisés en intervention.
+                </p>
+              </div>
+            </div>
+
+            <!-- Barre de recherche et filtres de catégories -->
+            <div class="space-y-2">
+              <div class="relative">
+                <input type="text" id="help-glossary-search" oninput="window.ProtecHelp.filterGlossary(this.value)" placeholder="Rechercher un sigle (ex: VPSP, PSE2, DPS, PMA, CI, SAMU...)" class="w-full pl-8 pr-3 py-2 rounded-xl text-xs bg-slate-100 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pc-blue font-semibold text-slate-800 placeholder-slate-400" />
+                <span class="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+              </div>
+              <div class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[10px] font-bold" id="help-glossary-filter-bar">
+                <button type="button" onclick="window.ProtecHelp.filterGlossaryCategory('all')" class="help-glossary-cat-btn px-2.5 py-1 rounded-lg bg-pc-blue text-white shadow-2xs whitespace-nowrap cursor-pointer" data-cat="all">Tous</button>
+                <button type="button" onclick="window.ProtecHelp.filterGlossaryCategory('Flotte')" class="help-glossary-cat-btn px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 whitespace-nowrap cursor-pointer" data-cat="Flotte">Véhicules</button>
+                <button type="button" onclick="window.ProtecHelp.filterGlossaryCategory('Secourisme')" class="help-glossary-cat-btn px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 whitespace-nowrap cursor-pointer" data-cat="Secourisme">Secourisme & Grades</button>
+                <button type="button" onclick="window.ProtecHelp.filterGlossaryCategory('Dispositif')" class="help-glossary-cat-btn px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 whitespace-nowrap cursor-pointer" data-cat="Dispositif">Missions & DPS</button>
+                <button type="button" onclick="window.ProtecHelp.filterGlossaryCategory('Médical')" class="help-glossary-cat-btn px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 whitespace-nowrap cursor-pointer" data-cat="Médical">Matériel & Médical</button>
+                <button type="button" onclick="window.ProtecHelp.filterGlossaryCategory('Institution')" class="help-glossary-cat-btn px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 whitespace-nowrap cursor-pointer" data-cat="Institution">Institutions</button>
+              </div>
+            </div>
+
+            <!-- Grille des termes du glossaire -->
+            <div id="help-glossary-list" class="space-y-2 pt-1 max-h-[50vh] overflow-y-auto pr-1">
+              <!-- Rempli dynamiquement -->
+            </div>
+          </div>
+
         </div>
 
         <!-- Footer Modal -->
@@ -263,5 +306,79 @@ window.ProtecHelp = {
       </div>
     `;
     document.body.appendChild(div);
+  },
+
+  glossaryQuery: '',
+  glossaryCategory: 'all',
+
+  filterGlossary(query) {
+    this.glossaryQuery = (query || '').trim().toLowerCase();
+    this.renderGlossaryContent();
+  },
+
+  filterGlossaryCategory(cat) {
+    this.glossaryCategory = cat || 'all';
+    const buttons = document.querySelectorAll('.help-glossary-cat-btn');
+    buttons.forEach(btn => {
+      const bCat = btn.getAttribute('data-cat');
+      if (bCat === this.glossaryCategory) {
+        btn.className = 'help-glossary-cat-btn px-2.5 py-1 rounded-lg bg-pc-blue text-white shadow-2xs whitespace-nowrap cursor-pointer';
+      } else {
+        btn.className = 'help-glossary-cat-btn px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 whitespace-nowrap cursor-pointer';
+      }
+    });
+    this.renderGlossaryContent();
+  },
+
+  renderGlossaryContent() {
+    const listEl = document.getElementById('help-glossary-list');
+    if (!listEl) return;
+
+    const dict = window.ProtecGlossaire?.dictionary || {};
+    const q = this.glossaryQuery;
+    const catFilter = this.glossaryCategory;
+
+    const entries = Object.entries(dict).filter(([key, val]) => {
+      // Filtre catégorie
+      if (catFilter !== 'all') {
+        const itemCat = (val.category || '').toLowerCase();
+        if (!itemCat.includes(catFilter.toLowerCase())) return false;
+      }
+      // Filtre recherche
+      if (q) {
+        const matchKey = key.toLowerCase().includes(q);
+        const matchName = (val.fullName || '').toLowerCase().includes(q);
+        const matchDesc = (val.desc || '').toLowerCase().includes(q);
+        const matchCat = (val.category || '').toLowerCase().includes(q);
+        if (!matchKey && !matchName && !matchDesc && !matchCat) return false;
+      }
+      return true;
+    });
+
+    if (entries.length === 0) {
+      listEl.innerHTML = `
+        <div class="py-8 text-center text-xs text-slate-400 font-medium bg-slate-50 rounded-2xl border border-slate-200/80">
+          Aucun sigle trouvé pour cette recherche.
+        </div>
+      `;
+      return;
+    }
+
+    listEl.innerHTML = entries.map(([key, item]) => `
+      <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-slate-300 transition space-y-1">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded font-mono font-black text-xs bg-pc-blue text-white shadow-2xs">${key}</span>
+            <strong class="text-xs text-slate-900 font-black">${item.fullName}</strong>
+          </div>
+          <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase tracking-wide flex-shrink-0">${item.category || 'Abréviation'}</span>
+        </div>
+        ${item.desc ? `
+          <p class="text-[11px] text-slate-600 leading-relaxed font-medium pl-0.5">
+            ${item.desc}
+          </p>
+        ` : ''}
+      </div>
+    `).join('');
   }
 };

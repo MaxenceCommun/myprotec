@@ -38,7 +38,16 @@ window.ProtecEcussons = {
     { id: 'ec-renf-dpsge', code: 'renf_dps_ge', nom: 'Grande Envergure • Renfort Inter-Antennes', description: 'Décerné pour l’envoi d’un équipage en renfort solidaire sur un DPS-GE.', categorie: 'renfort', rarete: 'epique', icon: 'users', color: '#4f46e5' },
     { id: 'ec-renf-crue', code: 'renf_colonne_crue', nom: 'Colonne Nationale Crues & Inondations', description: 'Insigne de prestige remis lors des déploiements majeurs de pompage et sauvetage.', categorie: 'renfort', rarete: 'historique', icon: 'droplets', color: '#0284c7' },
     { id: 'ec-renf-zonal', code: 'renf_zonal', nom: 'Solidarité Zonale de Sécurité Civile', description: 'Appui rapide et détachement de vecteurs entre départements voisins.', categorie: 'renfort', rarete: 'rare', icon: 'share-2', color: '#0d9488' },
-    { id: 'ec-renf-fondateur', code: 'renf_fondateur', nom: 'Pionnier FNPC • Fondation d’Antenne', description: 'Écusson commémoratif remis aux directeurs ayant fondé leur antenne locale.', categorie: 'renfort', rarete: 'historique', icon: 'crown', color: '#eab308' }
+    { id: 'ec-renf-fondateur', code: 'renf_fondateur', nom: 'Membre Fondateur', description: 'Écusson commémoratif remis aux directeurs ayant fondé leur antenne locale.', categorie: 'renfort', rarete: 'historique', icon: 'crown', color: '#eab308', imageUrl: 'images/badges/membre_fondateur.png' },
+
+    { id: 'ec-admin', code: 'badge_admin', nom: 'Administrateur • État-Major', description: 'Insigne officiel d’honneur suprême réservé aux administrateurs de la plate-forme et membres de l’État-Major Fédéral.', categorie: 'renfort', rarete: 'historique', icon: 'shield-alert', color: '#dc2626', imageUrl: 'images/badge_admin.png' },
+    { id: 'ec-zonal-est', code: 'badge_def_est', nom: 'Zone de Défense et de Sécurité Est', description: 'Coordination zonale des opérations et renforts de sécurité civile (Grand Est, Bourgogne-Franche-Comté).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_est.png' },
+    { id: 'ec-zonal-nord', code: 'badge_def_nord', nom: 'Zone de Défense et de Sécurité Nord', description: 'Coordination zonale des moyens de secours et de crise (Hauts-de-France).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_nord.png' },
+    { id: 'ec-zonal-ouest', code: 'badge_def_ouest', nom: 'Zone de Défense et de Sécurité Ouest', description: 'Coordination zonale des unités de secours et renforts (Bretagne, Normandie, Pays de la Loire, Centre-Val de Loire).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_ouest.png' },
+    { id: 'ec-zonal-sudest', code: 'badge_def_sudest', nom: 'Zone de Défense et de Sécurité Sud-Est', description: 'Coordination zonale de secours en montagne, vallées et métropoles (Auvergne-Rhône-Alpes).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_sudest.png' },
+    { id: 'ec-zonal-sud', code: 'badge_def_sud', nom: 'Zone de Défense et de Sécurité Sud', description: 'Coordination zonale des dispositifs méditerranéens et feux de forêts (PACA, Occitanie, Corse).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_sud.png' },
+    { id: 'ec-zonal-paris', code: 'badge_def_paris', nom: 'Zone de Défense et de Sécurité de Paris', description: 'Coordination zonale de la région capitale et Préfecture de Police (Île-de-France).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_paris.png' },
+    { id: 'ec-zonal-sudouest', code: 'badge_def_sudouest', nom: 'Zone de Défense et de Sécurité Sud-Ouest', description: 'Coordination zonale des moyens de sécurité civile du Sud-Ouest (Nouvelle-Aquitaine).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_sudouest.png' }
   ],
 
   // --- INITIALISATION DU MODULE & SYNCHRONISATION ---
@@ -55,7 +64,40 @@ window.ProtecEcussons = {
           .order('categorie', { ascending: true });
 
         if (!catErr && supaCatalog && supaCatalog.length > 0) {
-          this.catalog = supaCatalog;
+          this.catalog = supaCatalog.map(item => {
+            const fb = this.FALLBACK_CATALOG.find(f => f.code === item.code || f.id === item.id) || {};
+            let img = item.badge_url || item.imageUrl || fb.imageUrl;
+            let nom = item.nom || fb.nom;
+            if (item.code === 'renf_fondateur' || (nom && nom.includes('Pionnier'))) {
+              nom = 'Membre Fondateur';
+              img = 'images/badges/membre_fondateur.png';
+            } else if (item.code === 'dept_54') {
+              nom = 'Protection Civile 54 • Meurthe-et-Moselle';
+              img = 'images/badges/badge_meurthe_et_moselle_54.png';
+            } else if (item.code === 'badge_admin' || item.code === 'admin') {
+              img = 'images/badge_admin.png';
+            } else if (item.code === 'badge_def_est' || item.code === 'zonal_est') {
+              img = 'images/badge_def_est.png';
+            } else if (item.code === 'badge_def_nord' || item.code === 'zonal_nord') {
+              img = 'images/badge_def_nord.png';
+            } else if (item.code === 'badge_def_ouest' || item.code === 'zonal_ouest') {
+              img = 'images/badge_def_ouest.png';
+            } else if (item.code === 'badge_def_sudest' || item.code === 'zonal_sudest') {
+              img = 'images/badge_def_sudest.png';
+            } else if (item.code === 'badge_def_sud' || item.code === 'zonal_sud') {
+              img = 'images/badge_def_sud.png';
+            } else if (item.code === 'badge_def_paris' || item.code === 'zonal_paris') {
+              img = 'images/badge_def_paris.png';
+            } else if (item.code === 'badge_def_sudouest' || item.code === 'zonal_sudouest') {
+              img = 'images/badge_def_sudouest.png';
+            }
+            return {
+              ...fb,
+              ...item,
+              nom: nom,
+              imageUrl: img
+            };
+          });
         }
       } catch (e) {
         console.warn('Chargement catalogue écussons Supabase:', e);
@@ -225,8 +267,56 @@ window.ProtecEcussons = {
     }, 4200);
   },
 
-  // --- RENDU VISUEL D'UN ÉCUSSON (SVG BRODÉ HAUTE FIDÉLITÉ) ---
+  // --- RENDU VISUEL D'UN ÉCUSSON (SVG BRODÉ HAUTE FIDÉLITÉ OU IMAGE RÉELLE) ---
   renderBadgeIconSvg(badge, size = 48) {
+    let imgSrc = badge && (badge.imageUrl || (badge.badge_url && (badge.badge_url.includes('/') || badge.badge_url.includes('.')) ? badge.badge_url : null));
+    if (!imgSrc && badge) {
+      if (badge.code === 'renf_fondateur' || (badge.nom && (badge.nom.includes('Fondateur') || badge.nom.includes('Pionnier')))) {
+        imgSrc = 'images/badges/membre_fondateur.png';
+      } else if (badge.code === 'dept_54' || (badge.nom && badge.nom.includes('54'))) {
+        imgSrc = 'images/badges/badge_meurthe_et_moselle_54.png';
+      } else if (badge.code === 'badge_admin' || badge.code === 'admin' || (badge.nom && badge.nom.includes('Admin'))) {
+        imgSrc = 'images/badge_admin.png';
+      } else if (badge.code === 'badge_def_est' || badge.code === 'zonal_est' || (badge.nom && badge.nom.includes('Défense') && badge.nom.includes('Est'))) {
+        imgSrc = 'images/badge_def_est.png';
+      } else if (badge.code === 'badge_def_nord' || badge.code === 'zonal_nord' || (badge.nom && badge.nom.includes('Défense') && badge.nom.includes('Nord'))) {
+        imgSrc = 'images/badge_def_nord.png';
+      } else if (badge.code === 'badge_def_ouest' || badge.code === 'zonal_ouest' || (badge.nom && badge.nom.includes('Défense') && badge.nom.includes('Ouest'))) {
+        imgSrc = 'images/badge_def_ouest.png';
+      } else if (badge.code === 'badge_def_sudest' || badge.code === 'zonal_sudest' || (badge.nom && badge.nom.includes('Défense') && badge.nom.includes('Sud-Est'))) {
+        imgSrc = 'images/badge_def_sudest.png';
+      } else if (badge.code === 'badge_def_sud' || badge.code === 'zonal_sud' || (badge.nom && badge.nom.includes('Défense') && badge.nom.includes('Sud') && !badge.nom.includes('Sud-Est') && !badge.nom.includes('Sud-Ouest'))) {
+        imgSrc = 'images/badge_def_sud.png';
+      } else if (badge.code === 'badge_def_paris' || badge.code === 'zonal_paris' || (badge.nom && badge.nom.includes('Défense') && badge.nom.includes('Paris'))) {
+        imgSrc = 'images/badge_def_paris.png';
+      } else if (badge.code === 'badge_def_sudouest' || badge.code === 'zonal_sudouest' || (badge.nom && badge.nom.includes('Défense') && badge.nom.includes('Sud-Ouest'))) {
+        imgSrc = 'images/badge_def_sudouest.png';
+      }
+    }
+
+    if (imgSrc) {
+      const isFondateur = imgSrc.includes('membre_fondateur') || (badge && (badge.code === 'renf_fondateur' || (badge.nom && (badge.nom.includes('Fondateur') || badge.nom.includes('Pionnier')))));
+      const h = isFondateur ? Math.round(size * (400 / 300)) : Math.round(size * 1.28);
+
+      if (isFondateur) {
+        return `
+          <div class="ecusson-fondateur-wrapper select-none" style="width: ${size}px; height: ${h}px;" title="${badge.nom || 'Membre Fondateur'}">
+            <img src="${imgSrc}" alt="${badge.nom || 'Membre Fondateur'}" class="w-full h-full object-contain pointer-events-none relative z-0" onerror="this.onerror=null; this.parentElement.innerHTML='🛡️';" />
+            <div class="ecusson-fondateur-mask">
+              <div class="ecusson-fondateur-ambient"></div>
+              <div class="ecusson-fondateur-shimmer"></div>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="inline-flex items-center justify-center filter drop-shadow-md transition transform hover:scale-105 select-none" style="width: ${size}px; height: ${h}px;" title="${badge.nom || 'Écusson'}">
+          <img src="${imgSrc}" alt="${badge.nom || 'Écusson'}" class="w-full h-full object-contain drop-shadow-sm pointer-events-none" onerror="this.onerror=null; this.parentElement.innerHTML='🛡️';" />
+        </div>
+      `;
+    }
+
     const rareteColors = {
       commun: { stroke: '#94a3b8', glow: 'rgba(148, 163, 184, 0.2)' },
       rare: { stroke: '#38bdf8', glow: 'rgba(56, 189, 248, 0.4)' },

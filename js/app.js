@@ -596,6 +596,49 @@ class ProtecGame {
       if (window.ProtecAdmin && typeof window.ProtecAdmin.displayBroadcastPopup === 'function') {
         window.ProtecAdmin.displayBroadcastPopup(data);
       }
+    } else if (type === 'admin_player_notification') {
+      const isForMe = !data.targetUserId || data.targetUserId === 'all' || 
+                      (this.player && (this.player.id === data.targetUserId || this.player.name === data.targetUserId)) ||
+                      (window.ProtecAuth?.currentUser && (window.ProtecAuth.currentUser.id === data.targetUserId || window.ProtecAuth.currentUser.username === data.targetUserId));
+      if (isForMe) {
+        const notifTitle = data.title || '🔔 Notification Administrateur';
+        const notifMsg = data.message || '';
+        const notifType = data.type || 'orange';
+
+        // 1. Toast in-game
+        this.showToast(notifTitle, notifMsg, notifType);
+
+        // 2. Notification Push Système OS
+        if (window.ProtecNotifications && typeof window.ProtecNotifications.sendPushNotification === 'function') {
+          window.ProtecNotifications.sendPushNotification(notifTitle, notifMsg, { category: data.category || 'admin-test' });
+        } else if (window.ProtecIncidents && typeof window.ProtecIncidents.sendSystemNotification === 'function') {
+          window.ProtecIncidents.sendSystemNotification(notifTitle, notifMsg, 'admin-test-notif');
+        }
+
+        // 3. Audio officiel
+        if (window.ProtecAudio) {
+          if (typeof window.ProtecAudio.handleToastAudio === 'function') {
+            window.ProtecAudio.handleToastAudio(notifTitle, notifMsg, notifType);
+          } else if (typeof window.ProtecAudio.playAlertSound === 'function') {
+            window.ProtecAudio.playAlertSound();
+          }
+        }
+
+        // 4. Vibration mobile
+        if (navigator.vibrate) {
+          try { navigator.vibrate([200, 100, 200, 100, 300]); } catch (e) {}
+        }
+
+        // 5. Enregistrement dans l'historique de notifications
+        if (window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
+          window.ProtecNotifications.recordNotification({
+            title: notifTitle,
+            message: notifMsg,
+            color: notifType,
+            category: data.category || 'admin'
+          });
+        }
+      }
     } else if (type === 'admin_user_updated') {
       if (data.userId === this.player.id) {
         if (data.updates.money !== undefined) {
@@ -607,6 +650,67 @@ class ProtecGame {
           window.ProtecDialog.alert('Votre compte a été suspendu par un administrateur.', 'Compte Suspendu', { isDestructive: true }).then(() => {
             location.reload();
           });
+        }
+      }
+    } else if (type === 'badge_awarded') {
+      const isForMe = !data.userId || data.userId === 'all' ||
+                      (this.player && (this.player.id === data.userId || this.player.name === data.userId)) ||
+                      (window.ProtecAuth?.currentUser && (window.ProtecAuth.currentUser.id === data.userId || window.ProtecAuth.currentUser.username === data.userId));
+      if (isForMe && data.badge) {
+        const badge = data.badge;
+        // 1. Ajouter localement à la collection
+        if (window.ProtecEcussons && typeof window.ProtecEcussons.attribuerEcusson === 'function') {
+          window.ProtecEcussons.attribuerEcusson(badge.code, null, false);
+        } else {
+          if (!this.localEcussons) this.localEcussons = [];
+          const existing = this.localEcussons.find(l => l.code === badge.code);
+          if (existing) existing.quantite = (existing.quantite || 1) + Number(data.quantity || 1);
+          else this.localEcussons.push({ code: badge.code, quantite: Number(data.quantity || 1) });
+        }
+
+        // 2. Notification festive & son
+        if (data.notify !== false) {
+          const badgeNom = badge.nom || badge.name || 'Écusson Officiel';
+          this.showToast('🎉 Distinction Fédérale Décernée !', `L'État-Major vous a officiellement remis l'écusson « ${badgeNom} » !`, badge.rarete === 'historique' ? 'purple' : 'green');
+          if (window.ProtecAudio) {
+            try {
+              if (typeof window.ProtecAudio.playSuccessSound === 'function') window.ProtecAudio.playSuccessSound();
+              else if (typeof window.ProtecAudio.playAlertSound === 'function') window.ProtecAudio.playAlertSound();
+            } catch (e) {}
+          }
+          if (navigator.vibrate) {
+            try { navigator.vibrate([100, 50, 100, 50, 200]); } catch (e) {}
+          }
+          if (window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
+            window.ProtecNotifications.recordNotification({
+              title: `🎉 Distinction Fédérale : ${badgeNom}`,
+              message: badge.description || 'Écusson remis par l’Administration MyProtec.',
+              color: badge.rarete === 'historique' ? 'purple' : 'green',
+              category: 'ecussons'
+            });
+          }
+        }
+
+        // 3. Si la modale écussons est ouverte, actualiser en direct
+        if (this.currentModalKey === 'ecussons' && window.ProtecEcussons && typeof window.ProtecEcussons.renderTableauEcussons === 'function') {
+          const body = document.getElementById('modal-body');
+          if (body) window.ProtecEcussons.renderTableauEcussons(this, body);
+        }
+      }
+    } else if (type === 'badge_revoked') {
+      const isForMe = !data.userId || data.userId === 'all' ||
+                      (this.player && (this.player.id === data.userId || this.player.name === data.userId)) ||
+                      (window.ProtecAuth?.currentUser && (window.ProtecAuth.currentUser.id === data.userId || window.ProtecAuth.currentUser.username === data.userId));
+      if (isForMe && data.badgeCode) {
+        if (this.localEcussons) {
+          this.localEcussons = this.localEcussons.filter(l => l.code !== data.badgeCode);
+        }
+        if (window.ProtecEcussons && window.ProtecEcussons.playerEcussons) {
+          window.ProtecEcussons.playerEcussons = window.ProtecEcussons.playerEcussons.filter(pe => pe.ecusson?.code !== data.badgeCode);
+        }
+        if (this.currentModalKey === 'ecussons' && window.ProtecEcussons && typeof window.ProtecEcussons.renderTableauEcussons === 'function') {
+          const body = document.getElementById('modal-body');
+          if (body) window.ProtecEcussons.renderTableauEcussons(this, body);
         }
       }
     }
@@ -2840,7 +2944,19 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const current = devis.configuredVolunteers || 0;
-    devis.configuredVolunteers = Math.max(0, Math.min(48, current + delta));
+    devis.configuredVolunteers = Math.max(0, Math.min(999, current + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe de l'effectif secouriste engagé au clavier
+  setDevisVolunteers(devisId, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
+    devis.configuredVolunteers = count;
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -2853,7 +2969,19 @@ class ProtecGame {
     if (devis.configuredVolunteersWeekday === undefined || devis.configuredVolunteersWeekday === null) {
       devis.configuredVolunteersWeekday = Math.max(2, Math.round((devis.requiredVolunteers || 4) * 0.5));
     }
-    devis.configuredVolunteersWeekday = Math.max(1, Math.min(30, devis.configuredVolunteersWeekday + delta));
+    devis.configuredVolunteersWeekday = Math.max(0, Math.min(999, devis.configuredVolunteersWeekday + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe des secouristes en Semaine au clavier
+  setDevisWeekdayVolunteers(devisId, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
+    devis.configuredVolunteersWeekday = count;
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -2866,7 +2994,19 @@ class ProtecGame {
     if (devis.configuredVolunteersWeekend === undefined || devis.configuredVolunteersWeekend === null) {
       devis.configuredVolunteersWeekend = devis.requiredVolunteers || 4;
     }
-    devis.configuredVolunteersWeekend = Math.max(2, Math.min(48, devis.configuredVolunteersWeekend + delta));
+    devis.configuredVolunteersWeekend = Math.max(0, Math.min(999, devis.configuredVolunteersWeekend + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe des secouristes en Week-end au clavier
+  setDevisWeekendVolunteers(devisId, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
+    devis.configuredVolunteersWeekend = count;
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -2877,7 +3017,19 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const current = devis.configuredCE || 0;
-    devis.configuredCE = Math.max(0, Math.min(10, current + delta));
+    devis.configuredCE = Math.max(0, Math.min(99, current + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe des Chefs d'Équipe (CE) au clavier
+  setDevisCE(devisId, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(99, parsed));
+    devis.configuredCE = count;
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -2888,7 +3040,19 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const current = devis.configuredCP || 0;
-    devis.configuredCP = Math.max(0, Math.min(4, current + delta));
+    devis.configuredCP = Math.max(0, Math.min(50, current + delta));
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe des Chefs de Poste (CP) au clavier
+  setDevisCP(devisId, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(50, parsed));
+    devis.configuredCP = count;
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -2983,8 +3147,31 @@ class ProtecGame {
     if (!devis) return;
     const counts = this.ensureDevisVehicleCounts(devis);
     const current = counts[vehType] || 0;
-    const next = Math.max(1, Math.min(10, current + delta));
+    const next = Math.max(1, Math.min(50, current + delta));
     counts[vehType] = next;
+    this.syncDevisConfiguredVehicles(devis);
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe du compteur pour un type de véhicule coché au clavier
+  setDevisVehicleCount(devisId, vehType, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const counts = this.ensureDevisVehicleCounts(devis);
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(50, parsed));
+    if (count <= 0) {
+      delete counts[vehType];
+      if (Array.isArray(devis.configuredVehicles)) {
+        devis.configuredVehicles = devis.configuredVehicles.filter(t => t !== vehType);
+      }
+    } else {
+      counts[vehType] = count;
+      if (!Array.isArray(devis.configuredVehicles)) devis.configuredVehicles = [];
+      if (!devis.configuredVehicles.includes(vehType)) devis.configuredVehicles.push(vehType);
+    }
     this.syncDevisConfiguredVehicles(devis);
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
@@ -7336,11 +7523,6 @@ class ProtecGame {
                       ${isVLC ? '📡 VLC' : '📡 Équiper'}
                     </button>
                   ` : ''}
-                  ${v.status === 'dispo' ? `
-                    <button onclick="window.ProtecMarcheOccasion.openSellModal('vehicle', '${v.id}')" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-pc-orange border border-slate-200 transition" title="Mettre ce véhicule en vente sur la bourse d'occasion">
-                      Vendre 🏷️
-                    </button>
-                  ` : ''}
                   <span class="px-2 py-0.5 rounded text-[10px] font-black border ${v.status === 'dispo' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300'}">
                     ${v.status === 'dispo' ? 'DISPO' : 'ENGAGÉ'}
                   </span>
@@ -8612,7 +8794,6 @@ class ProtecGame {
       'bourse': 'antenne',
       'occasion': 'antenne',
 
-      'radio': 'liaisons',
       'tchat': 'liaisons',
       'messagerie': 'liaisons',
       'alliance': 'liaisons',
@@ -8709,7 +8890,6 @@ class ProtecGame {
         { key: 'communication', label: 'Communication & Médias', icon: 'megaphone' }
       ],
       liaisons: [
-        { key: 'radio', label: 'Radio PC', icon: 'radio' },
         { key: 'tchat', label: 'Messagerie & MP', icon: 'message-square' },
         { key: 'alliance', label: 'Alliances', icon: 'handshake', count: this.renforts?.filter(r => r.status === 'open').length || 0 },
         { key: 'meteo', label: 'Météo-France', icon: 'cloud-sun' }
@@ -8760,6 +8940,15 @@ class ProtecGame {
   // --- POPUP MODULES DOCK ---
   openModule(moduleKey, isBackNavigation = false) {
     this.closeAllDockSubmenus();
+
+    if (moduleKey === 'parrainage' || moduleKey === 'referral' || moduleKey === 'filleul') {
+      if (window.ProtecAuth && typeof window.ProtecAuth.openReferralShareModal === 'function') {
+        window.ProtecAuth.openReferralShareModal();
+      } else if (window.ProtecAuth && typeof window.ProtecAuth.openAuthModal === 'function') {
+        window.ProtecAuth.openAuthModal();
+      }
+      return;
+    }
 
     const aliases = {
       'missions': 'planning',
@@ -10157,12 +10346,12 @@ class ProtecGame {
                               <span class="text-[10px] font-extrabold text-slate-500">${d.weekdayDaysCount || 20} j • ${d.weekdayHours || 6}h/j</span>
                             </div>
                             <div class="flex items-center gap-1.5">
-                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                              <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                                <span class="text-sm font-black text-pc-blue">${(d.configuredVolunteersWeekday !== undefined && d.configuredVolunteersWeekday !== null) ? d.configuredVolunteersWeekday : Math.max(2, Math.round((d.requiredVolunteers || 4) * 0.5))}</span>
+                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                              <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                                <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekday !== undefined && d.configuredVolunteersWeekday !== null) ? d.configuredVolunteersWeekday : Math.max(2, Math.round((d.requiredVolunteers || 4) * 0.5))}" onchange="window.game.setDevisWeekdayVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
                                 <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
                               </div>
-                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                             </div>
                           </div>
 
@@ -10173,12 +10362,12 @@ class ProtecGame {
                               <span class="text-[10px] font-extrabold text-amber-600 font-bold">${d.weekendDaysCount || 8} j • ${d.weekendHours || 10}h/j</span>
                             </div>
                             <div class="flex items-center gap-1.5">
-                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                              <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                                <span class="text-sm font-black text-amber-600">${(d.configuredVolunteersWeekend !== undefined && d.configuredVolunteersWeekend !== null) ? d.configuredVolunteersWeekend : (d.requiredVolunteers || 4)}</span>
+                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                              <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                                <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekend !== undefined && d.configuredVolunteersWeekend !== null) ? d.configuredVolunteersWeekend : (d.requiredVolunteers || 4)}" onchange="window.game.setDevisWeekendVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
                                 <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
                               </div>
-                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                             </div>
                           </div>
                         </div>
@@ -10188,17 +10377,17 @@ class ProtecGame {
                           <div class="p-2 bg-white rounded-xl border border-slate-200">
                             <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
                             <div class="flex items-center gap-1">
-                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">-</button>
-                              <span class="flex-1 text-center text-xs font-black text-amber-600">${d.configuredCE || 0}</span>
-                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">+</button>
+                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">-</button>
+                              <input type="number" min="0" max="99" value="${d.configuredCE || 0}" onchange="window.game.setDevisCE('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="flex-1 min-w-0 text-center text-xs font-black text-amber-600 bg-slate-50 border border-slate-300 rounded py-0.5 focus:bg-white focus:outline-none" />
+                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">+</button>
                             </div>
                           </div>
                           <div class="p-2 bg-white rounded-xl border border-slate-200">
                             <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
                             <div class="flex items-center gap-1">
-                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">-</button>
-                              <span class="flex-1 text-center text-xs font-black text-indigo-600">${d.configuredCP || 0}</span>
-                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer">+</button>
+                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">-</button>
+                              <input type="number" min="0" max="50" value="${d.configuredCP || 0}" onchange="window.game.setDevisCP('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="flex-1 min-w-0 text-center text-xs font-black text-indigo-600 bg-slate-50 border border-slate-300 rounded py-0.5 focus:bg-white focus:outline-none" />
+                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">+</button>
                             </div>
                           </div>
                         </div>
@@ -10209,11 +10398,11 @@ class ProtecGame {
                         <div class="p-2.5 bg-white rounded-xl border border-slate-200">
                           <label class="block text-[11px] font-bold text-slate-600 mb-1">Secouristes Totaux :</label>
                           <div class="flex items-center gap-1.5">
-                            <button onclick="window.game.adjustDevisVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                            <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                              <span class="text-sm font-black text-pc-blue">${d.configuredVolunteers || 0}</span>
+                            <button type="button" onclick="window.game.adjustDevisVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                              <input type="number" min="0" max="999" value="${d.configuredVolunteers || 0}" onchange="window.game.setDevisVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
                             </div>
-                            <button onclick="window.game.adjustDevisVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                            <button type="button" onclick="window.game.adjustDevisVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                           </div>
                         </div>
 
@@ -10221,11 +10410,11 @@ class ProtecGame {
                         <div class="p-2.5 bg-white rounded-xl border border-slate-200">
                           <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
                           <div class="flex items-center gap-1.5">
-                            <button onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                            <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                              <span class="text-sm font-black text-amber-600">${d.configuredCE || 0}</span>
+                            <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                              <input type="number" min="0" max="99" value="${d.configuredCE || 0}" onchange="window.game.setDevisCE('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
                             </div>
-                            <button onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                            <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                           </div>
                         </div>
 
@@ -10233,11 +10422,11 @@ class ProtecGame {
                         <div class="p-2.5 bg-white rounded-xl border border-slate-200">
                           <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
                           <div class="flex items-center gap-1.5">
-                            <button onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">-</button>
-                            <div class="flex-1 text-center py-1 rounded-lg bg-slate-50 border border-slate-200 font-extrabold text-xs text-slate-800">
-                              <span class="text-sm font-black text-indigo-600">${d.configuredCP || 0}</span>
+                            <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                              <input type="number" min="0" max="50" value="${d.configuredCP || 0}" onchange="window.game.setDevisCP('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-indigo-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
                             </div>
-                            <button onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition">+</button>
+                            <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                           </div>
                         </div>
                       </div>
@@ -10256,7 +10445,7 @@ class ProtecGame {
                           </span>
                         </div>
                         <p class="text-[10px] text-slate-500">
-                          Cochez les catégories de véhicules souhaitées pour le dispositif puis ajustez le nombre exact avec les compteurs <strong>-</strong> et <strong>+</strong>.
+                          Cochez les catégories de véhicules souhaitées pour le dispositif puis ajustez le nombre exact avec les compteurs <strong>-</strong> et <strong>+</strong> ou saisissez-le directement au clavier.
                         </p>
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-1">
                           ${[
@@ -10285,16 +10474,24 @@ class ProtecGame {
                                   <span class="text-xs font-extrabold text-slate-800 truncate">${vItem.emoji} ${vItem.name}</span>
                                 </label>
                                 ${isChecked ? `
-                                  <div class="flex items-center gap-1 shrink-0 bg-white px-1.5 py-0.5 rounded-lg border border-indigo-200 shadow-2xs">
+                                  <div class="flex items-center gap-1 shrink-0 bg-white px-1 py-0.5 rounded-lg border border-indigo-200 shadow-2xs">
                                     <button 
                                       type="button" 
                                       onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', -1)" 
-                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">-</button>
-                                    <span class="w-5 text-center font-black text-xs text-pc-blue mono-num">${count}</span>
+                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">-</button>
+                                    <input 
+                                      type="number" 
+                                      min="0" 
+                                      max="50" 
+                                      value="${count}" 
+                                      onchange="window.game.setDevisVehicleCount('${d.id}', '${vItem.type}', this.value)" 
+                                      onkeydown="if(event.key==='Enter')this.blur()" 
+                                      class="w-9 text-center font-black text-xs text-pc-blue mono-num bg-slate-50 border border-slate-200 rounded py-0.5 px-0.5 focus:bg-white focus:outline-none" 
+                                    />
                                     <button 
                                       type="button" 
                                       onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', 1)" 
-                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">+</button>
+                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">+</button>
                                   </div>
                                 ` : ''}
                               </div>
@@ -11677,6 +11874,13 @@ class ProtecGame {
                         <span>📦</span>
                         <span>Armement</span>
                       </button>
+
+                      ${(isDispo && window.ProtecMarcheOccasion) ? `
+                        <button onclick="window.ProtecMarcheOccasion.openSellModal('vehicle', '${v.id}')" class="px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-pc-orange text-xs font-bold transition flex items-center gap-1 cursor-pointer border border-orange-200" title="Mettre ce véhicule en vente sur la bourse d'occasion">
+                          <span>🏷️</span>
+                          <span>Vendre</span>
+                        </button>
+                      ` : ''}
                     </div>
                   </div>
                 </div>
@@ -11699,12 +11903,9 @@ class ProtecGame {
         </div>
       `;
     } else if (moduleKey === 'radio') {
-      title.textContent = 'Canal Radio & Main Courante Opérationnelle';
-      subtitle.textContent = 'Fréquence inter-services, transmissions officielles et codes statuts S1 à S6';
-      icon.setAttribute('data-lucide', 'radio');
-      if (window.ProtecModals) {
-        body.innerHTML = window.ProtecModals.renderRadio(this);
-      }
+      // Le module Radio PC permanent a été retiré (la gestion de crise assure la main courante lors des sinistres)
+      this.openModule('tchat', isBackNavigation);
+      return;
     } else if (moduleKey === 'logistique') {
       if (window.ProtecLogistique) {
         window.ProtecLogistique.renderModal(this);
@@ -12528,12 +12729,6 @@ class ProtecGame {
         this.openModule('devis', true);
       } else if (this.currentModalKey === 'logistique' && window.ProtecLogistique && typeof window.ProtecLogistique.renderModal === 'function') {
         window.ProtecLogistique.renderModal(this);
-      } else if (this.currentModalKey === 'radio' && window.ProtecModals) {
-        const body = document.getElementById('modal-body');
-        if (body) {
-          body.innerHTML = window.ProtecModals.renderRadio(this);
-          if (window.lucide) window.lucide.createIcons();
-        }
       } else if (this.currentModalKey === 'pompiers') {
         this.openModule('pompiers', true);
       } else if (this.currentModalKey === 'samu') {
@@ -13939,9 +14134,6 @@ class ProtecGame {
 
     const bSubVeh = document.getElementById('badge-submenu-vehicules');
     if (bSubVeh) bSubVeh.textContent = this.vehicles.length;
-
-    const bSubRadio = document.getElementById('badge-submenu-radio');
-    if (bSubRadio) bSubRadio.textContent = ongoingCount;
 
     const bSubAll = document.getElementById('badge-submenu-alliance');
     if (bSubAll) {

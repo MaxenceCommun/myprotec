@@ -527,6 +527,36 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Test et émission de notification ciblée vers un joueur spécifique
+  if (url === '/api/admin/notify-player' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { targetUserId, title, message, category, type, testOptions } = JSON.parse(body);
+        broadcastSSE('admin_player_notification', {
+          targetUserId: targetUserId || 'all',
+          title: title || '🔔 Notification de Test',
+          message: message || 'Ceci est une notification de test envoyée par l’Administration.',
+          category: category || 'test',
+          type: type || 'orange',
+          testOptions: testOptions || {},
+          timestamp: new Date().toLocaleTimeString('fr-FR')
+        });
+        sendJson(res, 200, { success: true, deliveredAt: Date.now() });
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: 'Données invalides' });
+      }
+    });
+    return;
+  }
+
   // 4. Création d'une Alliance
   if (url === '/api/alliances/create' && req.method === 'POST') {
     let body = '';
@@ -984,23 +1014,83 @@ const server = http.createServer((req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       try {
-        const { userId, badge } = JSON.parse(body);
+        const { userId, badge, quantity = 1, notify = true } = JSON.parse(body);
         if (db.data.savedGames[userId]) {
           const gameData = db.data.savedGames[userId].data;
           if (gameData) {
             gameData.ecussons = gameData.ecussons || [];
-            gameData.ecussons.push({
-              id: badge.id || `badge-${Date.now()}`,
-              code: badge.code,
-              nom: badge.nom || badge.name,
-              imageUrl: badge.imageUrl,
-              rarete: badge.rarete || badge.rarity || 'commun',
-              acquiredAt: new Date().toISOString()
-            });
+            gameData.localEcussons = gameData.localEcussons || [];
+
+            // 1. localEcussons
+            const existingLoc = gameData.localEcussons.find(l => l.code === badge.code);
+            if (existingLoc) {
+              existingLoc.quantite = (existingLoc.quantite || 1) + Number(quantity || 1);
+            } else {
+              gameData.localEcussons.push({ code: badge.code, quantite: Number(quantity || 1) });
+            }
+
+            // 2. ecussons array
+            const existingEc = gameData.ecussons.find(e => e.code === badge.code);
+            if (existingEc) {
+              existingEc.quantite = (existingEc.quantite || 1) + Number(quantity || 1);
+              existingEc.updatedAt = new Date().toISOString();
+            } else {
+              gameData.ecussons.push({
+                id: badge.id || `badge-${Date.now()}`,
+                code: badge.code,
+                nom: badge.nom || badge.name,
+                imageUrl: badge.imageUrl,
+                rarete: badge.rarete || badge.rarity || 'commun',
+                quantite: Number(quantity || 1),
+                acquiredAt: new Date().toISOString()
+              });
+            }
             db.save();
           }
         }
-        broadcastSSE('badge_awarded', { userId, badge });
+        broadcastSSE('badge_awarded', { userId, badge, quantity, notify });
+        sendJson(res, 200, { success: true });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  // 24. Admin : Retirer / Réduire un Écusson d'un Joueur
+  if (url === '/api/admin/badges/revoke' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { userId, badgeCode, quantity = 1, removeAll = false } = JSON.parse(body);
+        if (db.data.savedGames[userId]) {
+          const gameData = db.data.savedGames[userId].data;
+          if (gameData) {
+            if (gameData.localEcussons) {
+              const loc = gameData.localEcussons.find(l => l.code === badgeCode);
+              if (loc) {
+                if (removeAll || loc.quantite <= quantity) {
+                  gameData.localEcussons = gameData.localEcussons.filter(l => l.code !== badgeCode);
+                } else {
+                  loc.quantite -= Number(quantity || 1);
+                }
+              }
+            }
+            if (gameData.ecussons) {
+              const ec = gameData.ecussons.find(e => e.code === badgeCode);
+              if (ec) {
+                if (removeAll || (ec.quantite || 1) <= quantity) {
+                  gameData.ecussons = gameData.ecussons.filter(e => e.code !== badgeCode);
+                } else {
+                  ec.quantite = (ec.quantite || 1) - Number(quantity || 1);
+                }
+              }
+            }
+            db.save();
+          }
+        }
+        broadcastSSE('badge_revoked', { userId, badgeCode });
         sendJson(res, 200, { success: true });
       } catch (err) {
         sendJson(res, 400, { error: err.message });

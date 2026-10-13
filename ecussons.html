@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>MyProtec • Toutes les Collections d'Écussons & Palmarès National</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            pc: {
+              blue: '#002E6D',
+              'blue-light': '#0B4EA2',
+              'blue-dark': '#001A3D',
+              orange: '#FF6600',
+              'orange-hover': '#E65C00',
+              'orange-dark': '#E65C00',
+              'orange-soft': '#FFF1E8',
+              cyan: '#0284C7'
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Styles Dédiés Landing Page & PWA Manifest -->
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="landing.css">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512x512.png">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#002E6D">
+
+  <style>
+    body {
+      overflow-x: hidden;
+      overflow-y: auto !important;
+      background-color: #f8fafc;
+    }
+  </style>
+</head>
+<body class="min-h-full flex flex-col font-sans antialiased text-slate-800 bg-[#f8fafc]">
+
+  <!-- BARRE DE NAVIGATION VITRÉE SUPÉRIEURE -->
+  <header class="sticky top-0 z-50 px-4 sm:px-8 py-3.5 backdrop-blur-md bg-white/80 border-b border-slate-200/80 shadow-xs">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      
+      <!-- Logo et retour accueil -->
+      <div class="flex items-center gap-3">
+        <a href="index.html" class="flex items-center gap-2.5 text-slate-600 hover:text-pc-blue transition group">
+          <img src="logo_myprotec_icon.png" alt="MyProtec" class="w-10 h-10 rounded-2xl object-contain shadow-md bg-white p-0.5 border border-slate-100 flex-shrink-0" />
+          <div>
+            <span class="text-base sm:text-lg font-black tracking-tight text-slate-900 block leading-none">MYPROTEC</span>
+            <span class="text-[9px] uppercase tracking-wider font-extrabold text-[#0055b8] block mt-0.5">Collections d'Écussons</span>
+          </div>
+        </a>
+      </div>
+
+      <!-- Navigation & Actions -->
+      <div class="flex items-center gap-2.5">
+        <a href="index.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition flex items-center gap-1.5">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">Accueil</span>
+        </a>
+        <a href="jeu.html" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-[#ff6600] hover:bg-[#e65c00] shadow-md transition flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+          <span>Mon Antenne</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENU PRINCIPAL -->
+  <main class="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-8 py-10 space-y-10">
+
+    <!-- HERO SECTION DE LA VITRINE -->
+    <div class="text-center max-w-3xl mx-auto space-y-4">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-100/80 text-pc-blue text-xs font-black uppercase tracking-wider">
+        <i data-lucide="award" class="w-3.5 h-3.5 text-amber-500"></i>
+        <span>Palmarès & Vitrine Nationale</span>
+      </div>
+      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+        Toutes les Collections d'Écussons
+      </h1>
+      <p class="text-sm sm:text-base text-slate-600 font-medium leading-relaxed">
+        Découvrez l'intégralité des distinctions officielles acquises par les antennes de la Protection Civile. Le palmarès est établi selon la rareté cumulée des patchs (Historique = 5 pts, Épique = 3 pts, Rare = 2 pts, Commun = 1 pt).
+      </p>
+    </div>
+
+    <!-- BARRE D'OUTILS : RECHERCHE ET FILTRES -->
+    <div class="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-sm space-y-4">
+      
+      <!-- Barre de recherche -->
+      <div class="relative max-w-2xl mx-auto">
+        <input 
+          type="text" 
+          id="ecussons-search-input"
+          oninput="window.MyProtecLanding.filterShowcaseSearch(this.value)"
+          placeholder="Rechercher par antenne, directeur, ville, département ou nom d'écusson..." 
+          class="w-full pl-11 pr-4 py-3 rounded-2xl text-xs sm:text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pc-blue font-semibold text-slate-800 placeholder-slate-400"
+        />
+        <span class="absolute left-4 top-3.5 text-slate-400 text-sm">🔍</span>
+      </div>
+
+      <!-- Filtres par catégorie -->
+      <div class="flex flex-wrap items-center justify-center gap-2 pt-1 border-t border-slate-100">
+        <button onclick="window.MyProtecLanding.renderShowcaseGrid('all', 0)" data-filter="all" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer bg-slate-900 text-white shadow-sm flex items-center gap-1.5">
+          <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+          <span>Toutes les collections</span>
+        </button>
+        <button onclick="window.MyProtecLanding.renderShowcaseGrid('specialite', 0)" data-filter="specialite" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <i data-lucide="crosshair" class="w-3.5 h-3.5 text-blue-600"></i>
+          <span>Spécialités</span>
+        </button>
+        <button onclick="window.MyProtecLanding.renderShowcaseGrid('mission', 0)" data-filter="mission" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <i data-lucide="award" class="w-3.5 h-3.5 text-amber-500"></i>
+          <span>Missions & Événements</span>
+        </button>
+        <button onclick="window.MyProtecLanding.renderShowcaseGrid('renfort', 0)" data-filter="renfort" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <i data-lucide="siren" class="w-3.5 h-3.5 text-red-600"></i>
+          <span>Renforts & Crises</span>
+        </button>
+        <button onclick="window.MyProtecLanding.renderShowcaseGrid('departement', 0)" data-filter="departement" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-indigo-600"></i>
+          <span>Territoires</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- GRILLE DE TOUTES LES COLLECTIONS (data-limit="0" pour tout afficher) -->
+    <div id="lp-showcase-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-limit="0">
+      <!-- Rempli dynamiquement par js/landing.js -->
+    </div>
+
+    <!-- ENCART EXPLICATIF : SYSTÈME DE RARETÉ & POINTS -->
+    <div class="p-6 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 text-white shadow-xl space-y-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center text-lg font-black">
+          🏆
+        </div>
+        <div>
+          <h3 class="text-base font-black text-white">Barème Officiel des Distinctions & Rareté</h3>
+          <p class="text-xs text-slate-300">Comment est calculé le rang de chaque antenne sur le réseau national</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs pt-1">
+        <div class="p-3.5 rounded-2xl bg-white/5 border border-amber-500/30 space-y-1">
+          <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-amber-400 text-slate-950">Historique • 5 pts</span>
+          <p class="text-slate-300 text-[11px] mt-1 leading-snug">Écussons d'honneur de fondateurs, opérations décennales et crises majeures.</p>
+        </div>
+        <div class="p-3.5 rounded-2xl bg-white/5 border border-purple-500/30 space-y-1">
+          <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-purple-500 text-white">Épique • 3 pts</span>
+          <p class="text-slate-300 text-[11px] mt-1 leading-snug">Dispositifs de grande envergure (DPS-GE), cellules PMA et 14 Juillet.</p>
+        </div>
+        <div class="p-3.5 rounded-2xl bg-white/5 border border-cyan-500/30 space-y-1">
+          <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-cyan-500 text-white">Rare • 2 pts</span>
+          <p class="text-slate-300 text-[11px] mt-1 leading-snug">Spécialités cynotechniques, aquatiques, formateurs et soutien psychologique.</p>
+        </div>
+        <div class="p-3.5 rounded-2xl bg-white/5 border border-slate-500/30 space-y-1">
+          <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-slate-300 text-slate-900">Commun • 1 pt</span>
+          <p class="text-slate-300 text-[11px] mt-1 leading-snug">Écussons départementaux territoriaux et événements sportifs réguliers.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="mt-auto py-8 px-4 sm:px-8 border-t border-slate-200/80 bg-white/70 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+      <div class="flex items-center gap-2">
+        <img src="logo_myprotec_icon.png" alt="MyProtec" class="w-6 h-6 rounded-lg object-contain bg-white p-0.5 border border-slate-200" />
+        <span class="font-bold text-slate-700">MYPROTEC • Réseau National des Écussons</span>
+      </div>
+      <div class="flex items-center gap-4 font-bold text-slate-600">
+        <a href="index.html" class="hover:text-slate-900 transition">Accueil</a>
+        <a href="jeu.html" class="hover:text-slate-900 transition">Simulateur</a>
+        <a href="privacy.html" class="hover:text-slate-900 transition">Confidentialité</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- SCRIPTS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/ecussons.js"></script>
+  <script src="js/landing.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+      if (window.MyProtecLanding) {
+        window.MyProtecLanding.initTooltip();
+        window.MyProtecLanding.init3DTilt();
+        window.MyProtecLanding.syncLeaderboardWithDatabase().then(() => {
+          // Affichage de TOUTES les collections (limit = 0)
+          window.MyProtecLanding.renderShowcaseGrid('all', 0);
+        });
+      }
+    });
+  </script>
+</body>
+</html>

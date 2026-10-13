@@ -463,8 +463,21 @@
       return el;
     },
 
+    isMobile() {
+      if (typeof window === 'undefined') return false;
+      return window.innerWidth < 768 || 
+             /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+             (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+             ('ontouchstart' in window && window.innerWidth < 1024);
+    },
+
     // Affiche l'infobulle flottante pour une abréviation
     showTooltip(abbrKey, targetRect, mousePos = null) {
+      if (this.isMobile()) {
+        this.hideTooltip();
+        return;
+      }
+
       const entry = this.getEntry(abbrKey);
       if (!entry) return;
 
@@ -568,6 +581,7 @@
 
       // Écouteur global ultra réactif au survol de la souris
       document.addEventListener('mouseover', (e) => {
+        if (this.isMobile()) return;
         const target = e.target;
         if (!target) return;
 
@@ -615,6 +629,10 @@
 
       // Clic ou tap tactile pour les écrans tactiles et mobiles
       document.addEventListener('click', (e) => {
+        if (this.isMobile()) {
+          this.hideTooltip();
+          return;
+        }
         const target = e.target;
         if (!target || target.closest('#global-abbr-tooltip')) return;
 

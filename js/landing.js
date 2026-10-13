@@ -86,6 +86,50 @@ window.MyProtecLanding = {
         { id: 'b14', code: 'miss_festival', name: 'Sécurité Festivals & Musique', cat: 'mission', rarity: 'rare', icon: 'music', desc: 'Encadrement préventif et secours d’urgence sur événements musicaux.' },
         { id: 'b15', code: 'dept_33', name: 'Protection Civile de Gironde', cat: 'departement', rarity: 'commun', icon: 'map-pin', desc: 'Distinction territoriale des secouristes du littoral aquitain.' }
       ]
+    },
+    {
+      id: 'showcase-5',
+      name: 'Groupement Opérationnel du Rhône',
+      director: 'Directrice Sophie',
+      department: 'Rhône (69)',
+      badges: [
+        { id: 'b16', code: 'spec_pma', name: 'Poste Médical Avancé (PMA)', cat: 'specialite', rarity: 'epique', icon: 'plus-square', desc: 'Capacité de déploiement d’une chaîne médicale complète de tri et d’urgence.' },
+        { id: 'b17', code: 'miss_marathon', name: 'Grands Événements Sportifs Nationaux', cat: 'mission', rarity: 'commun', icon: 'trophy', desc: 'Sécurisation et chaîne médicale continue sur marathons et courses d’endurance.' },
+        { id: 'b18', code: 'dept_69', name: 'Protection Civile du Rhône', cat: 'departement', rarity: 'rare', icon: 'activity', desc: 'Insigne officiel des unités de secours de la métropole lyonnaise.' }
+      ]
+    },
+    {
+      id: 'showcase-6',
+      name: 'Compagnie Territoriale des Flandres',
+      director: 'Capitaine Dubois',
+      department: 'Nord (59)',
+      badges: [
+        { id: 'b19', code: 'renf_colonne_crue', name: 'Colonne Nationale Crues & Inondations', cat: 'renfort', rarity: 'historique', icon: 'droplets', desc: 'Distinction officielle suite aux opérations majeures de pompage lourd et d’évacuation de population.' },
+        { id: 'b20', code: 'spec_cyno', name: 'Unité Cynotechnique de Recherche', cat: 'specialite', rarity: 'rare', icon: 'paw-print', desc: 'Équipes de recherche de personnes égarées et décombres.' },
+        { id: 'b21', code: 'dept_59', name: 'Protection Civile du Nord', cat: 'departement', rarity: 'commun', icon: 'shield', desc: 'Unité de secours et d’assistance civique des Hauts-de-France.' }
+      ]
+    },
+    {
+      id: 'showcase-7',
+      name: 'Antenne Métropolitaine de Toulouse',
+      director: 'Commandant Cazeneuve',
+      department: 'Haute-Garonne (31)',
+      badges: [
+        { id: 'b22', code: 'spec_aep', name: 'Soutien Psychologique d’Urgence (AEP)', cat: 'specialite', rarity: 'rare', icon: 'heart-pulse', desc: 'Cellule habilitée à la prise en charge immédiate du choc émotionnel post-catastrophe.' },
+        { id: 'b23', code: 'miss_14_juillet', name: 'Dispositif Fête Nationale 14 Juillet', cat: 'mission', rarity: 'epique', icon: 'sparkles', desc: 'Commandement de dispositifs républicains de grande envergure.' },
+        { id: 'b24', code: 'dept_31', name: 'Protection Civile 31 • Occitanie', cat: 'departement', rarity: 'commun', icon: 'compass', desc: 'Secouristes d’intervention du bassin toulousain.' }
+      ]
+    },
+    {
+      id: 'showcase-8',
+      name: 'Unité Océane Loire-Atlantique',
+      director: 'Lieutenant Guérin',
+      department: 'Loire-Atlantique (44)',
+      badges: [
+        { id: 'b25', code: 'spec_aqua', name: 'Sauvetage Aquatique & Inondations', cat: 'specialite', rarity: 'rare', icon: 'waves', desc: 'Secours nautique, estuaires et crues.' },
+        { id: 'b26', code: 'spec_formateur', name: 'Corps National des Formateurs', cat: 'specialite', rarity: 'rare', icon: 'graduation-cap', desc: 'Équipe agréée formations PSC / PSE.' },
+        { id: 'b27', code: 'dept_44', name: 'Protection Civile 44', cat: 'departement', rarity: 'commun', icon: 'anchor', desc: 'Insigne officiel des unités de secours nantaises et atlantiques.' }
+      ]
     }
   ],
 
@@ -95,6 +139,7 @@ window.MyProtecLanding = {
     this.isInitialized = true;
 
     this.checkLandingVisibility();
+    this.checkReferralBanner();
     this.initLiveTicker();
     this.initDynamicCounters();
     this.initAccordion();
@@ -106,6 +151,32 @@ window.MyProtecLanding = {
 
     if (window.lucide) {
       window.lucide.createIcons();
+    }
+  },
+
+  checkReferralBanner() {
+    let refCode = null;
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      refCode = urlParams.get('ref') || urlParams.get('parrain');
+      if (refCode) {
+        refCode = refCode.trim().toUpperCase();
+        try { localStorage.setItem('protec_pending_ref', refCode); } catch (e) {}
+      } else {
+        try { refCode = localStorage.getItem('protec_pending_ref'); } catch (e) {}
+      }
+    } catch (e) {}
+
+    const banner = document.getElementById('landing-referral-banner');
+    const label = document.getElementById('landing-ref-code-label');
+    const heroBtnText = document.getElementById('landing-hero-register-text');
+
+    if (refCode && banner) {
+      if (label) label.textContent = refCode;
+      banner.classList.remove('hidden');
+      if (heroBtnText) {
+        heroBtnText.innerHTML = `Ouvrir mon antenne <span class="text-[11px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black ml-1 shadow-xs">+1 500 €</span>`;
+      }
     }
   },
 
@@ -425,10 +496,27 @@ window.MyProtecLanding = {
   },
 
   // 4. VITRINE DES ÉCUSSONS : CLASSEMENT STRICT PAR SOMME DES NIVEAUX DE RARETÉ
-  renderShowcaseGrid(filter = 'all') {
+  searchQuery: '',
+  filterShowcaseSearch(query) {
+    this.searchQuery = (query || '').trim().toLowerCase();
+    this.renderShowcaseGrid(this.activeFilter, null, this.searchQuery);
+  },
+
+  renderShowcaseGrid(filter = 'all', limit = null, search = null) {
     this.activeFilter = filter;
+    if (search !== null) this.searchQuery = (search || '').trim().toLowerCase();
     const container = document.getElementById('lp-showcase-grid');
     if (!container) return;
+
+    // Détermination de la limite (sur accueil data-limit="3", sur page dédiée pas de limite)
+    if (limit === null) {
+      const dataLim = container.getAttribute('data-limit');
+      if (dataLim !== null) {
+        limit = parseInt(dataLim, 10);
+      } else {
+        limit = window.location.pathname.includes('ecussons') ? 0 : 3;
+      }
+    }
 
     // 1. Calculer pour chaque antenne la somme exacte des niveaux de rareté
     const rankedAntennes = this.antennesShowcases.map(antenne => {
@@ -447,8 +535,36 @@ window.MyProtecLanding = {
       antenne.rank = idx + 1;
     });
 
+    // Filtrage par recherche éventuelle
+    let listToRender = rankedAntennes;
+    if (this.searchQuery) {
+      const sq = this.searchQuery;
+      listToRender = listToRender.filter(a => {
+        const matchName = (a.name || '').toLowerCase().includes(sq);
+        const matchDir = (a.director || '').toLowerCase().includes(sq);
+        const matchDept = (a.department || '').toLowerCase().includes(sq);
+        const matchBadge = (a.badges || []).some(b => (b.name || '').toLowerCase().includes(sq) || (b.code || '').toLowerCase().includes(sq));
+        return matchName || matchDir || matchDept || matchBadge;
+      });
+    }
+
+    // Application de la limite (ex: Top 3 sur la page d'accueil)
+    if (limit > 0) {
+      listToRender = listToRender.slice(0, limit);
+    }
+
+    if (listToRender.length === 0) {
+      container.innerHTML = `
+        <div class="col-span-full py-12 text-center text-slate-400 bg-slate-50 border border-slate-200 rounded-3xl">
+          <p class="text-sm font-black text-slate-600">Aucune collection ne correspond à votre recherche</p>
+          <p class="text-xs text-slate-400 mt-1">Modifiez vos termes de recherche ou sélectionnez une autre catégorie.</p>
+        </div>
+      `;
+      return;
+    }
+
     // 4. Rendu des cartes de vitrine classées
-    const htmlCards = rankedAntennes.map(antenne => {
+    const htmlCards = listToRender.map(antenne => {
       // Filtrer les badges par catégorie si demandé
       const displayBadges = antenne.badges.filter(b => {
         if (filter === 'all') return true;

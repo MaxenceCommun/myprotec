@@ -771,7 +771,17 @@ INSERT INTO ecussons (code, nom, description, categorie, badge_url, rarete) VALU
   ('renf_dps_ge', 'Grande Envergure • Renfort Inter-Antennes', 'Décerné à toute antenne ayant dépêché un équipage ou VPSP en renfort sur un DPS-GE.', 'renfort', 'images/badges/badge_renfort_ge.png', 'epique'),
   ('renf_colonne_crue', 'Colonne Nationale de Secours Crues', 'Écusson de prestige remis lors des déploiements zonaux de crise hydraulique.', 'renfort', 'images/badges/badge_crue.png', 'historique'),
   ('renf_zonal', 'Solidarité Zonale de Sécurité Civile', 'Attribué pour l’appui logistique ou opérationnel rapide entre départements limitrophes.', 'renfort', 'images/badges/badge_zonal.png', 'rare'),
-  ('renf_fondateur', 'Membre Fondateur', 'Écusson commémoratif officiel remis aux directeurs membres fondateurs ayant ouvert leur premier centre de secours.', 'renfort', 'images/badges/membre_fondateur.png', 'historique')
+  ('renf_fondateur', 'Membre Fondateur', 'Écusson commémoratif officiel remis aux directeurs membres fondateurs ayant ouvert leur premier centre de secours.', 'renfort', 'images/badges/membre_fondateur.png', 'historique'),
+
+  -- 5. ÉTAT-MAJOR & ZONES DE DÉFENSE ET DE SÉCURITÉ
+  ('badge_admin', 'Administrateur • État-Major', 'Insigne officiel d’honneur suprême réservé aux administrateurs de la plate-forme et membres de l’État-Major Fédéral.', 'renfort', 'images/badge_admin.png', 'historique'),
+  ('badge_def_est', 'Zone de Défense et de Sécurité Est', 'Coordination zonale des opérations et renforts de sécurité civile (Grand Est, Bourgogne-Franche-Comté).', 'renfort', 'images/badge_def_est.png', 'epique'),
+  ('badge_def_nord', 'Zone de Défense et de Sécurité Nord', 'Coordination zonale des moyens de secours et de crise (Hauts-de-France).', 'renfort', 'images/badge_def_nord.png', 'epique'),
+  ('badge_def_ouest', 'Zone de Défense et de Sécurité Ouest', 'Coordination zonale des unités de secours et renforts (Bretagne, Normandie, Pays de la Loire, Centre-Val de Loire).', 'renfort', 'images/badge_def_ouest.png', 'epique'),
+  ('badge_def_sudest', 'Zone de Défense et de Sécurité Sud-Est', 'Coordination zonale de secours en montagne, vallées et métropoles (Auvergne-Rhône-Alpes).', 'renfort', 'images/badge_def_sudest.png', 'epique'),
+  ('badge_def_sud', 'Zone de Défense et de Sécurité Sud', 'Coordination zonale des dispositifs méditerranéens et feux de forêts (PACA, Occitanie, Corse).', 'renfort', 'images/badge_def_sud.png', 'epique'),
+  ('badge_def_paris', 'Zone de Défense et de Sécurité de Paris', 'Coordination zonale de la région capitale et Préfecture de Police (Île-de-France).', 'renfort', 'images/badge_def_paris.png', 'epique'),
+  ('badge_def_sudouest', 'Zone de Défense et de Sécurité Sud-Ouest', 'Coordination zonale des moyens de sécurité civile du Sud-Ouest (Nouvelle-Aquitaine).', 'renfort', 'images/badge_def_sudouest.png', 'epique')
 ON CONFLICT (code) DO UPDATE SET
   nom = EXCLUDED.nom,
   description = EXCLUDED.description,

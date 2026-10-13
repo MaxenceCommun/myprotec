@@ -95,6 +95,7 @@ window.MyProtecLanding = {
     this.isInitialized = true;
 
     this.checkLandingVisibility();
+    this.checkReferralBanner();
     this.initLiveTicker();
     this.initDynamicCounters();
     this.initAccordion();
@@ -106,6 +107,32 @@ window.MyProtecLanding = {
 
     if (window.lucide) {
       window.lucide.createIcons();
+    }
+  },
+
+  checkReferralBanner() {
+    let refCode = null;
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      refCode = urlParams.get('ref') || urlParams.get('parrain');
+      if (refCode) {
+        refCode = refCode.trim().toUpperCase();
+        try { localStorage.setItem('protec_pending_ref', refCode); } catch (e) {}
+      } else {
+        try { refCode = localStorage.getItem('protec_pending_ref'); } catch (e) {}
+      }
+    } catch (e) {}
+
+    const banner = document.getElementById('landing-referral-banner');
+    const label = document.getElementById('landing-ref-code-label');
+    const heroBtnText = document.getElementById('landing-hero-register-text');
+
+    if (refCode && banner) {
+      if (label) label.textContent = refCode;
+      banner.classList.remove('hidden');
+      if (heroBtnText) {
+        heroBtnText.innerHTML = `Ouvrir mon antenne <span class="text-[11px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black ml-1 shadow-xs">+1 500 €</span>`;
+      }
     }
   },
 
@@ -485,10 +512,27 @@ window.MyProtecLanding = {
   },
 
   // 4. VITRINE DES ÉCUSSONS : CLASSEMENT STRICT PAR SOMME DES NIVEAUX DE RARETÉ
-  renderShowcaseGrid(filter = 'all') {
+  searchQuery: '',
+  filterShowcaseSearch(query) {
+    this.searchQuery = (query || '').trim().toLowerCase();
+    this.renderShowcaseGrid(this.activeFilter, null, this.searchQuery);
+  },
+
+  renderShowcaseGrid(filter = 'all', limit = null, search = null) {
     this.activeFilter = filter;
+    if (search !== null) this.searchQuery = (search || '').trim().toLowerCase();
     const container = document.getElementById('lp-showcase-grid');
     if (!container) return;
+
+    // Détermination de la limite (sur accueil data-limit="3", sur page dédiée pas de limite)
+    if (limit === null) {
+      const dataLim = container.getAttribute('data-limit');
+      if (dataLim !== null) {
+        limit = parseInt(dataLim, 10);
+      } else {
+        limit = window.location.pathname.includes('ecussons') ? 0 : 3;
+      }
+    }
 
     // 1. Calculer pour chaque antenne la somme exacte des niveaux de rareté
     const rankedAntennes = this.antennesShowcases.map(antenne => {
@@ -507,8 +551,36 @@ window.MyProtecLanding = {
       antenne.rank = idx + 1;
     });
 
+    // Filtrage par recherche éventuelle
+    let listToRender = rankedAntennes;
+    if (this.searchQuery) {
+      const sq = this.searchQuery;
+      listToRender = listToRender.filter(a => {
+        const matchName = (a.name || '').toLowerCase().includes(sq);
+        const matchDir = (a.director || '').toLowerCase().includes(sq);
+        const matchDept = (a.department || '').toLowerCase().includes(sq);
+        const matchBadge = (a.badges || []).some(b => (b.name || '').toLowerCase().includes(sq) || (b.code || '').toLowerCase().includes(sq));
+        return matchName || matchDir || matchDept || matchBadge;
+      });
+    }
+
+    // Application de la limite (ex: Top 3 sur la page d'accueil)
+    if (limit > 0) {
+      listToRender = listToRender.slice(0, limit);
+    }
+
+    if (listToRender.length === 0) {
+      container.innerHTML = `
+        <div class="col-span-full py-12 text-center text-slate-400 bg-slate-50 border border-slate-200 rounded-3xl">
+          <p class="text-sm font-black text-slate-600">Aucune collection ne correspond à votre recherche</p>
+          <p class="text-xs text-slate-400 mt-1">Modifiez vos termes de recherche ou sélectionnez une autre catégorie.</p>
+        </div>
+      `;
+      return;
+    }
+
     // 4. Rendu des cartes de vitrine classées
-    const htmlCards = rankedAntennes.map(antenne => {
+    const htmlCards = listToRender.map(antenne => {
       // Filtrer les badges par catégorie si demandé
       const displayBadges = antenne.badges.filter(b => {
         if (filter === 'all') return true;
