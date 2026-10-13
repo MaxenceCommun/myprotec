@@ -30,6 +30,59 @@ ALTER TABLE players ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE;
 ALTER TABLE players ADD COLUMN IF NOT EXISTS ban_reason TEXT;
 ALTER TABLE players ADD COLUMN IF NOT EXISTS time_tracking JSONB DEFAULT '{"activeSeconds":0,"idleSeconds":0,"lastSeen":0}'::jsonb;
 ALTER TABLE players ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE players ADD COLUMN IF NOT EXISTS referral_code TEXT;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS referred_by TEXT;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS referral_suspended BOOLEAN DEFAULT FALSE;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS registration_ip TEXT;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_known_ips JSONB DEFAULT '[]'::jsonb;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_players_referral_code ON players(referral_code) WHERE referral_code IS NOT NULL;
+
+-- 2.1 TABLE DES SUIVIS DE PARRAINAGES (REFERRAL LOGS)
+CREATE TABLE IF NOT EXISTS referral_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_id TEXT NOT NULL,
+  referee_id TEXT NOT NULL,
+  referrer_username TEXT,
+  referee_username TEXT,
+  status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'completed', 'blocked_fraud'
+  reward_referee_granted BOOLEAN DEFAULT FALSE,
+  reward_referrer_granted BOOLEAN DEFAULT FALSE,
+  client_ip TEXT,
+  device_fingerprint TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  validated_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_referral_logs_referrer ON referral_logs(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_referral_logs_referee ON referral_logs(referee_id);
+CREATE INDEX IF NOT EXISTS idx_referral_logs_status ON referral_logs(status);
+
+ALTER TABLE referral_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "referral_logs_all" ON referral_logs;
+CREATE POLICY "referral_logs_all" ON referral_logs FOR ALL USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE referral_logs TO anon, authenticated, service_role;
+
+-- 2.2 TABLE DES LOGS DE FRAUDE ET TENTATIVES BLOQUÉES (FRAUD LOGS)
+CREATE TABLE IF NOT EXISTS fraud_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_id TEXT,
+  attempted_referee_username TEXT,
+  ip_detected TEXT,
+  device_fingerprint TEXT,
+  reason TEXT NOT NULL, -- 'SAME_IP_AS_REFERRER', 'IP_ALREADY_USED_BY_ANOTHER_REFERRAL', 'SELF_REFERRAL', 'REFERRAL_SUSPENDED'
+  reviewed BOOLEAN DEFAULT FALSE,
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fraud_logs_referrer ON fraud_logs(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_fraud_logs_reviewed ON fraud_logs(reviewed);
+CREATE INDEX IF NOT EXISTS idx_fraud_logs_created_at ON fraud_logs(created_at DESC);
+
+ALTER TABLE fraud_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "fraud_logs_all" ON fraud_logs;
+CREATE POLICY "fraud_logs_all" ON fraud_logs FOR ALL USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE fraud_logs TO anon, authenticated, service_role;
 
 -- 3. TABLE DES SAUVEGARDES CLOUD DU MONDE PERSISTANT
 CREATE TABLE IF NOT EXISTS game_saves (

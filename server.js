@@ -118,11 +118,20 @@ function getAuthUser(req) {
   return db.getUserByToken(token);
 }
 
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const list = forwarded.split(',');
+    if (list.length > 0) return list[0].trim();
+  }
+  return req.headers['x-real-ip'] || req.socket.remoteAddress || '';
+}
+
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=UTF-8',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-auth-token',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-auth-token, x-admin-key',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
   });
   res.end(JSON.stringify(data));
@@ -135,10 +144,17 @@ const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-auth-token',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-auth-token, x-admin-key',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
     });
     res.end();
+    return;
+  }
+
+  // Obtenir l'IP client
+  if (url === '/api/client-ip' && req.method === 'GET') {
+    const rawIp = getClientIp(req);
+    sendJson(res, 200, { success: true, ip: db.normalizeIp(rawIp) });
     return;
   }
 
@@ -150,9 +166,11 @@ const server = http.createServer((req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       try {
-        const { username, password, stationName, city, departmentCode } = JSON.parse(body);
+        const { username, password, stationName, city, departmentCode, referralCode, referral_code, deviceFingerprint } = JSON.parse(body);
         const dept = departmentCode || city || '75';
-        const result = db.registerUser(username, password, stationName, dept, dept);
+        const clientIp = getClientIp(req);
+        const refCode = referralCode || referral_code || null;
+        const result = db.registerUser(username, password, stationName, dept, dept, refCode, clientIp, deviceFingerprint);
         if (result.error) {
           sendJson(res, 400, { success: false, error: result.error });
         } else {
@@ -163,6 +181,97 @@ const server = http.createServer((req, res) => {
         console.error('Erreur API Inscription:', err);
         sendJson(res, 400, { success: false, error: err.message || 'Données invalides' });
       }
+    });
+    return;
+  }
+
+  // Connexion
+  if (url === '/api/auth/login' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { username, password } = JSON.parse(body);
+        const clientIp = getClientIp(req);
+        const result = db.loginUser(username, password, clientIp);
+        if (result.error) {
+          sendJson(res, 401, { success: false, error: result.error });
+        } else {
+          sendJson(res, 200, result);
+        }
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: 'Données invalides' });
+      }
+    });
+    return;
+  }
+
+  // Vérifier Session actuelle (Me)
+  if (url === '/api/auth/me' && req.method === 'GET') {
+    const user = getAuthUser(req);
+    if (!user) {
+      sendJson(res, 401, { success: false, error: 'Non authentifié' });
+    } else {
+      const pendingAlerts = [...(user.pending_referral_alerts || [])];
+      user.pending_referral_alerts = [];
+      db.save();
+      sendJson(res, 200, {
+        success: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          role: user.role || 'user',
+          stationName: user.stationName,
+          city: user.city,
+          referral_code: user.referral_code,
+          referred_by: user.referred_by || null,
+          referral_suspended: !!user.referral_suspended
+        },
+        pendingAlerts
+      });
+    }
+    return;
+  }
+
+  // Déconnexion
+  if (url === '/api/auth/logout' && req.method === 'POST') {
+    const authHeader = req.headers['authorization'] || req.headers['x-auth-token'];
+    let token = authHeader ? (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim()) : null;
+    db.logoutUser(token);
+    sendJson(res, 200, { success: true });
+    return;
+  }
+
+  // Validation du palier première mission terminée pour le parrainage
+  if (url === '/api/referral/claim-first-mission' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    if (!user) {
+      sendJson(res, 401, { success: false, error: 'Connexion requise.' });
+      return;
+    }
+    const result = db.claimReferralFirstMission(user.id);
+    if (result.success) {
+      broadcastSSE('referral_validated', result);
+    }
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // Statut parrainage du joueur
+  if (url === '/api/referral/status' && req.method === 'GET') {
+    const user = getAuthUser(req);
+    if (!user) {
+      sendJson(res, 401, { success: false, error: 'Connexion requise.' });
+      return;
+    }
+    const myReferrals = (db.data.referralLogs || []).filter(r => r.referrer_id === user.id);
+    sendJson(res, 200, {
+      success: true,
+      referral_code: user.referral_code,
+      referral_suspended: !!user.referral_suspended,
+      referred_by: user.referred_by || null,
+      total_referees: myReferrals.length,
+      completed_referees: myReferrals.filter(r => r.status === 'completed').length
     });
     return;
   }
@@ -199,55 +308,6 @@ const server = http.createServer((req, res) => {
         sendJson(res, 400, { success: false, error: err.message });
       }
     });
-    return;
-  }
-
-  // Connexion
-  if (url === '/api/auth/login' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', () => {
-      try {
-        const { username, password } = JSON.parse(body);
-        const result = db.loginUser(username, password);
-        if (result.error) {
-          sendJson(res, 401, { success: false, error: result.error });
-        } else {
-          sendJson(res, 200, result);
-        }
-      } catch (err) {
-        sendJson(res, 400, { success: false, error: 'Données invalides' });
-      }
-    });
-    return;
-  }
-
-  // Vérifier Session actuelle (Me)
-  if (url === '/api/auth/me' && req.method === 'GET') {
-    const user = getAuthUser(req);
-    if (!user) {
-      sendJson(res, 401, { success: false, error: 'Non authentifié' });
-    } else {
-      sendJson(res, 200, {
-        success: true,
-        user: {
-          id: user.id,
-          username: user.username,
-          role: user.role || 'user',
-          stationName: user.stationName,
-          city: user.city
-        }
-      });
-    }
-    return;
-  }
-
-  // Déconnexion
-  if (url === '/api/auth/logout' && req.method === 'POST') {
-    const authHeader = req.headers['authorization'] || req.headers['x-auth-token'];
-    let token = authHeader ? (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim()) : null;
-    db.logoutUser(token);
-    sendJson(res, 200, { success: true });
     return;
   }
 
@@ -471,6 +531,46 @@ const server = http.createServer((req, res) => {
         activeOnline: Object.keys(gameState.players).length,
         alliancesCount: db.data.alliances.length,
         totalSavedGames: Object.keys(db.data.savedGames).length
+      }
+    });
+    return;
+  }
+
+  // Admin : Sécurité & Parrainages (Logs de fraude et parrainages)
+  if (url === '/api/admin/referrals' && req.method === 'GET') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    const referralData = db.getReferralAdminData();
+    sendJson(res, 200, { success: true, ...referralData });
+    return;
+  }
+
+  // Admin : Action sur un incident de fraude ou un compte parrain
+  if (url === '/api/admin/referrals/action' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { action, targetId, extra } = JSON.parse(body);
+        const result = db.processAdminReferralAction(action, targetId, extra || {});
+        if (result.error) {
+          sendJson(res, 400, { success: false, error: result.error });
+        } else {
+          broadcastSSE('admin_referral_updated', { action, targetId });
+          sendJson(res, 200, { success: true, ...result });
+        }
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: err.message });
       }
     });
     return;

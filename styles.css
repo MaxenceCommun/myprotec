@@ -1066,3 +1066,111 @@ abbr.protec-abbr, [data-abbr], .protec-abbr {
   box-shadow: 0 6px 20px rgba(0, 46, 109, 0.6), 0 0 0 4px rgba(255, 102, 0, 0.9);
 }
 
+/* ==========================================================================
+   REFLET SPÉCULAIRE DE L'ÉCUSSON MEMBRE FONDATEUR (MASQUÉ VIA CALQUE)
+   ========================================================================== */
+.ecusson-fondateur-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), filter 0.3s ease;
+  vertical-align: middle;
+}
+
+.ecusson-fondateur-wrapper:hover {
+  transform: scale(1.08) translateY(-3px);
+  filter: drop-shadow(0 10px 22px rgba(0, 46, 109, 0.45));
+}
+
+.ecusson-fondateur-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+  
+  /* Masque de découpe utilisant le calque utilisateur (zones opaques = reflet actif) */
+  -webkit-mask-image: url('images/badges/membre_fondateur_mask.png');
+  mask-image: url('images/badges/membre_fondateur_mask.png');
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  
+  /* Mode de fusion spéculaire / éclaircissant */
+  mix-blend-mode: screen;
+}
+
+/* Faisceau lumineux oblique traversant le blason */
+.ecusson-fondateur-shimmer {
+  position: absolute;
+  top: -60%;
+  left: -130%;
+  width: 280%;
+  height: 220%;
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0) 35%,
+    rgba(255, 255, 255, 0.25) 42%,
+    rgba(255, 255, 255, 0.85) 48%,
+    rgba(255, 240, 200, 0.95) 50%,
+    rgba(255, 255, 255, 0.85) 52%,
+    rgba(180, 220, 255, 0.35) 58%,
+    rgba(255, 255, 255, 0) 65%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(0deg);
+  animation: ecusson-fondateur-sweep 4.2s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+  opacity: 0.88;
+  filter: blur(1px);
+}
+
+/* Léger halo pulsant au sommet pour rehausser la texture mate */
+.ecusson-fondateur-ambient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 45% 30%,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 220, 120, 0.12) 30%,
+    transparent 65%
+  );
+  animation: ecusson-fondateur-pulse 3s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes ecusson-fondateur-sweep {
+  0% {
+    transform: translateX(-45%) translateY(-15%);
+  }
+  32% {
+    transform: translateX(45%) translateY(15%);
+  }
+  100% {
+    transform: translateX(45%) translateY(15%);
+  }
+}
+
+@keyframes ecusson-fondateur-pulse {
+  0% {
+    opacity: 0.25;
+  }
+  100% {
+    opacity: 0.75;
+  }
+}
+
+.ecusson-fondateur-wrapper:hover .ecusson-fondateur-shimmer {
+  animation: ecusson-fondateur-sweep 2.2s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+  opacity: 1;
+}
+
+

@@ -66,6 +66,7 @@ window.ProtecAdmin = {
     const tabArchivesBtn = document.getElementById('admin-tab-archives-btn');
     const tabMissionsBtn = document.getElementById('admin-tab-missions-btn');
     const tabEventsBtn = document.getElementById('admin-tab-events-btn');
+    const tabReferralsBtn = document.getElementById('admin-tab-referrals-btn');
 
     const viewPlayers = document.getElementById('admin-view-players');
     const viewAnnouncements = document.getElementById('admin-view-announcements');
@@ -76,6 +77,7 @@ window.ProtecAdmin = {
     const viewArchives = document.getElementById('admin-view-archives');
     const viewMissions = document.getElementById('admin-view-missions');
     const viewEvents = document.getElementById('admin-view-events');
+    const viewReferrals = document.getElementById('admin-view-referrals');
 
     const defaultClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer';
     const activeClass = 'px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer';
@@ -89,6 +91,7 @@ window.ProtecAdmin = {
     if (tabArchivesBtn) tabArchivesBtn.className = (tab === 'archives' ? activeClass : defaultClass);
     if (tabMissionsBtn) tabMissionsBtn.className = (tab === 'missions' ? activeClass : defaultClass);
     if (tabEventsBtn) tabEventsBtn.className = (tab === 'events' ? activeClass : defaultClass);
+    if (tabReferralsBtn) tabReferralsBtn.className = (tab === 'parrainages' ? activeClass : defaultClass);
 
     if (viewPlayers) viewPlayers.classList.toggle('hidden', tab !== 'joueurs');
     if (viewAnnouncements) viewAnnouncements.classList.toggle('hidden', tab !== 'annonces');
@@ -99,6 +102,7 @@ window.ProtecAdmin = {
     if (viewArchives) viewArchives.classList.toggle('hidden', tab !== 'archives');
     if (viewMissions) viewMissions.classList.toggle('hidden', tab !== 'missions');
     if (viewEvents) viewEvents.classList.toggle('hidden', tab !== 'events');
+    if (viewReferrals) viewReferrals.classList.toggle('hidden', tab !== 'parrainages');
 
     if (tab === 'archives') {
       this.loadResetArchives();
@@ -113,6 +117,8 @@ window.ProtecAdmin = {
       this.renderSuspiciousAlerts();
     } else if (tab === 'support') {
       this.renderSupportPlayerSelect();
+    } else if (tab === 'parrainages') {
+      this.loadReferralsData();
     }
   },
 
@@ -882,6 +888,7 @@ window.ProtecAdmin = {
       if (usersLoaded) {
         this.renderUsersTable(game);
         this.scanForSuspiciousActivities();
+        this.updateReferralFraudBadge();
       } else {
         if (tableBody) {
           tableBody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-xs text-rose-600 font-bold">Impossible de charger les données des directeurs. Vérifiez la connexion serveur ou Supabase.</td></tr>`;
@@ -1732,6 +1739,9 @@ window.ProtecAdmin = {
           <button id="admin-tab-suspicion-btn" onclick="window.ProtecAdmin.switchTab('suspicion')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
             🚨 Mouvements Suspects <span id="admin-suspicion-badge" class="hidden px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-600 text-white animate-pulse">0</span>
           </button>
+          <button id="admin-tab-referrals-btn" onclick="window.ProtecAdmin.switchTab('parrainages')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
+            🎁 Sécurité & Parrainages <span id="admin-referral-fraud-badge" class="hidden px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-600 text-white animate-pulse">0</span>
+          </button>
           <button id="admin-tab-support-btn" onclick="window.ProtecAdmin.switchTab('support')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
             🛠️ Support Flotte & Missions
           </button>
@@ -2397,6 +2407,93 @@ window.ProtecAdmin = {
 
             <div id="admin-badges-list-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pb-6">
               <!-- Rempli dynamiquement -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Vue : Sécurité & Parrainages (Contrôle Anti-Triche Réseau & Logs de Fraude) -->
+        <div id="admin-view-referrals" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4">
+          <!-- Bannière informative -->
+          <div class="p-4 rounded-2xl bg-gradient-to-r from-indigo-900 via-slate-900 to-rose-950 border border-rose-500/30 text-white flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-500 text-white uppercase tracking-wider">Sécurité Opérationnelle</span>
+                <span class="text-xs font-black text-rose-300">Contrôle Anti-Fraude IP & Liaison Parrain</span>
+              </div>
+              <h4 class="text-sm font-black text-white">Supervision des Parrainages & Détection d'Anomalies IP</h4>
+              <p class="text-[11px] text-slate-300">Auditez les tentatives de doublons d'adresse IP (même IP parrain/filleul ou filleuls partagés). Les récidivistes (≥ 2 tentatives) sont mis en surbrillance rouge.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="window.ProtecAdmin.loadReferralsData()" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition flex items-center gap-1.5 border border-white/20 cursor-pointer">
+                <span>🔄 Actualiser</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Section 1 : Tableau des Incidents de Fraude (fraud_logs) -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+                <h4 class="text-xs font-black text-slate-900 uppercase tracking-wide">Journal des Incidents de Fraude Détectés (fraud_logs)</h4>
+              </div>
+              <span id="admin-fraud-logs-count" class="text-xs font-bold text-slate-500">0 incident(s)</span>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-50 text-[10px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th class="py-2.5 px-3">Date</th>
+                      <th class="py-2.5 px-3">Parrain (Pseudo + ID)</th>
+                      <th class="py-2.5 px-3">Filleul Tenté</th>
+                      <th class="py-2.5 px-3">IP Détectée</th>
+                      <th class="py-2.5 px-3">Raison du Blocage</th>
+                      <th class="py-2.5 px-3">Statut</th>
+                      <th class="py-2.5 px-3 text-right">Actions Rapides</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-fraud-logs-tbody" class="divide-y divide-slate-100 font-medium text-slate-700">
+                    <tr>
+                      <td colspan="7" class="py-6 text-center text-xs text-slate-400">Chargement des données de sécurité...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2 : Tableau des Parrainages Actifs & Réussis (referral_logs) -->
+          <div class="space-y-2 pt-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <h4 class="text-xs font-black text-slate-900 uppercase tracking-wide">Historique des Parrainages Conformes (referral_logs)</h4>
+              </div>
+              <span id="admin-referrals-count" class="text-xs font-bold text-slate-500">0 parrainage(s)</span>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-50 text-[10px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th class="py-2.5 px-3">Date</th>
+                      <th class="py-2.5 px-3">Parrain</th>
+                      <th class="py-2.5 px-3">Filleul</th>
+                      <th class="py-2.5 px-3">Statut Palier</th>
+                      <th class="py-2.5 px-3">Bonus Filleul (+1 500 €)</th>
+                      <th class="py-2.5 px-3">Prime Parrain (+2 500 €)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-referrals-tbody" class="divide-y divide-slate-100 font-medium text-slate-700">
+                    <tr>
+                      <td colspan="6" class="py-6 text-center text-xs text-slate-400">Aucun parrainage enregistré.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -4332,6 +4429,212 @@ window.ProtecAdmin = {
 
     document.getElementById('admin-create-event-modal')?.classList.add('hidden');
     this.loadEventsData();
+  },
+
+  // Chargement des données de Sécurité & Parrainages
+  async loadReferralsData() {
+    const tbodyFraud = document.getElementById('admin-fraud-logs-tbody');
+    const tbodyRef = document.getElementById('admin-referrals-tbody');
+    const badgeCount = document.getElementById('admin-referral-fraud-badge');
+    const countFraud = document.getElementById('admin-fraud-logs-count');
+    const countRef = document.getElementById('admin-referrals-count');
+
+    if (tbodyFraud) tbodyFraud.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-slate-400 font-semibold animate-pulse">Chargement des données de sécurité...</td></tr>`;
+
+    let data = null;
+    try {
+      const res = await fetch('/api/admin/referrals', { headers: this.getAuthHeaders() });
+      if (res.ok) {
+        data = await res.json();
+      }
+    } catch (e) {}
+
+    if (!data && window.ProtecSupabase) {
+      data = await window.ProtecSupabase.getReferralAdminDataSupabase();
+    }
+
+    if (!data) {
+      if (tbodyFraud) tbodyFraud.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-rose-500 font-bold">Impossible de récupérer les données de parrainage.</td></tr>`;
+      return;
+    }
+
+    const unreviewedCount = (data.fraudLogs || []).filter(f => !f.reviewed).length;
+    if (badgeCount) {
+      if (unreviewedCount > 0) {
+        badgeCount.textContent = unreviewedCount;
+        badgeCount.classList.remove('hidden');
+      } else {
+        badgeCount.classList.add('hidden');
+      }
+    }
+
+    if (countFraud) countFraud.textContent = `${(data.fraudLogs || []).length} incident(s)`;
+    if (countRef) countRef.textContent = `${(data.referralLogs || []).length} parrainage(s)`;
+
+    // Rendu des logs de fraude
+    if (tbodyFraud) {
+      if (!data.fraudLogs || data.fraudLogs.length === 0) {
+        tbodyFraud.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-slate-400 font-medium">Aucun incident de fraude détecté. Tous les parrainages respectent les règles IP.</td></tr>`;
+      } else {
+        tbodyFraud.innerHTML = data.fraudLogs.map(f => {
+          const dateStr = new Date(f.timestamp).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+          const isRecidivist = f.is_recidivist || f.total_fraud_attempts >= 2;
+          const rowBg = isRecidivist ? 'bg-rose-50/70' : 'hover:bg-slate-50/80';
+
+          const reasonMap = {
+            'SAME_IP_AS_REFERRER': { label: 'Même IP que le Parrain', color: 'bg-rose-100 text-rose-800 border-rose-300' },
+            'IP_ALREADY_USED_BY_ANOTHER_REFERRAL': { label: 'IP déjà utilisée par un autre Filleul', color: 'bg-orange-100 text-orange-900 border-orange-300' },
+            'SELF_REFERRAL': { label: 'Auto-Parrainage', color: 'bg-amber-100 text-amber-900 border-amber-300' },
+            'REFERRAL_SUSPENDED': { label: 'Parrain Suspendu', color: 'bg-slate-100 text-slate-800 border-slate-300' }
+          };
+          const reasonInfo = reasonMap[f.reason] || { label: f.reason, color: 'bg-slate-100 text-slate-800 border-slate-200' };
+
+          return `
+            <tr class="${rowBg} transition border-b border-slate-100">
+              <td class="py-3 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">${dateStr}</td>
+              <td class="py-3 px-3">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="font-extrabold text-slate-900">${f.referrer_username}</span>
+                  ${isRecidivist ? `<span class="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-600 text-white uppercase tracking-wider animate-pulse" title="Ce parrain a accumulé ${f.total_fraud_attempts} tentatives suspectes">⚠️ Récidiviste (${f.total_fraud_attempts})</span>` : ''}
+                  ${f.referrer_suspended ? `<span class="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300">Code Suspendu</span>` : ''}
+                  ${f.referrer_is_banned ? `<span class="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-100 text-rose-900 border border-rose-300">Banni</span>` : ''}
+                </div>
+                <div class="text-[10px] text-slate-400 font-mono">${f.referrer_id}</div>
+              </td>
+              <td class="py-3 px-3 font-bold text-slate-800">${f.attempted_referee_username}</td>
+              <td class="py-3 px-3">
+                <code class="px-2 py-0.5 rounded bg-slate-100 text-slate-800 font-mono text-[11px] border border-slate-200">${f.ip_detected}</code>
+              </td>
+              <td class="py-3 px-3">
+                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${reasonInfo.color}">${reasonInfo.label}</span>
+              </td>
+              <td class="py-3 px-3">
+                ${f.reviewed ? `
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Classé</span>
+                ` : `
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">À Traiter</span>
+                `}
+              </td>
+              <td class="py-3 px-3 text-right">
+                <div class="flex items-center justify-end gap-1 flex-wrap">
+                  ${!f.reviewed ? `
+                    <button onclick="window.ProtecAdmin.executeReferralAction('review_fraud', '${f.id}')" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition cursor-pointer" title="Marquer cet incident comme examiné">
+                      Classer
+                    </button>
+                  ` : ''}
+                  <button onclick="window.ProtecAdmin.promptWarnReferrer('${f.referrer_id}', '${f.referrer_username}')" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition cursor-pointer" title="Envoyer une alerte officielle au joueur">
+                    Avertir
+                  </button>
+                  ${f.referrer_suspended ? `
+                    <button onclick="window.ProtecAdmin.executeReferralAction('reactivate_referrer', '${f.referrer_id}')" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 transition cursor-pointer" title="Lever la suspension de son code de parrainage">
+                      Réactiver
+                    </button>
+                  ` : ''}
+                  ${!f.referrer_is_banned ? `
+                    <button onclick="window.ProtecAdmin.promptBanReferrer('${f.referrer_id}', '${f.referrer_username}')" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 transition cursor-pointer" title="Bannir définitivement ce joueur">
+                      Bannir
+                    </button>
+                  ` : ''}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    // Rendu des parrainages conformes
+    if (tbodyRef) {
+      if (!data.referralLogs || data.referralLogs.length === 0) {
+        tbodyRef.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-xs text-slate-400 font-medium">Aucun parrainage certifié pour le moment.</td></tr>`;
+      } else {
+        tbodyRef.innerHTML = data.referralLogs.map(r => {
+          const dateStr = new Date(r.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+          const isDone = r.status === 'completed';
+
+          return `
+            <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+              <td class="py-2.5 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">${dateStr}</td>
+              <td class="py-2.5 px-3 font-bold text-slate-900">${r.referrer_username} <span class="text-[10px] font-mono text-slate-400">(${r.referrer_id})</span></td>
+              <td class="py-2.5 px-3 font-bold text-slate-900">${r.referee_username} <span class="text-[10px] font-mono text-slate-400">(${r.referee_id})</span></td>
+              <td class="py-2.5 px-3">
+                ${isDone ? `
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    ✓ Validé (1ère intervention)
+                  </span>
+                ` : `
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    ⏳ En attente de réalisation du 1er DPS
+                  </span>
+                `}
+              </td>
+              <td class="py-2.5 px-3 font-bold text-emerald-700">+1 500 € (Accordé)</td>
+              <td class="py-2.5 px-3 font-bold ${r.reward_referrer_granted ? 'text-emerald-700' : 'text-slate-400'}">
+                ${r.reward_referrer_granted ? '+2 500 € (Versée)' : 'En attente palier'}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+  },
+
+  async executeReferralAction(action, targetId, extra = {}) {
+    try {
+      let res = await fetch('/api/admin/referrals/action', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ action, targetId, extra })
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        window.game?.showToast?.('Action Validée', 'Action administrative enregistrée avec succès.', 'green');
+      } else if (window.ProtecSupabase) {
+        await window.ProtecSupabase.processAdminReferralActionSupabase(action, targetId, extra);
+        window.game?.showToast?.('Action Validée', 'Action administrative appliquée sur Supabase.', 'green');
+      }
+      this.loadReferralsData();
+      this.loadAdminData(window.game);
+    } catch (e) {
+      window.game?.showToast?.('Erreur', e.message, 'red');
+    }
+  },
+
+  promptWarnReferrer(referrerId, username) {
+    const msg = prompt(`Message d'avertissement pour ${username} :`, "Avertissement Administrateur : Des irrégularités réseau (doublons IP) ont été détectées sur votre code de parrainage. Veillez à respecter les règles sous peine de suspension définitive.");
+    if (msg) {
+      this.executeReferralAction('warn_referrer', referrerId, { message: msg });
+    }
+  },
+
+  promptBanReferrer(referrerId, username) {
+    if (confirm(`Confirmez-vous le bannissement immédiat du parrain ${username} ? Le joueur sera déconnecté et ses accès coupés.`)) {
+      this.executeReferralAction('ban_referrer', referrerId);
+    }
+  },
+
+  async updateReferralFraudBadge() {
+    try {
+      const badge = document.getElementById('admin-referral-fraud-badge');
+      if (!badge) return;
+      let data = null;
+      try {
+        const res = await fetch('/api/admin/referrals', { headers: this.getAuthHeaders() });
+        if (res.ok) data = await res.json();
+      } catch (e) {}
+      if (!data && window.ProtecSupabase) {
+        data = await window.ProtecSupabase.getReferralAdminDataSupabase();
+      }
+      if (data && Array.isArray(data.fraudLogs)) {
+        const unreviewed = data.fraudLogs.filter(f => !f.reviewed).length;
+        if (unreviewed > 0) {
+          badge.textContent = unreviewed;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
+    } catch (e) {}
   }
 };
 

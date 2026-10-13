@@ -4,19 +4,34 @@ window.ProtecAuth = {
   currentUser: null,
   lastSyncTime: null,
   isSyncing: false,
+  pendingReferralCode: null,
 
   init(game = null) {
     this.token = localStorage.getItem('protec_auth_token') || null;
     this.currentUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
     this.updateHeaderUI();
 
+    // Détection d'un lien de parrainage dans l'URL (?ref=CODE ou ?parrain=CODE)
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const refParam = urlParams.get('ref') || urlParams.get('parrain');
+      if (refParam) {
+        this.pendingReferralCode = refParam.trim().toUpperCase();
+        console.log('🎁 Code parrain détecté depuis l’URL :', this.pendingReferralCode);
+      }
+    } catch (e) {}
+
     if (this.token && game) {
       this.checkSession(game);
     } else if (!this.token) {
-      // Si la landing page est active, ne pas afficher la modale au chargement pour laisser le joueur découvrir l'accueil
+      // Si la landing page est active, ne pas afficher la modale au chargement pour laisser le joueur découvrir l'accueil,
+      // SAUF si un lien de parrainage a été suivi : dans ce cas, ouvrir directement le formulaire d'inscription
       const landingEl = document.getElementById('myprotec-landing-page');
-      if (!landingEl) {
+      if (!landingEl || this.pendingReferralCode) {
         this.openAuthModal(true);
+        if (this.pendingReferralCode) {
+          setTimeout(() => this.renderModalContent('register', true), 100);
+        }
       }
     }
 
@@ -88,6 +103,12 @@ window.ProtecAuth = {
 
             // Charger directement la progression depuis Supabase
             await this.checkCloudSaveOnLogin(game);
+
+            if (game && typeof game.returnToMyAntenna === 'function') {
+              setTimeout(() => {
+                game.returnToMyAntenna(15, true);
+              }, 300);
+            }
 
             if (game.syncPlayerToServer) {
               game.syncPlayerToServer();
@@ -302,13 +323,11 @@ window.ProtecAuth = {
 
           <!-- Bouton d'entrée dans le jeu immédiat si on est sur la page d'accueil -->
           ${isLandingPage ? `
-            <div class="space-y-2 pt-1">
+            <div class="pt-1">
               <button onclick="window.location.href='jeu.html'" class="w-full py-3.5 rounded-2xl bg-[#ff6600] hover:bg-[#e65c00] active:scale-98 text-white font-black text-sm shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
-                <span>🚀 Accéder au Poste de Commandement</span>
+                <i data-lucide="radio" class="w-4 h-4"></i>
+                <span>Rejoindre mon Antenne</span>
                 <i data-lucide="arrow-right" class="w-4 h-4"></i>
-              </button>
-              <button onclick="window.ProtecAuth.clearSession(); window.ProtecAuth.renderModalContent('register', false);" class="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer">
-                Ouvrir une autre antenne (Nouveau compte)
               </button>
             </div>
           ` : `
@@ -327,6 +346,60 @@ window.ProtecAuth = {
 
             <!-- Collection d'Écussons Commémoratifs & Rareté -->
             ${window.ProtecMultiplayer ? window.ProtecMultiplayer.renderBadgesCollectionHTML(window.game) : ''}
+
+            <!-- Programme de Parrainage & Sécurité -->
+            <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/40 to-slate-50 border border-blue-200/80 shadow-xs space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-7 h-7 rounded-lg bg-pc-blue text-white flex items-center justify-center font-black">
+                    <i data-lucide="gift" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide">Programme de Parrainage</h5>
+                    <p class="text-[10px] text-slate-500">Invitez de nouveaux directeurs & gagnez +2 500 €</p>
+                  </div>
+                </div>
+                ${this.currentUser.referral_suspended ? `
+                  <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+                    Suspendu (Admin)
+                  </span>
+                ` : `
+                  <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    Actif
+                  </span>
+                `}
+              </div>
+
+              ${(this.currentUser.pendingAlerts && this.currentUser.pendingAlerts.length > 0) || (this.currentUser.pending_referral_alerts && this.currentUser.pending_referral_alerts.length > 0) ? `
+                <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-300 text-rose-800 text-[11px] leading-relaxed flex items-start gap-2">
+                  <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5"></i>
+                  <div>
+                    <strong>Avertissement :</strong> Une tentative de parrainage non conforme a été détectée sur votre compte (adresse IP ou appareil doublon). La liaison a été rejetée et l'incident consigné.
+                  </div>
+                </div>
+              ` : ''}
+
+              <div class="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Votre Code Parrain Unique</div>
+                  <div class="font-mono font-black text-sm text-pc-blue tracking-wider truncate" id="auth-my-ref-code">
+                    ${this.currentUser.referral_code || 'GÉNÉRATION...'}
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                  <button type="button" onclick="navigator.clipboard.writeText('${this.currentUser.referral_code || ''}'); window.game?.showToast?.('Code Copié !', 'Votre code de parrainage a été copié.', 'blue');" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="copy" class="w-3 h-3"></i> Copier
+                  </button>
+                  <button type="button" onclick="const url = window.location.origin + window.location.pathname + '?ref=' + ('${this.currentUser.referral_code || ''}'); navigator.clipboard.writeText(url); window.game?.showToast?.('Lien Copié !', 'Lien d’invitation copié dans le presse-papier.', 'blue');" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="link" class="w-3 h-3"></i> Lien
+                  </button>
+                </div>
+              </div>
+              <div class="text-[10px] text-slate-500 flex items-center justify-between">
+                <span>Bonus Filleul à l'inscription : <strong>+1 500 €</strong></span>
+                <span>Prime Parrain au 1er DPS : <strong>+2 500 €</strong></span>
+              </div>
+            </div>
 
             <!-- Initiative d'Événement Fédéral Exceptionnel -->
             <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 border border-indigo-500/30 text-white shadow-lg space-y-2.5">
@@ -409,7 +482,7 @@ window.ProtecAuth = {
             </button>
           </form>
         ` : `
-          <!-- Formulaire d'Inscription Officiel : Pseudo, Mot de Passe, Département, Nom de l'Antenne -->
+          <!-- Formulaire d'Inscription Officiel : Pseudo, Mot de Passe, Département, Nom de l'Antenne, Code Parrain -->
           <form onsubmit="window.ProtecAuth.handleRegisterForm(event, window.game)" class="space-y-3">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
@@ -426,6 +499,20 @@ window.ProtecAuth = {
                   <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
                   <input type="password" id="auth-reg-password" required minlength="4" placeholder="••••••••" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
                 </div>
+              </div>
+            </div>
+
+            <!-- Code de Parrainage (Optionnel) -->
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">Code Parrain (Facultatif)</label>
+                <span class="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <i data-lucide="sparkles" class="w-3 h-3"></i> +1 500 € offerts
+                </span>
+              </div>
+              <div class="relative">
+                <i data-lucide="gift" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" id="auth-reg-referral" value="${this.pendingReferralCode || ''}" placeholder="Ex: PROT-A1B2 ou Pseudo de votre parrain" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-bold uppercase focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue placeholder:normal-case placeholder:font-normal" />
               </div>
             </div>
 
@@ -575,9 +662,27 @@ window.ProtecAuth = {
       game.showToast('Connexion Réussie !', `Bienvenue Commandant ${data.user.username} ! Connexion au serveur multijoueur active.`, 'green');
       this.updateHeaderUI();
 
+      // Traitement des alertes de parrainage (Avertissements de fraude ou félicitations)
+      if (Array.isArray(data.pendingAlerts) && data.pendingAlerts.length > 0) {
+        data.pendingAlerts.forEach(al => {
+          if (al.type === 'reward') {
+            game.showToast('Prime de Parrainage !', al.message, 'green');
+          } else {
+            game.showToast('Sécurité Parrainage', al.message, 'red');
+          }
+        });
+      }
+
       // Charger la partie sauvegardée sur le serveur
       await this.checkCloudSaveOnLogin(game);
       this.closeAuthModal();
+
+      // Recentre et positionne immédiatement le joueur devant son antenne sur la carte
+      if (game && typeof game.returnToMyAntenna === 'function') {
+        setTimeout(() => {
+          game.returnToMyAntenna(15, true);
+        }, 300);
+      }
 
       // Activer la surveillance de compte et la synchronisation multijoueur temps réel
       if (window.ProtecSupabase) {
@@ -768,6 +873,8 @@ window.ProtecAuth = {
       city = stationName;
     }
 
+    const referralCode = (document.getElementById('auth-reg-referral')?.value || this.pendingReferralCode || '').trim();
+
     const errorEl = document.getElementById('auth-error-msg');
     const submitBtn = document.getElementById('auth-submit-btn');
 
@@ -780,18 +887,23 @@ window.ProtecAuth = {
 
       // 1. Enregistrement dans Supabase Cloud en priorité
       if (window.ProtecSupabase && window.ProtecSupabase.client) {
-        const supaRes = await window.ProtecSupabase.registerPlayer(username, password, { stationName, departmentCode, city });
+        const supaRes = await window.ProtecSupabase.registerPlayer(username, password, { stationName, departmentCode, city, referralCode });
         if (supaRes && supaRes.user) {
           data = {
             success: true,
             token: `supa-${supaRes.user.id}`,
+            referralStatus: supaRes.referralStatus,
+            refereeBonusGranted: supaRes.refereeBonusGranted,
             user: {
               id: supaRes.user.id,
               username: supaRes.user.username,
               role: supaRes.user.role || 'directeur',
               stationName: supaRes.user.station_name,
               city: supaRes.user.city || city,
-              departmentCode: supaRes.user.department_code || departmentCode
+              departmentCode: supaRes.user.department_code || departmentCode,
+              referral_code: supaRes.user.referral_code,
+              referred_by: supaRes.user.referred_by || null,
+              referral_suspended: !!supaRes.user.referral_suspended
             }
           };
         } else if (supaRes && supaRes.error) {
@@ -809,7 +921,7 @@ window.ProtecAuth = {
         const res = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password, stationName, departmentCode })
+          body: JSON.stringify({ username, password, stationName, departmentCode, referralCode })
         });
         data = await res.json();
       }
@@ -851,13 +963,19 @@ window.ProtecAuth = {
       localStorage.setItem('protec_department_code', game.player.departmentCode);
 
       // Nouveau compte : état d'antenne vierge et remise à zéro pour démarrer l'implantation
+      // Bonus de bienvenue parrainage (+1 500 €) si le code parrain était valide et certifié
+      const hasReferralBonus = !!(data.refereeBonusGranted || (data.referralStatus && data.referralStatus.success));
+      const startingMoney = 15000 + (hasReferralBonus ? 1500 : 0);
+
       game.stations = [];
       game.vehicles = [];
       game.volunteers = [];
       game.missions = [];
       game.devis = [];
       game.candidatures = [];
-      game.resources.money = 15000;
+      game.resources.money = startingMoney;
+      game.resources.budget = startingMoney;
+      game.resources.funds = startingMoney;
       game.resources.reputationScore = 50;
       if (game.rewards) {
         (game.rewards.dailyTasks || []).forEach(t => { t.current = 0; t.done = false; });
@@ -871,6 +989,24 @@ window.ProtecAuth = {
 
       const roleLabel = game.player.deptRole === 'antenne_principale' ? 'Antenne Principale du Département' : 'Antenne Départementale';
       game.showToast('Compte Créé !', `Bienvenue ${data.user.username} (${roleLabel} • Dépt ${game.player.departmentCode}).`, 'green');
+
+      // Notification informative sur le statut du parrainage
+      if (data.referralStatus) {
+        if (data.referralStatus.success) {
+          setTimeout(() => {
+            game.showToast('Bonus Parrainage Accordé !', `+1 500 € crédités grâce à votre parrain (${data.referralStatus.referrerName || 'Partenaire'}) !`, 'green');
+          }, 1200);
+        } else if (data.referralStatus.fraudDetected) {
+          setTimeout(() => {
+            game.showToast('Contrôle Parrainage Rejeté', data.referralStatus.message || 'Parrainage refusé : anomalie réseau / doublon IP détecté.', 'amber');
+          }, 1200);
+        } else if (data.referralStatus.message) {
+          setTimeout(() => {
+            game.showToast('Info Parrainage', data.referralStatus.message, 'amber');
+          }, 1200);
+        }
+      }
+
       this.updateHeaderUI();
 
       // Sauvegarde immédiate et synchronisation multijoueur
@@ -1209,6 +1345,9 @@ window.ProtecAuth = {
       }
       if (window.ProtecSystems && window.ProtecSystems.updateWeatherAndDayNight) {
         window.ProtecSystems.updateWeatherAndDayNight(game);
+      }
+      if (typeof game.returnToMyAntenna === 'function') {
+        setTimeout(() => game.returnToMyAntenna(15, true), 250);
       }
     } catch (err) {
       console.error('Erreur application données:', err);

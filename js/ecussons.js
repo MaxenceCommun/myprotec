@@ -322,7 +322,21 @@ window.ProtecEcussons = {
     }
 
     if (imgSrc) {
-      const h = Math.round(size * 1.28);
+      const isFondateur = imgSrc.includes('membre_fondateur') || (badge && (badge.code === 'renf_fondateur' || (badge.nom && (badge.nom.includes('Fondateur') || badge.nom.includes('Pionnier')))));
+      const h = isFondateur ? Math.round(size * (400 / 300)) : Math.round(size * 1.28);
+
+      if (isFondateur) {
+        return `
+          <div class="ecusson-fondateur-wrapper select-none" style="width: ${size}px; height: ${h}px;" title="${badge.nom || 'Membre Fondateur'}">
+            <img src="${imgSrc}" alt="${badge.nom || 'Membre Fondateur'}" class="w-full h-full object-contain pointer-events-none relative z-0" onerror="this.onerror=null; this.parentElement.innerHTML='🛡️';" />
+            <div class="ecusson-fondateur-mask">
+              <div class="ecusson-fondateur-ambient"></div>
+              <div class="ecusson-fondateur-shimmer"></div>
+            </div>
+          </div>
+        `;
+      }
+
       return `
         <div class="inline-flex items-center justify-center filter drop-shadow-md transition transform hover:scale-105 select-none" style="width: ${size}px; height: ${h}px;">
           <img src="${imgSrc}" alt="${badge.nom || 'Écusson'}" class="w-full h-full object-contain drop-shadow-sm pointer-events-none" onerror="this.onerror=null; this.parentElement.innerHTML='🛡️';" />

@@ -1247,9 +1247,16 @@ class ProtecGame {
 
   initMap() {
     const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.currentDepartmentCode) : null;
-    const centerLat = deptInfo ? deptInfo.lat : 48.8566;
-    const centerLng = deptInfo ? deptInfo.lng : 2.3522;
-    const initialZoom = deptInfo ? deptInfo.zoom : 11;
+    let centerLat = deptInfo ? deptInfo.lat : 48.8566;
+    let centerLng = deptInfo ? deptInfo.lng : 2.3522;
+    let initialZoom = deptInfo ? deptInfo.zoom : 11;
+
+    // Si le joueur possède une antenne, centrer immédiatement la caméra devant ses locaux (zoom 15)
+    if (this.stations && this.stations.length > 0 && this.stations[0].lat && this.stations[0].lng) {
+      centerLat = this.stations[0].lat;
+      centerLng = this.stations[0].lng;
+      initialZoom = 15;
+    }
 
     this.map = L.map('map', {
       center: [centerLat, centerLng],
@@ -1363,15 +1370,19 @@ class ProtecGame {
   }
 
   // Recentre la carte immédiatement sur l'antenne ou le département officiel du joueur
-  returnToMyAntenna() {
+  returnToMyAntenna(zoom = 15, silent = false) {
     this.inspectedDepartmentCode = null;
     const myDeptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
     const dept = window.ProtecDepartements ? window.ProtecDepartements.getByCode(myDeptCode) : null;
 
-    if (this.stations.length > 0) {
-      this.map.flyTo([this.stations[0].lat, this.stations[0].lng], 13, { duration: 1.2 });
+    if (this.stations.length > 0 && this.stations[0].lat && this.stations[0].lng) {
+      if (this.map) {
+        this.map.flyTo([this.stations[0].lat, this.stations[0].lng], zoom, { duration: 1.2 });
+      }
     } else if (dept) {
-      this.map.flyTo([dept.lat, dept.lng], dept.zoom, { duration: 1.2 });
+      if (this.map) {
+        this.map.flyTo([dept.lat, dept.lng], dept.zoom, { duration: 1.2 });
+      }
     }
 
     // Réinitialise le sélecteur d'exploration sur notre propre département
@@ -1383,7 +1394,9 @@ class ProtecGame {
     if (banner) banner.classList.add('hidden');
     if (returnBtn) returnBtn.classList.add('hidden');
 
-    this.showToast('Mon Antenne', `Retour à votre antenne d'affectation (${myDeptCode}).`, 'blue');
+    if (!silent) {
+      this.showToast('Mon Antenne', `Retour à votre antenne d'affectation (${myDeptCode}).`, 'blue');
+    }
 
     // Réactualise l'affichage des autres antennes pour le département joueur
     this.renderOtherStations();
@@ -5931,10 +5944,38 @@ class ProtecGame {
       window.ProtecContratsAnnuels.onMissionCompleted(this, mission);
     }
 
+    // Déclencheur officiel du palier de parrainage (1ère intervention terminée -> déblocage de la prime parrain)
+    if (!this._firstMissionReferralChecked) {
+      this._firstMissionReferralChecked = true;
+      this.checkAndClaimReferralFirstMission();
+    }
+
     this.renderStations();
     this.renderMissions();
     this.updateStatsUI();
     this.saveGame();
+  }
+
+  // Déblocage de la prime de parrainage pour le parrain à la réalisation du premier palier (1ère mission)
+  async checkAndClaimReferralFirstMission() {
+    const user = window.ProtecAuth?.currentUser;
+    if (!user || !user.id) return;
+    try {
+      if (window.ProtecSupabase && window.ProtecSupabase.client) {
+        await window.ProtecSupabase.claimReferralFirstMissionSupabase(user.id);
+      }
+      if (window.ProtecAuth?.token) {
+        await fetch('/api/referral/claim-first-mission', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${window.ProtecAuth.token}`
+          }
+        }).catch(() => null);
+      }
+    } catch (e) {
+      console.warn('Vérification palier parrainage différée:', e);
+    }
   }
 
   // --- GESTION DES IDENTITÉS DES BÉNÉVOLES (NOM ET PRÉNOM UNIQUEMENT) ---
