@@ -110,6 +110,10 @@ window.ProtecAuth = {
               }, 300);
             }
 
+            if (window.ProtecPlatformAnalytics) {
+              window.ProtecPlatformAnalytics.recordSession(this.currentUser, game);
+            }
+
             if (game.syncPlayerToServer) {
               game.syncPlayerToServer();
             }
@@ -1202,7 +1206,9 @@ window.ProtecAuth = {
           reputation_samu: game.reputation_samu !== undefined ? game.reputation_samu : 50,
           reputation_sdis: game.reputation_sdis !== undefined ? game.reputation_sdis : 50,
           reputation_prefecture: game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50,
-          reputation_villes: game.reputation_villes || {}
+          reputation_villes: game.reputation_villes || {},
+          platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(this.currentUser, game)) || null,
+          lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null
         };
 
         await fetch('/api/game/save', {

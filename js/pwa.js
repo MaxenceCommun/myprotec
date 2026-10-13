@@ -411,7 +411,373 @@ window.ProtecPWA = {
   }
 };
 
+/**
+ * MODULE ANALYTICS SUPPORTS & INSTALLATIONS PWA
+ * Détecte si le joueur a installé l'application, sur quelle plateforme il joue,
+ * calcule la répartition par joueur et génère les graphiques d'analyse.
+ */
+window.ProtecPlatformAnalytics = {
+  detectPlatform() {
+    const ua = (navigator.userAgent || '').toLowerCase();
+    const plat = (navigator.userAgentData?.platform || navigator.platform || '').toLowerCase();
+
+    if (/android/.test(ua) || /android/.test(plat)) return 'Android';
+    if (/iphone|ipad|ipod/.test(ua)) return 'iOS';
+    if (/win/.test(plat) || /windows/.test(ua)) return 'Windows';
+    if (/mac/.test(plat) || /macintosh|mac os x/.test(ua)) return 'macOS';
+    if (/cros/.test(ua)) return 'ChromeOS';
+    if (/linux/.test(plat) || /linux/.test(ua)) return 'Linux';
+    return 'Autre';
+  },
+
+  detectDeviceType() {
+    const ua = (navigator.userAgent || '').toLowerCase();
+    const width = window.innerWidth || screen.width || 1024;
+
+    if (/ipad|tablet/.test(ua) || (width >= 768 && width <= 1024 && 'ontouchstart' in window)) {
+      return 'Tablette';
+    }
+    if (/mobile|iphone|ipod|android.*mobile/.test(ua) || width < 768) {
+      return 'Mobile';
+    }
+    return 'Desktop';
+  },
+
+  detectBrowser() {
+    const ua = (navigator.userAgent || '').toLowerCase();
+    if (/edg\//.test(ua)) return 'Edge';
+    if (/samsungbrowser/.test(ua)) return 'Samsung Internet';
+    if (/opr\/|opera/.test(ua)) return 'Opera';
+    if (/chrome|crios/.test(ua) && !/edg\//.test(ua)) return 'Chrome';
+    if (/firefox|fxios/.test(ua)) return 'Firefox';
+    if (/safari/.test(ua) && !/chrome|crios/.test(ua)) return 'Safari';
+    return 'Navigateur Web';
+  },
+
+  detectIsInstalled() {
+    const isStandalone = (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches ||
+      navigator.standalone === true ||
+      document.referrer.includes('android-app://') ||
+      localStorage.getItem('protec_pwa_installed') === 'true'
+    );
+    return Boolean(isStandalone);
+  },
+
+  getCurrentDevice() {
+    return {
+      platform: this.detectPlatform(),
+      deviceType: this.detectDeviceType(),
+      browser: this.detectBrowser(),
+      isInstalled: this.detectIsInstalled(),
+      screenResolution: `${window.screen?.width || window.innerWidth || 0}x${window.screen?.height || window.innerHeight || 0}`,
+      lastSeen: new Date().toISOString()
+    };
+  },
+
+  // Enregistrer ou mettre à jour la session courante du joueur
+  recordSession(user, game) {
+    const dev = this.getCurrentDevice();
+    let stats = null;
+
+    try {
+      const raw = localStorage.getItem('protec_platform_stats');
+      if (raw) stats = JSON.parse(raw);
+    } catch (e) {}
+
+    if (!stats || typeof stats !== 'object') {
+      stats = {
+        platforms: {},
+        devices: {},
+        installations: { installed: 0, web: 0 },
+        lastDevice: dev
+      };
+    }
+
+    if (!stats.platforms) stats.platforms = {};
+    if (!stats.devices) stats.devices = {};
+    if (!stats.installations) stats.installations = { installed: 0, web: 0 };
+
+    // Incrémenter la plateforme courante
+    stats.platforms[dev.platform] = (stats.platforms[dev.platform] || 0) + 1;
+    stats.devices[dev.deviceType] = (stats.devices[dev.deviceType] || 0) + 1;
+
+    if (dev.isInstalled) {
+      stats.installations.installed = (stats.installations.installed || 0) + 1;
+    } else {
+      stats.installations.web = (stats.installations.web || 0) + 1;
+    }
+
+    stats.lastDevice = dev;
+
+    try {
+      localStorage.setItem('protec_platform_stats', JSON.stringify(stats));
+      localStorage.setItem('protec_last_device', JSON.stringify(dev));
+    } catch (e) {}
+
+    if (user) {
+      user.platformStats = stats;
+      user.lastDevice = dev;
+    }
+    if (game) {
+      game.platformStats = stats;
+      game.lastDevice = dev;
+      if (game.player) {
+        game.player.platformStats = stats;
+        game.player.lastDevice = dev;
+      }
+    }
+
+    return stats;
+  },
+
+  // Palette de couleurs et icônes par OS
+  getPlatformStyle(platform) {
+    switch (platform) {
+      case 'Windows':
+        return { color: 'bg-blue-600', text: 'text-blue-700', bgLight: 'bg-blue-50', icon: '💻', border: 'border-blue-200' };
+      case 'Android':
+        return { color: 'bg-emerald-500', text: 'text-emerald-700', bgLight: 'bg-emerald-50', icon: '🤖', border: 'border-emerald-200' };
+      case 'iOS':
+        return { color: 'bg-slate-800', text: 'text-slate-800', bgLight: 'bg-slate-100', icon: '🍎', border: 'border-slate-300' };
+      case 'macOS':
+        return { color: 'bg-indigo-600', text: 'text-indigo-700', bgLight: 'bg-indigo-50', icon: '🖥️', border: 'border-indigo-200' };
+      case 'Linux':
+        return { color: 'bg-amber-600', text: 'text-amber-700', bgLight: 'bg-amber-50', icon: '🐧', border: 'border-amber-200' };
+      case 'ChromeOS':
+        return { color: 'bg-teal-600', text: 'text-teal-700', bgLight: 'bg-teal-50', icon: '🌐', border: 'border-teal-200' };
+      default:
+        return { color: 'bg-slate-500', text: 'text-slate-700', bgLight: 'bg-slate-50', icon: '📱', border: 'border-slate-200' };
+    }
+  },
+
+  // Génération du widget graphique pour un joueur spécifique
+  renderPlayerPlatformChartHTML(platformStats, lastDevice, username = 'Joueur') {
+    const stats = platformStats || { platforms: { [this.detectPlatform()]: 1 }, installations: { installed: this.detectIsInstalled() ? 1 : 0, web: this.detectIsInstalled() ? 0 : 1 } };
+    const dev = lastDevice || stats.lastDevice || this.getCurrentDevice();
+
+    const platforms = stats.platforms || {};
+    const totalSessions = Object.values(platforms).reduce((a, b) => a + Number(b || 0), 0) || 1;
+
+    const installedCount = stats.installations?.installed || (dev.isInstalled ? 1 : 0);
+    const webCount = stats.installations?.web || (!dev.isInstalled ? 1 : 0);
+    const totalInstalls = installedCount + webCount || 1;
+    const installRate = Math.round((installedCount / totalInstalls) * 100);
+
+    const sortedPlatforms = Object.entries(platforms).sort((a, b) => b[1] - a[1]);
+
+    return `
+      <div class="space-y-4 p-4 rounded-2xl bg-white border border-slate-200/90 shadow-xs text-xs">
+        <!-- En-tête Statut App Installée vs Navigateur -->
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <div>
+            <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Support & Installation</span>
+            <div class="flex items-center gap-2 mt-0.5">
+              ${dev.isInstalled ? `
+                <span class="px-2.5 py-1 rounded-xl text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shadow-xs">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  📱 Application PWA Installée
+                </span>
+              ` : `
+                <span class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                  🌐 Navigateur Web (${dev.browser || 'Web'})
+                </span>
+              `}
+              <span class="text-[11px] font-bold text-slate-500">
+                sur <strong>${dev.platform || 'Système inconnu'}</strong> (${dev.deviceType || 'Appareil'})
+              </span>
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="text-[10px] font-bold text-slate-400 block">Taux d'usage App</span>
+            <span class="text-sm font-black ${installRate >= 50 ? 'text-emerald-600' : 'text-slate-700'}">${installRate}%</span>
+          </div>
+        </div>
+
+        <!-- Jauge d'utilisation App vs Web -->
+        <div class="space-y-1">
+          <div class="flex justify-between text-[10px] font-bold text-slate-500">
+            <span class="text-emerald-700">App Installée (${installedCount} session${installedCount > 1 ? 's' : ''})</span>
+            <span class="text-slate-600">Navigateur Web (${webCount} session${webCount > 1 ? 's' : ''})</span>
+          </div>
+          <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex border border-slate-200/60">
+            <div class="bg-emerald-500 h-full transition-all" style="width: ${installRate}%"></div>
+            <div class="bg-slate-300 h-full transition-all" style="width: ${100 - installRate}%"></div>
+          </div>
+        </div>
+
+        <!-- Graphique des plateformes utilisées par ce joueur -->
+        <div class="space-y-2 pt-1">
+          <div class="flex items-center justify-between text-[11px] font-black text-slate-700">
+            <span>Répartition par Plateforme de Jeu :</span>
+            <span class="text-[10px] font-bold text-slate-400">${totalSessions} accès enregistrés</span>
+          </div>
+
+          <div class="space-y-2">
+            ${sortedPlatforms.map(([plat, count]) => {
+              const pct = Math.round((count / totalSessions) * 100);
+              const style = this.getPlatformStyle(plat);
+              return `
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between text-[11px]">
+                    <span class="font-extrabold text-slate-800 flex items-center gap-1.5">
+                      <span>${style.icon}</span>
+                      <span>${plat}</span>
+                      ${dev.platform === plat ? '<span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-indigo-100 text-indigo-700">Actuel</span>' : ''}
+                    </span>
+                    <span class="font-black ${style.text}">
+                      ${count} (${pct}%)
+                    </span>
+                  </div>
+                  <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200/50">
+                    <div class="${style.color} h-full rounded-full transition-all" style="width: ${Math.max(4, pct)}%"></div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Détails matériels & Dernier accès -->
+        <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between text-[10px] text-slate-500 gap-2">
+          <span>Navigateur : <strong>${dev.browser || 'Inconnu'}</strong></span>
+          <span>Écran : <strong>${dev.screenResolution || 'N/A'}</strong></span>
+          <span>Dernière connexion : <strong>${dev.lastSeen ? new Date(dev.lastSeen).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'Récente'}</strong></span>
+        </div>
+      </div>
+    `;
+  },
+
+  // Génération du tableau de bord Analytics Global de la communauté (pour le Panel Admin)
+  renderGlobalPlatformAnalyticsHTML(usersList = []) {
+    const users = Array.isArray(usersList) ? usersList : [];
+    const totalUsers = users.length || 1;
+
+    let installedUsersCount = 0;
+    let webUsersCount = 0;
+    const globalPlatforms = {};
+    const globalDevices = {};
+
+    users.forEach(u => {
+      const stats = u.platformStats || u.saveData?.platformStats || null;
+      const dev = u.lastDevice || u.saveData?.lastDevice || stats?.lastDevice || null;
+
+      const isInst = (dev && dev.isInstalled) || (stats && stats.installations?.installed > 0);
+      if (isInst) {
+        installedUsersCount++;
+      } else {
+        webUsersCount++;
+      }
+
+      // Plateforme principale du joueur
+      const p = (dev && dev.platform) || (stats && Object.keys(stats.platforms || {})[0]) || 'Windows';
+      globalPlatforms[p] = (globalPlatforms[p] || 0) + 1;
+
+      // Type d'appareil
+      const d = (dev && dev.deviceType) || 'Desktop';
+      globalDevices[d] = (globalDevices[d] || 0) + 1;
+    });
+
+    const globalInstallRate = Math.round((installedUsersCount / totalUsers) * 100);
+    const sortedGlobalPlatforms = Object.entries(globalPlatforms).sort((a, b) => b[1] - a[1]);
+    const topPlatform = sortedGlobalPlatforms[0] ? sortedGlobalPlatforms[0][0] : 'Windows';
+
+    return `
+      <div class="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl space-y-4">
+        <!-- En-tête de section -->
+        <div class="flex items-center justify-between flex-wrap gap-2 border-b border-white/10 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-xl">
+              📊
+            </div>
+            <div>
+              <h3 class="text-sm font-black text-white flex items-center gap-2">
+                Analyse des Supports de Jeu & Taux d'Installation App
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">Données Live</span>
+              </h3>
+              <p class="text-[11px] text-white/70">Statistiques pour mesurer les supports les plus utilisés et le succès du déploiement PWA.</p>
+            </div>
+          </div>
+          <span class="text-[11px] font-bold text-white/80 bg-white/10 px-3 py-1 rounded-xl">
+            ${totalUsers} Directeur${totalUsers > 1 ? 's' : ''} analysé${totalUsers > 1 ? 's' : ''}
+          </span>
+        </div>
+
+        <!-- 3 Métriques Clés -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <!-- Carte 1 : Taux d'installation -->
+          <div class="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+            <span class="text-[10px] font-extrabold uppercase text-indigo-300 tracking-wider block">Taux d'Installation App</span>
+            <div class="flex items-baseline gap-2">
+              <span class="text-2xl font-black text-emerald-400">${globalInstallRate}%</span>
+              <span class="text-[11px] text-white/60">(${installedUsersCount} installés)</span>
+            </div>
+            <div class="w-full bg-white/10 h-1.5 rounded-full overflow-hidden mt-1">
+              <div class="bg-emerald-400 h-full rounded-full" style="width: ${globalInstallRate}%"></div>
+            </div>
+          </div>
+
+          <!-- Carte 2 : Plateforme N°1 -->
+          <div class="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+            <span class="text-[10px] font-extrabold uppercase text-sky-300 tracking-wider block">Plateforme Leader</span>
+            <div class="flex items-center gap-2">
+              <span class="text-2xl font-black text-sky-300">${topPlatform}</span>
+              <span class="text-[11px] text-white/60">(${sortedGlobalPlatforms[0] ? Math.round((sortedGlobalPlatforms[0][1] / totalUsers) * 100) : 0}%)</span>
+            </div>
+            <span class="text-[10px] text-white/50 block">Support privilégié par les directeurs</span>
+          </div>
+
+          <!-- Carte 3 : Type d'appareil -->
+          <div class="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+            <span class="text-[10px] font-extrabold uppercase text-amber-300 tracking-wider block">Répartition Appareils</span>
+            <div class="flex items-center gap-3 text-xs font-bold pt-0.5">
+              <span>🖥️ Desktop : <strong>${globalDevices['Desktop'] || 0}</strong></span>
+              <span>📱 Mobile : <strong>${globalDevices['Mobile'] || 0}</strong></span>
+              <span>📟 Tab : <strong>${globalDevices['Tablette'] || 0}</strong></span>
+            </div>
+            <span class="text-[10px] text-white/50 block">Mix d'usage bureau et mobilité</span>
+          </div>
+        </div>
+
+        <!-- Graphique des Plateformes Comparatif -->
+        <div class="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2.5">
+          <span class="text-xs font-black text-white block">Parts de Marché par Plateforme (OS) :</span>
+          <div class="space-y-2">
+            ${sortedGlobalPlatforms.map(([plat, count]) => {
+              const pct = Math.round((count / totalUsers) * 100);
+              const style = this.getPlatformStyle(plat);
+              return `
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-white flex items-center gap-1.5">
+                      <span>${style.icon}</span>
+                      <span>${plat}</span>
+                    </span>
+                    <span class="font-black text-indigo-200">
+                      ${count} joueur${count > 1 ? 's' : ''} (${pct}%)
+                    </span>
+                  </div>
+                  <div class="w-full bg-white/10 h-2.5 rounded-full overflow-hidden">
+                    <div class="${style.color} h-full rounded-full transition-all" style="width: ${Math.max(3, pct)}%"></div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+};
+
 // Initialisation dès chargement du script
 window.addEventListener('DOMContentLoaded', () => {
   window.ProtecPWA.init();
+  if (window.ProtecPlatformAnalytics) {
+    window.ProtecPlatformAnalytics.recordSession(window.ProtecAuth?.currentUser, window.game);
+  }
 });

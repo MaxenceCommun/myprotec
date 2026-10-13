@@ -330,6 +330,8 @@ const server = http.createServer((req, res) => {
           stations: gameData.stations || [],
           departmentCode: user.departmentCode || (gameData.player && gameData.player.departmentCode),
           allianceId: (gameData.player && gameData.player.allianceId) || 'alliance-fnpc',
+          platformStats: gameData.platformStats || null,
+          lastDevice: gameData.lastDevice || null,
           lastSeen: Date.now()
         };
         broadcastSSE('stations_updated', { allianceStations: gameState.allianceStations });
@@ -506,6 +508,8 @@ const server = http.createServer((req, res) => {
             missionsCount: 0,
             reputationScore: 50,
             timeTracking: p.timeTracking || null,
+            platformStats: p.platformStats || null,
+            lastDevice: p.lastDevice || null,
             lastSaved: new Date().toISOString()
           });
         }

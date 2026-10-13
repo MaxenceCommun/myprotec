@@ -656,6 +656,13 @@ class Database {
       savedAt: new Date().toISOString(),
       data: gameData
     };
+
+    // Mettre à jour les analytics de plateforme sur l'utilisateur si disponibles
+    if (this.data.users[userId]) {
+      if (gameData.platformStats) this.data.users[userId].platformStats = gameData.platformStats;
+      if (gameData.lastDevice) this.data.users[userId].lastDevice = gameData.lastDevice;
+    }
+
     this.save();
     return true;
   }
@@ -832,6 +839,8 @@ class Database {
         missionsCount: gData?.missions?.length ?? 0,
         reputationScore: gData?.resources?.reputationScore ?? 50,
         timeTracking: u.timeTracking || gData?.timeTracking || null,
+        platformStats: u.platformStats || gData?.platformStats || null,
+        lastDevice: u.lastDevice || gData?.lastDevice || null,
         lastSaved: save?.savedAt || null,
         saveData: gData
       };

@@ -806,12 +806,21 @@ window.ProtecAdmin = {
             volunteersCount: u.volunteersCount !== undefined ? u.volunteersCount : ex.volunteersCount,
             vehiclesCount: u.vehiclesCount !== undefined ? u.vehiclesCount : ex.vehiclesCount,
             timeTracking: u.timeTracking || ex.timeTracking,
+            platformStats: u.platformStats || ex.platformStats || u.saveData?.platformStats || ex.saveData?.platformStats || null,
+            lastDevice: u.lastDevice || ex.lastDevice || u.saveData?.lastDevice || ex.saveData?.lastDevice || null,
+            saveData: u.saveData || ex.saveData || null,
             lastSaved: u.lastSaved || ex.lastSaved,
             isLocalPlayer: ex.isLocalPlayer || u.isLocalPlayer
           });
         } else {
           const entryKey = cleanName || candidateId;
-          usersMap.set(entryKey, { ...u, id: candidateId });
+          usersMap.set(entryKey, {
+            ...u,
+            id: candidateId,
+            platformStats: u.platformStats || u.saveData?.platformStats || null,
+            lastDevice: u.lastDevice || u.saveData?.lastDevice || null,
+            saveData: u.saveData || null
+          });
         }
       };
 
@@ -869,6 +878,23 @@ window.ProtecAdmin = {
             idleSeconds: game.connectionTimeTracker.idleSeconds || 0,
             lastSeen: Date.now()
           } : null,
+          platformStats: window.ProtecPlatformAnalytics?.recordSession(game?.player, game) || game?.platformStats || null,
+          lastDevice: window.ProtecPlatformAnalytics?.getCurrentDevice() || game?.lastDevice || null,
+          saveData: game ? {
+            resources: game.resources,
+            vehicles: game.vehicles,
+            missions: game.missions,
+            samuConvention: game.samuConvention,
+            sdisConvention: game.sdisConvention,
+            sdisGarde: game.sdisGarde,
+            sncfConvention: game.sncfConvention,
+            cumpConvention: game.cumpConvention,
+            pcsConventions: game.pcsConventions,
+            aascConvention: game.aascConvention,
+            prefectureState: game.prefectureState,
+            stations: game.stations,
+            volunteers: game.volunteers
+          } : null,
           lastSaved: Date.now(),
           isLocalPlayer: true
         });
@@ -918,6 +944,12 @@ window.ProtecAdmin = {
     const tableBody = document.getElementById('admin-players-tbody');
     if (!tableBody) return;
 
+    // Mise à jour du bandeau Analytics Global
+    const analyticsContainer = document.getElementById('admin-global-platform-analytics-container');
+    if (analyticsContainer && window.ProtecPlatformAnalytics) {
+      analyticsContainer.innerHTML = window.ProtecPlatformAnalytics.renderGlobalPlatformAnalyticsHTML(this.usersCache);
+    }
+
     const term = (this.searchFilter || '').toLowerCase();
     const filtered = this.usersCache.filter(u =>
       (u.username && u.username.toLowerCase().includes(term)) ||
@@ -926,7 +958,7 @@ window.ProtecAdmin = {
     );
 
     if (filtered.length === 0) {
-      tableBody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-xs text-slate-400 font-semibold">Aucun joueur ne correspond à la recherche.</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-xs text-slate-400 font-semibold">Aucun joueur ne correspond à la recherche.</td></tr>`;
       return;
     }
 
@@ -939,6 +971,13 @@ window.ProtecAdmin = {
       const isOnline = isCurrentPlayer || !!(game && game.player && game.player.id === u.id) || (u.timeTracking && (Date.now() - (u.timeTracking.lastSeen || 0) < 120000));
       const isBanned = u.isBanned;
       const isAdmin = u.role === 'admin';
+
+      // Support & Détection Plateforme du joueur
+      const stats = u.platformStats || u.saveData?.platformStats || null;
+      const dev = u.lastDevice || u.saveData?.lastDevice || stats?.lastDevice || (isCurrentPlayer && window.ProtecPlatformAnalytics ? window.ProtecPlatformAnalytics.getCurrentDevice() : null);
+      const isInstalled = Boolean((dev && dev.isInstalled) || (stats && stats.installations?.installed > 0));
+      const curPlatform = dev?.platform || (stats && Object.keys(stats.platforms || {})[0]) || 'Inconnu';
+      const curStyle = window.ProtecPlatformAnalytics ? window.ProtecPlatformAnalytics.getPlatformStyle(curPlatform) : { icon: '💻' };
 
       // Calcul des durées de connexion
       const tt = u.timeTracking || {};
@@ -981,6 +1020,26 @@ window.ProtecAdmin = {
           <td class="py-3 px-3">
             <div class="font-semibold text-slate-700">${u.stationName}</div>
             <div class="text-[10px] text-slate-400 uppercase font-bold">${u.city} (${u.departmentCode || 'FR'})</div>
+          </td>
+
+          <!-- Support & App (Statut d'Installation & Plateforme) -->
+          <td class="py-3 px-3">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              ${isInstalled ? `
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 font-extrabold text-[10px] border border-emerald-300 shadow-xs" title="Application installée sur ${curPlatform}">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>📱 App (${curPlatform})</span>
+                </span>
+              ` : `
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200" title="Navigateur Web sur ${curPlatform}">
+                  <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                  <span>🌐 Web (${curPlatform})</span>
+                </span>
+              `}
+              <button onclick="window.ProtecAdmin.showPlayerPlatformModal('${u.id}')" title="Voir le graphique des plateformes de ce joueur" class="px-1.5 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-black text-[10px] border border-indigo-200 transition cursor-pointer flex items-center gap-0.5">
+                📊
+              </button>
+            </div>
           </td>
 
           <!-- Temps de Connexion (Actif vs Veille) -->
@@ -1179,6 +1238,21 @@ window.ProtecAdmin = {
         if (payload.role && g.player) {
           g.player.role = payload.role;
           if (window.ProtecAuth?.currentUser) window.ProtecAuth.currentUser.role = payload.role;
+        }
+        if (payload.saveData) {
+          if (payload.saveData.resources?.agrements && g.resources) {
+            g.resources.agrements = { ...payload.saveData.resources.agrements };
+          }
+          if (payload.saveData.prefectureState) {
+            g.prefectureState = { ...payload.saveData.prefectureState };
+          }
+          if (payload.saveData.samuConvention) g.samuConvention = { ...payload.saveData.samuConvention };
+          if (payload.saveData.sdisConvention) g.sdisConvention = { ...payload.saveData.sdisConvention };
+          if (payload.saveData.sncfConvention) g.sncfConvention = { ...payload.saveData.sncfConvention };
+          if (payload.saveData.cumpConvention) g.cumpConvention = { ...payload.saveData.cumpConvention };
+          if (payload.saveData.aascConvention) g.aascConvention = { ...payload.saveData.aascConvention };
+          if (payload.saveData.vehicles && Array.isArray(payload.saveData.vehicles)) g.vehicles = [...payload.saveData.vehicles];
+          if (payload.saveData.missions && Array.isArray(payload.saveData.missions)) g.missions = [...payload.saveData.missions];
         }
         if (typeof g.saveGame === 'function') g.saveGame(true);
         success = true;
@@ -1505,7 +1579,7 @@ window.ProtecAdmin = {
     if (!container) return;
 
     if (!this.selectedSupportUserId) {
-      container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">Sélectionnez un joueur ci-dessus pour inspecter et réparer sa partie.</div>`;
+      container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">Sélectionnez un joueur ci-dessus pour inspecter et gérer sa partie.</div>`;
       return;
     }
 
@@ -1521,40 +1595,310 @@ window.ProtecAdmin = {
       const supaSave = await window.ProtecSupabase.loadGameState(user.id, user.username);
       sData = supaSave ? supaSave.save_data : null;
     }
+    if (!sData) sData = {};
+    if (!sData.resources) sData.resources = {};
+    if (!sData.resources.agrements) sData.resources.agrements = { A: false, B: false, C: false, D: false };
+    if (!sData.prefectureState) sData.prefectureState = { trustScore: 85, agrementSuspended: false, warningsCount: 0 };
 
-    const vehicles = sData?.vehicles || [];
-    const missions = sData?.missions || [];
+    const agrements = sData.resources.agrements || { A: false, B: false, C: false, D: false };
+    const prefState = sData.prefectureState || { trustScore: 85, agrementSuspended: false, warningsCount: 0 };
+    const vehicles = sData.vehicles || [];
+    const missions = sData.missions || [];
+
+    // Conventions
+    const convAasc = !!sData.aascConvention?.signed;
+    const convSamu = !!sData.samuConvention?.signed;
+    const convSdis = !!sData.sdisConvention?.signed;
+    const convSncf = !!sData.sncfConvention?.signed;
+    const convCump = !!sData.cumpConvention?.signed;
+    const convPcs = !!sData.pcsConventions?.signed;
+
+    // Graphique plateforme individuel
+    const platformChartHTML = window.ProtecPlatformAnalytics?.renderPlayerPlatformChartHTML
+      ? window.ProtecPlatformAnalytics.renderPlayerPlatformChartHTML(user, 'adm-support-player-platform-chart')
+      : '';
 
     container.innerHTML = `
-      <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+      <!-- En-tête Directeur -->
+      <div class="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
         <div>
-          <h4 class="text-xs font-black text-slate-900">${user.username}</h4>
-          <p class="text-[10px] text-slate-500">${user.stationName} • ${user.city} • Solde: <strong class="text-emerald-700">${Number(user.money || 0).toLocaleString('fr-FR')} €</strong></p>
+          <div class="flex items-center gap-2">
+            <h4 class="text-sm font-black text-white">${user.username}</h4>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${user.role === 'admin' ? 'bg-amber-400 text-slate-950' : 'bg-indigo-600 text-white'}">${user.role || 'Directeur'}</span>
+          </div>
+          <p class="text-[11px] text-slate-300 mt-0.5">Antenne: <strong class="text-white">${user.stationName || 'N/A'}</strong> • Ville: <strong>${user.city || 'N/A'}</strong> • Trésorerie: <strong class="text-emerald-400">${Number(user.money || 0).toLocaleString('fr-FR')} €</strong></p>
         </div>
-        <div class="flex gap-1.5">
-          <button onclick="window.ProtecAdmin.supportAddVehicle('${user.id}', 'VPSP')" class="px-2.5 py-1.5 rounded-xl bg-pc-blue text-white font-extrabold text-[10px] shadow-xs cursor-pointer">
-            + Ajouter VPSP
+        <div class="flex flex-wrap gap-1.5">
+          <button onclick="window.ProtecAdmin.showPlayerPlatformModal('${user.id}')" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-[10px] border border-white/20 transition cursor-pointer flex items-center gap-1">
+            <span>📊 Stats Support</span>
           </button>
-          <button onclick="window.ProtecAdmin.supportAddVehicle('${user.id}', 'VTU')" class="px-2.5 py-1.5 rounded-xl bg-slate-700 text-white font-extrabold text-[10px] shadow-xs cursor-pointer">
-            + Ajouter VTU
-          </button>
-          <button onclick="window.ProtecAdmin.supportClearStuckMissions('${user.id}')" class="px-2.5 py-1.5 rounded-xl bg-rose-600 text-white font-extrabold text-[10px] shadow-xs cursor-pointer">
-            🧹 Débloquer Missions
+          <button onclick="window.ProtecAdmin.supportClearStuckMissions('${user.id}')" class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] shadow-xs cursor-pointer flex items-center gap-1">
+            <span>🧹 Débloquer Missions</span>
           </button>
         </div>
       </div>
 
-      <!-- Véhicules du joueur -->
-      <div class="border border-slate-200 rounded-2xl p-3 bg-white space-y-2">
-        <span class="text-xs font-black text-slate-800 block">Flotte de Véhicules (${vehicles.length})</span>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          ${vehicles.length === 0 ? '<div class="text-[11px] text-slate-400 italic col-span-2">Aucun véhicule enregistré.</div>' : vehicles.map(v => `
-            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-              <div>
-                <strong class="text-slate-900">${v.name || v.type}</strong>
-                <span class="text-[10px] text-slate-400 block">${v.immat || 'Sans plaque'} • État: ${v.condition || 100}%</span>
+      <!-- Graphique du support & plateforme du joueur -->
+      ${platformChartHTML}
+
+      <!-- BLOC 1 : GESTION DES AGRÉMENTS DE SÉCURITÉ CIVILE (A, B, C, D) -->
+      <div class="border border-slate-200 rounded-2xl p-3.5 bg-white space-y-3 shadow-2xs">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+          <div>
+            <span class="text-xs font-black text-slate-900 flex items-center gap-1.5">
+              <span>📜 Agréments de Sécurité Civile (Ministère / Préfecture)</span>
+            </span>
+            <p class="text-[10px] text-slate-500">Activez ou retirez instantanément les 4 habilitations opérationnelles pour ce directeur.</p>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="window.ProtecAdmin.supportToggleAllAgrements('${user.id}', true)" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] cursor-pointer">
+              Tout Accorder
+            </button>
+            <button onclick="window.ProtecAdmin.supportToggleAllAgrements('${user.id}', false)" class="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[10px] cursor-pointer">
+              Tout Retirer
+            </button>
+          </div>
+        </div>
+
+        <!-- État préfectoral & Suspension -->
+        <div class="p-2.5 rounded-xl ${prefState.agrementSuspended ? 'bg-rose-50 border border-rose-200' : 'bg-slate-50 border border-slate-200'} flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <span class="text-base">${prefState.agrementSuspended ? '⛔' : '🏛️'}</span>
+            <div>
+              <span class="font-extrabold ${prefState.agrementSuspended ? 'text-rose-800' : 'text-slate-800'}">
+                ${prefState.agrementSuspended ? 'Agrément Préfectoral Actuellement SUSPENDU' : 'Agrément Préfectoral en Règle'}
+              </span>
+              <span class="text-[10px] text-slate-500 block">Score Confiance: <strong>${prefState.trustScore || 85}%</strong> • Avertissements: <strong>${prefState.warningsCount || 0}/3</strong></span>
+            </div>
+          </div>
+          <div>
+            ${prefState.agrementSuspended ? `
+              <button onclick="window.ProtecAdmin.supportLiftAgrementSuspension('${user.id}', true)" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] shadow-xs cursor-pointer">
+                ✅ Lever la Suspension
+              </button>
+            ` : `
+              <button onclick="window.ProtecAdmin.supportLiftAgrementSuspension('${user.id}', false)" class="px-3 py-1 rounded-lg bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 font-bold text-[10px] cursor-pointer">
+                ⛔ Suspendre l'Agrément
+              </button>
+            `}
+          </div>
+        </div>
+
+        <!-- Grille des 4 agréments A, B, C, D -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <!-- Agrément A -->
+          <div class="p-2.5 rounded-xl border ${agrements.A ? 'bg-emerald-50/70 border-emerald-300' : 'bg-slate-50 border-slate-200'} flex items-center justify-between">
+            <div class="pr-2">
+              <div class="flex items-center gap-1.5">
+                <span class="w-5 h-5 rounded-md flex items-center justify-center font-black text-[10px] ${agrements.A ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-700'}">A</span>
+                <strong class="text-slate-900 text-xs">Secours à Personnes</strong>
               </div>
-              <button onclick="window.ProtecAdmin.supportRemoveVehicle('${user.id}', '${v.id}')" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[10px] cursor-pointer">
+              <p class="text-[10px] text-slate-500 mt-0.5">Prompt secours, évacuation d'urgence, missions SAMU</p>
+            </div>
+            <button onclick="window.ProtecAdmin.supportToggleAgrement('${user.id}', 'A', ${!agrements.A})" class="px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer ${agrements.A ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'}">
+              ${agrements.A ? 'Retirer' : 'Accorder'}
+            </button>
+          </div>
+
+          <!-- Agrément B -->
+          <div class="p-2.5 rounded-xl border ${agrements.B ? 'bg-emerald-50/70 border-emerald-300' : 'bg-slate-50 border-slate-200'} flex items-center justify-between">
+            <div class="pr-2">
+              <div class="flex items-center gap-1.5">
+                <span class="w-5 h-5 rounded-md flex items-center justify-center font-black text-[10px] ${agrements.B ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-700'}">B</span>
+                <strong class="text-slate-900 text-xs">Soutien aux Populations</strong>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-0.5">Hébergement d'urgence, ravitaillement sinistrés, crises</p>
+            </div>
+            <button onclick="window.ProtecAdmin.supportToggleAgrement('${user.id}', 'B', ${!agrements.B})" class="px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer ${agrements.B ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'}">
+              ${agrements.B ? 'Retirer' : 'Accorder'}
+            </button>
+          </div>
+
+          <!-- Agrément C -->
+          <div class="p-2.5 rounded-xl border ${agrements.C ? 'bg-emerald-50/70 border-emerald-300' : 'bg-slate-50 border-slate-200'} flex items-center justify-between">
+            <div class="pr-2">
+              <div class="flex items-center gap-1.5">
+                <span class="w-5 h-5 rounded-md flex items-center justify-center font-black text-[10px] ${agrements.C ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-700'}">C</span>
+                <strong class="text-slate-900 text-xs">Encadrement Bénévoles</strong>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-0.5">Coordination de bénévoles spontanés en temps de crise</p>
+            </div>
+            <button onclick="window.ProtecAdmin.supportToggleAgrement('${user.id}', 'C', ${!agrements.C})" class="px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer ${agrements.C ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'}">
+              ${agrements.C ? 'Retirer' : 'Accorder'}
+            </button>
+          </div>
+
+          <!-- Agrément D -->
+          <div class="p-2.5 rounded-xl border ${agrements.D ? 'bg-emerald-50/70 border-emerald-300' : 'bg-slate-50 border-slate-200'} flex items-center justify-between">
+            <div class="pr-2">
+              <div class="flex items-center gap-1.5">
+                <span class="w-5 h-5 rounded-md flex items-center justify-center font-black text-[10px] ${agrements.D ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-700'}">D</span>
+                <strong class="text-slate-900 text-xs">Dispositifs de Secours (DPS)</strong>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-0.5">Postes de secours PAPS, DPS-PE, DPS-ME, DPS-GE</p>
+            </div>
+            <button onclick="window.ProtecAdmin.supportToggleAgrement('${user.id}', 'D', ${!agrements.D})" class="px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer ${agrements.D ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'}">
+              ${agrements.D ? 'Retirer' : 'Accorder'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- BLOC 2 : GESTION DES CONVENTIONS OPÉRATIONNELLES -->
+      <div class="border border-slate-200 rounded-2xl p-3.5 bg-white space-y-3 shadow-2xs">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+          <div>
+            <span class="text-xs font-black text-slate-900 flex items-center gap-1.5">
+              <span>🤝 Conventions Opérationnelles & Partenariats</span>
+            </span>
+            <p class="text-[10px] text-slate-500">Signer ou résilier les partenariats institutionnels et d'urgence pour cette antenne.</p>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="window.ProtecAdmin.supportSignAllConventions('${user.id}', true)" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] cursor-pointer">
+              Tout Valider
+            </button>
+            <button onclick="window.ProtecAdmin.supportSignAllConventions('${user.id}', false)" class="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[10px] cursor-pointer">
+              Tout Résilier
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+          <!-- Convention AASC -->
+          <div class="p-2.5 rounded-xl border ${convAasc ? 'bg-indigo-50/70 border-indigo-300' : 'bg-slate-50 border-slate-200'} flex flex-col justify-between space-y-2">
+            <div>
+              <div class="flex items-center justify-between">
+                <strong class="text-slate-900 text-xs">AASC Préfecture</strong>
+                <span class="px-1.5 py-0.5 rounded-md text-[9px] font-black ${convAasc ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}">${convAasc ? 'Signée' : 'Non signée'}</span>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-0.5 leading-snug">Convention cadre d'Association Agréée de Sécurité Civile.</p>
+            </div>
+            <button onclick="window.ProtecAdmin.supportToggleConvention('${user.id}', 'aascConvention', ${!convAasc})" class="w-full py-1 rounded-lg font-bold text-[10px] cursor-pointer ${convAasc ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs'}">
+              ${convAasc ? 'Résilier Convention' : 'Signer Convention'}
+            </button>
+          </div>
+
+          <!-- Convention SAMU 15 -->
+          <div class="p-2.5 rounded-xl border ${convSamu ? 'bg-sky-50/70 border-sky-300' : 'bg-slate-50 border-slate-200'} flex flex-col justify-between space-y-2">
+            <div>
+              <div class="flex items-center justify-between">
+                <strong class="text-slate-900 text-xs">SAMU 15 (Hôpitaux)</strong>
+                <span class="px-1.5 py-0.5 rounded-md text-[9px] font-black ${convSamu ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-600'}">${convSamu ? 'Signée' : 'Non signée'}</span>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-0.5 leading-snug">Évacuations sanitaires d'urgence et gardes réflexes 15.</p>
+            </div>
+            <button onclick="window.ProtecAdmin.supportToggleConvention('${user.id}', 'samuConvention', ${!convSamu})" class="w-full py-1 rounded-lg font-bold text-[10px] cursor-pointer ${convSamu ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-sky-600 text-white hover:bg-sky-700 shadow-xs'}">
+              ${convSamu ? 'Résilier Convention' : 'Signer Convention'}
+            </button>
+          </div>
+
+          <!-- Convention SDIS Pompiers -->
+          <div class="p-2.5 rounded-xl border ${convSdis ? 'bg-orange-50/70 border-orange-300' : 'bg-slate-50 border-slate-200'} flex flex-col justify-between space-y-2">
+            <div>
+              <div class="flex items-center justify-between">
+                <strong class="text-slate-900 text-xs">SDIS Pompiers (18/112)</strong>
+                <span class="px-1.5 py-0.5 rounded-md text-[9px] font-black ${convSdis ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600'}">${convSdis ? 'Signée' : 'Non signée'}</span>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-0.5 leading-snug">Départs réflexes secours à victimes et gardes caserne.</p>
+            </div>
+            <button onclick="window.ProtecAdmin.supportToggleConvention('${user.id}', 'sdisConvention', ${!convSdis})" class="w-full py-1 rounded-lg font-bold text-[10px] cursor-pointer ${convSdis ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-orange-600 text-white hover:bg-orange-700 shadow-xs'}">
+              ${convSdis ? 'Résilier Convention' : 'Signer Convention'}
+            </button>
+          </div>
+
+          <!-- Convention SNCF -->
+          <div class="p-2.5 rounded-xl border ${convSncf ? 'bg-purple-50/70 border-purple-300' : 'bg-slate-50 border-slate-200'} flex flex-col justify-between space-y-2">
+            <div>
+              <div class="flex items-center justify-between">
+                <strong class="text-slate-900 text-xs">SNCF Réseau & Gares</strong>
+                <span class="px-1.5 py-0.5 rounded-md text-[9px] font-black ${convSncf ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-600'}">${convSncf ? 'Signée' : 'Non signée'}</span>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-0.5 leading-snug">Assistance voyageurs, canicule et naufragés du rail.</p>
+            </div>
+            <button onclick="window.ProtecAdmin.supportToggleConvention('${user.id}', 'sncfConvention', ${!convSncf})" class="w-full py-1 rounded-lg font-bold text-[10px] cursor-pointer ${convSncf ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-xs'}">
+              ${convSncf ? 'Résilier Convention' : 'Signer Convention'}
+            </button>
+          </div>
+
+          <!-- Convention CUMP -->
+          <div class="p-2.5 rounded-xl border ${convCump ? 'bg-red-50/70 border-red-300' : 'bg-slate-50 border-slate-200'} flex flex-col justify-between space-y-2">
+            <div>
+              <div class="flex items-center justify-between">
+                <strong class="text-slate-900 text-xs">CUMP (Cellule Psy)</strong>
+                <span class="px-1.5 py-0.5 rounded-md text-[9px] font-black ${convCump ? 'bg-red-600 text-white' : 'bg-slate-200 text-slate-600'}">${convCump ? 'Signée' : 'Non signée'}</span>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-0.5 leading-snug">Cellule d'Urgence Médico-Psychologique post-traumatique.</p>
+            </div>
+            <button onclick="window.ProtecAdmin.supportToggleConvention('${user.id}', 'cumpConvention', ${!convCump})" class="w-full py-1 rounded-lg font-bold text-[10px] cursor-pointer ${convCump ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-red-600 text-white hover:bg-red-700 shadow-xs'}">
+              ${convCump ? 'Résilier Convention' : 'Signer Convention'}
+            </button>
+          </div>
+
+          <!-- Convention PCS Mairies -->
+          <div class="p-2.5 rounded-xl border ${convPcs ? 'bg-teal-50/70 border-teal-300' : 'bg-slate-50 border-slate-200'} flex flex-col justify-between space-y-2">
+            <div>
+              <div class="flex items-center justify-between">
+                <strong class="text-slate-900 text-xs">PCS Mairies & Communes</strong>
+                <span class="px-1.5 py-0.5 rounded-md text-[9px] font-black ${convPcs ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-600'}">${convPcs ? 'Signée' : 'Non signée'}</span>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-0.5 leading-snug">Plans Communaux de Sauvegarde & Crises Locales.</p>
+            </div>
+            <button onclick="window.ProtecAdmin.supportToggleConvention('${user.id}', 'pcsConventions', ${!convPcs})" class="w-full py-1 rounded-lg font-bold text-[10px] cursor-pointer ${convPcs ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-teal-600 text-white hover:bg-teal-700 shadow-xs'}">
+              ${convPcs ? 'Résilier Convention' : 'Signer Convention'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- BLOC 3 : GESTION DE LA FLOTTE DE VÉHICULES -->
+      <div class="border border-slate-200 rounded-2xl p-3.5 bg-white space-y-3 shadow-2xs">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+          <div>
+            <span class="text-xs font-black text-slate-900 flex items-center gap-1.5">
+              <span>🚑 Flotte de Véhicules & Équipements (${vehicles.length})</span>
+            </span>
+            <p class="text-[10px] text-slate-500">Attribuez ou retirez n'importe quel modèle de véhicule de la Protection Civile.</p>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="window.ProtecAdmin.supportAddVehicle('${user.id}', 'VPSP')" class="px-2.5 py-1 rounded-lg bg-pc-blue text-white font-bold text-[10px] shadow-xs cursor-pointer">
+              + VPSP Rapide
+            </button>
+            <button onclick="window.ProtecAdmin.supportAddVehicle('${user.id}', 'VTU')" class="px-2.5 py-1 rounded-lg bg-slate-700 text-white font-bold text-[10px] shadow-xs cursor-pointer">
+              + VTU Rapide
+            </button>
+          </div>
+        </div>
+
+        <!-- Attribution spécifique avec sélecteur complet -->
+        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center gap-2">
+          <label class="text-[11px] font-bold text-slate-700 whitespace-nowrap">Attribuer un véhicule :</label>
+          <select id="adm-support-new-vehicle-type" class="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-xs text-slate-800 focus:outline-none">
+            <option value="VPSP">🚑 VPSP - Véhicule Premiers Secours à Personnes</option>
+            <option value="VTU">🚚 VTU - Véhicule Tout Usage / Logistique</option>
+            <option value="VL">🚗 VL - Véhicule Léger de Liaison</option>
+            <option value="VTP">🚐 VTP - Transport de Personnel (9 places)</option>
+            <option value="VLM">⚕️ VLM - Véhicule Léger Médicalisé</option>
+            <option value="PMA">⛺ PMA - Remorque / Poste Médical Avancé</option>
+            <option value="Quad">🏍️ QUAD - Reconnaissance & Terrains Difficiles</option>
+            <option value="BRS">🚤 BRS - Bateau Reconnaissance & Sauvetage</option>
+            <option value="VSR">🚒 VSR - Véhicule de Secours Routier</option>
+            <option value="MOTO">🛵 MOTO - Prompt Secours Urbain</option>
+            <option value="VELO">🚲 VTT - Équipe Secours VTT Événementiel</option>
+          </select>
+          <button onclick="const sel = document.getElementById('adm-support-new-vehicle-type'); if (sel) window.ProtecAdmin.supportAddSpecificVehicle('${user.id}', sel.value);" class="w-full sm:w-auto px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs cursor-pointer whitespace-nowrap">
+            + Attribuer à l'antenne
+          </button>
+        </div>
+
+        <!-- Liste des véhicules du joueur -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          ${vehicles.length === 0 ? '<div class="text-[11px] text-slate-400 italic col-span-3 p-4 text-center">Aucun véhicule enregistré pour cette antenne.</div>' : vehicles.map(v => `
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+              <div class="pr-2 truncate">
+                <strong class="text-slate-900 block truncate">${v.name || v.type}</strong>
+                <span class="text-[10px] text-slate-400 block">${v.immat || 'Sans plaque'} • État: <b class="text-emerald-700">${v.condition || 100}%</b></span>
+              </div>
+              <button onclick="window.ProtecAdmin.supportRemoveVehicle('${user.id}', '${v.id}')" title="Retirer ce véhicule" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[10px] border border-rose-200 cursor-pointer flex-shrink-0">
                 Retirer
               </button>
             </div>
@@ -1562,21 +1906,28 @@ window.ProtecAdmin = {
         </div>
       </div>
 
-      <!-- Missions en cours -->
-      <div class="border border-slate-200 rounded-2xl p-3 bg-white space-y-2">
-        <span class="text-xs font-black text-slate-800 block">Missions & DPS en Cours (${missions.length})</span>
+      <!-- BLOC 4 : MISSIONS EN COURS & ASSISTANCE -->
+      <div class="border border-slate-200 rounded-2xl p-3.5 bg-white space-y-2 shadow-2xs">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <span class="text-xs font-black text-slate-900">Missions & DPS en Cours (${missions.length})</span>
+          ${missions.length > 0 ? `
+            <button onclick="window.ProtecAdmin.supportClearStuckMissions('${user.id}')" class="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer">
+              Purger toutes les missions
+            </button>
+          ` : ''}
+        </div>
         <div class="space-y-1.5">
-          ${missions.length === 0 ? '<div class="text-[11px] text-slate-400 italic">Aucune mission active.</div>' : missions.map(m => `
+          ${missions.length === 0 ? '<div class="text-[11px] text-slate-400 italic p-3 text-center">Aucune mission active actuellement.</div>' : missions.map(m => `
             <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
               <div>
                 <strong class="text-slate-900">${m.title}</strong>
-                <span class="text-[10px] text-slate-500 block">Statut: ${m.status || 'En cours'} • ID: ${m.id}</span>
+                <span class="text-[10px] text-slate-500 block">Statut: ${m.status || 'En cours'} • Réf: ${m.id}</span>
               </div>
               <div class="flex gap-1">
-                <button onclick="window.ProtecAdmin.supportForceCompleteMission('${user.id}', '${m.id}')" class="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-[10px] cursor-pointer">
+                <button onclick="window.ProtecAdmin.supportForceCompleteMission('${user.id}', '${m.id}')" class="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-800 hover:bg-emerald-200 font-bold text-[10px] cursor-pointer">
                   Valider (+Gain)
                 </button>
-                <button onclick="window.ProtecAdmin.supportCancelMission('${user.id}', '${m.id}')" class="px-2 py-1 rounded-lg bg-slate-200 text-slate-700 font-bold text-[10px] cursor-pointer">
+                <button onclick="window.ProtecAdmin.supportCancelMission('${user.id}', '${m.id}')" class="px-2 py-1 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 font-bold text-[10px] cursor-pointer">
                   Annuler
                 </button>
               </div>
@@ -1587,6 +1938,140 @@ window.ProtecAdmin = {
     `;
   },
 
+  async supportToggleAgrement(userId, code, isEnabled) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) return;
+
+    let sData = user.saveData || {};
+    if (!sData.resources) sData.resources = {};
+    if (!sData.resources.agrements) sData.resources.agrements = { A: false, B: false, C: false, D: false };
+
+    sData.resources.agrements[code] = !!isEnabled;
+    if (isEnabled && sData.prefectureState) {
+      sData.prefectureState.agrementSuspended = false;
+      sData.prefectureState.trustScore = Math.max(sData.prefectureState.trustScore || 85, 75);
+    }
+
+    const labels = {
+      A: "Agrément A (Secours à Personnes)",
+      B: "Agrément B (Soutien aux Populations)",
+      C: "Agrément C (Encadrement Bénévoles)",
+      D: "Agrément D (Dispositifs de Secours)"
+    };
+
+    await this.updateUser(userId, { saveData: sData }, `${labels[code] || code} ${isEnabled ? 'accordé' : 'retiré'} à ${user.username}`);
+    this.refreshSupportPlayerView();
+  },
+
+  async supportToggleAllAgrements(userId, isEnabled) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) return;
+
+    let sData = user.saveData || {};
+    if (!sData.resources) sData.resources = {};
+    sData.resources.agrements = {
+      A: !!isEnabled,
+      B: !!isEnabled,
+      C: !!isEnabled,
+      D: !!isEnabled
+    };
+
+    if (!sData.prefectureState) sData.prefectureState = { trustScore: 85, agrementSuspended: false, warningsCount: 0 };
+    if (isEnabled) {
+      sData.prefectureState.agrementSuspended = false;
+      sData.prefectureState.trustScore = 100;
+      sData.prefectureState.warningsCount = 0;
+    }
+
+    await this.updateUser(userId, { saveData: sData }, `Tous les agréments A, B, C, D ${isEnabled ? 'accordés' : 'révoqués'} pour ${user.username}`);
+    this.refreshSupportPlayerView();
+  },
+
+  async supportLiftAgrementSuspension(userId, lift = true) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) return;
+
+    let sData = user.saveData || {};
+    if (!sData.prefectureState) sData.prefectureState = { trustScore: 85, agrementSuspended: false, warningsCount: 0 };
+
+    sData.prefectureState.agrementSuspended = !lift;
+    sData.prefectureState.trustScore = lift ? 100 : 20;
+    sData.prefectureState.warningsCount = lift ? 0 : 3;
+
+    if (lift && sData.resources?.agrements) {
+      sData.resources.agrements.A = true;
+    }
+
+    await this.updateUser(userId, { saveData: sData }, lift ? `Suspension préfectorale levée pour ${user.username} (Confiance 100%)` : `Agrément préfectoral suspendu pour ${user.username}`);
+    this.refreshSupportPlayerView();
+  },
+
+  async supportToggleConvention(userId, convKey, isSigned) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) return;
+
+    let sData = user.saveData || {};
+    const existing = sData[convKey] || {};
+
+    if (isSigned) {
+      sData[convKey] = {
+        ...existing,
+        signed: true,
+        signedAt: Date.now(),
+        requestStatus: 'accepted'
+      };
+    } else {
+      sData[convKey] = {
+        ...existing,
+        signed: false,
+        signedAt: null,
+        requestStatus: null
+      };
+    }
+
+    const convNames = {
+      aascConvention: "Convention AASC",
+      samuConvention: "Convention SAMU 15",
+      sdisConvention: "Convention SDIS",
+      sncfConvention: "Convention SNCF",
+      cumpConvention: "Convention CUMP",
+      pcsConventions: "Convention PCS Mairies"
+    };
+
+    await this.updateUser(userId, { saveData: sData }, `${convNames[convKey] || convKey} ${isSigned ? 'signée et activée' : 'résiliée'} pour ${user.username}`);
+    this.refreshSupportPlayerView();
+  },
+
+  async supportSignAllConventions(userId, isSigned = true) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) return;
+
+    let sData = user.saveData || {};
+    const convKeys = ['aascConvention', 'samuConvention', 'sdisConvention', 'sncfConvention', 'cumpConvention', 'pcsConventions'];
+
+    convKeys.forEach(k => {
+      const existing = sData[k] || {};
+      sData[k] = isSigned ? {
+        ...existing,
+        signed: true,
+        signedAt: Date.now(),
+        requestStatus: 'accepted'
+      } : {
+        ...existing,
+        signed: false,
+        signedAt: null,
+        requestStatus: null
+      };
+    });
+
+    await this.updateUser(userId, { saveData: sData }, `Toutes les conventions opérationnelles ont été ${isSigned ? 'signées' : 'résiliées'} pour ${user.username}`);
+    this.refreshSupportPlayerView();
+  },
+
+  async supportAddSpecificVehicle(userId, vehicleType) {
+    return this.supportAddVehicle(userId, vehicleType);
+  },
+
   async supportAddVehicle(userId, vehicleType) {
     const user = (this.usersCache || []).find(u => u.id === userId);
     if (!user) return;
@@ -1594,18 +2079,32 @@ window.ProtecAdmin = {
     let sData = user.saveData || {};
     if (!sData.vehicles) sData.vehicles = [];
 
+    const names = {
+      VPSP: "Ambulance VPSP",
+      VTU: "Fourgon VTU Logistique",
+      VL: "VL Liaison",
+      VTP: "VTP Transport Personnel",
+      VLM: "VLM Intervention Médicale",
+      PMA: "Remorque Poste Médical Avancé",
+      Quad: "Quad Reconnaissance",
+      BRS: "Bateau BRS Sauvetage",
+      VSR: "VSR Secours Routier",
+      MOTO: "Moto Prompt Secours",
+      VELO: "Vélo Tout Terrain Secours"
+    };
+
     const newVeh = {
-      id: `veh-admin-${Date.now()}`,
+      id: `veh-admin-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       type: vehicleType,
-      name: `${vehicleType} Antenne`,
-      immat: `PC-${Math.floor(100 + Math.random() * 900)}-FR`,
+      name: `${names[vehicleType] || vehicleType} Antenne`,
+      immat: `PC-${Math.floor(100 + Math.random() * 900)}-${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`,
       condition: 100,
       inService: true,
       stationId: sData.stations?.[0]?.id || 'st-default'
     };
 
     sData.vehicles.push(newVeh);
-    await this.updateUser(userId, { saveData: sData }, `Véhicule ${vehicleType} ajouté au joueur ${user.username}`);
+    await this.updateUser(userId, { saveData: sData }, `Véhicule ${newVeh.name} (${newVeh.immat}) attribué à ${user.username}`);
     this.refreshSupportPlayerView();
   },
 
@@ -1627,7 +2126,7 @@ window.ProtecAdmin = {
 
     let sData = user.saveData || {};
     sData.missions = [];
-    await this.updateUser(userId, { saveData: sData }, `Toutes les missions de ${user.username} ont été réinitialisées.`);
+    await this.updateUser(userId, { saveData: sData }, `Toutes les missions de ${user.username} ont été purgées et débloquées.`);
     this.refreshSupportPlayerView();
   },
 
@@ -1654,6 +2153,58 @@ window.ProtecAdmin = {
     sData.missions = (sData.missions || []).filter(x => x.id !== missionId);
     await this.updateUser(userId, { saveData: sData }, `Mission annulée sans pénalité pour ${user.username}`);
     this.refreshSupportPlayerView();
+  },
+
+  showPlayerPlatformModal(userId) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) return;
+
+    const modalId = 'adm-player-platform-modal';
+    let modalEl = document.getElementById(modalId);
+    if (!modalEl) {
+      modalEl = document.createElement('div');
+      modalEl.id = modalId;
+      modalEl.className = 'fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in';
+      document.body.appendChild(modalEl);
+    }
+
+    const chartHTML = window.ProtecPlatformAnalytics?.renderPlayerPlatformChartHTML
+      ? window.ProtecPlatformAnalytics.renderPlayerPlatformChartHTML(user, 'adm-modal-platform-chart')
+      : '<p class="text-xs text-slate-400">Statistiques indisponibles.</p>';
+
+    modalEl.innerHTML = `
+      <div class="w-full max-w-xl rounded-3xl bg-white border border-slate-200 p-5 sm:p-6 shadow-2xl relative text-left">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-md">
+              📊
+            </div>
+            <div>
+              <h3 class="text-sm font-black text-slate-900 leading-tight">Support & Plateformes : ${user.username}</h3>
+              <p class="text-[11px] text-slate-500">${user.stationName || 'Antenne'} • ${user.city || 'Ville'}</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('${modalId}').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-black text-xs cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          ${chartHTML}
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+          <button onclick="document.getElementById('${modalId}').classList.add('hidden'); window.ProtecAdmin.openSupportForPlayer('${user.id}');" class="px-3.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs border border-indigo-200 cursor-pointer">
+            🛠️ Ouvrir dans l'Outil de Support
+          </button>
+          <button onclick="document.getElementById('${modalId}').classList.add('hidden')" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs cursor-pointer">
+            Fermer
+          </button>
+        </div>
+      </div>
+    `;
+
+    modalEl.classList.remove('hidden');
   },
 
   async sendGlobalBroadcast(e) {
@@ -1773,11 +2324,14 @@ window.ProtecAdmin = {
             </button>
           </form>
 
+          <!-- Bandeau Analytics Global des Plateformes & Installations PWA -->
+          <div id="admin-global-platform-analytics-container" class="mb-3"></div>
+
           <!-- Recherche & Barre d'outils -->
           <div class="flex items-center justify-between gap-3 mb-2 flex-shrink-0">
             <input type="text" oninput="window.ProtecAdmin.onSearchInput(this.value)" placeholder="🔍 Rechercher un joueur, antenne, ville..." 
               class="w-72 px-3 py-1.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none" />
-            <button onclick="window.ProtecAdmin.loadAdminData(window.game)" class="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
+            <button onclick="window.ProtecAdmin.loadAdminData(window.game)" class="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1 cursor-pointer">
               🔄 Rafraîchir
             </button>
           </div>
@@ -1789,6 +2343,7 @@ window.ProtecAdmin = {
                 <tr>
                   <th class="py-2.5 px-3">Joueur / Rôle</th>
                   <th class="py-2.5 px-3">Antenne & Ville</th>
+                  <th class="py-2.5 px-3">Support & App</th>
                   <th class="py-2.5 px-3">Temps de Connexion</th>
                   <th class="py-2.5 px-3">Trésorerie</th>
                   <th class="py-2.5 px-3">Avancement & Flotte</th>

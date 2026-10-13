@@ -345,6 +345,8 @@ window.ProtecSupabase = {
           missionsCount: (sData?.missions?.length !== undefined) ? sData.missions.length : 0,
           reputationScore: (sData?.resources?.reputationScore !== undefined) ? sData.resources.reputationScore : 50,
           timeTracking: sData?.timeTracking || p.time_tracking || null,
+          platformStats: sData?.platformStats || p.platform_stats || null,
+          lastDevice: sData?.lastDevice || p.last_device || null,
           lastSaved: s?.updated_at || null,
           saveData: sData
         };
@@ -971,7 +973,9 @@ window.ProtecSupabase = {
         reputation_samu: game.reputation_samu !== undefined ? game.reputation_samu : 50,
         reputation_sdis: game.reputation_sdis !== undefined ? game.reputation_sdis : 50,
         reputation_prefecture: game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50,
-        reputation_villes: game.reputation_villes || {}
+        reputation_villes: game.reputation_villes || {},
+        platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(game.player, game)) || null,
+        lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null
       };
 
       const payload = {
