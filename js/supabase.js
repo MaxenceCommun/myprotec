@@ -770,7 +770,15 @@ window.ProtecSupabase = {
     if (!this.client || !player || !station) return;
 
     try {
-      const isUUID = typeof player.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(player.id);
+      // Contrôle de conformité de l'alliance_id pour respecter la clé étrangère alliance_stations_alliance_id_fkey
+      let validAllianceId = null;
+      if (player.allianceId && player.allianceId !== 'alliance-fnpc') {
+        const isAllianceUUID = typeof player.allianceId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(player.allianceId);
+        if (isAllianceUUID) {
+          validAllianceId = player.allianceId;
+        }
+      }
+
       const payload = {
         id: String(station.id),
         player_id: isUUID ? player.id : null,
@@ -782,11 +790,11 @@ window.ProtecSupabase = {
         level: station.level || 1,
         vehicles_count: (station.vehicles || []).length,
         volunteers_count: (station.volunteers || []).length,
-        alliance_id: player.allianceId || 'alliance-fnpc',
+        alliance_id: validAllianceId,
         last_sync: new Date().toISOString()
       };
 
-      // 1. Contrôle préalable d'existence pour éviter l'erreur HTTP 409 (Conflict) sur on_conflict
+      // 1. Contrôle préalable d'existence pour éviter l'erreur HTTP 409 (Conflict)
       const { data: existing } = await this.client
         .from('alliance_stations')
         .select('id')
