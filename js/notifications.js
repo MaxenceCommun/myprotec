@@ -206,38 +206,16 @@ window.ProtecNotifications = {
     }
   },
 
-  // Émission sonore opérationnelle (Bitonal alerte de secours)
-  playAlertSound() {
+  // Émission sonore opérationnelle (Intégration des sons MP3 officiels)
+  playAlertSound(title = '', body = '', options = {}) {
     if (!this.config.sound) return;
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-
-      // Ton 1 (880 Hz)
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(880, ctx.currentTime);
-      gain1.gain.setValueAtTime(0.25, ctx.currentTime);
-      gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.18);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(ctx.currentTime);
-      osc1.stop(ctx.currentTime + 0.2);
-
-      // Ton 2 (659 Hz)
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(659.25, ctx.currentTime + 0.22);
-      gain2.gain.setValueAtTime(0.3, ctx.currentTime + 0.22);
-      gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(ctx.currentTime + 0.22);
-      osc2.stop(ctx.currentTime + 0.45);
-    } catch (e) {}
+    if (window.ProtecAudio) {
+      if (typeof window.ProtecAudio.handleToastAudio === 'function' && (title || body)) {
+        window.ProtecAudio.handleToastAudio(title, body, options.color || 'blue', options.target || null);
+      } else if (typeof window.ProtecAudio.playInfoSound === 'function') {
+        window.ProtecAudio.playInfoSound();
+      }
+    }
   },
 
   // Vibration tactile sur mobile
@@ -458,7 +436,7 @@ window.ProtecNotifications = {
     }
 
     // 3. Son d'alerte et vibration
-    this.playAlertSound();
+    this.playAlertSound(title, body, options);
     this.triggerVibration();
 
     const notifOptions = Object.assign({

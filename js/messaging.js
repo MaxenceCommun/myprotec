@@ -128,6 +128,11 @@ window.ProtecMessaging = {
     if (histBox && this.currentChannel === 'interne') {
       this.renderModal(game);
     }
+
+    // Émission du son notif.mp3 pour les messages des bénévoles
+    if (window.ProtecAudio && typeof window.ProtecAudio.playVolunteerMessageSound === 'function') {
+      window.ProtecAudio.playVolunteerMessageSound();
+    }
   },
 
   // Ouvrir la messagerie filtrée sur un poste précis

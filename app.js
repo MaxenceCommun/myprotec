@@ -14134,17 +14134,9 @@ class ProtecGame {
       window.ProtecNotifications.recordNotification({ title, message, color, target });
     }
 
-    // Effets sonores opérationnels réalistes (Web Audio API)
-    if (window.ProtecAudio) {
-      if (color === 'red') {
-        window.ProtecAudio.playAlertChime();
-      } else if (color === 'orange') {
-        window.ProtecAudio.playRadioBeep();
-      } else if (color === 'green') {
-        window.ProtecAudio.playSuccessChime();
-      } else {
-        window.ProtecAudio.playClickSound();
-      }
+    // Déclenchement du son approprié (notif, info, expire, erreur, attention)
+    if (window.ProtecAudio && typeof window.ProtecAudio.handleToastAudio === 'function') {
+      window.ProtecAudio.handleToastAudio(title, message, color, target);
     }
 
     this.updateToastContainerPosition();

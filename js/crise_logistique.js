@@ -932,8 +932,11 @@ window.ProtecCriseLogistique = {
       game.missions.unshift(m);
       game.renderMissions();
       game.saveGame();
-      if (window.ProtecAudio) window.ProtecAudio.playAlertChime();
-      game.showToast('Scénario Déclenché ! 🚨', `Nouvelle mission : « ${m.title} ».`, 'red', { type: 'mission', id: m.id });
+      if (window.ProtecAudio) {
+        if (m.isCrisis) window.ProtecAudio.playCrisisAlertSound();
+        else window.ProtecAudio.playInfoSound();
+      }
+      game.showToast('Scénario Déclenché ! 🚨', `Nouvelle mission : « ${m.title} ».`, m.isCrisis ? 'red' : 'blue', { type: m.isCrisis ? 'crise' : 'mission', id: m.id });
       game.openMissionDetails(m.id);
     }
   },
@@ -1030,7 +1033,7 @@ window.ProtecCriseLogistique = {
     game.activeCrises.unshift(newCrisis);
 
     if (window.ProtecAudio) {
-      window.ProtecAudio.playAlertChime();
+      window.ProtecAudio.playCrisisAlertSound();
     }
 
     game.showToast(
