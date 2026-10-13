@@ -247,10 +247,12 @@ window.ProtecNotifications = {
     }
 
     // 1. Cible explicite fournie
-    if (item.targetType === 'mission' && item.targetId) {
-      const exists = (game.missions || []).some(m => m.id === item.targetId);
+    if ((item.targetType === 'mission' || item.type === 'mission') && (item.targetId || item.id)) {
+      let rawId = item.targetId || item.id;
+      if (typeof rawId === 'string') rawId = rawId.replace(/^(sncf-|evt-|dps-|alert-)/, '');
+      const exists = (game.missions || []).some(m => m.id === rawId);
       if (exists) {
-        return { type: 'mission', id: item.targetId, label: 'Voir l\'intervention' };
+        return { type: 'mission', id: rawId, label: 'Localiser & Gérer' };
       }
     }
 
@@ -313,7 +315,15 @@ window.ProtecNotifications = {
       return { type: 'module', id: 'crise', label: 'Cellule de crise' };
     }
 
-    // G. Météo & Vigilance
+    // G. SNCF / Réseau Ferré & Naufragés du rail
+    if (title.includes('sncf') || msg.includes('sncf') || title.includes('ferroviaire') || msg.includes('ferroviaire') || title.includes('gare') || msg.includes('gare')) {
+      const sncfMission = (game.missions || []).find(m => m.alertOrigin === 'sncf' || (m.title && m.title.toLowerCase().includes('sncf')));
+      if (sncfMission) {
+        return { type: 'mission', id: sncfMission.id, label: 'Localiser la Mission SNCF' };
+      }
+    }
+
+    // H. Météo & Vigilance
     if (title.includes('météo') || title.includes('meteo') || title.includes('vigilance') || item.category === 'weather' || item.category === 'meteo') {
       return { type: 'module', id: 'meteo', label: 'Bulletin météo' };
     }

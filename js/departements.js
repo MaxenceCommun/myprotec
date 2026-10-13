@@ -1119,6 +1119,27 @@ window.ProtecDepartements = {
     });
 
     return result;
+  },
+
+  // Recherche synchrone instantanée de la commune la plus proche à partir de coordonnées GPS
+  getNearestCommune(lat, lng, deptCode) {
+    if (lat === undefined || lng === undefined) return null;
+    const communes = this.getCommunesForDepartment(deptCode);
+    if (!communes || communes.length === 0) return null;
+
+    let best = communes[0];
+    let bestDist = this.calculateDistance(lat, lng, best.lat, best.lng);
+
+    for (let i = 1; i < communes.length; i++) {
+      const c = communes[i];
+      const dist = this.calculateDistance(lat, lng, c.lat, c.lng);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = c;
+      }
+    }
+
+    return { ...best, distanceKm: bestDist };
   }
 };
 

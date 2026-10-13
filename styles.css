@@ -294,6 +294,14 @@ html, body {
   z-index: 2;
 }
 
+.marker-inner svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: block;
+  pointer-events: none;
+}
+
 .badge-counter {
   position: absolute;
   top: -4px;

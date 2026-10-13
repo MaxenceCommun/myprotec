@@ -554,6 +554,9 @@ window.ProtecIncidents = {
     if (ongoing.length === 0) return;
 
     ongoing.forEach(m => {
+      // 1. Détection prioritaire du manque de personnel / sous-dimensionnement
+      this.checkUnderstaffedAlert(game, m);
+
       // Si la mission a déjà un incident non résolu, on ne le duplique pas
       if (m.currentIncident) return;
       if (m.incidentResolved) return;
@@ -779,5 +782,269 @@ window.ProtecIncidents = {
       </div>
     `;
     document.body.appendChild(div);
+  },
+
+  // Détection du sous-dimensionnement en cours de mission
+  checkUnderstaffedAlert(game, mission) {
+    if (mission.understaffAlertTriggered || mission.understaffResolved) return;
+    if (mission.type !== 'dps' && !mission.scale) return;
+    if (!mission.startedAt || !mission.durationSeconds) return;
+
+    const elapsed = (Date.now() - mission.startedAt) / 1000;
+    const progressRatio = elapsed / mission.durationSeconds;
+    // Déclenchement quand la mission a dépassé 15% et avant 85% de sa durée
+    if (progressRatio < 0.15 || progressRatio > 0.85) return;
+
+    const crewCount = (mission.assignedCrew?.volunteers || mission.registeredVolunteers || []).length;
+    const minNeeded = mission.hiddenMinVolunteers || mission.requiredVolunteers || 4;
+
+    const titleLower = (mission.title || '').toLowerCase();
+    const descLower = (mission.desc || '').toLowerCase();
+    const isIntenseEvent = titleLower.includes('festival') || 
+                           titleLower.includes('concert') || 
+                           titleLower.includes('match') || 
+                           titleLower.includes('tournoi') || 
+                           titleLower.includes('rugby') || 
+                           titleLower.includes('foot') || 
+                           titleLower.includes('trail') || 
+                           titleLower.includes('course') || 
+                           titleLower.includes('marathon') || 
+                           titleLower.includes('carnaval') || 
+                           titleLower.includes('nocturne') || 
+                           titleLower.includes('fête') || 
+                           titleLower.includes('gala') || 
+                           descLower.includes('festival') ||
+                           descLower.includes('concert') ||
+                           (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE')));
+
+    const isStrictlyUnderstaffed = !!(mission.isUnderdimensioned || (crewCount < minNeeded));
+    const isUnderForWorkload = isIntenseEvent && (crewCount <= 4 || crewCount < minNeeded);
+
+    if (!isStrictlyUnderstaffed && !isUnderForWorkload) return;
+
+    // Probabilité d'alerte par cycle de 4 secondes
+    const triggerChance = isStrictlyUnderstaffed ? 0.08 : 0.04;
+    if (Math.random() < triggerChance) {
+      this.triggerUnderstaffAlert(game, mission, {
+        crewCount,
+        minNeeded,
+        isIntenseEvent
+      });
+    }
+  },
+
+  // Déclencher l'alerte de manque de personnel sur place
+  triggerUnderstaffAlert(game, mission, context) {
+    mission.understaffAlertTriggered = true;
+
+    if (window.ProtecAudio && typeof window.ProtecAudio.playEmergencyAlert === 'function') {
+      window.ProtecAudio.playEmergencyAlert();
+    }
+
+    this.sendSystemNotification(
+      `🚨 ALERTE EFFECTIFS : ${mission.title}`,
+      `Les secouristes sur place sont débordés par la quantité de travail et demandent des renforts en urgence !`,
+      `understaff-${mission.id}`
+    );
+
+    if (game.radioLogs) {
+      game.radioLogs.unshift({
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        channel: 'TACTIQUE-1',
+        text: `[URGENCE EFFECTIFS] ${mission.title} : Chef de poste signale débordement face à la quantité de travail. Demande de renforts immédiate.`,
+        type: 'alert'
+      });
+    }
+
+    game.showToast(
+      '🚨 Secouristes Débordés !',
+      `Appel radio d'urgence sur « ${mission.title} » : manque de personnel face à l'afflux de victimes. Décision requise !`,
+      'red'
+    );
+
+    this.openUnderstaffModal(game, mission, context);
+    game.updateStatsUI();
+  },
+
+  // Modale d'arbitrage de renforts en urgence
+  openUnderstaffModal(game, mission, context) {
+    let modal = document.getElementById('understaff-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'understaff-modal';
+      modal.className = 'fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="w-full max-w-lg rounded-3xl bg-white border-2 border-rose-500 shadow-2xl p-6 text-left space-y-4 animate-in zoom-in-95 duration-150">
+        <!-- En-tête alerte -->
+        <div class="flex items-center gap-3 pb-3 border-b border-slate-100">
+          <div class="w-11 h-11 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0 shadow-xs">
+            <i data-lucide="siren" class="w-6 h-6 animate-pulse"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 uppercase tracking-wider animate-pulse">Urgence Terrain</span>
+              <span class="text-[10px] font-bold text-slate-500">Radio TACTIQUE-1</span>
+            </div>
+            <h3 class="text-base font-black text-slate-955 leading-tight mt-0.5 truncate">Poste Débordé : Renforts Requis</h3>
+          </div>
+        </div>
+
+        <!-- Appel radio du Chef de Poste -->
+        <div class="p-4 rounded-2xl bg-slate-900 text-slate-100 border border-slate-800 space-y-2 text-xs relative overflow-hidden">
+          <div class="flex items-center justify-between text-[11px] text-amber-400 font-bold border-b border-slate-800 pb-1.5">
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+              <span>Chef de Poste sur « ${mission.title} »</span>
+            </span>
+            <span class="text-[10px] text-slate-400">${context.crewCount} secouriste(s) sur site</span>
+          </div>
+          <p class="italic text-slate-200 leading-relaxed pt-1">
+            « Ici le Chef de Dispositif ! Nous sommes complètement submergés par le flux d'interventions. Le poste a été sous-dimensionné par rapport à l'affluence et à la quantité de travail : les malaises et traumatismes s'enchaînent, nous n'avons plus assez de bras pour sécuriser la zone et tenir les postes de soins ! Nous demandons des renforts en urgence absolue ! »
+          </p>
+        </div>
+
+        <div class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+          Arbitrage du Directeur des Secours :
+        </div>
+
+        <!-- Choix 1 : Renforts Internes -->
+        <button onclick="window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'interne')"
+          class="w-full text-left p-4 rounded-2xl border-2 border-indigo-200 bg-indigo-50/40 hover:bg-indigo-100/60 hover:border-indigo-400 transition cursor-pointer group space-y-1.5 shadow-xs">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black text-indigo-950 group-hover:text-indigo-800 flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">1</span>
+              <span>Trouver et déployer des renforts internes</span>
+            </span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-indigo-400 group-hover:translate-x-1 transition flex-shrink-0"></i>
+          </div>
+          <div class="text-[11px] text-indigo-900/90 pl-8 space-y-0.5">
+            <p>• Mobilise des secouristes disponibles ou d'astreinte de l'antenne sur le dispositif.</p>
+            <p class="font-bold text-amber-700">📉 Légère baisse de l'humeur et motivation de l'équipe et des renforts (-6%)</p>
+            <p class="font-bold text-emerald-700">🛡️ Baisse légère de réputation (-3 pts) : Limitation des dégâts (l'antenne assume en interne)</p>
+          </div>
+        </button>
+
+        <!-- Choix 2 : Renforts SDIS -->
+        <button onclick="window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'sdis')"
+          class="w-full text-left p-4 rounded-2xl border-2 border-rose-200 bg-rose-50/40 hover:bg-rose-100/60 hover:border-rose-400 transition cursor-pointer group space-y-1.5 shadow-xs">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black text-rose-950 group-hover:text-rose-800 flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-rose-600 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">2</span>
+              <span>Passer par les renforts SDIS (Sapeurs-Pompiers)</span>
+            </span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-rose-400 group-hover:translate-x-1 transition flex-shrink-0"></i>
+          </div>
+          <div class="text-[11px] text-rose-900/90 pl-8 space-y-0.5">
+            <p>• Demande au CTA-CODIS (18/112) l'envoi d'un engin de sapeurs-pompiers en renfort.</p>
+            <p class="font-bold text-rose-700">⚠️ Baisse de l'humeur et motivation des bénévoles sur place (-20%)</p>
+            <p class="font-bold text-rose-800">❌ Dégradation marquée de la réputation de l'antenne (-15 pts auprès du SDIS & organisateur)</p>
+          </div>
+        </button>
+      </div>
+    `;
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  },
+
+  // Résolution de l'arbitrage
+  resolveUnderstaffChoice(game, missionId, choice) {
+    const mission = (game.missions || []).find(m => m.id === missionId);
+    if (!mission) return;
+
+    const crewVols = (mission.assignedCrew?.volunteers || mission.registeredVolunteers || [])
+      .map(id => game.volunteers.find(v => v.id === id))
+      .filter(Boolean);
+
+    if (choice === 'interne') {
+      // Déploiement de renforts internes
+      const availableVols = (game.volunteers || []).filter(v => 
+        v.status === 'dispo' && 
+        !mission.assignedCrew?.volunteers?.includes(v.id)
+      );
+      const reinforcedVols = availableVols.slice(0, 2);
+
+      reinforcedVols.forEach(v => {
+        v.status = 'mission';
+        if (!mission.assignedCrew.volunteers.includes(v.id)) {
+          mission.assignedCrew.volunteers.push(v.id);
+        }
+        // Baisse légère d'humeur et motivation des renforts
+        v.motivation = Math.max(10, (v.motivation || 70) - 5);
+        v.humeur = Math.max(10, (v.humeur || 70) - 5);
+      });
+
+      // Baisse légère de l'humeur et motivation de l'équipe sur place
+      crewVols.forEach(v => {
+        v.motivation = Math.max(10, (v.motivation || 70) - 6);
+        v.humeur = Math.max(10, (v.humeur || 70) - 6);
+      });
+
+      // Baisse légère de réputation (limitation des dégâts)
+      const repLoss = 3;
+      game.resources.reputationScore = Math.max(0, (game.resources.reputationScore || 50) - repLoss);
+
+      mission.understaffChoice = 'interne';
+      mission.understaffResolved = true;
+
+      const namesText = reinforcedVols.length > 0 ? reinforcedVols.map(v => v.name).join(' & ') : 'équipe d’astreinte';
+      game.showToast(
+        'Renforts Internes Déployés 🚑',
+        `Renforts (${namesText}) arrivés sur « ${mission.title} ». Le poste est sécurisé en interne. Dégâts limités (-${repLoss} pts réput., fatigue passagère).`,
+        'blue'
+      );
+
+      if (game.radioLogs) {
+        game.radioLogs.unshift({
+          time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          channel: 'TACTIQUE-1',
+          text: `[RENFORTS INTERNES] ${mission.title} : Renforts associatifs intégrés au poste. Dispositif sécurisé.`,
+          type: 'success'
+        });
+      }
+    } else if (choice === 'sdis') {
+      // Baisse de l'humeur et de la motivation des bénévoles sur place
+      crewVols.forEach(v => {
+        v.motivation = Math.max(10, (v.motivation || 70) - 20);
+        v.humeur = Math.max(10, (v.humeur || 70) - 22);
+      });
+
+      // Baisse marquée de réputation
+      const repLoss = 15;
+      game.resources.reputationScore = Math.max(0, (game.resources.reputationScore || 50) - repLoss);
+
+      if (game.prefectureState) {
+        game.prefectureState.trustScore = Math.max(10, (game.prefectureState.trustScore || 85) - 8);
+      }
+      if (window.ProtecConventions) {
+        window.ProtecConventions.adjustInstitutionalReputation(game, 'sdis', -8, 'Appel renfort SDIS pour sous-dimensionnement associatif');
+      }
+
+      mission.understaffChoice = 'sdis';
+      mission.understaffResolved = true;
+
+      game.showToast(
+        'Renforts SDIS Engagés 🚒',
+        `Sapeurs-pompiers déployés sur « ${mission.title} ». Relais pris par le SDIS. Baisse du moral (-20 motivation) et dégradation de la réputation (-${repLoss} pts).`,
+        'red'
+      );
+
+      if (game.radioLogs) {
+        game.radioLogs.unshift({
+          time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          channel: 'TACTIQUE-1',
+          text: `[RENFORTS SDIS] ${mission.title} : Prise de relais par les sapeurs-pompiers suite au sous-dimensionnement associatif.`,
+          type: 'warning'
+        });
+      }
+    }
+
+    document.getElementById('understaff-modal')?.remove();
+    game.saveGame();
+    game.updateStatsUI();
   }
 };

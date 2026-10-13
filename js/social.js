@@ -165,11 +165,12 @@ window.ProtecSocial = {
 
   // Générer une mission de maraude rattachée à une subvention
   generateMaraudeMission(game, contract) {
-    const base = game.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne' };
+    const base = game.stations[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', city: 'Nancy' };
     const locCoords = (typeof game.calculateRealisticMissionLocation === 'function')
       ? game.calculateRealisticMissionLocation(base, 'social')
-      : { lat: base.lat + (Math.random() - 0.5) * 0.03, lng: base.lng + (Math.random() - 0.5) * 0.03 };
+      : { lat: base.lat + (Math.random() - 0.5) * 0.015, lng: base.lng + (Math.random() - 0.5) * 0.015 };
 
+    const cityName = locCoords.commune || base.city || 'Nancy';
     const missionId = `maraude-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const newMission = {
       id: missionId,
@@ -183,6 +184,8 @@ window.ProtecSocial = {
       desc: `Maraude de contact, réconfort et distribution solidaire sous convention ${contract.funder}. Objectif : distribuer des kits repas et hygiène, évaluer la situation des personnes isolées.`,
       lat: locCoords.lat,
       lng: locCoords.lng,
+      commune: cityName,
+      postcode: locCoords.postcode || '',
       scale: 'Maraude Solidaire (2-4 secouristes)',
       eventDate: (() => {
         let m = Math.round((game.clock?.minute || 0) / 5) * 5;
@@ -202,8 +205,8 @@ window.ProtecSocial = {
       registeredVolunteers: [],
       assignedCrew: { volunteers: [], vehicles: [] },
       isSector: true,
-      sector: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${game.stations?.[0]?.city || 'Agglomération'})`,
-      address: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${game.stations?.[0]?.city || 'Agglomération'})`
+      sector: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${cityName})`,
+      address: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${cityName})`
     };
 
     if (typeof game.enrichMissionLocationWithCity === 'function') {
