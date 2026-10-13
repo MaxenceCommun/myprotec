@@ -184,7 +184,12 @@ window.ProtecSocial = {
       lat: locCoords.lat,
       lng: locCoords.lng,
       scale: 'Maraude Solidaire (2-4 secouristes)',
-      eventDate: { ...game.clock },
+      eventDate: (() => {
+        let m = Math.round((game.clock?.minute || 0) / 5) * 5;
+        let h = (game.clock?.hour || 0);
+        if (m >= 60) { h = (h + Math.floor(m / 60)) % 24; m = m % 60; }
+        return { ...game.clock, hour: h, minute: m };
+      })(),
       durationSeconds: 90 * 60, // 1h30 de maraude
       durationHours: 2.0,
       requiredVolunteers: 3,

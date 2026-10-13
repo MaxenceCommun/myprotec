@@ -361,6 +361,52 @@ class ProtecGame {
     };
   }
 
+  // Formatage propre du créneau de mission avec heures rondes (multiple de 5 min) : "Du Mardi 13 Octobre à 00:30 au Mardi 13 Octobre à 02:00"
+  formatMissionScheduleRange(mission) {
+    if (!mission) return 'Créneau non défini';
+
+    const d = mission.eventDate ? { ...mission.eventDate } : (this.clock ? { ...this.clock } : null);
+    if (!d) return 'Immédiat';
+
+    const year = d.year || (this.clock ? this.clock.year : 2026);
+    const month = d.month !== undefined ? d.month : (this.clock ? this.clock.month : 9);
+    const day = d.day || (this.clock ? this.clock.day : 1);
+    let hour = d.hour !== undefined ? d.hour : 14;
+    let minute = d.minute !== undefined ? d.minute : 0;
+
+    // Arrondi des minutes au multiple de 5 minutes le plus proche (00, 05, 10, ..., 55)
+    let roundedMinute = Math.round(minute / 5) * 5;
+    if (roundedMinute >= 60) {
+      hour += Math.floor(roundedMinute / 60);
+      roundedMinute = roundedMinute % 60;
+    }
+
+    const startDate = new Date(year, month, day, hour, roundedMinute, 0);
+
+    // Calcul de la durée en minutes
+    let durationMins = 90;
+    if (mission.durationHours) {
+      durationMins = Math.round(Number(mission.durationHours) * 60);
+    } else if (mission.durationSeconds) {
+      durationMins = Math.round(Number(mission.durationSeconds) / 60);
+    }
+    if (durationMins <= 0) durationMins = 60;
+
+    const endDate = new Date(startDate.getTime() + durationMins * 60 * 1000);
+
+    const formatMoment = (dt) => {
+      const days = this.clock?.daysNames || ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+      const months = this.clock?.monthsNames || ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+      const dayName = days[dt.getDay()];
+      const monthName = months[dt.getMonth()];
+      const hStr = dt.getHours().toString().padStart(2, '0');
+      const mStr = dt.getMinutes().toString().padStart(2, '0');
+      return `${dayName} ${dt.getDate()} ${monthName} à ${hStr}:${mStr}`;
+    };
+
+    return `Du ${formatMoment(startDate)} au ${formatMoment(endDate)}`;
+  }
+
   // --- INITIALISATION DU MULTIJOUEUR ---
   initMultiplayer() {
     this.isBackendOnline = false;
@@ -6526,7 +6572,6 @@ class ProtecGame {
     const lng = mission.lng;
     if (lat && lng) {
       this.map.setView([lat, lng], 16, { animate: true });
-      this.showToast('Localisation Mission 🎯', `Carte centrée sur ${mission.address || mission.title}.`, 'blue');
       if (this.missionMarkers && this.missionMarkers[missionId]) {
         try { this.missionMarkers[missionId].openPopup(); } catch (e) {}
       }
@@ -6922,15 +6967,14 @@ class ProtecGame {
           <!-- Niveau d'alerte, Horodatage & Durée -->
           ${(() => {
             let missionSec = mission.durationSeconds;
-            if (!missionSec && mission.durationHours) missionSec = mission.durationHours * 3600;
+            if (!missionSec && mission.durationHours) missionSec = Math.round(mission.durationHours * 3600);
             if (!missionSec && mission.duration) missionSec = (mission.duration > 24 ? mission.duration : mission.duration * 3600);
             if (missionSec && missionSec < 1800 && (mission.type === 'dps' || mission.scale)) {
               missionSec = missionSec > 24 ? missionSec * 60 : missionSec * 3600;
             }
             if (!missionSec) missionSec = 14400;
 
-            const missionHourText = mission.eventDate ? `${mission.eventDate.hour}h${(mission.eventDate.minute || 0).toString().padStart(2, '0')}` : 'Immédiat';
-            const missionDateText = mission.eventDate ? this.formatFullDate(mission.eventDate) : 'Aujourd’hui';
+            const missionScheduleRange = this.formatMissionScheduleRange(mission);
 
             return `
               <div class="space-y-2">
@@ -6955,15 +6999,13 @@ class ProtecGame {
                   </div>
                 </div>
 
-                <!-- Bandeau Date & Heure précis -->
-                <div class="flex items-center justify-between gap-2 p-2 rounded-xl bg-white/80 border border-slate-200/90 text-xs shadow-2xs">
-                  <div class="flex items-center gap-1.5 font-bold text-slate-700">
-                    <i data-lucide="calendar" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
-                    <span>${missionDateText}</span>
+                <!-- Bandeau Date & Heure unifié (Du Début au Fin) -->
+                <div class="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/90 border border-slate-200 text-xs shadow-2xs">
+                  <div class="w-7 h-7 rounded-lg bg-blue-50 text-pc-blue flex items-center justify-center flex-shrink-0">
+                    <i data-lucide="calendar" class="w-4 h-4"></i>
                   </div>
-                  <div class="px-2.5 py-0.5 rounded-lg text-xs font-black bg-blue-50 text-pc-blue border border-blue-200 mono-num flex items-center gap-1">
-                    <span>⏰</span>
-                    <span>${missionHourText}</span>
+                  <div class="flex-1 min-w-0">
+                    <span class="font-extrabold text-slate-900 text-xs leading-snug block">${missionScheduleRange}</span>
                   </div>
                 </div>
               </div>
