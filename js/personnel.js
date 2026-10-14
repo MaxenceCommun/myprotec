@@ -2430,14 +2430,14 @@ window.ProtecPersonnel = {
     return this.getAllKnownStations(game).filter(s => s.departmentCode === cleanDept);
   },
 
-  // 2. Sélectionne les communes éligibles selon les règles du bassin d'attractivité territoriale :
-  // - L'adresse DOIT être dans le département de l'antenne
-  // - L'antenne cible DOIT être l'antenne la plus proche (aucune autre antenne concurrente plus proche)
+  // 2. Sélectionne les communes et villages éligibles selon les règles départementales :
+  // - Les candidatures peuvent provenir de TOUT le département (villes et villages)
+  // - Aucune restriction arbitraire de 15 km : le recrutement couvre l'ensemble du territoire départemental
   getCatchmentCommunes(game, targetStation) {
     const station = targetStation || (game.stations && game.stations[0]) || { lat: 48.6921, lng: 6.1844, departmentCode: '54', city: 'Nancy' };
-    const deptCode = String(station.departmentCode || game.currentDepartmentCode || '54').trim().toUpperCase();
+    const deptCode = String(station.departmentCode || game.currentDepartmentCode || (game.player && game.player.departmentCode) || '54').trim().toUpperCase();
 
-    // Catalogue des communes réelles du département
+    // Catalogue des communes et villages réels du département
     let communes = [];
     if (window.ProtecDepartements && typeof window.ProtecDepartements.getCommunesForDepartment === 'function') {
       communes = window.ProtecDepartements.getCommunesForDepartment(deptCode);
@@ -2451,80 +2451,26 @@ window.ProtecPersonnel = {
       }];
     }
 
-    // Récupérer toutes les AUTRES antennes connues
-    const allStations = this.getAllKnownStations(game);
-    const rivalStations = allStations.filter(s => s.id !== station.id && s.lat && s.lng);
-
-    // RÈGLE STRICTE : Pour chaque commune du département, l'antenne cible DOIT être la plus proche
-    const eligibleCommunes = [];
-
-    communes.forEach(commune => {
-      const distToTarget = window.ProtecDepartements 
+    // Toutes les communes et tous les villages du département sont éligibles
+    return communes.map(commune => {
+      const dist = window.ProtecDepartements
         ? window.ProtecDepartements.calculateDistance(commune.lat, commune.lng, station.lat, station.lng)
-        : Math.sqrt(Math.pow(commune.lat - station.lat, 2) + Math.pow(commune.lng - station.lng, 2)) * 111;
-
-      // Vérifier si une AUTRE antenne de la carte est plus proche de cette commune
-      let isAnotherStationCloser = false;
-      for (const rival of rivalStations) {
-        const distToRival = window.ProtecDepartements
-          ? window.ProtecDepartements.calculateDistance(commune.lat, commune.lng, rival.lat, rival.lng)
-          : Math.sqrt(Math.pow(commune.lat - rival.lat, 2) + Math.pow(commune.lng - rival.lng, 2)) * 111;
-
-        if (distToRival < distToTarget) {
-          isAnotherStationCloser = true;
-          break; // Une autre antenne est plus proche : commune non recrutable
-        }
-      }
-
-      if (!isAnotherStationCloser) {
-        eligibleCommunes.push({
-          ...commune,
-          _distKm: distToTarget
-        });
-      }
+        : 10;
+      return {
+        ...commune,
+        _distKm: dist
+      };
     });
-
-    // En cas d'isolation extrême, conserver la commune la plus proche
-    if (eligibleCommunes.length === 0) {
-      let nearest = communes[0];
-      let minDist = 999999;
-      communes.forEach(c => {
-        const d = window.ProtecDepartements
-          ? window.ProtecDepartements.calculateDistance(c.lat, c.lng, station.lat, station.lng)
-          : 0;
-        if (d < minDist) {
-          minDist = d;
-          nearest = { ...c, _distKm: d };
-        }
-      });
-      return [nearest];
-    }
-
-    return eligibleCommunes;
   },
 
-  // 3. Tirage pondéré d'une commune : les communes proches de l'antenne ont une forte attractivité
+  // 3. Tirage équilibré parmi les villes et villages du département (sans barrière de 15 km)
   pickWeightedCommune(eligibleCommunes, station) {
     if (!eligibleCommunes || eligibleCommunes.length === 0) return null;
     if (eligibleCommunes.length === 1) return eligibleCommunes[0];
 
-    // Loi de gravité spatiale : poids inverse du carré de la distance
-    let totalWeight = 0;
-    const weightedList = eligibleCommunes.map(c => {
-      const dist = c._distKm !== undefined ? c._distKm : (window.ProtecDepartements ? window.ProtecDepartements.calculateDistance(c.lat, c.lng, station.lat, station.lng) : 5);
-      const weight = 1 / Math.pow(dist + 2.0, 2);
-      totalWeight += weight;
-      return { commune: c, weight: weight };
-    });
-
-    let rnd = Math.random() * totalWeight;
-    for (const item of weightedList) {
-      if (rnd <= item.weight) {
-        return item.commune;
-      }
-      rnd -= item.weight;
-    }
-    return weightedList[0].commune;
+    // Tirage aléatoire équitable pour que les candidatures proviennent de l'ensemble du département
+    const idx = Math.floor(Math.random() * eligibleCommunes.length);
+    return eligibleCommunes[idx];
   },
 
   // 4. Interroge l'API officielle de la Base Adresse Nationale (BAN data.gouv.fr) pour obtenir une vraie adresse
@@ -2591,11 +2537,11 @@ window.ProtecPersonnel = {
     }).catch(() => {});
   },
 
-  // 5. Génère une adresse résidentielle réaliste dans le département sans antenne concurrente plus proche
+  // 5. Génère une adresse résidentielle réaliste dans le département (ville ou village)
   generateVolunteerResidence(game, station, volunteerProfile = {}) {
     const baseStation = station || (game.stations && game.stations[0]) || { lat: 48.6921, lng: 6.1844, departmentCode: '54', city: 'Nancy' };
     
-    // 1. Piocher parmi les communes éligibles du bassin exclusif (Voronoi + département)
+    // 1. Piocher parmi les communes et villages du département (sans restriction arbitraire de distance)
     const eligibleCommunes = this.getCatchmentCommunes(game, baseStation);
     const commune = this.pickWeightedCommune(eligibleCommunes, baseStation) || {
       nom: baseStation.city || 'Nancy',
@@ -2604,9 +2550,9 @@ window.ProtecPersonnel = {
       lng: baseStation.lng
     };
 
-    // 2. Décalage modéré autour du centre de la commune (80 à 350 mètres en zone résidentielle)
+    // 2. Décalage modéré autour du centre de la commune (50 à 280 mètres en zone résidentielle/village)
     const angle = Math.random() * 2 * Math.PI;
-    const distanceMeters = 80 + Math.random() * 270;
+    const distanceMeters = 50 + Math.random() * 230;
     const earthRadius = 6371000;
     const deltaLat = (distanceMeters * Math.cos(angle)) / earthRadius * (180 / Math.PI);
     const deltaLng = (distanceMeters * Math.sin(angle)) / (earthRadius * Math.cos(commune.lat * Math.PI / 180)) * (180 / Math.PI);
@@ -2622,40 +2568,43 @@ window.ProtecPersonnel = {
     const voie = this.VOIES_FRANCAISES[Math.floor(Math.random() * this.VOIES_FRANCAISES.length)];
     const adresseComplete = `${numVoie}${suffixe} ${voie}, ${commune.cp} ${commune.nom}`;
 
-    // 4. Permis de conduire
+    // 4. Permis de conduire (très répandu dans les villes et villages du département)
     const age = volunteerProfile.age || 25;
     const hasExistingPermisB = volunteerProfile.skills?.includes('permis_b') || volunteerProfile.skills?.includes('permis_vpsp') || volunteerProfile.permis_b;
-    const hasPermisB = hasExistingPermisB !== undefined ? !!hasExistingPermisB : (age >= 24 ? Math.random() < 0.88 : (age >= 20 ? Math.random() < 0.76 : Math.random() < 0.45));
+    const hasPermisB = hasExistingPermisB !== undefined ? !!hasExistingPermisB : (age >= 24 ? Math.random() < 0.94 : (age >= 20 ? Math.random() < 0.88 : Math.random() < 0.65));
     const hasPermisMoto = volunteerProfile.skills?.includes('permis_moto') ? true : (Math.random() < 0.16);
     // Permis C (Poids Lourd > 3.5t : FLIT, VALOG, PCM...)
     const hasExistingPermisC = volunteerProfile.skills?.includes('permis_c') || volunteerProfile.permis_c;
     const hasPermisC = hasExistingPermisC !== undefined ? !!hasExistingPermisC : (hasPermisB && age >= 21 && Math.random() < 0.18);
 
     // 5. Mode de transport
-    let modeTransport = 'velo_transports';
+    let modeTransport = 'voiture';
     if (hasPermisB) {
       modeTransport = 'voiture';
     } else if (hasPermisMoto) {
       modeTransport = 'moto';
+    } else {
+      modeTransport = 'velo_transports';
     }
 
-    // 6. Distance et temps de ralliement
+    // 6. Distance et temps de ralliement calculés selon la géographie départementale
     const distanceKm = window.ProtecDepartements
       ? parseFloat(window.ProtecDepartements.calculateDistance(coordsDomicile.lat, coordsDomicile.lng, baseStation.lat, baseStation.lng).toFixed(2))
-      : 3.5;
+      : 5.0;
 
-    let speedKmh = 38;
-    let prepMinutes = 4;
-    if (modeTransport === 'moto') {
-      speedKmh = 46;
-      prepMinutes = 3;
-    } else if (modeTransport === 'velo_transports') {
-      speedKmh = 16;
-      prepMinutes = 3;
+    // Vitesse moyenne réaliste (prise en compte des axes départementaux / voies rapides si distance > 10 km)
+    let speedKmh = 45;
+    let prepMinutes = 3;
+    if (modeTransport === 'voiture') {
+      speedKmh = distanceKm > 25 ? 75 : (distanceKm > 10 ? 60 : 45);
+    } else if (modeTransport === 'moto') {
+      speedKmh = distanceKm > 25 ? 80 : (distanceKm > 10 ? 65 : 48);
+    } else {
+      speedKmh = 18;
     }
 
     const transitMinutes = Math.round((distanceKm / speedKmh) * 60);
-    const tempsRalliementMinutes = Math.max(4, prepMinutes + transitMinutes);
+    const tempsRalliementMinutes = Math.max(3, prepMinutes + transitMinutes);
 
     return {
       commune: commune.nom,
@@ -2671,45 +2620,29 @@ window.ProtecPersonnel = {
     };
   },
 
-  // 6. Audit et assainissement complet de tous les bénévoles
-  // Garantit qu'aucun bénévole n'a une autre antenne plus proche de son domicile
+  // 6. Audit et assainissement de tous les bénévoles
+  // Garantit que chaque bénévole possède une adresse valide dans une ville ou un village du département
   auditAndSanitizeAllVolunteersResidences(game) {
     if (!game || !game.volunteers || game.volunteers.length === 0) return;
-    const allStations = this.getAllKnownStations(game);
     let modified = false;
 
     game.volunteers.forEach(v => {
       const station = (game.stations || []).find(s => s.id === v.stationId) || game.stations?.[0];
       if (!station) return;
 
-      const deptCode = String(station.departmentCode || game.currentDepartmentCode || '54').trim().toUpperCase();
+      const deptCode = String(station.departmentCode || game.currentDepartmentCode || (game.player && game.player.departmentCode) || '54').trim().toUpperCase();
       let needsReseed = false;
 
-      // Doit avoir une commune et adresse
+      // Doit avoir une commune, un code postal, des coordonnées et une adresse
       if (!v.adresse || !v.commune || !v.coords_domicile || !v.temps_ralliement_minutes) {
         needsReseed = true;
       }
 
-      // Contrôle de proximité : aucune autre antenne ne doit être plus proche
-      if (!needsReseed && v.coords_domicile) {
-        const distToStation = window.ProtecDepartements
-          ? window.ProtecDepartements.calculateDistance(v.coords_domicile.lat, v.coords_domicile.lng, station.lat, station.lng)
-          : (v.distance_base_km || 5);
-
-        // Distance excessive (> 45 km) ou mauvaise antenne
-        if (distToStation > 45) {
+      // Si le code postal ne correspond pas au département
+      if (!needsReseed && v.code_postal) {
+        const cpPrefix = v.code_postal.slice(0, deptCode.length);
+        if (cpPrefix !== deptCode && !['2A', '2B'].includes(deptCode)) {
           needsReseed = true;
-        } else {
-          const rivals = allStations.filter(s => s.id !== station.id && s.lat && s.lng);
-          for (const rival of rivals) {
-            const distToRival = window.ProtecDepartements
-              ? window.ProtecDepartements.calculateDistance(v.coords_domicile.lat, v.coords_domicile.lng, rival.lat, rival.lng)
-              : 999;
-            if (distToRival < distToStation) {
-              needsReseed = true;
-              break;
-            }
-          }
         }
       }
 
@@ -2768,30 +2701,9 @@ window.ProtecPersonnel = {
     const station = (game.stations || []).find(s => s.id === volunteer.stationId) || game.stations?.[0];
     if (!station) return;
 
-    const allStations = this.getAllKnownStations(game);
-    const rivals = allStations.filter(s => s.id !== station.id && s.lat && s.lng);
-
     let needsReseed = false;
     if (!volunteer.commune || !volunteer.temps_ralliement_minutes || !volunteer.adresse || !volunteer.coords_domicile) {
       needsReseed = true;
-    } else {
-      const distToStation = window.ProtecDepartements
-        ? window.ProtecDepartements.calculateDistance(volunteer.coords_domicile.lat, volunteer.coords_domicile.lng, station.lat, station.lng)
-        : (volunteer.distance_base_km || 5);
-
-      if (distToStation > 45) {
-        needsReseed = true;
-      } else {
-        for (const rival of rivals) {
-          const distToRival = window.ProtecDepartements
-            ? window.ProtecDepartements.calculateDistance(volunteer.coords_domicile.lat, volunteer.coords_domicile.lng, rival.lat, rival.lng)
-            : 999;
-          if (distToRival < distToStation) {
-            needsReseed = true;
-            break;
-          }
-        }
-      }
     }
 
     if (needsReseed) {
