@@ -22,18 +22,30 @@ window.ProtecPersonnel = {
     etudiant: {
       label: 'Étudiant(e)',
       icon: '🎓',
-      baseDispoRate: 0.72,
-      desc: 'Forte disponibilité soirs et week-ends. Enthousiaste et dynamique.',
+      baseDispoRate: 0.75,
+      desc: 'Forte disponibilité soirs (dès 17h) et week-ends. Progression d’apprentissage rapide (+50% exp), mais risque de mobilité/départ après 1 à 2 ans.',
       favDays: ['Mercredi', 'Vendredi', 'Samedi', 'Dimanche'],
-      energyDrainRatio: 0.95
+      energyDrainRatio: 0.95,
+      learningBonus: 1.5,
+      mobilityRiskYear: 1
+    },
+    actif: {
+      label: 'Actif (Salarié en entreprise)',
+      icon: '💼',
+      baseDispoRate: 0.42,
+      desc: 'Disponible principalement week-ends et soirs (dès 19h). Fatigue augmentant 50% plus vite en semaine.',
+      favDays: ['Vendredi', 'Samedi', 'Dimanche'],
+      energyDrainRatio: 1.10,
+      weekdayFatigueMultiplier: 1.5
     },
     salarie: {
       label: 'Salarié(e) temps plein',
       icon: '💼',
       baseDispoRate: 0.42,
-      desc: 'Disponible uniquement en soirée de fin de semaine et le week-end.',
+      desc: 'Disponible principalement week-ends et soirs (dès 19h). Fatigue augmentant 50% plus vite en semaine.',
       favDays: ['Vendredi', 'Samedi', 'Dimanche'],
-      energyDrainRatio: 1.10
+      energyDrainRatio: 1.10,
+      weekdayFatigueMultiplier: 1.5
     },
     chomeur: {
       label: 'En recherche d’emploi',
@@ -46,10 +58,12 @@ window.ProtecPersonnel = {
     retraite: {
       label: 'Retraité(e) actif',
       icon: '👴',
-      baseDispoRate: 0.75,
-      desc: 'Disponible en journée de semaine. Idéal pour la logistique, la pharmacie et les maraudes.',
+      baseDispoRate: 0.80,
+      desc: 'Grande disponibilité en journée de semaine (8h-20h). Idéal pour la logistique, l’administratif et formations PSC1. Fatigue modérée (-20%), indisponible la nuit.',
       favDays: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'],
-      energyDrainRatio: 1.20
+      energyDrainRatio: 0.85,
+      dayFatigueMultiplier: 0.80,
+      nightRestricted: true
     },
     service_civique: {
       label: 'Volontaire Service Civique',
@@ -68,7 +82,6 @@ window.ProtecPersonnel = {
       energyDrainRatio: 0.85
     }
   },
-
   // Traits psychologiques
   traits: {
     devoue: {
@@ -122,13 +135,13 @@ window.ProtecPersonnel = {
     },
     {
       code: 'B',
-      title: 'Agrément B - Action Sociale & Soutien Psychologique',
-      category: 'Solidarité & Précarité',
-      cost: 1200,
-      icon: 'heart-handshake',
-      color: 'purple',
-      unlocks: 'Maraudes Sociales, Hébergement d’Urgence, Écoute',
-      desc: 'Habilitation préfectorale DDETS pour l’aide aux sans-abris, distributions de kits et centres d’accueil d’urgence hivernaux.'
+      title: 'Agrément B - Sauvetage en Milieu Aquatique & Nautique',
+      category: 'Secours Aquatique',
+      cost: 2200,
+      icon: 'life-buoy',
+      color: 'sky',
+      unlocks: 'Embarcations, Secours Nautique & Sauvetage Inondations',
+      desc: 'Agrément ministériel de Sécurité Civile autorisant le déploiement d’équipages nautiques, embarcations et sauveteurs aquatiques sur plans d’eau et crues.'
     },
     {
       code: 'C',
@@ -161,8 +174,7 @@ window.ProtecPersonnel = {
       game.resources.associationExp = 0;
     }
 
-    // Mise à jour de chaque secouriste existant avec les nouvelles métriques
-    // Mise à jour de chaque secouriste existant avec les nouvelles métriques
+    // Mise à jour de chaque secouriste existant avec les jauges Fatigue, Moral et Profils
     if (game.volunteers && Array.isArray(game.volunteers)) {
       game.volunteers.forEach(v => {
         if (!v.contractType) {
@@ -172,10 +184,34 @@ window.ProtecPersonnel = {
             v.contractType = 'benevole';
           }
         }
-        if (!v.profilSocial) v.profilSocial = v.dispoType === 'étudiant' ? 'etudiant' : (v.dispoType === 'salarié' || v.contractType === 'salarie' ? 'salarie_asso' : 'parent');
-        if (v.energy === undefined) v.energy = 85;
-        if (v.motivation === undefined) v.motivation = 80;
-        if (v.humeur === undefined) v.humeur = 80;
+        
+        // Typologie sociologique : etudiant, actif, retraite
+        if (!v.profilSocial) {
+          if (v.dispoType === 'étudiant' || v.dispoType === 'étudiante') {
+            v.profilSocial = 'etudiant';
+          } else if (v.age && v.age >= 62) {
+            v.profilSocial = 'retraite';
+          } else if (v.contractType === 'salarie') {
+            v.profilSocial = 'salarie_asso';
+          } else {
+            v.profilSocial = 'actif';
+          }
+        }
+        if (v.profilSocial === 'salarie') v.profilSocial = 'actif';
+
+        // Nouvelles jauges fondamentales : Fatigue (0 à 100) et Moral (0 à 100)
+        if (v.fatigue === undefined) {
+          v.fatigue = Math.max(0, 100 - (v.energy !== undefined ? v.energy : 85));
+        }
+        if (v.moral === undefined) {
+          v.moral = v.humeur !== undefined ? v.humeur : (v.motivation !== undefined ? v.motivation : 80);
+        }
+
+        // Synchronisation des indicateurs miroirs
+        v.energy = Math.max(0, 100 - v.fatigue);
+        v.motivation = v.moral;
+        v.humeur = v.moral;
+
         if (!v.trait) {
           const traitsKeys = Object.keys(this.traits);
           v.trait = traitsKeys[Math.floor(Math.random() * traitsKeys.length)];
@@ -183,6 +219,10 @@ window.ProtecPersonnel = {
         if (v.missionsCount === undefined) v.missionsCount = 0;
         if (v.consecutiveMissions === undefined) v.consecutiveMissions = 0;
         if (v.isBurnout === undefined) v.isBurnout = false;
+        if (v.lastMissionHoursElapsed === undefined) v.lastMissionHoursElapsed = game.clock?.totalHoursElapsed || 0;
+        if (!v.joinDate) {
+          v.joinDate = { year: game.clock?.year || 2026, month: game.clock?.month || 9, day: game.clock?.day || 5 };
+        }
 
         // Attributs exclusifs aux salariés sous contrat de travail
         if (v.contractType === 'salarie') {
@@ -194,6 +234,9 @@ window.ProtecPersonnel = {
           if (v.currentVacation === undefined) v.currentVacation = null;
           if (!v.vacationHistory) v.vacationHistory = [];
         }
+
+        // Bassin d'attractivité territoriale, adresse et temps de ralliement
+        this.ensureVolunteerResidence(v, game);
       });
     }
   },
@@ -213,6 +256,16 @@ window.ProtecPersonnel = {
       return { available: false, reason: 'Arrêt de travail / Burnout (surmenage)' };
     }
 
+    // Conséquence d'usure morale : mise en retrait
+    if (volunteer.status === 'retrait' || (volunteer.moral !== undefined && volunteer.moral < 20)) {
+      return { available: false, reason: 'En retrait associatif (moral critique < 20% : cohésion d’antenne requise)' };
+    }
+
+    // Règle d'usure stricte : fatigue > 80 = indisponibilité automatique pour repos obligatoire
+    if (volunteer.fatigue !== undefined && volunteer.fatigue > 80) {
+      return { available: false, reason: 'Fatigue critique (> 80%) : Repos obligatoire pour prévenir toute faute opérationnelle' };
+    }
+
     // --- RÈGLE DU CODE DU TRAVAIL STRICTEMENT RÉSERVÉE AUX SALARIÉS ---
     if (volunteer.contractType === 'salarie') {
       const now = Date.now();
@@ -220,13 +273,13 @@ window.ProtecPersonnel = {
         const secLeft = Math.ceil((volunteer.mandatoryRestUntil - now) / 1000);
         return {
           available: false,
-          reason: `Repos obligatoire (Code du Travail Art. L3131-1 : 11h consécutives - encore ${secLeft}s)`
+          reason: 'Repos obligatoire (Code du Travail Art. L3131-1 : 11h consécutives - encore ' + secLeft + 's)'
         };
       }
       if (volunteer.currentVacation) {
         return {
           available: false,
-          reason: `En vacation interne : « ${volunteer.currentVacation.title} »`
+          reason: 'En vacation interne : « ' + volunteer.currentVacation.title + ' »'
         };
       }
     }
@@ -235,20 +288,63 @@ window.ProtecPersonnel = {
       return { available: false, reason: 'Énergie critique (besoin de repos)' };
     }
 
-    const profile = this.socialProfiles[volunteer.profilSocial] || this.socialProfiles.benevole;
+    // Période de repos obligatoire post-mission (bénévoles & salariés)
+    const now = Date.now();
+    if (volunteer.restUntil && now < volunteer.restUntil) {
+      const secLeft = Math.ceil((volunteer.restUntil - now) / 1000);
+      return {
+        available: false,
+        reason: 'En repos post-mission obligatoire (encore ' + secLeft + 's)'
+      };
+    }
+
+    const profileKey = volunteer.profilSocial === 'salarie' ? 'actif' : (volunteer.profilSocial || 'actif');
+    const profile = this.socialProfiles[profileKey] || this.socialProfiles.actif;
     const currentDayName = (mission && mission.eventDate?.dayName) ? mission.eventDate.dayName : game.clock.daysNames[game.clock.day % 7];
+    const missionHour = mission?.startHour !== undefined ? mission.startHour : (mission?.eventDate?.hour !== undefined ? mission.eventDate.hour : (game.clock?.hour || 14));
+    const isWeekend = currentDayName === 'Samedi' || currentDayName === 'Dimanche';
+
+    // Plages horaires réalistes selon le profil socio-professionnel
+    let hourEligible = true;
+    let hourReason = '';
+
+    if (volunteer.profilSocial === 'etudiant') {
+      // Disponible soirs (dès 17h) et week-ends entiers
+      if (!isWeekend && missionHour < 17 && missionHour >= 8) {
+        hourEligible = false;
+        hourReason = 'En cours / amphithéâtre en journée de semaine';
+      }
+    } else if (volunteer.profilSocial === 'actif' || volunteer.profilSocial === 'salarie') {
+      // Disponible uniquement en soirée (dès 19h) et le week-end
+      if (!isWeekend && missionHour < 19 && missionHour >= 8) {
+        hourEligible = false;
+        hourReason = 'Au travail (actif en entreprise en journée de semaine)';
+      }
+    } else if (volunteer.profilSocial === 'retraite') {
+      // Disponible en journée de semaine (8h-20h), indisponible la nuit
+      if (missionHour >= 22 || missionHour < 7) {
+        hourEligible = false;
+        hourReason = 'Indisponible en horaire nocturne tardif';
+      }
+    }
+
+    if (!hourEligible && volunteer.contractType !== 'salarie_asso') {
+      return {
+        available: false,
+        reason: profile.label + ' : ' + hourReason
+      };
+    }
 
     // Vérification du jour favori selon profil social et préférences
-    const isPreferredDay = volunteer.dispoJours?.includes(currentDayName) || profile.favDays.includes(currentDayName);
+    const isPreferredDay = volunteer.dispoJours?.includes(currentDayName) || (profile.favDays && profile.favDays.includes(currentDayName));
     
-    // Probabilité d'acceptation :
-    // Même si le bénévole a Samedi/Dimanche, il peut quand même se libérer en semaine (mardi, etc.) avec une probabilité réduite
+    // Probabilité d'acceptation réaliste
     let chance = isPreferredDay ? (profile.baseDispoRate + 0.35) : 0.16;
-    if (volunteer.motivation > 75) chance += 0.12;
-    if (volunteer.energy > 70) chance += 0.08;
-    if (volunteer.contractType === 'salarie') chance += 0.40; // Les salariés ont une présence renforcée
+    if (volunteer.moral > 75) chance += 0.12;
+    if (volunteer.fatigue < 40) chance += 0.08;
+    if (volunteer.contractType === 'salarie' || volunteer.contractType === 'salarie_asso') chance += 0.40;
     
-    // Si petit poste de secours (durée <= 4h ou PAPS/DPS-PE), plus accessible en semaine
+    // Si petit poste de secours (durée <= 4h ou PAPS/DPS-PE), plus accessible
     if (mission && (mission.durationHours <= 4 || (mission.scale && (mission.scale.includes('PE') || mission.scale.includes('PAPS'))))) {
       chance += 0.10;
     }
@@ -256,86 +352,254 @@ window.ProtecPersonnel = {
     const available = Math.random() < Math.min(0.96, Math.max(0.08, chance));
     return {
       available,
-      reason: available ? 'Disponible' : `${profile.label} : indisponible ce jour-là`
+      reason: available ? 'Disponible' : (profile.label + ' : indisponible sur ce créneau')
     };
   },
 
-  // Déduction de fatigue et mise à jour psychologique lors d'une mission
-  applyMissionExertion(volunteer, mission, hasAep2 = false) {
-    const profile = this.socialProfiles[volunteer.profilSocial] || this.socialProfiles.benevole;
-    let drain = 20 * (profile.energyDrainRatio || 1);
+  // Déduction de fatigue horaire, intempéries, nuit, repos obligatoire et moral
+  applyMissionExertion(volunteer, mission, hasAep2 = false, weather = null) {
+    const profileKey = volunteer.profilSocial === 'salarie' ? 'actif' : (volunteer.profilSocial || 'actif');
+    const profile = this.socialProfiles[profileKey] || this.socialProfiles.actif;
 
-    // Missions de nuit ou d'urgence SAMU plus éprouvantes
-    if (mission.type === 'samu') drain += 10;
-    if (mission.type === 'social') drain += 8;
-    if (mission.durationHours && mission.durationHours > 6) drain += 12;
+    const durationHours = mission.durationHours ? parseFloat(mission.durationHours) : Math.max(2, Math.round((mission.duration || 30) / 10));
+    let fatiguePerHour = 4.5 * (profile.energyDrainRatio || 1.0);
 
-    // Trait dynamique récupère mieux
-    if (volunteer.trait === 'dynamique') drain *= 0.75;
-    if (volunteer.trait === 'sensible' && mission.type === 'samu') drain *= 1.25;
-
-    // Soutien et débriefing psychologique AEP2 (defusing d'équipage : -50% de fatigue morale et physique)
-    if (hasAep2) drain *= 0.50;
-
-    volunteer.energy = Math.max(0, Math.round(volunteer.energy - drain));
-    volunteer.missionsCount = (volunteer.missionsCount || 0) + 1;
-    volunteer.consecutiveMissions = (volunteer.consecutiveMissions || 0) + 1;
-
-    // Si le bénévole enchaîne trop sans pause (surmenage)
-    if (volunteer.consecutiveMissions >= 3) {
-      volunteer.motivation = Math.max(10, volunteer.motivation - 12);
-      volunteer.humeur = Math.max(10, volunteer.humeur - 15);
-    } else {
-      // Mission valorisante accomplie avec succès
-      volunteer.motivation = Math.min(100, volunteer.motivation + 6);
-      volunteer.humeur = Math.min(100, volunteer.humeur + 5);
+    // 1. Bonus de fatigue de nuit (entre 21h et 06h) : +50%
+    const missionHour = mission.startHour !== undefined ? mission.startHour : (mission.eventDate?.hour !== undefined ? mission.eventDate.hour : 14);
+    const isNight = missionHour >= 21 || missionHour < 6;
+    if (isNight) {
+      fatiguePerHour *= 1.5;
     }
 
-    // Risque de burnout critique si énergie = 0 ou dépassement excessif
-    if (volunteer.energy <= 0 || (volunteer.energy < 15 && volunteer.trait === 'devoue' && volunteer.consecutiveMissions >= 4)) {
+    // 2. Bonus intempéries (canicule, orage violent, pluie battante, grand froid, neige) : +50%
+    const cond = weather?.condition || window.game?.weather?.condition || 'ensoleille';
+    const isBadWeather = ['canicule', 'pluie_battante', 'orage_violent', 'grand_froid', 'neige', 'heat', 'storm', 'rain', 'snow'].includes(cond);
+    if (isBadWeather) {
+      fatiguePerHour *= 1.5;
+    }
+
+    // 3. Spécificité actif : fatigue augmentant 50% plus vite en semaine
+    const dayName = mission.eventDate?.dayName || window.game?.clock?.daysNames?.[(window.game?.clock?.day || 0) % 7] || 'Lundi';
+    const isWeekday = !['Samedi', 'Dimanche'].includes(dayName);
+    if ((volunteer.profilSocial === 'actif' || volunteer.profilSocial === 'salarie') && isWeekday) {
+      fatiguePerHour *= 1.5;
+    }
+
+    // 4. Spécificité retraité : fatigue réduite en journée
+    if (volunteer.profilSocial === 'retraite') {
+      fatiguePerHour *= 0.8;
+    }
+
+    // 5. Trait dynamique récupère mieux et fatigue moins
+    if (volunteer.trait === 'dynamique') {
+      fatiguePerHour *= 0.75;
+    }
+
+    // 6. Soutien et débriefing psychologique AEP2 (defusing d'équipage : -50% de fatigue)
+    if (hasAep2) {
+      fatiguePerHour *= 0.50;
+    }
+
+    const fatigueGained = Math.round(durationHours * fatiguePerHour);
+    volunteer.fatigue = Math.min(100, (volunteer.fatigue || 0) + fatigueGained);
+    volunteer.energy = Math.max(0, 100 - volunteer.fatigue);
+
+    volunteer.missionsCount = (volunteer.missionsCount || 0) + 1;
+    volunteer.consecutiveMissions = (volunteer.consecutiveMissions || 0) + 1;
+    volunteer.lastMissionHoursElapsed = window.game?.clock?.totalHoursElapsed || 0;
+
+    // Progression accélérée pour le profil étudiant (+50% gain d'expérience)
+    const baseExp = volunteer.profilSocial === 'etudiant' ? 25 : 15;
+    volunteer.exp = (volunteer.exp || 0) + baseExp;
+
+    // Enclenchement d'une période de repos obligatoire post-mission (30 à 60 secondes de jeu)
+    const restDurationMs = Math.max(30000, durationHours * 8000);
+    volunteer.restUntil = Date.now() + restDurationMs;
+
+    // Impact sur le moral : surmenage ou mission éprouvante
+    if (volunteer.fatigue > 70 || volunteer.consecutiveMissions >= 3) {
+      // Décroissance en cas de surmenage
+      volunteer.moral = Math.max(0, (volunteer.moral || 75) - 16);
+    } else if (mission.type === 'samu' || mission.severity === 'critique') {
+      volunteer.moral = Math.max(0, (volunteer.moral || 75) - 8);
+    } else {
+      // Mission réussie et valorisante
+      volunteer.moral = Math.min(100, (volunteer.moral || 75) + 6);
+    }
+
+    volunteer.motivation = volunteer.moral;
+    volunteer.humeur = volunteer.moral;
+
+    // Conséquence d'usure : repos obligatoire si fatigue > 80
+    if (volunteer.fatigue > 80) {
+      volunteer.status = 'repos';
+      if (window.game?.showToast) {
+        window.game.showToast('Repos Obligatoire 🛌', volunteer.name + ' dépasse 80% de fatigue (' + volunteer.fatigue + '%). Mis(e) au repos forcé pour éviter toute faute opérationnelle.', 'orange');
+      }
+    }
+
+    // Conséquence d'usure : mise en retrait puis démission définitive si moral < 20
+    if (volunteer.moral < 20 && volunteer.contractType === 'benevole') {
+      if (volunteer.status !== 'retrait') {
+        volunteer.status = 'retrait';
+        if (window.game?.showToast) {
+          window.game.showToast('Bénévole en Retrait 😟', volunteer.name + ' se met en retrait associatif (moral critique : ' + volunteer.moral + '%). Organisez un moment de cohésion pour le remobiliser.', 'orange');
+        }
+      } else {
+        // Confirmation de démission définitive si déjà en retrait
+        volunteer.hasResigned = true;
+        volunteer.status = 'demissionne';
+        return { burnout: true, resigned: true, volunteer };
+      }
+    }
+
+    // Risque de burnout critique si fatigue = 100
+    if (volunteer.fatigue >= 100) {
       volunteer.isBurnout = true;
       volunteer.status = 'repos';
-      volunteer.burnoutUntil = Date.now() + (30 * 60 * 1000); // 30 minutes réelles d'arrêt forcé
+      volunteer.burnoutUntil = Date.now() + (30 * 60 * 1000);
       return { burnout: true, volunteer };
     }
 
     return { burnout: false, volunteer };
   },
 
-  // Régénération au repos
+  // Régénération au repos, surveillance de l'inactivité (> 30 jours) et mobilité étudiante
   applyRestCycle(game) {
     if (!game.volunteers) return;
     const now = Date.now();
+    const currentHours = game.clock?.totalHoursElapsed || 0;
 
     game.volunteers.forEach(v => {
       // Fin de burnout éventuelle
       if (v.isBurnout && v.burnoutUntil && now >= v.burnoutUntil) {
         v.isBurnout = false;
-        v.energy = 50;
+        v.fatigue = 40;
+        v.energy = 60;
+        v.moral = 60;
+        v.motivation = 60;
         v.humeur = 60;
+        v.status = 'dispo';
         v.consecutiveMissions = 0;
-        game.showToast('Reprise d’activité', `${v.name} a récupéré et réintègre l’effectif disponible.`, 'green');
+        game.showToast('Reprise d’activité', v.name + ' a récupéré et réintègre l’effectif disponible.', 'green');
       }
 
-      if (v.status === 'dispo') {
-        const bonusFoyer = game.stations[0]?.rooms?.foyer === 2 ? 1.5 : (game.stations[0]?.rooms?.foyer === 3 ? 2.0 : 1.0);
-        const gain = Math.round(4 * bonusFoyer * (v.trait === 'dynamique' ? 1.3 : 1.0));
-        v.energy = Math.min(100, (v.energy || 70) + gain);
+      if (v.status === 'dispo' || v.status === 'repos') {
+        const station = game.stations[0];
+        const foyerRoom = station?.premises?.rooms?.foyer_vie_associative;
+        const foyerLevel = foyerRoom?.level || (station?.rooms?.foyer === 3 ? 3 : (station?.rooms?.foyer === 2 ? 2 : 1));
+        const bonusFoyer = foyerLevel === 2 ? 1.5 : (foyerLevel === 3 ? 2.0 : 1.0);
+        const cuisineBonus = foyerRoom?.hasCuisineEquipee ? 1.25 : 1.0;
+        const recoveryGain = Math.round(5 * bonusFoyer * cuisineBonus * (v.trait === 'dynamique' ? 1.3 : 1.0));
+        
+        // Récupération de fatigue et d'énergie
+        v.fatigue = Math.max(0, (v.fatigue || 20) - recoveryGain);
+        v.energy = Math.max(0, 100 - v.fatigue);
 
-        // Si bien reposé, le moral remonte
-        if (v.energy >= 80) {
-          v.humeur = Math.min(100, (v.humeur || 70) + 2);
+        // Sortie de repos si fatigue retombée sous 50
+        if (v.status === 'repos' && v.fatigue <= 50 && !v.isBurnout) {
+          v.status = 'dispo';
         }
 
-        // Si le secouriste n'a pas fait de mission depuis longtemps, légère baisse de motivation
-        if (Math.random() < 0.05 && v.consecutiveMissions === 0 && v.motivation > 35) {
-          v.motivation = Math.max(30, v.motivation - 1);
+        // Si bien reposé, le moral remonte avec boost passif du foyer de vie associative et des équipements
+        if (v.fatigue <= 30 && v.status !== 'retrait') {
+          let moralPassiveGain = (foyerLevel >= 2 ? 2 : 1) + (foyerRoom?.hasCuisineEquipee ? 1 : 0);
+
+          // Impact des gammes d'équipements et tenues
+          const eqTiers = game.equipmentTiers || {};
+          const hasModernEup = eqTiers.vetements_eup === 2;
+          const hasHighTechEquipment = (eqTiers.prise_parametres === 3) || (eqTiers.mannequin_rcp_adulte === 3);
+          const isAllLevel1 = Object.values(eqTiers).every(t => t <= 1);
+          const isLargeStation = (game.volunteers && game.volunteers.length >= 10) || (game.vehicles && game.vehicles.length >= 3);
+
+          if (hasModernEup) {
+            moralPassiveGain += 1; // Fierté de porter des tenues de haute technicité
+          }
+          if (hasHighTechEquipment) {
+            moralPassiveGain += 1; // Fierté d'utiliser du matériel connecté
+          }
+          if (isAllLevel1 && isLargeStation) {
+            moralPassiveGain = Math.max(0, moralPassiveGain - 2); // Malus passif "manque de moyens"
+          }
+
+          v.moral = Math.min(100, (v.moral || 70) + moralPassiveGain);
+          v.motivation = v.moral;
+          v.humeur = v.moral;
+        }
+
+        // 1. INACTIVITÉ PROLONGÉE (> 30 jours sans convocation) : décroissance du moral
+        const hoursWithoutMission = currentHours - (v.lastMissionHoursElapsed || 0);
+        if (hoursWithoutMission > 720 && v.contractType === 'benevole') { // 30 jours = 720 heures
+          // Perte de moral par période d'inactivité
+          if (Math.random() < 0.10) {
+            v.moral = Math.max(5, (v.moral || 70) - 5);
+            v.motivation = v.moral;
+            v.humeur = v.moral;
+
+            if (v.moral < 20 && v.status !== 'retrait') {
+              v.status = 'retrait';
+              game.showToast('Inactivité Prolongée ⚠️', v.name + ' n’a pas été convoqué(e) depuis plus d’un mois (moral < 20%). Il se met en retrait associatif.', 'orange');
+            }
+          }
+        }
+
+        // 2. MOBILITÉ DU PROFIL ÉTUDIANT (risque de départ après 1 à 2 ans)
+        if (v.profilSocial === 'etudiant' && v.contractType === 'benevole' && v.joinDate) {
+          const yearsElapsed = (game.clock.year - v.joinDate.year) + ((game.clock.month - v.joinDate.month) / 12);
+          if (yearsElapsed >= 1.0 && Math.random() < 0.003) {
+            v.status = 'demissionne';
+            v.hasResigned = true;
+            game.showToast('Mobilité Étudiante 🎓', v.name + ' (étudiant) doit quitter l’antenne après ' + yearsElapsed.toFixed(1) + ' an(s) pour poursuivre ses études/stage dans une autre ville.', 'blue');
+          }
         }
       }
     });
   },
 
-  // Prélèvement des charges salariales et services civiques (cycle régulier)
+  // Action de cohésion associative : Moment de convivialité d'antenne
+  triggerCohesionEvent(game, eventType = 'convivialite') {
+    const cost = 250;
+    if (game.resources.money < cost) {
+      game.showToast('Fonds Insuffisants', 'L’organisation du moment de cohésion requiert ' + cost + ' €.', 'orange');
+      return;
+    }
+
+    game.resources.money -= cost;
+
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(game, -cost, 'Moment de convivialité & Cohésion d’équipe', 'autre');
+    }
+
+    let countReintegrated = 0;
+
+    game.volunteers.forEach(v => {
+      // Réduit la fatigue collective et restaure le moral
+      v.fatigue = Math.max(0, (v.fatigue || 20) - 25);
+      v.energy = Math.max(0, 100 - v.fatigue);
+      v.moral = Math.min(100, (v.moral || 60) + 30);
+      v.motivation = v.moral;
+      v.humeur = v.moral;
+
+      // Réactivation des secouristes en retrait
+      if (v.status === 'retrait') {
+        v.status = 'dispo';
+        countReintegrated++;
+      } else if (v.status === 'repos' && v.fatigue <= 60 && !v.isBurnout) {
+        v.status = 'dispo';
+      }
+    });
+
+    const msgExtra = countReintegrated > 0 ? (' ' + countReintegrated + ' bénévole(s) remobilisé(s) !') : '';
+    game.showToast(
+      '🎉 Moment de Cohésion Réussi !',
+      'Repas convivial au local : fatigue collective réduite (-25%), moral reboosté (+30 pts) !' + msgExtra,
+      'green'
+    );
+
+    game.updateStatsUI();
+    game.saveGame();
+    if (game.openModule) game.openModule('recrutement');
+  },
   processSalariesAndStipends(game) {
     if (!game.volunteers) return;
     let totalMonthlyCharges = 0;
@@ -355,6 +619,16 @@ window.ProtecPersonnel = {
     if (totalMonthlyCharges > 0 && game.clock.day === 1 && game.clock.hour === 9 && game.clock.minute === 0) {
       if (game.resources.money >= totalMonthlyCharges) {
         game.resources.money -= totalMonthlyCharges;
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(
+            game,
+            -totalMonthlyCharges,
+            `Virement Salaires & Indemnités Mensuelles (${salarieCount} salarié(s), ${serviceCiviqueCount} service(s) civique(s))`,
+            'salaires',
+            'SAL-' + (game.clock ? `${game.clock.year || 2026}-${game.clock.month || 1}` : Date.now()),
+            'Personnel & URSSAF'
+          );
+        }
         game.showToast(
           'Paiement des Salaires & Indemnités',
           `Virement mensuel : ${totalMonthlyCharges} € (${salarieCount} salarié(s), ${serviceCiviqueCount} service(s) civique(s)).`,
@@ -390,6 +664,16 @@ window.ProtecPersonnel = {
     }
 
     game.resources.money -= agr.cost;
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        game,
+        -agr.cost,
+        `Audit & Droits d'Agrément Préfectoral : ${agr.title}`,
+        'frais',
+        'AGR-' + agrementCode,
+        'Préfecture'
+      );
+    }
     game.resources.agrements[agrementCode] = true;
     game.resources.reputationScore = (game.resources.reputationScore || 0) + 50;
 
@@ -629,6 +913,16 @@ window.ProtecPersonnel = {
       return;
     }
 
+    // Contrôle ERP pour les sessions de formation accueillant du public
+    if (task.category === 'formation') {
+      const station = game.stations[0];
+      const premises = station?.premises;
+      if (premises && premises.erpStatus === 'non_conforme') {
+        game.showToast('Salle Suspendue ERP 🧯', 'La commission de sécurité a suspendu la salle de formation PSC1 pour non-conformité. Réalisez un audit de mise aux normes dans le module Locaux !', 'red');
+        return;
+      }
+    }
+
     // Qualification formateur si requis
     if (task.trainerRank && !salarie.isTrainer) {
       if (!['CE', 'CD', 'Cadre'].includes(salarie.rank)) {
@@ -683,16 +977,54 @@ window.ProtecPersonnel = {
       const overtimeCost = Math.round(task.hours * this.laborLawConfig.overtimeRate);
       if (game.resources.money >= overtimeCost) {
         game.resources.money -= overtimeCost;
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(
+            game,
+            -overtimeCost,
+            `Heures Supplémentaires Salarié (+25%) : ${salarie.name}`,
+            'salaires',
+            'HS-' + Date.now(),
+            'Personnel Salarié'
+          );
+        }
       }
       overtimeNotice = ` ⚠️ Heures Supp' : Dépassement des 151h mensuelles (${salarie.monthlyOvertimeHours}h supp au total). Majoration légale de +25% appliquée (-${overtimeCost} €).`;
     }
 
     // 3. Application des bénéfices de la vacation
-    if (task.revenue) {
-      game.resources.money += task.revenue;
+    let totalRevenue = task.revenue || 0;
+    let totalRep = task.repGain || 0;
+
+    // Bonus d'équipements de la salle de formation PSC1
+    if (task.category === 'formation' || task.id === 'formation_psc1') {
+      const station = game.stations[0];
+      const psc1Room = station?.premises?.rooms?.salle_formation_psc1;
+      if (psc1Room) {
+        if (psc1Room.hasVideoprojecteur) {
+          totalRevenue += Math.round(totalRevenue * 0.20); // +20% d'inscrits grâce au vidéoprojecteur
+        }
+        if (psc1Room.hasQcprMannequins) {
+          totalRevenue += 120; // +120 € (qualité de formation & matériel connecté)
+          totalRep += 8; // +8 pts de réputation
+        }
+      }
     }
-    if (task.repGain) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + task.repGain;
+
+    if (totalRevenue > 0) {
+      game.resources.money += totalRevenue;
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(
+          game,
+          totalRevenue,
+          `Session Formation / Prestation B2B : ${task.title}`,
+          'formation_grand_public',
+          'FORM-B2B-' + Date.now(),
+          'Clients & Entreprises'
+        );
+      }
+    }
+    if (totalRep > 0) {
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + totalRep;
     }
     if (task.grantHoursValorisation && game.grants) {
       game.grants.totalVolunteerHours = (game.grants.totalVolunteerHours || 0) + task.grantHoursValorisation;
@@ -760,6 +1092,16 @@ window.ProtecPersonnel = {
       const otCost = Math.round(missionHours * this.laborLawConfig.overtimeRate);
       if (game.resources.money >= otCost) {
         game.resources.money -= otCost;
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(
+            game,
+            -otCost,
+            `Heures Supp' Mission Salarié (+25%) : ${salarie.name}`,
+            'salaires',
+            'HS-MIS-' + Date.now(),
+            'Personnel Salarié'
+          );
+        }
       }
       overtimeMsg = ` (${salarie.monthlyOvertimeHours}h supp' au mois, majoration légale +25% appliquée)`;
     }
@@ -784,15 +1126,30 @@ window.ProtecPersonnel = {
   },
 
   // Dérogation d'urgence exceptionnelle (Crise majeure / NOVI)
-  forceDerogationRest(game, salarieId) {
+  async forceDerogationRest(game, salarieId) {
     const salarie = game.volunteers.find(v => v.id === salarieId);
     if (!salarie) return;
 
-    if (!confirm(`⚠️ DÉROGATION AU CODE DU TRAVAIL (URGENCE SÉCURITÉ CIVILE) :\n\nFaire reprendre le travail à ${salarie.name} avant la fin de ses 11h de repos obligatoire constitue une dérogation au droit commun du travail (Art. L3131-1).\n\nConséquences :\n- Prime de pénibilité exceptionnelle : -150 €\n- Avertissement Inspection du Travail & Perte de -10 pts de réputation\n- Fatigue accrue du salarié\n\nConfirmez-vous cette décision de crise ?`)) {
+    const confirmed = await window.ProtecDialog.confirm(
+      `Faire reprendre le travail à ${salarie.name} avant la fin de ses 11h de repos obligatoire constitue une dérogation au droit commun du travail (Art. L3131-1).\n\nConséquences :\n• Prime de pénibilité exceptionnelle : -150 €\n• Avertissement Inspection du Travail & Perte de -10 pts de réputation\n• Fatigue accrue du salarié\n\nConfirmez-vous cette décision de crise ?`,
+      'Dérogation au Code du Travail',
+      { isDestructive: true, confirmText: 'Forcer la reprise', cancelText: 'Respecter le repos' }
+    );
+    if (!confirmed) {
       return;
     }
 
     game.resources.money = Math.max(0, game.resources.money - 150);
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        game,
+        -150,
+        `Prime Exceptionnelle Pénibilité Dérogation : ${salarie.name}`,
+        'salaires',
+        'PENIB-' + Date.now(),
+        'Personnel Salarié'
+      );
+    }
     game.resources.reputationScore = Math.max(0, (game.resources.reputationScore || 50) - 10);
     salarie.mandatoryRestUntil = null;
     salarie.status = 'dispo';
@@ -1091,6 +1448,7 @@ window.ProtecPersonnel = {
     const body = document.getElementById('modal-body');
 
     if (!modal || !body) return;
+    if (game) game.currentModalKey = 'job_offer_form';
 
     modal.classList.remove('hidden');
     const isSC = defaultContractType === 'service_civique';
@@ -1211,7 +1569,7 @@ window.ProtecPersonnel = {
             Frais de publication : <strong id="job-cost-display" class="text-slate-900 font-mono">${isSC ? '50 €' : '180 €'}</strong> <span id="job-cost-desc" class="text-[10px] text-slate-400">(${isSC ? 'dossier agrément Agence Service Civique' : 'diffusion nationale'})</span>
           </div>
           <div class="flex items-center gap-2">
-            <button type="button" onclick="window.game.closeModal()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Annuler</button>
+            <button type="button" onclick="window.game.openModule('recrutement', true)" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Annuler</button>
             <button type="submit" id="job-submit-btn" class="px-5 py-2.5 rounded-xl text-xs font-black ${isSC ? 'bg-gradient-to-r from-amber-600 to-orange-600' : 'bg-gradient-to-r from-indigo-600 to-blue-600'} hover:brightness-110 text-white shadow-md transition flex items-center gap-2">
               <i data-lucide="send" class="w-3.5 h-3.5"></i>
               <span>${isSC ? 'Publier la Mission (50 €)' : 'Publier l’Offre de Poste (180 €)'}</span>
@@ -1327,6 +1685,16 @@ window.ProtecPersonnel = {
     if (checkedMissions.length === 0) checkedMissions.push('operationnel');
 
     game.resources.money -= cost;
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        game,
+        -cost,
+        `Publication d'Offre RH : ${title} (${contractType})`,
+        'frais',
+        'RH-PUB-' + Date.now(),
+        isSC ? 'Agence du Service Civique' : 'France Travail / APEC'
+      );
+    }
 
     if (!game.jobOffers) game.jobOffers = [];
     const newOffer = {
@@ -1463,6 +1831,12 @@ window.ProtecPersonnel = {
       interviewReport: null
     };
 
+    // Attribution réaliste de l'adresse et ralliement selon le bassin territorial
+    const baseSt = (game.stations && game.stations[0]) || null;
+    const geo = this.generateVolunteerResidence(game, baseSt, { age: pick.age, skills: newCand.skills });
+    Object.assign(newCand, geo);
+    this.resolveVolunteerRealAddress(newCand, game);
+
     offer.applicantsCount = (offer.applicantsCount || 0) + 1;
     game.candidatures.unshift(newCand);
 
@@ -1567,6 +1941,12 @@ window.ProtecPersonnel = {
       interviewReport: null
     };
 
+    // Attribution réaliste de l'adresse et ralliement selon le bassin territorial
+    const baseSt = (game.stations && game.stations[0]) || null;
+    const geo = this.generateVolunteerResidence(game, baseSt, { age: pick.age, skills: newCand.skills });
+    Object.assign(newCand, geo);
+    this.resolveVolunteerRealAddress(newCand, game);
+
     offer.applicantsCount = (offer.applicantsCount || 0) + 1;
     game.candidatures.unshift(newCand);
 
@@ -1648,6 +2028,12 @@ window.ProtecPersonnel = {
             <p class="text-xs text-slate-500 font-semibold">
               ${isSC ? `Mission visée : <strong>${cand.jobOfferTitle}</strong> (Indemnité antenne 115 €/mois)` : (isSalarie ? `Poste visé : <strong>${cand.jobOfferTitle}</strong> (${cand.monthlySalary} €/mois)` : `Activité civile : <strong>${cand.job || 'Étudiant'}</strong>`)}
             </p>
+            ${cand.adresse ? `
+              <div class="p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-700 flex flex-wrap items-center justify-between gap-1 mt-1">
+                <span>🏠 Domicile : <strong>${cand.adresse}</strong></span>
+                <span class="text-pc-blue font-bold">⏱️ Ralliement : ${cand.temps_ralliement_minutes || 10} min (${cand.distance_base_km || 3} km en ${cand.mode_transport === 'voiture' ? '🚗 Voiture' : (cand.mode_transport === 'moto' ? '🏍️ Moto' : '🚲 Vélo/Transports')})</span>
+              </div>
+            ` : ''}
             ${cand.background ? `<p class="text-[11px] text-slate-600 italic">Parcours : ${cand.background}</p>` : ''}
           </div>
         </div>
@@ -1886,11 +2272,22 @@ window.ProtecPersonnel = {
         dispoType: 'service_civique',
         dispoJours: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
         skills: cand.skills || ['pse1', 'permis_b'],
+        commune: cand.commune,
+        code_postal: cand.code_postal,
+        adresse: cand.adresse,
+        coords_domicile: cand.coords_domicile,
+        distance_base_km: cand.distance_base_km,
+        temps_ralliement_minutes: cand.temps_ralliement_minutes,
+        mode_transport: cand.mode_transport,
+        permis_b: cand.permis_b,
+        permis_c: cand.permis_c,
+        permis_moto: cand.permis_moto,
         missionsCount: 0,
         consecutiveMissions: 0,
         isBurnout: false
       };
 
+      this.ensureVolunteerResidence(newVol, game);
       game.volunteers.push(newVol);
       game.candidatures = game.candidatures.filter(c => c.id !== candId);
 
@@ -1927,6 +2324,17 @@ window.ProtecPersonnel = {
         avatar: cand.avatar || '👔',
         dispoType: 'salarie_permanent',
         dispoJours: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+        skills: cand.skills || ['CE', 'PSE2', 'permis_b'],
+        commune: cand.commune,
+        code_postal: cand.code_postal,
+        adresse: cand.adresse,
+        coords_domicile: cand.coords_domicile,
+        distance_base_km: cand.distance_base_km,
+        temps_ralliement_minutes: cand.temps_ralliement_minutes,
+        mode_transport: cand.mode_transport,
+        permis_b: cand.permis_b,
+        permis_c: cand.permis_c,
+        permis_moto: cand.permis_moto,
         contractMonthlyHours: 151,
         monthlyHoursWorked: 0,
         monthlyOvertimeHours: 0,
@@ -1936,6 +2344,7 @@ window.ProtecPersonnel = {
         vacationHistory: []
       };
 
+      this.ensureVolunteerResidence(newSalarie, game);
       game.volunteers.push(newSalarie);
       game.candidatures = game.candidatures.filter(c => c.id !== candId);
 
@@ -1960,5 +2369,461 @@ window.ProtecPersonnel = {
     game.saveGame();
     game.updateStatsUI();
     game.openModule('recrutement');
+  },
+
+  // ==============================================================================
+  // SYSTÈME DE RECRUTEMENT TERRITORIAL COHÉRENT (BASSIN D'ATTRACTIVITÉ & GÉOGRAPHIE)
+  // ==============================================================================
+
+  // Répertoire officiel de noms de voies typiquement françaises pour adresses crédibles en zone habitée
+  VOIES_FRANCAISES: [
+    'rue de la République', 'avenue de la Gare', 'rue Pasteur', 'boulevard Victor Hugo',
+    'rue Jean Jaurès', 'avenue du Général de Gaulle', 'rue de Verdun', 'rue Saint-Jean',
+    'rue de la Paix', 'avenue Jean Moulin', 'rue Gambetta', 'rue des Fleurs',
+    'place de la Mairie', 'rue Anatole France', 'rue Henri Barbusse', 'avenue de la Liberté',
+    'rue du Maréchal Foch', 'rue Voltaire', 'rue Émile Zola', 'rue de Lorraine',
+    'rue de Bretagne', 'rue Paul Bert', 'place de la République', 'rue des Écoles',
+    'rue Georges Clemenceau', 'rue Saint-Michel', 'avenue de France', 'rue du Commerce',
+    'rue des Lilas', 'rue des Tilleuls', 'boulevard Gambetta', 'rue de l’Église'
+  ],
+
+  // 1. Récupère toutes les antennes connues dans la partie (du joueur et multijoueur)
+  getAllKnownStations(game) {
+    const list = [];
+    const seen = new Set();
+
+    (game.stations || []).forEach(st => {
+      if (st && st.lat && st.lng && !seen.has(st.id)) {
+        seen.add(st.id);
+        list.push({
+          id: st.id,
+          name: st.name || 'Mon Antenne',
+          departmentCode: String(st.departmentCode || game.currentDepartmentCode || '54').trim().toUpperCase(),
+          lat: st.lat,
+          lng: st.lng,
+          city: st.city || 'Nancy',
+          isPlayer: true
+        });
+      }
+    });
+
+    (game.allianceStations || []).forEach(st => {
+      if (st && st.lat && st.lng && !seen.has(st.id)) {
+        seen.add(st.id);
+        list.push({
+          id: st.id,
+          name: st.station_name || st.name || 'Antenne Alliée',
+          departmentCode: String(st.department_code || st.departmentCode || '').trim().toUpperCase(),
+          lat: st.lat,
+          lng: st.lng,
+          city: st.city || '',
+          isPlayer: false
+        });
+      }
+    });
+
+    return list;
+  },
+
+  getAllActiveAntennasInDepartment(game, deptCode) {
+    const cleanDept = String(deptCode || '54').trim().toUpperCase();
+    return this.getAllKnownStations(game).filter(s => s.departmentCode === cleanDept);
+  },
+
+  // 2. Sélectionne les communes éligibles selon les règles du bassin d'attractivité territoriale :
+  // - L'adresse DOIT être dans le département de l'antenne
+  // - L'antenne cible DOIT être l'antenne la plus proche (aucune autre antenne concurrente plus proche)
+  getCatchmentCommunes(game, targetStation) {
+    const station = targetStation || (game.stations && game.stations[0]) || { lat: 48.6921, lng: 6.1844, departmentCode: '54', city: 'Nancy' };
+    const deptCode = String(station.departmentCode || game.currentDepartmentCode || '54').trim().toUpperCase();
+
+    // Catalogue des communes réelles du département
+    let communes = [];
+    if (window.ProtecDepartements && typeof window.ProtecDepartements.getCommunesForDepartment === 'function') {
+      communes = window.ProtecDepartements.getCommunesForDepartment(deptCode);
+    }
+    if (!communes || communes.length === 0) {
+      communes = [{
+        nom: station.city || 'Centre-Ville',
+        cp: `${deptCode.padStart(2, '0')}000`,
+        lat: station.lat || 48.6921,
+        lng: station.lng || 6.1844
+      }];
+    }
+
+    // Récupérer toutes les AUTRES antennes connues
+    const allStations = this.getAllKnownStations(game);
+    const rivalStations = allStations.filter(s => s.id !== station.id && s.lat && s.lng);
+
+    // RÈGLE STRICTE : Pour chaque commune du département, l'antenne cible DOIT être la plus proche
+    const eligibleCommunes = [];
+
+    communes.forEach(commune => {
+      const distToTarget = window.ProtecDepartements 
+        ? window.ProtecDepartements.calculateDistance(commune.lat, commune.lng, station.lat, station.lng)
+        : Math.sqrt(Math.pow(commune.lat - station.lat, 2) + Math.pow(commune.lng - station.lng, 2)) * 111;
+
+      // Vérifier si une AUTRE antenne de la carte est plus proche de cette commune
+      let isAnotherStationCloser = false;
+      for (const rival of rivalStations) {
+        const distToRival = window.ProtecDepartements
+          ? window.ProtecDepartements.calculateDistance(commune.lat, commune.lng, rival.lat, rival.lng)
+          : Math.sqrt(Math.pow(commune.lat - rival.lat, 2) + Math.pow(commune.lng - rival.lng, 2)) * 111;
+
+        if (distToRival < distToTarget) {
+          isAnotherStationCloser = true;
+          break; // Une autre antenne est plus proche : commune non recrutable
+        }
+      }
+
+      if (!isAnotherStationCloser) {
+        eligibleCommunes.push({
+          ...commune,
+          _distKm: distToTarget
+        });
+      }
+    });
+
+    // En cas d'isolation extrême, conserver la commune la plus proche
+    if (eligibleCommunes.length === 0) {
+      let nearest = communes[0];
+      let minDist = 999999;
+      communes.forEach(c => {
+        const d = window.ProtecDepartements
+          ? window.ProtecDepartements.calculateDistance(c.lat, c.lng, station.lat, station.lng)
+          : 0;
+        if (d < minDist) {
+          minDist = d;
+          nearest = { ...c, _distKm: d };
+        }
+      });
+      return [nearest];
+    }
+
+    return eligibleCommunes;
+  },
+
+  // 3. Tirage pondéré d'une commune : les communes proches de l'antenne ont une forte attractivité
+  pickWeightedCommune(eligibleCommunes, station) {
+    if (!eligibleCommunes || eligibleCommunes.length === 0) return null;
+    if (eligibleCommunes.length === 1) return eligibleCommunes[0];
+
+    // Loi de gravité spatiale : poids inverse du carré de la distance
+    let totalWeight = 0;
+    const weightedList = eligibleCommunes.map(c => {
+      const dist = c._distKm !== undefined ? c._distKm : (window.ProtecDepartements ? window.ProtecDepartements.calculateDistance(c.lat, c.lng, station.lat, station.lng) : 5);
+      const weight = 1 / Math.pow(dist + 2.0, 2);
+      totalWeight += weight;
+      return { commune: c, weight: weight };
+    });
+
+    let rnd = Math.random() * totalWeight;
+    for (const item of weightedList) {
+      if (rnd <= item.weight) {
+        return item.commune;
+      }
+      rnd -= item.weight;
+    }
+    return weightedList[0].commune;
+  },
+
+  // 4. Interroge l'API officielle de la Base Adresse Nationale (BAN data.gouv.fr) pour obtenir une vraie adresse
+  async fetchRealAddressFromBAN(lat, lng, communeNom = '', cp = '') {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const url = `https://api-adresse.data.gouv.fr/reverse/?lat=${lat}&lon=${lng}&type=housenumber`;
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data && data.features && data.features.length > 0) {
+        const feat = data.features[0];
+        const p = feat.properties;
+        const coords = feat.geometry?.coordinates; // [lon, lat]
+        if (p && p.label) {
+          return {
+            adresse: p.label,
+            street: p.street || p.name,
+            housenumber: p.housenumber || '',
+            code_postal: p.postcode || cp,
+            commune: p.city || communeNom,
+            lat: coords ? coords[1] : lat,
+            lng: coords ? coords[0] : lng,
+            isOfficialBan: true
+          };
+        }
+      }
+    } catch (e) {
+      // Ignorer silencieusement si hors-ligne ou timeout
+    }
+    return null;
+  },
+
+  // Résout et assigne une vraie adresse cadastrale officielle en tâche de fond
+  resolveVolunteerRealAddress(volunteer, game) {
+    if (!volunteer || !volunteer.coords_domicile) return;
+    const lat = volunteer.coords_domicile.lat;
+    const lng = volunteer.coords_domicile.lng;
+    const commune = volunteer.commune;
+    const cp = volunteer.code_postal;
+
+    this.fetchRealAddressFromBAN(lat, lng, commune, cp).then(ban => {
+      if (ban && ban.adresse) {
+        volunteer.adresse = ban.adresse;
+        volunteer.code_postal = ban.code_postal;
+        volunteer.commune = ban.commune;
+        if (ban.lat && ban.lng) {
+          volunteer.coords_domicile = { lat: ban.lat, lng: ban.lng };
+          const station = (game.stations || []).find(s => s.id === volunteer.stationId) || game.stations?.[0];
+          if (station && window.ProtecDepartements) {
+            volunteer.distance_base_km = parseFloat(window.ProtecDepartements.calculateDistance(ban.lat, ban.lng, station.lat, station.lng).toFixed(2));
+            const speedKmh = volunteer.mode_transport === 'moto' ? 46 : (volunteer.mode_transport === 'voiture' ? 38 : 16);
+            const prepMin = volunteer.mode_transport === 'voiture' ? 4 : 3;
+            volunteer.temps_ralliement_minutes = Math.max(4, Math.round(prepMin + (volunteer.distance_base_km / speedKmh) * 60));
+            volunteer.temps_trajet_base_minutes = volunteer.temps_ralliement_minutes;
+          }
+        }
+        volunteer.isOfficialBanAddress = true;
+        if (typeof game.saveGame === 'function') game.saveGame();
+      }
+    }).catch(() => {});
+  },
+
+  // 5. Génère une adresse résidentielle réaliste dans le département sans antenne concurrente plus proche
+  generateVolunteerResidence(game, station, volunteerProfile = {}) {
+    const baseStation = station || (game.stations && game.stations[0]) || { lat: 48.6921, lng: 6.1844, departmentCode: '54', city: 'Nancy' };
+    
+    // 1. Piocher parmi les communes éligibles du bassin exclusif (Voronoi + département)
+    const eligibleCommunes = this.getCatchmentCommunes(game, baseStation);
+    const commune = this.pickWeightedCommune(eligibleCommunes, baseStation) || {
+      nom: baseStation.city || 'Nancy',
+      cp: `${(baseStation.departmentCode || '54').padStart(2, '0')}000`,
+      lat: baseStation.lat,
+      lng: baseStation.lng
+    };
+
+    // 2. Décalage modéré autour du centre de la commune (80 à 350 mètres en zone résidentielle)
+    const angle = Math.random() * 2 * Math.PI;
+    const distanceMeters = 80 + Math.random() * 270;
+    const earthRadius = 6371000;
+    const deltaLat = (distanceMeters * Math.cos(angle)) / earthRadius * (180 / Math.PI);
+    const deltaLng = (distanceMeters * Math.sin(angle)) / (earthRadius * Math.cos(commune.lat * Math.PI / 180)) * (180 / Math.PI);
+
+    const coordsDomicile = {
+      lat: parseFloat((commune.lat + deltaLat).toFixed(5)),
+      lng: parseFloat((commune.lng + deltaLng).toFixed(5))
+    };
+
+    // 3. Composition de l'adresse de base (numéro + voie crédible de la commune)
+    const numVoie = Math.floor(Math.random() * 118) + 1;
+    const suffixe = Math.random() < 0.08 ? ' bis' : '';
+    const voie = this.VOIES_FRANCAISES[Math.floor(Math.random() * this.VOIES_FRANCAISES.length)];
+    const adresseComplete = `${numVoie}${suffixe} ${voie}, ${commune.cp} ${commune.nom}`;
+
+    // 4. Permis de conduire
+    const age = volunteerProfile.age || 25;
+    const hasExistingPermisB = volunteerProfile.skills?.includes('permis_b') || volunteerProfile.skills?.includes('permis_vpsp') || volunteerProfile.permis_b;
+    const hasPermisB = hasExistingPermisB !== undefined ? !!hasExistingPermisB : (age >= 24 ? Math.random() < 0.88 : (age >= 20 ? Math.random() < 0.76 : Math.random() < 0.45));
+    const hasPermisMoto = volunteerProfile.skills?.includes('permis_moto') ? true : (Math.random() < 0.16);
+    // Permis C (Poids Lourd > 3.5t : FLIT, VALOG, PCM...)
+    const hasExistingPermisC = volunteerProfile.skills?.includes('permis_c') || volunteerProfile.permis_c;
+    const hasPermisC = hasExistingPermisC !== undefined ? !!hasExistingPermisC : (hasPermisB && age >= 21 && Math.random() < 0.18);
+
+    // 5. Mode de transport
+    let modeTransport = 'velo_transports';
+    if (hasPermisB) {
+      modeTransport = 'voiture';
+    } else if (hasPermisMoto) {
+      modeTransport = 'moto';
+    }
+
+    // 6. Distance et temps de ralliement
+    const distanceKm = window.ProtecDepartements
+      ? parseFloat(window.ProtecDepartements.calculateDistance(coordsDomicile.lat, coordsDomicile.lng, baseStation.lat, baseStation.lng).toFixed(2))
+      : 3.5;
+
+    let speedKmh = 38;
+    let prepMinutes = 4;
+    if (modeTransport === 'moto') {
+      speedKmh = 46;
+      prepMinutes = 3;
+    } else if (modeTransport === 'velo_transports') {
+      speedKmh = 16;
+      prepMinutes = 3;
+    }
+
+    const transitMinutes = Math.round((distanceKm / speedKmh) * 60);
+    const tempsRalliementMinutes = Math.max(4, prepMinutes + transitMinutes);
+
+    return {
+      commune: commune.nom,
+      code_postal: commune.cp,
+      adresse: adresseComplete,
+      coords_domicile: coordsDomicile,
+      distance_base_km: distanceKm,
+      temps_ralliement_minutes: tempsRalliementMinutes,
+      mode_transport: modeTransport,
+      permis_b: hasPermisB,
+      permis_c: hasPermisC,
+      permis_moto: hasPermisMoto
+    };
+  },
+
+  // 6. Audit et assainissement complet de tous les bénévoles
+  // Garantit qu'aucun bénévole n'a une autre antenne plus proche de son domicile
+  auditAndSanitizeAllVolunteersResidences(game) {
+    if (!game || !game.volunteers || game.volunteers.length === 0) return;
+    const allStations = this.getAllKnownStations(game);
+    let modified = false;
+
+    game.volunteers.forEach(v => {
+      const station = (game.stations || []).find(s => s.id === v.stationId) || game.stations?.[0];
+      if (!station) return;
+
+      const deptCode = String(station.departmentCode || game.currentDepartmentCode || '54').trim().toUpperCase();
+      let needsReseed = false;
+
+      // Doit avoir une commune et adresse
+      if (!v.adresse || !v.commune || !v.coords_domicile || !v.temps_ralliement_minutes) {
+        needsReseed = true;
+      }
+
+      // Contrôle de proximité : aucune autre antenne ne doit être plus proche
+      if (!needsReseed && v.coords_domicile) {
+        const distToStation = window.ProtecDepartements
+          ? window.ProtecDepartements.calculateDistance(v.coords_domicile.lat, v.coords_domicile.lng, station.lat, station.lng)
+          : (v.distance_base_km || 5);
+
+        // Distance excessive (> 45 km) ou mauvaise antenne
+        if (distToStation > 45) {
+          needsReseed = true;
+        } else {
+          const rivals = allStations.filter(s => s.id !== station.id && s.lat && s.lng);
+          for (const rival of rivals) {
+            const distToRival = window.ProtecDepartements
+              ? window.ProtecDepartements.calculateDistance(v.coords_domicile.lat, v.coords_domicile.lng, rival.lat, rival.lng)
+              : 999;
+            if (distToRival < distToStation) {
+              needsReseed = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (needsReseed) {
+        const newGeo = this.generateVolunteerResidence(game, station, v);
+        v.commune = newGeo.commune;
+        v.code_postal = newGeo.code_postal;
+        v.adresse = newGeo.adresse;
+        v.coords_domicile = newGeo.coords_domicile;
+        v.distance_base_km = newGeo.distance_base_km;
+        v.temps_ralliement_minutes = newGeo.temps_ralliement_minutes;
+        v.temps_trajet_base_minutes = newGeo.temps_ralliement_minutes;
+        v.mode_transport = newGeo.mode_transport;
+        v.permis_b = v.permis_b !== undefined ? v.permis_b : newGeo.permis_b;
+        v.permis_c = v.permis_c !== undefined ? v.permis_c : (newGeo.permis_c !== undefined ? newGeo.permis_c : (v.permis_b && (v.age || 25) >= 21 && Math.random() < 0.18));
+        v.permis_moto = v.permis_moto !== undefined ? v.permis_moto : newGeo.permis_moto;
+        v.possede_permis = !!v.permis_b || !!v.permis_c || !!v.permis_moto;
+        modified = true;
+        this.resolveVolunteerRealAddress(v, game);
+      } else if (!v.isOfficialBanAddress) {
+        this.resolveVolunteerRealAddress(v, game);
+      }
+    });
+
+    if (modified && typeof game.saveGame === 'function') {
+      game.saveGame();
+    }
+  },
+
+  // 7. Vérification de l'éligibilité d'un bénévole pour une urgence réflexe non anticipée
+  isVolunteerEligibleForUrgentMission(volunteer, maxRallyMinutes = 20) {
+    if (!volunteer) return { eligible: false, rallyMinutes: 99, reason: 'Inconnu' };
+
+    if (volunteer.status === 'sdis_caserne' || volunteer.status === 'poste' || volunteer.onBase) {
+      return { eligible: true, rallyMinutes: 0, isOnBase: true };
+    }
+
+    const tRally = volunteer.temps_ralliement_minutes !== undefined ? volunteer.temps_ralliement_minutes : 12;
+
+    if (tRally <= maxRallyMinutes) {
+      return { eligible: true, rallyMinutes: tRally, isOnBase: false };
+    }
+
+    return {
+      eligible: false,
+      rallyMinutes: tRally,
+      isOnBase: false,
+      reason: `Domicile trop éloigné (${tRally} min > ${maxRallyMinutes} min max réflexe)`
+    };
+  },
+
+  // 8. Initialisation / Migration des données territoriales pour un bénévole
+  ensureVolunteerResidence(volunteer, game) {
+    if (!volunteer) return;
+
+    const station = (game.stations || []).find(s => s.id === volunteer.stationId) || game.stations?.[0];
+    if (!station) return;
+
+    const allStations = this.getAllKnownStations(game);
+    const rivals = allStations.filter(s => s.id !== station.id && s.lat && s.lng);
+
+    let needsReseed = false;
+    if (!volunteer.commune || !volunteer.temps_ralliement_minutes || !volunteer.adresse || !volunteer.coords_domicile) {
+      needsReseed = true;
+    } else {
+      const distToStation = window.ProtecDepartements
+        ? window.ProtecDepartements.calculateDistance(volunteer.coords_domicile.lat, volunteer.coords_domicile.lng, station.lat, station.lng)
+        : (volunteer.distance_base_km || 5);
+
+      if (distToStation > 45) {
+        needsReseed = true;
+      } else {
+        for (const rival of rivals) {
+          const distToRival = window.ProtecDepartements
+            ? window.ProtecDepartements.calculateDistance(volunteer.coords_domicile.lat, volunteer.coords_domicile.lng, rival.lat, rival.lng)
+            : 999;
+          if (distToRival < distToStation) {
+            needsReseed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (needsReseed) {
+      const geo = this.generateVolunteerResidence(game, station, volunteer);
+      volunteer.commune = geo.commune;
+      volunteer.code_postal = geo.code_postal;
+      volunteer.adresse = geo.adresse;
+      volunteer.coords_domicile = geo.coords_domicile;
+      volunteer.distance_base_km = geo.distance_base_km;
+      volunteer.temps_ralliement_minutes = geo.temps_ralliement_minutes;
+      volunteer.temps_trajet_base_minutes = geo.temps_ralliement_minutes;
+      volunteer.mode_transport = geo.mode_transport;
+      volunteer.permis_b = volunteer.permis_b !== undefined ? volunteer.permis_b : geo.permis_b;
+      volunteer.permis_c = volunteer.permis_c !== undefined ? volunteer.permis_c : geo.permis_c;
+      volunteer.permis_moto = volunteer.permis_moto !== undefined ? volunteer.permis_moto : geo.permis_moto;
+      volunteer.possede_permis = !!volunteer.permis_b || !!volunteer.permis_c || !!volunteer.permis_moto;
+      this.resolveVolunteerRealAddress(volunteer, game);
+    } else if (!volunteer.isOfficialBanAddress) {
+      this.resolveVolunteerRealAddress(volunteer, game);
+    }
+
+    // Synchroniser avec les compétences si permis
+    volunteer.skills = volunteer.skills || [];
+    if (volunteer.permis_b && !volunteer.skills.includes('permis_b')) {
+      volunteer.skills.push('permis_b');
+    }
+    if (volunteer.permis_c && !volunteer.skills.includes('permis_c')) {
+      volunteer.skills.push('permis_c');
+    }
+    if (volunteer.permis_moto && !volunteer.skills.includes('permis_moto')) {
+      volunteer.skills.push('permis_moto');
+    }
   }
 };
+

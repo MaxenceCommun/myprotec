@@ -135,13 +135,13 @@ window.ProtecPersonnel = {
     },
     {
       code: 'B',
-      title: 'Agrément B - Action Sociale & Soutien Psychologique',
-      category: 'Solidarité & Précarité',
-      cost: 1200,
-      icon: 'heart-handshake',
-      color: 'purple',
-      unlocks: 'Maraudes Sociales, Hébergement d’Urgence, Écoute',
-      desc: 'Habilitation préfectorale DDETS pour l’aide aux sans-abris, distributions de kits et centres d’accueil d’urgence hivernaux.'
+      title: 'Agrément B - Sauvetage en Milieu Aquatique & Nautique',
+      category: 'Secours Aquatique',
+      cost: 2200,
+      icon: 'life-buoy',
+      color: 'sky',
+      unlocks: 'Embarcations, Secours Nautique & Sauvetage Inondations',
+      desc: 'Agrément ministériel de Sécurité Civile autorisant le déploiement d’équipages nautiques, embarcations et sauveteurs aquatiques sur plans d’eau et crues.'
     },
     {
       code: 'C',

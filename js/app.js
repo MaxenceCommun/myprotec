@@ -79,6 +79,12 @@ class ProtecGame {
       campaigns: {
         social: false,
         posters: false
+      },
+      agrements: {
+        D: true, // Agrément D de base actif au démarrage (DPS)
+        A: false,
+        B: false,
+        C: false
       }
     };
 
@@ -243,8 +249,11 @@ class ProtecGame {
         reputationLevel: 1,
         followers: 140,
         alliancePoints: 50,
-        campaigns: { social: false, posters: false }
+        campaigns: { social: false, posters: false },
+        agrements: { D: true, A: false, B: false, C: false }
       };
+    } else if (!this.resources.agrements) {
+      this.resources.agrements = { D: true, A: false, B: false, C: false };
     }
 
     let initialMoney = 15000;
@@ -279,6 +288,39 @@ class ProtecGame {
     } catch (e) {
       console.warn('Getter/setter réactif money:', e);
     }
+  }
+
+  // Autorité Pompiers officielle territorialisée (BSPP à Paris/petite couronne, BMPM à Marseille, SDIS ailleurs)
+  getPompierAuthority(deptCode = null) {
+    const code = String(deptCode || this.stations?.[0]?.departmentCode || this.currentDepartmentCode || '75').trim();
+    if (['75', '92', '93', '94'].includes(code)) {
+      return {
+        code: 'BSPP',
+        label: 'BSPP',
+        shortGarde: 'Garde BSPP',
+        fullLabel: 'Brigade de Sapeurs-Pompiers de Paris',
+        codisLabel: 'COSS / BSPP',
+        caserneLabel: 'Caserne BSPP'
+      };
+    }
+    if (code === '13') {
+      return {
+        code: 'BMPM',
+        label: 'BMPM',
+        shortGarde: 'Garde BMPM',
+        fullLabel: 'Bataillon de Marins-Pompiers de Marseille',
+        codisLabel: 'COSS / BMPM',
+        caserneLabel: 'Caserne BMPM'
+      };
+    }
+    return {
+      code: 'SDIS',
+      label: `SDIS ${code}`.trim(),
+      shortGarde: `Garde SDIS ${code}`.trim(),
+      fullLabel: `Service Départemental d'Incendie et de Secours (${code})`,
+      codisLabel: `CODIS / SDIS ${code}`.trim(),
+      caserneLabel: 'Caserne Pompiers'
+    };
   }
 
   // Initialisation du traçage du temps de présence actif vs veille
@@ -1350,6 +1392,14 @@ class ProtecGame {
     }
     this.initReactiveResources();
     this.cleanPastDevis();
+
+    // Rétrocompatibilité des sauvegardes : Enregistrement des infrastructures hospitalières avec spécialités
+    if (window.ProtecHealthInfrastructures && this.stations && this.stations.length > 0) {
+      this.stations.forEach(st => {
+        const dept = st.departmentCode || this.currentDepartmentCode || '75';
+        window.ProtecHealthInfrastructures.ensureDepartmentInfrastructures(this, dept, st);
+      });
+    }
   }
 
   confirmResetGame() {
@@ -11500,6 +11550,15 @@ class ProtecGame {
     if (this.currentFilter && this.currentFilter !== 'all' && !this.isFeatureUnlocked(this.currentFilter)) {
       this.setFilter('all');
     }
+
+    // 3. Adaptation dynamique des libellés pompiers (BSPP / BMPM / SDIS) selon le département de l'antenne
+    const pompierAuth = this.getPompierAuthority();
+    const filterPompLabel = document.getElementById('label-filter-pompiers');
+    if (filterPompLabel) filterPompLabel.textContent = pompierAuth.shortGarde;
+    const dockPompLabel = document.getElementById('label-dock-pompiers');
+    if (dockPompLabel) dockPompLabel.textContent = pompierAuth.shortGarde;
+    const mobPompLabel = document.getElementById('label-mobile-pompiers');
+    if (mobPompLabel) mobPompLabel.textContent = pompierAuth.shortGarde;
   }
 
   renderModalCategorySubnav(currentModuleKey) {
@@ -17001,10 +17060,12 @@ class ProtecGame {
           window.ProtecSystems.startTransit(this, vpsp, { lat: base.lat, lng: base.lng }, { lat: newSdis.lat, lng: newSdis.lng }, newSdis, 2);
         }
 
-        this.showToast('⚡ SDIS Pompiers (Départ Réflexe Auto)', `Ambulance ${vpsp.name} partie immédiatement vers « ${pick.title} » sans attente !`, 'red');
+        const pompAuth = this.getPompierAuthority(base?.departmentCode);
+        this.showToast(`⚡ ${pompAuth.label} (Départ Réflexe Auto)`, `Ambulance ${vpsp.name} partie immédiatement vers « ${pick.title} » sans attente !`, 'red');
       }
     }
 
+    const pompAuth = this.getPompierAuthority(newSdis.departmentCode);
     this.missions.push(newSdis);
     this.renderMissions();
     this.updateStatsUI();
@@ -17013,20 +17074,20 @@ class ProtecGame {
     if (window.ProtecNotifications) {
       window.ProtecNotifications.notifyCategory(
         'sdis',
-        isAutoSdis ? `⚡ DÉPART IMMÉDIAT CODIS (Auto)` : `🚒 DÉPART POMPIERS IMMÉDIAT (CODIS)`,
-        `${pick.title} : ${isAutoSdis ? 'Équipage en route sous gyrophare.' : 'Équipage VPSP en caserne sonné pour départ réflexe !'}`,
+        isAutoSdis ? `⚡ DÉPART IMMÉDIAT ${pompAuth.codisLabel} (Auto)` : `🚒 DÉPART POMPIERS IMMÉDIAT (${pompAuth.label})`,
+        `${pick.title} : ${isAutoSdis ? 'Équipage en route sous gyrophare.' : `Équipage VPSP en ${pompAuth.caserneLabel} sonné pour départ réflexe !`}`,
         `sdis-${newSdis.id}`
       );
     } else if (window.ProtecIncidents) {
       window.ProtecIncidents.sendSystemNotification(
-        `🚨 DÉPART POMPIERS IMMÉDIAT`,
-        `${pick.title} ! Équipage VPSP en caserne sonné par le CODIS !`,
+        `🚨 DÉPART POMPIERS IMMÉDIAT (${pompAuth.label})`,
+        `${pick.title} ! Équipage VPSP sonné par le ${pompAuth.codisLabel} !`,
         `sdis-${newSdis.id}`
       );
     }
 
     if (!isAutoSdis) {
-      this.showToast('Départ Pompiers (CODIS)', `${pick.title} ! Départ réflexe immédiat requis.`, 'orange');
+      this.showToast(`Départ Pompiers (${pompAuth.codisLabel})`, `${pick.title} ! Départ réflexe immédiat requis.`, 'orange');
     }
   }
 
@@ -17081,8 +17142,8 @@ class ProtecGame {
     } else if (typeLower === 'samu' || titleLower.includes('samu') || catLower.includes('samu') || titleLower.includes('urgence médicale')) {
       managerName = "SAMU Centre 15";
       managerEmoji = "🏥";
-    } else if (typeLower === 'pompiers' || titleLower.includes('sdis') || titleLower.includes('pompier') || catLower.includes('sdis')) {
-      managerName = "CODIS / SDIS";
+    } else if (typeLower === 'pompiers' || titleLower.includes('sdis') || titleLower.includes('pompier') || catLower.includes('sdis') || titleLower.includes('bspp') || titleLower.includes('bmpm')) {
+      managerName = this.getPompierAuthority(mission.departmentCode).codisLabel;
       managerEmoji = "🚒";
     } else if (typeLower === 'prefecture' || mission.isRequisition || titleLower.includes('préfecture') || titleLower.includes('crise')) {
       managerName = "Préfecture (SIDPC)";
@@ -17245,6 +17306,23 @@ class ProtecGame {
     if (volTotal) {
       volTotal.textContent = this.volunteers.length;
       volTotal.title = `${this.volunteers.length} secouriste(s) au total dans l'antenne`;
+    }
+
+    // Agréments de Sécurité Civile actifs affichés dans le Header
+    const statAgrementEl = document.getElementById('stat-reputation-level');
+    if (statAgrementEl) {
+      const activeAgrements = Object.entries(this.resources.agrements || {})
+        .filter(([_, active]) => active)
+        .map(([code]) => code);
+      if (activeAgrements.length > 0) {
+        statAgrementEl.textContent = activeAgrements.join(' · ');
+        statAgrementEl.className = 'font-black text-amber-600';
+        statAgrementEl.title = `${activeAgrements.length} / 4 Agréments de Sécurité Civile actifs : ${activeAgrements.join(', ')}`;
+      } else {
+        statAgrementEl.textContent = 'Aucun';
+        statAgrementEl.className = 'font-bold text-slate-400';
+        statAgrementEl.title = 'Aucun agrément actif - Déposez un dossier en préfecture (pôle Recrutement)';
+      }
     }
 
     const planCount = this.missions.filter(m => m.status === 'planifie' || m.status === 'ongoing' || m.type === 'dps').length;
