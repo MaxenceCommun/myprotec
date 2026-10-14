@@ -8,6 +8,31 @@
  */
 
 window.ProtecConventions = {
+  formatRequestDate(conv) {
+    if (!conv) return '';
+    if (conv.lastRequestDate) return conv.lastRequestDate;
+    if (conv.requestedAt) {
+      try {
+        return new Date(conv.requestedAt).toLocaleDateString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch (e) {
+        return '';
+      }
+    }
+    return new Date().toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  },
+
   renderModal(game) {
     const modal = document.getElementById('main-modal');
     const title = document.getElementById('modal-title');
@@ -224,12 +249,14 @@ window.ProtecConventions = {
                 </div>
               </div>
 
-              ${game.samuConvention?.requestStatus === 'rejected' && game.samuConvention?.rejectReason ? `
-                <div class="p-2 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 space-y-0.5">
-                  <div class="font-bold flex items-center gap-1">
-                    <span>⚠️ Motif de refus de la commission médicale :</span>
-                  </div>
-                  <div>${game.samuConvention.rejectReason}</div>
+              ${game.samuConvention?.requestStatus === 'rejected' ? `
+                <div class="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 flex items-center justify-between" ${game.samuConvention.rejectReason ? `title="${game.samuConvention.rejectReason.replace(/"/g, '&quot;')}"` : ''}>
+                  <span class="font-bold flex items-center gap-1.5">
+                    <span>⚠️ Demande Ajournée</span>
+                  </span>
+                  <span class="font-bold text-rose-700 bg-rose-100/90 px-2 py-0.5 rounded-md border border-rose-200">
+                    Dernière demande le ${this.formatRequestDate(game.samuConvention)}
+                  </span>
                 </div>
               ` : ''}
 
@@ -326,12 +353,14 @@ window.ProtecConventions = {
                 </div>
               </div>
 
-              ${game.sdisConvention?.requestStatus === 'rejected' && game.sdisConvention?.rejectReason ? `
-                <div class="p-2 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 space-y-0.5">
-                  <div class="font-bold flex items-center gap-1">
-                    <span>⚠️ Motif du refus du commandement ${pompiersAuth.shortName} :</span>
-                  </div>
-                  <div>${game.sdisConvention.rejectReason}</div>
+              ${game.sdisConvention?.requestStatus === 'rejected' ? `
+                <div class="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 flex items-center justify-between" ${game.sdisConvention.rejectReason ? `title="${game.sdisConvention.rejectReason.replace(/"/g, '&quot;')}"` : ''}>
+                  <span class="font-bold flex items-center gap-1.5">
+                    <span>⚠️ Demande Ajournée</span>
+                  </span>
+                  <span class="font-bold text-rose-700 bg-rose-100/90 px-2 py-0.5 rounded-md border border-rose-200">
+                    Dernière demande le ${this.formatRequestDate(game.sdisConvention)}
+                  </span>
                 </div>
               ` : ''}
 
@@ -428,12 +457,14 @@ window.ProtecConventions = {
                 </div>
               </div>
 
-              ${cump.requestStatus === 'rejected' && cump.rejectReason ? `
-                <div class="p-2 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 space-y-0.5">
-                  <div class="font-bold flex items-center gap-1">
-                    <span>⚠️ Motif du refus de la CUMP / CHU :</span>
-                  </div>
-                  <div>${cump.rejectReason}</div>
+              ${cump.requestStatus === 'rejected' ? `
+                <div class="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 flex items-center justify-between" ${cump.rejectReason ? `title="${cump.rejectReason.replace(/"/g, '&quot;')}"` : ''}>
+                  <span class="font-bold flex items-center gap-1.5">
+                    <span>⚠️ Demande Ajournée</span>
+                  </span>
+                  <span class="font-bold text-rose-700 bg-rose-100/90 px-2 py-0.5 rounded-md border border-rose-200">
+                    Dernière demande le ${this.formatRequestDate(cump)}
+                  </span>
                 </div>
               ` : ''}
 
@@ -527,12 +558,14 @@ window.ProtecConventions = {
                 </div>
               </div>
 
-              ${game.sncfConvention?.requestStatus === 'rejected' && game.sncfConvention?.rejectReason ? `
-                <div class="p-2 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 space-y-0.5">
-                  <div class="font-bold flex items-center gap-1">
-                    <span>⚠️ Motif du refus de la SNCF :</span>
-                  </div>
-                  <div>${game.sncfConvention.rejectReason}</div>
+              ${game.sncfConvention?.requestStatus === 'rejected' ? `
+                <div class="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 flex items-center justify-between" ${game.sncfConvention.rejectReason ? `title="${game.sncfConvention.rejectReason.replace(/"/g, '&quot;')}"` : ''}>
+                  <span class="font-bold flex items-center gap-1.5">
+                    <span>⚠️ Demande Ajournée</span>
+                  </span>
+                  <span class="font-bold text-rose-700 bg-rose-100/90 px-2 py-0.5 rounded-md border border-rose-200">
+                    Dernière demande le ${this.formatRequestDate(game.sncfConvention)}
+                  </span>
                 </div>
               ` : ''}
 
@@ -1473,6 +1506,7 @@ if (numVehicles > 0 && totalCrew > 0) {
     game[convKey].reviewTimer = initialTimer;
     game[convKey].initialTimer = initialTimer;
     game[convKey].requestedAt = Date.now();
+    game[convKey].lastRequestDate = this.formatRequestDate({ requestedAt: Date.now() });
     game[convKey].rejectReason = null;
 
     const pompiersAuth = (typeof game.getPompiersAuthority === 'function')
@@ -1653,17 +1687,20 @@ if (numVehicles > 0 && totalCrew > 0) {
     } else {
       conv.requestStatus = 'rejected';
       conv.rejectReason = reasons.join(' • ');
+      if (!conv.lastRequestDate) {
+        conv.lastRequestDate = this.formatRequestDate(conv);
+      }
 
       game.showToast(
         `Demande ${titlePartner} Ajournée ⚠️`,
-        `La commission a ajourné votre demande : ${reasons[0] || 'Critères d’implantation insuffisants.'}`,
+        `La commission a ajourné votre demande (Dernière demande le ${conv.lastRequestDate}). Le dossier reste ajourné jusqu'à votre prochain renouvellement.`,
         'red'
       );
 
       if (window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
         window.ProtecNotifications.recordNotification({
           title: `⚠️ Demande ${titlePartner} Ajournée`,
-          message: `Votre antenne est encore trop récente ou incomplète pour ce partenaire. Motif : ${conv.rejectReason}. Développez votre antenne avant de renouveler la demande.`,
+          message: `La demande déposée le ${conv.lastRequestDate} a été ajournée. Elle reste ajournée jusqu'à ce que vous la renouveliez depuis le module Conventions.`,
           category: 'conventions',
           level: 'alert'
         });

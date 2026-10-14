@@ -646,6 +646,13 @@ html, body {
   max-height: min(88vh, 850px);
 }
 
+@media (min-width: 769px) {
+  #context-drawer {
+    width: clamp(540px, 42vw, 700px) !important;
+    max-width: calc(100vw - 2rem) !important;
+  }
+}
+
 @media (max-width: 768px) {
   #context-drawer {
     width: 100% !important;
@@ -734,12 +741,22 @@ html, body {
     left: 0.75rem !important;
   }
 
-  /* Toasts de notifications mobiles sans déborder */
+  /* Toasts de notifications - toujours positionnés à gauche pour ne jamais masquer le menu latéral droit */
   #toast-container {
-    top: 5.5rem !important;
-    left: 0.75rem !important;
-    right: 0.75rem !important;
-    max-width: calc(100vw - 1.5rem) !important;
+    top: 5rem !important;
+    left: 1.25rem !important;
+    right: auto !important;
+    max-width: min(400px, calc(100vw - 2.5rem)) !important;
+    z-index: 95 !important;
+  }
+
+  @media (max-width: 640px) {
+    #toast-container {
+      top: 4.5rem !important;
+      left: 0.75rem !important;
+      right: 0.75rem !important;
+      max-width: calc(100vw - 1.5rem) !important;
+    }
   }
 
   .dock-container {

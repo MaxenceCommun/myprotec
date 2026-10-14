@@ -55,27 +55,44 @@ window.ProtecNotifications = {
     {
       title: 'Alerte 15 : Départ Réflexe VPSP Requis',
       body: 'Le SAMU 15 demande une ambulance de votre antenne pour un malaise grave sur la voie publique. Reconnectez-vous vite pour engager votre équipage !',
-      tag: 'reengage-samu'
+      tag: 'reengage-samu',
+      condition: (game) => Boolean(game && game.samuConvention?.signed && game.samuGarde?.active && Array.isArray(game.missions) && game.missions.some(m => m.type === 'samu' && ['declenche', 'prealerte', 'ongoing'].includes(m.status)))
     },
     {
-      title: 'Nouveau Devis : Sollicitation DPS Urgente',
-      body: 'La Mairie et le Comité des Fêtes vous ont transmis un devis prioritaire pour un festival ce week-end. Répondez avant clôture des candidatures !',
-      tag: 'reengage-dps'
+      title: 'Nouveau Devis : Sollicitation DPS en Attente',
+      body: 'Des organisateurs d’événements ont transmis des devis DPS en attente de validation. Répondez avant la clôture !',
+      tag: 'reengage-dps',
+      condition: (game) => Boolean(game && Array.isArray(game.dpsQuotes) && game.dpsQuotes.some(q => q.status === 'pending' || q.status === 'received' || q.status === 'negotiation'))
+    },
+    {
+      title: 'Recrutement : Candidature(s) en Attente',
+      body: 'Des candidats bénévoles attendent leur entretien à l’antenne. Renforcez vos équipes opérationnelles !',
+      tag: 'reengage-rh',
+      condition: (game) => Boolean(game && Array.isArray(game.candidatures) && game.candidatures.filter(c => c.type !== 'salarie').length > 0)
     },
     {
       title: 'Recrutement : Nouvelle Candidature Reçue',
-      body: 'Un bénévole qualifié PSE2 vient de déposer sa candidature à l’antenne. Faites-lui passer son entretien pour renforcer vos équipes !',
-      tag: 'reengage-rh'
+      body: 'Un bénévole qualifié vient de déposer sa candidature à l’antenne. Faites-lui passer son entretien pour renforcer vos équipes !',
+      tag: 'reengage-rh-new',
+      condition: (game) => Boolean(game && (!game.candidatures || game.candidatures.filter(c => c.type !== 'salarie').length < 4)),
+      action: (game) => {
+        if (game && typeof game.generateRandomCandidature === 'function') {
+          game.generateRandomCandidature();
+          if (typeof game.saveGame === 'function') game.saveGame();
+        }
+      }
     },
     {
       title: 'Bulletin Préfecture : Risque Météo Majeur',
       body: 'Météo-France place votre département en vigilance accrue. Les services de l’État pré-alertent votre antenne de Protection Civile !',
-      tag: 'reengage-meteo'
+      tag: 'reengage-meteo',
+      condition: (game) => Boolean(game && (typeof game.isFeatureUnlocked === 'function' ? game.isFeatureUnlocked('meteo') : true) && game.weather && ['jaune', 'orange', 'rouge'].includes((game.weather.vigilanceLevel || '').toLowerCase()))
     },
     {
-      title: 'Subventions & Dotations Disponibles',
-      body: 'Vos récompenses administratives et dotations de mécénat sont prêtes à être récupérées à l’antenne. Ne passez pas à côté !',
-      tag: 'reengage-reward'
+      title: 'Trésorerie & Bilan d’Activité',
+      body: 'Votre antenne est prête pour une nouvelle période opérationnelle. Consultez votre trésorerie et vos dotations !',
+      tag: 'reengage-reward',
+      condition: (game) => Boolean(game && game.resources && game.resources.money !== undefined)
     }
   ],
 
@@ -418,6 +435,16 @@ window.ProtecNotifications = {
     if (target.type === 'mission' && target.id) {
       game.openMissionDetails(target.id);
     } else if (target.type === 'module' && target.id) {
+      if (target.id === 'recrutement') {
+        game.showCandidaturesView = true;
+        // Si aucune candidature bénévole n'est présente alors qu'une notification de candidature est cliquée,
+        // on honore la notification en générant immédiatement un candidat qualifié !
+        if (!game.candidatures || game.candidatures.filter(c => c.type !== 'salarie').length === 0) {
+          if (typeof game.generateRandomCandidature === 'function') {
+            game.generateRandomCandidature();
+          }
+        }
+      }
       game.openModule(target.id);
     } else if (target.type === 'station' && target.id) {
       game.openStationDetails(target.id);
@@ -493,8 +520,14 @@ window.ProtecNotifications = {
   // Notification d'un événement selon sa catégorie
   notifyCategory(category, title, body, tag = 'alert') {
     if (!this.config.enabled) return;
-    if (category === 'samu' && !this.config.samuAlerts) return;
-    if (category === 'sdis' && !this.config.sdisAlerts) return;
+    if (category === 'samu') {
+      if (!this.config.samuAlerts) return;
+      if (!window.game || !window.game.samuConvention || !window.game.samuConvention.signed) return;
+    }
+    if (category === 'sdis') {
+      if (!this.config.sdisAlerts) return;
+      if (!window.game || !window.game.sdisGarde || !window.game.sdisGarde.active) return;
+    }
     if (category === 'dps' && !this.config.dpsAlerts) return;
     if (category === 'rh' && !this.config.rhAlerts) return;
     if ((category === 'weather' || category === 'meteo') && !this.config.weatherAlerts) return;
@@ -509,8 +542,21 @@ window.ProtecNotifications = {
     this.clearInactivityTimer();
 
     this.inactivityTimer = setTimeout(() => {
-      const pick = this.reengagementScenarios[Math.floor(Math.random() * this.reengagementScenarios.length)];
-      this.sendPushNotification(pick.title, pick.body, { tag: pick.tag });
+      const game = window.game;
+      const eligible = this.reengagementScenarios.filter(s => {
+        if (typeof s.condition === 'function') {
+          return s.condition(game);
+        }
+        return true;
+      });
+      if (eligible.length === 0) return;
+      const pick = eligible[Math.floor(Math.random() * eligible.length)];
+      if (pick) {
+        if (typeof pick.action === 'function') {
+          pick.action(game);
+        }
+        this.sendPushNotification(pick.title, pick.body, { tag: pick.tag });
+      }
     }, this.inactivityIntervalSec * 1000);
   },
 

@@ -189,6 +189,11 @@ window.ProtecAPC = {
             currentVotes: data.current_votes || {},
             debts: data.debts || {},
             solidarityFund: data.solidarity_fund || [],
+            crisisAutonomousRequisition: data.crisis_autonomous_requisition || data.crisisAutonomousRequisition || {
+              title: "Engagement Autonome Inter-Antennes en Temps de Crise",
+              description: "Autoriser l'engagement en autonomie d'un engin avec équipage complet d'un confrère sans validation préalable, exclusivement lors des crises majeures.",
+              votes: {}
+            },
             lastProcessedDay: data.last_processed_day || null,
             updatedAt: data.updated_at
           };
@@ -207,6 +212,13 @@ window.ProtecAPC = {
 
       if (localAPC) {
         apc = localAPC;
+        if (!apc.crisisAutonomousRequisition) {
+          apc.crisisAutonomousRequisition = {
+            title: "Engagement Autonome Inter-Antennes en Temps de Crise",
+            description: "Autoriser l'engagement en autonomie d'un engin avec équipage complet d'un confrère sans validation préalable, exclusivement lors des crises majeures.",
+            votes: {}
+          };
+        }
       } else {
         // Création initiale : le premier joueur en devient automatiquement le Président
         const defaultPresidentId = game.player?.id || 'usr_player';
@@ -241,6 +253,11 @@ window.ProtecAPC = {
           currentVotes: {},
           debts: {}, // { playerId: amount }
           solidarityFund: [],
+          crisisAutonomousRequisition: {
+            title: "Engagement Autonome Inter-Antennes en Temps de Crise",
+            description: "Autoriser l'engagement en autonomie d'un engin avec équipage complet d'un confrère sans validation préalable, exclusivement lors des crises majeures.",
+            votes: {}
+          },
           lastProcessedDay: null,
           updatedAt: new Date().toISOString()
         };
@@ -319,29 +336,38 @@ window.ProtecAPC = {
 
     if (window.ProtecSupabase && window.ProtecSupabase.client) {
       try {
-        await window.ProtecSupabase.client
+        const payload = {
+          department_code: apc.departmentCode,
+          name: apc.name,
+          president_id: apc.presidentId,
+          president_name: apc.presidentName,
+          treasurer_id: apc.treasurerId,
+          treasurer_name: apc.treasurerName,
+          secretary_id: apc.secretaryId,
+          secretary_name: apc.secretaryName,
+          treasury: apc.treasury,
+          daily_contribution: apc.dailyContribution,
+          astreinte_bonus: apc.astreinteBonus,
+          conventions: apc.conventions,
+          mutual_equipment: apc.mutualEquipment,
+          election_history: apc.electionHistory,
+          current_votes: apc.currentVotes,
+          debts: apc.debts,
+          solidarity_fund: apc.solidarityFund,
+          crisis_autonomous_requisition: apc.crisisAutonomousRequisition,
+          last_processed_day: apc.lastProcessedDay,
+          updated_at: new Date().toISOString()
+        };
+        const res = await window.ProtecSupabase.client
           .from('apc_departments')
-          .upsert({
-            department_code: apc.departmentCode,
-            name: apc.name,
-            president_id: apc.presidentId,
-            president_name: apc.presidentName,
-            treasurer_id: apc.treasurerId,
-            treasurer_name: apc.treasurerName,
-            secretary_id: apc.secretaryId,
-            secretary_name: apc.secretaryName,
-            treasury: apc.treasury,
-            daily_contribution: apc.dailyContribution,
-            astreinte_bonus: apc.astreinteBonus,
-            conventions: apc.conventions,
-            mutual_equipment: apc.mutualEquipment,
-            election_history: apc.electionHistory,
-            current_votes: apc.currentVotes,
-            debts: apc.debts,
-            solidarity_fund: apc.solidarityFund,
-            last_processed_day: apc.lastProcessedDay,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'department_code' });
+          .upsert(payload, { onConflict: 'department_code' });
+        if (res && res.error) {
+          // Si la colonne n'existe pas encore dans Supabase, retirer le champ pour persister le reste sans erreur
+          delete payload.crisis_autonomous_requisition;
+          await window.ProtecSupabase.client
+            .from('apc_departments')
+            .upsert(payload, { onConflict: 'department_code' });
+        }
       } catch (e) {
         console.warn('Avertissement upsert APC Supabase:', e);
       }
@@ -729,6 +755,86 @@ window.ProtecAPC = {
   },
 
   // =========================================================================
+  // DÉCISIONS DE DIRECTION DU DÉPARTEMENT (DÉLIBÉRATIONS & VOTES)
+  // =========================================================================
+
+  // Récupère l'état d'adoption de la décision d'engagement autonome en crise
+  getCrisisAutonomousStatus(apc, game) {
+    const defaultRes = { isAdopted: false, pourCount: 0, contreCount: 0, totalVotes: 0, totalPlayers: 1, isSolo: true, myVote: null };
+    if (!apc) return defaultRes;
+
+    const dec = apc.crisisAutonomousRequisition || {};
+    const votes = dec.votes || {};
+    const entries = Object.entries(votes);
+
+    let pourCount = 0;
+    let contreCount = 0;
+    entries.forEach(([pid, vObj]) => {
+      const val = typeof vObj === 'string' ? vObj : vObj?.vote;
+      if (val === 'pour') pourCount++;
+      else if (val === 'contre') contreCount++;
+    });
+
+    const myId = game?.player?.id || 'usr_player';
+    const myVoteObj = votes[myId];
+    const myVote = typeof myVoteObj === 'string' ? myVoteObj : myVoteObj?.vote || null;
+
+    const totalPlayers = (this.deptPlayersCache && this.deptPlayersCache.length) || 1;
+    const isSolo = totalPlayers <= 1;
+
+    // En solo, le vote du joueur fait loi. À plusieurs, majorité des suffrages exprimés (pour > contre)
+    let isAdopted = false;
+    if (isSolo) {
+      isAdopted = (myVote === 'pour');
+    } else {
+      isAdopted = (pourCount > contreCount);
+    }
+
+    return {
+      isAdopted,
+      pourCount,
+      contreCount,
+      totalVotes: pourCount + contreCount,
+      totalPlayers,
+      isSolo,
+      myVote
+    };
+  },
+
+  // Voter pour ou contre la décision d'engagement autonome en crise
+  async voteCrisisAutonomousRequisition(choice, game) {
+    if (!['pour', 'contre'].includes(choice)) return;
+    const apc = await this.getAPCData(game);
+    const playerId = game.player?.id || 'usr_player';
+    const playerName = game.player?.name || 'Directeur';
+
+    if (!apc.crisisAutonomousRequisition) {
+      apc.crisisAutonomousRequisition = {
+        title: "Engagement Autonome Inter-Antennes en Temps de Crise",
+        description: "Autoriser l'engagement en autonomie d'un engin avec équipage complet d'un confrère sans validation préalable, exclusivement lors des crises majeures.",
+        votes: {}
+      };
+    }
+    if (!apc.crisisAutonomousRequisition.votes) apc.crisisAutonomousRequisition.votes = {};
+
+    apc.crisisAutonomousRequisition.votes[playerId] = {
+      vote: choice,
+      voterName: playerName,
+      stationName: game.stations?.[0]?.name || 'Antenne Locale',
+      votedAt: new Date().toISOString()
+    };
+
+    await this.saveAPC(apc);
+    const label = choice === 'pour' ? 'POUR (Autonomie autorisée en crise)' : 'CONTRE (Accord individuel obligatoire)';
+    game.showToast(
+      'Suffrage Enregistré 🗳️',
+      `Votre vote « ${label} » a été consigné au registre des décisions de direction de l'APC.`,
+      choice === 'pour' ? 'green' : 'orange'
+    );
+    this.renderModal(game);
+  },
+
+  // =========================================================================
   // RENDU INTERFACE UTILISATEUR & MODALE APC
   // =========================================================================
 
@@ -801,7 +907,7 @@ window.ProtecAPC = {
             ${schedule.isVotingDay ? '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>' : ''}
           </button>
           <button onclick="window.ProtecAPC.switchTab('politique', window.game)" class="${subnavClass('politique')}">
-            <span>📜 Conventions & Politique</span>
+            <span>📜 Conventions & Décisions</span>
           </button>
           <button onclick="window.ProtecAPC.switchTab('materiel', window.game)" class="${subnavClass('materiel')}">
             <span>🚛 Parc Matériel d’Appui</span>
@@ -1060,49 +1166,175 @@ window.ProtecAPC = {
     `;
   },
 
-  // 3. Onglet Politique & Conventions-Cadres
+  // 3. Onglet Conventions-Cadres & Décisions de Direction
   renderTabPolicy(game, apc, isPresident) {
     const activeConventions = apc.conventions || [];
+    const status = this.getCrisisAutonomousStatus(apc, game);
+    const totalVotes = status.totalVotes || 0;
+    const pourPct = totalVotes > 0 ? Math.round((status.pourCount / totalVotes) * 100) : 0;
+    const contrePct = totalVotes > 0 ? Math.round((status.contreCount / totalVotes) * 100) : 0;
 
     return `
-      <div class="space-y-4">
-        <div class="p-4 rounded-2xl bg-purple-50 border border-purple-200 text-purple-950 space-y-1">
-          <h5 class="text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-            <span>📜 Conventions-Cadres Départementales (Effet de Réseau)</span>
-          </h5>
-          <p class="text-[11px] text-purple-800">
-            Financées par la trésorerie commune de l'APC, les conventions-cadres renforcent les liens avec l'État et apportent des <strong>multiplicateurs financiers et de réputation</strong> à toutes les antennes non endettées du département.
-          </p>
+      <div class="space-y-5">
+        <!-- 1. DÉCISIONS DE DIRECTION DÉPARTEMENTALE & DÉLIBÉRATIONS DU CONSEIL -->
+        <div class="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center text-xl shrink-0">
+                🗳️
+              </div>
+              <div>
+                <h5 class="text-xs font-black uppercase tracking-wider text-slate-800">
+                  Décisions de Direction Départementale • Délibérations du Conseil
+                </h5>
+                <p class="text-[11px] text-slate-500">
+                  Suffrages des directeurs d'antenne du département (${status.totalPlayers} antenne(s) avec droit de vote • 1 antenne = 1 voix)
+                </p>
+              </div>
+            </div>
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+              status.isAdopted 
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                : 'bg-rose-100 text-rose-800 border border-rose-300'
+            }">
+              ${status.isAdopted ? '✓ Décision Adoptée & En Vigueur' : '✕ Décision Non Adoptée'}
+            </span>
+          </div>
+
+          <!-- CARTE DÉLIBÉRATION ENGAGEMENT EN CRISE -->
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3.5">
+            <div class="space-y-1.5">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-600 text-white uppercase tracking-wider">
+                  Crises Majeures Uniquement
+                </span>
+                <strong class="text-xs sm:text-sm font-black text-slate-900">
+                  Engagement en autonomie d'un engin avec personnel d'un autre joueur sans validation
+                </strong>
+              </div>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                <strong>Objet du vote :</strong> Décider si une antenne départementale confrontée à une <strong>situation de crise majeure</strong> (inondations, catastrophes naturelles, plan NOVI, tempêtes) est autorisée à <strong>engager d'office et en autonomie un véhicule avec son personnel complet d'une autre antenne sans devoir attendre sa validation manuelle</strong>.
+              </p>
+              <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-start sm:items-center gap-2">
+                <span class="text-base shrink-0">⚠️</span>
+                <span>Règle de sauvegarde : Cette mesure d'exception s'applique <strong>strictement et uniquement lors des crises</strong>. Sur les DPS réguliers, l'accord individuel du directeur reste formellement obligatoire.</span>
+              </div>
+            </div>
+
+            <!-- JAUGE DE VOTE DES DIRECTEURS -->
+            <div class="space-y-1.5 pt-2">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-700">
+                <span class="text-emerald-700 flex items-center gap-1">
+                  <span>👍 Pour (Favorable à l'autonomie) :</span>
+                  <strong>${status.pourCount} voix ${totalVotes > 0 ? `(${pourPct}%)` : ''}</strong>
+                </span>
+                <span class="text-rose-700 flex items-center gap-1">
+                  <span>👎 Contre (Accord préalable obligatoire) :</span>
+                  <strong>${status.contreCount} voix ${totalVotes > 0 ? `(${contrePct}%)` : ''}</strong>
+                </span>
+              </div>
+              <div class="w-full h-3 rounded-full bg-slate-200 overflow-hidden flex">
+                <div class="bg-emerald-500 transition-all duration-300" style="width: ${totalVotes > 0 ? pourPct : 0}%"></div>
+                <div class="bg-rose-500 transition-all duration-300" style="width: ${totalVotes > 0 ? contrePct : 0}%"></div>
+              </div>
+              <div class="text-[10px] text-slate-400 flex items-center justify-between flex-wrap gap-1">
+                <span>${status.totalVotes} vote(s) exprimé(s) / ${status.totalPlayers} directeur(s)</span>
+                <span class="font-bold ${status.isAdopted ? 'text-emerald-700' : 'text-slate-500'}">
+                  ${status.isAdopted 
+                    ? '🟢 Majorité Pour : Réquisition autonome d\'urgence autorisée sur les crises' 
+                    : '🔴 Majorité non atteinte : Accord préalable individuel maintenu'}
+                </span>
+              </div>
+            </div>
+
+            <!-- BOUTONS D'ACTION POUR VOTER -->
+            <div class="pt-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div class="text-xs">
+                <span class="font-bold text-slate-700">Votre suffrage :</span>
+                ${status.myVote === 'pour' ? `
+                  <span class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-black ml-1.5 inline-flex items-center gap-1">
+                    <span>✓</span> <span>Vous avez voté POUR</span>
+                  </span>
+                ` : (status.myVote === 'contre' ? `
+                  <span class="px-2.5 py-1 rounded-lg bg-rose-100 text-rose-800 font-black ml-1.5 inline-flex items-center gap-1">
+                    <span>✕</span> <span>Vous avez voté CONTRE</span>
+                  </span>
+                ` : `
+                  <span class="px-2.5 py-1 rounded-lg bg-slate-200 text-slate-600 font-bold ml-1.5">
+                    Aucun vote exprimé
+                  </span>
+                `)}
+              </div>
+
+              <div class="flex items-center gap-2 w-full sm:w-auto">
+                <button 
+                  type="button" 
+                  onclick="window.ProtecAPC.voteCrisisAutonomousRequisition('pour', window.game)" 
+                  class="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                    status.myVote === 'pour'
+                      ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-300'
+                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs active:scale-95'
+                  }">
+                  <span>👍</span>
+                  <span>Voter POUR</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onclick="window.ProtecAPC.voteCrisisAutonomousRequisition('contre', window.game)" 
+                  class="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                    status.myVote === 'contre'
+                      ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-300'
+                      : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs active:scale-95'
+                  }">
+                  <span>👎</span>
+                  <span>Voter CONTRE</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-3">
-          ${this.CONVENTIONS_APC.map(c => {
-            const isUnlocked = activeConventions.includes(c.id);
+        <!-- 2. CONVENTIONS-CADRES DÉPARTEMENTALES -->
+        <div class="space-y-3">
+          <div class="p-4 rounded-2xl bg-purple-50 border border-purple-200 text-purple-950 space-y-1">
+            <h5 class="text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+              <span>📜 Conventions-Cadres Départementales (Effet de Réseau)</span>
+            </h5>
+            <p class="text-[11px] text-purple-800">
+              Financées par la trésorerie commune de l'APC, les conventions-cadres renforcent les liens avec l'État et apportent des <strong>multiplicateurs financiers et de réputation</strong> à toutes les antennes non endettées du département.
+            </p>
+          </div>
 
-            return `
-              <div class="p-4 rounded-2xl bg-white border ${isUnlocked ? 'border-purple-300 ring-2 ring-purple-100' : 'border-slate-200'} shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div class="space-y-1 max-w-xl">
-                  <div class="flex items-center gap-2">
-                    <h6 class="text-xs font-black text-slate-900">${c.name}</h6>
-                    ${isUnlocked ? '<span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-purple-100 text-purple-800">✓ En Vigueur</span>' : ''}
+          <div class="grid grid-cols-1 gap-3">
+            ${this.CONVENTIONS_APC.map(c => {
+              const isUnlocked = activeConventions.includes(c.id);
+
+              return `
+                <div class="p-4 rounded-2xl bg-white border ${isUnlocked ? 'border-purple-300 ring-2 ring-purple-100' : 'border-slate-200'} shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div class="space-y-1 max-w-xl">
+                    <div class="flex items-center gap-2">
+                      <h6 class="text-xs font-black text-slate-900">${c.name}</h6>
+                      ${isUnlocked ? '<span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-purple-100 text-purple-800">✓ En Vigueur</span>' : ''}
+                    </div>
+                    <p class="text-[11px] text-slate-500">${c.description}</p>
+                    <span class="text-[11px] font-bold text-emerald-700 block">${c.effect}</span>
                   </div>
-                  <p class="text-[11px] text-slate-500">${c.description}</p>
-                  <span class="text-[11px] font-bold text-emerald-700 block">${c.effect}</span>
+                  <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                    ${isUnlocked ? `
+                      <span class="px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 font-extrabold text-xs">Active</span>
+                    ` : (isPresident ? `
+                      <button onclick="window.ProtecAPC.unlockConvention('${c.id}', window.game)" class="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs shadow-md transition cursor-pointer">
+                        Signer (${c.cost.toLocaleString('fr-FR')} €)
+                      </button>
+                    ` : `
+                      <span class="text-[11px] text-slate-400 font-bold">Réservé au Président (${c.cost.toLocaleString('fr-FR')} €)</span>
+                    `)}
+                  </div>
                 </div>
-                <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
-                  ${isUnlocked ? `
-                    <span class="px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 font-extrabold text-xs">Active</span>
-                  ` : (isPresident ? `
-                    <button onclick="window.ProtecAPC.unlockConvention('${c.id}', window.game)" class="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs shadow-md transition cursor-pointer">
-                      Signer (${c.cost.toLocaleString('fr-FR')} €)
-                    </button>
-                  ` : `
-                    <span class="text-[11px] text-slate-400 font-bold">Réservé au Président (${c.cost.toLocaleString('fr-FR')} €)</span>
-                  `)}
-                </div>
-              </div>
-            `;
-          }).join('')}
+              `;
+            }).join('')}
+          </div>
         </div>
       </div>
     `;

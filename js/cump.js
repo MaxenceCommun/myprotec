@@ -460,7 +460,7 @@ window.ProtecCump = {
                   : conv.requestStatus === 'accepted'
                     ? 'Le SAMU 15 a validé votre dossier et vous invite à parapher la convention CUMP !'
                     : conv.requestStatus === 'rejected'
-                      ? `Demande ajournée par la direction : ${conv.rejectReason || 'Implantation insuffisante.'}`
+                      ? `Demande ajournée (Dernière demande le ${window.ProtecConventions ? window.ProtecConventions.formatRequestDate(conv) : (conv.lastRequestDate || '')}).`
                       : 'La CUMP ne sollicite que les antennes puissantes et bien implantées pour armer l\'astreinte permanente.'}
               </p>
               ${conv.requestStatus === 'instruction' ? `

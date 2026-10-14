@@ -873,6 +873,10 @@ window.ProtecQuickDispatch = {
   // Bascule de la garde SAMU 15
   toggleSamuGarde(game) {
     if (!game) game = window.game;
+    if (!game.samuConvention || !game.samuConvention.signed) {
+      game.showToast('Convention SAMU Requise ⚠️', 'Vous devez d’abord signer la Convention Cadre avec le SAMU 15 dans le module SAMU ou Conventions.', 'orange');
+      return;
+    }
     if (!game.samuGarde) game.samuGarde = { active: false };
     game.samuGarde.active = !game.samuGarde.active;
     game.showToast(

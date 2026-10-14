@@ -205,6 +205,123 @@ window.ProtecCommunication = {
         ]
       };
     }
+
+    if (!Array.isArray(game.photoFolders)) {
+      game.photoFolders = [];
+    }
+  },
+
+  // Création d'un dossier photo (sans fichiers réels) issu d'un dispositif ou d'une formation
+  createPhotoFolder(game, data) {
+    this.injectState(game);
+    const folder = {
+      id: 'folder_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      title: data.title || 'Reportage d’Antenne',
+      sourceType: data.sourceType || (data.isFormation ? 'formation' : 'mission'),
+      isFormation: !!data.isFormation,
+      photographerNames: data.photographerNames || 'Équipe Communication',
+      createdTimestamp: Date.now(),
+      createdDayIndex: game.currentDayIndex !== undefined ? game.currentDayIndex : 0,
+      published: false,
+      publishedTimestamp: null,
+      baseReputationGain: data.baseReputationGain || (data.isFormation ? 15 : 20),
+      baseVisibilityGain: data.baseVisibilityGain || (data.isFormation ? 20 : 25),
+      baseLikes: data.baseLikes || (data.isFormation ? 50 : 65),
+      baseShares: data.baseShares || (data.isFormation ? 10 : 15)
+    };
+    game.photoFolders.unshift(folder);
+    if (game.photoFolders.length > 50) game.photoFolders.pop();
+    return folder;
+  },
+
+  // Calcul interne de l'efficacité du dossier photo lors de la publication
+  // - Les photos de formation ne perdent JAMAIS d'efficacité (toujours 100%)
+  // - Les photos de mission perdent progressivement d'impact avec le temps
+  // - L'impact ne descend jamais à zéro mais plafonne à un minimum de 60% de l'impact initial
+  // - Strictement aucune mention ni décompte n'est affiché au joueur
+  calculateFolderEffectiveness(game, folder) {
+    if (!folder) return 1.0;
+    if (folder.isFormation) return 1.0;
+
+    const currentDay = game.currentDayIndex !== undefined ? game.currentDayIndex : 0;
+    const createdDay = folder.createdDayIndex !== undefined ? folder.createdDayIndex : currentDay;
+    const daysElapsed = Math.max(0, currentDay - createdDay);
+
+    // Décroissance progressive basée sur le temps in-game écoulé (ou temps réel si même jour)
+    const hoursElapsed = Math.max(0, (Date.now() - (folder.createdTimestamp || Date.now())) / 3600000);
+    const effectiveDays = Math.max(daysElapsed, hoursElapsed / 2);
+
+    const decay = effectiveDays * 0.10;
+    return Math.max(0.60, 1.0 - decay);
+  },
+
+  // Publication d'un dossier photo sur les réseaux sociaux
+  publishPhotoFolder(game, folderId) {
+    this.injectState(game);
+    const folder = (game.photoFolders || []).find(f => f.id === folderId);
+    if (!folder) return;
+    if (folder.published) {
+      game.showToast('Déjà Publié', 'Ce dossier photo a déjà été partagé sur vos réseaux.', 'slate');
+      return;
+    }
+
+    const eff = this.calculateFolderEffectiveness(game, folder);
+
+    // Détection de l'appareil photo d'antenne
+    const photoTier = (game.equipmentTiers && game.equipmentTiers.appareil_photo) || 1;
+    const photoDef = window.ProtecEquipements?.TIERED_EQUIPMENT_CATALOG?.appareil_photo?.tiers?.find(t => t.level === photoTier);
+    const photoBonusRatio = photoDef?.stats?.comImpactBonus || 0.15;
+    const cameraTitle = photoDef ? photoDef.title : 'Smartphone Dédié';
+
+    const finalMultiplier = eff * (1 + photoBonusRatio);
+
+    const visGain = Math.round(folder.baseVisibilityGain * finalMultiplier);
+    const repGain = Math.round(folder.baseReputationGain * finalMultiplier);
+    const likes = Math.round(folder.baseLikes * finalMultiplier);
+    const shares = Math.round(folder.baseShares * finalMultiplier);
+
+    const oldVis = game.socialMedia.visibilityScore || 50;
+    game.socialMedia.visibilityScore = Math.min(100, oldVis + visGain);
+    game.socialMedia.lastPostTimestamp = Date.now();
+    game.socialMedia.totalPosts = (game.socialMedia.totalPosts || 0) + 1;
+    game.socialMedia.totalLikes = (game.socialMedia.totalLikes || 0) + likes;
+    game.socialMedia.totalShares = (game.socialMedia.totalShares || 0) + shares;
+    game.resources.reputationScore = (game.resources.reputationScore || 0) + repGain;
+
+    const postText = folder.isFormation
+      ? `🎓 Album photo de notre session « ${folder.title} » ! Félicitations à tous les stagiaires pour leur investissement citoyen et merci aux formateurs bénévoles. 🧡💙 #ProtectionCivile #Secourisme #Formation`
+      : `📸 Retour en images sur le terrain : « ${folder.title} » ! Clichés capturés par ${folder.photographerNames} (${cameraTitle}). Fiers de nos bénévoles mobilisés pour la sécurité de tous ! 🧡💙 #ProtectionCivile #Secourisme #Bénévolat`;
+
+    game.socialMedia.feed.unshift({
+      id: 'post-folder-' + folder.id + '-' + Date.now(),
+      timestamp: Date.now(),
+      themeId: folder.isFormation ? 'prevention' : 'dps',
+      themeTitle: folder.isFormation ? 'Album Photo Formation' : 'Reportage Terrain Photo',
+      authorName: folder.photographerNames,
+      authorRole: folder.isFormation ? 'Pôle Formation' : 'Photographe / Vidéaste d’Antenne',
+      text: postText,
+      likes: likes,
+      shares: shares,
+      commentsCount: Math.floor(4 * finalMultiplier) + 1,
+      topComment: folder.isFormation
+        ? 'Super formation, très formateurs et bienveillants ! 👏'
+        : 'Superbe série de clichés, bravo aux secouristes pour leur dévouement ! 📸🧡',
+      isAutoPilot: false
+    });
+    if (game.socialMedia.feed.length > 25) game.socialMedia.feed.pop();
+
+    folder.published = true;
+    folder.publishedTimestamp = Date.now();
+
+    game.showToast(
+      'Reportage Photo Publié ! 📸',
+      `Le reportage « ${folder.title} » a été publié avec succès sur vos réseaux sociaux (+${visGain}% visibilité, +${repGain} popularité).`,
+      'purple'
+    );
+
+    game.saveGame();
+    game.updateStatsUI();
+    this.renderModal(game);
   },
 
   // 1. ACTION MANUELLE GRATUITE (0 €) : PUBLIER SUR LES RÉSEAUX SOCIAUX
@@ -726,6 +843,66 @@ window.ProtecCommunication = {
           </div>
         ` : ''}
       </div>
+
+      <!-- BLOC DOSSIERS PHOTOS D'ÉVÉNEMENTS & REPORTAGES -->
+      ${(() => {
+        const folders = (game.photoFolders || []).filter(f => !f.published);
+        return `
+        <div class="p-4.5 rounded-2xl glass-card border border-purple-200 bg-gradient-to-r from-purple-50/50 via-white to-indigo-50/30 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h5 class="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
+                <span>📁</span> Dossiers Photos de Reportages & Événements
+              </h5>
+              <p class="text-[11px] text-slate-500">Dossiers d’images réalisés par vos photographes lors des missions et formations, prêts à être valorisés</p>
+            </div>
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-black ${folders.length > 0 ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-slate-100 text-slate-600'}">
+              ${folders.length} dossier(s) disponible(s)
+            </span>
+          </div>
+
+          ${folders.length === 0 ? `
+            <div class="p-3.5 rounded-xl bg-white/80 border border-slate-200 text-center text-xs text-slate-500 space-y-1">
+              <span class="text-xl">📸</span>
+              <p class="font-bold text-slate-700">Aucun dossier photo en attente</p>
+              <p class="text-[11px] text-slate-400">Pour constituer un dossier, affectez un bénévole au rôle <strong>Photographe / Vidéaste</strong> lors d'une mission ou validez des sessions de formation.</p>
+            </div>
+          ` : `
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              ${folders.map(folder => `
+                <div class="p-3.5 rounded-2xl border border-purple-100 hover:border-purple-300 transition bg-white flex flex-col justify-between space-y-3 shadow-2xs">
+                  <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xl">${folder.isFormation ? '🎓' : '📸'}</span>
+                      <span class="px-2 py-0.5 rounded text-[9px] font-black ${folder.isFormation ? 'bg-emerald-100 text-emerald-800' : 'bg-purple-100 text-purple-800'} uppercase">
+                        ${folder.isFormation ? 'Formation' : 'Dispositif de Secours'}
+                      </span>
+                    </div>
+                    <h6 class="text-xs font-black text-slate-900 leading-snug">
+                      ${folder.title}
+                    </h6>
+                    <p class="text-[11px] text-slate-500">
+                      Prises de vue : <strong class="text-slate-700">${folder.photographerNames}</strong>
+                    </p>
+                  </div>
+
+                  <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <span class="text-[10px] font-bold text-slate-400">
+                      Dossier prêt
+                    </span>
+                    <button
+                      onclick="window.ProtecCommunication.publishPhotoFolder(window.game, '${folder.id}')"
+                      class="py-1.5 px-3 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                      <span>🚀</span> Publier le Reportage (0 €)
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+        `;
+      })()}
 
       <!-- BLOC ACTIONS MANUELLES GRATUITES (0 €) -->
       <div class="space-y-3">

@@ -229,6 +229,30 @@ window.ProtecAudio = {
   // =========================================================================
   handleToastAudio(title, message, color = 'blue', target = null) {
     if (this.muted) return;
+
+    // RÈGLE TERRITORIALE STRICTE : Le son d'alerte ne doit être reçu QUE si le joueur est directement concerné
+    // (possède au moins une antenne dans le département concerné)
+    if (window.game) {
+      const g = window.game;
+      const playerStationDepts = (g.stations || []).map(s => String(s.departmentCode || '')).filter(Boolean);
+      const myDepts = playerStationDepts.length > 0
+        ? [...new Set(playerStationDepts)]
+        : [String(g.stations?.[0]?.departmentCode || g.player?.departmentCode || g.currentDepartmentCode || '54')];
+
+      // Vérifier le département ciblé par la mission ou le payload
+      const targetDept = target?.departmentCode || (target?.id && g.missions?.find(m => m.id === target.id)?.departmentCode);
+      if (targetDept && !myDepts.includes(String(targetDept))) {
+        return; // Alerte étrangère au département du joueur : silence absolu
+      }
+
+      // Vérifier si le titre ou message cible expressément un autre département, ex: [Dpt 75]
+      const fullText = (title || '') + ' ' + (message || '');
+      const dptMatch = fullText.match(/\[Dpt\s*(\d{2,3}|2[ABab])\]/i);
+      if (dptMatch && dptMatch[1] && !myDepts.includes(String(dptMatch[1]))) {
+        return; // Département extérieur : aucun son
+      }
+    }
+
     const t = (title || '').toLowerCase();
     const m = (message || '').toLowerCase();
 

@@ -835,6 +835,19 @@ window.ProtecFormations = {
     proposal.completedAt = Date.now();
     proposal.completed_at = new Date().toISOString();
 
+    if (window.ProtecCommunication) {
+      window.ProtecCommunication.createPhotoFolder(game, {
+        sourceType: 'formation',
+        title: `Formation Entreprise : ${proposal.courseTitle || proposal.courseId || proposal.training_type || 'SST'} (${proposal.companyName || proposal.company_name || 'Partenaire'})`,
+        isFormation: true,
+        photographerNames: 'Pôle Pédagogique & Communication',
+        baseReputationGain: 18,
+        baseVisibilityGain: 22,
+        baseLikes: 55,
+        baseShares: 14
+      });
+    }
+
     this.syncB2BWithSupabase(game, proposal);
     game.saveGame();
 
@@ -1401,6 +1414,19 @@ window.ProtecFormations = {
     }
 
     session.status = 'completed';
+
+    if (window.ProtecCommunication) {
+      window.ProtecCommunication.createPhotoFolder(game, {
+        sourceType: 'formation',
+        title: course?.title || session.courseId || 'Session de Formation Secourisme',
+        isFormation: true,
+        photographerNames: 'Pôle Pédagogique & Communication',
+        baseReputationGain: 15,
+        baseVisibilityGain: 20,
+        baseLikes: 50,
+        baseShares: 12
+      });
+    }
 
     // Attribution des écussons de formation et compétences
     if (window.ProtecEcussons) {

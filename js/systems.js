@@ -164,12 +164,12 @@ window.ProtecSystems = {
 
     // Détermination de l'antenne d'attache du véhicule
     const myStation = game.stations?.find(s => (s.vehicles || []).some(v => (typeof v === 'string' ? v === vehicle.id : v.id === vehicle.id))) || game.stations?.[0];
-    const stationName = myStation?.name || (myStation?.city ? `Antenne de ${myStation.city}` : 'Mon Antenne');
+    const stationName = vehicle.stationName || myStation?.name || (myStation?.city ? `Antenne de ${myStation.city}` : 'Mon Antenne');
 
     // Marqueur du véhicule compact : petite icône avec logo du véhicule et gyrophare sur le toit
     const imgUrl = vehicle.image || (game.getVehicleImage ? game.getVehicleImage(vehicle.type) : `images/vehicles/${vehicle.type || 'VPSP'}.png`);
     const iconHtml = `
-      <div class="vehicle-compact-marker ${isEmergency ? 'is-emergency' : ''}" title="${vehicle.name}">
+      <div class="vehicle-compact-marker ${isEmergency ? 'is-emergency' : ''}" title="${vehicle.name} • ${stationName}">
         ${isEmergency ? `
           <div class="vehicle-roof-beacon"></div>
           <div class="vehicle-roof-beacon-halo"></div>

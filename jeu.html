@@ -439,8 +439,8 @@
     </div>
   </header>
 
-  <!-- FLOATING NOTIFICATIONS TOAST CONTAINER (z-[100] pour rester toujours visible au-dessus du tiroir latéral) -->
-  <div id="toast-container" class="fixed top-20 right-4 z-[100] flex flex-col gap-2 max-w-sm pointer-events-none transition-all duration-300"></div>
+  <!-- FLOATING NOTIFICATIONS TOAST CONTAINER (Positionné à gauche pour ne jamais masquer le menu latéral droit) -->
+  <div id="toast-container" class="fixed top-20 left-4 sm:left-6 z-[100] flex flex-col gap-2.5 max-w-sm pointer-events-none transition-all duration-300"></div>
 
   <!-- FLOATING ACTIVE MISSIONS QUICK BAR (En bas à gauche) -->
   <div class="absolute bottom-24 left-4 z-10 flex flex-col gap-2 max-w-xs">
@@ -1010,8 +1010,8 @@
     </div>
   </div>
 
-  <!-- SLIDING CONTEXT DRAWER (Panneau Latéral Droit) -->
-  <aside id="context-drawer" class="fixed top-2 sm:top-4 right-2 sm:right-4 bottom-2 sm:bottom-4 w-[calc(100vw-1rem)] sm:w-[470px] md:w-[490px] z-50 hidden flex-col glass-panel-heavy rounded-3xl overflow-hidden shadow-2xl border border-white/90">
+  <!-- SLIDING CONTEXT DRAWER (Panneau Latéral Droit spacieux) -->
+  <aside id="context-drawer" class="fixed top-2 sm:top-4 right-2 sm:right-4 bottom-2 sm:bottom-4 w-[calc(100vw-1rem)] sm:w-[560px] md:w-[620px] lg:w-[680px] max-w-[96vw] z-50 hidden flex-col glass-panel-heavy rounded-3xl overflow-hidden shadow-2xl border border-white/90">
     
     <!-- Drawer Header -->
     <div class="px-5 py-4 border-b border-slate-100/80 flex items-center justify-between bg-white/40">
@@ -1270,7 +1270,7 @@
   <script src="js/departements.js"></script>
   <script src="js/health_infrastructures.js"></script>
   <script src="js/dps_generator.js"></script>
-  <script src="js/systems.js?v=2.1.0"></script>
+  <script src="js/systems.js?v=2.1.3"></script>
   <script src="js/modals.js"></script>
   <script src="js/advanced_systems.js"></script>
   <script src="js/advanced_modals.js"></script>
@@ -1287,11 +1287,11 @@
   <script src="js/incidents.js"></script>
   <script src="js/personnel.js?v=2.0.8"></script>
   <script src="js/poles.js"></script>
-  <script src="js/formations.js"></script>
+  <script src="js/formations.js?v=2.1.5"></script>
   <script src="js/social.js"></script>
   <script src="js/conventions.js"></script>
   <script src="js/contrats_annuels.js"></script>
-  <script src="js/communication.js"></script>
+  <script src="js/communication.js?v=2.1.5"></script>
   <script src="js/messaging.js"></script>
   <script src="js/admin.js"></script>
   <script src="js/building_engine.js"></script>
@@ -1300,22 +1300,22 @@
   <script src="js/finances.js"></script>
   <script src="js/equipements.js"></script>
   <script src="js/cump.js"></script>
-  <script src="js/audio.js?v=2.1.0"></script>
+  <script src="js/audio.js?v=2.1.2"></script>
   <script src="js/specialites.js"></script>
   <script src="js/crise_logistique.js"></script>
   <script src="js/commandement.js"></script>
   <script src="js/pwa.js"></script>
   <script src="js/glossaire.js"></script>
   <script src="js/signature.js"></script>
-  <script src="js/onboarding.js?v=2.1.0"></script>
+  <script src="js/onboarding.js?v=2.1.2"></script>
   <script src="js/tutorial.js"></script>
   <script src="js/veille_operationnelle.js"></script>
   <script src="js/multijoueur.js"></script>
   <script src="js/ecussons.js"></script>
   <script src="js/ai_badge_generator.js"></script>
-  <script src="js/apc.js"></script>
+  <script src="js/apc.js?v=2.1.4"></script>
   <script src="js/marche_occasion.js"></script>
   <script src="js/evenements_reels.js"></script>
-  <script src="js/app.js?v=2.1.0"></script>
+  <script src="js/app.js?v=2.2.0"></script>
 </body>
 </html>

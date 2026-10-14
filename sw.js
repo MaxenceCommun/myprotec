@@ -10,7 +10,7 @@
  * - En cas de coupure réseau, le client bloque immédiatement l'accès au jeu.
  */
 
-const CACHE_VERSION = 'myprotec-online-v2.1.0';
+const CACHE_VERSION = 'myprotec-online-v2.2.2';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 
 // Assets statiques essentiels mis en cache pour la rapidité de chargement
