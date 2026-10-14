@@ -13,7 +13,7 @@
 window.ProtecOnboarding = {
   currentStep: 1,
   teamName: 'Antenne Protection Civile',
-  deptCode: '75',
+  deptCode: '54',
   game: null,
 
   // 1. Équipe fondatrice personnalisable (5 bénévoles constitutifs)
@@ -27,10 +27,10 @@ window.ProtecOnboarding = {
 
   // 2. Coordonnées de placement sur la carte
   placementData: {
-    lat: 48.8566,
-    lng: 2.3522,
-    city: 'Paris',
-    citycode: '75'
+    lat: 48.75,
+    lng: 6.15,
+    city: 'Nancy / Lunéville',
+    citycode: '54'
   },
   step2Map: null,
   step2Marker: null,
@@ -71,19 +71,33 @@ window.ProtecOnboarding = {
     this.currentStep = 1;
     this.fnpcSigned = false;
 
+    let supaUser = null;
+    try {
+      supaUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
+    } catch (e) {}
+
+    const chosenDept = options.deptCode 
+      || (supaUser && (supaUser.departmentCode || supaUser.department_code))
+      || this.game?.player?.departmentCode 
+      || this.game?.currentDepartmentCode 
+      || localStorage.getItem('protec_department_code') 
+      || '54';
+
+    this.deptCode = String(chosenDept).trim();
+    if (this.game?.player) this.game.player.departmentCode = this.deptCode;
+    if (this.game) this.game.currentDepartmentCode = this.deptCode;
+    localStorage.setItem('protec_department_code', this.deptCode);
+
     if (options.teamName) this.teamName = options.teamName;
     else if (this.game?.player?.stationName) this.teamName = this.game.player.stationName;
-
-    if (options.deptCode) this.deptCode = options.deptCode;
-    else if (this.game?.currentDepartmentCode || this.game?.player?.departmentCode) {
-      this.deptCode = this.game.currentDepartmentCode || this.game.player.departmentCode;
-    }
+    else if (supaUser && (supaUser.stationName || supaUser.station_name)) this.teamName = supaUser.stationName || supaUser.station_name;
+    else this.teamName = localStorage.getItem('protec_station_name') || 'Antenne Protection Civile';
 
     // Position initiale sur la carte (centre géographique du département)
     const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.deptCode) : null;
-    this.placementData.lat = deptInfo ? deptInfo.lat : 48.8566;
-    this.placementData.lng = deptInfo ? deptInfo.lng : 2.3522;
-    this.placementData.city = '';
+    this.placementData.lat = deptInfo ? deptInfo.lat : 48.75;
+    this.placementData.lng = deptInfo ? deptInfo.lng : 6.15;
+    this.placementData.city = deptInfo ? (deptInfo.chefLieu || deptInfo.name) : 'Lunéville';
     this.placementData.citycode = this.deptCode;
     this.updatePlacementCoords(this.placementData.lat, this.placementData.lng);
 
@@ -501,8 +515,29 @@ window.ProtecOnboarding = {
     const coordsEl = document.getElementById('step2-coords-label');
     if (coordsEl) coordsEl.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
+    // 1. Détection dynamique du département correspondant aux coordonnées
+    if (window.ProtecDepartements && typeof window.ProtecDepartements.getDepartmentByCoordinates === 'function') {
+      const detectedDept = window.ProtecDepartements.getDepartmentByCoordinates(lat, lng);
+      if (detectedDept && detectedDept.code) {
+        this.deptCode = detectedDept.code;
+        this.placementData.citycode = detectedDept.code;
+        if (this.game?.player) this.game.player.departmentCode = detectedDept.code;
+        if (this.game) this.game.currentDepartmentCode = detectedDept.code;
+        localStorage.setItem('protec_department_code', detectedDept.code);
+
+        const subHeader = document.querySelector('#onboarding-modal h2 ~ p');
+        if (subHeader) {
+          subHeader.innerHTML = `Définissez l'emplacement officiel de votre local d'antenne dans le département <strong>${detectedDept.name} (${detectedDept.code})</strong>.`;
+        }
+        const deptLabelUnderMap = document.querySelector('#step2-city-label ~ div');
+        if (deptLabelUnderMap) {
+          deptLabelUnderMap.innerHTML = `Département ${detectedDept.code} • <span class="font-mono text-slate-500" id="step2-coords-label">${lat.toFixed(4)}, ${lng.toFixed(4)}</span>`;
+        }
+      }
+    }
+
     try {
-      // 1. API officielle Adresse Gouv (France)
+      // 2. API officielle Adresse Gouv (France)
       const res = await fetch(`https://api-adresse.data.gouv.fr/reverse/?lon=${lng}&lat=${lat}`);
       const data = await res.json();
       if (data.features && data.features.length > 0) {
@@ -510,18 +545,27 @@ window.ProtecOnboarding = {
         const detectedCity = props.city || props.town || props.village || props.municipality || props.district || props.name;
         if (detectedCity) {
           this.placementData.city = detectedCity;
-          this.placementData.citycode = props.citycode || this.deptCode;
+          if (props.postcode && props.postcode.length >= 2) {
+            const postalDept = props.postcode.startsWith('97') ? props.postcode.substr(0, 3) : props.postcode.substr(0, 2);
+            if (postalDept) {
+              this.deptCode = postalDept;
+              this.placementData.citycode = postalDept;
+              if (this.game?.player) this.game.player.departmentCode = postalDept;
+              if (this.game) this.game.currentDepartmentCode = postalDept;
+              localStorage.setItem('protec_department_code', postalDept);
+            }
+          }
           const cityEl = document.getElementById('step2-city-label');
           if (cityEl) cityEl.textContent = detectedCity;
           return;
         }
       }
     } catch (e) {
-      // Ignorer si hors-ligne
+      // Ignorer si indisponible
     }
 
     try {
-      // 2. Fallback OpenStreetMap / Nominatim
+      // 3. Fallback OpenStreetMap / Nominatim
       const res2 = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`);
       const data2 = await res2.json();
       const addr = data2.address || {};
@@ -1137,11 +1181,15 @@ window.ProtecOnboarding = {
     game.currentDepartmentCode = deptCode;
     localStorage.setItem('protec_department_code', deptCode);
 
-    // Synchronisation immédiate vers la BDD Supabase (table players)
+    // Synchronisation immédiate vers la BDD Supabase (table players et alliance_stations)
     if (window.ProtecSupabase && window.ProtecSupabase.client) {
       const pid = (game.player && game.player.id) || localStorage.getItem('protec_player_id');
       if (pid) {
         window.ProtecSupabase.updatePlayerCityAndStation(pid, city, stationName, deptCode).catch(e => console.warn(e));
+      }
+      window.ProtecSupabase.syncStationToMap(game.player, newStation);
+      if (typeof game.loadAllianceStations === 'function') {
+        game.loadAllianceStations();
       }
     }
 

@@ -535,8 +535,11 @@ window.ProtecNotifications = {
     }
   },
 
-  // Ouverture de la modale de réglage des notifications
-  openSettingsModal() {
+  // Ouverture de la modale de réglage des notifications et paramètres
+  openSettingsModal(defaultTab = null) {
+    if (defaultTab) {
+      this.activeTab = defaultTab;
+    }
     let modal = document.getElementById('notif-settings-modal');
     if (!modal) {
       this.createSettingsModalDOM();
@@ -566,12 +569,12 @@ window.ProtecNotifications = {
       <div class="w-full max-w-lg rounded-3xl glass-panel-heavy border border-white/80 p-5 sm:p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between pb-4 border-b border-slate-200/60 mb-4">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-2xl bg-pc-orange/15 text-pc-orange flex items-center justify-center text-lg font-black">
-              <i data-lucide="bell" class="w-5 h-5"></i>
+            <div class="w-10 h-10 rounded-2xl bg-pc-blue/10 text-pc-blue flex items-center justify-center text-lg font-black">
+              <i data-lucide="settings" class="w-5 h-5"></i>
             </div>
             <div>
-              <h3 class="text-base font-black text-slate-900">Centre de Notifications</h3>
-              <p class="text-[11px] text-slate-500 font-semibold">Alertes opérationnelles en temps réel & journal des événements</p>
+              <h3 class="text-base font-black text-slate-900">Paramètres & Notifications</h3>
+              <p class="text-[11px] text-slate-500 font-semibold">Affichage, popups d’acronymes, alertes d’urgence & journal</p>
             </div>
           </div>
           <button onclick="window.ProtecNotifications.closeSettingsModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
@@ -653,7 +656,7 @@ window.ProtecNotifications = {
 
     body.innerHTML = `
       <div class="space-y-4 text-xs">
-        <!-- Barre d'onglets : Journal d'Historique vs Paramètres Push -->
+        <!-- Barre d'onglets : Journal d'Historique vs Paramètres & Options -->
         <div class="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
           <div class="flex items-center gap-2">
             <button onclick="window.ProtecNotifications.switchTab('history')" class="px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 ${isHistory ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
@@ -662,7 +665,7 @@ window.ProtecNotifications = {
             </button>
             <button onclick="window.ProtecNotifications.switchTab('settings')" class="px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 ${!isHistory ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
               <i data-lucide="settings" class="w-3.5 h-3.5"></i>
-              <span>Réglages Push & Sons</span>
+              <span>Paramètres & Options</span>
             </button>
           </div>
           ${isHistory && this.history.length > 0 ? `
@@ -676,8 +679,29 @@ window.ProtecNotifications = {
           <!-- VUE 1 : HISTORIQUE DES NOTIFICATIONS -->
           <div id="notif-history-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1"></div>
         ` : `
-          <!-- VUE 2 : RÉGLAGES PUSH & SONS -->
+          <!-- VUE 2 : RÉGLAGES & PARAMÈTRES DU JEU -->
           <div class="space-y-4">
+            <!-- SECTION 1 : INTERFACE & EXPÉRIENCE DE JEU -->
+            <div class="space-y-2.5">
+              <h4 class="font-black text-slate-700 uppercase tracking-wider text-[10px]">Interface & Affichage</h4>
+
+              <label class="flex items-center justify-between p-3.5 rounded-2xl glass-card border border-slate-200 cursor-pointer hover:bg-slate-50/70 transition shadow-xs">
+                <div class="pr-3">
+                  <div class="flex items-center gap-2">
+                    <span class="font-extrabold text-slate-800 block text-xs">Infobulles et popups d’acronymes</span>
+                    <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-pc-blue/10 text-pc-blue font-bold">VPSP, CAI, PMA...</span>
+                  </div>
+                  <span class="text-[11px] text-slate-500 block leading-relaxed mt-0.5">
+                    Affiche la définition complète au survol de la souris ou au clic sur les abréviations de la Protection Civile.
+                  </span>
+                </div>
+                <input type="checkbox" id="setting-acronym-popups" ${(!window.ProtecGlossaire || window.ProtecGlossaire.isEnabled()) ? 'checked' : ''} onchange="if(window.ProtecGlossaire) window.ProtecGlossaire.setEnabled(this.checked); if(window.game) window.game.showToast('Paramètres', this.checked ? 'Popups d’acronymes activés' : 'Popups d’acronymes masqués', 'blue');" class="w-4 h-4 text-pc-blue rounded cursor-pointer flex-shrink-0" />
+              </label>
+            </div>
+
+            <!-- SECTION 2 : NOTIFICATIONS PUSH & ALERTES SYSTÈME -->
+            <div class="space-y-2.5 pt-1">
+              <h4 class="font-black text-slate-700 uppercase tracking-wider text-[10px]">Alertes Opérationnelles Push</h4>
             <!-- Statut d'autorisation système -->
             <div class="p-4 rounded-2xl ${isPermGranted ? 'bg-emerald-50 border border-emerald-200' : (isPermDenied ? 'bg-rose-50 border border-rose-200' : 'bg-amber-50 border border-amber-200')} flex items-center justify-between">
               <div class="space-y-1">

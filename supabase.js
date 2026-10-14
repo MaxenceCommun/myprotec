@@ -247,6 +247,33 @@ window.ProtecSupabase = {
       }
     });
 
+    // Écoute 8 : Attribution administrative d'écusson en direct
+    this.realtimeChannel.on('broadcast', { event: 'badge_awarded' }, (evt) => {
+      const data = evt.payload;
+      const g = game || window.game;
+      if (g && g.handleMultiplayerEvent && data) {
+        g.handleMultiplayerEvent('badge_awarded', data);
+      }
+    });
+
+    // Écoute 9 : Retrait administratif d'écusson en direct
+    this.realtimeChannel.on('broadcast', { event: 'badge_revoked' }, (evt) => {
+      const data = evt.payload;
+      const g = game || window.game;
+      if (g && g.handleMultiplayerEvent && data) {
+        g.handleMultiplayerEvent('badge_revoked', data);
+      }
+    });
+
+    // Écoute 10 : Déplacement en direct des véhicules des confrères directeurs sur la carte
+    this.realtimeChannel.on('broadcast', { event: 'player_vehicle_transit' }, (evt) => {
+      const data = evt.payload;
+      const g = game || window.game;
+      if (g && data && window.ProtecSystems && typeof window.ProtecSystems.startRemoteVehicleTransit === 'function') {
+        window.ProtecSystems.startRemoteVehicleTransit(g, data);
+      }
+    });
+
     this.realtimeChannel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         console.log('⚡ Canal Supabase Realtime actif : synchronisation en direct (< 50ms) connectée.');
@@ -279,6 +306,20 @@ window.ProtecSupabase = {
       });
     } catch (e) {
       console.warn('Erreur broadcast création renfort:', e);
+    }
+  },
+
+  // Diffusion en direct d'un déplacement de véhicule sur la carte pour tous les autres joueurs
+  broadcastVehicleTransit(payload) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'player_vehicle_transit',
+        payload: payload
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast transit véhicule:', e);
     }
   },
 
@@ -321,6 +362,183 @@ window.ProtecSupabase = {
       });
     } catch (e) {
       console.warn('Erreur broadcast admin_player_notification:', e);
+    }
+  },
+
+  // Diffusion d'une attribution d'écusson en direct
+  broadcastBadgeAwarded(data) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'badge_awarded',
+        payload: data
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast badge_awarded:', e);
+    }
+  },
+
+  // Diffusion d'un retrait d'écusson en direct
+  broadcastBadgeRevoked(data) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'badge_revoked',
+        payload: data
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast badge_revoked:', e);
+    }
+  },
+
+  // Attribution administrative d'un écusson sur Supabase Cloud
+  async awardBadge(targetUserId, badge, quantity = 1, notify = true) {
+    if (!this.client) return false;
+    const qty = Number(quantity || 1);
+    const badgeCode = badge?.code || badge;
+    const isAll = (targetUserId === 'all');
+
+    try {
+      // 1. Récupérer le catalogue pour avoir l'id Supabase de l'écusson si existant
+      let ecussonRecord = null;
+      try {
+        const { data: ecData } = await this.client
+          .from('ecussons')
+          .select('*')
+          .eq('code', badgeCode)
+          .maybeSingle();
+        if (ecData) ecussonRecord = ecData;
+      } catch (e) {}
+
+      // 2. Mettre à jour game_saves
+      if (isAll) {
+        const { data: saves } = await this.client.from('game_saves').select('*');
+        if (saves && saves.length > 0) {
+          for (const s of saves) {
+            const sData = s.save_data || {};
+            if (!sData.localEcussons) sData.localEcussons = [];
+            const ex = sData.localEcussons.find(l => l.code === badgeCode);
+            if (ex) ex.quantite = (ex.quantite || 1) + qty;
+            else sData.localEcussons.push({ code: badgeCode, quantite: qty });
+
+            await this.client.from('game_saves').update({
+              save_data: sData,
+              updated_at: new Date().toISOString()
+            }).eq('id', s.id);
+
+            if (ecussonRecord) {
+              const antId = s.user_id || sData?.player?.id || s.username;
+              if (antId) {
+                try {
+                  await this.client.from('antenne_ecussons').upsert({
+                    antenne_id: antId,
+                    ecusson_id: ecussonRecord.id,
+                    quantite: ex ? ex.quantite : qty,
+                    updated_at: new Date().toISOString()
+                  }, { onConflict: 'antenne_id,ecusson_id' });
+                } catch (e) {}
+              }
+            }
+          }
+        }
+      } else {
+        const isUUID = typeof targetUserId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId);
+        let q = this.client.from('game_saves').select('*');
+        if (isUUID) q = q.eq('user_id', targetUserId);
+        else q = q.eq('username', targetUserId);
+        let { data: saveRecord } = await q.maybeSingle();
+
+        let sData = saveRecord?.save_data || {};
+        if (!sData.localEcussons) sData.localEcussons = [];
+        const ex = sData.localEcussons.find(l => l.code === badgeCode);
+        const newQty = (ex ? (ex.quantite || 1) : 0) + qty;
+        if (ex) ex.quantite = newQty;
+        else sData.localEcussons.push({ code: badgeCode, quantite: qty });
+
+        if (saveRecord) {
+          await this.client.from('game_saves').update({
+            save_data: sData,
+            updated_at: new Date().toISOString()
+          }).eq('id', saveRecord.id);
+        } else {
+          await this.client.from('game_saves').insert({
+            user_id: isUUID ? targetUserId : null,
+            username: isUUID ? null : targetUserId,
+            save_data: sData,
+            funds: 15000,
+            updated_at: new Date().toISOString()
+          });
+        }
+
+        if (ecussonRecord) {
+          const antId = targetUserId || sData?.player?.id;
+          try {
+            await this.client.from('antenne_ecussons').upsert({
+              antenne_id: antId,
+              ecusson_id: ecussonRecord.id,
+              quantite: newQty,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'antenne_id,ecusson_id' });
+          } catch (e) {}
+        }
+      }
+
+      // 3. Diffuser en temps réel
+      this.broadcastBadgeAwarded({
+        userId: targetUserId,
+        badge: typeof badge === 'object' ? badge : { code: badgeCode },
+        quantity: qty,
+        notify: !!notify
+      });
+
+      return true;
+    } catch (err) {
+      console.warn('Erreur awardBadge Supabase:', err);
+      return false;
+    }
+  },
+
+  // Retrait administratif d'un écusson sur Supabase Cloud
+  async revokeBadge(targetUserId, badgeCode, removeAll = false) {
+    if (!this.client) return false;
+    try {
+      const isUUID = typeof targetUserId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId);
+      let q = this.client.from('game_saves').select('*');
+      if (isUUID) q = q.eq('user_id', targetUserId);
+      else q = q.eq('username', targetUserId);
+      const { data: saveRecord } = await q.maybeSingle();
+
+      if (saveRecord && saveRecord.save_data) {
+        const sData = saveRecord.save_data;
+        if (sData.localEcussons) {
+          const ex = sData.localEcussons.find(l => l.code === badgeCode);
+          if (ex) {
+            if (removeAll || ex.quantite <= 1) {
+              sData.localEcussons = sData.localEcussons.filter(l => l.code !== badgeCode);
+            } else {
+              ex.quantite -= 1;
+            }
+          }
+          await this.client.from('game_saves').update({
+            save_data: sData,
+            updated_at: new Date().toISOString()
+          }).eq('id', saveRecord.id);
+        }
+      }
+
+      // Diffuser en temps réel
+      this.broadcastBadgeRevoked({
+        userId: targetUserId,
+        badgeCode: badgeCode,
+        removeAll: !!removeAll
+      });
+
+      return true;
+    } catch (e) {
+      console.warn('Erreur revokeBadge Supabase:', e);
+      return false;
     }
   },
 
@@ -1000,7 +1218,8 @@ window.ProtecSupabase = {
         reputation_villes: game.reputation_villes || {},
         departmentInfrastructures: game.departmentInfrastructures || {},
         platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(game.player, game)) || null,
-        lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null
+        lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null,
+        localEcussons: game.localEcussons || []
       };
 
       const payload = {
@@ -1127,6 +1346,8 @@ window.ProtecSupabase = {
     if (!this.client || !player || !station) return;
 
     try {
+      const isUUID = typeof player.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(player.id);
+
       // Contrôle de conformité de l'alliance_id pour respecter la clé étrangère alliance_stations_alliance_id_fkey
       let validAllianceId = null;
       if (player.allianceId && player.allianceId !== 'alliance-fnpc') {
@@ -1136,17 +1357,23 @@ window.ProtecSupabase = {
         }
       }
 
+      const stLat = parseFloat(station.lat);
+      const stLng = parseFloat(station.lng);
+      if (isNaN(stLat) || isNaN(stLng)) return;
+
+      const stationKey = station.id ? String(station.id) : `station-${player.id || 'usr'}`;
+
       const payload = {
-        id: String(station.id),
+        id: stationKey,
         player_id: isUUID ? player.id : null,
-        player_name: player.name || 'Directeur d’Antenne',
-        station_name: station.name,
-        city: station.city || 'Paris',
-        lat: station.lat,
-        lng: station.lng,
+        player_name: player.name || player.username || 'Directeur d’Antenne',
+        station_name: station.name || 'Antenne Protection Civile',
+        city: station.city || player.city || 'Paris',
+        lat: stLat,
+        lng: stLng,
         level: station.level || 1,
-        vehicles_count: (station.vehicles || []).length,
-        volunteers_count: (station.volunteers || []).length,
+        vehicles_count: Array.isArray(station.vehicles) ? station.vehicles.length : 1,
+        volunteers_count: Array.isArray(station.volunteers) ? station.volunteers.length : 4,
         alliance_id: validAllianceId,
         last_sync: new Date().toISOString()
       };
@@ -1155,21 +1382,21 @@ window.ProtecSupabase = {
       const { data: existing } = await this.client
         .from('alliance_stations')
         .select('id')
-        .eq('id', String(station.id))
+        .eq('id', stationKey)
         .maybeSingle();
 
       if (existing && existing.id) {
         await this.client
           .from('alliance_stations')
           .update(payload)
-          .eq('id', String(station.id));
+          .eq('id', stationKey);
       } else {
         await this.client
           .from('alliance_stations')
           .insert(payload);
       }
     } catch (e) {
-      // Ignorer silencieusement pour éviter de polluer la console
+      console.warn('Erreur syncStationToMap:', e);
     }
   },
 
@@ -1182,19 +1409,61 @@ window.ProtecSupabase = {
         .from('alliance_stations')
         .select('*')
         .order('last_sync', { ascending: false })
-        .limit(50);
+        .limit(100);
 
-      // N'appliquer le filtre SQL que si excludePlayerId est un UUID valide pour éviter l'erreur 22P02
       const isUUID = typeof excludePlayerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(excludePlayerId);
       if (isUUID) {
         query = query.neq('player_id', excludePlayerId);
       }
 
       const { data, error } = await query;
-      if (error || !data) return [];
+      let stations = (data && !error && Array.isArray(data)) ? data : [];
+
+      // Enrichissement dynamique depuis game_saves pour s'assurer que TOUS les directeurs réels inscrits apparaissent sur la carte
+      try {
+        const { data: saves } = await this.client
+          .from('game_saves')
+          .select('user_id, username, save_data')
+          .limit(50);
+
+        if (saves && Array.isArray(saves)) {
+          const existingIds = new Set(stations.map(s => String(s.id)));
+          saves.forEach(sv => {
+            if (excludePlayerId && (sv.user_id === excludePlayerId || sv.username === excludePlayerId)) return;
+            const savedStations = sv.save_data?.stations;
+            if (Array.isArray(savedStations)) {
+              savedStations.forEach(st => {
+                if (!st) return;
+                const lat = parseFloat(st.lat);
+                const lng = parseFloat(st.lng);
+                if (isNaN(lat) || isNaN(lng)) return;
+                const stKey = String(st.id || ('st-' + sv.user_id));
+                if (!existingIds.has(stKey)) {
+                  existingIds.add(stKey);
+                  stations.push({
+                    id: stKey,
+                    player_id: sv.user_id,
+                    player_name: sv.username || 'Directeur d’Antenne',
+                    station_name: st.name || 'Antenne Protection Civile',
+                    city: st.city || 'Secteur Opérationnel',
+                    lat: lat,
+                    lng: lng,
+                    level: st.level || 1,
+                    vehicles_count: Array.isArray(st.vehicles) ? st.vehicles.length : 1,
+                    volunteers_count: Array.isArray(sv.save_data?.volunteers) ? sv.save_data.volunteers.length : 4,
+                    alliance_id: 'alliance-fnpc'
+                  });
+                }
+              });
+            }
+          });
+        }
+      } catch (saveErr) {
+        console.warn('Enrichissement stations game_saves différé:', saveErr);
+      }
 
       // Filtrage complémentaire sécurisé côté client
-      return data.filter(st => {
+      return stations.filter(st => {
         if (!excludePlayerId) return true;
         if (st.player_id && String(st.player_id) === String(excludePlayerId)) return false;
         return true;

@@ -265,6 +265,15 @@ window.ProtecSupabase = {
       }
     });
 
+    // Écoute 10 : Déplacement en direct des véhicules des confrères directeurs sur la carte
+    this.realtimeChannel.on('broadcast', { event: 'player_vehicle_transit' }, (evt) => {
+      const data = evt.payload;
+      const g = game || window.game;
+      if (g && data && window.ProtecSystems && typeof window.ProtecSystems.startRemoteVehicleTransit === 'function') {
+        window.ProtecSystems.startRemoteVehicleTransit(g, data);
+      }
+    });
+
     this.realtimeChannel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         console.log('⚡ Canal Supabase Realtime actif : synchronisation en direct (< 50ms) connectée.');
@@ -297,6 +306,20 @@ window.ProtecSupabase = {
       });
     } catch (e) {
       console.warn('Erreur broadcast création renfort:', e);
+    }
+  },
+
+  // Diffusion en direct d'un déplacement de véhicule sur la carte pour tous les autres joueurs
+  broadcastVehicleTransit(payload) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'player_vehicle_transit',
+        payload: payload
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast transit véhicule:', e);
     }
   },
 
@@ -1323,6 +1346,8 @@ window.ProtecSupabase = {
     if (!this.client || !player || !station) return;
 
     try {
+      const isUUID = typeof player.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(player.id);
+
       // Contrôle de conformité de l'alliance_id pour respecter la clé étrangère alliance_stations_alliance_id_fkey
       let validAllianceId = null;
       if (player.allianceId && player.allianceId !== 'alliance-fnpc') {
@@ -1332,17 +1357,23 @@ window.ProtecSupabase = {
         }
       }
 
+      const stLat = parseFloat(station.lat);
+      const stLng = parseFloat(station.lng);
+      if (isNaN(stLat) || isNaN(stLng)) return;
+
+      const stationKey = station.id ? String(station.id) : `station-${player.id || 'usr'}`;
+
       const payload = {
-        id: String(station.id),
+        id: stationKey,
         player_id: isUUID ? player.id : null,
-        player_name: player.name || 'Directeur d’Antenne',
-        station_name: station.name,
-        city: station.city || 'Paris',
-        lat: station.lat,
-        lng: station.lng,
+        player_name: player.name || player.username || 'Directeur d’Antenne',
+        station_name: station.name || 'Antenne Protection Civile',
+        city: station.city || player.city || 'Paris',
+        lat: stLat,
+        lng: stLng,
         level: station.level || 1,
-        vehicles_count: (station.vehicles || []).length,
-        volunteers_count: (station.volunteers || []).length,
+        vehicles_count: Array.isArray(station.vehicles) ? station.vehicles.length : 1,
+        volunteers_count: Array.isArray(station.volunteers) ? station.volunteers.length : 4,
         alliance_id: validAllianceId,
         last_sync: new Date().toISOString()
       };
@@ -1351,21 +1382,21 @@ window.ProtecSupabase = {
       const { data: existing } = await this.client
         .from('alliance_stations')
         .select('id')
-        .eq('id', String(station.id))
+        .eq('id', stationKey)
         .maybeSingle();
 
       if (existing && existing.id) {
         await this.client
           .from('alliance_stations')
           .update(payload)
-          .eq('id', String(station.id));
+          .eq('id', stationKey);
       } else {
         await this.client
           .from('alliance_stations')
           .insert(payload);
       }
     } catch (e) {
-      // Ignorer silencieusement pour éviter de polluer la console
+      console.warn('Erreur syncStationToMap:', e);
     }
   },
 
@@ -1378,19 +1409,61 @@ window.ProtecSupabase = {
         .from('alliance_stations')
         .select('*')
         .order('last_sync', { ascending: false })
-        .limit(50);
+        .limit(100);
 
-      // N'appliquer le filtre SQL que si excludePlayerId est un UUID valide pour éviter l'erreur 22P02
       const isUUID = typeof excludePlayerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(excludePlayerId);
       if (isUUID) {
         query = query.neq('player_id', excludePlayerId);
       }
 
       const { data, error } = await query;
-      if (error || !data) return [];
+      let stations = (data && !error && Array.isArray(data)) ? data : [];
+
+      // Enrichissement dynamique depuis game_saves pour s'assurer que TOUS les directeurs réels inscrits apparaissent sur la carte
+      try {
+        const { data: saves } = await this.client
+          .from('game_saves')
+          .select('user_id, username, save_data')
+          .limit(50);
+
+        if (saves && Array.isArray(saves)) {
+          const existingIds = new Set(stations.map(s => String(s.id)));
+          saves.forEach(sv => {
+            if (excludePlayerId && (sv.user_id === excludePlayerId || sv.username === excludePlayerId)) return;
+            const savedStations = sv.save_data?.stations;
+            if (Array.isArray(savedStations)) {
+              savedStations.forEach(st => {
+                if (!st) return;
+                const lat = parseFloat(st.lat);
+                const lng = parseFloat(st.lng);
+                if (isNaN(lat) || isNaN(lng)) return;
+                const stKey = String(st.id || ('st-' + sv.user_id));
+                if (!existingIds.has(stKey)) {
+                  existingIds.add(stKey);
+                  stations.push({
+                    id: stKey,
+                    player_id: sv.user_id,
+                    player_name: sv.username || 'Directeur d’Antenne',
+                    station_name: st.name || 'Antenne Protection Civile',
+                    city: st.city || 'Secteur Opérationnel',
+                    lat: lat,
+                    lng: lng,
+                    level: st.level || 1,
+                    vehicles_count: Array.isArray(st.vehicles) ? st.vehicles.length : 1,
+                    volunteers_count: Array.isArray(sv.save_data?.volunteers) ? sv.save_data.volunteers.length : 4,
+                    alliance_id: 'alliance-fnpc'
+                  });
+                }
+              });
+            }
+          });
+        }
+      } catch (saveErr) {
+        console.warn('Enrichissement stations game_saves différé:', saveErr);
+      }
 
       // Filtrage complémentaire sécurisé côté client
-      return data.filter(st => {
+      return stations.filter(st => {
         if (!excludePlayerId) return true;
         if (st.player_id && String(st.player_id) === String(excludePlayerId)) return false;
         return true;

@@ -441,6 +441,31 @@
     keys: SORTED_KEYS,
     regex: GLOSSARY_REGEX,
 
+    // État d'activation configurable par l'utilisateur (persiste en localStorage)
+    isEnabled() {
+      try {
+        const val = localStorage.getItem('protec_enable_acronym_tooltips');
+        return val !== 'false';
+      } catch (e) {
+        return true;
+      }
+    },
+
+    setEnabled(enabled) {
+      try {
+        localStorage.setItem('protec_enable_acronym_tooltips', enabled ? 'true' : 'false');
+      } catch (e) {}
+      if (!enabled) {
+        this.hideTooltip();
+      }
+    },
+
+    toggle() {
+      const next = !this.isEnabled();
+      this.setEnabled(next);
+      return next;
+    },
+
     getEntry(rawText) {
       if (!rawText) return null;
       const clean = String(rawText).trim().toUpperCase();
@@ -473,7 +498,7 @@
 
     // Affiche l'infobulle flottante pour une abréviation
     showTooltip(abbrKey, targetRect, mousePos = null) {
-      if (this.isMobile()) {
+      if (!this.isEnabled() || this.isMobile()) {
         this.hideTooltip();
         return;
       }
@@ -581,7 +606,7 @@
 
       // Écouteur global ultra réactif au survol de la souris
       document.addEventListener('mouseover', (e) => {
-        if (this.isMobile()) return;
+        if (!this.isEnabled() || this.isMobile()) return;
         const target = e.target;
         if (!target) return;
 
@@ -629,7 +654,7 @@
 
       // Clic ou tap tactile pour les écrans tactiles et mobiles
       document.addEventListener('click', (e) => {
-        if (this.isMobile()) {
+        if (!this.isEnabled() || this.isMobile()) {
           this.hideTooltip();
           return;
         }

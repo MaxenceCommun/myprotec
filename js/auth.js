@@ -610,6 +610,7 @@ window.ProtecAuth = {
   },
 
   setProfileTab(tabKey = 'identite') {
+    if (tabKey === 'ecussons') tabKey = 'identite';
     this.activeProfileTab = tabKey;
     this.renderModalContent('profile');
   },
@@ -812,19 +813,15 @@ window.ProtecAuth = {
         this.currentUser.referral_code = myRefCode;
         try { localStorage.setItem('protec_user', JSON.stringify(this.currentUser)); } catch (e) {}
       }
-      const activeTabKey = this.activeProfileTab || 'identite';
+      const activeTabKey = (this.activeProfileTab === 'ecussons') ? 'identite' : (this.activeProfileTab || 'identite');
 
       container.innerHTML = `
         <div class="space-y-3.5">
           <!-- Barre d'onglets du profil -->
-          <div class="grid grid-cols-3 rounded-2xl bg-slate-100 p-1 gap-1 border border-slate-200/70">
+          <div class="grid grid-cols-2 rounded-2xl bg-slate-100 p-1 gap-1 border border-slate-200/70">
             <button type="button" onclick="window.ProtecAuth.setProfileTab('identite')" class="py-2 px-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTabKey === 'identite' ? 'bg-white text-pc-blue shadow-xs' : 'text-slate-500 hover:text-slate-800'}">
               <i data-lucide="user" class="w-3.5 h-3.5"></i>
               <span class="truncate">Identité</span>
-            </button>
-            <button type="button" onclick="window.ProtecAuth.setProfileTab('ecussons')" class="py-2 px-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTabKey === 'ecussons' ? 'bg-white text-pc-blue shadow-xs' : 'text-slate-500 hover:text-slate-800'}">
-              <i data-lucide="shield" class="w-3.5 h-3.5"></i>
-              <span class="truncate">Écussons</span>
             </button>
             <button type="button" onclick="window.ProtecAuth.setProfileTab('parrainage')" class="py-2 px-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTabKey === 'parrainage' ? 'bg-white text-pc-blue shadow-xs' : 'text-slate-500 hover:text-slate-800'}">
               <i data-lucide="gift" class="w-3.5 h-3.5"></i>
@@ -932,27 +929,7 @@ window.ProtecAuth = {
             </div>
           ` : ''}
 
-          <!-- CONTENU ONGLET 2 : ÉCUSSONS & DISTINCTIONS -->
-          ${activeTabKey === 'ecussons' ? `
-            <div class="space-y-3 animate-in fade-in duration-150">
-              ${window.ProtecMultiplayer ? window.ProtecMultiplayer.renderBadgesCollectionHTML(window.game) : `
-                <div class="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-2">
-                  <div class="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center mx-auto">
-                    <i data-lucide="shield" class="w-5 h-5"></i>
-                  </div>
-                  <p class="text-xs text-slate-600 font-semibold">Les écussons commémoratifs sont accessibles en jeu lors des événements fédéraux et des missions.</p>
-                </div>
-              `}
-              <div class="pt-1">
-                <a href="ecussons.html" target="_blank" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition flex items-center justify-center gap-2">
-                  <i data-lucide="external-link" class="w-4 h-4 text-indigo-600"></i>
-                  <span>Consulter la Vitrine Nationale des Écussons</span>
-                </a>
-              </div>
-            </div>
-          ` : ''}
-
-          <!-- CONTENU ONGLET 3 : PARRAINAGE & QR CODE -->
+          <!-- CONTENU ONGLET 2 : PARRAINAGE & QR CODE -->
           ${activeTabKey === 'parrainage' ? `
             <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/40 to-slate-50 border border-blue-200/80 shadow-xs space-y-3 animate-in fade-in duration-150">
               <div class="flex items-center justify-between">
@@ -1520,7 +1497,9 @@ window.ProtecAuth = {
     const username = document.getElementById('auth-reg-username').value.trim();
     const password = document.getElementById('auth-reg-password').value;
     const stationName = (document.getElementById('auth-reg-station')?.value || '').trim() || 'Antenne Protection Civile';
-    const departmentCode = this.regDeptCode || document.getElementById('auth-reg-dept-select')?.value || '75';
+    const deptSelect = document.getElementById('auth-reg-dept-select');
+    const departmentCode = (deptSelect && deptSelect.value) ? deptSelect.value : (this.regDeptCode || '54');
+    this.regDeptCode = departmentCode;
     // La commune exacte sera définie dès l'implantation physique du bâtiment sur la carte
     let city = null;
     if (stationName && stationName.length > 2 && !stationName.toLowerCase().startsWith('antenne')) {
@@ -1603,6 +1582,12 @@ window.ProtecAuth = {
       localStorage.setItem('protec_user', JSON.stringify(data.user));
       localStorage.setItem('protec_last_login_username', username);
       localStorage.setItem('protec_last_login_password', password);
+
+      const effectiveDept = data.user.departmentCode || data.user.department_code || departmentCode || '54';
+      const effectiveStation = data.user.stationName || data.user.station_name || stationName || 'Antenne Protection Civile';
+      localStorage.setItem('protec_department_code', effectiveDept);
+      localStorage.setItem('protec_player_name', username);
+      localStorage.setItem('protec_station_name', effectiveStation);
 
       // PURGE FORMELLE DU LOCALSTORAGE : Tout nouveau compte démarre avec une sauvegarde locale vierge
       localStorage.removeItem('protec_live_save_v4');
@@ -1852,8 +1837,7 @@ window.ProtecAuth = {
           reputation_villes: game.reputation_villes || {},
           departmentInfrastructures: game.departmentInfrastructures || {},
           platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(this.currentUser, game)) || null,
-          lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null,
-          localEcussons: game.localEcussons || []
+          lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null
         };
 
         await fetch('/api/game/save', {
@@ -1972,12 +1956,6 @@ window.ProtecAuth = {
       if (savedData.departmentInfrastructures && typeof savedData.departmentInfrastructures === 'object') {
         game.departmentInfrastructures = savedData.departmentInfrastructures;
       }
-      if (Array.isArray(savedData.localEcussons)) {
-        game.localEcussons = savedData.localEcussons;
-        if (window.ProtecEcussons && typeof window.ProtecEcussons.refreshPlayerEcussons === 'function') {
-          window.ProtecEcussons.refreshPlayerEcussons(game);
-        }
-      }
 
       if (savedData.clock) game.clock = savedData.clock;
       if (savedData.grants) game.grants = savedData.grants;
@@ -2037,6 +2015,9 @@ window.ProtecAuth = {
       }
       if (typeof game.loadAllianceStations === 'function') {
         game.loadAllianceStations();
+      }
+      if (window.ProtecSupabase && window.ProtecSupabase.client && Array.isArray(game.stations)) {
+        game.stations.forEach(st => window.ProtecSupabase.syncStationToMap(game.player, st));
       }
       game.updateStatsUI();
       if (game.renderStations) game.renderStations();

@@ -785,9 +785,20 @@ window.ProtecMarcheOccasion = {
     const d = listing.item_data || {};
     const primaryStation = (game.stations && game.stations[0]) || { id: 'st_primary', name: 'Antenne' };
     
-    // Génération du nouvel indicatif adapté à la ville/antenne de l'acheteur
+    // Génération du nouvel indicatif adapté à la ville/antenne de l'acheteur (seul le propriétaire change)
     const vehicleType = (listing.item_type || 'VPSP').toUpperCase();
     const newCallsign = game.generateVehicleCallsign ? game.generateVehicleCallsign(vehicleType, primaryStation.id, primaryStation) : `${vehicleType} Occasion`;
+
+    // Préservation stricte du kilométrage réel d'origine
+    const km = Number(d.mileage !== undefined ? d.mileage : (d.kilometrage !== undefined ? d.kilometrage : 118400));
+    // Préservation stricte des options, kits et équipements achetés par le vendeur
+    const hasTowHitch = Boolean(d.hasTowHitch || d.options?.includes('Attelage remorque'));
+    const isPCM = Boolean(d.isCommandement || d.hasCommandementKit || d.options?.some(opt => typeof opt === 'string' && (opt.includes('Commandement') || opt.includes('PCM'))));
+    const preservedOptions = Array.isArray(d.options) && d.options.length > 0 ? [...d.options] : [
+      ...(hasTowHitch ? ['Attelage remorque'] : []),
+      ...(isPCM ? ['Poste de commandement Mobile'] : []),
+      'Équipement réglementaire'
+    ];
 
     const newVehicle = {
       id: `v_occ_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
@@ -796,8 +807,9 @@ window.ProtecMarcheOccasion = {
       label: d.label || d.name || 'Véhicule d’Occasion',
       model: d.model || 'Modèle Révisé',
       year: d.year || 2017,
-      mileage: d.mileage || 125000,
-      mechanical: d.mechanical || 88,
+      mileage: km,
+      kilometrage: km,
+      mechanical: d.mechanical !== undefined ? d.mechanical : 88,
       fuel: 100,
       status: 'dispo',
       ctStatus: d.ctStatus || 'valide',
@@ -806,9 +818,15 @@ window.ProtecMarcheOccasion = {
       insuranceMonthlyCost: 90,
       stationId: primaryStation.id,
       capacity: d.capacity || 5,
-      seatsCount: d.capacity || 5,
+      seatsCount: d.seatsCount || d.capacity || 5,
       image: d.image || (game.getVehicleImage ? game.getVehicleImage(vehicleType) : 'images/vehicles/VPSP.png'),
-      hasTowHitch: Boolean(d.options?.includes('Attelage remorque')),
+      hasTowHitch: hasTowHitch,
+      isCommandement: isPCM,
+      hasCommandementKit: isPCM,
+      options: preservedOptions,
+      upgrades: d.upgrades ? { ...d.upgrades } : {},
+      speedKmH: d.speedKmH || 80,
+      immat: d.immat || null,
       requiresTrailer: false,
       reqSkills: vehicleType === 'VPSP' ? ['permis_vpsp'] : ['permis_b']
     };
@@ -1174,19 +1192,42 @@ window.ProtecMarcheOccasion = {
       }
       const vehicle = game.vehicles[vIndex];
       itemType = vehicle.type || 'VPSP';
+      const km = Number(vehicle.mileage !== undefined ? vehicle.mileage : (vehicle.kilometrage !== undefined ? vehicle.kilometrage : 118400));
+      const hasTowHitch = Boolean(vehicle.hasTowHitch);
+      const isPCM = Boolean(vehicle.isCommandement || vehicle.hasCommandementKit);
+      const optionsList = [];
+      if (Array.isArray(vehicle.options)) {
+        vehicle.options.forEach(opt => {
+          if (!optionsList.includes(opt)) optionsList.push(opt);
+        });
+      }
+      if (hasTowHitch && !optionsList.includes('Attelage remorque')) optionsList.push('Attelage remorque');
+      if (isPCM && !optionsList.some(o => typeof o === 'string' && (o.includes('Commandement') || o.includes('PCM')))) {
+        optionsList.push('Poste de commandement Mobile');
+      }
+      if (optionsList.length === 0) optionsList.push('Équipement réglementaire');
+
       itemData = {
         name: vehicle.name,
-        label: vehicle.label,
-        model: vehicle.model,
+        label: vehicle.label || vehicle.name,
+        model: vehicle.model || vehicle.type,
         year: vehicle.year || 2017,
-        mileage: vehicle.mileage || 115000,
-        mechanical: vehicle.mechanical || 88,
+        mileage: km,
+        kilometrage: km,
+        mechanical: vehicle.mechanical !== undefined ? vehicle.mechanical : 88,
         ctStatus: vehicle.ctStatus || 'valide',
         ctDaysLeft: 180,
         capacity: vehicle.capacity || 5,
+        seatsCount: vehicle.seatsCount || vehicle.capacity || 5,
         image: vehicle.image,
-        newPriceRef: 28000,
-        options: vehicle.hasTowHitch ? ['Attelage remorque'] : ['Équipement réglementaire'],
+        newPriceRef: vehicle.newPriceRef || 28000,
+        hasTowHitch: hasTowHitch,
+        isCommandement: isPCM,
+        hasCommandementKit: isPCM,
+        options: optionsList,
+        upgrades: vehicle.upgrades ? { ...vehicle.upgrades } : {},
+        immat: vehicle.immat || null,
+        speedKmH: vehicle.speedKmH || 80,
         desc: `Véhicule cédé par l'${station.name} (${station.city || 'Territoire'}). Révision effectuée, prêt pour service.`
       };
 

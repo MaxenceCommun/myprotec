@@ -435,7 +435,7 @@ window.ProtecLogistique = {
     {
       id: 'lot_poste_commandement_mobile',
       category: 'transmissions',
-      name: 'Poste de Commandement Mobile (Pack PC Embarqué)',
+      name: 'Poste de Commandement Mobile',
       lucideIcon: 'satellite',
       image: 'images/equipements/lot_poste_commandement_mobile.png',
       price: 2800,

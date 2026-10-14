@@ -47,24 +47,95 @@
   <!-- Custom Styles & PWA Manifest -->
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="landing.css">
-  <link rel="icon" type="image/png" href="logo_myprotec_icon.png">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16x16.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512x512.png">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#1e3a8a">
+  <meta name="theme-color" content="#002E6D">
+  <meta name="color-scheme" content="light">
 
   <!-- Apple iOS Safari & Modern PWA Support -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="MyProtec">
-  <link rel="apple-touch-icon" href="logo_myprotec_icon.png">
-  <link rel="apple-touch-icon" sizes="192x192" href="logo_myprotec_icon.png">
-  <link rel="apple-touch-icon" sizes="512x512" href="logo_myprotec_icon.png">
+  <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512x512.png">
 
   <!-- Microsoft Windows Tile PWA -->
-  <meta name="msapplication-TileImage" content="logo_myprotec_icon.png">
+  <meta name="msapplication-TileImage" content="icons/icon-512x512.png">
   <meta name="msapplication-TileColor" content="#002E6D">
 </head>
 <body class="h-full w-full overflow-hidden bg-slate-100 font-sans text-slate-800 antialiased select-none">
+
+  <!-- ==============================================================================
+       ÉCRAN DE CHARGEMENT INITIAL (SPLASH SCREEN OPÉRATIONNEL MYPROTEC)
+       ============================================================================== -->
+  <div id="app-loading-screen" style="position: fixed; inset: 0; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; transition: opacity 0.5s ease-out, visibility 0.5s;" class="select-none">
+    <div class="flex flex-col items-center justify-center gap-5 text-center">
+      
+      <!-- Logo MyProtec avec douce pulsation -->
+      <div class="relative flex items-center justify-center">
+        <div class="absolute -inset-4 rounded-full bg-orange-500/10 blur-xl animate-pulse"></div>
+        <img src="logo_myprotec.png" onerror="this.src='logo.png'" alt="MyProtec" class="relative h-16 sm:h-20 w-auto object-contain drop-shadow-sm transition-transform duration-700 animate-pulse" />
+      </div>
+
+      <!-- Petit texte discret "Chargement..." -->
+      <div class="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-400 tracking-wider">
+        <span>Chargement</span>
+        <span class="inline-flex gap-0.5">
+          <span class="w-1 h-1 rounded-full bg-orange-500 animate-bounce" style="animation-delay: 0ms;"></span>
+          <span class="w-1 h-1 rounded-full bg-blue-700 animate-bounce" style="animation-delay: 150ms;"></span>
+          <span class="w-1 h-1 rounded-full bg-orange-500 animate-bounce" style="animation-delay: 300ms;"></span>
+        </span>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      window.ProtecLoader = {
+        progress: 15,
+        isFinished: false,
+        screenEl: null,
+
+        init() {
+          this.screenEl = document.getElementById('app-loading-screen');
+
+          // Failsafe automatique (5 secondes maximum pour ne jamais bloquer)
+          this.failsafeTimeout = setTimeout(() => {
+            this.finish();
+          }, 5000);
+        },
+
+        setProgress(pct, statusText, stepText) {
+          if (this.isFinished) return;
+          this.progress = Math.max(this.progress, Math.min(100, pct));
+        },
+
+        finish(finalMessage) {
+          if (this.isFinished) return;
+          this.isFinished = true;
+          if (this.failsafeTimeout) clearTimeout(this.failsafeTimeout);
+
+          if (!this.screenEl) this.screenEl = document.getElementById('app-loading-screen');
+          if (this.screenEl) {
+            this.screenEl.style.opacity = '0';
+            this.screenEl.style.pointerEvents = 'none';
+            setTimeout(() => {
+              this.screenEl.style.display = 'none';
+            }, 550);
+          }
+        }
+      };
+
+      window.ProtecLoader.init();
+    })();
+  </script>
 
   <!-- ==============================================================================
        SIMULATEUR OPÉRATIONNEL MYPROTEC (CARTE PLEIN ÉCRAN & GESTION)
@@ -103,7 +174,6 @@
       
       <!-- Gauche : Brand / Logo + Antenne active -->
       <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto flex-shrink-0">
-        <a href="/" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-xl sm:rounded-2xl flex items-center gap-1.5 text-xs font-black text-slate-700 hover:text-pc-blue hover:bg-white/95 transition shadow-sm pointer-events-auto" title="Retourner à la page d'accueil du site"><i data-lucide="home" class="w-4 h-4 text-pc-blue"></i><span class="hidden lg:inline text-[11px]">Accueil</span></a>
         <div class="glass-panel px-2 sm:px-3.5 h-10 sm:h-12 rounded-xl sm:rounded-2xl flex items-center gap-1.5 sm:gap-2.5 cursor-pointer hover:bg-white/90 transition shadow-sm" onclick="window.game.openOverviewModal()" title="Vue d'ensemble de l'antenne">
           <!-- Logo MyProtec -->
           <img src="logo_myprotec.png" alt="MyProtec" class="h-5 sm:h-8 object-contain drop-shadow-sm flex-shrink-0" />
@@ -166,15 +236,15 @@
 
         <div class="h-6 w-px bg-slate-200/80 flex-shrink-0"></div>
 
-        <!-- Agrément Préfectoral -->
-        <div class="hidden lg:flex items-center gap-2 cursor-pointer group flex-shrink-0" onclick="window.game.openReputationModal()" title="Niveau de reconnaissance préfectorale">
-          <div class="w-7 h-7 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
+        <!-- Agréments de Sécurité Civile (A, B, C, D) -->
+        <div class="hidden lg:flex items-center gap-2 cursor-pointer group flex-shrink-0" onclick="window.game.openModule('recrutement')" title="Agréments de Sécurité Civile (Ministère & Préfecture)">
+          <div class="w-7 h-7 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center group-hover:bg-amber-100 transition">
             <i data-lucide="award" class="w-3.5 h-3.5"></i>
           </div>
           <div>
-            <div class="text-[9px] uppercase font-bold tracking-wider text-slate-400">Agrément</div>
-            <div class="text-xs font-extrabold text-slate-800">
-              <span id="stat-reputation-level">Rang 1</span>
+            <div class="text-[9px] uppercase font-bold tracking-wider text-slate-400">Agréments</div>
+            <div class="text-xs font-extrabold text-slate-800 flex items-center gap-1">
+              <span id="stat-reputation-level" class="text-amber-600 font-black">D</span>
             </div>
           </div>
         </div>
@@ -251,22 +321,14 @@
           <span class="text-xs font-extrabold hidden lg:inline">Admin</span>
         </button>
 
-        <!-- Bouton Accueil / Présentation (Landing Page) -->
-        <button id="landing-header-btn" onclick="window.MyProtecLanding && window.MyProtecLanding.showLanding()" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-1.5 text-slate-700 hover:text-pc-blue hover:bg-white/90 transition shadow-sm group font-bold text-xs" title="Afficher la page d'accueil MyProtec">
-          <i data-lucide="home" class="w-4 h-4 text-pc-blue"></i>
-          <span class="hidden xl:inline">Accueil</span>
-        </button>
-
         <!-- Auth / Account Widget -->
         <div id="auth-header-widget" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-2 shadow-sm cursor-pointer hover:bg-white/90 transition group" onclick="window.ProtecAuth.openAuthModal()" title="Compte Directeur & Sauvegarde">
           <div id="auth-status-icon" class="w-6 h-6 rounded-lg bg-pc-blue/10 text-pc-blue flex items-center justify-center group-hover:bg-pc-blue group-hover:text-white transition">
             <i data-lucide="user" class="w-3.5 h-3.5"></i>
           </div>
-          <div class="flex flex-col text-left">
+          <div class="flex flex-col text-left justify-center">
             <span id="auth-user-label" class="text-xs font-bold text-slate-700 truncate max-w-[85px] sm:max-w-[110px]">Connexion</span>
-            <span id="auth-db-status" class="text-[8px] sm:text-[9px] font-semibold text-slate-400 flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span> Non connecté
-            </span>
+            <span id="auth-db-status" class="hidden"></span>
           </div>
         </div>
 
@@ -282,9 +344,14 @@
           <span id="push-notif-badge" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-300 border-2 border-white"></span>
         </button>
 
-        <!-- Mentions Légales & Confidentialité RGPD / AdSense -->
-        <button onclick="window.ProtecPrivacy.openModal()" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-500 hover:text-pc-blue hover:bg-white/90 transition shadow-sm group flex items-center justify-center" title="Mentions Légales, Cookies & Politique de Confidentialité AdSense">
-          <i data-lucide="shield-check" class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+        <!-- Paramètres & Options du Jeu (Desktop) -->
+        <button onclick="window.game.openSettingsModal('settings')" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-500 hover:text-pc-blue hover:bg-white/90 transition shadow-sm relative group flex items-center justify-center" title="Paramètres du Jeu (Interface, Popups, Alertes)">
+          <i data-lucide="settings" class="w-3.5 h-3.5 group-hover:rotate-45 transition-transform"></i>
+        </button>
+
+        <!-- Aide & Guide Opérationnel du Jeu (?) -->
+        <button onclick="window.ProtecHelp.openModal()" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-600 hover:text-pc-orange hover:bg-white/90 transition shadow-sm group flex items-center justify-center font-black text-sm cursor-pointer" title="Guide & Aide du Directeur (Fonctionnement du jeu, Conseils & FAQ)">
+          <span class="w-6 h-6 rounded-full bg-slate-100 group-hover:bg-pc-orange group-hover:text-white transition flex items-center justify-center font-black text-xs shadow-xs">?</span>
         </button>
 
         <!-- Reset / Options Button -->
@@ -335,7 +402,7 @@
       </button>
       <button data-feature-key="pompiers" onclick="window.game.setFilter('pompiers')" id="filter-btn-pompiers" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-red-700 transition flex items-center gap-1.5 flex-shrink-0">
         <span class="w-2 h-2 rounded-full bg-red-700"></span>
-        Garde SDIS (<span id="count-pompiers">0</span>)
+        <span id="label-filter-pompiers">Garde SDIS</span> (<span id="count-pompiers">0</span>)
       </button>
       <button data-feature-key="social" onclick="window.game.setFilter('social')" id="filter-btn-social" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-purple-600 transition flex items-center gap-1.5 flex-shrink-0">
         <span class="w-2 h-2 rounded-full bg-purple-600"></span>
@@ -428,7 +495,7 @@
           <button data-feature-key="pompiers" onclick="window.game.openModule('pompiers'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="flame" class="w-4 h-4 text-red-700"></i>
-              <span>Garde SDIS</span>
+              <span id="label-dock-pompiers">Garde SDIS</span>
             </div>
             <span id="badge-submenu-pompiers" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
           </button>
@@ -451,6 +518,13 @@
               <span>Crise NOVI / ORSEC</span>
             </div>
             <span id="badge-submenu-crise" class="text-[9px] px-1.5 py-0.2 rounded-full bg-red-100 text-red-700 font-bold">0</span>
+          </button>
+          <button onclick="window.game.openAlertTriggerLogsModal(); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="clipboard-list" class="w-4 h-4 text-pc-blue"></i>
+              <span>Registre Déclenchements</span>
+            </div>
+            <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-blue-100 text-pc-blue font-bold">Logs</span>
           </button>
         </div>
       </div>
@@ -553,9 +627,9 @@
           <button onclick="window.game.openModule('marche_occasion'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="tag" class="w-4 h-4 text-pc-orange"></i>
-              <span>Bourse de l'Occasion</span>
+              <span>Marché de l'Occasion</span>
             </div>
-            <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-orange-100 text-orange-800 font-bold">Marché</span>
+            <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-orange-100 text-orange-800 font-bold">P2P</span>
           </button>
         </div>
       </div>
@@ -748,7 +822,7 @@
             <div class="w-9 h-9 rounded-xl bg-red-50 text-red-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
               <i data-lucide="flame" class="w-4.5 h-4.5"></i>
             </div>
-            <span class="text-xs font-bold text-red-700">Garde SDIS</span>
+            <span id="label-mobile-pompiers" class="text-xs font-bold text-red-700">Garde SDIS</span>
             <span class="text-[9px] text-slate-400">Caserne</span>
           </button>
           <button data-feature-key="social" onclick="window.game.closeMobileMenu(); window.game.openModule('social')" class="mobile-grid-btn group">
@@ -770,7 +844,7 @@
               <i data-lucide="award" class="w-4.5 h-4.5"></i>
             </div>
             <span class="text-xs font-bold text-slate-700">Conventions</span>
-            <span class="text-[9px] text-slate-400">CUMP & SDIS</span>
+            <span class="text-[9px] text-slate-400">CUMP & Pompiers</span>
           </button>
           <button onclick="window.game.closeMobileMenu(); window.game.openModule('subventions')" class="mobile-grid-btn group">
             <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
@@ -798,7 +872,7 @@
               <i data-lucide="graduation-cap" class="w-4.5 h-4.5"></i>
             </div>
             <span class="text-xs font-bold text-slate-700">Formations</span>
-            <span class="text-[9px] text-emerald-600 font-bold">Devis & Rangs</span>
+            <span class="text-[9px] text-emerald-600 font-bold">Diplômes & B2B</span>
           </button>
           <button data-feature-key="poles" onclick="window.game.closeMobileMenu(); window.game.openModule('poles')" class="mobile-grid-btn group">
             <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
@@ -861,7 +935,7 @@
               <i data-lucide="tag" class="w-4.5 h-4.5"></i>
             </div>
             <span class="text-xs font-bold text-pc-orange">Occasion</span>
-            <span class="text-[9px] text-slate-400">Bourse</span>
+            <span class="text-[9px] text-slate-400">Joueurs</span>
           </button>
         </div>
       </div>
@@ -921,7 +995,10 @@
           👑 Admin
         </button>
         <button onclick="window.game.closeMobileMenu(); window.ProtecAuth.openAuthModal()" class="flex-1 py-2.5 px-3 rounded-xl bg-pc-blue/10 text-pc-blue font-bold text-xs flex items-center justify-center gap-1.5 active:bg-pc-blue/20 transition">
-          <i data-lucide="user" class="w-4 h-4"></i> Mon Compte
+          <i data-lucide="user" class="w-4 h-4"></i> Compte
+        </button>
+        <button onclick="window.game.closeMobileMenu(); window.game.openSettingsModal('settings')" class="py-2.5 px-3 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 active:bg-slate-200 transition" title="Paramètres & Options">
+          <i data-lucide="settings" class="w-4 h-4"></i> Paramètres
         </button>
         <button onclick="window.game.closeMobileMenu(); window.ProtecAuth.openReferralShareModal()" class="py-2.5 px-3 rounded-xl bg-amber-50 text-amber-800 font-bold text-xs flex items-center justify-center gap-1.5 active:bg-amber-100 transition" title="Parrainage & QR Code">
           <i data-lucide="gift" class="w-4 h-4 text-amber-600"></i> Parrainage
@@ -934,7 +1011,7 @@
   </div>
 
   <!-- SLIDING CONTEXT DRAWER (Panneau Latéral Droit) -->
-  <aside id="context-drawer" class="fixed top-2 sm:top-4 right-2 sm:right-4 bottom-2 sm:bottom-4 w-[calc(100vw-1rem)] sm:w-[470px] md:w-[490px] z-40 hidden flex-col glass-panel-heavy rounded-3xl overflow-hidden shadow-2xl border border-white/90">
+  <aside id="context-drawer" class="fixed top-2 sm:top-4 right-2 sm:right-4 bottom-2 sm:bottom-4 w-[calc(100vw-1rem)] sm:w-[470px] md:w-[490px] z-50 hidden flex-col glass-panel-heavy rounded-3xl overflow-hidden shadow-2xl border border-white/90">
     
     <!-- Drawer Header -->
     <div class="px-5 py-4 border-b border-slate-100/80 flex items-center justify-between bg-white/40">
@@ -1191,6 +1268,8 @@
   <!-- APPLICATION LOGIC SCRIPTS -->
   <script src="js/dialogs.js"></script>
   <script src="js/departements.js"></script>
+  <script src="js/health_infrastructures.js"></script>
+  <script src="js/dps_generator.js"></script>
   <script src="js/systems.js"></script>
   <script src="js/modals.js"></script>
   <script src="js/advanced_systems.js"></script>
@@ -1202,6 +1281,7 @@
   <script src="js/qrcode.min.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/privacy.js"></script>
+  <script src="js/help.js"></script>
   <script src="js/ads.js"></script>
   <script src="js/notifications.js"></script>
   <script src="js/incidents.js"></script>
@@ -1236,6 +1316,6 @@
   <script src="js/apc.js"></script>
   <script src="js/marche_occasion.js"></script>
   <script src="js/evenements_reels.js"></script>
-  <script src="app.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

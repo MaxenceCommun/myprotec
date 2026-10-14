@@ -201,50 +201,339 @@ window.ProtecCriseLogistique = {
     }
   },
 
+  // Assainissement préventif des logs existants pour garantir la logique opérationnelle
+  sanitizeOperationalLogs(mission) {
+    if (!mission || !Array.isArray(mission.operationalLog)) return;
+    const title = (mission.title || '').toLowerCase();
+    const desc = (mission.desc || mission.scenarioText || '').toLowerCase();
+    const cType = (mission.crisisType || '').toLowerCase();
+    const allText = `${title} ${desc} ${cType}`;
+
+    const isFire = allText.includes('feu') || allText.includes('incendie') || allText.includes('immeuble') || allText.includes('habitation') || allText.includes('flamme') || allText.includes('ehpad');
+    const isFlood = allText.includes('inondation') || allText.includes('crue') || allText.includes('submersion') || allText.includes('pompage') || allText.includes('tempête') || allText.includes('eaux chargées');
+
+    // Si la mission concerne un feu ou un sinistre non inondable, éradiquer toute mention erronée de pompage
+    if (isFire && !isFlood) {
+      mission.operationalLog.forEach(l => {
+        if (l && typeof l.text === 'string' && l.text.toLowerCase().includes('pompage')) {
+          const vols = (mission.registeredVolunteers || []).length || 3;
+          l.source = 'PC de Crise CODIS 18';
+          l.text = `Dispositif Protec actif sur le secteur (${vols} intervenants engagés). Actions d’accueil au CAI, bilans secouristes et soutien sanitaire aux évacués en cours.`;
+        }
+      });
+    }
+  },
+
   generateNextLogEntry(mission, timeStr, volsCount) {
+    this.sanitizeOperationalLogs(mission);
+
     const logs = mission.operationalLog || [];
     const step = logs.length;
 
-    // Scénario 1 : Recherche de personne disparue
-    if (mission.crisisType === 'recherche_disparu' || mission.title.includes('Recherche')) {
-      const msgs = [
-        { source: 'Gendarmerie Nationale', text: 'Point de situation : Zone de battue élargie au massif forestier Nord. Télépilote drone requis pour survol thermique.', type: 'info' },
-        { source: 'PC Protec (Chef Dispositif)', text: 'Unité Drone déployée : caméra infrarouge en balayage sur les crêtes. Équipes cynotechniques engagées au sol.', type: 'info' },
-        { source: 'Équipe Cynotechnique', text: 'Marquage d’odeur positif par le chien de recherche dans la combe ! Les équipes pédestres convergent avec brancard.', type: 'milestone' },
-        { source: 'Commandement Gendarmerie', text: 'Personne disparue localisée consciente mais désorientée et en hypothermie légère ! Bilan secouriste en cours.', type: 'success' },
-        { source: 'Régulation SAMU 15', text: 'Évacuation de la victime par notre VPSP vers l’hôpital le plus proche. Fin de battue imminente.', type: 'milestone' }
+    const title = (mission.title || '').toLowerCase();
+    const desc = (mission.desc || mission.scenarioText || '').toLowerCase();
+    const cType = (mission.crisisType || '').toLowerCase();
+    const authority = (mission.authority || mission.authorityLabel || mission.alertOrigin || '').toLowerCase();
+    const allText = `${title} ${desc} ${cType} ${authority}`;
+
+    let msgs = null;
+
+    // 1. INCENDIE / FEU D'HABITATION / FEU D'IMMEUBLE / FEU URBAIN / EHPAD
+    if (
+      cType === 'feu_immeuble' || cType === 'incendie_ehpad' ||
+      allText.includes('feu') || allText.includes('incendie') || allText.includes('immeuble') ||
+      allText.includes('habitation') || allText.includes('flamme') || allText.includes('fumée') ||
+      allText.includes('ehpad')
+    ) {
+      msgs = [
+        {
+          source: 'PC de Crise CODIS 18',
+          text: `Important incendie en cours. Dispositif Protec actif sur le secteur (${volsCount} intervenants engagés). Armement immédiat du Centre d’Accueil des Impliqués (CAI) et sécurisation du périmètre.`,
+          type: 'info'
+        },
+        {
+          source: 'COS Sapeurs-Pompiers',
+          text: 'Sauvetages et reconnaissances en cours dans les étages sous ARI. Noria d’évacuation des résidents vers notre point de rassemblement des impliqués.',
+          type: 'info'
+        },
+        {
+          source: 'Équipage VPSP / CAI',
+          text: 'Prise en charge sanitaire au CAI : 4 personnes incommodées par les fumées placées sous oxygénothérapie normobarre. Bilans transmis à la régulation 15.',
+          type: 'milestone'
+        },
+        {
+          source: 'Chef de Dispositif Protec',
+          text: 'Point de situation : résidents sinistrés recensés au gymnase de repli. Distribution de couvertures isothermiques, réconfort psychologique et boissons chaudes.',
+          type: 'info'
+        },
+        {
+          source: 'Soutien Sanitaire SDIS',
+          text: 'Point ravitaillement opérationnel : réhydratation et collations énergétiques fournies aux binômes sapeurs-pompiers engagés au front d’attaque.',
+          type: 'info'
+        },
+        {
+          source: 'Cellule de Crise Mairie',
+          text: 'Foyer principal circonscrit par les sapeurs-pompiers. Prise en charge des sinistrés achevée et relogements d’urgence organisés par la municipalité.',
+          type: 'success'
+        }
       ];
-      return msgs[step % msgs.length] ? { ...msgs[step % msgs.length], time: timeStr, timestamp: Date.now() } : null;
     }
 
-    // Scénario 2 : Crash Aérien & CAI / CUMP
-    if (mission.crisisType === 'crash_aerien' || mission.title.includes('Crash')) {
-      const msgs = [
-        { source: 'Médecin Référent CUMP', text: 'Montage du CAI terminé sous le gymnase réquisitionné. 50 impliqués et familles accueillis par les secouristes Protec.', type: 'milestone' },
-        { source: 'Secrétariat SINUS Protec', text: 'Traçabilité rigoureuse : 38 bracelets SINUS posés, prise en charge psychologique active et réconfort chaud.', type: 'info' },
-        { source: 'CODIS 15/18', text: 'Rotation d’équipes nécessaire. Recommandation : relève des secouristes en première ligne pour prévenir la fatigue psychologique.', type: 'alert' },
-        { source: 'Préfecture', text: 'Point presse préfectoral : félicitations adressées aux associations agréées pour la dignité de l’accueil des familles.', type: 'info' }
+    // 2. INONDATIONS / CRUES / RUISSELLEMENT / TEMPÊTE / POMPAGE
+    else if (
+      cType === 'inondation_lotissements' || cType === 'tempete_rouge' ||
+      allText.includes('inondation') || allText.includes('crue') || allText.includes('submersion') ||
+      allText.includes('pompage') || allText.includes('tempête') || allText.includes('ruissellement') ||
+      allText.includes('eaux chargées') || allText.includes('motopompe')
+    ) {
+      msgs = [
+        {
+          source: 'PC de Crise CODIS / Mairie',
+          text: `Montée des eaux critique sur le secteur (${volsCount} intervenants engagés). Actions de reconnaissance, pompage des points bas et armement du CHU en cours.`,
+          type: 'info'
+        },
+        {
+          source: 'Sauveteurs Nautiques SDIS',
+          text: 'Sauvetages par embarcations légères sur les lotissements inondés. Noria d’évacuation des sinistrés vers le Centre d’Hébergement d’Urgence.',
+          type: 'info'
+        },
+        {
+          source: 'Équipe Technique Protec',
+          text: 'Motopompes thermiques déployées : épuisement et pompage actif des axes stratégiques et sous-sols prioritaires.',
+          type: 'milestone'
+        },
+        {
+          source: 'Gestionnaire CHU Protec',
+          text: 'Centre d’hébergement en gymnase opérationnel : lits de camp installés, distribution de repas chauds et vêtements secs aux riverains évacués.',
+          type: 'info'
+        },
+        {
+          source: 'Vigilance Crues & SIDPC',
+          text: 'Stabilisation de la crue et amorçage de la décrue. Poursuite des actions d’épuisement par pompage et sécurisation des habitations.',
+          type: 'success'
+        }
       ];
-      return msgs[step % msgs.length] ? { ...msgs[step % msgs.length], time: timeStr, timestamp: Date.now() } : null;
     }
 
-    // Scénario 3 : Incendie EHPAD & Évacuation
-    if (mission.crisisType === 'incendie_ehpad' || mission.title.includes('EHPAD')) {
-      const msgs = [
-        { source: 'COS Sapeurs-Pompiers', text: 'Foyer principal circonscrit au 2e étage. Évacuation préventive de 45 résidents âgés confiée à la Protection Civile.', type: 'milestone' },
-        { source: 'Équipage VPSP / VTP', text: 'Navettes de transport sanitaire en cours vers la salle municipale de repli. Oxygénothérapie dispensée à 4 résidents incommodés.', type: 'info' },
-        { source: 'Direction EHPAD', text: 'Tous les résidents sont sains et saufs et réinstallés sous surveillance secouriste. Fin des évacuations.', type: 'success' }
+    // 3. ACCIDENT GRAVE / PLAN NOVI / CARAMBOLAGE / AUTOCAR / VICTIMES MULTIPLES
+    else if (
+      cType === 'accident_novi' || allText.includes('novi') || allText.includes('carambolage') ||
+      allText.includes('accident') || allText.includes('autocar') || allText.includes('collision') ||
+      allText.includes('multiples victimes') || allText.includes('pma')
+    ) {
+      msgs = [
+        {
+          source: 'Régulation SAMU 15 / CODIS',
+          text: `Plan NOVI déclenché suite à accident à cinétique violente. Dispositif Protec actif (${volsCount} intervenants). Montage et armement du Poste Médical Avancé (PMA).`,
+          type: 'info'
+        },
+        {
+          source: 'Médecin Chef PMA',
+          text: 'Tri des victimes en cours avec pose de bracelets SINUS. Équipes Protec positionnées en soutien au brancardage et surveillance des Urgences Relatives.',
+          type: 'info'
+        },
+        {
+          source: 'Régulation Sanitaire 15',
+          text: 'Grande Noria d’évacuation : nos VPSP prennent en charge les blessés stabilisés pour transfert prioritaire vers les urgences du Trauma Center.',
+          type: 'milestone'
+        },
+        {
+          source: 'Officier de Liaison Protec',
+          text: 'Point de situation intermédiaire : 14 impliqués accueillis et réconfortés. Prise en charge psychologique des témoins et familles.',
+          type: 'info'
+        },
+        {
+          source: 'Commandant des Opérations',
+          text: 'Toutes les victimes ont été évacuées vers les hôpitaux de secteur. Voies dégagées et désarmement progressif du dispositif.',
+          type: 'success'
+        }
       ];
-      return msgs[step % msgs.length] ? { ...msgs[step % msgs.length], time: timeStr, timestamp: Date.now() } : null;
     }
 
-    // Scénario par défaut (Inondations, tempête, crise NOVI)
-    const defaults = [
-      { source: 'PC de Crise CODIS', text: `Dispositif Protec actif sur le secteur (${volsCount} intervenants engagés). Actions de soutien et pompage en cours.`, type: 'info' },
-      { source: 'Commandement Terrain', text: 'Point de situation intermédiaire : 12 mises en sécurité effectuées. Ravitaillement des sinistrés en cours.', type: 'info' },
-      { source: 'Astreinte Opérationnelle', text: 'Pensez à organiser une rotation d’équipes pour préserver les secouristes les plus fatigués.', type: 'alert' }
-    ];
-    return { ...defaults[step % defaults.length], time: timeStr, timestamp: Date.now() };
+    // 4. FERROVIAIRE / SNCF / TGV BLOQUÉ / NAUFRAGÉS DES TRANSPORTS
+    else if (
+      cType === 'tgv_bloque' || allText.includes('tgv') || allText.includes('sncf') ||
+      allText.includes('train') || allText.includes('ferroviaire') || allText.includes('voyageur') ||
+      allText.includes('gare') || allText.includes('caténaire')
+    ) {
+      msgs = [
+        {
+          source: 'Direction de Crise SNCF',
+          text: `Trafic ferroviaire interrompu. Dispositif Protec actif en gare (${volsCount} intervenants). Accueil des passagers et aménagement de la zone de repli.`,
+          type: 'info'
+        },
+        {
+          source: 'Coordination Gare',
+          text: 'Arrivée des navettes de passagers : distribution massive de bouteilles d’eau et collations d’urgence aux voyageurs déroutés.',
+          type: 'info'
+        },
+        {
+          source: 'Responsable CHU Protec',
+          text: 'Montage de 50 lits de camp dans le hall de la gare. Bilans de confort et assistance aux personnes vulnérables et enfants en bas âge.',
+          type: 'milestone'
+        },
+        {
+          source: 'Cellule Info Voyageurs',
+          text: 'Régulation des correspondances en cours. Présence rassurante des secouristes Protec le long des quais et en salle d’attente.',
+          type: 'info'
+        },
+        {
+          source: 'Direction de Crise SNCF',
+          text: 'Mise en place des bus de substitution achevée. Évacuation ordonnée et fin de prise en charge des derniers voyageurs.',
+          type: 'success'
+        }
+      ];
+    }
+
+    // 5. RECHERCHE DE PERSONNE DISPARUE / BATTUE / GENDARMERIE
+    else if (
+      cType === 'recherche_disparu' || cType === 'recherche_foret' ||
+      allText.includes('recherche') || allText.includes('disparu') || allText.includes('battue') ||
+      allText.includes('cyno') || allText.includes('forêt') || allText.includes('boisée')
+    ) {
+      msgs = [
+        {
+          source: 'Commandement Gendarmerie',
+          text: `Battue opérationnelle lancée. Dispositif Protec engagé (${volsCount} intervenants). Équipes pédestres en chaîne de ratissage et appui drone thermique.`,
+          type: 'info'
+        },
+        {
+          source: 'Unité Drone Protec',
+          text: 'Survol des crêtes et combes par drone : caméra infrarouge active. Transmission des secteurs suspects aux équipes cynotechniques au sol.',
+          type: 'info'
+        },
+        {
+          source: 'Équipe Cynotechnique Protec',
+          text: 'Marquage d’odeur positif par le chien de recherche ! Les équipes pédestres convergent avec lot de brancardage et coquille.',
+          type: 'milestone'
+        },
+        {
+          source: 'Commandement Gendarmerie',
+          text: 'Personne disparue localisée vivante et consciente, en hypothermie modérée. Bilan secouriste complet et réchauffement en cours.',
+          type: 'success'
+        },
+        {
+          source: 'Régulation SAMU 15',
+          text: 'Évacuation de la victime par notre VPSP vers les urgences les plus proches. Fin des opérations de battue.',
+          type: 'milestone'
+        }
+      ];
+    }
+
+    // 6. CRASH AÉRIEN & CAI / CUMP
+    else if (
+      cType === 'crash_aerien' || allText.includes('crash') || allText.includes('aérien') || allText.includes('avion')
+    ) {
+      msgs = [
+        {
+          source: 'Médecin Référent CUMP',
+          text: `Plan d'urgence aéronautique activé. Dispositif Protec opérationnel (${volsCount} secouristes). Montage du CAI sous le gymnase réquisitionné.`,
+          type: 'milestone'
+        },
+        {
+          source: 'Secrétariat SINUS Protec',
+          text: 'Traçabilité et identification : bracelets SINUS posés, prise en charge psychologique active des impliqués et réconfort chaud.',
+          type: 'info'
+        },
+        {
+          source: 'CODIS 15/18',
+          text: 'Rotation d’équipes nécessaire. Recommandation : relève des secouristes en première ligne pour prévenir la fatigue psychologique.',
+          type: 'alert'
+        },
+        {
+          source: 'Préfecture',
+          text: 'Point presse préfectoral : félicitations adressées aux équipes agréées pour la dignité et la rigueur de l’accueil des familles.',
+          type: 'info'
+        }
+      ];
+    }
+
+    // 7. INTOXICATION COLLECTIVE / SANITAIRE / CANICULE / GRAND FROID
+    else if (
+      allText.includes('intoxication') || allText.includes('sanitaire') || allText.includes('canicule') ||
+      allText.includes('froid') || allText.includes('maraude') || allText.includes('monoxyde')
+    ) {
+      msgs = [
+        {
+          source: 'Régulation SAMU 15',
+          text: `Alerte sanitaire déclarée. Dispositif Protec actif (${volsCount} intervenants). Mise en sécurité des victimes et bilans vitaux prioritaires.`,
+          type: 'info'
+        },
+        {
+          source: 'Équipage VPSP Protec',
+          text: 'Mesures des paramètres vitaux (SpO2, TA, glycémie) et gestes d’urgence réalisés. Oxygénothérapie et surveillance rapprochée.',
+          type: 'milestone'
+        },
+        {
+          source: 'Commandement Terrain Protec',
+          text: 'Point de situation intermédiaire : personnes vulnérables orientées et hydratées. Noria sanitaire assurée vers le centre hospitalier.',
+          type: 'info'
+        },
+        {
+          source: 'Autorités Sanitaires',
+          text: 'Foyer de risque stabilisé. Prise en charge médicale et secouriste réussie pour l’ensemble des impliqués.',
+          type: 'success'
+        }
+      ];
+    }
+
+    // 8. DISPOSITIF PRÉVISIONNEL DE SECOURS (DPS) / RASSEMBLEMENT DE FOULE
+    else if (
+      allText.includes('dps') || allText.includes('concert') || allText.includes('sport') ||
+      allText.includes('match') || allText.includes('festival') || allText.includes('marathon') ||
+      allText.includes('fête') || allText.includes('manifestation')
+    ) {
+      msgs = [
+        {
+          source: 'PC Opérationnel DPS',
+          text: `Dispositif Prévisionnel de Secours en place (${volsCount} intervenants). Postes de secours ouverts et binômes patrouilleurs déployés.`,
+          type: 'info'
+        },
+        {
+          source: 'Binôme Patrouilleur',
+          text: 'Prise en charge d’un malaise dans le secteur public : transfert vers le poste de secours fixe pour mise en observation.',
+          type: 'info'
+        },
+        {
+          source: 'Chef de Dispositif Protec',
+          text: 'Point de situation intermédiaire : soins de petite traumatologie assurés et 1 bilan transmis au médecin régulateur SAMU.',
+          type: 'milestone'
+        },
+        {
+          source: 'Organisateur / PC Sécurité',
+          text: 'Événement clôturé et dispersion calme du public. Démontage méthodique des tentes et inventaire des lots opérationnels.',
+          type: 'success'
+        }
+      ];
+    }
+
+    // 9. SCÉNARIO GÉNÉRALISTE / SECOURS AUX POPULATIONS (JAMAIS DE POMPAGE NI D'INCOHÉRENCE)
+    else {
+      msgs = [
+        {
+          source: 'PC de Crise CODIS / Autorités',
+          text: `Dispositif Protec actif sur le secteur (${volsCount} intervenants engagés). Actions de soutien aux populations, bilans et sécurisation en cours.`,
+          type: 'info'
+        },
+        {
+          source: 'Commandement Terrain Protec',
+          text: 'Point de situation intermédiaire : accueil, premier secours et mise en sécurité des impliqués menés en coordination avec les secours.',
+          type: 'info'
+        },
+        {
+          source: 'Cadre d’Astreinte Protec',
+          text: 'Poursuite de la mission. Pensez à anticiper une rotation d’équipes pour préserver la condition physique des intervenants.',
+          type: 'alert'
+        },
+        {
+          source: 'Coordination Opérationnelle',
+          text: 'Objectifs de secours et de soutien pleinement atteints. Situation stabilisée sur l’ensemble du secteur.',
+          type: 'success'
+        }
+      ];
+    }
+
+    return msgs[step % msgs.length] ? { ...msgs[step % msgs.length], time: timeStr, timestamp: Date.now() } : null;
   },
 
   // Résolution finale de la crise par le CODIS
@@ -565,6 +854,7 @@ window.ProtecCriseLogistique = {
   renderCrisisDetailsHTML(game, mission) {
     this.injectState(game);
     if (!mission.operationalLog) this.initMissionOperationalLog(mission);
+    this.sanitizeOperationalLogs(mission);
 
     const engaged = game.volunteers.filter(v => (mission.registeredVolunteers || []).includes(v.id));
     const logs = mission.operationalLog || [];
@@ -714,29 +1004,61 @@ window.ProtecCriseLogistique = {
     game.resources.money += rewardMoney;
     game.resources.reputationScore = Math.min(100, (game.resources.reputationScore || 0) + rewardReputation);
 
-    // Libérer les effectifs
-    (mission.registeredVolunteers || []).forEach(vId => {
-      const v = game.volunteers.find(vol => vol.id === vId);
-      if (v) {
-        v.status = 'disponible';
-        v.experience = Math.min(100, (v.experience || 30) + 10);
+    // Libérer tous les effectifs engagés
+    const engagedVols = (game.volunteers || []).filter(v =>
+      (mission.registeredVolunteers || []).includes(v.id) ||
+      (mission.assignedCrew?.volunteers || []).some(av => av.id === v.id) ||
+      v.currentMissionId === mission.id ||
+      v.missionId === mission.id
+    );
+    engagedVols.forEach(v => {
+      v.status = 'disponible';
+      v.currentMissionId = null;
+      v.missionId = null;
+      v.experience = Math.min(100, (v.experience || 30) + 10);
+      v.stress = Math.max(5, (v.stress || 20) - 10);
+    });
+
+    // Libérer tous les véhicules engagés et marquer les VPSP pour réarmement
+    const engagedVehicles = (game.vehicles || []).filter(v =>
+      v.currentMissionId === mission.id ||
+      v.missionId === mission.id ||
+      (mission.assignedVehicles || []).includes(v.id) ||
+      (mission.assignedCrew?.vehicles || []).some(av => av.id === v.id)
+    );
+    engagedVehicles.forEach(v => {
+      v.status = 'disponible';
+      v.currentMissionId = null;
+      v.missionId = null;
+      if (v.type === 'VPSP' || v.name.includes('VPSP')) {
+        v.isRearmed = false;
       }
     });
 
-    // Libérer les véhicules et marquer le VPSP comme nécessitant réarmement
-    (mission.assignedCrew?.vehicles || []).forEach(vehObj => {
-      const v = game.vehicles.find(veh => veh.id === vehObj.id);
-      if (v) {
-        v.status = 'disponible';
-        if (v.type === 'VPSP' || v.name.includes('VPSP')) {
-          v.isRearmed = false; // Nécessite désinfection & réarmement
+    try {
+      if (window.ProtecAudio) {
+        if (typeof window.ProtecAudio.playSuccessChime === 'function') {
+          window.ProtecAudio.playSuccessChime();
+        } else if (typeof window.ProtecAudio.playInfoSound === 'function') {
+          window.ProtecAudio.playInfoSound();
         }
       }
-    });
+    } catch (e) {}
 
-    if (window.ProtecAudio) window.ProtecAudio.playContractSignedSound();
     game.showToast('Dispositif Clôturé avec Succès ! 🏆', `Fin de mission validée. +${rewardMoney} € et +${rewardReputation} pts de réputation !`, 'green');
-    game.closeDrawer();
+    
+    if (typeof game.closeDrawer === 'function') game.closeDrawer();
+    const modal = document.getElementById('mission-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+    const drawer = document.getElementById('context-drawer');
+    if (drawer) {
+      drawer.classList.add('hidden');
+      drawer.classList.remove('flex');
+    }
+
     game.saveGame();
     game.renderMissions();
     game.updateStatsUI();

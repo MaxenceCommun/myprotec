@@ -167,7 +167,7 @@ window.ProtecSystems = {
     const iconHtml = `
       <div class="vehicle-marker-container flex items-center gap-1.5 px-2 py-1 rounded-xl bg-white/95 border-2 ${isEmergency ? (statusTarget === 4 ? 'border-red-500 ring-2 ring-red-400/50' : 'border-pc-orange ring-1 ring-orange-400/40') : 'border-slate-300 shadow-md'} shadow-xl text-slate-800 text-[10px] font-black cursor-pointer">
         ${isEmergency ? '<div class="beacon-flash"></div>' : '<div class="w-2 h-2 rounded-full bg-slate-400"></div>'}
-        <img src="${imgUrl}" alt="${vehicle.name}" class="h-4 w-7 object-contain flex-shrink-0 drop-shadow-sm" onerror="this.outerHTML='<span class=\"text-xs font-bold text-pc-blue\">VPSP</span>'" />
+        <img src="${imgUrl}" alt="${vehicle.name}" class="h-4 w-7 object-contain flex-shrink-0 drop-shadow-sm" onerror="this.style.display='none'" />
         <span class="tracking-tight">${vehicle.name}</span>
         ${isEmergency ? '<span class="text-[8px] px-1 py-0.2 rounded font-extrabold bg-red-100 text-red-700 uppercase">Urgence</span>' : ''}
       </div>
@@ -188,11 +188,12 @@ window.ProtecSystems = {
       (destCoords.lng - originCoords.lng) * 111 * Math.cos(originCoords.lat * Math.PI / 180)
     ));
 
-    // Vitesse adaptée :
-    // - Allure normale (DPS, maraude, retour antenne statut 6) : 45 km/h sans gyrophare
-    // - Départ urgence (SAMU, transport CH, NOVI, pompiers) : +50% plus rapide (~70-75 km/h avec gyrophare)
-    const realisticSpeedKmh = isEmergency ? (statusTarget === 4 ? 74 : 68) : 45;
-    const baseDurationSec = Math.max(20, Math.min(180, Math.round((distKm / realisticSpeedKmh) * 3600 * 0.35)));
+    // Vitesse adaptée selon la réalité du terrain et la doctrine de conduite d'urgence :
+    // - Allure normale (DPS, maraude, retour antenne statut 6) : ~35 km/h en agglomération
+    // - Départ urgence (SAMU, pompiers statut 2) : ~48-50 km/h (prioritaire mais sécuritaire en zone urbaine)
+    // - Évacuation sanitaire CHU (statut 4) : ~50-52 km/h (confort et stabilité de la victime transportée)
+    const realisticSpeedKmh = isEmergency ? (statusTarget === 4 ? 52 : 48) : 35;
+    const baseDurationSec = Math.max(50, Math.min(300, Math.round((distKm / realisticSpeedKmh) * 3600 * 0.85)));
     const durationMs = (baseDurationSec * 1000) / Math.max(1, game.speed || 1);
     const now = Date.now();
 
@@ -239,6 +240,27 @@ window.ProtecSystems = {
 
     // Démarrage de la boucle haute-fréquence (60 FPS) pour une animation fluide
     this.ensureTransitLoop(game);
+
+    // Diffusion multijoueur temps réel du déplacement de véhicule vers les autres confrères
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.broadcastVehicleTransit === 'function') {
+      const baseStation = (game.stations || []).find(s => s.id === vehicle.stationId) || game.stations?.[0];
+      window.ProtecSupabase.broadcastVehicleTransit({
+        playerId: game.player?.id,
+        playerName: game.player?.name || game.player?.username || 'Directeur d’Antenne',
+        stationName: baseStation?.name || 'Antenne Protection Civile',
+        city: baseStation?.city || game.player?.city || 'Paris',
+        vehicleId: vehicle.id,
+        vehicleName: vehicle.name,
+        vehicleType: vehicle.type,
+        origin: originCoords,
+        dest: destCoords,
+        statusTarget: statusTarget,
+        isEmergency: isEmergency,
+        missionTitle: mission?.title || 'Intervention de secours',
+        speedKmh: realisticSpeedKmh,
+        durationMs: durationMs
+      });
+    }
 
     // Bip radio et message de départ
     this.playRadioChirp();
@@ -292,6 +314,27 @@ window.ProtecSystems = {
 
         if (t.marker && currentPos) {
           t.marker.setLatLng(currentPos);
+
+          if (t.isRemote) {
+            const remainingKm = (t.distKm * (1 - progress)).toFixed(1);
+            const remainingSec = Math.max(1, Math.round((t.durationMs - elapsed) / 1000));
+            t.marker.setTooltipContent(`
+              <div style="font-family: inherit; font-size: 11px; line-height: 1.35;">
+                <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+                  <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${t.isEmergency ? '#ef4444' : '#6366f1'};"></span>
+                  <strong style="color: #1e1b4b; font-size: 12px;">${t.vehicle.name}</strong>
+                </div>
+                <div style="color: #4338ca; font-weight: 800; font-size: 11px;">Directeur : ${t.remotePlayerName || 'Directeur d’Antenne'}</div>
+                <div style="color: #64748b; font-size: 10px;">${t.remoteStationName || 'Antenne Partenaire'} (${t.remoteCity || ''})</div>
+                <div style="color: #0369a1; font-size: 10px; margin-top: 2px;">Vitesse : ~${t.speedKmh} km/h • Reste : <strong>${remainingKm} km</strong> (~${remainingSec}s)</div>
+                <div style="color: ${t.isEmergency ? '#dc2626' : '#475569'}; font-weight: 700; font-size: 10px; margin-top: 2px;">
+                  ${t.isEmergency ? '🚨 Départ Urgence' : 'Déplacement Secteur'} • ${t.missionTitle || 'Opérations'}
+                </div>
+              </div>
+            `);
+            continue;
+          }
+
           const remainingKm = (t.distKm * (1 - progress)).toFixed(1);
           const remainingSec = Math.max(1, Math.round((t.durationMs - elapsed) / 1000));
           const hospName = t.evacData?.hospital?.name || t.mission?.evacHospitalData?.hospital?.name || 'Urgences de Secteur';
@@ -329,6 +372,13 @@ window.ProtecSystems = {
         if (t.marker && game.map) game.map.removeLayer(t.marker);
         game.transits.splice(i, 1);
 
+        if (t.isRemote) {
+          if (typeof t.onArrival === 'function') {
+            try { t.onArrival(); } catch(e) {}
+          }
+          continue;
+        }
+
         this.playRadioChirp();
         if (t.statusTarget === 2) {
           if (t.vehicle) t.vehicle.status = 'sur_les_lieux';
@@ -349,6 +399,12 @@ window.ProtecSystems = {
           game.showToast('Retour Antenne', `${t.vehicle.name} a regagné sa base. Véhicule disponible.`, 'blue');
         }
 
+        if (t.vehicle) {
+          const addedKm = Math.max(1, Math.round(t.distKm || 1));
+          t.vehicle.mileage = (t.vehicle.mileage || t.vehicle.kilometrage || 118400) + addedKm;
+          t.vehicle.kilometrage = t.vehicle.mileage;
+        }
+
         if (typeof t.onArrival === 'function') {
           t.onArrival();
         }
@@ -360,6 +416,184 @@ window.ProtecSystems = {
 
     // Mise à jour continue des missions gérées par la timeline multi-étapes
     this.updateTimelineMissions(game);
+  },
+
+  // --- TRANSIT D'UN VÉHICULE DISTANT MULTIJOUEUR (AUTRES JOUEURS RÉELS) ---
+  async startRemoteVehicleTransit(game, data) {
+    if (!game || !game.map || !data || !data.origin || !data.dest) return;
+    if (game.player?.id && data.playerId && String(data.playerId) === String(game.player.id)) return;
+
+    const transitId = `remote-transit-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const routeCoords = await this.fetchRouteCoordinates(data.origin, data.dest);
+
+    const isEmergency = !!data.isEmergency;
+    const polyline = L.polyline(routeCoords, {
+      color: isEmergency ? '#4f46e5' : '#0284c7',
+      weight: isEmergency ? 4 : 3,
+      opacity: isEmergency ? 0.8 : 0.65,
+      dashArray: isEmergency ? null : '5, 5',
+      className: isEmergency ? 'route-line-animated' : 'route-line-remote'
+    }).addTo(game.map);
+
+    const vehName = data.vehicleName || 'VPSP Partenaire';
+    const playerName = data.playerName || 'Directeur d’Antenne';
+    const stationName = data.stationName || 'Antenne Alliée';
+    const cityName = data.city || '';
+    const imgUrl = game.getVehicleImage ? game.getVehicleImage(data.vehicleType || 'VPSP') : `images/vehicles/${data.vehicleType || 'VPSP'}.png`;
+
+    const iconHtml = `
+      <div class="vehicle-marker-container flex items-center gap-1.5 px-2 py-1 rounded-xl bg-white/95 border-2 ${isEmergency ? 'border-indigo-600 ring-2 ring-indigo-400/50' : 'border-indigo-300 shadow-md'} shadow-xl text-slate-800 text-[10px] font-black cursor-pointer">
+        ${isEmergency ? '<div class="beacon-flash" style="background:#4f46e5 !important; box-shadow:0 0 10px #6366f1 !important;"></div>' : '<div class="w-2 h-2 rounded-full bg-indigo-500"></div>'}
+        <img src="${imgUrl}" alt="${vehName}" class="h-4 w-7 object-contain flex-shrink-0 drop-shadow-sm" onerror="this.style.display='none'" />
+        <span class="tracking-tight">${vehName}</span>
+        <span class="text-[8px] px-1 py-0.2 rounded font-extrabold bg-indigo-100 text-indigo-700 uppercase">${playerName}</span>
+      </div>
+    `;
+
+    const icon = L.divIcon({
+      html: iconHtml,
+      className: 'vehicle-leaflet-icon',
+      iconSize: [142, 32],
+      iconAnchor: [71, 16]
+    });
+
+    const marker = L.marker(routeCoords[0], { icon: icon, zIndexOffset: isEmergency ? 1100 : 750 }).addTo(game.map);
+
+    const distKm = Math.max(0.8, Math.hypot(
+      (data.dest.lat - data.origin.lat) * 111,
+      (data.dest.lng - data.origin.lng) * 111 * Math.cos(data.origin.lat * Math.PI / 180)
+    ));
+
+    const realisticSpeedKmh = data.speedKmh || (isEmergency ? 48 : 35);
+    const durationMs = data.durationMs || Math.max(45000, Math.round((distKm / realisticSpeedKmh) * 3600 * 1000 * 0.85));
+
+    marker.bindTooltip(`
+      <div style="font-family: inherit; font-size: 11px; line-height: 1.35;">
+        <strong style="color: #1e1b4b; font-size: 12px;">${vehName}</strong><br>
+        <span style="color: #4f46e5; font-weight: 700;">Directeur : ${playerName}</span><br>
+        <span style="color: #64748b;">${stationName} (${cityName})</span><br>
+        <span style="color: #0369a1;">Vitesse : ~${realisticSpeedKmh} km/h • Distance : ${distKm.toFixed(1)} km</span><br>
+        <span style="color: ${isEmergency ? '#dc2626' : '#475569'}; font-weight: 700;">${isEmergency ? '🚨 Départ Urgence' : 'Déplacement Normal'}</span>
+      </div>
+    `, {
+      direction: 'top',
+      offset: [0, -18],
+      className: 'glass-panel text-xs p-2'
+    });
+
+    const transit = {
+      id: transitId,
+      isRemote: true,
+      remotePlayerName: playerName,
+      remoteStationName: stationName,
+      remoteCity: cityName,
+      missionTitle: data.missionTitle || 'Opérations de Secours',
+      vehicle: { name: vehName, type: data.vehicleType || 'VPSP' },
+      isEmergency: isEmergency,
+      routeCoords: routeCoords,
+      distKm: distKm,
+      speedKmh: realisticSpeedKmh,
+      startTime: Date.now(),
+      durationMs: durationMs,
+      currentStep: 0,
+      polyline: polyline,
+      marker: marker,
+      onArrival: data.onArrival || null
+    };
+
+    if (!game.transits) game.transits = [];
+    game.transits.push(transit);
+    this.ensureTransitLoop(game);
+  },
+
+  // --- TRAFIC MULTIJOUEUR AMBIANT RÉALISTE DES ANTENNES DE FRANCE ---
+  startMultiplayerTraffic(game) {
+    if (this._multiplayerTrafficStarted) return;
+    this._multiplayerTrafficStarted = true;
+
+    const scheduleNext = () => {
+      const delay = Math.floor(Math.random() * 15000) + 20000; // Toutes les 20-35 secondes
+      setTimeout(async () => {
+        try {
+          await this.dispatchAmbientAllianceVehicle(game);
+        } catch (e) {
+          console.warn('Erreur traffic multijoueur ambiant:', e);
+        }
+        scheduleNext();
+      }, delay);
+    };
+
+    // Premier départ après 5 secondes d'initialisation de la carte
+    setTimeout(scheduleNext, 5000);
+  },
+
+  async dispatchAmbientAllianceVehicle(game) {
+    if (!game || !game.map) return;
+    const stations = (game.allianceStations || []).filter(st => {
+      if (!st || !st.lat || !st.lng) return false;
+      const lat = parseFloat(st.lat);
+      const lng = parseFloat(st.lng);
+      return !isNaN(lat) && !isNaN(lng);
+    });
+
+    if (stations.length === 0) return;
+
+    // Ne pas saturer la carte s'il y a déjà 3 véhicules distants qui roulent simultanément
+    const currentRemoteTransits = (game.transits || []).filter(t => t.isRemote);
+    if (currentRemoteTransits.length >= 3) return;
+
+    // Sélection aléatoire d'une antenne confrère
+    const station = stations[Math.floor(Math.random() * stations.length)];
+    const lat = parseFloat(station.lat);
+    const lng = parseFloat(station.lng);
+
+    // Éviter de doubler un départ sur la même antenne
+    if (currentRemoteTransits.some(t => t.remoteStationName === station.name)) return;
+
+    // Générer une destination opérationnelle dans le secteur de l'antenne (1.5 à 3.8 km)
+    const angle = Math.random() * Math.PI * 2;
+    const distanceDeg = 0.015 + Math.random() * 0.022;
+    const destLat = lat + Math.sin(angle) * distanceDeg;
+    const destLng = lng + Math.cos(angle) * (distanceDeg / Math.cos(lat * Math.PI / 180));
+
+    const isEmergency = Math.random() > 0.35;
+    const vehType = (station.vehicles && station.vehicles > 1 && Math.random() > 0.6) ? 'VTU' : 'VPSP';
+    const cityUpper = (station.city || 'SECTEUR').toUpperCase();
+    const vehName = `${vehType} 01 ${cityUpper}`;
+
+    // Aller : vers le lieu de mission / DPS
+    await this.startRemoteVehicleTransit(game, {
+      playerId: station.playerId || 'remote-alliance',
+      playerName: station.playerName || 'Directeur d’Antenne',
+      stationName: station.name || `Antenne Protection Civile ${station.city}`,
+      city: station.city || '',
+      vehicleName: vehName,
+      vehicleType: vehType,
+      origin: { lat, lng },
+      dest: { lat: destLat, lng: destLng },
+      isEmergency: isEmergency,
+      speedKmh: isEmergency ? 48 : 35,
+      missionTitle: isEmergency ? 'Intervention Urgence 15' : 'Dispositif Prévisionnel de Secours',
+      onArrival: () => {
+        // Pause sur les lieux (12s), puis retour à la base
+        setTimeout(() => {
+          if (!game || !game.map) return;
+          this.startRemoteVehicleTransit(game, {
+            playerId: station.playerId || 'remote-alliance',
+            playerName: station.playerName || 'Directeur d’Antenne',
+            stationName: station.name || `Antenne Protection Civile ${station.city}`,
+            city: station.city || '',
+            vehicleName: vehName,
+            vehicleType: vehType,
+            origin: { lat: destLat, lng: destLng },
+            dest: { lat, lng },
+            isEmergency: false,
+            speedKmh: 35,
+            missionTitle: 'Retour Antenne'
+          });
+        }, 12000);
+      }
+    });
   },
 
   // =========================================================================

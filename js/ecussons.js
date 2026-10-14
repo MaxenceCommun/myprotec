@@ -463,21 +463,14 @@ window.ProtecEcussons = {
             <button onclick="window.ProtecEcussons.switchTab('bourse')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.currentTab === 'bourse' ? 'bg-indigo-600 text-white shadow-md' : 'glass-button text-slate-700'}">
               <span>🤝</span>
               <span>Bourse au Troc</span>
-              <span class="px-2 py-0.5 rounded-full text-[10px] bg-indigo-800/60 text-white">Échanges</span>
             </button>
             <button onclick="window.ProtecEcussons.switchTab('ventes')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.currentTab === 'ventes' ? 'bg-emerald-600 text-white shadow-md' : 'glass-button text-slate-700'}">
               <span>🏷️</span>
               <span>Marché des Ventes (€)</span>
-              <span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-800/60 text-white">Inter-Joueurs</span>
             </button>
           </div>
 
           <div class="flex items-center gap-3">
-            <button onclick="window.ProtecEcussons.openCreateCustomBadgeModal()" class="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-orange-500 to-amber-500 hover:brightness-110 active:scale-95 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
-              <span>🎨</span>
-              <span>Créer un Écusson</span>
-            </button>
-
             <div class="text-xs text-slate-500 font-bold hidden sm:flex items-center gap-2">
               <span>Progression : <strong>${percentOwned}%</strong></span>
               <div class="w-16 bg-slate-200 h-2 rounded-full overflow-hidden">
@@ -500,14 +493,10 @@ window.ProtecEcussons = {
                 <div>
                   <h4 class="text-xs font-black text-white uppercase tracking-wider">Votre tableau d'écussons est vierge</h4>
                   <p class="text-[11px] text-amber-200/90 leading-relaxed">
-                    Par défaut, vous ne possédez aucun écusson. Concevez l'écusson officiel de votre antenne et mettez-le en vente entre joueurs pour gagner de l'argent et équiper votre centre de secours !
+                    Par défaut, vous ne possédez aucun écusson. Participez aux gardes, dispositifs de secours, missions opérationnelles et événements officiels pour remporter et collectionner vos premiers écussons !
                   </p>
                 </div>
               </div>
-              <button onclick="window.ProtecEcussons.openCreateCustomBadgeModal()" class="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-amber-950 font-black text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap">
-                <span>🎨</span>
-                <span>Créer mon Écusson d'Antenne</span>
-              </button>
             </div>
           ` : ''}
 
@@ -713,10 +702,10 @@ window.ProtecEcussons = {
         <div class="p-4 rounded-2xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-blue-900 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h4 class="text-sm font-black flex items-center gap-2">
-              <span>🤝</span> Bourse d'Échanges Inter-Antennes
+              <span>🤝</span> Bourse de Troc
             </h4>
             <p class="text-xs text-indigo-200">
-              Échangez vos doublons contre des écussons manquants avec les directeurs d’antenne alliés.
+              Troquez vos doublons contre des écussons manquants pour compléter votre collection d'antenne.
             </p>
           </div>
           <div>
@@ -1002,6 +991,12 @@ window.ProtecEcussons = {
   // CRÉATION D'UN ÉCUSSON PERSONNALISÉ D'ANTENNE
   // ==============================================================================
   openCreateCustomBadgeModal() {
+    if (window.game && typeof window.game.showToast === 'function') {
+      window.game.showToast('Accès Restreint', "La conception d'écussons officiels n'est pas disponible pour les directeurs.", 'orange');
+    }
+    return;
+  },
+  _unused_openCreateCustomBadgeModal() {
     const game = window.game;
     const defaultName = game?.stations?.[0]?.name ? `Écusson ${game.stations[0].name}` : 'Écusson Officiel d’Antenne';
 
@@ -1436,10 +1431,10 @@ window.ProtecEcussons = {
         <div class="p-4 rounded-2xl bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h4 class="text-sm font-black flex items-center gap-2">
-              <span>🏷️</span> Marché des Ventes Inter-Joueurs (€)
+              <span>🏷️</span> Marché des Ventes (€)
             </h4>
             <p class="text-xs text-emerald-200">
-              Vendez vos écussons et vos créations officielles pour vous faire de l'argent et enrichissez votre collection d'antenne !
+              Acquérez des écussons commémoratifs ou vendez vos exemplaires pour financer votre antenne !
             </p>
           </div>
           <div class="flex items-center gap-2">
@@ -1485,16 +1480,16 @@ window.ProtecEcussons = {
         <div class="space-y-3">
           <div class="flex items-center justify-between">
             <h5 class="text-xs font-black text-slate-700 uppercase tracking-wider">
-              Écussons en Vente par les Autres Antennes (${activeNetworkSales.length})
+              Écussons Disponibles à la Vente (${activeNetworkSales.length})
             </h5>
-            <span class="text-[10px] text-slate-400 font-bold">Transaction directe 100% sécurisée</span>
+            <span class="text-[10px] text-slate-400 font-bold">Transaction 100% sécurisée</span>
           </div>
 
           ${activeNetworkSales.length === 0 ? `
             <div class="p-8 rounded-3xl bg-slate-50 border-2 border-dashed border-slate-200 text-center space-y-2">
               <span class="text-3xl">📭</span>
-              <p class="text-xs font-bold text-slate-700">Aucun écusson actuellement en vente par d'autres directeurs.</p>
-              <p class="text-[11px] text-slate-400">Créez votre propre écusson ou mettez un exemplaire en vente pour lancer le marché associatif !</p>
+              <p class="text-xs font-bold text-slate-700">Aucun écusson actuellement disponible sur le marché.</p>
+              <p class="text-[11px] text-slate-400">Mettez un exemplaire en vente depuis votre collection pour enrichir le marché associatif !</p>
             </div>
           ` : `
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1511,7 +1506,7 @@ window.ProtecEcussons = {
                         <div>
                           <span class="text-[9px] uppercase font-black text-slate-400 block">${badge.categorie || 'antenne'} • ${badge.rarete || 'rare'}</span>
                           <h4 class="text-xs font-extrabold text-slate-900 leading-tight">${badge.nom || 'Écusson'}</h4>
-                          <span class="text-[10px] text-slate-500 font-semibold block mt-0.5">Vendeur : ${s.seller_name || 'Directeur'} (${s.seller_dept || '54'})</span>
+                          <span class="text-[10px] text-slate-500 font-semibold block mt-0.5">Vendeur : ${s.seller_name || 'Antenne Protection Civile'} (${s.seller_dept || '54'})</span>
                         </div>
                       </div>
                     </div>

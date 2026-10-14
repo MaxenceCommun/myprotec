@@ -74,123 +74,62 @@
   <!-- ==============================================================================
        ÉCRAN DE CHARGEMENT INITIAL (SPLASH SCREEN OPÉRATIONNEL MYPROTEC)
        ============================================================================== -->
-  <div id="app-loading-screen" style="position: fixed; inset: 0; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #020617; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; transition: opacity 0.6s ease-out, transform 0.6s ease-out, visibility 0.6s;" class="select-none overflow-hidden">
-    
-    <!-- Halos lumineux animés Protection Civile (Bleu FNPC & Orange Secours) -->
-    <div style="position: absolute; inset: 0; overflow: hidden; pointer-events: none;">
-      <div style="position: absolute; top: -100px; left: -100px; width: 420px; height: 420px; background: radial-gradient(circle, rgba(0, 46, 109, 0.5) 0%, transparent 70%); border-radius: 50%; filter: blur(70px);"></div>
-      <div style="position: absolute; bottom: -100px; right: -100px; width: 420px; height: 420px; background: radial-gradient(circle, rgba(255, 102, 0, 0.3) 0%, transparent 70%); border-radius: 50%; filter: blur(80px);"></div>
-      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 550px; height: 550px; background: radial-gradient(circle, rgba(15, 23, 42, 0.9) 0%, transparent 80%); border-radius: 50%;"></div>
-    </div>
-
-    <!-- Conteneur central d'initialisation -->
-    <div class="relative z-10 flex flex-col items-center max-w-sm w-full px-6 text-center space-y-6">
+  <div id="app-loading-screen" style="position: fixed; inset: 0; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; transition: opacity 0.5s ease-out, visibility 0.5s;" class="select-none">
+    <div class="flex flex-col items-center justify-center gap-5 text-center">
       
-      <!-- Logo MyProtec avec halo doux -->
+      <!-- Logo MyProtec avec douce pulsation -->
       <div class="relative flex items-center justify-center">
-        <div class="absolute inset-0 rounded-3xl bg-blue-600/20 blur-xl animate-pulse"></div>
-        <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-slate-900/90 border border-slate-700/80 p-3.5 shadow-2xl flex items-center justify-center backdrop-blur-xl">
-          <img src="logo_myprotec.png" alt="MyProtec" class="w-full h-full object-contain drop-shadow-md" />
-        </div>
+        <div class="absolute -inset-4 rounded-full bg-orange-500/10 blur-xl animate-pulse"></div>
+        <img src="logo_myprotec.png" onerror="this.src='logo.png'" alt="MyProtec" class="relative h-16 sm:h-20 w-auto object-contain drop-shadow-sm transition-transform duration-700 animate-pulse" />
       </div>
 
-      <!-- Titres & État opérationnel -->
-      <div class="space-y-2">
-        <div class="flex items-center justify-center gap-2">
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-900/80 text-sky-400 border border-sky-500/30 shadow-xs">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            Simulateur Opérationnel
-          </span>
-        </div>
-        <h1 class="text-xl sm:text-2xl font-black text-white tracking-tight">Protection Civile</h1>
-        <p class="text-xs text-slate-400 font-medium h-5 flex items-center justify-center" id="app-loading-status">Connexion au réseau opérationnel...</p>
+      <!-- Petit texte discret "Chargement..." -->
+      <div class="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-400 tracking-wider">
+        <span>Chargement</span>
+        <span class="inline-flex gap-0.5">
+          <span class="w-1 h-1 rounded-full bg-orange-500 animate-bounce" style="animation-delay: 0ms;"></span>
+          <span class="w-1 h-1 rounded-full bg-blue-700 animate-bounce" style="animation-delay: 150ms;"></span>
+          <span class="w-1 h-1 rounded-full bg-orange-500 animate-bounce" style="animation-delay: 300ms;"></span>
+        </span>
       </div>
 
-      <!-- Barre de progression moderne -->
-      <div class="w-full space-y-2 pt-1">
-        <div class="w-full h-2 rounded-full bg-slate-800/90 border border-slate-700/60 overflow-hidden p-0.5">
-          <div id="app-loading-bar" class="h-full rounded-full bg-gradient-to-r from-blue-700 via-sky-500 to-orange-500 transition-all duration-300 ease-out" style="width: 15%;"></div>
-        </div>
-        <div class="flex items-center justify-between text-[10px] font-mono font-bold text-slate-500 px-0.5">
-          <span id="app-loading-step">Initialisation...</span>
-          <span id="app-loading-percent">15%</span>
-        </div>
-      </div>
-
-      <!-- Conseils & Immersion Protection Civile -->
-      <div class="pt-3 border-t border-slate-800/70 w-full">
-        <p class="text-[11px] text-slate-400 italic leading-relaxed" id="app-loading-tip">
-          💡 « Un Dispositif Prévisionnel de Secours (DPS) s’organise toujours en concertation avec les autorités publiques. »
-        </p>
-      </div>
     </div>
   </div>
 
   <script>
     (function() {
-      const tipsList = [
-        "Un Dispositif Prévisionnel de Secours (DPS) s’organise toujours en concertation avec les autorités publiques.",
-        "Veillez à la qualification de vos équipages (PSE1, PSE2, Chef d’Équipe) avant chaque engagement.",
-        "L’agrément D autorise les postes de secours, l’agrément A les opérations d’urgence et d'évacuation.",
-        "Vérifiez régulièrement vos lots de secours (DSA, oxygénothérapie, colliers cervicaux) pour éviter toute rupture.",
-        "Maintenez la cohésion et le moral de vos secouristes grâce aux formations et au parrainage.",
-        "Les conventions (SAMU, SDIS, SNCF) renforcent votre réputation institutionnelle et financent votre parc."
-      ];
-
       window.ProtecLoader = {
         progress: 15,
         isFinished: false,
         screenEl: null,
-        barEl: null,
-        percentEl: null,
-        stepEl: null,
-        statusEl: null,
-        tipEl: null,
 
         init() {
           this.screenEl = document.getElementById('app-loading-screen');
-          this.barEl = document.getElementById('app-loading-bar');
-          this.percentEl = document.getElementById('app-loading-percent');
-          this.stepEl = document.getElementById('app-loading-step');
-          this.statusEl = document.getElementById('app-loading-status');
-          this.tipEl = document.getElementById('app-loading-tip');
-
-          if (this.tipEl && tipsList.length > 0) {
-            this.tipEl.textContent = '💡 « ' + tipsList[Math.floor(Math.random() * tipsList.length)] + ' »';
-          }
 
           // Failsafe automatique (5 secondes maximum pour ne jamais bloquer)
           this.failsafeTimeout = setTimeout(() => {
-            this.finish('Prêt pour le service !');
+            this.finish();
           }, 5000);
         },
 
         setProgress(pct, statusText, stepText) {
           if (this.isFinished) return;
           this.progress = Math.max(this.progress, Math.min(100, pct));
-          if (!this.barEl) this.init();
-          if (this.barEl) this.barEl.style.width = this.progress + '%';
-          if (this.percentEl) this.percentEl.textContent = Math.round(this.progress) + '%';
-          if (statusText && this.statusEl) this.statusEl.textContent = statusText;
-          if (stepText && this.stepEl) this.stepEl.textContent = stepText;
         },
 
-        finish(finalMessage = 'Prêt pour le service !') {
+        finish(finalMessage) {
           if (this.isFinished) return;
           this.isFinished = true;
           if (this.failsafeTimeout) clearTimeout(this.failsafeTimeout);
-          this.setProgress(100, finalMessage, 'Prêt');
 
-          setTimeout(() => {
-            if (this.screenEl) {
-              this.screenEl.style.opacity = '0';
-              this.screenEl.style.transform = 'scale(1.03)';
-              this.screenEl.style.pointerEvents = 'none';
-              setTimeout(() => {
-                this.screenEl.style.display = 'none';
-              }, 650);
-            }
-          }, 350);
+          if (!this.screenEl) this.screenEl = document.getElementById('app-loading-screen');
+          if (this.screenEl) {
+            this.screenEl.style.opacity = '0';
+            this.screenEl.style.pointerEvents = 'none';
+            setTimeout(() => {
+              this.screenEl.style.display = 'none';
+            }, 550);
+          }
         }
       };
 
@@ -403,6 +342,11 @@
         <button id="push-notif-btn" onclick="window.ProtecNotifications.openSettingsModal()" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-500 hover:text-pc-orange hover:bg-white/90 transition shadow-sm relative group flex items-center justify-center" title="Centre de Notifications Push & Alertes">
           <i data-lucide="bell" id="push-notif-icon" class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
           <span id="push-notif-badge" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-300 border-2 border-white"></span>
+        </button>
+
+        <!-- Paramètres & Options du Jeu (Desktop) -->
+        <button onclick="window.game.openSettingsModal('settings')" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-500 hover:text-pc-blue hover:bg-white/90 transition shadow-sm relative group flex items-center justify-center" title="Paramètres du Jeu (Interface, Popups, Alertes)">
+          <i data-lucide="settings" class="w-3.5 h-3.5 group-hover:rotate-45 transition-transform"></i>
         </button>
 
         <!-- Aide & Guide Opérationnel du Jeu (?) -->
@@ -1051,7 +995,10 @@
           👑 Admin
         </button>
         <button onclick="window.game.closeMobileMenu(); window.ProtecAuth.openAuthModal()" class="flex-1 py-2.5 px-3 rounded-xl bg-pc-blue/10 text-pc-blue font-bold text-xs flex items-center justify-center gap-1.5 active:bg-pc-blue/20 transition">
-          <i data-lucide="user" class="w-4 h-4"></i> Mon Compte
+          <i data-lucide="user" class="w-4 h-4"></i> Compte
+        </button>
+        <button onclick="window.game.closeMobileMenu(); window.game.openSettingsModal('settings')" class="py-2.5 px-3 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 active:bg-slate-200 transition" title="Paramètres & Options">
+          <i data-lucide="settings" class="w-4 h-4"></i> Paramètres
         </button>
         <button onclick="window.game.closeMobileMenu(); window.ProtecAuth.openReferralShareModal()" class="py-2.5 px-3 rounded-xl bg-amber-50 text-amber-800 font-bold text-xs flex items-center justify-center gap-1.5 active:bg-amber-100 transition" title="Parrainage & QR Code">
           <i data-lucide="gift" class="w-4 h-4 text-amber-600"></i> Parrainage

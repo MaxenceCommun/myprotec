@@ -149,8 +149,9 @@ window.ProtecCommandement = {
 
     // Ajout dans les options installées si présent
     if (!Array.isArray(veh.installedOptions)) veh.installedOptions = [];
-    if (!veh.installedOptions.includes('Poste de Commandement Mobile (Pack PC Embarqué)')) {
-      veh.installedOptions.push('Poste de Commandement Mobile (Pack PC Embarqué)');
+    veh.installedOptions = veh.installedOptions.filter(o => o !== 'Poste de Commandement Mobile (Pack PC Embarqué)');
+    if (!veh.installedOptions.includes('Poste de Commandement Mobile')) {
+      veh.installedOptions.push('Poste de Commandement Mobile');
     }
 
     game.saveGame();
@@ -186,7 +187,7 @@ window.ProtecCommandement = {
     veh.assignedLeaderId = null;
 
     if (Array.isArray(veh.installedOptions)) {
-      veh.installedOptions = veh.installedOptions.filter(o => o !== 'Poste de Commandement Mobile (Pack PC Embarqué)');
+      veh.installedOptions = veh.installedOptions.filter(o => o !== 'Poste de Commandement Mobile' && o !== 'Poste de Commandement Mobile (Pack PC Embarqué)');
     }
 
     game.saveGame();
@@ -313,7 +314,7 @@ window.ProtecCommandement = {
                 Matériel Embarqué
               </span>
               <h4 class="text-sm font-black text-white flex items-center gap-2">
-                <span>${isEquipped ? '✅ Pack PC Mobile Installé & Opérationnel' : '📦 Aucun Kit de Commandement Installé'}</span>
+                <span>${isEquipped ? '✅ Poste de Commandement Mobile Installé & Opérationnel' : '📦 Aucun Kit de Commandement Installé'}</span>
               </h4>
             </div>
 

@@ -301,6 +301,10 @@ window.ProtecAudio = {
     this.playFile('info');
   },
 
+  playContractSignedSound() {
+    this.playSuccessChime();
+  },
+
   playClickSound() {
     const ctx = this.getCtx();
     if (!ctx) return;

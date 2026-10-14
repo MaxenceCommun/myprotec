@@ -242,8 +242,12 @@ window.ProtecMultiplayer = {
           <button onclick="document.getElementById('renfort-zone-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm">✕</button>
         </div>
 
-        <div class="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 text-xs text-indigo-900">
-          Configurez précisément les <strong>moyens humains et matériels</strong> dont votre antenne a besoin ainsi que le <strong>tarif d'indemnisation proposé</strong> aux associations partenaires.
+        <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-300 text-xs text-amber-950 font-bold flex items-center gap-2.5">
+          <span class="text-lg">🤝</span>
+          <div>
+            <span class="font-black text-amber-900 block">Doctrine Opérationnelle : L'un ne vient pas sans l'autre</span>
+            <span class="text-[11px] text-amber-800 font-medium">Tout véhicule de renfort arrive impérativement avec son équipage complet qualifié, et le personnel dépêché arrive obligatoirement véhiculé.</span>
+          </div>
         </div>
 
         <!-- 1. PERSONNALISATION DES MOYENS HUMAINS -->

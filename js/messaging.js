@@ -15,6 +15,125 @@ window.ProtecMessaging = {
   selectedMpRecipientId: null,
   filterMissionId: null,
   currentInstitutionFilter: 'all',
+  isRecipientTyping: false,
+
+  DEFAULT_MP_RECIPIENTS: [
+    {
+      id: 'npc-luneville',
+      name: 'Directeur Julien Bertin',
+      stationName: 'Antenne de Lunéville',
+      dept: '54',
+      city: 'Lunéville',
+      role: 'Directeur Opérationnel',
+      welcomeMsg: 'Salut confrère ! Belle progression sur ton antenne. Si tu as besoin d’un coup de main en soutien logistique ou d’un VPSP en double pour une grosse garde de week-end, fais-moi signe sur la radio !'
+    },
+    {
+      id: 'npc-nancy',
+      name: 'Directeur Thomas Vasseur',
+      stationName: 'Antenne de Nancy',
+      dept: '54',
+      city: 'Nancy',
+      role: 'Directeur d’Antenne',
+      welcomeMsg: 'Bonjour camarade ! Je vois que tes équipes tournent bien. Pense à renouveler tes habilitations VPSP et tes DSA si tu prépares des gros DPS avec la préfecture. Amitiés secouristes !'
+    },
+    {
+      id: 'npc-paris',
+      name: 'Directrice Sophie Martin',
+      stationName: 'Antenne de Paris Centre',
+      dept: '75',
+      city: 'Paris',
+      role: 'Directrice Territoriale',
+      welcomeMsg: 'Bien reçu ton indicatif sur le réseau fédéral. La coordination en Île-de-France est intense en ce moment, contente de t’avoir en soutien opérationnel sur la zone !'
+    },
+    {
+      id: 'npc-lyon',
+      name: 'Directeur Maxime Roux',
+      stationName: 'Antenne du Rhône',
+      dept: '69',
+      city: 'Lyon',
+      role: 'Directeur d’Antenne',
+      welcomeMsg: 'Salut collègue ! On prépare un grand rassemblement régional le mois prochain. Tiens-moi au courant si tes secouristes sont disponibles pour du renfort zonal.'
+    },
+    {
+      id: 'npc-marseille',
+      name: 'Directeur Paul Lambert',
+      stationName: 'Antenne Bouches-du-Rhône',
+      dept: '13',
+      city: 'Marseille',
+      role: 'Chef de Dispositif',
+      welcomeMsg: 'Salut à toute ton équipe ! C’est toujours un plaisir de voir le réseau grandir. Bonne chance pour tes prochaines gardes SAMU.'
+    },
+    {
+      id: 'npc-bordeaux',
+      name: 'Directeur Alexandre Mercier',
+      stationName: 'Antenne Gironde',
+      dept: '33',
+      city: 'Bordeaux',
+      role: 'Directeur d’Antenne',
+      welcomeMsg: 'Bonjour confrère ! La saison des festivals approche à grands pas, le réseau d’entraide entre antennes va tourner à plein régime !'
+    },
+    {
+      id: 'npc-lille',
+      name: 'Directrice Camille Leroy',
+      stationName: 'Antenne Nord',
+      dept: '59',
+      city: 'Lille',
+      role: 'Directrice Adjointe',
+      welcomeMsg: 'Bienvenue sur la liaison directe ! Ici dans le Nord, nous restons à l’écoute pour toute entraide matérielle ou logistique.'
+    },
+    {
+      id: 'npc-strasbourg',
+      name: 'Directeur Lucas Schmitt',
+      stationName: 'Antenne Bas-Rhin',
+      dept: '67',
+      city: 'Strasbourg',
+      role: 'Directeur d’Antenne',
+      welcomeMsg: 'Bonjour ! Bravo pour la gestion de tes moyens. N’hésite pas si tu as des questions sur le protocole des postes de secours transfrontaliers.'
+    },
+    {
+      id: 'npc-nantes',
+      name: 'Directrice Élodie Moreau',
+      stationName: 'Antenne Loire-Atlantique',
+      dept: '44',
+      city: 'Nantes',
+      role: 'Directrice d’Antenne',
+      welcomeMsg: 'Bonjour cher confrère ! Bon courage pour le déploiement de tes équipages. Nous veillons sur la fréquence côtière et fluviale.'
+    }
+  ],
+
+  getAvailableRecipients(game) {
+    const list = [];
+    const seenIds = new Set();
+    const myPlayerId = game?.player?.id || 'me';
+
+    // 1. Directeurs réels de l'alliance (stations enregistrées dans Supabase)
+    if (Array.isArray(game?.allianceStations)) {
+      game.allianceStations.forEach(st => {
+        if (!st || !st.playerId || st.playerId === myPlayerId || seenIds.has(st.playerId)) return;
+        seenIds.add(st.playerId);
+        list.push({
+          id: st.playerId,
+          name: st.playerName || `Directeur ${st.city || 'Confrère'}`,
+          stationName: st.name || `Antenne Protection Civile ${st.deptCode || ''}`,
+          dept: st.deptCode || 'ADPC',
+          city: st.city || 'Partenaire',
+          role: 'Directeur d’Antenne Alliée',
+          isRealPlayer: true,
+          welcomeMsg: `Bonjour cher confrère ! Antenne ${st.name || 'alliée'} à l’écoute. Ravi d’échanger en direct avec vous.`
+        });
+      });
+    }
+
+    // 2. Directeurs du réseau fédéral (confrères départementaux)
+    this.DEFAULT_MP_RECIPIENTS.forEach(r => {
+      if (!seenIds.has(r.id)) {
+        seenIds.add(r.id);
+        list.push(r);
+      }
+    });
+
+    return list;
+  },
 
   injectState(game) {
     if (!game.messagesHistory || Array.isArray(game.messagesHistory) || typeof game.messagesHistory !== 'object') {
@@ -63,6 +182,28 @@ window.ProtecMessaging = {
     if (!game.messagesHistory.mp || typeof game.messagesHistory.mp !== 'object' || Array.isArray(game.messagesHistory.mp)) {
       game.messagesHistory.mp = {};
     }
+
+    // Initialisation proactive des conversations MP pour chaque interlocuteur
+    const recipients = this.getAvailableRecipients(game);
+    if (!this.selectedMpRecipientId && recipients.length > 0) {
+      this.selectedMpRecipientId = recipients[0].id;
+    }
+
+    recipients.forEach(r => {
+      if (!game.messagesHistory.mp[r.id] || !Array.isArray(game.messagesHistory.mp[r.id]) || game.messagesHistory.mp[r.id].length === 0) {
+        game.messagesHistory.mp[r.id] = [
+          {
+            id: `init-mp-${r.id}`,
+            senderId: r.id,
+            senderName: r.name,
+            deptCode: r.dept,
+            channel: 'mp',
+            text: r.welcomeMsg || 'Bonjour confrère ! Bienvenue sur la fréquence de messagerie privée.',
+            time: '08:30'
+          }
+        ];
+      }
+    });
 
     if (game.messagesHistory.institutions.length === 0) {
       game.messagesHistory.institutions.push({
@@ -335,28 +476,94 @@ window.ProtecMessaging = {
         game.showToast('Destinataire Requis', 'Veuillez sélectionner un directeur d’antenne pour envoyer un message privé.', 'orange');
         return;
       }
+      const recipients = this.getAvailableRecipients(game);
+      const recipient = recipients.find(r => r.id === this.selectedMpRecipientId) || { name: 'Directeur Confrère', dept: deptCode, city: 'France' };
       msgObj.recipientId = this.selectedMpRecipientId;
       if (!game.messagesHistory.mp[this.selectedMpRecipientId]) {
         game.messagesHistory.mp[this.selectedMpRecipientId] = [];
       }
       game.messagesHistory.mp[this.selectedMpRecipientId].push(msgObj);
 
-      // Simulation de réponse courtoise si NPC simulé
-      if (this.selectedMpRecipientId.startsWith('npc-')) {
-        setTimeout(() => {
-          const reply = {
-            id: `msg-${Date.now()}`,
-            senderId: this.selectedMpRecipientId,
-            senderName: 'Directeur Confrère',
-            deptCode: deptCode,
-            channel: 'mp',
-            text: 'Bien reçu votre message confraternel. Nous restons en veille radio sur votre secteur.',
-            time: `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`
-          };
-          game.messagesHistory.mp[this.selectedMpRecipientId].push(reply);
-          if (this.currentChannel === 'mp') this.renderModal(game);
-        }, 1200);
+      const recipientId = this.selectedMpRecipientId;
+      const playerTextLower = text.toLowerCase();
+
+      // Déterminer une réponse contextuelle réaliste de la Protection Civile
+      let replyText = '';
+      if (playerTextLower.includes('renfort') || playerTextLower.includes('vpsp') || playerTextLower.includes('vtu') || playerTextLower.includes('véhicule') || playerTextLower.includes('vehicule') || playerTextLower.includes('ambulance') || playerTextLower.includes('matériel') || playerTextLower.includes('materiel')) {
+        const replies = [
+          `Bien reçu pour les moyens ! Mes équipages sont actuellement sur le secteur, mais dès qu'un VPSP est libéré à la base, je pourrai te le détacher si ton dispositif est sous tension.`,
+          `Message bien noté cher confrère ! Côté flotte, nous avons un VPSP et un VTU en réserve opérationnelle ce week-end. Fais-moi signe si tu as besoin d'un départ en renfort.`,
+          `C'est bien noté pour les véhicules. Pense aussi à passer une demande formelle dans l'onglet Alliance si tu as besoin que d'autres antennes se joignent à l'effort !`
+        ];
+        replyText = replies[Math.floor(Math.random() * replies.length)];
+      } else if (playerTextLower.includes('secouriste') || playerTextLower.includes('bénévole') || playerTextLower.includes('benevole') || playerTextLower.includes('effectif') || playerTextLower.includes('formation') || playerTextLower.includes('pse') || playerTextLower.includes('recrutement')) {
+        const replies = [
+          `Exactement ! La gestion des effectifs est primordiale. En ce moment, nous organisons une formation interne PSE2 pour gonfler les rangs de nos équipages. Bon courage pour tes plannings !`,
+          `C'est une bonne démarche. Pour motiver les secouristes, rien de tel que de les envoyer sur des gardes SAMU/SDIS le week-end, ils adorent le terrain.`,
+          `Bien reçu ! De notre côté, la campagne de recrutement a bien fonctionné ce mois-ci. Si tes bénévoles veulent passer des qualifs spécifiques, on peut mutualiser les sessions.`
+        ];
+        replyText = replies[Math.floor(Math.random() * replies.length)];
+      } else if (playerTextLower.includes('argent') || playerTextLower.includes('euro') || playerTextLower.includes('finance') || playerTextLower.includes('budget') || playerTextLower.includes('subvention') || playerTextLower.includes('trésorerie') || playerTextLower.includes('tresorerie')) {
+        const replies = [
+          `Côté finances, le nerf de la guerre reste les conventions de DPS et les subventions municipales. Dès que la trésorerie le permet, investis dans du bon matériel de bilan, c'est vite rentabilisé !`,
+          `Bien d'accord avec toi. Nous venons de renouveler notre convention avec le SDIS, ça apporte une stabilité financière appréciable pour l'antenne.`
+        ];
+        replyText = replies[Math.floor(Math.random() * replies.length)];
+      } else if (playerTextLower.includes('bonjour') || playerTextLower.includes('salut') || playerTextLower.includes('hello') || playerTextLower.includes('ça va') || playerTextLower.includes('ca va') || playerTextLower.includes('comment')) {
+        const replies = [
+          `Salut cher confrère ! Tout va pour le mieux par chez nous, l'antenne tourne à plein régime et les secouristes sont motivés. Et de ton côté, comment se passe la prise en main de l'antenne ?`,
+          `Bonjour ! Très heureux d'échanger avec toi. La météo est clémente aujourd'hui, les interventions sont calmes mais on reste vigilants sur la radio !`,
+          `Salut camarade ! Tout roule, merci. N'hésite pas si tu as la moindre question sur la gestion opérationnelle des équipes.`
+        ];
+        replyText = replies[Math.floor(Math.random() * replies.length)];
+      } else if (playerTextLower.includes('merci') || playerTextLower.includes('super') || playerTextLower.includes('top') || playerTextLower.includes('d\'accord') || playerTextLower.includes('daccord') || playerTextLower.includes('ok')) {
+        const replies = [
+          `Avec grand plaisir mon cher confrère ! La solidarité entre antennes de la Protection Civile, c'est notre plus grande force. À très vite sur les ondes !`,
+          `À ton service ! Prends bien soin de tes équipages et bonne continuation pour la suite de tes missions.`
+        ];
+        replyText = replies[Math.floor(Math.random() * replies.length)];
+      } else {
+        const replies = [
+          `Message bien reçu cher confrère ! C'est parfaitement noté de mon côté. Nous restons en veille radio permanente sur la zone. Fais bon usage de tes moyens et transmets le bonjour à tes équipages !`,
+          `Bien reçu ta transmission ! On garde le contact sur ce canal privé. Bon courage pour les prochaines interventions sur ton secteur !`,
+          `Affirmatif, transmission 5/5 reçue. N'hésite pas si une urgence survient ou si tu as besoin d'un appui technique sur le terrain.`
+        ];
+        replyText = replies[Math.floor(Math.random() * replies.length)];
       }
+
+      // Simulation visuelle "Le directeur est en train d'écrire..."
+      this.isRecipientTyping = true;
+      if (this.currentChannel === 'mp') this.renderModal(game);
+
+      setTimeout(() => {
+        this.isRecipientTyping = false;
+        const now2 = new Date();
+        const timeStr2 = `${String(now2.getHours()).padStart(2, '0')}:${String(now2.getMinutes()).padStart(2, '0')}`;
+        const reply = {
+          id: `msg-${Date.now()}`,
+          senderId: recipientId,
+          senderName: recipient.name,
+          deptCode: recipient.dept,
+          channel: 'mp',
+          text: replyText,
+          time: timeStr2
+        };
+        if (!game.messagesHistory.mp[recipientId]) {
+          game.messagesHistory.mp[recipientId] = [];
+        }
+        game.messagesHistory.mp[recipientId].push(reply);
+
+        if (window.ProtecAudio && typeof window.ProtecAudio.playVolunteerMessageSound === 'function') {
+          window.ProtecAudio.playVolunteerMessageSound();
+        }
+        if (typeof game.saveGame === 'function') game.saveGame();
+
+        if (this.currentChannel === 'mp' && this.selectedMpRecipientId === recipientId) {
+          this.renderModal(game);
+        } else {
+          game.showToast?.('Nouveau Message Privé 🔒', `${recipient.name} vous a répondu.`, 'blue');
+        }
+      }, 900 + Math.random() * 500);
     } else if (this.currentChannel === 'regional') {
       msgObj.regionName = targetRegion;
       if (!game.messagesHistory.regional[targetRegion]) {
@@ -395,6 +602,121 @@ window.ProtecMessaging = {
     this.renderModal(game);
   },
 
+  parseRenfortMessage(text) {
+    if (!text || typeof text !== 'string') return null;
+    if (!text.includes('DEMANDE DE RENFORT')) return null;
+
+    const zoneMatch = text.match(/DEMANDE DE RENFORT\s+([A-ZÀ-ÿ]+)/i);
+    const zoneLabel = zoneMatch ? zoneMatch[1].trim() : 'DÉPARTEMENTALE';
+
+    const unitMatch = text.match(/Besoin urgent\s*:\s*(.*?)\s+pour\s*[«"“]/i);
+    const unitRequested = unitMatch ? unitMatch[1].trim() : 'Effectifs & Matériel';
+
+    const titleMatch = text.match(/[«"“](.*?)[»"”]/i);
+    let missionTitle = titleMatch ? titleMatch[1].trim() : 'Mission opérationnelle';
+    missionTitle = missionTitle.replace(/^\[(ALERTE ACTIVE|PRE-ALERTE|CRITIQUE|URGENCE)\]\s*/i, '');
+
+    const indemnMatch = text.match(/Indemnité proposée\s*:\s*\+?(\d+)/i);
+    const indemnite = indemnMatch ? indemnMatch[1] : '200';
+
+    return {
+      zoneLabel,
+      unitRequested,
+      missionTitle,
+      indemnite
+    };
+  },
+
+  renderRenfortCard(m, isMe, game) {
+    const parsed = this.parseRenfortMessage(m.text) || {};
+    const zoneLabel = (m.zoneLabel || parsed.zoneLabel || 'DÉPARTEMENTALE').toUpperCase();
+    const unitRequested = m.unitRequested || parsed.unitRequested || '5 Secouriste(s) + 1 Ambulance VPSP';
+    let missionTitle = m.missionTitle || parsed.missionTitle || 'Dispositif de secours';
+    missionTitle = missionTitle.replace(/^\[(ALERTE ACTIVE|PRE-ALERTE|CRITIQUE|URGENCE)\]\s*/i, '');
+    const indemnite = m.indemnite || parsed.indemnite || 200;
+    const missionId = m.missionId;
+    const hasMission = missionId && (game.missions || []).some(mis => mis.id === missionId);
+
+    // Décomposer unitRequested pour un affichage visuel distinct
+    const volsMatch = unitRequested.match(/(\d+)\s*(?:secouriste|bénévole)/i);
+    const vehsMatch = unitRequested.match(/(\d+\s*(?:Ambulance|VPSP|VTU|VL|VLHR|Véhicule)[^,]*)/i);
+    const volsStr = volsMatch ? `${volsMatch[1]} Secouriste(s) requis` : (m.requestedVolunteersCount ? `${m.requestedVolunteersCount} Secouriste(s)` : null);
+    const vehsStr = vehsMatch ? vehsMatch[1] : (Array.isArray(m.requestedVehicles) && m.requestedVehicles.length > 0 ? m.requestedVehicles.join(', ') : null);
+
+    return `
+      <div class="rounded-2xl max-w-lg w-full overflow-hidden border border-amber-300/90 bg-gradient-to-br from-amber-500/10 via-white to-orange-500/10 shadow-md ${isMe ? 'rounded-tr-none ring-2 ring-pc-orange/30' : 'rounded-tl-none ring-1 ring-amber-300'} text-left transition hover:shadow-lg">
+        <!-- Bandeau d'en-tête dynamique -->
+        <div class="px-4 py-2.5 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 text-white flex items-center justify-between gap-2 shadow-xs">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span>
+            <span class="font-black text-xs uppercase tracking-wider">📢 Appel à Renfort ${zoneLabel}</span>
+          </div>
+          <span class="px-2.5 py-0.5 rounded-full bg-black/20 text-white font-extrabold text-[10px] border border-white/20">
+            +${indemnite} € d’indemnité
+          </span>
+        </div>
+
+        <!-- Corps de la carte -->
+        <div class="p-4 space-y-3">
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Dispositif & Intervention</span>
+            <h4 class="text-xs sm:text-sm font-black text-slate-900 leading-snug flex items-center gap-1.5 mt-0.5">
+              <span>🚨</span>
+              <span>${missionTitle}</span>
+            </h4>
+          </div>
+
+          <!-- Puces visuelles des besoins -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <div class="p-2.5 rounded-xl bg-orange-50/90 border border-orange-200 flex items-center gap-2.5 shadow-2xs">
+              <div class="w-8 h-8 rounded-lg bg-orange-500 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                👥
+              </div>
+              <div class="min-w-0">
+                <span class="text-[9px] font-bold text-orange-950 uppercase tracking-tight block">Moyens Humains</span>
+                <span class="text-xs font-black text-orange-900 truncate block">${volsStr || unitRequested}</span>
+              </div>
+            </div>
+
+            <div class="p-2.5 rounded-xl bg-blue-50/90 border border-blue-200 flex items-center gap-2.5 shadow-2xs">
+              <div class="w-8 h-8 rounded-lg bg-pc-blue text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                🚑
+              </div>
+              <div class="min-w-0">
+                <span class="text-[9px] font-bold text-pc-blue-dark uppercase tracking-tight block">Vecteurs & Flotte</span>
+                <span class="text-xs font-black text-pc-blue truncate block">${vehsStr || '1 Ambulance VPSP'}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pied de carte opérationnelle -->
+          <div class="pt-2.5 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
+            <div class="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+              <span>📍 Émis par :</span>
+              <strong class="text-slate-800">${m.senderName} (${m.deptCode || '75'})</strong>
+            </div>
+
+            ${hasMission ? `
+              <button onclick="window.game.openMissionDetails('${missionId}')" class="px-3 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-extrabold text-[11px] shadow-sm transition flex items-center gap-1 cursor-pointer">
+                <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                <span>Consulter le Dispositif</span>
+              </button>
+            ` : (isMe ? `
+              <span class="text-[10px] font-bold text-amber-800 bg-amber-100/80 px-2.5 py-1 rounded-lg border border-amber-200">
+                ✓ En cours de diffusion sur le réseau
+              </span>
+            ` : `
+              <button onclick="window.game.openModule('alliance')" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-pc-orange to-amber-600 hover:brightness-110 text-white font-extrabold text-[11px] shadow-sm transition flex items-center gap-1 cursor-pointer">
+                <i data-lucide="handshake" class="w-3.5 h-3.5"></i>
+                <span>Détacher des Renforts</span>
+              </button>
+            `)}
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
   renderModal(game) {
     this.injectState(game);
     const modal = document.getElementById('main-modal');
@@ -413,44 +735,14 @@ window.ProtecMessaging = {
     const activeRegion = this.selectedRegionName || myRegion;
     const allRegions = window.ProtecDepartements?.REGIONS || [];
 
-    // Liste des interlocuteurs pour les MP (vrais joueurs d'abord, puis réseau fédéral)
-    const availableRecipients = [];
-    const seenIds = new Set();
-
-    // 1. Vrais directeurs d'antenne (autres joueurs réels enregistrés)
-    if (Array.isArray(game.allianceStations)) {
-      game.allianceStations.forEach(st => {
-        if (!st || !st.playerId || st.playerId === game.player?.id || seenIds.has(st.playerId)) return;
-        seenIds.add(st.playerId);
-        availableRecipients.push({
-          id: st.playerId,
-          name: `${st.playerName || 'Directeur'} • ${st.name || 'Antenne'}`,
-          dept: st.deptCode || 'ADPC',
-          city: st.city || 'Partenaire',
-          isRealPlayer: true
-        });
-      });
-    }
-
-    // 2. Directeurs départementaux du réseau
-    const defaultRecipients = [
-      { id: 'npc-lyon', name: 'Directeur PC Rhône (69)', dept: '69', city: 'Lyon' },
-      { id: 'npc-marseille', name: 'Directeur PC Bouches-du-Rhône (13)', dept: '13', city: 'Marseille' },
-      { id: 'npc-bordeaux', name: 'Directeur PC Gironde (33)', dept: '33', city: 'Bordeaux' },
-      { id: 'npc-lille', name: 'Directeur PC Nord (59)', dept: '59', city: 'Lille' },
-      { id: 'npc-strasbourg', name: 'Directeur PC Bas-Rhin (67)', dept: '67', city: 'Strasbourg' },
-      { id: 'npc-nantes', name: 'Directeur PC Loire-Atlantique (44)', dept: '44', city: 'Nantes' }
-    ];
-    defaultRecipients.forEach(r => {
-      if (!seenIds.has(r.id)) {
-        seenIds.add(r.id);
-        availableRecipients.push(r);
-      }
-    });
+    // Liste des directeurs disponibles pour les MP
+    const availableRecipients = this.getAvailableRecipients(game);
 
     if (!this.selectedMpRecipientId && availableRecipients.length > 0) {
       this.selectedMpRecipientId = availableRecipients[0].id;
     }
+
+    const currentRecipient = availableRecipients.find(r => r.id === this.selectedMpRecipientId) || availableRecipients[0];
 
     // Récupération des messages selon le canal
     let currentMessages = [];
@@ -588,18 +880,37 @@ window.ProtecMessaging = {
 
         <!-- Sous-barre spécifique pour les Messages Privés -->
         ${this.currentChannel === 'mp' ? `
-          <div class="p-3 rounded-2xl bg-slate-100 border border-slate-300 flex items-center justify-between gap-3 text-xs">
-            <span class="font-bold text-slate-800 flex items-center gap-1.5">
-              <i data-lucide="user" class="w-4 h-4"></i>
-              Discuter en privé avec :
-            </span>
-            <select onchange="window.ProtecMessaging.selectMpRecipient(this.value, window.game)" class="px-3 py-1.5 rounded-xl bg-white border border-slate-300 font-bold text-xs text-slate-800 focus:ring-2 focus:ring-slate-400">
-              ${availableRecipients.map(r => `
-                <option value="${r.id}" ${r.id === this.selectedMpRecipientId ? 'selected' : ''}>
-                  ${r.name} (${r.city})
-                </option>
-              `).join('')}
-            </select>
+          <div class="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border border-slate-700/60">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="relative flex-shrink-0">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pc-blue to-pc-blue-light text-white flex items-center justify-center font-black text-xs shadow-sm border border-white/20">
+                  ${currentRecipient ? currentRecipient.name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('') : 'DIR'}
+                </div>
+                <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-slate-900" title="En veille opérationnelle"></span>
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h4 class="font-black text-white text-xs truncate">${currentRecipient ? currentRecipient.name : 'Directeur Confrère'}</h4>
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-white/15 text-slate-200 border border-white/10">
+                    Dept ${currentRecipient ? currentRecipient.dept : '54'}
+                  </span>
+                </div>
+                <span class="text-[10px] text-emerald-400 font-semibold block truncate mt-0.5">
+                  🟢 En veille radio • ${currentRecipient ? currentRecipient.stationName || currentRecipient.city : 'France'}
+                </span>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <label class="text-[11px] font-bold text-slate-300">Changer d’interlocuteur :</label>
+              <select onchange="window.ProtecMessaging.selectMpRecipient(this.value, window.game)" class="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-600 font-bold text-xs text-white focus:ring-2 focus:ring-pc-blue shadow-xs">
+                ${availableRecipients.map(r => `
+                  <option value="${r.id}" ${r.id === this.selectedMpRecipientId ? 'selected' : ''}>
+                    ${r.name} (${r.city})
+                  </option>
+                `).join('')}
+              </select>
+            </div>
           </div>
         ` : ''}
 
@@ -731,6 +1042,22 @@ window.ProtecMessaging = {
             // Rendu canaux multijoueur (national, regional, dept, mp)
             const isMe = m.senderId === (game.player?.id || 'me');
             const discordTag = m.senderDiscord?.username || m.discord?.username || (isMe && (game.player?.discord?.username || window.ProtecAuth?.currentUser?.discord?.username));
+            const isRenfort = m.type === 'renfort_request' || (m.text && typeof m.text === 'string' && m.text.includes('DEMANDE DE RENFORT'));
+
+            if (isRenfort) {
+              return `
+                <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} my-1 w-full">
+                  <div class="flex items-center gap-1.5 text-[10px] text-slate-400 mb-1 px-1">
+                    <strong class="${isMe ? 'text-pc-orange' : 'text-slate-700'}">${m.senderName}</strong>
+                    ${m.deptCode ? `<span class="px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 font-bold text-[9px]">Dép. ${m.deptCode}</span>` : ''}
+                    ${m.regionName ? `<span class="px-1.5 py-0.2 rounded bg-sky-100 text-sky-800 font-bold text-[9px]">${m.regionName}</span>` : ''}
+                    <span>${m.time || ''}</span>
+                  </div>
+                  ${this.renderRenfortCard(m, isMe, game)}
+                </div>
+              `;
+            }
+
             return `
               <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'}">
                 <div class="flex items-center gap-1.5 text-[10px] text-slate-400 mb-0.5 px-1">
@@ -751,6 +1078,16 @@ window.ProtecMessaging = {
               </div>
             `;
           }).join('')}
+          ${(this.currentChannel === 'mp' && this.isRecipientTyping) ? `
+            <div class="flex items-center gap-2 p-2.5 rounded-2xl bg-slate-200/80 text-slate-700 text-xs w-fit animate-pulse shadow-xs">
+              <div class="flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-slate-500 animate-bounce"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-slate-500 animate-bounce [animation-delay:0.15s]"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-slate-500 animate-bounce [animation-delay:0.3s]"></span>
+              </div>
+              <span class="text-[11px] font-bold text-slate-600">${currentRecipient ? currentRecipient.name : 'Le directeur'} écrit...</span>
+            </div>
+          ` : ''}
         </div>
 
         <!-- Zone de saisie d'envoi ou bandeau d'information réceptif -->
