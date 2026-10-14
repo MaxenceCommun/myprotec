@@ -48,13 +48,15 @@ class ProtecGame {
       role: (supaUser && supaUser.role) || 'directeur'
     };
 
-    // Calendrier et Horloge Opérationnelle (Lundi 5 Octobre 2026 à 08:00)
+    // Calendrier et Horloge Opérationnelle (Synchronisée sur l'heure réelle dès l'instanciation)
+    const nowInit = new Date();
     this.clock = {
-      year: 2026,
-      month: 9, // Octobre
-      day: 5,
-      hour: 8,
-      minute: 0,
+      year: nowInit.getFullYear(),
+      month: nowInit.getMonth(),
+      day: nowInit.getDate(),
+      hour: nowInit.getHours(),
+      minute: nowInit.getMinutes(),
+      second: nowInit.getSeconds(),
       totalHoursElapsed: 0,
       monthsNames: [
         'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -147,6 +149,7 @@ class ProtecGame {
     this.badgesCollection = [];
     this.activeAllianceTab = 'membres';
     this.activePlanningTab = 'calendar';
+    this.planningPolesFilters = { dps: true, devis: true, formations: true, social: true };
     this.modalHistory = [];
     this.currentModalKey = null;
     this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
@@ -361,11 +364,99 @@ class ProtecGame {
     };
   }
 
+  // Formatage propre du créneau de mission avec heures rondes (multiple de 5 min) : "Du Mardi 13 Octobre à 00:30 au Mardi 13 Octobre à 02:00"
+  formatMissionScheduleRange(mission) {
+    if (!mission) return 'Créneau non défini';
+
+    const d = mission.eventDate ? { ...mission.eventDate } : (this.clock ? { ...this.clock } : null);
+    if (!d) return 'Immédiat';
+
+    const year = d.year || (this.clock ? this.clock.year : 2026);
+    const month = d.month !== undefined ? d.month : (this.clock ? this.clock.month : 9);
+    const day = d.day || (this.clock ? this.clock.day : 1);
+    let hour = d.hour !== undefined ? d.hour : 14;
+    let minute = d.minute !== undefined ? d.minute : 0;
+
+    // Arrondi des minutes au multiple de 5 minutes le plus proche (00, 05, 10, ..., 55)
+    let roundedMinute = Math.round(minute / 5) * 5;
+    if (roundedMinute >= 60) {
+      hour += Math.floor(roundedMinute / 60);
+      roundedMinute = roundedMinute % 60;
+    }
+
+    const startDate = new Date(year, month, day, hour, roundedMinute, 0);
+
+    // Calcul de la durée en minutes
+    let durationMins = 90;
+    if (mission.durationHours) {
+      durationMins = Math.round(Number(mission.durationHours) * 60);
+    } else if (mission.durationSeconds) {
+      durationMins = Math.round(Number(mission.durationSeconds) / 60);
+    }
+    if (durationMins <= 0) durationMins = 60;
+
+    const endDate = new Date(startDate.getTime() + durationMins * 60 * 1000);
+
+    const formatMoment = (dt) => {
+      const days = this.clock?.daysNames || ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+      const months = this.clock?.monthsNames || ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+      const dayName = days[dt.getDay()];
+      const monthName = months[dt.getMonth()];
+      const hStr = dt.getHours().toString().padStart(2, '0');
+      const mStr = dt.getMinutes().toString().padStart(2, '0');
+      return `${dayName} ${dt.getDate()} ${monthName} à ${hStr}:${mStr}`;
+    };
+
+    return `Du ${formatMoment(startDate)} au ${formatMoment(endDate)}`;
+  }
+
   // --- INITIALISATION DU MULTIJOUEUR ---
   initMultiplayer() {
     this.isBackendOnline = false;
 
-    // 1. Détection de disponibilité du serveur backend optionnel
+    // Détection de l'hébergement Cloud / PWA statique (pour éviter les erreurs 404 de /api/state)
+    const isCloudStatic = typeof window !== 'undefined' && (
+      window.location.hostname.includes('render.com') ||
+      window.location.hostname.includes('github.io') ||
+      window.location.hostname.includes('vercel.app') ||
+      window.location.protocol === 'file:'
+    );
+
+    if (isCloudStatic) {
+      this.isBackendOnline = false;
+      if (window.ProtecSupabase && window.ProtecSupabase.client) {
+        window.ProtecSupabase.getAllianceStations(this.player?.id).then(supaStations => {
+          if (supaStations && supaStations.length > 0) {
+            this.allianceStations = supaStations.map(st => ({
+              id: st.id,
+              playerId: st.player_id,
+              playerName: st.player_name || 'Directeur d’Antenne',
+              name: st.station_name,
+              city: st.city,
+              lat: st.lat,
+              lng: st.lng,
+              level: st.level || 1,
+              vehicles: st.vehicles_count || 1,
+              volunteers: st.volunteers_count || 4,
+              allianceId: st.alliance_id || 'alliance-fnpc'
+            }));
+            this.renderAllianceStations();
+          }
+        }).catch(() => {});
+      }
+      if (window.ProtecSupabase && window.ProtecAuth?.currentUser) {
+        window.ProtecSupabase.startAccountWatchdog(this);
+        window.ProtecSupabase.initMultiplayerRealtime(this);
+      }
+
+      // Battement de coeur périodique pour diffuser nos antennes
+      setInterval(() => {
+        this.syncPlayerToServer();
+      }, 15000);
+      return;
+    }
+
+    // 1. Détection de disponibilité du serveur backend optionnel (sur serveur local)
     fetch('/api/state')
       .then(res => {
         if (!res.ok) throw new Error(`Backend non disponible (HTTP ${res.status})`);
@@ -753,6 +844,34 @@ class ProtecGame {
     this.renderAllianceStations();
   }
 
+  // --- GÉNÉRATEUR VECTORIEL D'ICÔNES POUR MARQUEURS LEAFLET (Anti-Disparition) ---
+  getMarkerIconSvg(iconName, customClass = 'w-4 h-4 text-white') {
+    try {
+      if (window.lucide && window.lucide.icons) {
+        const pascal = iconName.split('-').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+        const iconDef = window.lucide.icons[iconName] || window.lucide.icons[pascal];
+        if (iconDef && typeof iconDef.toSvg === 'function') {
+          return iconDef.toSvg({ class: customClass });
+        }
+      }
+    } catch (e) {}
+
+    // Dictionnaire vectoriel SVG Lucide complet intégré en dur pour garantir un affichage immédiat et permanent
+    const svgs = {
+      'activity': `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="${customClass}"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`,
+      'flame': `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="${customClass}"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`,
+      'shield-alert': `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="${customClass}"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+      'heart-handshake': `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="${customClass}"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 7.96a2.17 2.17 0 0 0 0 3.08c.86.86 2.23.86 3.09 0l1.74-1.74a2.17 2.17 0 0 1 3.08 0l.09.09"/><path d="m14 12 1.5 1.5a2.17 2.17 0 0 0 3.08 0l.09-.09"/></svg>`,
+      'siren': `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="${customClass}"><path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2z"/><path d="M21 12h1"/><path d="M18.5 4.5 19 4"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M4.5 4.5 5 4"/><path d="m12 10 2-2"/></svg>`,
+      'award': `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="${customClass}"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>`,
+      'handshake': `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="${customClass}"><path d="m11 17 2 2a1 1 0 0 0 1.4 0l4.6-4.6a1 1 0 0 0 0-1.4l-2-2"/><path d="m18 10 1-1a1 1 0 0 0 0-1.4l-2-2a1 1 0 0 0-1.4 0l-1 1"/><path d="m13 14 3-3"/><path d="m3 7 3-3a1 1 0 0 1 1.4 0l2 2a1 1 0 0 1 0 1.4l-1 1"/><path d="m6 10 3 3"/><path d="m8 12-2 2a1 1 0 0 0 0 1.4l4.6 4.6a1 1 0 0 0 1.4 0l2-2"/></svg>`,
+      'shield-check': `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="${customClass}"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`
+    };
+
+    if (svgs[iconName]) return svgs[iconName];
+    return `<i data-lucide="${iconName}" class="${customClass}"></i>`;
+  }
+
   // --- RENDU CARTE ALLIANCE ---
   renderAllianceStations() {
     if (!this.map || !this.markers) return;
@@ -768,18 +887,19 @@ class ProtecGame {
       if (this.stations.some(my => my.id === st.id)) return;
       if (this.stations.some(my => Math.abs(my.lat - st.lat) < 0.0003 && Math.abs(my.lng - st.lng) < 0.0003)) return;
 
-      const el = document.createElement('div');
-      el.className = 'custom-leaflet-marker';
-      el.innerHTML = `
-        <div class="marker-inner bg-indigo-700 border-indigo-200 shadow-md">
-          <i data-lucide="shield-check" class="w-4 h-4 text-white"></i>
-          <span class="badge-counter bg-indigo-500">${st.vehicles || 1}</span>
+      const stSvg = this.getMarkerIconSvg('shield-check', 'w-4 h-4 text-white');
+      const stHtml = `
+        <div class="custom-leaflet-marker">
+          <div class="marker-inner bg-indigo-700 border-indigo-200 shadow-md">
+            ${stSvg}
+            <span class="badge-counter bg-indigo-500">${st.vehicles || 1}</span>
+          </div>
         </div>
       `;
 
       const icon = L.divIcon({
         className: 'clean-marker',
-        html: el,
+        html: stHtml,
         iconSize: [42, 42],
         iconAnchor: [21, 21]
       });
@@ -966,25 +1086,27 @@ class ProtecGame {
 
   // Chargement en continu des antennes de tous les directeurs et confrères connectés ou enregistrés
   loadAllianceStations() {
-    // 1. Récupération depuis le serveur
-    fetch('/api/state')
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data && Array.isArray(data.allianceStations)) {
-          const myId = this.player?.id;
-          const validStations = data.allianceStations.filter(st => {
-            if (!st || !st.id) return false;
-            if (myId && st.playerId === myId) return false;
-            if (String(st.playerId || '').startsWith('system') || String(st.id).startsWith('station-allie') || st.isFictive) return false;
-            if (this.stations.some(my => my.id === st.id)) return false;
-            if (this.stations.some(my => Math.abs(my.lat - st.lat) < 0.0003 && Math.abs(my.lng - st.lng) < 0.0003)) return false;
-            return true;
-          });
-          this.allianceStations = validStations;
-          this.renderAllianceStations();
-        }
-      })
-      .catch(() => {});
+    // 1. Récupération depuis le serveur uniquement si le backend est actif
+    if (this.isBackendOnline) {
+      fetch('/api/state')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && Array.isArray(data.allianceStations)) {
+            const myId = this.player?.id;
+            const validStations = data.allianceStations.filter(st => {
+              if (!st || !st.id) return false;
+              if (myId && st.playerId === myId) return false;
+              if (String(st.playerId || '').startsWith('system') || String(st.id).startsWith('station-allie') || st.isFictive) return false;
+              if (this.stations.some(my => my.id === st.id)) return false;
+              if (this.stations.some(my => Math.abs(my.lat - st.lat) < 0.0003 && Math.abs(my.lng - st.lng) < 0.0003)) return false;
+              return true;
+            });
+            this.allianceStations = validStations;
+            this.renderAllianceStations();
+          }
+        })
+        .catch(() => {});
+    }
 
     // 2. Synchronisation Supabase si disponible
     if (window.ProtecSupabase && window.ProtecSupabase.client) {
@@ -1021,6 +1143,7 @@ class ProtecGame {
     this.renderStations();
     this.ensureMissionAddresses();
     this.disperseOverlappingMissions();
+    this.sanitizeMissionLocationsAndAddresses();
     this.renderMissions();
     
     // Purge et assainissement complet des renforts
@@ -1131,10 +1254,21 @@ class ProtecGame {
             conventionRequests: this.conventionRequests,
             financesHistory: this.financesHistory || [],
             alertSubscription: this.alertSubscription,
+            rewards: this.rewards,
             savedAt: Date.now()
           };
           sessionStorage.setItem('myprotec_instant_cache', JSON.stringify(cacheData));
         } catch (ce) {}
+      }
+
+      // Persistance locale de secours des récompenses pour zéro perte
+      if (this.rewards) {
+        try {
+          localStorage.setItem('protec_rewards_save', JSON.stringify({
+            rewards: this.rewards,
+            savedAt: Date.now()
+          }));
+        } catch (re) {}
       }
 
       // 3. La sauvegarde est transmise directement et fidèlement à la BDD
@@ -1183,8 +1317,20 @@ class ProtecGame {
             if (c.conventionRequests) this.conventionRequests = c.conventionRequests;
             if (c.financesHistory) this.financesHistory = c.financesHistory;
             if (c.alertSubscription) this.alertSubscription = c.alertSubscription;
+            if (c.rewards) this.rewards = c.rewards;
           }
         } catch (ce) {}
+      }
+
+      // Restauration locale des récompenses si non encore restaurées
+      if (!this.rewards) {
+        try {
+          const rawRewards = localStorage.getItem('protec_rewards_save');
+          if (rawRewards) {
+            const parsed = JSON.parse(rawRewards);
+            if (parsed && parsed.rewards) this.rewards = parsed.rewards;
+          }
+        } catch (re) {}
       }
     } catch (e) {
       console.warn('Erreur réinitialisation état local:', e);
@@ -1308,9 +1454,16 @@ class ProtecGame {
 
   initMap() {
     const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.currentDepartmentCode) : null;
-    const centerLat = deptInfo ? deptInfo.lat : 48.8566;
-    const centerLng = deptInfo ? deptInfo.lng : 2.3522;
-    const initialZoom = deptInfo ? deptInfo.zoom : 11;
+    let centerLat = deptInfo ? deptInfo.lat : 48.8566;
+    let centerLng = deptInfo ? deptInfo.lng : 2.3522;
+    let initialZoom = deptInfo ? deptInfo.zoom : 11;
+
+    // Si le joueur possède une antenne, centrer immédiatement la caméra devant ses locaux (zoom 15)
+    if (this.stations && this.stations.length > 0 && this.stations[0].lat && this.stations[0].lng) {
+      centerLat = this.stations[0].lat;
+      centerLng = this.stations[0].lng;
+      initialZoom = 15;
+    }
 
     this.map = L.map('map', {
       center: [centerLat, centerLng],
@@ -1348,6 +1501,10 @@ class ProtecGame {
     this.populateDepartmentSelector();
 
     this.map.on('click', (e) => {
+      // Ignorer si un marqueur (mission, événement, renfort, antenne) vient d'être cliqué
+      if (this._lastMarkerClickTime && (Date.now() - this._lastMarkerClickTime < 600)) {
+        return;
+      }
       if (this.isPlacingAntenna) {
         this.confirmAntennaPlacement(e.latlng);
       } else if (this.isPickingLocation && this.onLocationPickedCallback) {
@@ -1367,6 +1524,11 @@ class ProtecGame {
     setTimeout(() => {
       if (this.map) this.map.invalidateSize();
     }, 300);
+
+    // Maintien automatique du rendu des icônes lors des zooms et déplacements cartographiques
+    this.map.on('zoomend moveend', () => {
+      if (window.lucide) window.lucide.createIcons();
+    });
   }
 
   populateDepartmentSelector() {
@@ -1420,15 +1582,19 @@ class ProtecGame {
   }
 
   // Recentre la carte immédiatement sur l'antenne ou le département officiel du joueur
-  returnToMyAntenna() {
+  returnToMyAntenna(zoom = 15, silent = false) {
     this.inspectedDepartmentCode = null;
     const myDeptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
     const dept = window.ProtecDepartements ? window.ProtecDepartements.getByCode(myDeptCode) : null;
 
-    if (this.stations.length > 0) {
-      this.map.flyTo([this.stations[0].lat, this.stations[0].lng], 13, { duration: 1.2 });
+    if (this.stations.length > 0 && this.stations[0].lat && this.stations[0].lng) {
+      if (this.map) {
+        this.map.flyTo([this.stations[0].lat, this.stations[0].lng], zoom, { duration: 1.2 });
+      }
     } else if (dept) {
-      this.map.flyTo([dept.lat, dept.lng], dept.zoom, { duration: 1.2 });
+      if (this.map) {
+        this.map.flyTo([dept.lat, dept.lng], dept.zoom, { duration: 1.2 });
+      }
     }
 
     // Réinitialise le sélecteur d'exploration sur notre propre département
@@ -1440,7 +1606,9 @@ class ProtecGame {
     if (banner) banner.classList.add('hidden');
     if (returnBtn) returnBtn.classList.add('hidden');
 
-    this.showToast('Mon Antenne', `Retour à votre antenne d'affectation (${myDeptCode}).`, 'blue');
+    if (!silent) {
+      this.showToast('Mon Antenne', `Retour à votre antenne d'affectation (${myDeptCode}).`, 'blue');
+    }
 
     // Réactualise l'affichage des autres antennes pour le département joueur
     this.renderOtherStations();
@@ -1557,6 +1725,46 @@ class ProtecGame {
     if (window.lucide) window.lucide.createIcons();
   }
 
+  isMissionIncomplete(mission) {
+    if (!mission) return false;
+
+    // 1. Mission d'urgence en attente de décision / préalerte / déclenchée
+    if (mission.status === 'prealerte' || mission.status === 'declenche') return true;
+
+    // 2. Incident en cours sur une mission active
+    if (mission.status === 'ongoing' && mission.currentIncident) return true;
+
+    // 3. Missions terminées, annulées ou en cours sans incident : aucune onde
+    if (mission.status === 'completed' || mission.status === 'annule' || mission.status === 'ongoing') {
+      return false;
+    }
+
+    // 4. Mission planifiée : vérifier s'il manque des éléments
+    if (mission.status === 'planifie') {
+      const regCount = (mission.registeredVolunteers || []).length;
+      const reqCount = mission.requiredVolunteers || 1;
+
+      // A. Manque de personnel
+      if (regCount < reqCount) return true;
+
+      // B. Véhicules requis par le devis non affectés
+      if (Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) {
+        const assignedIds = (mission.assignedVehicleIds || []).filter(Boolean);
+        if (assignedIds.length < mission.requiredVehicles.length) return true;
+      }
+
+      // C. Rôles non affectés aux secouristes inscrits
+      if (regCount > 0) {
+        const roles = mission.volunteerRoles || {};
+        for (const vId of mission.registeredVolunteers) {
+          if (!roles[vId]) return true; // Au moins un bénévole n'a pas encore de rôle affecté
+        }
+      }
+    }
+
+    return false;
+  }
+
   renderMissions() {
     // Initialisation paresseuse du groupe de clustering de marqueurs Leaflet
     if (!this.missionsClusterGroup && typeof L !== 'undefined' && typeof L.markerClusterGroup === 'function') {
@@ -1577,6 +1785,9 @@ class ProtecGame {
             });
           }
         });
+        this.missionsClusterGroup.on('animationend spiderfied unspiderfied', () => {
+          if (window.lucide) window.lucide.createIcons();
+        });
         this.map.addLayer(this.missionsClusterGroup);
       } catch (e) {
         console.warn('MarkerClusterGroup non disponible, utilisation des marqueurs classiques:', e);
@@ -1591,7 +1802,8 @@ class ProtecGame {
     this.markers.missions = {};
 
     this.missions.forEach(mission => {
-      if (this.currentFilter !== 'all' && mission.type !== this.currentFilter) return;
+      // Les alertes actives et préalertes urgentes restent visibles en direct sur la carte même avec un filtre sélectionné
+      if (this.currentFilter !== 'all' && mission.type !== this.currentFilter && mission.status !== 'prealerte' && mission.status !== 'declenche') return;
 
       // Règle DPS : selon le mode actif ('today' = uniquement jour même ou en cours, 'all' = tous les DPS à venir)
       if (mission.type === 'dps' && mission.status === 'planifie') {
@@ -1599,14 +1811,14 @@ class ProtecGame {
         if (this.dpsFilterMode === 'today' && !isToday) return;
       }
 
-      const el = document.createElement('div');
-      el.className = 'custom-leaflet-marker';
+      const isSncf = mission.alertOrigin === 'sncf' || (mission.title && mission.title.includes('SNCF'));
 
       let colorClass = 'bg-pc-blue';
       let pingClass = 'radar-ping-blue';
       let iconName = 'shield-alert';
 
-      if (mission.type === 'samu') { colorClass = 'bg-pc-orange'; pingClass = 'radar-ping-orange'; iconName = 'activity'; }
+      if (isSncf) { colorClass = 'bg-amber-600'; pingClass = 'radar-ping-orange'; iconName = 'train'; }
+      else if (mission.type === 'samu') { colorClass = 'bg-pc-orange'; pingClass = 'radar-ping-orange'; iconName = 'activity'; }
       else if (mission.type === 'pompiers') { colorClass = 'bg-red-700'; pingClass = 'radar-ping-red'; iconName = 'flame'; }
       else if (mission.type === 'meteo') { colorClass = 'bg-sky-700'; pingClass = 'radar-ping-blue'; iconName = 'shield-alert'; }
       else if (mission.type === 'social') { colorClass = 'bg-purple-600'; pingClass = 'radar-ping-purple'; iconName = 'heart-handshake'; }
@@ -1616,7 +1828,7 @@ class ProtecGame {
       if (mission.status === 'ongoing') {
         badgeHtml = `<span class="badge-counter bg-emerald-500 animate-pulse">✓</span>`;
       } else if (mission.status === 'prealerte') {
-        badgeHtml = `<span class="badge-counter bg-amber-500 animate-ping">⏳</span>`;
+        badgeHtml = `<span class="badge-counter bg-amber-500 animate-ping">${isSncf ? '🚂' : '⏳'}</span>`;
         pingClass = 'radar-ping-orange';
       } else if (mission.status === 'declenche') {
         badgeHtml = `<span class="badge-counter bg-red-600 animate-pulse">!</span>`;
@@ -1626,23 +1838,43 @@ class ProtecGame {
         badgeHtml = `<span class="badge-counter ${isComplete ? 'bg-emerald-500' : 'bg-amber-500'}">${mission.registeredVolunteers?.length || 0}/${mission.requiredVolunteers}</span>`;
       }
 
-      el.innerHTML = `
-        <div class="${pingClass}"></div>
-        <div class="marker-inner ${colorClass}">
-          <i data-lucide="${iconName}" class="w-4 h-4 text-white"></i>
-          ${badgeHtml}
+      // L'onde (radar-ping) n'apparaît QUE s'il manque quelque chose sur la mission (personnel, véhicule, rôle, etc.)
+      const needsAction = this.isMissionIncomplete(mission);
+      const activePingHtml = needsAction ? `<div class="${pingClass}"></div>` : '';
+
+      const iconSvg = this.getMarkerIconSvg(iconName, 'w-4 h-4 text-white');
+      const markerHtml = `
+        <div class="custom-leaflet-marker">
+          ${activePingHtml}
+          <div class="marker-inner ${colorClass}">
+            ${iconSvg}
+            ${badgeHtml}
+          </div>
         </div>
       `;
 
       const icon = L.divIcon({
         className: 'clean-marker',
-        html: el,
+        html: markerHtml,
         iconSize: [42, 42],
         iconAnchor: [21, 21]
       });
 
       const marker = L.marker([mission.lat, mission.lng], { icon });
-      marker.on('click', () => this.openMissionDetails(mission.id));
+
+      const handleMissionClick = (ev) => {
+        if (ev) {
+          if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+          if (ev.originalEvent && typeof ev.originalEvent.stopPropagation === 'function') {
+            ev.originalEvent.stopPropagation();
+          }
+        }
+        this._lastMarkerClickTime = Date.now();
+        this.openMissionDetails(mission.id);
+      };
+
+      marker.on('click', handleMissionClick);
+
       const tooltipText = (mission.type === 'social' || mission.isSector)
         ? `<b>${mission.title}</b><br/><span style="color:#7c3aed;">🗺️ ${mission.sector || mission.address || 'Secteur de Maraude'}</span>`
         : `<b>${mission.title}</b><br/><span>📍 ${mission.address || 'Point cartographique'}</span>`;
@@ -1654,6 +1886,104 @@ class ProtecGame {
         marker.addTo(this.map);
       }
       this.markers.missions[mission.id] = marker;
+    });
+
+    // Rendu des Événements Officiels & Communautaires (communityEvents) sur la carte
+    const openCommunityEvents = (this.communityEvents || []).filter(e => e.status === 'open' && (e.lat || e.latitude) && (e.lng || e.longitude));
+    openCommunityEvents.forEach(evt => {
+      const eLat = evt.lat || evt.latitude;
+      const eLng = evt.lng || evt.longitude;
+      if (!eLat || !eLng) return;
+
+      const evtSvg = this.getMarkerIconSvg('award', 'w-4 h-4 text-amber-200');
+      const evtHtml = `
+        <div class="custom-leaflet-marker community-event-marker">
+          <div class="radar-ping-purple"></div>
+          <div class="marker-inner bg-gradient-to-tr from-purple-700 via-indigo-600 to-amber-500 border-2 border-amber-300 shadow-lg">
+            ${evtSvg}
+            <span class="badge-counter bg-amber-400 text-slate-950 font-black">★</span>
+          </div>
+        </div>
+      `;
+
+      const evtIcon = L.divIcon({
+        className: 'clean-marker',
+        html: evtHtml,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22]
+      });
+
+      const evtMarker = L.marker([eLat, eLng], { icon: evtIcon, zIndexOffset: 1000 });
+      const handleEvtClick = (ev) => {
+        if (ev) {
+          if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+          if (ev.originalEvent && typeof ev.originalEvent.stopPropagation === 'function') {
+            ev.originalEvent.stopPropagation();
+          }
+        }
+        this._lastMarkerClickTime = Date.now();
+        this.openCommunityEventDetails(evt.id);
+      };
+
+      evtMarker.on('click', handleEvtClick);
+
+      evtMarker.bindTooltip(`<b>⭐ ${evt.title}</b><br/><span style="color:#7c3aed;">Événement Officiel • ${evt.locationName || evt.city || 'Dispositif'}</span>`, { direction: 'top', offset: [0, -15] });
+
+      if (this.missionsClusterGroup) {
+        this.missionsClusterGroup.addLayer(evtMarker);
+      } else {
+        evtMarker.addTo(this.map);
+      }
+      this.markers.missions['evt-' + evt.id] = evtMarker;
+    });
+
+    // Rendu des Demandes de Renfort Actives sur la carte
+    const openRenforts = (this.renforts || []).filter(r => r.status === 'open' && (r.lat || r.latitude) && (r.lng || r.longitude));
+    openRenforts.forEach(renf => {
+      const rLat = renf.lat || renf.latitude;
+      const rLng = renf.lng || renf.longitude;
+      if (!rLat || !rLng) return;
+
+      const rSvg = this.getMarkerIconSvg('handshake', 'w-4 h-4 text-white');
+      const rHtml = `
+        <div class="custom-leaflet-marker renfort-marker">
+          <div class="radar-ping-orange"></div>
+          <div class="marker-inner bg-gradient-to-tr from-amber-600 to-pc-orange border-2 border-white shadow-lg">
+            ${rSvg}
+            <span class="badge-counter bg-pc-blue text-white font-black">${(renf.requiredVolsCount || 6) - (renf.slotsCommitted || 0)}</span>
+          </div>
+        </div>
+      `;
+
+      const rIcon = L.divIcon({
+        className: 'clean-marker',
+        html: rHtml,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22]
+      });
+
+      const rMarker = L.marker([rLat, rLng], { icon: rIcon, zIndexOffset: 900 });
+      const handleRenfClick = (ev) => {
+        if (ev) {
+          if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+          if (ev.originalEvent && typeof ev.originalEvent.stopPropagation === 'function') {
+            ev.originalEvent.stopPropagation();
+          }
+        }
+        this._lastMarkerClickTime = Date.now();
+        this.openEngageRenfortModal(renf.id);
+      };
+
+      rMarker.on('click', handleRenfClick);
+
+      rMarker.bindTooltip(`<b>🤝 Appel à Renfort : ${renf.title || renf.typeTitle || 'Mission'}</b><br/><span style="color:#f97316;">${renf.addressDisplay || renf.address || 'Point de rassemblement'}</span>`, { direction: 'top', offset: [0, -15] });
+
+      if (this.missionsClusterGroup) {
+        this.missionsClusterGroup.addLayer(rMarker);
+      } else {
+        rMarker.addTo(this.map);
+      }
+      this.markers.missions['renf-' + renf.id] = rMarker;
     });
 
     if (window.lucide) window.lucide.createIcons();
@@ -2150,18 +2480,25 @@ class ProtecGame {
   // Règle : Les missions doivent être réparties dans le département. Si plusieurs antennes sont implantées dans le département,
   // la mission est générée à proximité de l'antenne concernée (son bassin de vie).
   calculateRealisticMissionLocation(baseStation = null, missionType = 'dps') {
-    const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
+    const deptCode = this.currentDepartmentCode || this.player.departmentCode || '54';
     const dept = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
     const stationsInDept = (this.stations || []).filter(s => s.departmentCode === deptCode || !s.departmentCode);
     const hasMultipleStations = stationsInDept.length > 1;
 
     // Point d'ancrage principal
-    const base = baseStation || stationsInDept[0] || (dept ? { lat: dept.lat, lng: dept.lng } : { lat: 48.8566, lng: 2.3522 });
+    let base = baseStation || stationsInDept[0] || (dept ? { lat: dept.lat, lng: dept.lng } : { lat: 48.6921, lng: 6.1844 });
+
+    // Pour une maraude sociale : toujours ancrer dans l'agglomération centrale de l'antenne
+    const isSocial = missionType === 'social';
 
     let minDistanceKm = 1.8;
     let maxDistanceKm = 10.0;
 
-    if (hasMultipleStations) {
+    if (isSocial) {
+      // Maraude sociale : reste STRICTEMENT dans le périmètre urbain direct du centre-ville et gares (0.4 à 2.2 km)
+      minDistanceKm = 0.4;
+      maxDistanceKm = 2.2;
+    } else if (hasMultipleStations) {
       // Plusieurs antennes dans le même département : la mission reste dans le secteur de proximité de cette antenne
       if (missionType === 'samu' || missionType === 'pompiers') {
         minDistanceKm = 1.2;
@@ -2174,38 +2511,38 @@ class ProtecGame {
         maxDistanceKm = 18.0; // SNCF, météo, grandes crises
       }
     } else {
-      // Antenne UNIQUE dans le département : l'antenne couvre TOUT le territoire départemental
-      // Ventilation réaliste : une partie en agglomération, le reste dans les villes et cantons du département
+      // Antenne UNIQUE dans le département : l'antenne couvre le territoire départemental
       if (missionType === 'samu') {
-        minDistanceKm = 1.8;
-        maxDistanceKm = Math.random() < 0.6 ? 7.5 : 16.0;
+        minDistanceKm = 1.5;
+        maxDistanceKm = Math.random() < 0.65 ? 6.5 : 15.0;
       } else if (missionType === 'pompiers') {
-        minDistanceKm = 1.8;
-        maxDistanceKm = Math.random() < 0.65 ? 8.5 : 18.0;
+        minDistanceKm = 1.5;
+        maxDistanceKm = Math.random() < 0.70 ? 7.5 : 16.0;
+      } else if (missionType === 'sncf') {
+        minDistanceKm = 1.0;
+        maxDistanceKm = 8.0; // En gare centrale / agglomération
       } else if (missionType === 'dps') {
         const roll = Math.random();
-        if (roll < 0.30) {
-          minDistanceKm = 2.5; maxDistanceKm = 8.5; // Urbain / agglomération
-        } else if (roll < 0.70) {
-          minDistanceKm = 8.5; maxDistanceKm = 22.0; // Villes moyennes & bassin du département
+        if (roll < 0.35) {
+          minDistanceKm = 2.0; maxDistanceKm = 7.5; // Urbain / agglomération
+        } else if (roll < 0.75) {
+          minDistanceKm = 7.5; maxDistanceKm = 20.0; // Villes moyennes du département
         } else {
-          minDistanceKm = 20.0; maxDistanceKm = 40.0; // Rassemblements majeurs départementaux
+          minDistanceKm = 18.0; maxDistanceKm = 35.0; // Grands rassemblements départementaux
         }
-      } else if (missionType === 'sncf') {
-        minDistanceKm = 4.0;
-        maxDistanceKm = 30.0;
       } else {
         // Météo / Crise Préfecture
-        minDistanceKm = 4.0;
-        maxDistanceKm = 38.0;
+        minDistanceKm = 3.5;
+        maxDistanceKm = 35.0;
       }
     }
 
     // Points existants pour anti-collision / anti-agglutinement
+    const collisionThreshold = isSocial ? 0.35 : 1.2;
     const existingPoints = [
-      ...this.stations.map(s => ({ lat: s.lat, lng: s.lng, minDist: 1.0 })),
-      ...this.missions.map(m => ({ lat: m.lat, lng: m.lng, minDist: 1.4 })),
-      ...this.devis.map(d => ({ lat: d.lat, lng: d.lng, minDist: 1.4 }))
+      ...this.stations.map(s => ({ lat: s.lat, lng: s.lng, minDist: isSocial ? 0.3 : 1.0 })),
+      ...this.missions.map(m => ({ lat: m.lat, lng: m.lng, minDist: isSocial ? 0.35 : 1.3 })),
+      ...this.devis.map(d => ({ lat: d.lat, lng: d.lng, minDist: isSocial ? 0.35 : 1.3 }))
     ];
 
     let bestCoord = null;
@@ -2241,7 +2578,7 @@ class ProtecGame {
         const dLat = (candLat - p.lat) * 110.574;
         const dLng = (candLng - p.lng) * (kmPerLngDeg || 75);
         const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-        if (dist < (p.minDist || 1.2)) {
+        if (dist < (p.minDist || collisionThreshold)) {
           collision = true;
           break;
         }
@@ -2258,20 +2595,29 @@ class ProtecGame {
     }
 
     if (!bestCoord) {
-      bestCoord = { lat: base.lat + 0.03, lng: base.lng + 0.03 };
+      bestCoord = { lat: base.lat + 0.015, lng: base.lng + 0.015 };
+    }
+
+    // Résolution instantanée de la commune la plus proche
+    const nearest = (window.ProtecDepartements && typeof window.ProtecDepartements.getNearestCommune === 'function')
+      ? window.ProtecDepartements.getNearestCommune(bestCoord.lat, bestCoord.lng, deptCode)
+      : null;
+    if (nearest) {
+      bestCoord.commune = nearest.nom;
+      bestCoord.postcode = nearest.cp;
     }
 
     return bestCoord;
   }
 
   // Générateur d'adresse réaliste par défaut pour chaque mission
-  generateRealisticStreetAddress(city = 'Paris', lat = null, lng = null) {
+  generateRealisticStreetAddress(city = 'Nancy', lat = null, lng = null) {
     const thoroughfares = [
       'Rue de la République', 'Avenue Jean Jaurès', 'Boulevard Victor Hugo', 'Rue Pasteur',
       'Rue Nationale', 'Boulevard Gambetta', 'Place de la Mairie', 'Rue des Fleurs',
       'Avenue de la Gare', 'Rue Saint-Jean', 'Boulevard de la Liberté', 'Rue des Écoles',
-      'Avenue du Général de Gaulle', 'Quai de la Marne', 'Rue de la Paix', 'Place du Marché',
-      'Rue du Moulin', 'Boulevard Maréchal Foch', 'Allée du Parc', 'Esplanade des Droits de l’Homme'
+      'Avenue du Général de Gaulle', 'Quai de la Meurthe', 'Rue de la Paix', 'Place Stanislas',
+      'Rue du Moulin', 'Boulevard Maréchal Foch', 'Allée du Parc', 'Esplanade Simone Veil'
     ];
     let seed = 0;
     if (lat && lng) seed = Math.abs(Math.round((lat + lng) * 1000));
@@ -2280,22 +2626,37 @@ class ProtecGame {
     return `${num} ${street}, ${city}`;
   }
 
-  // Enrichissement automatique du nom de la commune hôte et adresse par reverse-géocodage
+  // Enrichissement automatique et cohérent du nom de la commune et de l'adresse
   enrichMissionLocationWithCity(item) {
     if (!item) return;
     const isMaraude = item.type === 'social' || item.category === 'Social' || (item.title && item.title.toLowerCase().includes('maraude'));
+    const deptCode = this.currentDepartmentCode || this.player?.departmentCode || '54';
+
+    // 1. Résolution synchrone immédiate de la commune via la base locale
+    if (item.lat && item.lng && window.ProtecDepartements && typeof window.ProtecDepartements.getNearestCommune === 'function') {
+      const nearest = window.ProtecDepartements.getNearestCommune(item.lat, item.lng, deptCode);
+      if (nearest) {
+        item.commune = nearest.nom;
+        item.postcode = nearest.cp;
+      }
+    }
+
+    const currentCity = item.commune || this.stations[0]?.city || 'Nancy';
+
     if (isMaraude) {
       item.isSector = true;
-      if (!item.sector) {
-        item.sector = item.commune ? `Secteur : Quartiers & Gares (${item.commune})` : 'Secteur Urbain & Maraude';
-      }
+      item.sector = `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${currentCity})`;
       item.address = item.sector;
-    } else if (!item.address && (item.lat || item.lng)) {
-      item.address = this.generateRealisticStreetAddress(item.commune || this.stations[0]?.city || 'Paris', item.lat, item.lng);
+    } else {
+      item.isSector = false;
+      if (!item.address || (!item.address.includes(currentCity) && !item.address.includes(item.postcode || ''))) {
+        item.address = this.generateRealisticStreetAddress(currentCity, item.lat, item.lng);
+      }
     }
 
     if (!item.lat || !item.lng) return;
 
+    // 2. Affinage d'adresse officiel via API data.gouv (si réseau disponible)
     try {
       fetch(`https://api-adresse.data.gouv.fr/reverse/?lon=${item.lng}&lat=${item.lat}`)
         .then(res => res.json())
@@ -2311,7 +2672,7 @@ class ProtecGame {
             }
             if (isMaraude) {
               item.isSector = true;
-              item.sector = `Secteur Maraude : Quartiers Centre & Gares (${city || 'Agglomération'})`;
+              item.sector = `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${city || currentCity})`;
               item.address = item.sector;
             } else if (props.label) {
               item.address = props.label;
@@ -2324,17 +2685,15 @@ class ProtecGame {
     } catch (e) {}
   }
 
-  // Garantie que chaque mission en cours ou planifiée a une adresse (hors maraudes qui opèrent par secteur)
+  // Garantie que chaque mission en cours ou planifiée a une adresse cohérente
   ensureMissionAddresses() {
-    const cityName = this.stations[0]?.city || 'Paris';
+    const cityName = this.stations[0]?.city || 'Nancy';
     const allItems = [...(this.missions || []), ...(this.devis || [])];
     allItems.forEach(item => {
       const isMaraude = item.type === 'social' || item.category === 'Social' || (item.title && item.title.toLowerCase().includes('maraude'));
       if (isMaraude) {
         item.isSector = true;
-        if (!item.sector) {
-          item.sector = item.commune ? `Secteur : Quartiers & Gares (${item.commune})` : 'Secteur Urbain & Maraude';
-        }
+        item.sector = `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${item.commune || cityName})`;
         item.address = item.sector;
       } else {
         item.isSector = false;
@@ -2348,6 +2707,59 @@ class ProtecGame {
     });
   }
 
+  // Nettoyage, recalage et mise en cohérence rigoureuse de toutes les missions et maraudes
+  sanitizeMissionLocationsAndAddresses() {
+    if (!this.stations || this.stations.length === 0) return;
+    const base = this.stations[0];
+    const deptCode = this.currentDepartmentCode || this.player?.departmentCode || '54';
+    let changed = false;
+
+    const allItems = [...(this.missions || []), ...(this.devis || [])];
+    allItems.forEach(item => {
+      if (!item.lat || !item.lng) return;
+
+      const isMaraude = item.type === 'social' || item.category === 'Social' || (item.title && item.title.toLowerCase().includes('maraude'));
+
+      if (isMaraude) {
+        // Distance à la base de l'antenne
+        const distKm = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+          ? window.ProtecDepartements.calculateDistance(base.lat, base.lng, item.lat, item.lng)
+          : Math.hypot((item.lat - base.lat) * 111, (item.lng - base.lng) * 75);
+
+        // Si la maraude a été générée trop loin (ex: perdue à Villey-Saint-Étienne à 18 km)
+        if (distKm > 3.5) {
+          const newCoords = this.calculateRealisticMissionLocation(base, 'social');
+          item.lat = newCoords.lat;
+          item.lng = newCoords.lng;
+          changed = true;
+        }
+
+        const city = item.commune || base.city || 'Nancy';
+        item.isSector = true;
+        item.sector = `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${city})`;
+        item.address = item.sector;
+      } else {
+        // Contrôle de cohérence de l'adresse avec la commune du marqueur sur la carte
+        if (window.ProtecDepartements && typeof window.ProtecDepartements.getNearestCommune === 'function') {
+          const nearest = window.ProtecDepartements.getNearestCommune(item.lat, item.lng, deptCode);
+          if (nearest) {
+            item.commune = nearest.nom;
+            item.postcode = nearest.cp;
+            if (!item.address || (!item.address.includes(nearest.nom) && !item.address.includes(nearest.cp))) {
+              item.address = this.generateRealisticStreetAddress(nearest.nom, item.lat, item.lng);
+              changed = true;
+            }
+          }
+        }
+      }
+    });
+
+    if (changed) {
+      this.saveGame();
+      if (typeof this.renderMissions === 'function') this.renderMissions();
+    }
+  }
+
   // Dispersion des missions existantes si elles sont trop agglutinées dans un rayon étroit
   disperseOverlappingMissions() {
     if (this.stations.length === 0) return;
@@ -2359,20 +2771,21 @@ class ProtecGame {
       const item = allItems[i];
       if (!item.lat || !item.lng) continue;
 
+      const isMaraude = item.type === 'social' || item.category === 'Social' || (item.title && item.title.toLowerCase().includes('maraude'));
       const distToStation = Math.sqrt(Math.pow((item.lat - base.lat) * 110.574, 2) + Math.pow((item.lng - base.lng) * 75, 2));
 
-      let tooClose = distToStation < 0.9;
+      let tooClose = distToStation < (isMaraude ? 0.35 : 0.9);
       for (let j = 0; j < i; j++) {
         const other = allItems[j];
         const dist = Math.sqrt(Math.pow((item.lat - other.lat) * 110.574, 2) + Math.pow((item.lng - other.lng) * 75, 2));
-        if (dist < 1.3) {
+        if (dist < (isMaraude ? 0.45 : 1.3)) {
           tooClose = true;
           break;
         }
       }
 
       if (tooClose) {
-        const mType = item.type || (item.scale ? 'dps' : 'dps');
+        const mType = isMaraude ? 'social' : (item.type || (item.scale ? 'dps' : 'dps'));
         const newCoord = this.calculateRealisticMissionLocation(base, mType);
         item.lat = newCoord.lat;
         item.lng = newCoord.lng;
@@ -2669,7 +3082,9 @@ class ProtecGame {
       daysAhead: daysAhead,
       urgencyReason: isLastMinute ? 'Annulation de dernière minute d’une autre association agréée' : 'Planification anticipée d’événement',
       secondsLeft: isLastMinute ? (3 * 3600) : (6 * 3600), // Délai pour répondre
-      address: this.generateRealisticStreetAddress(base?.city || 'Paris', missionCoords.lat, missionCoords.lng),
+      commune: missionCoords.commune || base?.city || 'Nancy',
+      postcode: missionCoords.postcode || '',
+      address: this.generateRealisticStreetAddress(missionCoords.commune || base?.city || 'Nancy', missionCoords.lat, missionCoords.lng),
       isSector: false
     };
 
@@ -2735,6 +3150,207 @@ class ProtecGame {
     this.selectedPlanningDay = this.clock.day || 1;
     this.openModule('planning', true);
   }
+
+  togglePlanningPoleFilter(poleKey) {
+    if (!this.planningPolesFilters) {
+      this.planningPolesFilters = { dps: true, devis: true, formations: true, social: true };
+    }
+    this.planningPolesFilters[poleKey] = !this.planningPolesFilters[poleKey];
+    this.openModule('planning', true);
+  }
+
+  toggleAllPlanningPoleFilters(allActive) {
+    if (!this.planningPolesFilters) {
+      this.planningPolesFilters = { dps: true, devis: true, formations: true, social: true };
+    }
+    this.planningPolesFilters = {
+      dps: !!allActive,
+      devis: !!allActive,
+      formations: !!allActive,
+      social: !!allActive
+    };
+    this.openModule('planning', true);
+  }
+
+  openPlanningFiltered(focusPole) {
+    if (!this.planningPolesFilters) {
+      this.planningPolesFilters = { dps: true, devis: true, formations: true, social: true };
+    }
+    if (focusPole) {
+      this.planningPolesFilters[focusPole] = true;
+    }
+    this.openModule('planning');
+  }
+
+  // Agrégation transversale de tous les événements de tous les pôles opérationnels
+  getAllPlanningEvents(viewingMonth = null, viewingYear = null) {
+    const events = [];
+    const targetMonth = viewingMonth !== null ? viewingMonth : this.clock.month;
+    const targetYear = viewingYear !== null ? viewingYear : (this.clock.year || 2026);
+
+    // 1. PÔLE SECOURS & DPS (DPS validés, gardes SAMU/SDIS, missions planifiées hors maraude)
+    const dpsMissions = (this.missions || []).filter(m => 
+      m.type !== 'social' && 
+      (m.status === 'planifie' || m.status === 'ongoing' || m.type === 'dps' || m.isPlanned)
+    );
+    dpsMissions.forEach(m => {
+      let eDate = m.eventDate;
+      if (!eDate) {
+        eDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: m.startHour || 14, minute: 0 };
+        m.eventDate = eDate;
+      }
+      events.push({
+        id: m.id,
+        pole: 'dps',
+        poleLabel: 'Secours & DPS',
+        poleColor: 'bg-pc-blue',
+        type: m.type === 'dps' ? 'DPS' : 'Garde',
+        badgeBg: m.type === 'dps' ? 'bg-pc-blue text-white' : 'bg-pc-orange text-white',
+        title: m.title,
+        eventDate: eDate,
+        startHour: m.startHour || eDate.hour || 14,
+        durationHours: m.durationHours || 4,
+        durationSeconds: m.durationSeconds,
+        rewardMoney: m.rewardMoney || 0,
+        registeredCount: m.registeredVolunteers?.length || 0,
+        requiredCount: m.requiredVolunteers || 4,
+        scale: m.scale || 'DPS',
+        address: m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site'),
+        raw: m
+      });
+    });
+
+    // 2. PÔLE DEVIS & PRÉVISIONNELS DPS (Devis en attente, en délibération ou mis en prévisionnel)
+    const pendingAndPrevDevis = (this.devis || []).filter(d => ['pending', 'previsionnel', 'sent'].includes(d.status));
+    pendingAndPrevDevis.forEach(d => {
+      let eDate = d.eventDate;
+      if (!eDate) {
+        eDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: 14, minute: 0 };
+        d.eventDate = eDate;
+      }
+      const isPrev = d.status === 'previsionnel';
+      const isSent = d.status === 'sent';
+      events.push({
+        id: d.id,
+        pole: 'devis',
+        poleLabel: 'Devis & Prévisionnel',
+        poleColor: 'bg-amber-500',
+        type: isPrev ? 'Prévi' : (isSent ? 'Délibération' : 'Devis'),
+        badgeBg: isPrev ? 'bg-amber-500 text-white' : (isSent ? 'bg-indigo-600 text-white' : 'bg-sky-500 text-white'),
+        title: d.eventName,
+        eventDate: eDate,
+        startHour: eDate.hour || 14,
+        durationHours: d.durationHours || 4,
+        rewardMoney: d.proposedPrice || (this.calculateDynamicBareme(d)?.totalBareme) || 0,
+        registeredCount: d.previsionnelVolunteers?.length || 0,
+        requiredCount: d.configuredVolunteers || d.requiredVolunteers || 4,
+        scale: d.scale || 'DPS',
+        address: d.address || 'Adresse sur site',
+        raw: d
+      });
+    });
+
+    // 3. PÔLE FORMATIONS (Sessions grand public & internes + Prospections/contrats B2B)
+    const formationSessions = (this.sessionsFormation || []).filter(s => s.status !== 'completed');
+    formationSessions.forEach(s => {
+      let eDate = s.eventDate;
+      if (!eDate && s.createdAt) {
+        const cd = new Date(s.createdAt);
+        eDate = { day: cd.getDate(), month: cd.getMonth(), year: cd.getFullYear(), hour: 9, minute: 0 };
+      }
+      if (!eDate) {
+        eDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: 9, minute: 0 };
+      }
+      s.eventDate = eDate;
+
+      const trainer = this.volunteers?.find(v => v.id === s.trainerId);
+      events.push({
+        id: s.id,
+        pole: 'formations',
+        poleLabel: 'Formations',
+        poleColor: 'bg-emerald-600',
+        type: s.isInternal ? 'Formation Interne' : 'Formation Grand Public',
+        badgeBg: 'bg-emerald-600 text-white',
+        title: s.title || `Session ${s.courseId}`,
+        eventDate: eDate,
+        startHour: eDate.hour || 9,
+        durationHours: 7,
+        rewardMoney: s.finalPrice ? s.finalPrice * (s.registeredCandidates?.length || 1) : null,
+        registeredCount: (s.registeredCandidates?.length || 0) + (s.externalAttendeesCount || 0),
+        requiredCount: s.maxCandidates || 8,
+        scale: s.category || 'Formation',
+        address: s.locationLabel || (s.locationType === 'antenne' ? 'Salle Pédagogique (Antenne)' : 'Délocalisée'),
+        trainerName: trainer ? trainer.name : null,
+        raw: s
+      });
+    });
+
+    const b2bProposals = (this.formationB2BProposals || []).filter(p => ['accepted', 'in_progress', 'evaluating', 'pending_quote'].includes(p.status));
+    b2bProposals.forEach(p => {
+      let bDate = p.eventDate;
+      if (!bDate && p.deadline) {
+        const cd = new Date(p.deadline);
+        bDate = { day: cd.getDate(), month: cd.getMonth(), year: cd.getFullYear(), hour: 9, minute: 0 };
+      } else if (!bDate && p.startedAt) {
+        const cd = new Date(p.startedAt);
+        bDate = { day: cd.getDate(), month: cd.getMonth(), year: cd.getFullYear(), hour: 9, minute: 0 };
+      } else if (!bDate) {
+        bDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: 9, minute: 0 };
+      }
+      p.eventDate = bDate;
+
+      events.push({
+        id: p.id,
+        pole: 'formations',
+        poleLabel: 'Formations',
+        poleColor: 'bg-teal-600',
+        type: `B2B : ${p.training_type}`,
+        badgeBg: 'bg-teal-600 text-white',
+        title: `Formation Entreprise ${p.training_type} (${p.client_name || 'Client'})`,
+        eventDate: bDate,
+        startHour: 9,
+        durationHours: 7,
+        rewardMoney: p.proposed_price || p.proposedPrice || p.client_target_budget || 0,
+        registeredCount: p.attendees_count || 10,
+        requiredCount: p.attendees_count || 10,
+        scale: 'Formation Entreprise',
+        address: p.mode === 'intra' ? `Site client : ${p.client_name}` : 'Salle Pédagogique (Antenne)',
+        raw: p
+      });
+    });
+
+    // 4. PÔLE ACTION SOCIALE (Maraudes & interventions solidaires)
+    const maraudeMissions = (this.missions || []).filter(m => m.type === 'social');
+    maraudeMissions.forEach(m => {
+      let eDate = m.eventDate;
+      if (!eDate) {
+        eDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: 19, minute: 0 };
+        m.eventDate = eDate;
+      }
+      events.push({
+        id: m.id,
+        pole: 'social',
+        poleLabel: 'Action Sociale',
+        poleColor: 'bg-purple-600',
+        type: 'Maraude',
+        badgeBg: 'bg-purple-600 text-white',
+        title: m.title,
+        eventDate: eDate,
+        startHour: m.startHour || eDate.hour || 19,
+        durationHours: m.durationHours || 2,
+        durationSeconds: m.durationSeconds,
+        rewardMoney: m.rewardMoney || 150,
+        registeredCount: m.registeredVolunteers?.length || 0,
+        requiredCount: m.requiredVolunteers || 3,
+        scale: 'Action Sociale',
+        address: m.sector || m.address || 'Secteur Maraude',
+        raw: m
+      });
+    });
+
+    return events;
+  }
+
 
   calculateDynamicBareme(devis) {
     const ratePerHour = 18;
@@ -3712,38 +4328,38 @@ class ProtecGame {
       if (ratio <= 1.15) {
         badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
         text = '🚨 Tarif d’Urgence Très Compétitif';
-        acceptRate = 'Acceptation immédiate garantie face à l’urgence de l’organisateur (~90%)';
+        acceptRate = 'Positionnement idéal face à l’urgence de l’organisateur';
       } else if (ratio <= 1.40) {
         badgeClass = 'bg-blue-100 text-pc-blue border-blue-200';
         text = '🚨 Majoration d’Urgence Tolérée';
-        acceptRate = 'L’organisateur accepte le surcoût lié au préavis très court (~70-80%)';
+        acceptRate = 'Surcoût justifié par le préavis d’urgence';
       } else if (ratio <= 1.60) {
         badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
         text = 'Tarif très élevé (limite tolérance urgence)';
-        acceptRate = 'Risque que l’organisateur annule ou sollicite une autre AASC (~40%)';
+        acceptRate = 'Risque que l’organisateur recherche un concurrent';
       } else {
         badgeClass = 'bg-rose-100 text-rose-800 border-rose-300';
         text = 'Tarif abusif malgré l’urgence';
-        acceptRate = 'Rejet très probable par l’organisateur (<15%)';
+        acceptRate = 'Refus très probable de l’organisateur';
       }
     } else {
       // Planification à long terme : concurrence stricte des autres AASC
       if (ratio <= 0.85) {
         badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
         text = 'Tarif très compétitif';
-        acceptRate = 'Très forte chance de remporter face à la concurrence (~85%)';
+        acceptRate = 'Offre attractive face à la concurrence inter-associative';
       } else if (ratio <= 1.05) {
         badgeClass = 'bg-blue-100 text-pc-blue border-blue-200';
         text = 'Tarif conforme au barème';
-        acceptRate = 'Concurrence active des AASC : chance moyenne à bonne (~45-55%)';
+        acceptRate = 'Positionnement équilibré selon les barèmes fédéraux';
       } else if (ratio <= 1.20) {
         badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
         text = 'Tarif supérieur au barème';
-        acceptRate = 'Risque fort de perdre face aux offres concurrentes (~25%)';
+        acceptRate = 'Risque de perdre l’arbitrage face à des offres concurrentes';
       } else {
         badgeClass = 'bg-rose-100 text-rose-800 border-rose-300';
         text = 'Tarif excessif';
-        acceptRate = 'Rejet très probable par l’organisateur (<10%)';
+        acceptRate = 'Refus très probable de l’organisateur';
       }
     }
 
@@ -4085,6 +4701,7 @@ class ProtecGame {
       consumableCost: devis.consumableCost || 30,
       clientName: devis.clientName,
       clientType: devis.clientType,
+      isUnderdimensioned: !!(devis.isUnderdimensioned || (devis.complianceAudit && !devis.complianceAudit.isConforme) || (volsCount < (devis.hiddenMinVolunteers || 4))),
       progress: 0,
       status: 'planifie',
       registeredVolunteers: [...previDispoIds], // Inscription automatique directe des bénévoles disponibles
@@ -4157,8 +4774,8 @@ class ProtecGame {
     this.renderMissions();
     this.updateStatsUI();
 
-    // Déclencher la mobilisation de nouveaux bénévoles
-    this.launchSmsMobilization(missionId);
+    // Déclencher la mobilisation de nouveaux bénévoles (silencieux pour éviter double notification / double son)
+    this.launchSmsMobilization(missionId, true);
 
     if (this.selectedMissionId === missionId) {
       this.openMissionDetails(missionId);
@@ -4201,12 +4818,12 @@ class ProtecGame {
     this.launchSmsMobilization(missionId);
   }
 
-  launchSmsMobilization(missionId) {
+  launchSmsMobilization(missionId, silent = false) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
 
     if (mission.smsCampaignActive) {
-      this.showToast('Diffusion SMS en cours', 'Une mobilisation SMS est déjà active. Les réponses des secouristes arrivent...', 'blue');
+      if (!silent) this.showToast('Diffusion SMS en cours', 'Une mobilisation SMS est déjà active. Les réponses des secouristes arrivent...', 'blue');
       return;
     }
 
@@ -4217,7 +4834,7 @@ class ProtecGame {
     );
 
     if (unassignedVols.length === 0) {
-      this.showToast('Aucun bénévole disponible', 'Tous vos personnels sont déjà engagés ou en repos.', 'orange');
+      if (!silent) this.showToast('Aucun bénévole disponible', 'Tous vos personnels sont déjà engagés ou en repos.', 'orange');
       return;
     }
 
@@ -4225,15 +4842,42 @@ class ProtecGame {
     mission.relancesCount = (mission.relancesCount || 0) + 1;
 
     const urgencyTag = (mission.status === 'prealerte' || mission.status === 'declenche') ? 'Alerte Urgence' : 'Poste DPS';
-    this.showToast('Diffusion SMS Lancée', `📱 Message d'alerte [${urgencyTag}] envoyé à ${unassignedVols.length} secouriste(s). Réponses en attente...`, 'blue');
+    if (!silent) {
+      this.showToast('Diffusion SMS Lancée', `📱 Message d'alerte [${urgencyTag}] envoyé à ${unassignedVols.length} secouriste(s). Réponses en attente...`, 'blue');
+    }
 
     let pendingResponses = unassignedVols.length;
 
-    unassignedVols.forEach((vol) => {
-      // Évaluation réaliste selon correspondance du jour (80% jour habituel vs 10-20% autre jour) et délais étalés
+    // Simulation humaine réaliste :
+    // Les bénévoles les plus motivés et énergiques consultent leur téléphone et répondent en premier
+    const sortedVols = [...unassignedVols].sort((a, b) => {
+      const scoreA = (a.motivation || 70) + (a.energy || 70) * 0.4 + (a.trait === 'devoue' ? 25 : 0) + (Math.random() * 15);
+      const scoreB = (b.motivation || 70) + (b.energy || 70) * 0.4 + (b.trait === 'devoue' ? 25 : 0) + (Math.random() * 15);
+      return scoreB - scoreA;
+    });
+
+    let cumulativeDelayMs = 0;
+
+    sortedVols.forEach((vol, idx) => {
       const evalResult = this.evaluateVolunteerAvailability(vol, mission.eventDate, mission);
 
-      // PROGRAMMATION EN ARRIÈRE-PLAN DU RETOUR SMS
+      // Calcul d'un délai variable échelonné :
+      // - 1er bénévole : entre 3s et 6s
+      // - Bénévoles suivants : espacés chacun de 4s à 9s supplémentaires
+      // - Délais modulés par la motivation individuelle
+      const motiv = vol.motivation || 70;
+      const speedMod = Math.max(0.6, 1.4 - (motiv / 100));
+      const stepMs = Math.round((3500 + Math.random() * 4500) * speedMod);
+
+      if (idx === 0) {
+        cumulativeDelayMs = Math.round(2500 + Math.random() * 3000);
+      } else {
+        cumulativeDelayMs += stepMs;
+      }
+
+      const assignedDelayMs = cumulativeDelayMs;
+
+      // PROGRAMMATION EN ARRIÈRE-PLAN DU RETOUR SMS ÉCHELONNÉ
       setTimeout(() => {
         pendingResponses--;
         if (pendingResponses <= 0) {
@@ -4250,9 +4894,12 @@ class ProtecGame {
         if (willAccept) {
           currentMission.registeredVolunteers.push(vol.id);
           this.showToast('📱 SMS Reçu : DISPO !', `${vol.name} (${vol.rank}) : « Présent ! Je me rends disponible pour cette mission. »`, 'green');
-          this.checkEnginProgressNotification(currentMission);
+          // Déclencher la montée en charge avec un léger décalage naturel pour ne pas télescoper le toast SMS
+          setTimeout(() => {
+            this.checkEnginProgressNotification(currentMission);
+          }, 900);
         } else if (!isFull) {
-          if (Math.random() < 0.50) {
+          if (Math.random() < 0.65) {
             this.showToast('📱 SMS Reçu : Non dispo', `${vol.name} : « Désolé, impossible (${evalResult.rejectReason}) »`, 'slate');
           }
         }
@@ -4264,7 +4911,7 @@ class ProtecGame {
         if (this.selectedMissionId === currentMission.id) {
           this.openMissionDetails(currentMission.id);
         }
-      }, evalResult.delayMs);
+      }, assignedDelayMs);
     });
 
     this.saveGame();
@@ -4683,6 +5330,20 @@ class ProtecGame {
     const currentMission = this.missions.find(m => m.id !== targetMissionId && (m.registeredVolunteers || []).includes(volId) && ['planifie', 'prealerte', 'declenche'].includes(m.status));
 
     if (!currentMission) {
+      // VÉRIFICATION STRICTE DE DISPONIBILITÉ BÉNÉVOLE :
+      // On ne peut jamais forcer un bénévole sans son accord ou s'il est indisponible !
+      const isSalarie = (vol.contractType === 'salarie' || vol.dispoType === 'salarié' || vol.dispoType === 'salarie_permanent');
+      const evalResult = this.evaluateVolunteerAvailability(vol, targetMission.eventDate, targetMission);
+
+      if (!isSalarie && !evalResult.isAvailable) {
+        this.showToast(
+          'Bénévole Indisponible ⚠️',
+          `${vol.name} est bénévole et indisponible ce jour-là (${evalResult.rejectReason || 'contrainte personnelle'}). Impossible de le forcer ! Sollicitez-le par appel téléphonique ou mobilisez d'autres secouristes.`,
+          'orange'
+        );
+        return;
+      }
+
       if (!targetMission.registeredVolunteers.includes(volId)) {
         targetMission.registeredVolunteers.push(volId);
         this.showToast('Bénévole Affecté', `${vol.name} a été positionné(e) sur « ${targetMission.title} ».`, 'green');
@@ -5109,13 +5770,16 @@ class ProtecGame {
       type: 'crise',
       categoryLabel: 'Convention SNCF - Assistance Voyageurs & CHU',
       title: `[Préalerte] ${pick.title}`,
-      desc: `🟡 PRÉALERTE SNCF (Convention Partenaire) : ${pick.desc} Aucun effectif n'est pré-engagé d'avance. Lancez immédiatement la mobilisation par SMS pour recenser les secouristes disponibles.`,
+      desc: `🟡 PRÉALERTE SNCF (Convention Partenaire) : ${pick.desc} Aucun effectif n'est réservé d'office. L'antenne évalue la situation et mobilise les moyens adaptés selon ses capacités disponibles.`,
       lat: sncfCoords.lat,
       lng: sncfCoords.lng,
       scale: `Dispositif CHU SNCF (${pick.reqVol} secouristes)`,
       eventDate: { ...this.clock, hour: this.clock.hour },
       durationSeconds: 40 * 60,
       durationHours: 0.7,
+      isEvolutive: true,
+      spawnedAt: Date.now(),
+      maxResponseMinutes: 25,
       requiredVolunteers: pick.reqVol,
       requiredRanks: ['CE', 'PSE2', 'PSE1'],
       requiredVehicles: pick.vehs,
@@ -5139,6 +5803,11 @@ class ProtecGame {
     this.updateStatsUI();
     this.saveGame();
 
+    // Centrage et zoom direct sur la préalerte
+    this.centerMapOnMission(newSncfMission.id);
+
+    const targetObj = { type: 'mission', id: newSncfMission.id, label: 'Localiser & Gérer ➜' };
+
     if (window.ProtecNotifications) {
       window.ProtecNotifications.notifyCategory(
         'weather',
@@ -5153,7 +5822,12 @@ class ProtecGame {
         `sncf-${newSncfMission.id}`
       );
     }
-    game.showToast('Préalerte SNCF', `Incident ferroviaire : ${pick.title} ! Mobilisez votre personnel par SMS.`, 'orange');
+    this.showToast(
+      'Préalerte SNCF',
+      `Incident ferroviaire : ${pick.title} ! Cliquez pour localiser et mobiliser votre personnel.`,
+      'orange',
+      targetObj
+    );
   }
 
   // --- GESTION DES ÉVOLUTIONS DES PRÉALERTES (FAVORABLE VS AGGRAVATION) ---
@@ -5204,17 +5878,20 @@ class ProtecGame {
   resolvePrealertAggravation(mission) {
     mission.status = 'declenche';
     mission.title = mission.title.replace('[Préalerte] ', '[ALERTE ACTIVE] ');
+    mission.spawnedAt = Date.now();
+    mission.isEvolutive = true;
+    mission.maxResponseMinutes = 20; // 20 min max pour partir en intervention
     const originName = mission.alertOrigin === 'sncf' ? 'la SNCF' : 'la Préfecture';
 
     if (window.ProtecIncidents) {
       window.ProtecIncidents.sendSystemNotification(
         `🚨 PASSAGE EN ALERTE ACTIVE !`,
-        `Aggravation confirmée ! ${originName} ordonne le déploiement immédiat pour : ${mission.title}.`,
+        `Aggravation confirmée : ${originName} sollicite l'engagement opérationnel pour : ${mission.title}. Décision de mobilisation selon vos capacités disponibles.`,
         `alert-${mission.id}`
       );
     }
 
-    this.showToast('🔴 ALERTE DÉCLENCHÉE !', `Aggravation confirmée ! ${originName} ordonne le déploiement immédiat sur zone !`, 'red');
+    this.showToast('🔴 ALERTE DÉCLENCHÉE !', `Aggravation sur zone ! ${originName} sollicite l'appui opérationnel de votre antenne.`, 'red');
 
     this.saveGame();
     this.renderMissions();
@@ -5391,9 +6068,9 @@ class ProtecGame {
       const requiresHeavyLicense = mission.requiredVehicles.some(vt => ['FLIT', 'VALOG'].includes(vt)) ||
                                     assignedVehs.some(v => v.licenseRequired === 'C');
 
-      // 1. Contrôle Poids Lourd (Permis C)
+      // 1. Contrôle Poids Lourd (Permis C pour véhicules > 3.5t : FLIT / VALOG)
       if (requiresHeavyLicense) {
-        const hasHeavyDriver = crewVols.some(v => v.permis_c || (v.skills && (v.skills.includes('permis_c') || v.skills.includes('pl'))));
+        const hasHeavyDriver = crewVols.some(v => this.hasVolunteerSkill(v, 'permis_c'));
         if (!hasHeavyDriver) {
           this.showToast(
             'Conducteur Permis C Requis ! 🚚',
@@ -5404,24 +6081,12 @@ class ProtecGame {
         }
       }
 
-      // 2. Contrôle de l'habilitation Conducteur VPSP (prise en charge avec victime)
-      if (mission.requiredVehicles.includes('VPSP')) {
-        const hasVpspDriver = crewVols.some(v => v.skills && (v.skills.includes('permis_vpsp') || v.skills.includes('pilotage')));
-        if (!hasVpspDriver) {
-          this.showToast(
-            'Conducteur VPSP Requis ! 🚑',
-            'La conduite du VPSP lors d’une prise en charge de victime nécessite obligatoirement l’habilitation interne « Permis VPSP (P. VPSP) ». Assignez un conducteur qualifié à l’équipage !',
-            'orange'
-          );
-          return;
-        }
-      }
-
-      // 3. Contrôle Permis B pour tous véhicules légers routiers (VL, VTU, VTP, VAHU, VCYN...)
+      // 2. RÈGLE OFFICIELLE SÉCURITÉ CIVILE : Pour l'acheminement vers la mission, le PERMIS B suffit !
+      // Le P.VPSP (Permis VPSP interne) n'est exigé QUE lors d'un transport effectif de victime (évacuation CHU, NORIA, crise).
       const requiresLightLicense = mission.requiredVehicles.some(vt => ['VPSP', 'VL', 'VLHR', 'VTU', 'VTP', 'VAHU', 'VCYN', 'VTD', 'VST'].includes(vt)) ||
                                     assignedVehs.some(v => v.licenseRequired === 'B' || !v.licenseRequired);
       if (requiresLightLicense) {
-        const hasLightDriver = crewVols.some(v => v.permis_b || (v.skills && (v.skills.includes('permis_b') || v.skills.includes('permis_vpsp') || v.skills.includes('pilotage'))));
+        const hasLightDriver = crewVols.some(v => this.hasVolunteerSkill(v, 'permis_b') || this.hasVolunteerSkill(v, 'permis_vpsp'));
         if (!hasLightDriver) {
           this.showToast(
             'Conducteur Permis B Requis ! 🚗',
@@ -5431,10 +6096,50 @@ class ProtecGame {
           return;
         }
       }
+
+      // 3. Contrôle P.VPSP uniquement si la mission consiste d'emblée en une évacuation / transport direct de victime (SAMU 15)
+      const isDirectVictimTransport = (mission.type === 'samu' || mission.isEmergencyEvac);
+      if (isDirectVictimTransport && mission.requiredVehicles.includes('VPSP')) {
+        const hasVpspDriver = crewVols.some(v => this.hasVolunteerSkill(v, 'permis_vpsp'));
+        if (!hasVpspDriver) {
+          this.showToast(
+            'Conducteur P.VPSP Requis pour Évacuation 🚑',
+            'Le transport sanitaire direct d’une victime nécessite obligatoirement un secouriste titulaire de l’habilitation « Permis VPSP (P. VPSP) » au volant.',
+            'orange'
+          );
+          return;
+        }
+      }
     }
 
-    // Contrôle réglementaire d'équipage RNMSC (VPSP, Chef d'Agrès, PSE2, PSE1 & Recyclage à jour)
-    if (window.ProtecRNMSC) {
+    // Vérification des véhicules de substitution et conformité matérielle
+    let hasVehicleMismatch = false;
+    let mismatchReasons = [];
+    if (Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) {
+      mission.requiredVehicles.forEach((reqType, slotIdx) => {
+        const vId = mission.assignedVehicleIds?.[slotIdx];
+        const v = vId ? this.vehicles.find(veh => veh.id === vId) : null;
+        if (!v) {
+          hasVehicleMismatch = true;
+          mismatchReasons.push(`Emplacement #${slotIdx + 1} (${reqType}) non pourvu`);
+        } else if (v.type !== reqType && !(reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit))) {
+          hasVehicleMismatch = true;
+          mismatchReasons.push(`Substitution : ${v.type} au lieu de ${reqType}`);
+        }
+      });
+    }
+
+    mission.vehicleMismatch = hasVehicleMismatch;
+    mission.mismatchReasons = mismatchReasons;
+
+    if (hasVehicleMismatch) {
+      this.showToast(
+        '⚠️ Déploiement avec Véhicule de Substitution',
+        `Dispositif engagé avec des vecteurs non conformes (${mismatchReasons.join(', ')}). Attention : la mission avancera au ralenti et le gestionnaire contestera la prestation !`,
+        'orange'
+      );
+    } else if (window.ProtecRNMSC) {
+      // Contrôle réglementaire RNMSC classique si véhicules conformes
       const assignedVehs = this.vehicles.filter(veh => mission.requiredVehicles?.includes(veh.type));
       const compliance = window.ProtecRNMSC.validateCrewCompliance(mission, crewVols, assignedVehs, this);
       if (!compliance.valid) {
@@ -5527,6 +6232,24 @@ class ProtecGame {
       });
     }
 
+    // 3. Fallback impératif : Pour tout engagement opérationnel, l'équipe est obligatoirement véhiculée
+    if (assignedVehicles.length === 0) {
+      const fallbackVeh = this.vehicles.find(v => !usedVehIds.has(v.id) && (v.status === 'dispo' || v.status === 'sdis_caserne') && (v.type === 'VPSP' || v.type === 'VTU'))
+        || this.vehicles.find(v => !usedVehIds.has(v.id) && (v.status === 'dispo' || v.status === 'sdis_caserne') && ['VTP', 'VL'].includes(v.type))
+        || this.vehicles.find(v => !usedVehIds.has(v.id) && (v.status === 'dispo' || v.status === 'sdis_caserne') && !v.requiresTrailer)
+        || this.vehicles.find(v => !usedVehIds.has(v.id) && (v.status === 'dispo' || v.status === 'sdis_caserne'));
+
+      if (fallbackVeh) {
+        usedVehIds.add(fallbackVeh.id);
+        fallbackVeh.status = 'mission';
+        fallbackVeh.fuel = Math.max(10, (fallbackVeh.fuel || 90) - 10);
+        assignedVehicles.push(fallbackVeh);
+        if (!Array.isArray(mission.requiredVehicles) || mission.requiredVehicles.length === 0) {
+          mission.requiredVehicles = [fallbackVeh.type];
+        }
+      }
+    }
+
     mission.status = 'ongoing';
     const serverNow = Date.now() + (this.serverTimeOffset || 0);
     mission.startedAt = serverNow;
@@ -5580,8 +6303,10 @@ class ProtecGame {
     this.updateStatsUI();
     this.saveGame();
 
-    this.showToast('Départ en Mission', `Le dispositif « ${mission.title} » est déployé sur les lieux !`, 'blue');
-    this.openMissionDetails(mission.id);
+    // Fermeture du drawer pour laisser le joueur observer le véhicule rouler sur la carte
+    this.closeDrawer();
+    const vehNames = assignedVehicles.map(v => v.name).join(', ') || 'Véhicule d’intervention';
+    this.showToast('Départ en Mission 🚑', `L'équipage et ${vehNames} font route vers « ${mission.title} ». Suivez leur déplacement sur la carte !`, 'blue');
   }
 
   completeMission(mission) {
@@ -5616,7 +6341,37 @@ class ProtecGame {
         );
       }
 
-      if (isUnderstaffed || isUnderqualified) {
+      if (mission.understaffChoice === 'interne') {
+        // Dispositif initialement sous-dimensionné mais sauvé grâce au déploiement de renforts internes
+        const currentRep = this.resources.reputationScore || 0;
+        let repGain = Math.max(1, Math.round(10 * (1 - (currentRep / 2200))));
+        this.resources.reputationScore = currentRep + repGain;
+        this.showToast(
+          'Poste Sécurisé & Clôturé 👏',
+          `Dispositif « ${mission.title} » initialement sous-dimensionné mais parfaitement stabilisé grâce au déploiement de vos renforts internes (+${repGain} popularité).`,
+          'blue'
+        );
+      } else if (mission.understaffChoice === 'sdis') {
+        // Dispositif clôturé avec l'assistance des sapeurs-pompiers
+        this.showToast(
+          'Dispositif Clôturé avec le SDIS 🚒',
+          `Fin de couverture pour « ${mission.title} ». L'appui des sapeurs-pompiers a permis de finir le poste malgré le sous-dimensionnement associatif initial.`,
+          'orange'
+        );
+        if (window.ProtecMessaging?.logInstitutionalFeedback) {
+          window.ProtecMessaging.logInstitutionalFeedback(this, {
+            institution: 'sdis',
+            senderName: 'CTA-CODIS 18 • SDIS',
+            senderRole: 'Officier de Garde CODIS',
+            sentiment: 'negatif',
+            badge: 'Signalement SDIS',
+            subject: `Appui sapeurs-pompiers sur ${mission.title}`,
+            text: `Le SDIS a dû engager du personnel et un véhicule pour pallier le manque de secouristes sur « ${mission.title} ». Un tel recours à l'intervention publique fragilise nos accords partenariaux.`,
+            missionTitle: mission.title,
+            missionId: mission.id
+          });
+        }
+      } else if (isUnderstaffed || isUnderqualified) {
         // Catastrophe opérationnelle !
         const repLoss = 18;
         // Dégradation de la réputation de la commune hôte et de la Préfecture
@@ -5996,10 +6751,38 @@ class ProtecGame {
       window.ProtecContratsAnnuels.onMissionCompleted(this, mission);
     }
 
+    // Déclencheur officiel du palier de parrainage (1ère intervention terminée -> déblocage de la prime parrain)
+    if (!this._firstMissionReferralChecked) {
+      this._firstMissionReferralChecked = true;
+      this.checkAndClaimReferralFirstMission();
+    }
+
     this.renderStations();
     this.renderMissions();
     this.updateStatsUI();
     this.saveGame();
+  }
+
+  // Déblocage de la prime de parrainage pour le parrain à la réalisation du premier palier (1ère mission)
+  async checkAndClaimReferralFirstMission() {
+    const user = window.ProtecAuth?.currentUser;
+    if (!user || !user.id) return;
+    try {
+      if (window.ProtecSupabase && window.ProtecSupabase.client) {
+        await window.ProtecSupabase.claimReferralFirstMissionSupabase(user.id);
+      }
+      if (window.ProtecAuth?.token) {
+        await fetch('/api/referral/claim-first-mission', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${window.ProtecAuth.token}`
+          }
+        }).catch(() => null);
+      }
+    } catch (e) {
+      console.warn('Vérification palier parrainage différée:', e);
+    }
   }
 
   // --- GESTION DES IDENTITÉS DES BÉNÉVOLES (NOM ET PRÉNOM UNIQUEMENT) ---
@@ -6274,24 +7057,24 @@ class ProtecGame {
   getVolunteerAllSkills(v) {
     if (!v) return [];
     const skillsMap = {
-      'cd': { id: 'cd', label: 'Chef de Dispositif (CD)', cat: 'DPS', badge: 'CD', color: 'bg-amber-950/90 text-amber-300 border-amber-500/70' },
-      'ce': { id: 'ce', label: 'Chef d’Équipe (CE)', cat: 'DPS', badge: 'CE', color: 'bg-indigo-950/90 text-indigo-300 border-indigo-500/70' },
-      'pse2': { id: 'pse2', label: 'PSE2 Équipier Secouriste', cat: 'Secours', badge: 'PSE2', color: 'bg-blue-950/90 text-sky-300 border-sky-400/70' },
-      'pse1': { id: 'pse1', label: 'PSE1 Secouriste', cat: 'Secours', badge: 'PSE1', color: 'bg-sky-950/90 text-sky-300 border-sky-400/70' },
-      'stagiaire': { id: 'stagiaire', label: 'Stagiaire en Intégration', cat: 'Formation', badge: 'STAG', color: 'bg-slate-800 text-slate-300 border-slate-600' },
-      'psc1': { id: 'psc1', label: 'PSC1 / Premiers Secours', cat: 'Secours', badge: 'PSC1', color: 'bg-teal-950/90 text-teal-300 border-teal-500/70' },
-      'permis_vpsp': { id: 'permis_vpsp', label: 'P.VPSP Conduite Ambulance', cat: 'Véhicule', badge: 'P.VPSP', color: 'bg-emerald-950/90 text-emerald-300 border-emerald-500/70' },
-      'permis_b': { id: 'permis_b', label: 'Permis B (VL / VTU / VTP)', cat: 'Véhicule', badge: 'Permis B', color: 'bg-emerald-950/90 text-emerald-300 border-emerald-500/70' },
-      'permis_c': { id: 'permis_c', label: 'Permis C (Poids Lourd - FLIT / VALOG)', cat: 'Véhicule', badge: 'Permis C (PL)', color: 'bg-amber-950/90 text-amber-300 border-amber-500/70' },
-      'formateur_ps': { id: 'formateur_ps', label: 'Formateur Premiers Secours (PS)', cat: 'Pédagogie', badge: 'Formateur PS', color: 'bg-orange-950/90 text-orange-300 border-orange-500/70' },
-      'formateur_psc': { id: 'formateur_psc', label: 'Formateur PSC (PIC F)', cat: 'Pédagogie', badge: 'Formateur PSC', color: 'bg-amber-950/90 text-amber-300 border-amber-500/70' },
-      'formateur_sst': { id: 'formateur_sst', label: 'Formateur SST', cat: 'Pédagogie', badge: 'Formateur SST', color: 'bg-amber-950/90 text-amber-300 border-amber-500/70' },
-      'formateur_de_formateur': { id: 'formateur_de_formateur', label: 'Formateur de Formateurs (FdF)', cat: 'Pédagogie', badge: 'FdF', color: 'bg-purple-950/90 text-purple-300 border-purple-500/70' },
-      'aep1': { id: 'aep1', label: 'AEP1 Écoute d’Urgence', cat: 'Soutien', badge: 'AEP1', color: 'bg-rose-950/90 text-rose-300 border-rose-500/70' },
-      'aep2': { id: 'aep2', label: 'AEP2 Soutien CAI & Catastrophe', cat: 'Soutien', badge: 'AEP2', color: 'bg-rose-950/90 text-rose-300 border-rose-500/70' },
-      'telepilote': { id: 'telepilote', label: 'Télépilote Drone S1/S3', cat: 'Spécialité', badge: 'Drone', color: 'bg-cyan-950/90 text-cyan-300 border-cyan-500/70' },
-      'cyno': { id: 'cyno', label: 'Cynotechnie (Maître-Chien)', cat: 'Spécialité', badge: 'Cyno', color: 'bg-amber-950/90 text-amber-300 border-amber-600/70' },
-      'communication': { id: 'communication', label: 'Communication & Médias', cat: 'Presse', badge: 'Com/Média', color: 'bg-pink-950/90 text-pink-300 border-pink-500/70' }
+      'cd': { id: 'cd', label: 'Chef de Dispositif (CD)', cat: 'DPS', badge: 'CD', color: 'bg-amber-100 text-amber-900 border-amber-300' },
+      'ce': { id: 'ce', label: 'Chef d’Équipe (CE)', cat: 'DPS', badge: 'CE', color: 'bg-indigo-100 text-indigo-900 border-indigo-300' },
+      'pse2': { id: 'pse2', label: 'PSE2 Équipier Secouriste', cat: 'Secours', badge: 'PSE2', color: 'bg-sky-100 text-sky-900 border-sky-300' },
+      'pse1': { id: 'pse1', label: 'PSE1 Secouriste', cat: 'Secours', badge: 'PSE1', color: 'bg-blue-100 text-blue-900 border-blue-300' },
+      'stagiaire': { id: 'stagiaire', label: 'Stagiaire en Intégration', cat: 'Formation', badge: 'STAG', color: 'bg-slate-100 text-slate-800 border-slate-300' },
+      'psc1': { id: 'psc1', label: 'PSC1 / Premiers Secours', cat: 'Secours', badge: 'PSC1', color: 'bg-teal-100 text-teal-900 border-teal-300' },
+      'permis_vpsp': { id: 'permis_vpsp', label: 'P.VPSP Conduite Ambulance', cat: 'Véhicule', badge: 'P.VPSP', color: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
+      'permis_b': { id: 'permis_b', label: 'Permis B (VL / VTU / VTP)', cat: 'Véhicule', badge: 'Permis B', color: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
+      'permis_c': { id: 'permis_c', label: 'Permis C (Poids Lourd - FLIT / VALOG)', cat: 'Véhicule', badge: 'Permis C (PL)', color: 'bg-orange-100 text-orange-900 border-orange-300' },
+      'formateur_ps': { id: 'formateur_ps', label: 'Formateur Premiers Secours (PS)', cat: 'Pédagogie', badge: 'Formateur PS', color: 'bg-orange-100 text-orange-900 border-orange-300' },
+      'formateur_psc': { id: 'formateur_psc', label: 'Formateur PSC (PIC F)', cat: 'Pédagogie', badge: 'Formateur PSC', color: 'bg-amber-100 text-amber-900 border-amber-300' },
+      'formateur_sst': { id: 'formateur_sst', label: 'Formateur SST', cat: 'Pédagogie', badge: 'Formateur SST', color: 'bg-amber-100 text-amber-900 border-amber-300' },
+      'formateur_de_formateur': { id: 'formateur_de_formateur', label: 'Formateur de Formateurs (FdF)', cat: 'Pédagogie', badge: 'FdF', color: 'bg-purple-100 text-purple-900 border-purple-300' },
+      'aep1': { id: 'aep1', label: 'AEP1 Écoute d’Urgence', cat: 'Soutien', badge: 'AEP1', color: 'bg-rose-100 text-rose-900 border-rose-300' },
+      'aep2': { id: 'aep2', label: 'AEP2 Soutien CAI & Catastrophe', cat: 'Soutien', badge: 'AEP2', color: 'bg-rose-100 text-rose-900 border-rose-300' },
+      'telepilote': { id: 'telepilote', label: 'Télépilote Drone S1/S3', cat: 'Spécialité', badge: 'Drone', color: 'bg-cyan-100 text-cyan-900 border-cyan-300' },
+      'cyno': { id: 'cyno', label: 'Cynotechnie (Maître-Chien)', cat: 'Spécialité', badge: 'Cyno', color: 'bg-amber-100 text-amber-900 border-amber-300' },
+      'communication': { id: 'communication', label: 'Communication & Médias', cat: 'Presse', badge: 'Com/Média', color: 'bg-pink-100 text-pink-900 border-pink-300' }
     };
 
     const detected = new Set();
@@ -6367,47 +7150,48 @@ class ProtecGame {
     });
   }
 
-  // Infobulle globale et absolue pour l'affichage sans obstruction des compétences (z-index 99999)
+  // Infobulle globale et absolue pour l'affichage sans obstruction des compétences (z-index 99999) - Style clair et harmonisé
   showFloatingSkillsTooltip(e, volId, isClick = false) {
     const el = document.getElementById('global-skills-tooltip');
     const vol = (this.volunteers || []).find(v => String(v.id) === String(volId)) || (this.candidatures || []).find(c => String(c.id) === String(volId));
     if (!el || !vol) return;
 
-    // Forcer le style sombre haute visibilité directement en JS pour garantir un contraste sans faille
-    el.style.backgroundColor = '#0b1120';
-    el.style.color = '#f8fafc';
-    el.style.border = '2px solid #334155';
-    el.style.boxShadow = '0 25px 50px -12px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.12)';
+    // Style clair, lumineux et moderne harmonisé avec l'application
+    el.style.backgroundColor = '#ffffff';
+    el.style.color = '#0f172a';
+    el.style.border = '1.5px solid #cbd5e1';
+    el.style.boxShadow = '0 20px 45px -10px rgba(0, 46, 109, 0.25), 0 0 0 1px rgba(0, 46, 109, 0.08)';
+    el.style.borderRadius = '1.25rem';
     el.style.zIndex = '99999';
 
     const allSkills = this.getVolunteerAllSkills(vol);
     const skillsBadges = allSkills.length > 0
       ? allSkills.map(s => `
-          <div class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold border flex items-center justify-between gap-2 shadow-xs ${s.color}">
+          <div class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold border flex items-center justify-between gap-2 shadow-2xs ${s.color}">
             <span class="font-mono font-black tracking-wide">${s.badge || s.id.toUpperCase()}</span>
-            <span class="text-[9.5px] font-medium opacity-95 truncate">${s.label}</span>
+            <span class="text-[9.5px] font-semibold opacity-95 truncate">${s.label}</span>
           </div>
         `).join('')
-      : `<span class="text-[10px] text-slate-300 italic">Formation initiale ${vol.rank || 'Secouriste'}</span>`;
+      : `<span class="text-[10px] text-slate-500 italic">Formation initiale ${vol.rank || 'Secouriste'}</span>`;
 
     el.innerHTML = `
-      <div class="font-black text-xs text-white mb-2.5 pb-2 border-b border-slate-700/80 flex items-center justify-between gap-2">
+      <div class="font-black text-xs text-slate-900 mb-2.5 pb-2 border-b border-slate-200 flex items-center justify-between gap-2">
         <span class="flex items-center gap-2 truncate">
-          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/30 flex-shrink-0"></span>
-          <span class="text-white font-black truncate">${vol.name}</span>
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-400/30 flex-shrink-0"></span>
+          <span class="text-slate-900 font-black truncate">${vol.name}</span>
         </span>
-        <span class="text-[9.5px] font-mono px-2 py-0.5 rounded-full bg-pc-blue text-white font-black border border-blue-400/80 flex-shrink-0">${vol.rank || 'Secouriste'}</span>
+        <span class="text-[9.5px] font-mono px-2 py-0.5 rounded-full bg-pc-blue text-white font-black shadow-2xs flex-shrink-0">${vol.rank || 'Secouriste'}</span>
       </div>
-      <div class="text-[10px] font-black uppercase text-amber-300 mb-2 tracking-wider flex items-center gap-1.5">
-        <i data-lucide="award" class="w-3.5 h-3.5 text-amber-400 flex-shrink-0"></i>
+      <div class="text-[10px] font-black uppercase text-amber-800 mb-2 tracking-wider flex items-center gap-1.5">
+        <i data-lucide="award" class="w-3.5 h-3.5 text-amber-600 flex-shrink-0"></i>
         <span>Compétences & Habilitations :</span>
       </div>
       <div class="space-y-1.5 mb-2.5 max-h-72 overflow-y-auto pr-1.5 custom-scrollbar">
         ${skillsBadges}
       </div>
-      <div class="text-[9.5px] text-slate-300 pt-2 border-t border-slate-800 flex justify-between items-center font-medium">
-        <span>Dispo : <strong class="text-white font-bold">${vol.dispoJours?.join(', ') || 'Semaine & WE'}</strong></span>
-        <span>Énergie : <strong class="text-emerald-400 font-bold">${vol.energy || 80}%</strong></span>
+      <div class="text-[9.5px] text-slate-600 pt-2 border-t border-slate-200 flex justify-between items-center font-medium">
+        <span>Dispo : <strong class="text-slate-900 font-bold">${vol.dispoJours?.join(', ') || 'Semaine & WE'}</strong></span>
+        <span>Énergie : <strong class="text-emerald-700 font-bold">${vol.energy || 80}%</strong></span>
       </div>
     `;
 
@@ -6542,6 +7326,96 @@ class ProtecGame {
     }
   }
 
+  // Centrage interactif et dé-clusterisation de la carte Leaflet sur une mission
+  centerMapOnMission(missionId) {
+    if (!missionId) return;
+    const cleanId = String(missionId).replace(/^(sncf-|evt-|dps-|alert-)/, '');
+    const mission = (this.missions || []).find(m => m.id === cleanId || m.id === missionId) ||
+                    (this.devis || []).find(d => d.id === cleanId || d.id === missionId);
+    if (!mission || !this.map) return;
+    const lat = mission.lat;
+    const lng = mission.lng;
+    if (lat && lng) {
+      // 1. Si un filtre masquait cette mission, réinitialiser pour l'afficher immédiatement
+      if (this.currentFilter !== 'all' && mission.type && mission.type !== this.currentFilter) {
+        this.currentFilter = 'all';
+        this.renderMissions();
+      }
+
+      // 2. Centrage fluide avec zoom
+      this.map.flyTo([lat, lng], 16, { duration: 1.2 });
+
+      // 3. Révélation du marqueur hors du cluster si nécessaire
+      const marker = (this.markers?.missions && (this.markers.missions[cleanId] || this.markers.missions[mission.id])) ||
+                     (this.missionMarkers && (this.missionMarkers[cleanId] || this.missionMarkers[mission.id]));
+      if (marker) {
+        if (this.missionsClusterGroup && typeof this.missionsClusterGroup.zoomToShowLayer === 'function') {
+          try {
+            this.missionsClusterGroup.zoomToShowLayer(marker, () => {
+              if (typeof marker.openTooltip === 'function') marker.openTooltip();
+            });
+          } catch (e) {
+            if (typeof marker.openTooltip === 'function') marker.openTooltip();
+          }
+        } else if (typeof marker.openTooltip === 'function') {
+          try { marker.openTooltip(); } catch (e) {}
+        }
+      }
+    }
+  }
+
+  centerOnMission(missionId) {
+    return this.centerMapOnMission(missionId);
+  }
+
+  // Déclenchement forcé / passage direct d'une préalerte en alerte opérationnelle réelle
+  forceEscalatePrealert(missionId) {
+    const cleanId = String(missionId).replace(/^(sncf-|evt-|dps-|alert-)/, '');
+    const mission = (this.missions || []).find(m => m.id === cleanId || m.id === missionId);
+    if (!mission || mission.status !== 'prealerte') return;
+
+    this.resolvePrealertAggravation(mission);
+    this.showToast('🚨 ALERTE RÉELLE DÉCLENCHÉE !', `Passage en alerte active immédiate pour « ${mission.title} ». Mobilisez et engagez vos équipes sur le terrain !`, 'red');
+    this.centerMapOnMission(mission.id);
+    this.openMissionDetails(mission.id);
+  }
+
+  // Vérification robuste et unifiée des qualifications/permis d'un secouriste
+  hasVolunteerSkill(vol, skillId) {
+    if (!vol) return false;
+    if (vol[skillId] === true) return true;
+    if (skillId === 'permis_b' && (vol.permis_b || vol.hasPermisB)) return true;
+    if (skillId === 'permis_c' && (vol.permis_c || vol.hasPermisC)) return true;
+    if (skillId === 'permis_vpsp' && (vol.hasPermisVpsp || vol.permis_vpsp)) return true;
+
+    // Inspection du tableau de compétences existant
+    if (Array.isArray(vol.skills)) {
+      const matched = vol.skills.some(s => {
+        if (!s) return false;
+        const clean = String(s).toLowerCase().replace(/[- ]/g, '_');
+        if (skillId === 'permis_vpsp') return clean.includes('vpsp') || clean.includes('pilotage');
+        if (skillId === 'permis_b') return clean === 'permis_b' || clean.includes('permis_b') || clean.includes('vpsp');
+        if (skillId === 'permis_c') return clean.includes('permis_c') || clean === 'pl' || clean.includes('poids_lourd');
+        return clean === skillId || clean.includes(skillId);
+      });
+      if (matched) return true;
+    }
+
+    // Déduction selon les compétences calculées par getVolunteerSkills
+    if (typeof this.getVolunteerSkills === 'function') {
+      const derived = this.getVolunteerSkills(vol);
+      if (Array.isArray(derived) && derived.some(item => item.id === skillId)) return true;
+    }
+
+    // Règle générale d'aptitude : les cadres ou secouristes expérimentés (≥ 25 XP)
+    if (skillId === 'permis_b') return true;
+    if (skillId === 'permis_vpsp') {
+      const rank = vol.rank || '';
+      if (['CD', 'CE'].includes(rank) || (vol.exp || 0) >= 25) return true;
+    }
+    return false;
+  }
+
   formatSkillName(skill) {
     if (!skill) return '';
     const skillsMap = {
@@ -6589,8 +7463,13 @@ class ProtecGame {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
     mission.volunteerRoles = mission.volunteerRoles || {};
-    mission.volunteerRoles[volId] = roleId;
+    if (roleId) {
+      mission.volunteerRoles[volId] = roleId;
+    } else {
+      delete mission.volunteerRoles[volId];
+    }
     this.saveGame();
+    this.renderMissions();
     if (this.selectedMissionId === missionId) {
       this.openMissionDetails(missionId);
     }
@@ -6670,10 +7549,178 @@ class ProtecGame {
     this.updateStatsUI();
   }
 
+  openCommunityEventDetails(eventId) {
+    try {
+      this._lastMarkerClickTime = Date.now();
+      const evt = (this.communityEvents || []).find(e => e.id === eventId || e.id === 'evt-' + eventId);
+      if (!evt) return;
+
+      this.selectedMissionId = 'evt-' + evt.id;
+      const drawer = document.getElementById('context-drawer');
+      const title = document.getElementById('drawer-title');
+      const catBadge = document.getElementById('drawer-category-badge');
+      const headerIcon = document.getElementById('drawer-header-icon');
+      const body = document.getElementById('drawer-body');
+      const footer = document.getElementById('drawer-footer');
+
+      if (!drawer || !body || !footer) return;
+
+      catBadge.textContent = 'ÉVÉNEMENT COMMUNAUTAIRE OFFICIEL';
+      catBadge.className = 'text-[10px] uppercase font-black tracking-wider text-purple-700 block truncate';
+      title.textContent = evt.title || 'Grand Événement Officiel';
+      headerIcon.setAttribute('data-lucide', 'award');
+
+      const myPlayerId = this.player?.id || 'directeur-local';
+      const isAlreadyRegistered = (evt.registeredAntennas || []).some(a => a.playerId === myPlayerId);
+      const totalAntennas = (evt.registeredAntennas || []).length;
+      const badgeData = evt.badge || {};
+
+      body.innerHTML = `
+        <div class="space-y-4">
+          <!-- Carte Écusson commémoratif exclusif de l'événement -->
+          <div class="p-4 rounded-3xl bg-gradient-to-tr from-purple-900 via-indigo-900 to-slate-900 text-white shadow-xl border-2 border-amber-400/60 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-black uppercase tracking-widest text-amber-300">Écusson Commémoratif</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950">${badgeData.rarityTier || 'Épique'}</span>
+            </div>
+            <div class="flex items-center gap-3.5">
+              <div class="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 p-2 flex items-center justify-center flex-shrink-0 filter drop-shadow-md">
+                ${badgeData.imageUrl ? `
+                  <img src="${badgeData.imageUrl}" alt="${badgeData.name || 'Écusson'}" class="w-full h-full object-contain pointer-events-none" onerror="this.onerror=null; this.parentElement.innerHTML='🛡️';" />
+                ` : `
+                  <i data-lucide="${badgeData.icon || 'award'}" class="w-8 h-8 text-amber-300"></i>
+                `}
+              </div>
+              <div class="min-w-0 flex-1">
+                <h4 class="text-sm font-black text-white leading-tight truncate">${badgeData.name || evt.title}</h4>
+                <p class="text-[11px] text-slate-300 mt-0.5 line-clamp-2">${badgeData.desc || 'Débloqué sur votre profil lors du déploiement opérationnel.'}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Détails opérationnels -->
+          <div class="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5 text-xs text-slate-700">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-500">Localisation :</span>
+              <span class="font-black text-slate-900">${evt.locationName || evt.city || 'Non renseigné'} (${evt.departmentCode || 'National'})</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-500">Public attendu :</span>
+              <span class="font-black text-slate-900">${(evt.publicCount || 5000).toLocaleString('fr-FR')} personnes</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-500">Secouristes requis :</span>
+              <span class="font-black text-slate-900">${evt.requiredVolunteers || 8} intervenants</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-500">Indemnisation d'Antenne :</span>
+              <span class="font-black text-emerald-700">+${(evt.rewardMoney || 1200).toLocaleString('fr-FR')} €</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-500">Points de Réputation :</span>
+              <span class="font-black text-pc-blue">+${evt.rewardReputation || 30} pts</span>
+            </div>
+            ${evt.desc ? `
+              <div class="pt-2 border-t border-slate-100 text-[11px] text-slate-600 leading-relaxed">
+                ${evt.desc}
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Antennes déjà engagées -->
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5 text-xs">
+            <div class="flex items-center justify-between font-bold text-slate-700">
+              <span>Mobilisation Inter-Antennes :</span>
+              <span class="text-pc-blue">${totalAntennas} antenne(s) déployée(s)</span>
+            </div>
+            <p class="text-[11px] text-slate-500">
+              ${isAlreadyRegistered
+                ? '✅ Votre antenne est officiellement inscrite sur ce dispositif inter-départemental !'
+                : 'Mobilisez 2 équipiers de votre antenne pour participer à cet événement républicain et remporter l’écusson officiel.'}
+            </p>
+          </div>
+        </div>
+      `;
+
+      footer.innerHTML = `
+        <button onclick="window.game.closeDrawer()" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
+        ${isAlreadyRegistered ? `
+          <button disabled class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-emerald-600 text-white opacity-80 cursor-default flex items-center justify-center gap-1.5">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            Déjà Déployé sur l'Événement
+          </button>
+        ` : `
+          <button onclick="window.ProtecMultiplayer && window.ProtecMultiplayer.participateInCommunityEvent(window.game, '${evt.id}'); window.game.openCommunityEventDetails('${evt.id}');" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-purple-700 to-indigo-600 hover:brightness-110 active:scale-95 text-white shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
+            <i data-lucide="shield-check" class="w-4 h-4 text-amber-300"></i>
+            Déployer l'Équipe & Obtenir l'Écusson
+          </button>
+        `}
+      `;
+
+      drawer.classList.remove('hidden');
+      drawer.classList.add('flex', 'drawer-slide-in');
+      this.updateToastContainerPosition();
+      if (window.lucide) window.lucide.createIcons();
+    } catch (e) {
+      console.error('Erreur openCommunityEventDetails:', e);
+    }
+  }
+
+  setMissionDetailTab(tab) {
+    if (tab === 'effectifs') {
+      this.missionDetailActiveTab = 'personnel';
+    } else if (tab === 'vehicules') {
+      this.missionDetailActiveTab = 'logistique';
+      this.missionDetailLogistiqueSubTab = 'vehicule';
+    } else if (tab === 'materiel') {
+      this.missionDetailActiveTab = 'logistique';
+      this.missionDetailLogistiqueSubTab = 'materiel';
+    } else {
+      this.missionDetailActiveTab = tab;
+    }
+    if (this.selectedMissionId) {
+      this.openMissionDetails(this.selectedMissionId);
+    }
+  }
+
+  setMissionDetailLogistiqueSubTab(subTab) {
+    this.missionDetailLogistiqueSubTab = subTab;
+    this.missionDetailActiveTab = 'logistique';
+    if (this.selectedMissionId) {
+      this.openMissionDetails(this.selectedMissionId);
+    }
+  }
+
   openMissionDetails(missionId) {
     try {
-      const mission = this.missions.find(m => m.id === missionId);
-      if (!mission) return;
+      this._lastMarkerClickTime = Date.now();
+
+      if (typeof missionId === 'string' && (missionId.startsWith('evt-') || missionId.startsWith('evt_'))) {
+        const cleanId = missionId.replace(/^evt-/, '').replace(/^evt_/, '');
+        this.openCommunityEventDetails(cleanId);
+        return;
+      }
+      if (typeof missionId === 'string' && (missionId.startsWith('renf-') || missionId.startsWith('renf_'))) {
+        const cleanId = missionId.replace(/^renf-/, '').replace(/^renf_/, '');
+        this.openEngageRenfortModal(cleanId);
+        return;
+      }
+
+      let mission = this.missions.find(m => m.id === missionId);
+      if (!mission) {
+        // Fallback de recherche dans communityEvents et renforts
+        const commEvt = (this.communityEvents || []).find(e => e.id === missionId);
+        if (commEvt) {
+          this.openCommunityEventDetails(commEvt.id);
+          return;
+        }
+        const renf = (this.renforts || []).find(r => r.id === missionId);
+        if (renf) {
+          this.openEngageRenfortModal(renf.id);
+          return;
+        }
+        return;
+      }
 
       if (!Array.isArray(mission.registeredVolunteers)) {
         mission.registeredVolunteers = [];
@@ -6710,17 +7757,176 @@ class ProtecGame {
       const elapsedSec = Math.max(0, Math.floor((now - (mission.startedAt || now)) / 1000));
       const remainingSec = Math.max(0, totalSec - elapsedSec);
       progressPct = Math.min(100, Math.round((elapsedSec / totalSec) * 100));
-
-      const hrs = Math.floor(remainingSec / 3600);
-      const mins = Math.floor((remainingSec % 3600) / 60);
-      const secs = remainingSec % 60;
-      remainingTimeText = hrs > 0 ? `${hrs}h ${mins.toString().padStart(2, '0')}m restantes` : `${mins}m ${secs.toString().padStart(2, '0')}s restantes`;
+      if (remainingSec >= 3600) {
+        remainingTimeText = `${Math.floor(remainingSec / 3600)}h ${Math.floor((remainingSec % 3600) / 60)}min`;
+      } else {
+        remainingTimeText = `${Math.floor(remainingSec / 60)}min ${remainingSec % 60}s`;
+      }
     }
 
+    const activeTab = this.missionDetailActiveTab || 'info';
+
+    // Indicateur s'il manque des véhicules
+    const assignedVehIds = (mission.assignedVehicleIds || []).filter(Boolean);
+    const hasMissingVehicles = Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0 && assignedVehIds.length < mission.requiredVehicles.length;
+
+    // Calcul des durées et 3 horaires clés
+    let missionSec = mission.durationSeconds;
+    if (!missionSec && mission.durationHours) missionSec = Math.round(mission.durationHours * 3600);
+    if (!missionSec && mission.duration) missionSec = (mission.duration > 24 ? mission.duration : mission.duration * 3600);
+    if (missionSec && missionSec < 1800 && (mission.type === 'dps' || mission.scale)) {
+      missionSec = missionSec > 24 ? missionSec * 60 : missionSec * 3600;
+    }
+    if (!missionSec) missionSec = 14400;
+
+    const missionScheduleRange = this.formatMissionScheduleRange(mission);
+
+    const d = mission.eventDate ? { ...mission.eventDate } : (this.clock ? { ...this.clock } : null);
+    const year = d?.year || (this.clock ? this.clock.year : 2026);
+    const month = d?.month !== undefined ? d.month : (this.clock ? this.clock.month : 9);
+    const day = d?.day || (this.clock ? this.clock.day : 1);
+    let startH = d?.hour !== undefined ? d.hour : (this.clock ? this.clock.hour : 14);
+    let startM = d?.minute !== undefined ? d.minute : (this.clock ? this.clock.minute : 0);
+    startM = Math.round(startM / 5) * 5;
+    if (startM >= 60) {
+      startH += Math.floor(startM / 60);
+      startM = startM % 60;
+    }
+
+    const startDate = new Date(year, month, day, startH, startM, 0);
+    const durationMins = Math.max(30, Math.round(missionSec / 60));
+    const endDate = new Date(startDate.getTime() + durationMins * 60 * 1000);
+
+    const station = this.stations && this.stations.length > 0 ? this.stations[0] : { lat: 48.8566, lng: 2.3522 };
+    const destLat = mission.lat || station.lat;
+    const destLng = mission.lng || station.lng;
+    const dLat = (destLat - station.lat) * 111;
+    const dLng = (destLng - station.lng) * 111 * Math.cos(station.lat * Math.PI / 180);
+    const rawDist = Math.hypot(dLat, dLng);
+    const distKm = Math.max(1.2, Math.round(rawDist * 1.25 * 10) / 10);
+    const isUrgency = ['samu', 'pompiers', 'crise'].includes(mission.type) || ['critique', 'haute'].includes(mission.urgency) || mission.status === 'declenche';
+    const speedKmh = isUrgency ? 68 : 45;
+    const transitMinutes = Math.max(5, Math.round((distKm / speedKmh) * 60));
+    const advanceMinutes = Math.round((transitMinutes + 10) / 5) * 5;
+    const rdvBaseDate = new Date(startDate.getTime() - advanceMinutes * 60 * 1000);
+
+    const formatH = (dt) => `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
+    const rdvBaseStr = (mission.status === 'ongoing' || mission.status === 'declenche') ? 'Immédiat' : formatH(rdvBaseDate);
+    const debutEventStr = formatH(startDate);
+
+    // RÈGLE MÉTIER : Sur les alertes, pas d'heure de fin prédéterminée si situation évolutive.
+    // On ne l'affiche qu'une fois presque terminée (phase de repli / stabilisation).
+    const isEvolutiveAlert = mission.isEvolutive || 
+      mission.status === 'declenche' || 
+      mission.status === 'prealerte' || 
+      mission.type === 'crise' || 
+      mission.alertOrigin || 
+      mission.isCrisis;
+
+    const isEndingPhase = mission.status === 'ongoing' && 
+      (mission.endingPhase || (mission.durationSeconds && mission.progress >= mission.durationSeconds * 0.8));
+
+    let finEventStr = '';
+    let finEventSub = '';
+    let durationDisplay = '';
+    let missionScheduleRangeText = '';
+
+    if (isEvolutiveAlert) {
+      if (isEndingPhase) {
+        finEventStr = `~${formatH(endDate)}`;
+        finEventSub = 'Fin estimée (Stabilisation & Repli)';
+        durationDisplay = `~${this.formatHoursAndMinutes(missionSec, true)} (Phase finale)`;
+        missionScheduleRangeText = `Déclenchée à ${debutEventStr} • Fin prévisionnelle estimée à ~${formatH(endDate)}`;
+      } else {
+        finEventStr = 'Indéterminée';
+        finEventSub = 'Situation évolutive';
+        durationDisplay = (mission.status === 'ongoing') 
+          ? `En cours (${Math.floor((mission.progress || 0) / 60)} min) • Évolutive` 
+          : 'Évolutive (En cours d\'évaluation)';
+        missionScheduleRangeText = `Déclenchée à ${debutEventStr} • Durée et fin non déterminées (Situation évolutive)`;
+      }
+    } else {
+      finEventStr = formatH(endDate);
+      finEventSub = 'Fin dispositif';
+      durationDisplay = this.formatHoursAndMinutes(missionSec, true);
+      missionScheduleRangeText = missionScheduleRange;
+    }
+
+    const missionBadgeClass = mission.status === 'declenche' ? 'bg-red-600 text-white animate-pulse' :
+      mission.status === 'prealerte' ? 'bg-amber-400 text-amber-950' :
+      mission.type === 'crise' ? 'bg-purple-700 text-white' :
+      'bg-pc-blue text-white';
+
+    const missionBadgeText = mission.status === 'declenche' ? '🚨 Alerte Déclenchée' :
+      mission.status === 'prealerte' ? '⏳ Vigilance / Préalerte' :
+      mission.type === 'crise' ? '🚨 Crise Majeure / NOVI' :
+      '📋 Dispositif Opérationnel Programmé';
+
+    const eventDayStr = day.toString().padStart(2, '0');
+    const eventMonthStr = (month + 1).toString().padStart(2, '0');
+    const breadcrumbDateStr = `(du ${eventDayStr}/${eventMonthStr}/${year} au ${eventDayStr}/${eventMonthStr}/${year})`;
+
+    const getVolunteerPhone = (v) => {
+      if (v.phone) return v.phone;
+      let hash = 0;
+      const str = String(v.id || v.name || '0');
+      for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      const num = Math.abs(hash) % 100000000;
+      const s = String(num).padStart(8, '0');
+      return `06 ${s.slice(0, 2)} ${s.slice(2, 4)} ${s.slice(4, 6)} ${s.slice(6, 8)}`;
+    };
+
+    const getVehicleImmat = (veh) => {
+      if (veh.immat) return veh.immat;
+      let hash = 0;
+      const str = String(veh.id || veh.name || '0');
+      for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
+      const l1 = letters[Math.abs(hash) % letters.length];
+      const l2 = letters[Math.abs(hash >> 2) % letters.length];
+      const l3 = letters[Math.abs(hash >> 4) % letters.length];
+      const l4 = letters[Math.abs(hash >> 6) % letters.length];
+      const digits = String(Math.abs(hash >> 8) % 900 + 100);
+      return `${l1}${l2}-${digits}-${l3}${l4}`;
+    };
+
+    const getTeamLabel = (v, idx) => {
+      const role = mission.volunteerRoles?.[v.id];
+      if (role === 'chef_poste') return 'PMA / PC';
+      if (role === 'conducteur') return 'VPSP (Vecteur)';
+      if (role === 'photographe') return 'Média / Com';
+      const binomeNum = Math.floor(idx / 2) + 1;
+      return `PSA ${binomeNum}`;
+    };
+
+    const pse2Count = registeredVols.filter(v => v.rank === 'PSE2' || (v.skills || []).includes('pse2')).length;
+    const pse1Count = registeredVols.filter(v => v.rank === 'PSE1' || (v.skills || []).includes('pse1')).length;
+    const ceCount = registeredVols.filter(v => v.rank === 'CE' || (v.skills || []).includes('ce')).length;
+    const driverCount = registeredVols.filter(v => (v.skills || []).includes('permis_vpsp') || (v.skills || []).includes('pilotage')).length;
+    const chefDePoste = registeredVols.find(v => mission.volunteerRoles?.[v.id] === 'chef_poste' || mission.volunteerRoles?.[v.id] === 'chef_equipe');
+
+    const logistiqueSubTab = this.missionDetailLogistiqueSubTab || 'vehicule';
+
     body.innerHTML = `
-      <div class="space-y-4">
+      <div class="space-y-3">
+        <!-- BREADCRUMB & ENTÊTE EPROTEC -->
+        <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
+          <div class="flex items-center gap-1.5 min-w-0 text-[11px] text-slate-600 truncate">
+            <span class="hover:text-slate-900 cursor-pointer font-semibold" onclick="window.game.closeDrawer()">Accueil</span>
+            <span class="text-slate-400">›</span>
+            <span class="hover:text-slate-900 cursor-pointer font-semibold" onclick="window.game.setMissionDetailTab('info')">Activité</span>
+            <span class="text-slate-400">›</span>
+            <span class="text-amber-500 font-black">▲</span>
+            <span class="font-bold text-slate-900 truncate" title="${mission.title}">${mission.title}</span>
+            <span class="text-slate-500 hidden sm:inline text-[10px]">${breadcrumbDateStr}</span>
+          </div>
+          <button type="button" onclick="window.game.showToast('Note de Frais', 'Note de frais d\\'activité générée (repas et indemnités kilométriques).', 'green')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] shadow-xs flex items-center gap-1.5 transition cursor-pointer shrink-0">
+            <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
+            <span>Note de Frais</span>
+          </button>
+        </div>
         ${mission.isCumpCai ? `
-          <div class="p-4 rounded-3xl bg-gradient-to-r from-red-600 via-rose-700 to-indigo-800 text-white shadow-md space-y-2.5">
+          <div class="p-3.5 rounded-2xl bg-gradient-to-r from-red-600 via-rose-700 to-indigo-800 text-white shadow-md space-y-2">
             <div class="flex items-center justify-between">
               <span class="text-xs font-black uppercase flex items-center gap-1.5">
                 <span>🚨</span>
@@ -6731,7 +7937,7 @@ class ProtecGame {
             <p class="text-[11px] text-white/90 leading-snug">
               Délais stricts engagés : Accusé &lt; 20 min, Départ agrès &lt; ${mission.cumpData?.maxDepartureMinutes || 60} min, Ouverture CAI &lt; 2h00.
             </p>
-            <button onclick="window.ProtecCump.renderCaiModal(window.game, '${mission.id}')" class="w-full py-2.5 rounded-2xl bg-white text-red-700 hover:bg-rose-50 font-black text-xs shadow transition flex items-center justify-center gap-1.5 cursor-pointer">
+            <button onclick="window.ProtecCump.renderCaiModal(window.game, '${mission.id}')" class="w-full py-2 rounded-xl bg-white text-red-700 hover:bg-rose-50 font-black text-xs shadow transition flex items-center justify-center gap-1.5 cursor-pointer">
               <i data-lucide="shield-alert" class="w-4 h-4"></i>
               <span>Ouvrir le Pilotage Opérationnel du CAI</span>
             </button>
@@ -6741,121 +7947,10 @@ class ProtecGame {
         <!-- WIDGET TIMELINE MULTI-ÉTAPES (6 JALONS STRICTS) -->
         ${(mission.isTimelineUrgence || mission.timeline_milestones || mission.t_alerte) && window.ProtecConventions?.renderTimelineWidget ? window.ProtecConventions.renderTimelineWidget(mission, Date.now()) : ''}
 
-        <!-- FICHE OPÉRATIONNELLE D'ALERTE / SITUATION DE TERRAIN -->
-        <div class="p-4 rounded-3xl border ${
-          mission.status === 'declenche' ? 'bg-red-50/80 border-red-300 text-red-950 shadow-sm' :
-          mission.status === 'prealerte' ? 'bg-amber-50/80 border-amber-300 text-amber-950 shadow-sm' :
-          mission.type === 'crise' ? 'bg-purple-50/80 border-purple-300 text-purple-950 shadow-sm' :
-          'bg-slate-50 border-slate-200 text-slate-800'
-        } space-y-3">
-          
-          <!-- Niveau d'alerte & Horodatage -->
-          <div class="flex items-center justify-between">
-            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-              mission.status === 'declenche' ? 'bg-red-600 text-white animate-pulse' :
-              mission.status === 'prealerte' ? 'bg-amber-400 text-amber-950' :
-              mission.type === 'crise' ? 'bg-purple-700 text-white' :
-              'bg-pc-blue text-white'
-            }">
-              ${
-                mission.status === 'declenche' ? '🚨 Alerte Déclenchée - Engagement Terrain' :
-                mission.status === 'prealerte' ? '⏳ Vigilance / Préalerte Évolutive' :
-                mission.type === 'crise' ? '🚨 Crise Majeure / Plan NOVI' :
-                '📋 Dispositif Opérationnel Programmé'
-              }
-            </span>
-            <span class="text-[10px] font-bold text-slate-500">
-              ${mission.eventDate ? this.formatFullDate(mission.eventDate) + ' à ' + mission.eventDate.hour + 'h00' : 'Aujourd’hui'}
-              • Durée : <strong>${this.formatHoursAndMinutes(mission.durationSeconds || (mission.durationHours ? mission.durationHours * 3600 : 14400), true)}</strong>
-            </span>
-          </div>
-
-          <!-- Type d'événement & Adresse / Secteur -->
-          <div class="space-y-1">
-            <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Type d'Événement & Intitulé</span>
-            <h4 class="text-xs font-black text-slate-900 leading-snug">${mission.title}</h4>
-            ${(mission.type === 'social' || mission.isSector) ? `
-              <div class="flex items-center gap-1.5 text-xs text-purple-700 font-bold bg-purple-50 p-2 rounded-xl border border-purple-200">
-                <i data-lucide="map" class="w-3.5 h-3.5 text-purple-600 flex-shrink-0"></i>
-                <span>${mission.sector || mission.address || 'Secteur de Maraude (Itinérance Urbaine)'}</span>
-              </div>
-            ` : `
-              <div class="flex items-center gap-1.5 text-xs text-slate-700 font-bold bg-slate-100 p-2 rounded-xl border border-slate-200">
-                <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
-                <span>Adresse : <strong class="text-slate-900">${mission.address || (mission.lat && mission.lng ? `Point GPS: ${mission.lat.toFixed(4)}, ${mission.lng.toFixed(4)}` : 'Adresse en cours')}</strong></span>
-              </div>
-            `}
-          </div>
-
-          <!-- Situation terrain -->
-          <div class="p-3 rounded-2xl bg-white/90 border border-slate-200/80 text-xs text-slate-700 leading-relaxed space-y-1">
-            <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Situation Opérationnelle :</span>
-            <p>${mission.desc}</p>
-          </div>
-
-          <!-- Missions prévues sur le terrain -->
-          <div class="p-3 rounded-2xl bg-white/90 border border-slate-200/80 space-y-1.5">
-            <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Missions Prévues sur Site :</span>
-            <ul class="text-[11px] text-slate-700 space-y-1 list-disc list-inside">
-              <li>Reconnaissance de périmètre et bilans circonstanciés</li>
-              <li>Prise en charge des victimes et gestes de premiers secours</li>
-              <li>Accueil, réconfort et distribution d'urgence aux impliqués</li>
-              <li>Coordination radio PC et évacuations vers les urgences (CHU)</li>
-            </ul>
-          </div>
-
-          <!-- Effectif & Spécialités -->
-          <div class="grid grid-cols-2 gap-2 text-[10px]">
-            <div class="p-2.5 rounded-2xl bg-white/90 border border-slate-200 space-y-0.5">
-              <span class="text-slate-400 font-bold block text-[9px] uppercase">Personnel Nécessaire</span>
-              <div class="flex items-center justify-between">
-                <strong class="text-slate-900 text-xs">${mission.requiredVolunteers} secouristes min.</strong>
-                ${mission.status === 'planifie' ? `
-                  <div class="flex items-center gap-1">
-                    <button onclick="window.game.adjustMissionRequiredVolunteers('${mission.id}', -1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black flex items-center justify-center border border-slate-300 text-xs cursor-pointer" title="Réduire l'effectif requis (min. 2)">-</button>
-                    <button onclick="window.game.adjustMissionRequiredVolunteers('${mission.id}', 1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black flex items-center justify-center border border-slate-300 text-xs cursor-pointer" title="Augmenter l'effectif requis">+</button>
-                  </div>
-                ` : ''}
-              </div>
-              <span class="text-slate-500 block text-[9px]">Effectif conseillé (RNMSC) : ${mission.hiddenMinVolunteers || mission.requiredVolunteers} secouristes</span>
-            </div>
-            <div class="p-2.5 rounded-2xl bg-white/90 border border-slate-200 space-y-0.5">
-              <span class="text-slate-400 font-bold block text-[9px] uppercase">Spécialités Attendues</span>
-              <span class="text-emerald-700 font-bold block">Chef d'Équipe (CE) requis</span>
-              <span class="text-slate-600 block text-[9px]">Chauffeur VPSP, PSE2/PSE1</span>
-            </div>
-          </div>
-
-          <!-- Facturation / Indemnisation conventionnée -->
-          <div class="pt-1">
-            <div class="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-center justify-between">
-              <span class="text-[10px] text-emerald-800 font-bold">Indemnisation conventionnée :</span>
-              <span class="text-xs font-black text-emerald-900 mono-num">+${mission.rewardMoney} €</span>
-            </div>
-          </div>
-
-          ${mission.status === 'prealerte' ? `
-            <div class="p-3 rounded-2xl bg-amber-100/70 border border-amber-300 text-amber-950 space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="font-black text-xs flex items-center gap-1.5 text-amber-900">
-                  <i data-lucide="hourglass" class="w-4 h-4 text-amber-600 animate-spin"></i>
-                  Veille Opérationnelle en cours
-                </span>
-                <span id="mission-prealert-timer" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 mono-num animate-pulse">
-                  ⏳ ${mission.prealertSecondsLeft || 0}s
-                </span>
-              </div>
-              <p class="text-[10px] text-amber-900 leading-snug">
-                Vous décidez si vous lancez la mobilisation générale par SMS. Les réponses des secouristes arriveront au fil des secondes.
-              </p>
-            </div>
-          ` : ''}
-
-        </div>
-
+        <!-- BANDEAU INTERVENTION ACTIVE EN DIRECT (SI ONGOING) -->
         ${mission.status === 'ongoing' ? `
           ${mission.currentIncident ? `
-            <div class="p-3.5 rounded-2xl bg-orange-50 border-2 border-pc-orange text-xs shadow-sm flex items-center justify-between gap-2 animate-pulse">
+            <div class="p-3 rounded-2xl bg-orange-50 border-2 border-pc-orange text-xs shadow-sm flex items-center justify-between gap-2 animate-pulse">
               <div class="flex items-center gap-2">
                 <span class="text-lg">🚨</span>
                 <div>
@@ -6869,11 +7964,24 @@ class ProtecGame {
             </div>
           ` : ''}
 
-          <!-- Si c'est un sinistre ou une crise : Main Courante Opérationnelle (sans heure de fin fixe) -->
+          <!-- Si c'est un sinistre ou une crise : Main Courante Opérationnelle -->
           ${(mission.isCrisis || ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type)) && window.ProtecCriseLogistique ? `
             ${window.ProtecCriseLogistique.renderCrisisDetailsHTML(this, mission)}
           ` : `
-            <div class="p-4 rounded-2xl glass-card-blue space-y-3">
+            ${(mission.vehicleMismatch || mission.isSlowedDown) ? `
+              <div class="p-3 rounded-2xl bg-amber-500/15 border-2 border-amber-500 text-amber-950 text-xs shadow-sm space-y-1 mb-2.5">
+                <div class="flex items-center gap-2 font-black text-amber-900">
+                  <span class="text-base">⚠️</span>
+                  <span>Intervention ralentie (Vecteur inadapté)</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-200 border border-amber-400 font-bold ml-auto text-amber-900">-70% vitesse</span>
+                </div>
+                <div class="text-[11px] text-amber-800 leading-tight">
+                  ${(mission.mismatchReasons && mission.mismatchReasons.length > 0) ? mission.mismatchReasons.join(', ') : 'Véhicule de substitution inadapté aux réquisitions de la mission'}.
+                  Le gestionnaire conteste la prestation et vos relations se dégradent !
+                </div>
+              </div>
+            ` : ''}
+            <div class="p-3.5 rounded-2xl glass-card-blue space-y-2.5">
               <div class="flex items-center justify-between text-xs">
                 <span class="font-bold text-pc-blue flex items-center gap-1.5">
                   <i data-lucide="radio" class="w-3.5 h-3.5 text-pc-blue animate-pulse"></i>
@@ -6881,240 +7989,400 @@ class ProtecGame {
                 </span>
                 <span id="mission-ongoing-timer" class="font-extrabold mono-num text-pc-blue">${remainingTimeText} (${progressPct}%)</span>
               </div>
-              <div class="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden shimmer-bar">
+              <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden shimmer-bar">
                 <div id="mission-ongoing-bar" class="bg-gradient-to-r from-pc-blue to-pc-orange h-full rounded-full transition-all duration-300" style="width: ${progressPct}%"></div>
               </div>
               
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                <button onclick="window.game.evacuateToNearestHospital('${mission.id}', '${mission.assignedCrew?.vehicles[0]?.id}')" class="py-2.5 px-3 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer" title="Déclencher le transport sanitaire vers les Urgences de l'Hôpital de secteur">
+                <button onclick="window.game.evacuateToNearestHospital('${mission.id}', '${mission.assignedCrew?.vehicles[0]?.id}')" class="py-2 px-3 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer" title="Déclencher le transport sanitaire vers les Urgences de l'Hôpital de secteur">
                   <i data-lucide="siren" class="w-4 h-4"></i>
                   <span>Évacuer vers CHU (Statut 4)</span>
                 </button>
-                <button onclick="window.game.completeInterventionOnSite('${mission.id}')" class="py-2.5 px-3 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer" title="Victime soignée et laissée sur place après accord de la régulation SAMU 15">
+                <button onclick="window.game.completeInterventionOnSite('${mission.id}')" class="py-2 px-3 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer" title="Victime soignée et laissée sur place après accord de la régulation SAMU 15">
                   <i data-lucide="check-circle" class="w-4 h-4"></i>
                   <span>Laissé sur Place / Clôturer</span>
                 </button>
               </div>
+
+              <!-- Possibilité de demander / déployer des moyens supplémentaires pendant l'événement -->
+              <div class="pt-2 border-t border-blue-100 flex items-center justify-between gap-2">
+                <div class="text-[10px] text-slate-600 font-semibold leading-tight">
+                  Dispositif : ${mission.assignedCrew?.volunteers?.length || mission.registeredVolunteers?.length || 0} secouriste(s), ${mission.assignedCrew?.vehicles?.length || (mission.assignedVehicleIds || []).filter(Boolean).length || 1} véhicule(s)
+                </div>
+                <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="px-2.5 py-1.5 rounded-lg text-[10px] font-black bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 transition flex items-center gap-1 cursor-pointer border border-indigo-200" title="Demander des moyens supplémentaires (bénévoles disponibles, SDIS ou alliances)">
+                  <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                  <span>+ Demander / Déployer Moyens</span>
+                </button>
+              </div>
             </div>
           `}
-        ` : `
-          <div class="space-y-3">
-            <!-- Contrôles Logistique : Places Véhicules / Réarmement -->
-            ${window.ProtecCriseLogistique ? `
-              ${window.ProtecCriseLogistique.renderVehiclesCapacityAndRearmAlertHTML(this, mission)}
-            ` : ''}
+        ` : ''}
 
-            <!-- SECTION AFFECTATION DES VÉHICULES DU DISPOSITIF -->
-            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
-                  <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
-                  <span>Véhicules du Dispositif (Devis Organisateur)</span>
+        ${mission.status === 'prealerte' ? `
+          <div class="p-3.5 rounded-2xl bg-amber-500/15 border-2 border-amber-400 text-amber-950 space-y-2.5 shadow-sm">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-xs flex items-center gap-1.5 text-amber-900">
+                <i data-lucide="hourglass" class="w-4 h-4 text-amber-600 animate-spin"></i>
+                <span>Veille Opérationnelle / Préalerte en cours</span>
+              </span>
+              <span id="mission-prealert-timer" class="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 mono-num animate-pulse border border-amber-300">
+                ⏳ ${mission.prealertSecondsLeft || 0}s avant arbitrage
+              </span>
+            </div>
+            <p class="text-[11px] text-amber-900 leading-snug">
+              Situation opérationnelle en cours de qualification. Vous pouvez recenser vos disponibilités par SMS ou déclarer le passage en alerte réelle selon vos effectifs.
+            </p>
+            <div class="flex items-center gap-2 pt-0.5">
+              <button type="button" onclick="window.game.centerMapOnMission('${mission.id}')" class="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 font-extrabold text-[11px] transition shadow-2xs flex items-center gap-1 cursor-pointer">
+                <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-700"></i>
+                <span>Voir sur la carte</span>
+              </button>
+              <button type="button" onclick="window.game.forceEscalatePrealert('${mission.id}')" class="flex-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-black text-[11px] transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer">
+                <i data-lucide="siren" class="w-3.5 h-3.5 text-white animate-pulse"></i>
+                <span>Déclencher l'Alerte Réelle</span>
+              </button>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- BARRE D'ONGLETS DU DISPOSITIF (STYLE eProtec) -->
+        <div class="flex items-center gap-1 border-b border-slate-200 pb-0 overflow-x-auto text-xs font-bold">
+          <button type="button" onclick="window.game.setMissionDetailTab('info')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'info' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+            <i data-lucide="info" class="w-3.5 h-3.5"></i>
+            <span>Information</span>
+          </button>
+          <button type="button" onclick="window.game.setMissionDetailTab('personnel')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'personnel' || activeTab === 'effectifs' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+            <i data-lucide="users" class="w-3.5 h-3.5"></i>
+            <span>Personnel (${registeredVols.length})</span>
+          </button>
+          <button type="button" onclick="window.game.setMissionDetailTab('logistique')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'logistique' || activeTab === 'vehicules' || activeTab === 'materiel' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+            <i data-lucide="truck" class="w-3.5 h-3.5"></i>
+            <span>Logistique</span>
+            ${hasMissingVehicles ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>' : ''}
+          </button>
+          <button type="button" onclick="window.game.setMissionDetailTab('dps')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'dps' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+            <i data-lucide="calculator" class="w-3.5 h-3.5"></i>
+            <span>DPS</span>
+          </button>
+        </div>
+
+        <!-- CONTENU DE L'ONGLET SÉLECTIONNÉ -->
+        ${activeTab === 'info' ? `
+          <!-- ONGLET 1 : INFORMATION (eProtec 3 CARTES) -->
+          <div class="space-y-3 animate-in fade-in duration-150">
+            <!-- CARTE 1 : ACTIVITÉ N° -->
+            <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+              <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center font-black text-xs">▲</span>
+                  <h4 class="text-xs font-black text-slate-900 tracking-wide uppercase">Activité n° ${(mission.id || 'ACT').toString().slice(0, 8).toUpperCase()}</h4>
+                </div>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${missionBadgeClass}">
+                  ${missionBadgeText}
                 </span>
-                ${(Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) ? `
-                  <button 
-                    type="button" 
-                    onclick="window.game.autoAssignVehiclesToMission('${mission.id}')" 
-                    class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue/10 hover:bg-pc-blue hover:text-white text-pc-blue transition flex items-center gap-1 cursor-pointer">
-                    <i data-lucide="zap" class="w-3 h-3"></i>
-                    <span>Affectation Auto</span>
-                  </button>
-                ` : ''}
               </div>
 
-              <!-- Slots des véhicules requis par l'organisateur -->
-              ${(Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) ? `
-                <div class="space-y-2">
-                  ${mission.requiredVehicles.map((reqType, slotIdx) => {
-                    const assignedId = (mission.assignedVehicleIds && mission.assignedVehicleIds[slotIdx]) ? mission.assignedVehicleIds[slotIdx] : null;
-                    const assignedVeh = assignedId ? this.vehicles.find(v => v.id === assignedId) : null;
+              <!-- Titre & Dates -->
+              <div class="space-y-1.5">
+                <h3 class="text-sm font-black text-slate-900 leading-snug">${mission.title}</h3>
+                <p class="text-xs text-slate-600 font-medium">Dispositif Prévisionnel de Secours (${mission.scale || 'DPS'})</p>
+              </div>
 
-                    // Liste des véhicules disponibles dans le garage pour ce type
-                    const alreadyAssignedIds = (mission.assignedVehicleIds || []).filter((id, idx) => idx !== slotIdx && id);
-                    const extraAssignedIds = mission.extraTransportVehicles || [];
-                    const dispoVehsForSlot = this.vehicles.filter(v => 
-                      (v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit))) && 
-                      (v.status === 'dispo' || v.status === 'sdis_caserne') &&
-                      !alreadyAssignedIds.includes(v.id) &&
-                      !extraAssignedIds.includes(v.id)
-                    );
-
-                    if (assignedVeh) {
-                      const fuelPct = assignedVeh.fuel !== undefined ? assignedVeh.fuel : 90;
-                      const mechPct = assignedVeh.mechanical !== undefined ? assignedVeh.mechanical : 95;
-                      const fuelColor = fuelPct > 50 ? 'text-emerald-600' : (fuelPct > 20 ? 'text-amber-600' : 'text-red-600');
-                      const driverSkill = assignedVeh.licenseRequired === 'C' ? 'Permis C (PL)' : (assignedVeh.type === 'VPSP' ? 'P. VPSP' : 'Permis B');
-
-                      return `
-                        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                          <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-0.5 flex-shrink-0 shadow-2xs overflow-hidden">
-                              <img src="${assignedVeh.image || this.getVehicleImage(assignedVeh.type)}" class="max-w-full max-h-full object-contain" alt="${assignedVeh.name}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\'><text y=\\'18\\' font-size=\\'18\\'>🚑</text></svg>'">
-                            </div>
-                            <div class="min-w-0">
-                              <div class="flex items-center gap-1.5 flex-wrap">
-                                <span class="text-xs font-black text-slate-800 truncate">${assignedVeh.name}</span>
-                                <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-100 text-blue-800 uppercase">${assignedVeh.type}</span>
-                                ${assignedVeh.immat ? `<span class="text-[9px] font-bold text-slate-400 font-mono">${assignedVeh.immat}</span>` : ''}
-                              </div>
-                              <div class="flex items-center gap-2.5 text-[10px] text-slate-500 pt-0.5">
-                                <span class="flex items-center gap-1 ${fuelColor} font-bold">
-                                  <span>⛽</span> ${fuelPct}%
-                                </span>
-                                <span class="flex items-center gap-1 text-slate-600 font-bold">
-                                  <span>🔧</span> ${mechPct}%
-                                </span>
-                                <span class="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-bold text-[9px]">
-                                  ${driverSkill}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div class="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-center">
-                            ${dispoVehsForSlot.length > 0 ? `
-                              <select 
-                                onchange="window.game.assignVehicleToMissionSlot('${mission.id}', ${slotIdx}, this.value)" 
-                                class="text-[11px] font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-700 cursor-pointer shadow-2xs">
-                                <option value="${assignedVeh.id}">Changer (${assignedVeh.name})</option>
-                                ${dispoVehsForSlot.map(v => `<option value="${v.id}">↳ ${v.name} (${v.fuel || 90}% carbu)</option>`).join('')}
-                              </select>
-                            ` : ''}
-                            <button 
-                              type="button" 
-                              onclick="window.game.unassignVehicleFromMissionSlot('${mission.id}', ${slotIdx})" 
-                              class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition cursor-pointer flex items-center gap-1"
-                              title="Retirer ce véhicule du dispositif">
-                              <i data-lucide="x" class="w-3 h-3"></i>
-                              <span>Retirer</span>
-                            </button>
-                          </div>
-                        </div>
-                      `;
-                    } else {
-                      return `
-                        <div class="p-2.5 rounded-xl bg-amber-500/5 border border-dashed border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                          <div class="flex items-center gap-2">
-                            <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 font-black text-xs flex items-center justify-center flex-shrink-0">
-                              #${slotIdx + 1}
-                            </span>
-                            <div>
-                              <p class="text-xs font-bold text-amber-900">
-                                Emplacement ${reqType} à pourvoir
-                              </p>
-                              <p class="text-[10px] text-amber-700">
-                                Prévu au devis validé (${mission.title})
-                              </p>
-                            </div>
-                          </div>
-
-                          <div class="flex items-center gap-1.5">
-                            ${dispoVehsForSlot.length > 0 ? `
-                              <select 
-                                onchange="window.game.assignVehicleToMissionSlot('${mission.id}', ${slotIdx}, this.value)" 
-                                class="text-[11px] font-bold bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-slate-800 cursor-pointer shadow-2xs">
-                                <option value="">-- Affecter un ${reqType} (${dispoVehsForSlot.length} dispo) --</option>
-                                ${dispoVehsForSlot.map(v => `<option value="${v.id}">${v.name} • ${v.fuel || 90}% carbu • ${v.mechanical || 95}% méca</option>`).join('')}
-                              </select>
-                            ` : `
-                              <span class="px-2.5 py-1 rounded-lg bg-rose-100 text-rose-700 text-[10px] font-extrabold flex items-center gap-1">
-                                <span>⚠️</span> Aucun ${reqType} disponible au garage
-                              </span>
-                            `}
-                          </div>
-                        </div>
-                      `;
-                    }
-                  }).join('')}
+              <!-- Dates & Horaires -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span class="text-[9px] uppercase font-black text-slate-400 block">Date & Horaires Prévisionnels</span>
+                  <strong class="text-xs font-extrabold text-slate-900 block mt-0.5">${missionScheduleRangeText}</strong>
+                  <span class="text-[10px] text-slate-500 block">Durée totale : ${durationDisplay}</span>
                 </div>
-              ` : `
-                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
-                  <span>🚶</span>
-                  <span>Dispositif pédestre / poste de secours fixe (aucun véhicule requis au devis).</span>
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span class="text-[9px] uppercase font-black text-slate-400 block">Organisateur / Client</span>
+                  <strong class="text-xs font-extrabold text-slate-900 block mt-0.5 truncate">${mission.clientName || 'Commanditaire conventionné'}</strong>
+                  <span class="text-[10px] text-slate-500 block">Accord-cadre validé</span>
                 </div>
-              `}
+              </div>
 
-              <!-- Acheminement interne des bénévoles -->
-              <div class="pt-2 border-t border-slate-100 space-y-2">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
-                  <span class="font-bold text-slate-700 flex items-center gap-1">
-                    <span>🚐</span> Véhicule de transport bénévoles (Non facturé au devis) :
-                  </span>
-                  ${(mission.extraTransportVehicles && mission.extraTransportVehicles.length > 0) ? `
-                    <span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-extrabold text-[10px]">
-                      ${mission.extraTransportVehicles.map(id => this.vehicles.find(v => v.id === id)?.name || id).join(', ')}
-                    </span>
-                  ` : `
-                    <span class="text-slate-400 text-[10px] italic">Aucun véhicule d'acheminement ajouté</span>
-                  `}
+              <!-- 3 Horaires Clés indispensables (eProtec / eBrigade) -->
+              <div class="grid grid-cols-3 gap-2 text-center text-xs pt-0.5">
+                <div class="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200 shadow-2xs">
+                  <span class="text-[9px] uppercase font-black text-amber-800 block">🚗 RDV Base</span>
+                  <strong class="text-xs font-black text-amber-950 block my-0.5">${rdvBaseStr}</strong>
+                  <span class="text-[8px] text-amber-700 block">Départ Antenne</span>
                 </div>
-                <p class="text-[10px] text-slate-500">
-                  Vous pouvez ajouter un VTP (9 places) ou un VL pour transporter votre équipe sur le site de la mission sans modifier le devis facturé.
-                </p>
+                <div class="p-2.5 rounded-xl bg-sky-50/80 border border-sky-200 shadow-2xs">
+                  <span class="text-[9px] uppercase font-black text-sky-800 block">📍 Début Événement</span>
+                  <strong class="text-xs font-black text-sky-950 block my-0.5">${debutEventStr}</strong>
+                  <span class="text-[8px] text-sky-700 block">Sur site</span>
+                </div>
+                <div class="p-2.5 rounded-xl bg-indigo-50/80 border border-indigo-200 shadow-2xs">
+                  <span class="text-[9px] uppercase font-black text-indigo-800 block">🏁 Fin Événement</span>
+                  <strong class="text-xs font-black text-indigo-950 block my-0.5">${finEventStr}</strong>
+                  <span class="text-[8px] text-indigo-700 block">${finEventSub}</span>
+                </div>
+              </div>
 
-                <div class="flex flex-wrap gap-1.5 pt-1">
-                  ${this.vehicles.filter(v => ['VTP', 'VL', 'VTU'].includes(v.type) && (v.status === 'dispo' || (mission.extraTransportVehicles || []).includes(v.id))).map(veh => {
-                    const isAdded = (mission.extraTransportVehicles || []).includes(veh.id);
-                    return `
-                      <button 
-                        type="button" 
-                        onclick="window.game.toggleMissionExtraTransportVehicle('${mission.id}', '${veh.id}')" 
-                        class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${isAdded ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}">
-                        <span>${isAdded ? '✓ ' : '+ '}${veh.name} (${veh.type} • ${veh.seatsCount || veh.capacity || 4} pl.)</span>
-                      </button>
-                    `;
-                  }).join('')}
-                  ${this.vehicles.filter(v => ['VTP', 'VL', 'VTU'].includes(v.type)).length === 0 ? `
-                    <span class="text-[10px] text-slate-400 italic">Aucun VTP ou VL disponible dans le garage de l'antenne pour transporter les bénévoles.</span>
-                  ` : ''}
+              <!-- Lieu / Adresse -->
+              <div onclick="window.game.centerMapOnMission('${mission.id}')" class="flex items-center justify-between gap-2 text-xs text-slate-800 font-bold bg-sky-50/80 hover:bg-sky-100 p-2.5 rounded-xl border border-sky-200 cursor-pointer transition shadow-2xs group" title="Cliquer pour centrer la carte sur cette adresse">
+                <div class="flex items-center gap-2 min-w-0">
+                  <i data-lucide="map-pin" class="w-4 h-4 text-pc-blue flex-shrink-0 group-hover:scale-110 transition"></i>
+                  <span class="truncate">Lieu : <strong class="text-slate-900">${mission.address || (mission.lat && mission.lng ? 'Point GPS: ' + mission.lat.toFixed(4) + ', ' + mission.lng.toFixed(4) : 'Adresse sur site')}</strong></span>
                 </div>
+                <span class="text-[10px] font-black text-pc-blue bg-white px-2 py-0.5 rounded-lg border border-sky-200 group-hover:bg-pc-blue group-hover:text-white transition flex items-center gap-1 shrink-0">
+                  <i data-lucide="crosshair" class="w-3 h-3"></i>
+                  <span>Centrer</span>
+                </span>
+              </div>
+
+              <!-- Situation / Descriptif -->
+              <div class="text-xs text-slate-700 space-y-1 pt-1">
+                <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Situation & Contexte :</span>
+                <p class="leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-200">${mission.desc}</p>
+              </div>
+
+              <!-- Missions Prévues sur le Terrain -->
+              <div class="text-xs text-slate-700 space-y-1 pt-1">
+                <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Missions Prévues sur Site :</span>
+                <ul class="text-[11px] text-slate-700 space-y-1 list-disc list-inside bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                  <li>Reconnaissance de périmètre et bilans circonstanciés</li>
+                  <li>Prise en charge des victimes et gestes de premiers secours</li>
+                  <li>Accueil, réconfort et distribution d'urgence aux impliqués</li>
+                  <li>Transmissions opérationnelles et liaisons vers les urgences (CHU)</li>
+                </ul>
               </div>
             </div>
 
-            ${(() => {
-              if (!window.ProtecRNMSC || registeredVols.length === 0) return '';
-              const rnmscVehs = (this.vehicles || []).filter(veh => (mission.requiredVehicles || []).includes(veh.type));
-              const comp = window.ProtecRNMSC.validateCrewCompliance(mission, registeredVols, rnmscVehs, this);
-              if (!comp.valid) {
-                return `
-                  <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 text-xs flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-1.5 min-w-0">
-                      <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 flex-shrink-0"></i>
-                      <span class="text-[11px] font-bold truncate">RNMSC : ${comp.errors[0]}</span>
-                    </div>
-                    <button onclick="window.game.autoAssignMissionRoles('${mission.id}')" class="px-2 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-black text-[10px] whitespace-nowrap shadow-xs cursor-pointer">Auto-Rôles</button>
-                  </div>
-                `;
-              } else {
-                return `
-                  <div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 text-xs flex items-center gap-2">
-                    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
-                    <span class="text-[11px] font-bold">Dispositif Conforme RNMSC (Dotation Lots, Commandement, PSE & Véhicules validés ✓)</span>
-                  </div>
-                `;
-              }
-            })()}
+            <!-- CARTE 2 : PERSONNEL (QUALIFICATIONS BADGES & EFFECTIF) -->
+            <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+              <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="users" class="w-4 h-4 text-pc-blue"></i>
+                  <h4 class="text-xs font-black text-slate-900 uppercase">Personnel du Dispositif</h4>
+                </div>
+                <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${registeredVols.length >= (mission.requiredVolunteers || 1) ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                  ${registeredVols.length} / ${mission.requiredVolunteers} inscrits
+                </span>
+              </div>
 
-            <!-- SUIVI DES SOLLICITATIONS & RELANCES BÉNÉVOLES (RNMSC) -->
+              <!-- Badges de qualifications requises (eProtec) -->
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                  <span>🩺</span> ${pse2Count} PSE2
+                </span>
+                <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-sky-100 text-sky-800 border border-sky-200 flex items-center gap-1">
+                  <span>🩹</span> ${pse1Count} PSE1
+                </span>
+                <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
+                  <span>🛡️</span> ${ceCount} CE
+                </span>
+                <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                  <span>🚑</span> ${driverCount} Chauffeur
+                </span>
+              </div>
+
+              <!-- Progression inscription -->
+              <div class="space-y-1">
+                <div class="flex items-center justify-between text-[11px] font-bold text-slate-600">
+                  <span>Taux d'armement</span>
+                  <span class="font-black text-slate-900">${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}%</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
+                  <div class="bg-gradient-to-r from-pc-blue to-emerald-500 h-full rounded-full transition-all" style="width: ${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}%"></div>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-xs text-slate-700 pt-1">
+                <span>Chef de Poste désigné :</span>
+                <strong class="text-slate-900">${chefDePoste ? chefDePoste.name : (registeredVols.length > 0 ? registeredVols[0].name : 'Non désigné')}</strong>
+              </div>
+
+              <button type="button" onclick="window.game.setMissionDetailTab('personnel')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-pc-blue font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+                <i data-lucide="users" class="w-3.5 h-3.5"></i>
+                <span>Gérer les Effectifs & Rôles (${registeredVols.length}/${mission.requiredVolunteers}) →</span>
+              </button>
+            </div>
+
+            <!-- CARTE 3 : LOGISTIQUE (VÉHICULES & MATÉRIELS) -->
+            <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+              <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
+                  <h4 class="text-xs font-black text-slate-900 uppercase">Logistique & Vecteurs</h4>
+                </div>
+                <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${assignedVehIds.length >= ((mission.requiredVehicles || []).length || 1) ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                  ${assignedVehIds.length} / ${(mission.requiredVehicles || []).length || 1} véhicule(s)
+                </span>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span class="text-[9px] uppercase font-black text-slate-400 block">Vecteurs Requis</span>
+                  <div class="flex items-center gap-1 mt-1 flex-wrap">
+                    ${(mission.requiredVehicles && mission.requiredVehicles.length > 0) ? mission.requiredVehicles.map(vType => `
+                      <span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-pc-blue border border-blue-200">${vType}</span>
+                    `).join('') : '<span class="text-[10px] text-slate-500">Poste fixe (aucun)</span>'}
+                  </div>
+                </div>
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span class="text-[9px] uppercase font-black text-slate-400 block">Lots RNMSC</span>
+                  <div class="flex items-center gap-1 mt-1 flex-wrap">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">Lot A</span>
+                    ${(mission.configuredLots || []).includes('lot_b') ? '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200">Lot B</span>' : ''}
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-200">DAE+O2</span>
+                  </div>
+                </div>
+              </div>
+
+              <button type="button" onclick="window.game.setMissionDetailTab('logistique')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-pc-blue font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+                <i data-lucide="truck" class="w-3.5 h-3.5"></i>
+                <span>Gérer les Véhicules, Matériels & Consommables →</span>
+              </button>
+            </div>
+
+            <!-- Indemnisation conventionnée -->
+            <div class="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between text-xs">
+              <span class="text-emerald-800 font-bold flex items-center gap-1.5">
+                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
+                <span>Indemnisation conventionnée (Devis Organisateur) :</span>
+              </span>
+              <span class="font-black text-emerald-950 mono-num text-sm">+${mission.rewardMoney} €</span>
+            </div>
+          </div>
+        ` : (activeTab === 'personnel' || activeTab === 'effectifs') ? `
+          <!-- ONGLET 2 : PERSONNEL DU DISPOSITIF (TABLEAU eProtec) -->
+          <div class="space-y-3 animate-in fade-in duration-150">
+            <!-- Barre d'outils et jauge eProtec -->
+            <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="window.game.showToast('Feuille de Route', 'Génération de l\\'ordre de mission et feuille d\\'émargement eProtec...', 'blue')" class="p-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 transition cursor-pointer" title="Imprimer la feuille de route / d'émargement">
+                  <i data-lucide="printer" class="w-4 h-4"></i>
+                </button>
+                <div class="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                  <button type="button" class="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-white text-pc-blue shadow-2xs">Liste</button>
+                  <button type="button" onclick="window.game.autoAssignMissionRoles('${mission.id}')" class="px-2.5 py-0.5 rounded-md text-[11px] font-bold text-slate-600 hover:text-slate-900 cursor-pointer">Affectations</button>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <div class="w-20 sm:w-28 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
+                  <div class="bg-emerald-500 h-full rounded-full transition-all" style="width: ${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}%"></div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${registeredVols.length < mission.requiredVolunteers ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
+                  ${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}% ${registeredVols.length}/${mission.requiredVolunteers}
+                </span>
+              </div>
+
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button onclick="window.game.autoAssignMissionRoles('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue/10 hover:bg-pc-blue hover:text-white text-pc-blue transition flex items-center gap-1 cursor-pointer" title="Affecter automatiquement les rôles optimaux">
+                  <i data-lucide="wand-2" class="w-3 h-3"></i>
+                  <span>Auto-Rôles</span>
+                </button>
+                <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition flex items-center gap-1 cursor-pointer" title="Demander renforts aux antennes alliées">
+                  <i data-lucide="users" class="w-3.5 h-3.5"></i>
+                  <span>Renforts</span>
+                </button>
+                <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition flex items-center gap-1 cursor-pointer">
+                  <i data-lucide="send" class="w-3 h-3"></i>
+                  <span>${mission.smsCampaignActive ? 'SMS...' : 'SMS'}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- TABLEAU EPROTEC DU PERSONNEL ENGAGÉ -->
+            <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500">
+                    <th class="py-2.5 px-3 w-10">Image</th>
+                    <th class="py-2.5 px-3">Personnel</th>
+                    <th class="py-2.5 px-3 hidden sm:table-cell">Téléphone</th>
+                    <th class="py-2.5 px-3">Fonction</th>
+                    <th class="py-2.5 px-3">Équipe</th>
+                    <th class="py-2.5 px-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${registeredVols.length === 0 ? `
+                    <tr>
+                      <td colspan="6" class="p-4 text-center text-xs text-amber-700 bg-amber-50/50">
+                        Aucun secouriste n’a encore validé sa disponibilité. Cliquez sur « SMS » ou utilisez l’accordéon ci-dessous pour recruter vos bénévoles.
+                      </td>
+                    </tr>
+                  ` : ''}
+                  ${registeredVols.map((v, idx) => {
+                    const currentRole = mission.volunteerRoles?.[v.id] || '';
+                    const rolesList = this.getMissionRoles();
+                    const isRoleMissing = !currentRole;
+                    const phoneStr = getVolunteerPhone(v);
+                    const teamLabel = getTeamLabel(v, idx);
+
+                    return `
+                      <tr class="hover:bg-slate-50/80 transition ${isRoleMissing ? 'bg-amber-50/20' : ''}">
+                        <td class="py-2 px-3">
+                          ${this.getVolunteerAvatarHTML(v, 'w-8 h-8 text-xs')}
+                        </td>
+                        <td class="py-2 px-3">
+                          <div class="font-bold text-slate-900 leading-tight">${v.name}</div>
+                          <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+                            <span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-rose-600 text-white uppercase tracking-wider flex items-center gap-0.5">
+                              Engagé <span class="opacity-80">(i)</span>
+                            </span>
+                            <span class="text-[9px] font-bold text-slate-600 px-1 py-0.2 bg-slate-100 rounded border border-slate-200">${v.rank || 'Secouriste'}</span>
+                            ${isRoleMissing ? '<span class="text-[8px] font-black text-amber-700 bg-amber-100 px-1 py-0.2 rounded">Rôle requis</span>' : ''}
+                          </div>
+                        </td>
+                        <td class="py-2 px-3 hidden sm:table-cell">
+                          <a href="tel:${phoneStr.replace(/\s/g, '')}" class="text-[11px] font-mono text-slate-700 hover:text-pc-blue font-bold flex items-center gap-1">
+                            <i data-lucide="phone" class="w-3 h-3 text-slate-400"></i>
+                            <span>${phoneStr}</span>
+                          </a>
+                        </td>
+                        <td class="py-2 px-3">
+                          <select onchange="window.game.setVolunteerMissionRole('${mission.id}', '${v.id}', this.value)" class="text-[10px] font-bold px-2 py-1 rounded-lg ${isRoleMissing ? 'bg-amber-100 text-amber-900 border-amber-400 ring-1 ring-amber-400' : 'bg-slate-50 hover:bg-slate-100 border-slate-300 text-slate-800'} border cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[130px] sm:max-w-[160px]">
+                            <option value="" ${!currentRole ? 'selected' : ''}>⚠️ Rôle à choisir...</option>
+                            ${rolesList.map(r => `
+                              <option value="${r.id}" ${r.id === currentRole ? 'selected' : ''}>${r.label}</option>
+                            `).join('')}
+                          </select>
+                        </td>
+                        <td class="py-2 px-3">
+                          <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-blue-50 text-pc-blue border border-blue-200 inline-block">
+                            ${teamLabel}
+                          </span>
+                        </td>
+                        <td class="py-2 px-2 text-right">
+                          ${mission.status === 'planifie' ? `
+                            <button onclick="window.game.unregisterVolunteerFromMission('${mission.id}', '${v.id}')" class="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600 hover:text-rose-700 font-bold transition cursor-pointer" title="Désinscrire ce bénévole">
+                              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                            </button>
+                          ` : ''}
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Suivi des convocations et relances -->
             <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5 font-black text-slate-800">
                   <i data-lucide="mail-check" class="w-4 h-4 text-pc-blue"></i>
-                  <span>Suivi des Convocations & Sollicitations</span>
+                  <span>Suivi des Convocations</span>
                 </div>
                 <div>
                   ${mission.sollicitationSent ? `
                     <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-pc-blue border border-blue-200">
-                      Statut : Sollicité (${mission.relancesCount || 0} relance${(mission.relancesCount || 0) > 1 ? 's' : ''})
+                      Sollicité (${mission.relancesCount || 0} relance${(mission.relancesCount || 0) > 1 ? 's' : ''})
                     </span>
                   ` : `
-                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/80 text-slate-600">
-                      Statut : Non sollicité
+                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">
+                      Non sollicité
                     </span>
                   `}
                 </div>
               </div>
-              <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-200/70">
+              <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-200">
                 <button onclick="window.ProtecMessaging ? window.ProtecMessaging.openForMission('${mission.id}', window.game) : null" class="text-pc-blue hover:underline text-[11px] font-extrabold flex items-center gap-1 cursor-pointer">
                   <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
                   <span>Fil des convocations (${(() => {
@@ -7124,79 +8392,13 @@ class ProtecGame {
                     return allMsgs.filter(m => m && m.missionId === mission.id).length;
                   })()})</span>
                 </button>
-                ${(this.alertSubscription?.active) ? `
-                  <div class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shadow-2xs" title="L'abonnement E-Alerte est actif : les relances et appels individuels sont automatisés">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>🤖 E-Alerte active (relances & appels auto)</span>
-                  </div>
-                ` : (!isComplete && mission.status === 'planifie') ? `
-                  <button onclick="window.game.manualRelanceVolunteers('${mission.id}')" class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1 transition cursor-pointer" title="Déclencher une relance manuelle si effectif incomplet">
+                ${(!isComplete && mission.status === 'planifie') ? `
+                  <button onclick="window.game.manualRelanceVolunteers('${mission.id}')" class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1 transition cursor-pointer">
                     <i data-lucide="bell-ring" class="w-3 h-3"></i>
                     <span>Relancer l'équipe</span>
                   </button>
                 ` : ''}
               </div>
-            </div>
-
-            <div class="flex items-center justify-between">
-              <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">
-                Effectifs Répondants (${registeredVols.length} / ${mission.requiredVolunteers})
-              </h4>
-              <div class="flex items-center gap-2">
-                <button onclick="window.game.autoAssignMissionRoles('${mission.id}')" class="text-xs font-extrabold text-pc-blue hover:underline flex items-center gap-1" title="Affecter automatiquement les rôles optimaux (Chef de poste, conducteur, photographe...)">
-                  <i data-lucide="wand-2" class="w-3.5 h-3.5"></i>
-                  Auto-Rôles
-                </button>
-                <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="text-xs font-extrabold text-indigo-600 hover:underline flex items-center gap-1" title="Faire appel aux autres joueurs et antennes alliées">
-                  <i data-lucide="users" class="w-3.5 h-3.5"></i>
-                  Renforts
-                </button>
-                <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="text-xs font-extrabold text-pc-orange hover:underline flex items-center gap-1">
-                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                  ${mission.smsCampaignActive ? 'SMS en cours...' : 'SMS'}
-                </button>
-              </div>
-            </div>
-
-            ${registeredVols.some(v => (v.skills || []).includes('communication') && mission.volunteerRoles?.[v.id] === 'photographe') ? `
-              <div class="p-2 rounded-xl bg-pink-50 border border-pink-200 text-pink-900 text-[11px] flex items-center gap-2 font-medium">
-                <i data-lucide="camera" class="w-4 h-4 text-pink-600"></i>
-                <span><strong>Couverture Média & Pub :</strong> reportage photo/vidéo sur ce DPS (+notoriété d'antenne garantie).</span>
-              </div>
-            ` : ''}
-
-            <div class="space-y-2 max-h-64 overflow-y-auto pr-1 pb-20">
-              ${registeredVols.length === 0 ? '<p class="text-xs text-amber-600 p-2.5 glass-card-amber rounded-xl">Aucun secouriste n’a encore validé sa disponibilité. Cliquez sur « SMS » ou utilisez l’appel individuel pour mobiliser vos effectifs.</p>' : ''}
-              ${registeredVols.map(v => {
-                const currentRole = (mission.volunteerRoles && mission.volunteerRoles[v.id]) || (v.rank === 'Stagiaire' ? 'stagiaire' : 'secouriste');
-                const rolesList = this.getMissionRoles();
-                const hasCom = (v.skills || []).includes('communication') && currentRole === 'photographe';
-
-                return `
-                <div class="p-2.5 rounded-xl bg-white border border-slate-200/90 shadow-xs flex items-center justify-between text-xs hover:border-slate-300 transition gap-2.5">
-                  <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                    ${this.getVolunteerAvatarHTML(v, 'w-8 h-8 text-xs')}
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="font-bold text-slate-800 leading-tight truncate max-w-[130px] sm:max-w-[180px]">${v.name}</span>
-                        <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">${v.rank || 'Secouriste'}</span>
-                        ${hasCom ? '<span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-pink-100 text-pink-700">📸 Média</span>' : ''}
-                      </div>
-                      ${this.getVolunteerSkillsPopoverHTML(v)}
-                    </div>
-                  </div>
-                  <div class="flex-shrink-0 flex items-center gap-1.5">
-                    <select onchange="window.game.setVolunteerMissionRole('${mission.id}', '${v.id}', this.value)" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-800 cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[110px] sm:max-w-[140px]">
-                      ${rolesList.map(r => `
-                        <option value="${r.id}" ${r.id === currentRole ? 'selected' : ''}>${r.label}</option>
-                      `).join('')}
-                    </select>
-                    ${mission.status === 'planifie' ? `
-                      <button onclick="window.game.unregisterVolunteerFromMission('${mission.id}', '${v.id}')" class="w-6 h-6 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold flex items-center justify-center text-xs transition cursor-pointer" title="Désinscrire ce bénévole">✕</button>
-                    ` : ''}
-                  </div>
-                </div>
-              `;}).join('')}
             </div>
 
             <!-- Affectation directe, Appel individuel & Bascule de Bénévoles -->
@@ -7216,20 +8418,33 @@ class ProtecGame {
                   const eligibility = window.ProtecPersonnel ? window.ProtecPersonnel.isVolunteerEligibleForUrgentMission(v, maxRallyLimit) : { eligible: true, rallyMinutes: v.temps_ralliement_minutes || 10 };
                   const isBlockedByDistance = isUrgentMission && !eligibility.eligible;
 
+                  const isSalarie = (v.contractType === 'salarie' || v.dispoType === 'salarié' || v.dispoType === 'salarie_permanent');
+                  const evalResult = this.evaluateVolunteerAvailability(v, mission.eventDate, mission);
+                  const isAvailable = isSalarie || evalResult.isAvailable;
+
                   return `
-                    <div class="p-2 rounded-xl border flex items-center justify-between text-xs transition ${isBlockedByDistance ? 'bg-slate-100/70 border-slate-300 opacity-60' : 'bg-white border-slate-200 hover:shadow-sm'}">
+                    <div class="p-2 rounded-xl border flex items-center justify-between text-xs transition ${isBlockedByDistance ? 'bg-slate-100/70 border-slate-300 opacity-60' : (!isAvailable ? 'bg-slate-50/80 border-slate-200' : 'bg-white border-slate-200 hover:shadow-sm')}">
                       <div class="flex items-center gap-2 min-w-0 flex-1">
                         ${this.getVolunteerAvatarHTML(v, 'w-6 h-6 text-[10px]')}
                         <div class="min-w-0 flex-1">
                           <div class="flex items-center gap-1.5 flex-wrap">
                             <span class="font-bold text-slate-800 truncate">${v.name}</span>
                             <span class="text-[9px] text-slate-500 font-semibold">${v.rank}</span>
-                            <span class="text-[9px] font-bold ${v.temps_ralliement_minutes > 20 ? 'text-amber-700' : 'text-slate-500'}">⏱️ ${v.temps_ralliement_minutes || 10}m (${v.commune || 'Base'})</span>
+                            <span class="text-[9px] font-bold ${v.temps_ralliement_minutes > 20 ? 'text-amber-700' : 'text-slate-500'}">⏱️ ${v.temps_ralliement_minutes || 10}m</span>
+                            ${isSalarie ? `
+                              <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-indigo-100 text-indigo-800">💼 Salarié</span>
+                            ` : isAvailable ? `
+                              <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">✅ Dispo</span>
+                            ` : `
+                              <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-100 text-rose-800" title="${evalResult.rejectReason || 'Non dispo'}">❌ Indispo (${evalResult.rejectReason || 'Contrainte'})</span>
+                            `}
                           </div>
                           ${isBlockedByDistance ? `
                             <div class="text-[9px] text-rose-700 font-bold truncate">⚠️ Domicile trop éloigné (> ${maxRallyLimit} min limite réflexe)</div>
                           ` : otherMission ? `
                             <div class="text-[9px] text-amber-700 font-bold truncate max-w-[130px]">Sur : ${otherMission.title}</div>
+                          ` : !isAvailable ? `
+                            <div class="text-[9px] text-slate-500 italic truncate">${evalResult.rejectReason || 'Bénévole non disponible sur ce créneau'}</div>
                           ` : ''}
                         </div>
                       </div>
@@ -7237,22 +8452,26 @@ class ProtecGame {
                         ${v.status === 'mission' ? `
                           <span class="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">En mission</span>
                         ` : isBlockedByDistance ? `
-                          <span class="px-2 py-1 rounded text-[10px] font-bold bg-slate-200 text-slate-400 cursor-not-allowed" title="Le bénévole habite trop loin (${v.temps_ralliement_minutes} min) pour rallier la base avant le départ de l'urgence réflexe">
-                            Hors délai
-                          </span>
+                          <span class="px-2 py-1 rounded text-[10px] font-bold bg-slate-200 text-slate-400 cursor-not-allowed">Hors délai</span>
                         ` : otherMission ? `
                           <button onclick="window.game.proposeVolunteerSwitch('${v.id}', '${mission.id}')" class="px-2 py-1 rounded text-[10px] font-extrabold bg-amber-100 hover:bg-amber-200 text-amber-900 transition flex items-center gap-1" title="Proposer au bénévole d'annuler sa participation sur l'autre mission pour venir ici">
                             <i data-lucide="arrow-left-right" class="w-3 h-3"></i>
                             <span>Bascule</span>
                           </button>
                         ` : `
-                          <button onclick="window.game.callVolunteerIndividually('${mission.id}', '${v.id}')" class="px-2 py-1 rounded text-[10px] font-black bg-blue-50 hover:bg-blue-100 text-pc-blue border border-blue-200 transition flex items-center gap-1" title="Passer un appel téléphonique direct (plus de chance que le SMS)">
+                          <button onclick="window.game.callVolunteerIndividually('${mission.id}', '${v.id}')" class="px-2 py-1 rounded text-[10px] font-black bg-blue-50 hover:bg-blue-100 text-pc-blue border border-blue-200 transition flex items-center gap-1" title="Passer un appel téléphonique direct pour solliciter un dépannage">
                             <i data-lucide="phone" class="w-3 h-3 text-pc-blue"></i>
                             <span>Appeler</span>
                           </button>
-                          <button onclick="window.game.proposeVolunteerSwitch('${v.id}', '${mission.id}')" class="px-2 py-1 rounded text-[10px] font-extrabold bg-emerald-100 hover:bg-emerald-200 text-emerald-900 transition">
-                            + Affecter
-                          </button>
+                          ${isAvailable ? `
+                            <button onclick="window.game.proposeVolunteerSwitch('${v.id}', '${mission.id}')" class="px-2 py-1 rounded text-[10px] font-extrabold bg-emerald-100 hover:bg-emerald-200 text-emerald-900 transition" title="Affecter ce bénévole confirmé disponible">
+                              + Affecter
+                            </button>
+                          ` : `
+                            <button disabled class="px-2 py-1 rounded text-[10px] font-bold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed" title="Bénévole indisponible">
+                              🔒 Indispo
+                            </button>
+                          `}
                         `}
                       </div>
                     </div>
@@ -7261,6 +8480,515 @@ class ProtecGame {
               </div>
             </details>
           </div>
+        ` : (activeTab === 'logistique' || activeTab === 'vehicules' || activeTab === 'materiel') ? `
+          <!-- ONGLET 3 : LOGISTIQUE (SOUS-ONGLETS : VÉHICULE / MATÉRIEL / CONSOMMABLE) -->
+          <div class="space-y-3 animate-in fade-in duration-150">
+            <!-- SOUS-ONGLETS LOGISTIQUE eProtec -->
+            <div class="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 shadow-2xs">
+              <button type="button" onclick="window.game.setMissionDetailLogistiqueSubTab('vehicule')" class="flex-1 py-1.5 px-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${logistiqueSubTab === 'vehicule' ? 'bg-white text-pc-blue shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+                <i data-lucide="truck" class="w-3.5 h-3.5"></i>
+                <span>Véhicule</span>
+                ${hasMissingVehicles ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>' : ''}
+              </button>
+              <button type="button" onclick="window.game.setMissionDetailLogistiqueSubTab('materiel')" class="flex-1 py-1.5 px-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${logistiqueSubTab === 'materiel' ? 'bg-white text-pc-blue shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+                <i data-lucide="package" class="w-3.5 h-3.5"></i>
+                <span>Matériel</span>
+              </button>
+              <button type="button" onclick="window.game.setMissionDetailLogistiqueSubTab('consommable')" class="flex-1 py-1.5 px-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${logistiqueSubTab === 'consommable' ? 'bg-white text-pc-blue shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+                <i data-lucide="first-aid" class="w-3.5 h-3.5"></i>
+                <span>Consommable</span>
+              </button>
+            </div>
+
+            ${logistiqueSubTab === 'vehicule' ? `
+              <!-- SOUS-ONGLET VÉHICULE : TABLEAU EPROTEC + CONFIGURATION -->
+              <div class="space-y-3">
+                <!-- TABLEAU DES VÉHICULES ENGAGÉS -->
+                <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs">
+                  <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500">
+                        <th class="py-2.5 px-3 w-12">Image</th>
+                        <th class="py-2.5 px-3">Véhicule</th>
+                        <th class="py-2.5 px-3">Statut</th>
+                        <th class="py-2.5 px-3">Indicatif</th>
+                        <th class="py-2.5 px-3 hidden sm:table-cell">Immatriculation</th>
+                        <th class="py-2.5 px-3">Fonction</th>
+                        <th class="py-2.5 px-3 hidden sm:table-cell">Kilométrage</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                      ${(() => {
+                        const assignedVehsList = (mission.assignedVehicleIds || [])
+                          .filter(Boolean)
+                          .concat(mission.extraTransportVehicles || [])
+                          .map(id => this.vehicles.find(v => v.id === id))
+                          .filter(Boolean);
+
+                        if (assignedVehsList.length === 0) {
+                          return `
+                            <tr>
+                              <td colspan="7" class="p-4 text-center text-xs text-slate-500 italic bg-slate-50/50">
+                                Aucun véhicule encore affecté à cette activité. Utilisez les sélecteurs ci-dessous pour armer le dispositif.
+                              </td>
+                            </tr>
+                          `;
+                        }
+
+                        return assignedVehsList.map(veh => {
+                          const immat = getVehicleImmat(veh);
+                          const indicatif = veh.indicatif || `${veh.type} ${veh.num || 1}`;
+                          const mileage = veh.mileage || (118000 + (veh.id.charCodeAt(0) * 137) % 35000);
+                          const fonction = veh.type === 'VPSP' ? 'Évacuation / Soins' : (veh.type === 'PCM' ? 'Poste Commandement' : 'Liaison / Transport');
+
+                          return `
+                            <tr class="hover:bg-slate-50/80 transition">
+                              <td class="py-2 px-3">
+                                <div class="w-10 h-7 rounded bg-white border border-slate-200 flex items-center justify-center p-0.5 shadow-2xs overflow-hidden">
+                                  <img src="${veh.image || this.getVehicleImage(veh.type)}" class="max-w-full max-h-full object-contain" alt="${veh.name}">
+                                </div>
+                              </td>
+                              <td class="py-2 px-3">
+                                <strong class="text-slate-900 block leading-tight">${veh.name}</strong>
+                                <span class="text-[9px] text-slate-500 font-bold">${veh.type}</span>
+                              </td>
+                              <td class="py-2 px-3">
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
+                                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Opérationnel
+                                </span>
+                              </td>
+                              <td class="py-2 px-3 font-bold text-slate-800 text-[11px]">
+                                ${indicatif}
+                              </td>
+                              <td class="py-2 px-3 hidden sm:table-cell font-mono text-[10px] text-slate-700 font-bold">
+                                ${immat}
+                              </td>
+                              <td class="py-2 px-3">
+                                <span class="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-semibold border border-slate-200">
+                                  ${fonction}
+                                </span>
+                              </td>
+                              <td class="py-2 px-3 hidden sm:table-cell font-mono text-[10px] text-slate-600">
+                                ${mileage.toLocaleString()} km
+                              </td>
+                            </tr>
+                          `;
+                        }).join('');
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Contrôles Logistique : Places Véhicules / Réarmement -->
+                ${window.ProtecCriseLogistique ? `
+                  ${window.ProtecCriseLogistique.renderVehiclesCapacityAndRearmAlertHTML(this, mission)}
+                ` : ''}
+
+                <!-- SECTION AFFECTATION DES VÉHICULES DU DISPOSITIF -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                      <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
+                      <span>Véhicules du Dispositif (Devis Organisateur)</span>
+                    </span>
+                    ${(Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) ? `
+                      <button 
+                        type="button" 
+                        onclick="window.game.autoAssignVehiclesToMission('${mission.id}')" 
+                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue/10 hover:bg-pc-blue hover:text-white text-pc-blue transition flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="zap" class="w-3 h-3"></i>
+                        <span>Affectation Auto</span>
+                      </button>
+                    ` : ''}
+                  </div>
+
+                  <!-- Slots des véhicules requis par l'organisateur -->
+                  ${(Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) ? `
+                    <div class="space-y-2">
+                      ${mission.requiredVehicles.map((reqType, slotIdx) => {
+                        const assignedId = (mission.assignedVehicleIds && mission.assignedVehicleIds[slotIdx]) ? mission.assignedVehicleIds[slotIdx] : null;
+                        const assignedVeh = assignedId ? this.vehicles.find(v => v.id === assignedId) : null;
+
+                        const alreadyAssignedIds = (mission.assignedVehicleIds || []).filter((id, idx) => idx !== slotIdx && id);
+                        const extraAssignedIds = mission.extraTransportVehicles || [];
+                        const allDispoVehs = this.vehicles.filter(v => 
+                          (v.status === 'dispo' || v.status === 'sdis_caserne') &&
+                          !alreadyAssignedIds.includes(v.id) &&
+                          !extraAssignedIds.includes(v.id)
+                        );
+
+                        const exactDispoVehs = allDispoVehs.filter(v => 
+                          v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit))
+                        );
+
+                        const substituteDispoVehs = allDispoVehs.filter(v => 
+                          !(v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit)))
+                        );
+
+                        const isMatch = assignedVeh && (assignedVeh.type === reqType || (reqType === 'PCM' && (assignedVeh.isCommandement || assignedVeh.hasCommandementKit)));
+
+                        if (assignedVeh) {
+                          const fuelPct = assignedVeh.fuel !== undefined ? assignedVeh.fuel : 90;
+                          const mechPct = assignedVeh.mechanical !== undefined ? assignedVeh.mechanical : 95;
+                          const fuelColor = fuelPct > 50 ? 'text-emerald-600' : (fuelPct > 20 ? 'text-amber-600' : 'text-red-600');
+                          const driverSkill = assignedVeh.licenseRequired === 'C' ? 'Permis C (PL)' : (assignedVeh.type === 'VPSP' ? 'P. VPSP' : 'Permis B');
+                          
+                          const otherExactVehs = exactDispoVehs.filter(v => v.id !== assignedVeh.id);
+                          const otherSubVehs = substituteDispoVehs.filter(v => v.id !== assignedVeh.id);
+                          const totalOtherCount = otherExactVehs.length + otherSubVehs.length;
+
+                          return `
+                            <div class="p-2.5 rounded-xl ${isMatch ? 'bg-slate-50 border-slate-200' : 'bg-amber-500/10 border-amber-300'} border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                              <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-0.5 flex-shrink-0 shadow-2xs overflow-hidden">
+                                  <img src="${assignedVeh.image || this.getVehicleImage(assignedVeh.type)}" class="max-w-full max-h-full object-contain" alt="${assignedVeh.name}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\'><text y=\\'18\\' font-size=\\'18\\'>🚑</text></svg>'">
+                                </div>
+                                <div class="min-w-0">
+                                  <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="text-xs font-black text-slate-800 truncate">${assignedVeh.name}</span>
+                                    ${isMatch ? `
+                                      <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 uppercase flex items-center gap-0.5">
+                                        <span>✓</span> ${assignedVeh.type}
+                                      </span>
+                                    ` : `
+                                      <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300 uppercase flex items-center gap-0.5" title="Véhicule de substitution non conforme au devis">
+                                        <span>⚠️</span> Substitution (${assignedVeh.type} / requis: ${reqType})
+                                      </span>
+                                    `}
+                                    ${assignedVeh.immat ? `<span class="text-[9px] font-bold text-slate-400 font-mono">${assignedVeh.immat}</span>` : ''}
+                                  </div>
+                                  <div class="flex items-center gap-2.5 text-[10px] text-slate-500 pt-0.5">
+                                    <span class="flex items-center gap-1 ${fuelColor} font-bold">
+                                      <span>⛽</span> ${fuelPct}%
+                                    </span>
+                                    <span class="flex items-center gap-1 text-slate-600 font-bold">
+                                      <span>🔧</span> ${mechPct}%
+                                    </span>
+                                    <span class="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-bold text-[9px]">
+                                      ${driverSkill}
+                                    </span>
+                                  </div>
+                                  ${!isMatch ? `
+                                    <p class="text-[9px] text-amber-800 font-semibold pt-0.5">
+                                      ⚠️ Vecteur inadapté : si l'intervention requiert impérativement un ${reqType}, la mission avancera au ralenti et le commanditaire exprimera son mécontentement.
+                                    </p>
+                                  ` : ''}
+                                </div>
+                              </div>
+
+                              <div class="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-center">
+                                ${totalOtherCount > 0 ? `
+                                  <select 
+                                    onchange="window.game.assignVehicleToMissionSlot('${mission.id}', ${slotIdx}, this.value)" 
+                                    class="text-[11px] font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-700 cursor-pointer shadow-2xs hover:border-slate-400">
+                                    <option value="" disabled selected>🔄 Changer (${totalOtherCount} autre${totalOtherCount > 1 ? 's' : ''})...</option>
+                                    ${otherExactVehs.length > 0 ? `
+                                      <optgroup label="✅ Conformes (${reqType})">
+                                        ${otherExactVehs.map(v => `<option value="${v.id}">↳ ${v.name} (${v.fuel || 90}% carbu)</option>`).join('')}
+                                      </optgroup>
+                                    ` : ''}
+                                    ${otherSubVehs.length > 0 ? `
+                                      <optgroup label="⚠️ Substitution (Autre type)">
+                                        ${otherSubVehs.map(v => `<option value="${v.id}">↳ ${v.name} (${v.type} • Non conforme)</option>`).join('')}
+                                      </optgroup>
+                                    ` : ''}
+                                  </select>
+                                ` : `
+                                  <span class="px-2 py-1 rounded-lg text-[10px] font-bold ${isMatch ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-100 text-amber-900 border border-amber-300'}">
+                                    ${isMatch ? '✅ Affecté' : '⚠️ Substitué'}
+                                  </span>
+                                `}
+                                <button 
+                                  type="button" 
+                                  onclick="window.game.unassignVehicleFromMissionSlot('${mission.id}', ${slotIdx})" 
+                                  class="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition cursor-pointer flex items-center gap-1"
+                                  title="Retirer ce véhicule du dispositif">
+                                  <i data-lucide="x" class="w-3 h-3"></i>
+                                  <span>Retirer</span>
+                                </button>
+                              </div>
+                            </div>
+                          `;
+                        } else {
+                          const hasAnyDispo = allDispoVehs.length > 0;
+                          return `
+                            <div class="p-2.5 rounded-xl bg-amber-500/5 border border-dashed border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                              <div class="flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 font-black text-xs flex items-center justify-center flex-shrink-0">
+                                  #${slotIdx + 1}
+                                </span>
+                                <div>
+                                  <p class="text-xs font-bold text-amber-900">
+                                    Emplacement ${reqType} à pourvoir
+                                  </p>
+                                  <p class="text-[10px] text-amber-700">
+                                    Prévu au devis validé (${mission.title})
+                                  </p>
+                                  ${exactDispoVehs.length === 0 && substituteDispoVehs.length > 0 ? `
+                                    <p class="text-[9px] text-amber-800 font-bold pt-0.5">
+                                      💡 Aucun ${reqType} disponible : vous pouvez affecter un autre véhicule du garage (VPSP, VTP, VL) pour ne pas bloquer l'engagement.
+                                    </p>
+                                  ` : ''}
+                                </div>
+                              </div>
+
+                              <div class="flex items-center gap-1.5 flex-shrink-0">
+                                ${hasAnyDispo ? `
+                                  <select 
+                                    onchange="window.game.assignVehicleToMissionSlot('${mission.id}', ${slotIdx}, this.value)" 
+                                    class="text-[11px] font-bold bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-slate-800 cursor-pointer shadow-2xs max-w-[260px]">
+                                    <option value="" selected disabled>
+                                      ${exactDispoVehs.length > 0 ? `-- Affecter un ${reqType} (${exactDispoVehs.length} dispo) --` : `-- Choisir véhicule de substitution (${substituteDispoVehs.length} dispo) --`}
+                                    </option>
+                                    ${exactDispoVehs.length > 0 ? `
+                                      <optgroup label="✅ Conformes au devis (${reqType})">
+                                        ${exactDispoVehs.map(v => `<option value="${v.id}">${v.name} • ${v.fuel || 90}% carbu</option>`).join('')}
+                                      </optgroup>
+                                    ` : ''}
+                                    ${substituteDispoVehs.length > 0 ? `
+                                      <optgroup label="⚠️ Véhicules de substitution (Autre type disponible)">
+                                        ${substituteDispoVehs.map(v => `<option value="${v.id}">↳ ${v.name} (${v.type} • Non conforme)</option>`).join('')}
+                                      </optgroup>
+                                    ` : ''}
+                                  </select>
+                                ` : `
+                                  <span class="px-2.5 py-1 rounded-lg bg-rose-100 text-rose-700 text-[10px] font-extrabold flex items-center gap-1">
+                                    <span>⚠️</span> Aucun véhicule disponible au garage
+                                  </span>
+                                `}
+                              </div>
+                            </div>
+                          `;
+                        }
+                      }).join('')}
+                    </div>
+                  ` : `
+                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
+                      <span>🚶</span>
+                      <span>Dispositif pédestre / poste de secours fixe (aucun véhicule requis au devis).</span>
+                    </div>
+                  `}
+
+                  <!-- Acheminement interne des bénévoles -->
+                  <div class="pt-2 border-t border-slate-100 space-y-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
+                      <span class="font-bold text-slate-700 flex items-center gap-1">
+                        <span>🚐</span> Véhicule de transport bénévoles (Non facturé au devis) :
+                      </span>
+                      ${(mission.extraTransportVehicles && mission.extraTransportVehicles.length > 0) ? `
+                        <span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-extrabold text-[10px]">
+                          ${mission.extraTransportVehicles.map(id => this.vehicles.find(v => v.id === id)?.name || id).join(', ')}
+                        </span>
+                      ` : `
+                        <span class="text-slate-400 text-[10px] italic">Aucun véhicule d'acheminement ajouté</span>
+                      `}
+                    </div>
+                    <p class="text-[10px] text-slate-500">
+                      Vous pouvez ajouter un VTP (9 places) ou un VL pour transporter votre équipe sur le site de la mission sans modifier le devis facturé.
+                    </p>
+
+                    <div class="flex flex-wrap gap-1.5 pt-1">
+                      ${this.vehicles.filter(v => ['VTP', 'VL', 'VTU'].includes(v.type) && (v.status === 'dispo' || (mission.extraTransportVehicles || []).includes(v.id))).map(veh => {
+                        const isAdded = (mission.extraTransportVehicles || []).includes(veh.id);
+                        return `
+                          <button 
+                            type="button" 
+                            onclick="window.game.toggleMissionExtraTransportVehicle('${mission.id}', '${veh.id}')" 
+                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${isAdded ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}">
+                            <span>${isAdded ? '✓ ' : '+ '}${veh.name} (${veh.type} • ${veh.seatsCount || veh.capacity || 4} pl.)</span>
+                          </button>
+                        `;
+                      }).join('')}
+                      ${this.vehicles.filter(v => ['VTP', 'VL', 'VTU'].includes(v.type)).length === 0 ? `
+                        <span class="text-[10px] text-slate-400 italic">Aucun VTP ou VL disponible dans le garage de l'antenne pour transporter les bénévoles.</span>
+                      ` : ''}
+                    </div>
+                  </div>
+                </div>
+
+                ${(() => {
+                  if (!window.ProtecRNMSC || registeredVols.length === 0) return '';
+                  const rnmscVehs = (this.vehicles || []).filter(veh => (mission.requiredVehicles || []).includes(veh.type));
+                  const comp = window.ProtecRNMSC.validateCrewCompliance(mission, registeredVols, rnmscVehs, this);
+                  if (!comp.valid) {
+                    return `
+                      <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 text-xs flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-1.5 min-w-0">
+                          <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 flex-shrink-0"></i>
+                          <span class="text-[11px] font-bold truncate">RNMSC : ${comp.errors[0]}</span>
+                        </div>
+                      </div>
+                    `;
+                  } else {
+                    return `
+                      <div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 text-xs flex items-center gap-2">
+                        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
+                        <span class="text-[11px] font-bold">Dotation Véhicules RNMSC Validée ✓</span>
+                      </div>
+                    `;
+                  }
+                })()}
+              </div>
+            ` : logistiqueSubTab === 'materiel' ? `
+              <!-- SOUS-ONGLET MATÉRIEL (eProtec STYLE) -->
+              <div class="space-y-3">
+                <!-- Callout eProtec état vide ou info -->
+                <div class="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
+                  <span class="text-base">⚠️</span>
+                  <div>
+                    <strong class="block font-black text-amber-950">Matériels d'Intervention Opérationnels</strong>
+                    <span class="text-[10px] text-amber-800">Les lots et matériels réglementaires sont armés automatiquement dans les agrès engagés.</span>
+                  </div>
+                </div>
+
+                <!-- Dotation réglementaire des lots opérationnels -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                      <i data-lucide="package-check" class="w-4 h-4 text-pc-blue"></i>
+                      <span>Lots Opérationnels RNMSC</span>
+                    </span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Dotation Conforme
+                    </span>
+                  </div>
+
+                  <!-- Lot A : Prompt Secours -->
+                  <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                      <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span>Lot A — Prompt Secours & Réanimation</span>
+                      </span>
+                      <span class="text-[9px] font-black px-2 py-0.5 rounded bg-blue-100 text-blue-800">Embarqué VPSP</span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 leading-relaxed">
+                      Sac d'intervention d'urgence complet : Défibrillateur DAE automatisé, aspirateur de mucosités, colliers cervicaux (pédiatrique & adulte), oxygénothérapie 5L/min, tensiomètre, saturomètre SpO2, pansements compressifs & garrot tourniquet tactique.
+                    </p>
+                  </div>
+
+                  <!-- Lot B : PMA & Soins avancés (si requis) -->
+                  <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                      <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
+                        <span>Lot B — Poste Médical Avancé & Soins</span>
+                      </span>
+                      <span class="text-[9px] font-black px-2 py-0.5 rounded ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}">
+                        ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'Dotation Active' : 'Non requis'}
+                      </span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 leading-relaxed">
+                      Tente de premiers secours pliante/gonflable, brancards de catastrophe, lits de camp picot, projecteurs autonomes LED, matériel de réchauffement actif et couvertures de survie.
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Matériel Spécifique & Dispositifs Médicaux -->
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
+                    <div class="flex items-center gap-1.5 font-extrabold text-slate-800">
+                      <i data-lucide="heart-pulse" class="w-4 h-4 text-rose-500"></i>
+                      <span>Défibrillateur DAE</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500">Électrodes adultes & pédiatriques vérifiées. Batterie 100%.</p>
+                    <span class="text-[9px] font-bold text-emerald-700 block">✓ Prêt à l'emploi</span>
+                  </div>
+
+                  <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
+                    <div class="flex items-center gap-1.5 font-extrabold text-slate-800">
+                      <i data-lucide="wind" class="w-4 h-4 text-sky-500"></i>
+                      <span>Oxygénothérapie O2</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500">2 Bouteilles 5L (200 bars). Masques haute concentration.</p>
+                    <span class="text-[9px] font-bold text-emerald-700 block">✓ Pression conforme</span>
+                  </div>
+                </div>
+
+                <!-- Matériel d'Immobilisation & Brancardage -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+                  <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                    <i data-lucide="shield" class="w-4 h-4 text-indigo-500"></i>
+                    <span>Immobilisation & Brancardage</span>
+                  </span>
+                  <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+                    <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold">Matelas Coquille (MID)</strong>
+                      <span class="text-[10px] text-slate-500">Pompe à dépression vérifiée</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold">Attelles à Dépression</strong>
+                      <span class="text-[10px] text-slate-500">Membres inf. & sup.</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold">Plan Dur & Immobilisateur</strong>
+                      <span class="text-[10px] text-slate-500">Sangles araignée complètes</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold">Chaise Portoir Pliante</strong>
+                      <span class="text-[10px] text-slate-500">Évacuation escaliers</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ` : `
+              <!-- SOUS-ONGLET CONSOMMABLE (eProtec STYLE) -->
+              <div class="space-y-3">
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                      <i data-lucide="first-aid" class="w-4 h-4 text-pc-blue"></i>
+                      <span>Consommables Sanitaires de Mission</span>
+                    </span>
+                    <span class="font-black text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 text-xs">
+                      ${mission.consumableCost || 30} € prévus
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold text-slate-800">Pansements & Compresses</strong>
+                      <span class="text-[10px] text-slate-500">Compresses stériles 10x10, bandes de gaze, sparadrap</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold text-slate-800">Protection & Hygiène</strong>
+                      <span class="text-[10px] text-slate-500">Gants nitrile (S, M, L), masques FFP2, gel hydroalcoolique</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold text-slate-800">Désinfection & Lavage</strong>
+                      <span class="text-[10px] text-slate-500">Dosettes de sérum physiologique, antiseptique dermo</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <strong class="block font-bold text-slate-800">Hémorragie & Urgence</strong>
+                      <span class="text-[10px] text-slate-500">Garrots tourniquets tactiques, coussins hémostatiques</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `}
+          </div>
+        ` : `
+          <!-- ONGLET 4 : DPS • GRILLE RNMSC OFFICIELLE (eProtec) -->
+          <div class="space-y-3 animate-in fade-in duration-150">
+            <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between">
+              <div>
+                <h4 class="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <i data-lucide="calculator" class="w-4 h-4 text-pc-blue"></i>
+                  <span>Dimensionnement RNMSC de l'Activité</span>
+                </h4>
+                <p class="text-[10px] text-slate-500">Grille officielle d'évaluation des risques et effectifs requis</p>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                Conforme RNMSC
+              </span>
+            </div>
+
+            ${window.ProtecRNMSC ? window.ProtecRNMSC.renderRNMSCSimulatorCardHTML('mission-rnmsc') : `
+              <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500">
+                Simulateur RNMSC non initialisé.
+              </div>
+            `}
+          </div>
         `}
       </div>
     `;
@@ -7268,45 +8996,52 @@ class ProtecGame {
     if (mission.status === 'prealerte') {
       const canEchelon = registeredVols.length >= 3 && !isComplete;
       footer.innerHTML = `
-        <button onclick="window.game.closeDrawer()" class="px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
-        <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-pc-orange text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5" ${mission.smsCampaignActive ? 'disabled' : ''}>
-          <i data-lucide="send" class="w-3.5 h-3.5"></i>
-          ${mission.smsCampaignActive ? 'Diffusion SMS en cours...' : 'Mobilisation SMS'}
+        <button onclick="window.game.closeDrawer()" class="px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition whitespace-nowrap shrink-0">Fermer</button>
+        <button onclick="window.game.centerMapOnMission('${mission.id}')" class="px-3 py-2 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 text-slate-800 transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0" title="Centrer la carte sur le lieu de la préalerte">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-slate-700"></i> <span>Carte</span>
+        </button>
+        <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="px-3 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-pc-orange text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" ${mission.smsCampaignActive ? 'disabled' : ''}>
+          <i data-lucide="send" class="w-3.5 h-3.5 flex-shrink-0"></i>
+          <span>${mission.smsCampaignActive ? 'Diffusion...' : 'SMS Mobilisation'}</span>
+        </button>
+        <button onclick="window.game.forceEscalatePrealert('${mission.id}')" class="flex-1 min-w-[130px] px-3.5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i data-lucide="siren" class="w-3.5 h-3.5 flex-shrink-0 animate-pulse"></i>
+          <span>Déclencher Alerte</span>
         </button>
         ${canEchelon ? `
-          <button onclick="window.game.launchEchelonMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow transition flex items-center gap-1" title="Faire partir un 1er engin avec 3 secouristes">
-            <i data-lucide="truck" class="w-3.5 h-3.5"></i> 1er Engin
+          <button onclick="window.game.launchEchelonMission('${mission.id}')" class="px-3 py-2 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Faire partir un 1er engin avec 3 secouristes">
+            <i data-lucide="truck" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>1er Engin</span>
           </button>
         ` : ''}
-        <button onclick="window.game.registerSalarieToMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1" title="Inscrire d'office un salarié permanent">
-          <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> + Salarié
+        <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-2.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0" title="Choisir et affecter un ou plusieurs salariés permanents">
+          <i data-lucide="briefcase" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>+ Salarié</span>
         </button>
-        <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-blue-50 text-pc-blue hover:bg-blue-100 transition flex items-center gap-1" title="Demander renforts aux antennes alliées">
-          <i data-lucide="handshake" class="w-3.5 h-3.5"></i> Alliances
+        <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-2.5 py-2 rounded-xl text-xs font-bold bg-blue-50 text-pc-blue hover:bg-blue-100 transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0" title="Demander renforts aux antennes alliées">
+          <i data-lucide="handshake" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>Alliances</span>
         </button>
       `;
     } else if (mission.status === 'declenche') {
       const canEchelon = registeredVols.length >= 3 && !isComplete;
       footer.innerHTML = `
-        <button onclick="window.game.closeDrawer()" class="px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
-        <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition flex items-center gap-1">
-          <i data-lucide="bell" class="w-3.5 h-3.5"></i> SMS
+        <button onclick="window.game.closeDrawer()" class="px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition whitespace-nowrap shrink-0">Fermer</button>
+        <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0">
+          <i data-lucide="bell" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>SMS</span>
         </button>
         ${canEchelon ? `
-          <button onclick="window.game.launchEchelonMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow transition flex items-center gap-1" title="Faire partir un 1er engin avec 3 secouristes">
-            <i data-lucide="truck" class="w-3.5 h-3.5"></i> 1er Engin
+          <button onclick="window.game.launchEchelonMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Faire partir un 1er engin avec 3 secouristes">
+            <i data-lucide="truck" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>1er Engin</span>
           </button>
         ` : ''}
-        <button onclick="window.game.registerSalarieToMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1">
-          <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> + Salarié
+        <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Choisir et affecter un ou plusieurs salariés permanents">
+          <i data-lucide="briefcase" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>+ Salarié</span>
         </button>
         ${isComplete ? `
-          <button onclick="window.game.launchScheduledMission('${mission.id}')" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-lg shadow-red-600/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 animate-pulse">
-            <i data-lucide="siren" class="w-4 h-4"></i>
-            Engager & Partir
+          <button onclick="window.game.launchScheduledMission('${mission.id}')" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-lg shadow-red-600/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 animate-pulse whitespace-nowrap">
+            <i data-lucide="siren" class="w-4 h-4 flex-shrink-0"></i>
+            <span>Engager & Partir</span>
           </button>
         ` : `
-          <div class="flex-1 px-3 py-2 rounded-xl text-center text-[10px] font-black bg-red-100 text-red-900 border border-red-300">
+          <div class="flex-1 px-3 py-2 rounded-xl text-center text-[10px] font-black bg-red-100 text-red-900 border border-red-300 whitespace-nowrap flex items-center justify-center">
             Manque ${mission.requiredVolunteers - registeredVols.length} secouriste(s)
           </div>
         `}
@@ -7315,31 +9050,33 @@ class ProtecGame {
       const isComplete = registeredVols.length >= mission.requiredVolunteers;
       const canEchelon = registeredVols.length >= 3 && !isComplete;
       footer.innerHTML = `
-        <button onclick="window.game.closeDrawer()" class="px-3 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
-        <button onclick="window.game.cancelDpsMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition border border-rose-200" title="${mission.type === 'social' ? 'Annuler la maraude' : (mission.type === 'pompiers' ? 'Annuler la garde' : 'Annuler le DPS')}">
-          <i data-lucide="x-circle" class="w-3.5 h-3.5"></i> ${mission.type === 'social' ? 'Annuler Maraude' : (mission.type === 'pompiers' ? 'Annuler Garde' : (mission.type === 'samu' ? 'Refuser Urgence' : 'Annuler DPS'))}
+        <button onclick="window.game.closeDrawer()" class="px-3 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition whitespace-nowrap shrink-0">Fermer</button>
+        <button onclick="window.game.cancelDpsMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition border border-rose-200 whitespace-nowrap flex items-center justify-center gap-1.5 shrink-0" title="${mission.type === 'social' ? 'Annuler la maraude' : (mission.type === 'pompiers' ? 'Annuler la garde' : 'Annuler le DPS')}">
+          <i data-lucide="x-circle" class="w-3.5 h-3.5 flex-shrink-0 text-rose-600"></i>
+          <span>${mission.type === 'social' ? 'Annuler Maraude' : (mission.type === 'pompiers' ? 'Annuler Garde' : (mission.type === 'samu' ? 'Refuser Urgence' : 'Annuler DPS'))}</span>
         </button>
-        <button onclick="window.game.manualRelanceVolunteers('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 hover:bg-amber-100 transition flex items-center gap-1" title="Déclencher une relance d'équipe avec suivi">
-          <i data-lucide="bell" class="w-3.5 h-3.5"></i> Relancer (${mission.relancesCount || 0})
+        <button onclick="window.game.manualRelanceVolunteers('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 hover:bg-amber-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Déclencher une relance d'équipe avec suivi">
+          <i data-lucide="bell" class="w-3.5 h-3.5 flex-shrink-0 text-amber-600"></i>
+          <span>Relancer (${mission.relancesCount || 0})</span>
         </button>
         ${canEchelon ? `
-          <button onclick="window.game.launchEchelonMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow transition flex items-center gap-1" title="Faire partir un 1er engin avec 3 secouristes">
-            <i data-lucide="truck" class="w-3.5 h-3.5"></i> 1er Engin
+          <button onclick="window.game.launchEchelonMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Faire partir un 1er engin avec 3 secouristes">
+            <i data-lucide="truck" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>1er Engin</span>
           </button>
         ` : ''}
-        <button onclick="window.game.registerSalarieToMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1" title="Inscrire d'office un salarié permanent">
-          <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> + Salarié
+        <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Choisir et affecter un ou plusieurs salariés permanents">
+          <i data-lucide="briefcase" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>+ Salarié</span>
         </button>
-        <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-blue-50 text-pc-blue hover:bg-blue-100 transition flex items-center gap-1" title="Demander renforts aux antennes alliées">
-          <i data-lucide="handshake" class="w-3.5 h-3.5"></i> Alliances
+        <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-blue-50 text-pc-blue hover:bg-blue-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Demander renforts aux antennes alliées">
+          <i data-lucide="handshake" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>Alliances</span>
         </button>
         ${isComplete ? `
-          <button onclick="window.game.launchScheduledMission('${mission.id}')" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-lg shadow-pc-blue/20 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5">
-            <i data-lucide="play" class="w-3.5 h-3.5"></i>
-            Engager l'Équipe
+          <button onclick="window.game.launchScheduledMission('${mission.id}')" class="flex-1 min-w-[140px] px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-lg shadow-pc-blue/20 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0">
+            <i data-lucide="play" class="w-3.5 h-3.5 flex-shrink-0"></i>
+            <span>Engager l'Équipe</span>
           </button>
         ` : `
-          <div class="flex-1 px-3 py-2 rounded-xl text-center text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200">
+          <div class="flex-1 min-w-[140px] px-3 py-2 rounded-xl text-center text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200 whitespace-nowrap flex items-center justify-center">
             Manque ${mission.requiredVolunteers - registeredVols.length} secouriste(s)
           </div>
         `}
@@ -7354,6 +9091,11 @@ class ProtecGame {
     drawer.classList.add('flex', 'drawer-slide-in');
     this.updateToastContainerPosition();
     if (window.lucide) window.lucide.createIcons();
+    if (activeTab === 'dps' && window.ProtecRNMSC) {
+      setTimeout(() => {
+        window.ProtecRNMSC.updateSimulatorUI('mission-rnmsc');
+      }, 50);
+    }
     } catch (err) {
       console.error('Erreur openMissionDetails:', err);
       this.showToast('Affichage Mission', 'Erreur lors de l’ouverture du détail de la mission.', 'orange');
@@ -7452,48 +9194,190 @@ class ProtecGame {
     this.updateStatsUI();
   }
 
-  registerSalarieToMission(missionId) {
+  // Modale de sélection et multi-affectation des salariés permanents de l'antenne
+  openSelectSalarieModal(missionId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
 
-    const allSalaries = this.volunteers.filter(v => (v.contractType === 'salarie' || v.dispoType === 'salarié' || v.dispoType === 'salarie_permanent'));
-    if (allSalaries.length === 0) {
-      this.showToast('Aucun Salarié Embauché', 'Votre antenne n’a pas encore embauché de salarié permanent (recrutement disponible dans Pôle RH).', 'orange');
-      return;
+    let modal = document.getElementById('select-salarie-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'select-salarie-modal';
+      modal.className = 'fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4';
+      document.body.appendChild(modal);
     }
 
-    const now = Date.now();
-    // 1. Contrôle du repos quotidien obligatoire de 11h consécutives (Code du Travail Art. L3131-1)
-    const restingSalaries = allSalaries.filter(v => v.status === 'repos_legal' && v.mandatoryRestUntil && now < v.mandatoryRestUntil);
-    const availableSalaries = allSalaries.filter(v => 
-      !mission.registeredVolunteers.includes(v.id) && 
-      v.status === 'dispo' &&
-      (!v.mandatoryRestUntil || now >= v.mandatoryRestUntil) &&
-      !v.currentVacation
+    const allSalaries = (this.volunteers || []).filter(v => 
+      v.contractType === 'salarie' || 
+      v.contractType === 'salarie_asso' || 
+      v.isSalarie === true || 
+      v.dispoType === 'salarie_permanent' || 
+      v.profilSocial === 'salarie_asso'
     );
 
-    if (availableSalaries.length === 0) {
-      if (restingSalaries.length > 0) {
-        const first = restingSalaries[0];
-        const secLeft = Math.ceil((first.mandatoryRestUntil - now) / 1000);
-        this.showToast(
-          '🛑 Repos Légal (Code du Travail Art. L3131-1)',
-          `${first.name} est en repos quotidien obligatoire de 11h consécutives (encore ${secLeft}s). Cette obligation légale s’applique uniquement aux salariés, pas aux bénévoles.`,
-          'red'
-        );
-      } else {
-        this.showToast('Salariés Indisponibles', 'Tous vos salariés sont actuellement en mission ou en vacation interne.', 'orange');
-      }
+    const registeredVols = mission.registeredVolunteers || [];
+    const assignedSalaries = allSalaries.filter(s => registeredVols.includes(s.id));
+    const now = Date.now();
+
+    modal.innerHTML = `
+      <div class="bg-white rounded-3xl max-w-lg w-full p-5 space-y-4 shadow-2xl border border-indigo-200 animate-in fade-in zoom-in duration-150 max-h-[92vh] flex flex-col">
+        <!-- En-tête -->
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center shadow-xs">
+              <i data-lucide="briefcase" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-800 uppercase">Personnel Salarié</span>
+                <span class="text-[10px] font-bold text-slate-500">Antenne</span>
+              </div>
+              <h3 class="text-sm font-black text-slate-900 leading-tight mt-0.5">Affectation des Salariés</h3>
+            </div>
+          </div>
+          <button onclick="document.getElementById('select-salarie-modal')?.remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-black text-xs cursor-pointer">✕</button>
+        </div>
+
+        <!-- Dispositif ciblé & Règle légale -->
+        <div class="p-3 rounded-2xl bg-indigo-50/80 border border-indigo-200/90 space-y-2 text-xs">
+          <div class="flex items-center justify-between">
+            <span class="font-extrabold text-indigo-950 truncate max-w-[240px]">🎯 ${mission.title}</span>
+            <span class="font-black px-2 py-0.5 rounded-lg bg-indigo-200 text-indigo-900 text-[11px]">
+              ${registeredVols.length} / ${mission.requiredVolunteers} secouristes
+            </span>
+          </div>
+          <p class="text-[11px] text-indigo-800/90 leading-relaxed">
+            <strong>Code du Travail (Art. L3131-1) :</strong> Les salariés de l'antenne peuvent être engagés directement. Un repos quotidien obligatoire de 11h consécutives s'applique entre deux vacations.
+          </p>
+        </div>
+
+        <!-- Liste des Salariés -->
+        <div class="overflow-y-auto max-h-[50vh] space-y-2 pr-1 flex-1">
+          ${allSalaries.length === 0 ? `
+            <div class="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2 text-center">
+              <div class="w-10 h-10 mx-auto rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
+                <i data-lucide="user-x" class="w-5 h-5"></i>
+              </div>
+              <p class="font-extrabold text-sm">Aucun salarié permanent embauché</p>
+              <p class="text-slate-600 text-[11px]">
+                Votre antenne n'a pas encore recruté de salarié sous contrat. Vous pouvez recruter des coordinateurs ou secouristes permanents dans l'onglet <strong>Pôle RH & Formation</strong>.
+              </p>
+            </div>
+          ` : allSalaries.map(s => {
+            const isAssigned = registeredVols.includes(s.id);
+            const isResting = (s.status === 'repos_legal' && s.mandatoryRestUntil && now < s.mandatoryRestUntil);
+            const isBusyOther = (s.status === 'mission' && !isAssigned);
+            const secLeft = isResting ? Math.ceil((s.mandatoryRestUntil - now) / 1000) : 0;
+            const minLeft = Math.ceil(secLeft / 60);
+
+            return `
+              <div class="p-3 rounded-2xl border ${isAssigned ? 'border-emerald-300 bg-emerald-50/40' : (isResting ? 'border-rose-200 bg-rose-50/30' : 'border-slate-200 bg-white hover:border-slate-300')} shadow-xs flex items-center justify-between gap-3 text-xs transition">
+                <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                  ${this.getVolunteerAvatarHTML(s, 'w-9 h-9 text-xs')}
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span class="font-bold text-slate-800 truncate">${s.name}</span>
+                      <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 border border-indigo-200">${s.rank || 'Secouriste'}</span>
+                      <span class="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700">💼 Salarié</span>
+                    </div>
+                    <div class="text-[10px] text-slate-500 mt-0.5 truncate">
+                      ${s.role || 'Personnel permanent'} • ${s.exp || 10} pts exp
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex-shrink-0 flex items-center gap-2">
+                  ${isAssigned ? `
+                    <span class="px-2 py-1 rounded-lg text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                      <i data-lucide="check" class="w-3 h-3"></i> Inscrit
+                    </span>
+                    <button onclick="window.game.removeSalarieFromMission('${mission.id}', '${s.id}')" class="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer" title="Retirer ce salarié du poste">
+                      Retirer
+                    </button>
+                  ` : isResting ? `
+                    <span class="px-2 py-1 rounded-lg text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1" title="Repos obligatoire de 11h après vacation">
+                      🛑 Repos (${minLeft}m)
+                    </span>
+                  ` : isBusyOther ? `
+                    <span class="px-2 py-1 rounded-lg text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
+                      En mission
+                    </span>
+                  ` : `
+                    <button onclick="window.game.assignSalarieToMission('${mission.id}', '${s.id}')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1">
+                      <i data-lucide="plus" class="w-3.5 h-3.5"></i> Affecter
+                    </button>
+                  `}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+
+        <!-- Pied de page -->
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+          <span class="text-slate-500 font-bold">
+            ${assignedSalaries.length} salarié(s) affecté(s)
+          </span>
+          <button onclick="document.getElementById('select-salarie-modal')?.remove()" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition">
+            Fermer
+          </button>
+        </div>
+      </div>
+    `;
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  }
+
+  // Affectation d'un salarié spécifique à la mission
+  assignSalarieToMission(missionId, salarieId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const sal = this.volunteers.find(v => v.id === salarieId);
+    if (!sal) return;
+
+    const now = Date.now();
+    if (sal.status === 'repos_legal' && sal.mandatoryRestUntil && now < sal.mandatoryRestUntil) {
+      const secLeft = Math.ceil((sal.mandatoryRestUntil - now) / 1000);
+      this.showToast('🛑 Repos Légal (Art. L3131-1)', `${sal.name} est en repos obligatoire (encore ${secLeft}s).`, 'red');
       return;
     }
 
-    const sal = availableSalaries[0];
-    mission.registeredVolunteers.push(sal.id);
-    this.showToast('Salarié Affecté d’Office', `${sal.name} (${sal.rank}) a été positionné sur le dispositif par la direction de l'antenne.`, 'green');
+    if (!mission.registeredVolunteers) mission.registeredVolunteers = [];
+    if (!mission.registeredVolunteers.includes(sal.id)) {
+      mission.registeredVolunteers.push(sal.id);
+    }
+
+    this.showToast('Salarié Affecté d’Office', `${sal.name} (${sal.rank}) a été positionné sur le dispositif.`, 'green');
     this.saveGame();
     this.renderMissions();
     this.updateStatsUI();
     this.openMissionDetails(missionId);
+    this.openSelectSalarieModal(missionId);
+  }
+
+  // Retrait d'un salarié de la mission
+  removeSalarieFromMission(missionId, salarieId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const sal = this.volunteers.find(v => v.id === salarieId);
+
+    mission.registeredVolunteers = (mission.registeredVolunteers || []).filter(id => id !== salarieId);
+    if (mission.volunteerRoles && mission.volunteerRoles[salarieId]) {
+      delete mission.volunteerRoles[salarieId];
+    }
+
+    this.showToast('Salarié Retiré', `${sal ? sal.name : 'Le salarié'} a été retiré de ce dispositif.`, 'blue');
+    this.saveGame();
+    this.renderMissions();
+    this.updateStatsUI();
+    this.openMissionDetails(missionId);
+    this.openSelectSalarieModal(missionId);
+  }
+
+  registerSalarieToMission(missionId) {
+    this.openSelectSalarieModal(missionId);
   }
 
   requestAllianceRenfortForMission(missionId) {
@@ -7533,6 +9417,222 @@ class ProtecGame {
       this.sanitizeRenforts();
       this.showToast('Appel à Renfort Diffusé', `Alerte transmise sur la fréquence fédérale !`, 'green');
     });
+  }
+
+  // --- GESTION DES MOYENS SUPPLÉMENTAIRES DURANT L'ÉVÉNEMENT (RENFORTS SUR SITE) ---
+  openMissionReinforcementsModal(missionId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+
+    const modal = document.getElementById('main-modal');
+    const title = document.getElementById('modal-title');
+    const body = document.getElementById('modal-body');
+    if (!modal || !title || !body) return;
+
+    title.innerHTML = `
+      <div class="flex items-center gap-2">
+        <i data-lucide="user-plus" class="w-5 h-5 text-indigo-600"></i>
+        <span>Moyens Supplémentaires & Renforts : ${mission.title}</span>
+      </div>
+    `;
+
+    const assignedVolIds = mission.assignedCrew?.volunteers || mission.registeredVolunteers || [];
+    const assignedVehIds = (mission.assignedCrew?.vehicles || []).map(v => typeof v === 'object' ? v.id : v).concat(mission.assignedVehicleIds || []).filter(Boolean);
+
+    const dispoVols = (this.volunteers || []).filter(v => v.status === 'dispo' && !assignedVolIds.includes(v.id));
+    const dispoVehs = (this.vehicles || []).filter(v => (v.status === 'dispo' || v.status === 'sdis_caserne') && !assignedVehIds.includes(v.id));
+
+    body.innerHTML = `
+      <div class="space-y-4">
+        <!-- Contexte & Choix d'arbitrage -->
+        <div class="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-950 space-y-1">
+          <div class="font-black flex items-center gap-1.5">
+            <span>ℹ️</span>
+            <span>Point de situation & Dimensionnement</span>
+          </div>
+          <p class="text-[11px] text-indigo-900 leading-relaxed">
+            Vous pouvez ajuster les moyens engagés selon l'évolution du terrain et les capacités actuelles de votre antenne.
+            Aucun engagement n'est imposé : décidez en fonction de vos effectifs et du niveau d'urgence.
+          </p>
+        </div>
+
+        <!-- Section 1 : Bénévoles disponibles à la base -->
+        <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+              <i data-lucide="users" class="w-4 h-4 text-pc-blue"></i>
+              <span>Secouristes Disponibles à la Base (${dispoVols.length})</span>
+            </span>
+            <span class="text-[10px] text-slate-500 font-bold">Effectif actuel : ${assignedVolIds.length}</span>
+          </div>
+
+          ${dispoVols.length > 0 ? `
+            <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              ${dispoVols.map(v => `
+                <div class="p-2 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-base">${v.av || '👤'}</span>
+                    <div class="min-w-0">
+                      <div class="font-bold text-slate-900 truncate">${v.name}</div>
+                      <div class="text-[10px] text-slate-500">${v.rank || 'Secouriste'} • ${v.skills?.join(', ') || 'PSE'}</div>
+                    </div>
+                  </div>
+                  <button 
+                    onclick="window.game.deployReinforcementVolunteer('${mission.id}', '${v.id}')"
+                    class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="send" class="w-3 h-3"></i>
+                    <span>Engager</span>
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <p class="text-[11px] text-slate-500 italic p-2 bg-slate-50 rounded-xl">
+              Aucun secouriste n'est actuellement disponible à la base.
+            </p>
+          `}
+        </div>
+
+        <!-- Section 2 : Véhicules disponibles au garage -->
+        <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+              <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
+              <span>Véhicules Disponibles au Garage (${dispoVehs.length})</span>
+            </span>
+            <span class="text-[10px] text-slate-500 font-bold">Actifs : ${assignedVehIds.length}</span>
+          </div>
+
+          ${dispoVehs.length > 0 ? `
+            <div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              ${dispoVehs.map(veh => `
+                <div class="p-2 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-base">🚑</span>
+                    <div class="min-w-0">
+                      <div class="font-bold text-slate-900 truncate">${veh.name} (${veh.type})</div>
+                      <div class="text-[10px] text-slate-500">Carburant : ${veh.fuel || 90}%</div>
+                    </div>
+                  </div>
+                  <button 
+                    onclick="window.game.deployReinforcementVehicle('${mission.id}', '${veh.id}')"
+                    class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue hover:bg-pc-blue-hover text-white shadow-xs transition flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="send" class="w-3 h-3"></i>
+                    <span>Déployer</span>
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <p class="text-[11px] text-slate-500 italic p-2 bg-slate-50 rounded-xl">
+              Tous vos véhicules sont actuellement en mission ou en atelier.
+            </p>
+          `}
+        </div>
+
+        <!-- Section 3 : Renforts Extérieurs (SDIS / Alliances) -->
+        <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+          <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+            <i data-lucide="shield" class="w-4 h-4 text-rose-600"></i>
+            <span>Moyens Extérieurs & Partenaires</span>
+          </span>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+            <button 
+              onclick="window.game.closeModal(); if (window.ProtecIncidents) window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'sdis');"
+              class="p-2.5 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-left transition cursor-pointer space-y-1">
+              <div class="font-black text-xs text-rose-950 flex items-center gap-1.5">
+                <span>🚒</span>
+                <span>Renforts SDIS (Pompiers)</span>
+              </div>
+              <p class="text-[10px] text-rose-800 leading-tight">
+                Appel au CTA-CODIS. Décharge l'équipe mais dégrade la réputation associative auprès du SDIS.
+              </p>
+            </button>
+
+            <button 
+              onclick="window.game.closeModal(); window.game.requestAllianceRenfortForMission('${mission.id}');"
+              class="p-2.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-left transition cursor-pointer space-y-1">
+              <div class="font-black text-xs text-blue-950 flex items-center gap-1.5">
+                <span>🤝</span>
+                <span>Antennes Alliées (Fédération)</span>
+              </div>
+              <p class="text-[10px] text-blue-800 leading-tight">
+                Diffusion d'une demande de mutualisation aux sections voisines du réseau.
+              </p>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button onclick="window.game.closeModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer">
+            Fermer
+          </button>
+        </div>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  deployReinforcementVolunteer(missionId, volId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    const vol = this.volunteers.find(v => v.id === volId);
+    if (!mission || !vol) return;
+
+    if (!mission.assignedCrew) mission.assignedCrew = { volunteers: [], vehicles: [] };
+    if (!Array.isArray(mission.assignedCrew.volunteers)) mission.assignedCrew.volunteers = [];
+    if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
+
+    mission.assignedCrew.volunteers.push(vol.id);
+    mission.registeredVolunteers.push(vol.id);
+    vol.status = 'mission';
+    vol.energy = Math.max(10, (vol.energy || 90) - 15);
+
+    this.showToast('Renfort Engagé ! 🏃‍♂️', `${vol.name} rejoint l'intervention en cours sur « ${mission.title} ».`, 'green');
+
+    this.saveGame();
+    this.updateStatsUI();
+    this.renderMissions();
+    this.openMissionReinforcementsModal(missionId);
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
+  }
+
+  deployReinforcementVehicle(missionId, vehId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    const veh = this.vehicles.find(v => v.id === vehId);
+    if (!mission || !veh) return;
+
+    if (!mission.assignedCrew) mission.assignedCrew = { volunteers: [], vehicles: [] };
+    if (!Array.isArray(mission.assignedCrew.vehicles)) mission.assignedCrew.vehicles = [];
+
+    mission.assignedCrew.vehicles.push(veh);
+    veh.status = 'mission';
+
+    // Si le véhicule régularise le type requis
+    if (mission.vehicleMismatch && Array.isArray(mission.requiredVehicles)) {
+      const hasRequired = mission.requiredVehicles.some(req => veh.type === req);
+      if (hasRequired) {
+        mission.vehicleMismatch = false;
+        mission.isSlowedDown = false;
+        mission.mismatchReasons = [];
+        this.showToast('Dispositif Régularisé ! ✅', `L'arrivée du ${veh.type} (${veh.name}) rétablit l'efficacité complète sur « ${mission.title} » !`, 'blue');
+      }
+    } else {
+      this.showToast('Véhicule Déployé ! 🚑', `${veh.name} (${veh.type}) est parti renforcer « ${mission.title} ».`, 'green');
+    }
+
+    this.saveGame();
+    this.updateStatsUI();
+    this.renderMissions();
+    this.openMissionReinforcementsModal(missionId);
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
   }
 
   openStationDetails(stationId) {
@@ -7591,7 +9691,7 @@ class ProtecGame {
           <div class="flex items-center justify-between">
             <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider">Flotte (${stationVehicles.length})</h4>
             <div class="flex items-center gap-2.5">
-              <button onclick="window.game.openModule('marche_occasion')" class="text-xs font-extrabold text-slate-500 hover:text-pc-orange hover:underline">Bourse Occasion 🏷️</button>
+              <button onclick="window.game.openModule('marche_occasion')" class="text-xs font-extrabold text-slate-500 hover:text-pc-orange hover:underline">Marché Occasion 🏷️</button>
               <button onclick="window.game.openBuyVehicleModal('${station.id}')" class="text-xs font-extrabold text-pc-orange hover:underline">+ Acheter Neuf</button>
             </div>
           </div>
@@ -8408,9 +10508,29 @@ class ProtecGame {
       this.openEngageRenfortModal(renfortId);
     }
 
-    // Simulation des réponses asynchrones des bénévoles
-    dispoVolunteers.forEach(vol => {
+    // Simulation des réponses asynchrones et échelonnées des bénévoles
+    const sortedDispoVols = [...dispoVolunteers].sort((a, b) => {
+      const scoreA = (a.motivation || 70) + (a.energy || 70) * 0.4 + (a.trait === 'devoue' ? 25 : 0) + (Math.random() * 15);
+      const scoreB = (b.motivation || 70) + (b.energy || 70) * 0.4 + (b.trait === 'devoue' ? 25 : 0) + (Math.random() * 15);
+      return scoreB - scoreA;
+    });
+
+    let cumulativeRenfortDelayMs = 0;
+
+    sortedDispoVols.forEach((vol, idx) => {
       const evalResult = this.evaluateVolunteerAvailability(vol, renfort.eventDate || { dayName: 'Samedi' });
+
+      const motiv = vol.motivation || 70;
+      const speedMod = Math.max(0.6, 1.4 - (motiv / 100));
+      const stepMs = Math.round((3500 + Math.random() * 4500) * speedMod);
+
+      if (idx === 0) {
+        cumulativeRenfortDelayMs = Math.round(2500 + Math.random() * 3000);
+      } else {
+        cumulativeRenfortDelayMs += stepMs;
+      }
+
+      const assignedDelay = cumulativeRenfortDelayMs;
 
       setTimeout(() => {
         const liveRenfort = (this.renforts || []).find(r => r.id === renfortId);
@@ -8421,6 +10541,8 @@ class ProtecGame {
 
         if (evalResult.isAvailable) {
           this.showToast('📱 SMS Reçu : DISPO !', `${vol.name} (${vol.rank || 'Secouriste'}) : « Présent ! Je me porte volontaire pour le renfort. »`, 'green');
+        } else {
+          this.showToast('📱 SMS Reçu : Non dispo', `${vol.name} : « Empêché pour ce renfort (${evalResult.rejectReason}) »`, 'slate');
         }
 
         // Rafraîchir la modale si toujours ouverte
@@ -8985,14 +11107,14 @@ class ProtecGame {
         { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
         { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
         { key: 'specialites', label: 'Spécialités', icon: 'crosshair' },
-        { key: 'marche_occasion', label: 'Bourse Occasion', icon: 'tag' }
+        { key: 'marche_occasion', label: 'Marché Occasion', icon: 'tag' }
       ],
       materiel: [
         { key: 'locaux', label: 'Bâtiment (Plan 2D)', icon: 'layout-grid' },
         { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
         { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
         { key: 'specialites', label: 'Spécialités', icon: 'crosshair' },
-        { key: 'marche_occasion', label: 'Bourse Occasion', icon: 'tag' }
+        { key: 'marche_occasion', label: 'Marché Occasion', icon: 'tag' }
       ],
       rh: [
         { key: 'recrutement', label: 'Bénévoles & Équipe', icon: 'users', count: this.volunteers?.length || 0 },
@@ -9350,7 +11472,7 @@ class ProtecGame {
             </button>
             <button onclick="window.game.setAllianceTab('bourse')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'bourse' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
               <i data-lucide="repeat" class="w-3.5 h-3.5"></i>
-              Bourse & Matériel (${this.marketplace?.length || 0})
+              Marché & Matériel (${this.marketplace?.length || 0})
             </button>
             <button onclick="window.game.setAllianceTab('manoeuvres')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'manoeuvres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
               <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
@@ -9566,16 +11688,14 @@ class ProtecGame {
         setTimeout(() => this.renderChatMessages(), 50);
       }
     } else if (moduleKey === 'planning') {
-      title.textContent = 'Planning Opérationnel des Dispositifs & Missions';
-      subtitle.textContent = 'Dispositifs prévisionnels (DPS), gardes SAMU/SDIS, maraudes sociales et calendrier officiel';
+      title.textContent = 'Planning Opérationnel Multi-Pôles';
+      subtitle.textContent = 'Dispositifs prévisionnels (DPS), Formations (Grand public & B2B), Maraudes sociales et Devis';
       icon.setAttribute('data-lucide', 'calendar');
 
       // Régulariser immédiatement tout devis dont la date serait passée
       this.cleanPastDevis();
 
       const currentTab = this.activePlanningTab || 'calendar';
-      const allScheduled = this.missions.filter(m => m.status === 'planifie' || m.status === 'ongoing' || m.type === 'dps');
-      const pendingAndPrevDevis = (this.devis || []).filter(d => ['pending', 'previsionnel', 'sent'].includes(d.status));
       
       const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
       if (this.calendarViewingMonth === undefined || this.calendarViewingMonth === null) {
@@ -9595,36 +11715,115 @@ class ProtecGame {
       const daysInMonth = new Date(curYear, curViewingMonth + 1, 0).getDate();
       const firstDayIndex = (new Date(curYear, curViewingMonth, 1).getDay() + 6) % 7; // 0 = Lundi, 6 = Dimanche
 
-      const selectedDayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === selectedDay && m.eventDate.month === curViewingMonth && (m.eventDate.year == null || m.eventDate.year === curYear));
-      const selectedDayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === selectedDay && d.eventDate.month === curViewingMonth && (d.eventDate.year == null || d.eventDate.year === curYear));
+      // Agrégation transversale des événements de tous les pôles
+      const allEvents = this.getAllPlanningEvents(curViewingMonth, curYear);
+      const filters = this.planningPolesFilters || { dps: true, devis: true, formations: true, social: true };
+      this.planningPolesFilters = filters;
+
+      const poleCounts = {
+        dps: allEvents.filter(e => e.pole === 'dps').length,
+        devis: allEvents.filter(e => e.pole === 'devis').length,
+        formations: allEvents.filter(e => e.pole === 'formations').length,
+        social: allEvents.filter(e => e.pole === 'social').length
+      };
+
+      const activeEvents = allEvents.filter(e => filters[e.pole]);
+
+      // Événements pour le jour sélectionné
+      const selectedDayEvents = activeEvents.filter(e => e.eventDate && e.eventDate.day === selectedDay && e.eventDate.month === curViewingMonth && (e.eventDate.year == null || e.eventDate.year === curYear));
+      const selectedDayMissions = selectedDayEvents.filter(e => e.pole === 'dps');
+      const selectedDayDevis = selectedDayEvents.filter(e => e.pole === 'devis');
+      const selectedDayFormations = selectedDayEvents.filter(e => e.pole === 'formations');
+      const selectedDaySocial = selectedDayEvents.filter(e => e.pole === 'social');
 
       body.innerHTML = `
-        <div class="space-y-5">
-          <!-- Barre d'onglets Vue Calendrier / Vue Liste / Devis DPS -->
+        <div class="space-y-4">
+          <!-- Barre d'onglets Vue Calendrier / Vue Liste / Raccourcis Pôles -->
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-            <div class="flex items-center gap-2">
-              <button onclick="window.game.setPlanningTab('calendar')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'calendar' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button onclick="window.game.setPlanningTab('calendar')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'calendar' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
                 <i data-lucide="calendar" class="w-4 h-4"></i>
                 Vue Calendrier
               </button>
-              <button onclick="window.game.setPlanningTab('list')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'list' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
+              <button onclick="window.game.setPlanningTab('list')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'list' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
                 <i data-lucide="list" class="w-4 h-4"></i>
-                Dispositifs Validés (${allScheduled.length})
+                Vue Liste (${activeEvents.length})
               </button>
-              <button onclick="window.game.openModule('devis')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer">
+              <button onclick="window.game.openModule('devis')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Gestion des Devis DPS">
                 <i data-lucide="file-check" class="w-4 h-4 text-amber-500"></i>
-                Devis & Prévisionnels (${pendingAndPrevDevis.length})
+                Devis (${poleCounts.devis})
+              </button>
+              <button onclick="window.game.openModule('formations')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Formations">
+                <i data-lucide="graduation-cap" class="w-4 h-4 text-emerald-600"></i>
+                Formations (${poleCounts.formations})
+              </button>
+              <button onclick="window.game.openModule('social')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Action Sociale">
+                <i data-lucide="heart-handshake" class="w-4 h-4 text-purple-600"></i>
+                Social (${poleCounts.social})
               </button>
             </div>
             <div class="flex items-center gap-2">
-              <button onclick="window.ProtecAuth.openAuthModal();" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition flex items-center gap-1.5 cursor-pointer" title="Proposer un événement exceptionnel depuis le profil directeur">
-                <i data-lucide="award" class="w-4 h-4 text-amber-500"></i>
-                Événements & Écussons (Profil)
-              </button>
               <div class="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 Aujourd'hui : <strong class="text-slate-800">${this.formatFullDate(this.clock)}</strong>
               </div>
+            </div>
+          </div>
+
+          <!-- BARRE DE FILTRES INTERACTIFS PAR PÔLE (VISIBILITÉ DYNAMIQUE) -->
+          <div class="flex flex-wrap items-center justify-between gap-2.5 p-3 bg-gradient-to-r from-slate-50 to-slate-100/80 border border-slate-200/90 rounded-2xl shadow-xs">
+            <div class="flex items-center gap-1.5 text-xs font-black text-slate-800 mr-1">
+              <i data-lucide="filter" class="w-4 h-4 text-pc-blue"></i>
+              <span>Filtres par Pôle :</span>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- Filtre Pôle Secours & DPS -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('dps')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.dps ? 'bg-pc-blue text-white border-pc-blue shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                title="${filters.dps ? 'Cliquer pour masquer Secours & DPS' : 'Cliquer pour afficher Secours & DPS'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.dps ? 'bg-white' : 'bg-slate-300'}"></span>
+                <span>🔵 Secours & DPS (${poleCounts.dps})</span>
+              </button>
+
+              <!-- Filtre Pôle Devis & Prévisionnels -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('devis')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.devis ? 'bg-amber-500 text-white border-amber-600 shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                title="${filters.devis ? 'Cliquer pour masquer Devis & Prévisionnels' : 'Cliquer pour afficher Devis & Prévisionnels'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.devis ? 'bg-white' : 'bg-slate-300'}"></span>
+                <span>📋 Devis & Prévi (${poleCounts.devis})</span>
+              </button>
+
+              <!-- Filtre Pôle Formations -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('formations')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.formations ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                title="${filters.formations ? 'Cliquer pour masquer Formations' : 'Cliquer pour afficher Formations'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.formations ? 'bg-white' : 'bg-slate-300'}"></span>
+                <span>🎓 Formations (${poleCounts.formations})</span>
+              </button>
+
+              <!-- Filtre Pôle Action Sociale -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('social')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.social ? 'bg-purple-600 text-white border-purple-700 shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                title="${filters.social ? 'Cliquer pour masquer Action Sociale' : 'Cliquer pour afficher Action Sociale'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.social ? 'bg-white' : 'bg-slate-300'}"></span>
+                <span>🥫 Action Sociale (${poleCounts.social})</span>
+              </button>
+            </div>
+
+            <!-- Toggles rapides Tout Activer / Tout Masquer -->
+            <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+              <button onclick="window.game.toggleAllPlanningPoleFilters(true)" class="hover:text-pc-blue cursor-pointer underline decoration-dotted">Tout afficher</button>
+              <span>•</span>
+              <button onclick="window.game.toggleAllPlanningPoleFilters(false)" class="hover:text-rose-600 cursor-pointer underline decoration-dotted">Tout masquer</button>
             </div>
           </div>
 
@@ -9637,323 +11836,450 @@ class ProtecGame {
           ${currentTab === 'calendar' ? `
             <!-- VUE CALENDRIER -->
             <div class="space-y-4">
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
-                <div class="flex flex-wrap items-center gap-2.5">
-                  <!-- Navigation Mois : ◀ Précédent / Mois Année / Suivant ▶ -->
-                  <div class="flex items-center bg-white border border-slate-200/90 rounded-2xl p-1 shadow-xs">
+              <!-- Grille principale : Calendrier à gauche (lg:col-span-7) + Détails journée à droite (lg:col-span-5) -->
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                <!-- Colonne Gauche : Navigation Mois + Grille du calendrier -->
+                <div class="lg:col-span-7 xl:col-span-7 space-y-3">
+                  <!-- Navigation Mois -->
+                  <div class="w-full flex items-center justify-between bg-white border border-slate-200/90 rounded-2xl p-1.5 sm:p-2 shadow-xs">
                     <button 
                       onclick="window.game.changePlanningMonth(-1)" 
-                      class="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer"
+                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer flex-shrink-0"
                       title="Mois précédent"
                     >
-                      <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                      <i data-lucide="chevron-left" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
-                    <div class="px-3 py-0.5 text-center min-w-[130px]">
-                      <span class="text-sm font-black text-slate-900 block leading-tight">${curMonthName} ${curYear}</span>
+                    <div class="flex-1 text-center px-2 sm:px-4">
+                      <div class="flex items-center justify-center gap-2">
+                        <span class="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-tight">${curMonthName} ${curYear}</span>
+                        ${!isViewingCurrentMonth ? `
+                          <button 
+                            onclick="window.game.resetPlanningMonthToCurrent()" 
+                            class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-pc-blue text-white hover:brightness-110 active:scale-95 transition cursor-pointer flex items-center gap-1 shadow-xs"
+                            title="Revenir au mois en cours"
+                          >
+                            <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                            <span class="hidden sm:inline">Mois en cours</span>
+                          </button>
+                        ` : ''}
+                      </div>
                       ${!isViewingCurrentMonth ? `
-                        <span class="text-[9px] font-bold text-amber-600 uppercase tracking-wider block">Mois décalé</span>
+                        <span class="text-[9px] sm:text-[10px] font-extrabold text-amber-600 uppercase tracking-wider block mt-0.5">${(curYear < this.clock.year || (curYear === this.clock.year && curViewingMonth < this.clock.month)) ? 'Mois précédent' : 'Mois suivant'}</span>
                       ` : `
-                        <span class="text-[9px] font-bold text-emerald-600 uppercase tracking-wider block">Mois en cours</span>
+                        <span class="text-[9px] sm:text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider block mt-0.5">Mois en cours</span>
                       `}
                     </div>
                     <button 
                       onclick="window.game.changePlanningMonth(1)" 
-                      class="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer"
+                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer flex-shrink-0"
                       title="Mois suivant"
                     >
-                      <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                      <i data-lucide="chevron-right" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
                   </div>
 
-                  ${!isViewingCurrentMonth ? `
-                    <button 
-                      onclick="window.game.resetPlanningMonthToCurrent()" 
-                      class="px-3 py-1.5 rounded-xl text-xs font-black bg-pc-blue text-white hover:brightness-110 active:scale-95 transition cursor-pointer flex items-center gap-1.5 shadow-sm"
-                      title="Revenir au mois en cours"
-                    >
-                      <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-                      <span>Mois en cours</span>
-                    </button>
-                  ` : ''}
-                </div>
-
-                <div class="flex flex-wrap items-center gap-2.5 text-[11px] text-slate-600">
-                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-pc-blue"></span> DPS Validé</span>
-                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> ⏳ Prévisionnel</span>
-                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span> 📋 Devis Reçu</span>
-                  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-pc-orange"></span> Garde</span>
-                </div>
-              </div>
-
-              <!-- Grille principale : Calendrier à gauche (lg:col-span-7) + Détails journée à droite (lg:col-span-5) -->
-              <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                <!-- Grille du calendrier -->
-                <div class="lg:col-span-7 xl:col-span-7 glass-card rounded-2xl p-3.5 sm:p-4 shadow-sm">
-                <!-- En-têtes des jours de la semaine -->
-                <div class="grid grid-cols-7 gap-1 text-center text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-                  <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
-                </div>
-
-                <!-- Cases des jours -->
-                <div class="grid grid-cols-7 gap-1.5">
-                  <!-- Décalage premier jour -->
-                  ${Array.from({ length: firstDayIndex }).map(() => `
-                    <div class="h-16 rounded-xl bg-slate-50/50 opacity-30 border border-transparent"></div>
-                  `).join('')}
-
-                  <!-- Jours du mois -->
-                  ${Array.from({ length: daysInMonth }).map((_, i) => {
-                    const day = i + 1;
-                    const isToday = day === todayDay;
-                    const isSelected = day === selectedDay;
-                    const dayMissions = allScheduled.filter(m => m.eventDate && m.eventDate.day === day && m.eventDate.month === curViewingMonth && (m.eventDate.year == null || m.eventDate.year === curYear));
-                    const dpsCount = dayMissions.filter(m => m.type === 'dps').length;
-                    const otherCount = dayMissions.filter(m => m.type !== 'dps').length;
-
-                    const dayDevis = pendingAndPrevDevis.filter(d => d.eventDate && d.eventDate.day === day && d.eventDate.month === curViewingMonth && (d.eventDate.year == null || d.eventDate.year === curYear));
-                    const prevCount = dayDevis.filter(d => d.status === 'previsionnel').length;
-                    const pendingCount = dayDevis.filter(d => d.status === 'pending' || d.status === 'sent').length;
-
-                    let bgClass = 'bg-white hover:bg-slate-50 border-slate-200/80';
-                    if (isSelected) bgClass = 'bg-pc-blue/10 border-pc-blue ring-2 ring-pc-blue/30';
-                    else if (isToday) bgClass = 'bg-amber-50/80 border-amber-300';
-
-                    return `
-                      <button 
-                        onclick="window.game.selectPlanningDay(${day})" 
-                        class="min-h-16 rounded-xl p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
-                      >
-                        <div class="flex items-center justify-between w-full">
-                          <span class="text-xs font-extrabold ${isToday ? 'text-amber-800 font-black' : isSelected ? 'text-pc-blue' : 'text-slate-800'}">
-                            ${day}
-                          </span>
-                          ${isToday ? `<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-amber-950 uppercase">Auj.</span>` : ''}
-                        </div>
-
-                        <div class="flex flex-col gap-0.5 w-full mt-1">
-                          ${dpsCount > 0 ? `
-                            <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-blue text-white truncate text-center">
-                              DPS (${dpsCount})
-                            </div>
-                          ` : ''}
-                          ${prevCount > 0 ? `
-                            <div class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-500 text-white truncate text-center border border-amber-600/30">
-                              ⏳ Prévi (${prevCount})
-                            </div>
-                          ` : ''}
-                          ${pendingCount > 0 ? `
-                            <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-sky-500 text-white truncate text-center">
-                              📋 Devis (${pendingCount})
-                            </div>
-                          ` : ''}
-                          ${otherCount > 0 ? `
-                            <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-orange text-white truncate text-center">
-                              Garde (${otherCount})
-                            </div>
-                          ` : ''}
-                        </div>
-                      </button>
-                    `;
-                  }).join('')}
-                </div>
-              </div>
-
-                <!-- Colonne Droite : Détail de la journée sélectionnée -->
-                <div class="lg:col-span-5 xl:col-span-5 p-4 rounded-2xl glass-card space-y-4 shadow-sm lg:sticky lg:top-2 max-h-[75vh] overflow-y-auto">
-                  <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <div>
-                      <h4 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                        <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue"></i>
-                        Planning du ${selectedDay} ${curMonthName} ${curYear}
-                      </h4>
-                      ${isViewingCurrentMonth && selectedDay === todayDay ? `<span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">Aujourd'hui</span>` : ''}
+                  <!-- Grille du calendrier -->
+                  <div class="glass-card rounded-2xl p-3.5 sm:p-4 shadow-sm">
+                    <!-- En-têtes des jours de la semaine -->
+                    <div class="grid grid-cols-7 gap-1 text-center text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
+                      <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
                     </div>
-                    <span class="text-[11px] font-bold text-slate-500 text-right">${selectedDayMissions.length} mission(s)<br/>${selectedDayDevis.length} devis/option(s)</span>
+
+                    <!-- Cases des jours -->
+                    <div class="grid grid-cols-7 gap-1.5">
+                      <!-- Décalage premier jour -->
+                      ${Array.from({ length: firstDayIndex }).map(() => `
+                        <div class="h-16 rounded-xl bg-slate-50/50 opacity-30 border border-transparent"></div>
+                      `).join('')}
+
+                      <!-- Jours du mois -->
+                      ${Array.from({ length: daysInMonth }).map((_, i) => {
+                        const day = i + 1;
+                        const isToday = isViewingCurrentMonth && (day === todayDay);
+                        const isSelected = day === selectedDay;
+                        const isPast = (curYear < this.clock.year) ||
+                          (curYear === this.clock.year && curViewingMonth < this.clock.month) ||
+                          (isViewingCurrentMonth && day < todayDay);
+
+                        const dayEvents = activeEvents.filter(e => e.eventDate && e.eventDate.day === day && e.eventDate.month === curViewingMonth && (e.eventDate.year == null || e.eventDate.year === curYear));
+                        
+                        const dpsCount = dayEvents.filter(e => e.pole === 'dps' && e.type === 'DPS').length;
+                        const gardeCount = dayEvents.filter(e => e.pole === 'dps' && e.type !== 'DPS').length;
+                        const prevCount = dayEvents.filter(e => e.pole === 'devis' && e.type === 'Prévi').length;
+                        const pendingCount = dayEvents.filter(e => e.pole === 'devis' && e.type !== 'Prévi').length;
+                        const formationCount = dayEvents.filter(e => e.pole === 'formations').length;
+                        const socialCount = dayEvents.filter(e => e.pole === 'social').length;
+
+                        let bgClass = 'bg-white hover:bg-slate-50 border-slate-200/80';
+                        if (isSelected) {
+                          bgClass = isPast 
+                            ? 'bg-slate-200 border-pc-blue ring-2 ring-pc-blue/40' 
+                            : 'bg-pc-blue/10 border-pc-blue ring-2 ring-pc-blue/30';
+                        } else if (isToday) {
+                          bgClass = 'bg-amber-50/90 border-amber-300 ring-1 ring-amber-300';
+                        } else if (isPast) {
+                          bgClass = 'bg-slate-100/90 hover:bg-slate-200/70 border-slate-200/90';
+                        }
+
+                        return `
+                          <button 
+                            onclick="window.game.selectPlanningDay(${day})" 
+                            class="min-h-16 rounded-xl p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
+                          >
+                            <div class="flex items-center justify-between w-full">
+                              <span class="text-xs ${isToday ? 'text-amber-800 font-black' : isSelected ? 'text-pc-blue font-black' : isPast ? 'text-slate-400 font-bold' : 'text-slate-800 font-extrabold'}">
+                                ${day}
+                              </span>
+                              ${isToday ? `<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-amber-950 uppercase">Auj.</span>` : ''}
+                            </div>
+
+                            <div class="flex flex-col gap-0.5 w-full mt-1 ${isPast && !isToday ? 'opacity-65 filter saturate-50' : ''}">
+                              ${dpsCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-blue text-white truncate text-center">
+                                  DPS (${dpsCount})
+                                </div>
+                              ` : ''}
+                              ${gardeCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-orange text-white truncate text-center">
+                                  Garde (${gardeCount})
+                                </div>
+                              ` : ''}
+                              ${prevCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-500 text-white truncate text-center border border-amber-600/30">
+                                  ⏳ Prévi (${prevCount})
+                                </div>
+                              ` : ''}
+                              ${pendingCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-sky-500 text-white truncate text-center">
+                                  📋 Devis (${pendingCount})
+                                </div>
+                              ` : ''}
+                              ${formationCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-emerald-600 text-white truncate text-center">
+                                  🎓 Form. (${formationCount})
+                                </div>
+                              ` : ''}
+                              ${socialCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-purple-600 text-white truncate text-center">
+                                  🥫 Maraude (${socialCount})
+                                </div>
+                              ` : ''}
+                            </div>
+                          </button>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Colonne Droite : Légendes en en-tête + Détail de la journée sélectionnée -->
+                <div class="lg:col-span-5 xl:col-span-5 space-y-3 lg:sticky lg:top-2">
+                  <!-- Pastilles de légendes alignées en carte -->
+                  <div class="w-full flex flex-wrap items-center justify-between gap-2 text-[10.5px] text-slate-600 bg-white border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs">
+                    <span class="flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-pc-blue"></span> Secours DPS</span>
+                    <span class="flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> ⏳ Prévi</span>
+                    <span class="flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span> 📋 Devis</span>
+                    <span class="flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> 🎓 Formation</span>
+                    <span class="flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded-full bg-purple-600"></span> 🥫 Maraude</span>
                   </div>
 
-                ${(selectedDayMissions.length === 0 && selectedDayDevis.length === 0) ? `
-                  <p class="text-xs text-slate-500 py-6 text-center italic">
-                    Aucun dispositif ni option prévisionnelle pour cette date. Consultez vos devis reçus ou activez la communication pour recevoir des sollicitations.
-                  </p>
-                ` : `
-                  <div class="space-y-4">
-                    <!-- SECTION 1 : DEMANDES EN ATTENTE & EN PRÉVISIONNEL -->
-                    ${selectedDayDevis.length > 0 ? `
-                      <div class="space-y-2.5">
-                        <div class="text-[11px] font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5">
-                          <i data-lucide="clipboard-list" class="w-3.5 h-3.5 text-amber-600"></i>
-                          <span>Devis & Options Prévisionnelles pour cette date (${selectedDayDevis.length})</span>
-                        </div>
-                        <div class="flex flex-col space-y-3">
-                          ${selectedDayDevis.map(d => {
-                            const isPrev = d.status === 'previsionnel';
-                            const isSent = d.status === 'sent';
-                            const dynBareme = this.calculateDynamicBareme(d);
-                            const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
-                            const prevVolsCount = d.previsionnelVolunteers?.length || 0;
-
-                            return `
-                              <div class="p-3.5 rounded-2xl border-2 ${isPrev ? 'border-amber-400 bg-amber-50/50' : isSent ? 'border-indigo-300 bg-indigo-50/40' : 'border-dashed border-sky-300 bg-sky-50/40'} flex flex-col justify-between space-y-3">
-                                <div>
-                                  <div class="flex items-center justify-between gap-2">
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-black ${isPrev ? 'bg-amber-500 text-white' : isSent ? 'bg-indigo-600 text-white' : 'bg-sky-600 text-white'} uppercase">
-                                      ${isPrev ? '⏳ En Prévisionnel' : isSent ? '⚖️ En Délibération' : '📋 Devis Reçu'}
-                                    </span>
-                                    ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
-                                    <span class="text-xs font-mono font-bold text-slate-700">${d.proposedPrice || dynBareme.totalBareme} €</span>
-                                  </div>
-                                  <h5 class="text-xs font-black text-slate-900 mt-1.5">${d.eventName}</h5>
-                                  <p class="text-[11px] text-slate-500">
-                                    ${d.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
-                                  </p>
-                                  <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
-                                    <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
-                                    <span>${d.address || 'Adresse sur site'}</span>
-                                  </p>
-                                </div>
-
-                                <!-- Bloc statut bénévoles si prévisionnel -->
-                                ${isPrev ? `
-                                  <div class="p-2.5 rounded-xl bg-white/80 border border-amber-200 text-xs space-y-1.5">
-                                    <div class="flex items-center justify-between">
-                                      <span class="font-bold text-slate-700">Disponibilités bénévoles :</span>
-                                      <span class="font-black ${prevVolsCount >= reqVols ? 'text-emerald-700' : 'text-amber-800'}">${prevVolsCount} / ${reqVols} confirmés</span>
-                                    </div>
-                                    <div class="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
-                                      <div class="h-full bg-amber-500 rounded-full transition-all" style="width: ${Math.min(100, (prevVolsCount / reqVols) * 100)}%"></div>
-                                    </div>
-                                    <div class="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
-                                      <span>Statut : <strong>${d.sollicitationSent ? `Sollicité (${d.relancesCount || 0} relance${(d.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
-                                    </div>
-                                    <div class="flex items-center justify-between text-[10px] pt-0.5">
-                                      <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="text-pc-blue font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
-                                        <i data-lucide="phone-call" class="w-3 h-3"></i> Sonder
-                                      </button>
-                                      <button onclick="window.game.manualRelancePrevisionnel('${d.id}')" class="text-amber-800 font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
-                                        <i data-lucide="bell" class="w-3 h-3"></i> Relancer (${d.relancesCount || 0})
-                                      </button>
-                                      <button onclick="window.game.openModule('devis')" class="text-slate-600 font-bold hover:underline cursor-pointer">
-                                        Devis →
-                                      </button>
-                                    </div>
-                                  </div>
-                                ` : ''}
-
-                                <!-- Actions rapides -->
-                                <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-1.5">
-                                  ${isPrev ? `
-                                    <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-pc-blue to-pc-blue-light text-white text-[11px] font-black shadow-xs hover:brightness-110 transition">
-                                      Valider avec l'Orga
-                                    </button>
-                                    <button onclick="window.game.refuseDevis('${d.id}')" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition">
-                                      Refuser
-                                    </button>
-                                  ` : isSent ? `
-                                    <button onclick="window.game.openModule('devis')" class="w-full py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black transition">
-                                      Consulter l'arbitrage en cours
-                                    </button>
-                                  ` : `
-                                    <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="flex-1 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black shadow-xs transition" title="Mettre en prévisionnel pour sonder l'équipe">
-                                      ⏳ Mettre en Prévi
-                                    </button>
-                                    <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white text-[11px] font-black transition">
-                                      Chiffrer
-                                    </button>
-                                    <button onclick="window.game.refuseDevis('${d.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition" title="Décliner la demande">
-                                      ✕
-                                    </button>
-                                  `}
-                                </div>
-                              </div>
-                            `;
-                          }).join('')}
-                        </div>
+                  <!-- Carte Détail de la journée sélectionnée -->
+                  <div class="p-4 rounded-2xl glass-card space-y-4 shadow-sm max-h-[75vh] overflow-y-auto">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <div>
+                        <h4 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                          <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue"></i>
+                          Planning du ${selectedDay} ${curMonthName} ${curYear}
+                        </h4>
+                        ${isViewingCurrentMonth && selectedDay === todayDay ? `<span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">Aujourd'hui</span>` : ''}
                       </div>
-                    ` : ''}
+                      <span class="text-[11px] font-bold text-slate-500 text-right">
+                        ${selectedDayEvents.length} événement(s) au total
+                      </span>
+                    </div>
 
-                    <!-- SECTION 2 : DISPOSITIFS CONFIRMÉS AU PLANNING -->
-                    ${selectedDayMissions.length > 0 ? `
-                      <div class="space-y-2.5">
-                        <div class="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
-                          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-pc-blue"></i>
-                          <span>Dispositifs Confirmés & Validés (${selectedDayMissions.length})</span>
-                        </div>
-                        <div class="flex flex-col space-y-3">
-                          ${selectedDayMissions.map(m => {
-                            const regCount = m.registeredVolunteers?.length || 0;
-                            const isFull = regCount >= m.requiredVolunteers;
-                            const timeStr = `${m.startHour || m.eventDate?.hour || 14}h00 à ${(m.endHour || ((m.eventDate?.hour || 14) + (m.durationHours || 4)) % 24)}h00`;
+                    ${selectedDayEvents.length === 0 ? `
+                      <p class="text-xs text-slate-500 py-6 text-center italic">
+                        Aucun événement pour cette date sur les pôles sélectionnés. Activez plus de filtres ci-dessus ou établissez des propositions pour remplir votre planning.
+                      </p>
+                    ` : `
+                      <div class="space-y-4">
+                        <!-- SECTION 1 : FORMATIONS & STAGES PÉDAGOGIQUES -->
+                        ${filters.formations && selectedDayFormations.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-emerald-600"></i>
+                              <span>Pôle Formations & Stages (${selectedDayFormations.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDayFormations.map(e => {
+                                const f = e.raw;
+                                const isB2B = e.type.startsWith('B2B');
+                                return `
+                                  <div class="p-3.5 rounded-2xl border-2 border-emerald-300 bg-emerald-50/40 flex flex-col justify-between space-y-2.5">
+                                    <div>
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white uppercase">
+                                          ${e.type}
+                                        </span>
+                                        ${e.rewardMoney ? `<span class="text-xs font-mono font-bold text-emerald-700">+${e.rewardMoney} €</span>` : ''}
+                                      </div>
+                                      <h5 class="text-xs font-black text-slate-900 mt-1.5">${e.title}</h5>
+                                      <p class="text-[11px] text-slate-600 mt-0.5">
+                                        Lieu : <strong>${e.address}</strong> • Inscrits : <strong>${e.registeredCount} / ${e.requiredCount}</strong>
+                                      </p>
+                                      ${e.trainerName ? `
+                                        <p class="text-[11px] text-emerald-800 font-semibold mt-0.5">
+                                          Formateur : <strong>${e.trainerName}</strong>
+                                        </p>
+                                      ` : `
+                                        <p class="text-[11px] text-amber-700 font-bold mt-0.5">
+                                          ⚠️ Aucun formateur affecté
+                                        </p>
+                                      `}
+                                    </div>
 
-                            return `
-                              <div class="p-3.5 rounded-xl glass-card border border-slate-200/80 flex flex-col justify-between space-y-2.5">
-                                <div>
-                                  <div class="flex items-center justify-between">
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${timeStr}</span>
-                                    <span class="text-xs font-bold text-emerald-700 mono-num">+${m.rewardMoney} €</span>
+                                    <div class="pt-2 border-t border-emerald-200/60 flex items-center justify-end">
+                                      <button onclick="window.game.openModule('formations')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition flex items-center gap-1 cursor-pointer">
+                                        <span>Gérer la Formation</span>
+                                        <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                                      </button>
+                                    </div>
                                   </div>
-                                  <h5 class="text-xs font-extrabold text-slate-900 mt-1">${m.title}</h5>
-                                  <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
-                                    <i data-lucide="${m.isSector || m.type === 'social' ? 'map' : 'map-pin'}" class="w-3 h-3 ${m.isSector || m.type === 'social' ? 'text-purple-600' : 'text-pc-blue'} flex-shrink-0"></i>
-                                    <span>${m.isSector || m.type === 'social' ? (m.sector || m.address || 'Secteur de Maraude') : (m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site'))}</span>
-                                  </p>
-                                  <p class="text-[11px] text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
-                                </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
 
-                                <div class="pt-2 border-t border-slate-100 space-y-1.5">
-                                  <div class="flex items-center justify-between text-xs font-bold">
-                                    <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
-                                      ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
-                                    </span>
-                                    <div class="flex gap-2">
-                                      <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold cursor-pointer">Renfort</button>
-                                      ${!isFull ? `
-                                        <button onclick="window.game.manualRelanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold cursor-pointer" title="Relancer l'équipe">
-                                          Relancer (${m.relancesCount || 0})
+                        <!-- SECTION 2 : ACTION SOCIALE & MARAUDES -->
+                        ${filters.social && selectedDaySocial.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-purple-800 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="heart-handshake" class="w-3.5 h-3.5 text-purple-600"></i>
+                              <span>Pôle Action Sociale & Maraudes (${selectedDaySocial.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDaySocial.map(e => {
+                                const m = e.raw;
+                                const regCount = m.registeredVolunteers?.length || 0;
+                                const isFull = regCount >= m.requiredVolunteers;
+                                return `
+                                  <div class="p-3.5 rounded-2xl border-2 border-purple-300 bg-purple-50/40 flex flex-col justify-between space-y-2.5">
+                                    <div>
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-600 text-white uppercase">
+                                          🥫 Maraude
+                                        </span>
+                                        <span class="text-xs font-mono font-bold text-purple-800">+${m.rewardMoney} €</span>
+                                      </div>
+                                      <h5 class="text-xs font-black text-slate-900 mt-1.5">${m.title}</h5>
+                                      <p class="text-[11px] text-slate-600 mt-0.5 flex items-center gap-1">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-purple-600"></i>
+                                        <span>${m.sector || m.address || 'Secteur de Maraude'}</span>
+                                      </p>
+                                    </div>
+
+                                    <div class="pt-2 border-t border-purple-200/60 space-y-1.5">
+                                      <div class="flex items-center justify-between text-xs font-bold">
+                                        <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
+                                          ${isFull ? '✓ Équipage complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
+                                        </span>
+                                      </div>
+                                      <div class="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
+                                        <div class="h-full bg-purple-600 rounded-full" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
+                                      </div>
+                                      <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-black transition cursor-pointer">
+                                        Détail de la maraude
+                                      </button>
+                                    </div>
+                                  </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
+
+                        <!-- SECTION 3 : DEMANDES EN ATTENTE & EN PRÉVISIONNEL -->
+                        ${filters.devis && selectedDayDevis.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="clipboard-list" class="w-3.5 h-3.5 text-amber-600"></i>
+                              <span>Devis & Options Prévisionnelles (${selectedDayDevis.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDayDevis.map(e => {
+                                const d = e.raw;
+                                const isPrev = d.status === 'previsionnel';
+                                const isSent = d.status === 'sent';
+                                const dynBareme = this.calculateDynamicBareme(d);
+                                const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
+                                const prevVolsCount = d.previsionnelVolunteers?.length || 0;
+
+                                return `
+                                  <div class="p-3.5 rounded-2xl border-2 ${isPrev ? 'border-amber-400 bg-amber-50/50' : isSent ? 'border-indigo-300 bg-indigo-50/40' : 'border-dashed border-sky-300 bg-sky-50/40'} flex flex-col justify-between space-y-3">
+                                    <div>
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${isPrev ? 'bg-amber-500 text-white' : isSent ? 'bg-indigo-600 text-white' : 'bg-sky-600 text-white'} uppercase">
+                                          ${isPrev ? '⏳ En Prévisionnel' : isSent ? '⚖️ En Délibération' : '📋 Devis Reçu'}
+                                        </span>
+                                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
+                                        <span class="text-xs font-mono font-bold text-slate-700">${d.proposedPrice || dynBareme.totalBareme} €</span>
+                                      </div>
+                                      <h5 class="text-xs font-black text-slate-900 mt-1.5">${d.eventName}</h5>
+                                      <p class="text-[11px] text-slate-500">
+                                        ${d.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
+                                      </p>
+                                      <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
+                                        <span>${d.address || 'Adresse sur site'}</span>
+                                      </p>
+                                    </div>
+
+                                    <!-- Bloc statut bénévoles si prévisionnel -->
+                                    ${isPrev ? `
+                                      <div class="p-2.5 rounded-xl bg-white/80 border border-amber-200 text-xs space-y-1.5">
+                                        <div class="flex items-center justify-between">
+                                          <span class="font-bold text-slate-700">Disponibilités bénévoles :</span>
+                                          <span class="font-black ${prevVolsCount >= reqVols ? 'text-emerald-700' : 'text-amber-800'}">${prevVolsCount} / ${reqVols} confirmés</span>
+                                        </div>
+                                        <div class="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
+                                          <div class="h-full bg-amber-500 rounded-full transition-all" style="width: ${Math.min(100, (prevVolsCount / reqVols) * 100)}%"></div>
+                                        </div>
+                                        <div class="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+                                          <span>Statut : <strong>${d.sollicitationSent ? `Sollicité (${d.relancesCount || 0} relance${(d.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
+                                        </div>
+                                        <div class="flex items-center justify-between text-[10px] pt-0.5">
+                                          <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="text-pc-blue font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
+                                            <i data-lucide="phone-call" class="w-3 h-3"></i> Sonder
+                                          </button>
+                                          <button onclick="window.game.manualRelancePrevisionnel('${d.id}')" class="text-amber-800 font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
+                                            <i data-lucide="bell" class="w-3 h-3"></i> Relancer (${d.relancesCount || 0})
+                                          </button>
+                                          <button onclick="window.game.openModule('devis')" class="text-slate-600 font-bold hover:underline cursor-pointer">
+                                            Devis →
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ` : ''}
+
+                                    <!-- Actions rapides -->
+                                    <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-1.5">
+                                      ${isPrev ? `
+                                        <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-pc-blue to-pc-blue-light text-white text-[11px] font-black shadow-xs hover:brightness-110 transition">
+                                          Valider avec l'Orga
                                         </button>
-                                      ` : ''}
+                                        <button onclick="window.game.refuseDevis('${d.id}')" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition">
+                                          Refuser
+                                        </button>
+                                      ` : isSent ? `
+                                        <button onclick="window.game.openModule('devis')" class="w-full py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black transition">
+                                          Consulter l'arbitrage en cours
+                                        </button>
+                                      ` : `
+                                        <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="flex-1 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black shadow-xs transition" title="Mettre en prévisionnel pour sonder l'équipe">
+                                          ⏳ Mettre en Prévi
+                                        </button>
+                                        <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white text-[11px] font-black transition">
+                                          Chiffrer
+                                        </button>
+                                        <button onclick="window.game.refuseDevis('${d.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition" title="Décliner la demande">
+                                          ✕
+                                        </button>
+                                      `}
                                     </div>
                                   </div>
-                                  <div class="flex items-center justify-between text-[10px] text-slate-500">
-                                    <span>Statut : <strong>${m.sollicitationSent ? `Sollicité (${m.relancesCount || 0} relance${(m.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
-                                  </div>
-                                  <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
-                                    <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
-                                  </div>
-                                </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
 
-                                <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl text-xs font-bold glass-button text-slate-800 transition">
-                                  Fiche détaillée & Inscriptions
-                                </button>
-                              </div>
-                            `;
-                          }).join('')}
-                        </div>
+                        <!-- SECTION 4 : DISPOSITIFS CONFIRMÉS AU PLANNING -->
+                        ${filters.dps && selectedDayMissions.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-pc-blue"></i>
+                              <span>Dispositifs Confirmés & Validés (${selectedDayMissions.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDayMissions.map(e => {
+                                const m = e.raw;
+                                const regCount = m.registeredVolunteers?.length || 0;
+                                const isFull = regCount >= m.requiredVolunteers;
+                                const timeStr = `${m.startHour || m.eventDate?.hour || 14}h00 à ${(m.endHour || ((m.eventDate?.hour || 14) + (m.durationHours || 4)) % 24)}h00`;
+
+                                return `
+                                  <div class="p-3.5 rounded-xl glass-card border border-slate-200/80 flex flex-col justify-between space-y-2.5">
+                                    <div>
+                                      <div class="flex items-center justify-between">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${timeStr}</span>
+                                        <span class="text-xs font-bold text-emerald-700 mono-num">+${m.rewardMoney} €</span>
+                                      </div>
+                                      <h5 class="text-xs font-extrabold text-slate-900 mt-1">${m.title}</h5>
+                                      <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
+                                        <span>${m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site')}</span>
+                                      </p>
+                                      <p class="text-[11px] text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                                    </div>
+
+                                    <div class="pt-2 border-t border-slate-100 space-y-1.5">
+                                      <div class="flex items-center justify-between text-xs font-bold">
+                                        <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
+                                          ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
+                                        </span>
+                                        <div class="flex gap-2">
+                                          <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold cursor-pointer">Renfort</button>
+                                          ${!isFull ? `
+                                            <button onclick="window.game.manualRelanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold cursor-pointer" title="Relancer l'équipe">
+                                              Relancer (${m.relancesCount || 0})
+                                            </button>
+                                          ` : ''}
+                                        </div>
+                                      </div>
+                                      <div class="flex items-center justify-between text-[10px] text-slate-500">
+                                        <span>Statut : <strong>${m.sollicitationSent ? `Sollicité (${m.relancesCount || 0} relance${(m.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
+                                      </div>
+                                      <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                                        <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
+                                      </div>
+                                    </div>
+
+                                    <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl text-xs font-bold glass-button text-slate-800 transition cursor-pointer">
+                                      Fiche détaillée & Inscriptions
+                                    </button>
+                                  </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
                       </div>
-                    ` : ''}
+                    `}
                   </div>
-                `}
+                </div>
               </div>
             </div>
-          </div>
-        ` : `
-            <!-- VUE LISTE CHRONOLOGIQUE -->
+          ` : `
+            <!-- VUE LISTE CHRONOLOGIQUE TOUS PÔLES -->
             <div class="space-y-4">
               <div class="p-4 rounded-2xl glass-card-blue flex items-center justify-between text-xs text-pc-blue">
                 <div>
-                  <span class="font-bold block">Calendrier des Dispositifs :</span>
-                  Vue continue de tous les postes et interventions planifiés dans le département. Seuls les postes du jour apparaissent sur la carte tactique.
+                  <span class="font-bold block">Calendrier Transversal des Activités :</span>
+                  Vue continue de tous les événements planifiés dans le département selon les pôles sélectionnés (Secours, Devis, Formations, Action Sociale).
                 </div>
                 <div class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-white/80 border border-pc-blue/30 text-pc-blue whitespace-nowrap ml-3">
-                  ${allScheduled.length} Dispositifs
+                  ${activeEvents.length} Événement(s)
                 </div>
               </div>
 
-              <!-- Barre de Recherche des Dispositifs Planifiés -->
+              <!-- Barre de Recherche des Événements Planifiés -->
               <div class="relative">
                 <input 
                   type="text" 
                   id="planning-search-input" 
-                  placeholder="🔍 Rechercher un dispositif (ex: nom, adresse, ville, DPS, Maraude, SAMU...)" 
+                  placeholder="🔍 Rechercher un événement (ex: nom, adresse, ville, DPS, Formation, Maraude, B2B...)" 
                   oninput="window.game.filterPlanningList(this.value)"
                   class="w-full pl-4 pr-10 py-2 rounded-2xl bg-white border border-slate-300 shadow-sm font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
                 />
@@ -9961,62 +12287,55 @@ class ProtecGame {
               </div>
 
               <div id="planning-search-empty-msg" class="hidden p-6 rounded-2xl glass-card text-center text-xs text-slate-500 italic">
-                Aucun dispositif ne correspond à votre recherche.
+                Aucun événement ne correspond à votre recherche.
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                ${allScheduled.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour l’instant. Établissez des devis dans le module Devis pour remplir votre planning.</p>' : ''}
-                ${allScheduled.map(m => {
-                  const regCount = m.registeredVolunteers?.length || 0;
-                  const isFull = regCount >= m.requiredVolunteers;
-                  const dateStr = m.eventDate ? this.formatFullDate(m.eventDate) + ' à ' + (m.startHour || m.eventDate.hour || 14) + 'h00' : 'Date à confirmer';
-                  const isToday = m.eventDate ? (m.eventDate.day === this.clock.day && m.eventDate.month === this.clock.month) : false;
-                  const searchText = `${m.title || ''} ${m.type || ''} ${m.scale || ''} ${m.address || ''} ${m.sector || ''} ${m.city || ''}`.toLowerCase();
+                ${activeEvents.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour les pôles sélectionnés. Activez plus de filtres pour élargir l\'affichage.</p>' : ''}
+                ${activeEvents.map(e => {
+                  const dateStr = e.eventDate ? this.formatFullDate(e.eventDate) + ' à ' + (e.startHour || 14) + 'h00' : 'Date à confirmer';
+                  const isToday = e.eventDate ? (e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month) : false;
+                  const searchText = `${e.title || ''} ${e.type || ''} ${e.scale || ''} ${e.address || ''} ${e.poleLabel || ''}`.toLowerCase();
 
                   return `
                     <div class="planning-mission-card p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${isToday ? 'border-amber-300 ring-2 ring-amber-200' : 'border-slate-200/80'}" data-search-text="${searchText}">
                       <div class="space-y-1.5">
-                        <div class="flex items-center justify-between">
-                          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${isToday ? 'bg-amber-500 text-white' : 'bg-pc-blue text-white'}">
-                            ${dateStr} ${isToday ? '⭐ (AUJOURD’HUI)' : ''}
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${e.badgeBg}">
+                            ${e.poleLabel} • ${e.type}
                           </span>
-                          <span class="text-xs font-bold mono-num text-emerald-600">+${m.rewardMoney} €</span>
+                          ${e.rewardMoney ? `<span class="text-xs font-bold mono-num text-emerald-600">+${e.rewardMoney} €</span>` : ''}
                         </div>
-                        <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
+                        <div class="text-[11px] font-black ${isToday ? 'text-amber-600' : 'text-slate-500'}">
+                          📅 ${dateStr} ${isToday ? '⭐ (AUJOURD’HUI)' : ''}
+                        </div>
+                        <h4 class="text-sm font-extrabold text-slate-900">${e.title}</h4>
                         <p class="text-xs text-slate-700 font-semibold flex items-center gap-1">
-                          <i data-lucide="${m.isSector || m.type === 'social' ? 'map' : 'map-pin'}" class="w-3.5 h-3.5 ${m.isSector || m.type === 'social' ? 'text-purple-600' : 'text-pc-blue'} flex-shrink-0"></i>
-                          <span>${m.isSector || m.type === 'social' ? (m.sector || m.address || 'Secteur de Maraude') : (m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site'))}</span>
+                          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
+                          <span>${e.address}</span>
                         </p>
-                        <p class="text-xs text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                        <p class="text-xs text-slate-500">${e.scale || 'Activité'} • Durée : <strong>${e.durationHours || 4}h</strong> • Effectifs : <strong>${e.registeredCount}/${e.requiredCount}</strong></p>
                       </div>
 
                       <div class="space-y-1.5 pt-2 border-t border-slate-100/70">
-                        <div class="flex items-center justify-between text-xs font-bold">
-                          <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
-                            ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
-                          </span>
-                          <div class="flex gap-2">
-                            <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold cursor-pointer">
-                              Renfort Alliance
-                            </button>
-                            ${!isFull ? `
-                              <button onclick="window.game.manualRelanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold cursor-pointer" title="Relancer l'équipe">
-                                Relancer (${m.relancesCount || 0})
-                              </button>
-                            ` : ''}
-                          </div>
+                        <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                          <div class="h-full rounded-full ${e.registeredCount >= e.requiredCount ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (e.registeredCount / (e.requiredCount || 1)) * 100)}%"></div>
                         </div>
-                        <div class="flex items-center justify-between text-[10px] text-slate-500">
-                          <span>Statut : <strong>${m.sollicitationSent ? `Sollicité (${m.relancesCount || 0} relance${(m.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
-                        </div>
-                        <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden">
-                          <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
-                        </div>
-                      </div>
 
-                      <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-2 rounded-xl text-xs font-bold glass-button text-slate-800 transition">
-                        Détail du dispositif
-                      </button>
+                        ${e.pole === 'dps' || e.pole === 'social' ? `
+                          <button onclick="window.game.closeModal(); window.game.openMissionDetails('${e.id}')" class="w-full py-2 rounded-xl text-xs font-bold glass-button text-slate-800 transition cursor-pointer">
+                            ${e.pole === 'social' ? 'Fiche de la Maraude' : 'Détail du Dispositif'}
+                          </button>
+                        ` : e.pole === 'devis' ? `
+                          <button onclick="window.game.openModule('devis')" class="w-full py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition cursor-pointer">
+                            Gérer le Devis DPS
+                          </button>
+                        ` : `
+                          <button onclick="window.game.openModule('formations')" class="w-full py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer">
+                            Consulter la Formation
+                          </button>
+                        `}
+                      </div>
                     </div>
                   `;
                 }).join('')}
@@ -12839,6 +15158,18 @@ class ProtecGame {
       return;
     }
 
+    // Protection absolue : ne JAMAIS rafraîchir si un formulaire ou une sous-vue d'édition/création est ouverte
+    if (modal.querySelector('form') || this.currentModalKey === 'job_offer_form' || this.isSubModalOpen) {
+      return;
+    }
+
+    // Vérifier si une sous-modale contextuelle est active
+    const titleEl = document.getElementById('modal-title');
+    const currentTitle = titleEl ? (titleEl.textContent || '') : '';
+    if (currentTitle.includes('Offre de Recrutement') || currentTitle.includes('Service Civique') || currentTitle.includes('Création') || currentTitle.includes('Entretien')) {
+      return;
+    }
+
     try {
       if (this.currentModalKey === 'flotte') {
         this.openModule('flotte', true);
@@ -12848,6 +15179,7 @@ class ProtecGame {
         this.openModule('devis', true);
       } else if (this.currentModalKey === 'logistique' && window.ProtecLogistique && typeof window.ProtecLogistique.renderModal === 'function') {
         window.ProtecLogistique.renderModal(this);
+
       } else if (this.currentModalKey === 'pompiers') {
         this.openModule('pompiers', true);
       } else if (this.currentModalKey === 'samu') {
@@ -12980,7 +15312,7 @@ class ProtecGame {
           if ((m.isCrisis || ['crise', 'pompiers', 'samu', 'meteo'].includes(m.type)) && window.ProtecCriseLogistique) {
             window.ProtecCriseLogistique.progressCrisisMission(this, m);
           } else {
-            // Dispositif classique (DPS, Maraude sociale programmée)
+            // Dispositif classique (DPS, Maraude sociale programmée, Urgences)
             if (!m.startedAt) m.startedAt = currentTime;
             if (!m.durationSeconds) {
               if (m.type === 'samu') m.durationSeconds = 25 * 60; // 25 min réelles
@@ -12990,8 +15322,32 @@ class ProtecGame {
             }
             if (!m.endsAt) m.endsAt = m.startedAt + (m.durationSeconds * 1000);
 
-            m.progress = Math.min(m.durationSeconds, Math.floor((currentTime - m.startedAt) / 1000));
-            if (currentTime >= m.endsAt) {
+            if (m.vehicleMismatch) {
+              if (m.effectiveProgressSec === undefined) {
+                m.effectiveProgressSec = m.progress || 0;
+                m.lastProgressTick = currentTime;
+              }
+              const deltaSec = Math.max(0, (currentTime - (m.lastProgressTick || currentTime)) / 1000);
+              m.lastProgressTick = currentTime;
+              // Vitesse réduite de 70% (progression à 30% du rythme normal)
+              m.effectiveProgressSec += deltaSec * 0.30;
+              m.progress = Math.min(m.durationSeconds, Math.floor(m.effectiveProgressSec));
+              m.isSlowedDown = true;
+
+              // Repousser la fin de mission
+              const remainingSec = (m.durationSeconds - m.progress) / 0.30;
+              m.endsAt = currentTime + (remainingSec * 1000);
+
+              // Réclamation et mécontentement du gestionnaire (toutes les 45 secondes)
+              if (!m.lastManagerComplaint || (currentTime - m.lastManagerComplaint > 45000)) {
+                m.lastManagerComplaint = currentTime;
+                this.handleManagerDissatisfaction(m);
+              }
+            } else {
+              m.progress = Math.min(m.durationSeconds, Math.floor((currentTime - m.startedAt) / 1000));
+            }
+
+            if (m.progress >= m.durationSeconds || currentTime >= m.endsAt) {
               this.completeMission(m);
             }
           }
@@ -13066,23 +15422,129 @@ class ProtecGame {
         window.ProtecFormations.processClockTick(this);
       }
 
-      // 1b. DÉPART AUTOMATIQUE DES DPS À L'HEURE DU POSTE
+      // 1b. DÉPART ET GESTION DU TEMPS RÉEL SUR LES ALERTES ET DPS
       if (this.clock.second === 0) {
+        // 1b-1. Contrôle des alertes urgentes déclenchées non engagées (Carence / Expiration horaire)
+        this.missions.forEach(m => {
+          if (m.status === 'declenche') {
+            const spawnedTime = m.spawnedAt || (m.eventDate ? new Date(
+              m.eventDate.year || now.getFullYear(),
+              m.eventDate.month !== undefined ? m.eventDate.month : now.getMonth(),
+              m.eventDate.day || now.getDate(),
+              m.eventDate.hour || 14,
+              m.eventDate.minute || 0
+            ).getTime() : (currentTime - 1800000));
+
+            const elapsedMinutes = (currentTime - spawnedTime) / 60000;
+            const maxResponse = m.maxResponseMinutes || 25;
+            const missionDurationSec = m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 2400);
+            const isEventOverTime = (currentTime >= (spawnedTime + (missionDurationSec * 1000)));
+
+            // Si le délai maximal d'intervention est dépassé OU si l'horaire de l'événement est révolu
+            if ((elapsedMinutes > maxResponse || isEventOverTime) && !m.carenceApplied) {
+              m.carenceApplied = true;
+              m.status = 'carence';
+
+              (m.registeredVolunteers || []).forEach(id => {
+                const vol = this.volunteers.find(v => v.id === id);
+                if (vol && vol.status === 'mission') vol.status = 'dispo';
+              });
+
+              this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 0) - 25);
+              if (this.prefectureState) {
+                this.prefectureState.trustScore = Math.max(0, (this.prefectureState.trustScore || 85) - 5);
+              }
+
+              const originLabel = m.alertOrigin === 'sncf' ? 'la SNCF' : (m.type === 'samu' ? 'le SAMU 15' : (m.type === 'pompiers' ? 'le SDIS' : 'le commanditaire'));
+              const carenceMsg = `Faute de départ dans les délais impartis (${Math.round(elapsedMinutes)} min d'attente), ${originLabel} a clôturé l'alerte « ${m.title} ». Les services publics ont assuré seuls la prise en charge (-25 réputation).`;
+
+              this.showToast('⏱️ Carence Opérationnelle Constatée !', carenceMsg, 'red');
+
+              if (window.ProtecNotifications) {
+                window.ProtecNotifications.recordNotification({
+                  title: '⏱️ Carence Opérationnelle Constatée',
+                  message: `Alerte « ${m.title} » : clôturée suite au dépassement du délai de réponse opérationnelle. Sanction de carence appliquée (-25 réputation).`,
+                  category: 'operations',
+                  level: 'danger'
+                });
+              }
+
+              if (this.selectedMissionId === m.id) {
+                this.closeDrawer();
+              }
+
+              setTimeout(() => {
+                const idx = this.missions.findIndex(item => item.id === m.id);
+                if (idx !== -1) {
+                  this.missions.splice(idx, 1);
+                  this.renderMissions();
+                  this.updateStatsUI();
+                  this.saveGame();
+                }
+              }, 6000);
+            }
+          }
+        });
+
+        // 1b-2. Contrôle des DPS planifiés dont l'heure de fin est dépassée sans engagement (Défaut de présence)
         this.missions.forEach(m => {
           if (m.type === 'dps' && m.status === 'planifie') {
             const isToday = this.clock.day === m.eventDate?.day;
             const targetHour = m.startHour || m.eventDate?.hour || 14;
-            const isHourReached = isToday && this.clock.hour >= targetHour;
+            const targetMinute = m.startMinute || m.eventDate?.minute || 0;
+            const durHours = m.durationHours || (m.durationSeconds ? m.durationSeconds / 3600 : 4);
+            const plannedStartDate = new Date(m.eventDate?.year || now.getFullYear(), m.eventDate?.month !== undefined ? m.eventDate.month : now.getMonth(), m.eventDate?.day || now.getDate(), targetHour, targetMinute, 0);
+            const plannedEndDate = new Date(plannedStartDate.getTime() + (durHours * 3600 * 1000));
 
-            if (isHourReached) {
-              const registered = m.registeredVolunteers?.length || 0;
-              if (registered >= m.requiredVolunteers && !m.autoLaunched) {
-                m.autoLaunched = true;
-                this.launchScheduledMission(m.id);
-                this.showToast('Début du Poste !', `C’est l’heure ! « ${m.title} » débute sur les lieux (${registered} secouristes en mission).`, 'blue');
-              } else if (registered < m.requiredVolunteers && !m.alertLateShown) {
-                m.alertLateShown = true;
-                this.showToast('Retard Prise de Poste !', `L’heure du poste « ${m.title} » est arrivée mais l’effectif est incomplet (${registered}/${m.requiredVolunteers}) ! L’organisateur attend son dispositif.`, 'orange');
+            // Si l'heure de fin du DPS est dépassée de plus de 15 minutes sans déploiement
+            if (currentTime > (plannedEndDate.getTime() + 15 * 60 * 1000) && !m.defautPresenceApplied) {
+              m.defautPresenceApplied = true;
+              m.status = 'annule_defaut';
+
+              (m.registeredVolunteers || []).forEach(id => {
+                const vol = this.volunteers.find(v => v.id === id);
+                if (vol && vol.status === 'mission') vol.status = 'dispo';
+              });
+
+              this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 0) - 35);
+              const cancelMsg = `L'événement « ${m.title} » est terminé et vos équipes ne se sont jamais présentées ! L'organisateur a fait constater la défaillance par la Mairie (-35 réputation).`;
+
+              this.showToast('❌ DPS Expiré - Défaut de Présence', cancelMsg, 'red');
+
+              if (window.ProtecNotifications) {
+                window.ProtecNotifications.recordNotification({
+                  title: '❌ DPS Expiré : Défaut de Présence',
+                  message: `Le DPS « ${m.title} » s'est achevé sans aucun déploiement de secours. Prestation annulée.`,
+                  category: 'dps',
+                  level: 'danger'
+                });
+              }
+
+              if (this.selectedMissionId === m.id) {
+                this.closeDrawer();
+              }
+
+              setTimeout(() => {
+                const idx = this.missions.findIndex(item => item.id === m.id);
+                if (idx !== -1) {
+                  this.missions.splice(idx, 1);
+                  this.renderMissions();
+                  this.updateStatsUI();
+                  this.saveGame();
+                }
+              }, 6000);
+            } else {
+              const isHourReached = isToday && (this.clock.hour > targetHour || (this.clock.hour === targetHour && this.clock.minute >= targetMinute));
+              if (isHourReached) {
+                const registered = m.registeredVolunteers?.length || 0;
+                if (registered >= m.requiredVolunteers && !m.autoLaunched) {
+                  m.autoLaunched = true;
+                  this.launchScheduledMission(m.id);
+                  this.showToast('Début du Poste !', `C’est l’heure ! « ${m.title} » débute sur les lieux (${registered} secouristes en mission).`, 'blue');
+                } else if (registered < m.requiredVolunteers && !m.alertLateShown) {
+                  m.alertLateShown = true;
+                  this.showToast('Retard Prise de Poste !', `L’heure du poste « ${m.title} » est arrivée mais l’effectif est incomplet (${registered}/${m.requiredVolunteers}) ! L’organisateur attend son dispositif.`, 'orange');
+                }
               }
             }
           }
@@ -14070,6 +16532,80 @@ class ProtecGame {
     this.updateStatsUI();
   }
 
+  // Gestion du mécontentement des gestionnaires (SNCF, SAMU, SDIS, Préfecture, Mairie...) en cas de véhicule inadapté
+  handleManagerDissatisfaction(mission) {
+    if (!mission) return;
+
+    // 1. Identification du gestionnaire / commanditaire de l'alerte
+    let managerName = "Commanditaire de l'alerte";
+    let managerEmoji = "🏢";
+    const titleLower = (mission.title || '').toLowerCase();
+    const typeLower = (mission.type || '').toLowerCase();
+    const catLower = (mission.categoryLabel || '').toLowerCase();
+
+    if (typeLower === 'sncf' || mission.sncf || titleLower.includes('sncf') || titleLower.includes('gare') || catLower.includes('sncf')) {
+      managerName = "SNCF Gares & Connexions / SUGE";
+      managerEmoji = "🚆";
+    } else if (typeLower === 'samu' || titleLower.includes('samu') || catLower.includes('samu') || titleLower.includes('urgence médicale')) {
+      managerName = "SAMU Centre 15";
+      managerEmoji = "🏥";
+    } else if (typeLower === 'pompiers' || titleLower.includes('sdis') || titleLower.includes('pompier') || catLower.includes('sdis')) {
+      managerName = "CODIS / SDIS";
+      managerEmoji = "🚒";
+    } else if (typeLower === 'prefecture' || mission.isRequisition || titleLower.includes('préfecture') || titleLower.includes('crise')) {
+      managerName = "Préfecture (SIDPC)";
+      managerEmoji = "🏛️";
+    } else if (typeLower === 'social' || mission.isMaraude || titleLower.includes('maraude') || titleLower.includes('115')) {
+      managerName = "Coordination SIAO / 115 Samu Social";
+      managerEmoji = "🧣";
+    } else {
+      managerName = "Mairie & Organisateur du Dispositif";
+      managerEmoji = "📋";
+    }
+
+    // 2. Dégradation des relations et réputation
+    const repPenalty = 15;
+    this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 0) - repPenalty);
+
+    // Si préfecture impliquée ou score préfecture existant
+    if (this.prefectureState && (typeLower === 'prefecture' || typeLower === 'pompiers' || typeLower === 'samu' || typeLower === 'sncf')) {
+      this.prefectureState.trustScore = Math.max(0, (this.prefectureState.trustScore || 85) - 3);
+    }
+
+    // Impact moral sur les bénévoles engagés qui font face au gestionnaire énervé
+    if (mission.registeredVolunteers && mission.registeredVolunteers.length > 0) {
+      mission.registeredVolunteers.forEach(vid => {
+        const vol = this.volunteers.find(v => v.id === vid);
+        if (vol) {
+          vol.mood = Math.max(10, (vol.mood || 80) - 5);
+        }
+      });
+    }
+
+    const mismatchDetail = (mission.mismatchReasons && mission.mismatchReasons.length > 0)
+      ? mission.mismatchReasons.join(', ')
+      : "Vecteur inadapté aux réquisitions";
+
+    const alertMsg = `« Vos équipes sur place n'ont pas le véhicule requis (${mismatchDetail}) ! L'intervention est sévèrement ralentie. Si vous ne respectez pas vos engagements, nos conventions seront remises en cause ! » (-${repPenalty} Réputation)`;
+
+    this.showToast(
+      `⚠️ Mécontentement : ${managerEmoji} ${managerName}`,
+      alertMsg,
+      'orange'
+    );
+
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.recordNotification({
+        title: `⚠️ Mécontentement : ${managerName}`,
+        message: `Mission « ${mission.title} » : intervention ralentie par un véhicule inadapté (${mismatchDetail}). Sanction relationnelle appliquée (-${repPenalty} réputation).`,
+        category: 'relations',
+        type: 'warning'
+      });
+    }
+
+    this.updateStatsUI();
+  }
+
   // Candidature spontanée de bénévole
   generateRandomCandidature() {
     const pool = [
@@ -14311,7 +16847,12 @@ class ProtecGame {
     let hasSomethingToClaim = false;
     if (r && hasAntenna) {
       // 1. Récompense quotidienne non encore réclamée aujourd'hui
-      if (r.lastDailyClaimDay !== today) {
+      if (window.ProtecAdvanced && typeof window.ProtecAdvanced.canClaimDailyStreak === 'function') {
+        if (window.ProtecAdvanced.canClaimDailyStreak(this)) hasSomethingToClaim = true;
+      } else if (r.lastDailyClaimDate) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (r.lastDailyClaimDate !== todayStr) hasSomethingToClaim = true;
+      } else if (r.lastDailyClaimDay !== today) {
         hasSomethingToClaim = true;
       }
       // 2. Défi journalier complété prêt à être encaissé

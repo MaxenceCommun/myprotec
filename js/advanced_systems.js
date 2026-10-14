@@ -763,18 +763,26 @@ window.ProtecAdvanced = {
 
   // 1. Initialisation de l'état étendu avec tâches progressives selon le stade de l'antenne
   injectAdvancedState(game) {
+    // Tentative de restauration locale immédiate de secours
+    this.loadRewardsLocally(game);
+
     if (!game.rewards) {
       game.rewards = {
         streakDays: 1,
         tier: 1,
         lastDailyClaimDay: null,
+        lastDailyClaimDate: null,
+        lastDailyClaimTimestamp: 0,
+        lastDailyTaskResetDate: this.getTodayDateKey(game),
+        lastDailyTaskResetDay: game.clock ? game.clock.day : new Date().getDate(),
         dailyTasks: this.getTasksForTier(1, false),
         weeklyTasks: this.getTasksForTier(1, true)
       };
     } else {
       if (!game.rewards.tier) game.rewards.tier = this.detectAntennaTier(game);
+      if (!game.rewards.lastDailyTaskResetDate) game.rewards.lastDailyTaskResetDate = this.getTodayDateKey(game);
       const hasAntenna = game.stations && game.stations.length > 0;
-      if (!hasAntenna) {
+      if (!hasAntenna && (!game.rewards.dailyTasks || game.rewards.dailyTasks.length === 0)) {
         game.rewards.tier = 1;
         game.rewards.dailyTasks = this.getTasksForTier(1, false);
         game.rewards.weeklyTasks = this.getTasksForTier(1, true);
@@ -862,20 +870,126 @@ window.ProtecAdvanced = {
     }
   },
 
-  // 2. Gestion des Récompenses Quotidiennes
+  // --- PERSISTANCE LOCALE DE SECOURS (ZÉRO PERTE SUR LES RÉCOMPENSES) ---
+  saveRewardsLocally(game) {
+    if (!game || !game.rewards) return;
+    try {
+      localStorage.setItem('protec_rewards_save', JSON.stringify({
+        rewards: game.rewards,
+        savedAt: Date.now()
+      }));
+    } catch (e) {}
+  },
+
+  loadRewardsLocally(game) {
+    if (!game) return;
+    try {
+      const raw = localStorage.getItem('protec_rewards_save');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.rewards) {
+          if (!game.rewards) {
+            game.rewards = parsed.rewards;
+          } else {
+            const localTs = parsed.rewards.lastDailyClaimTimestamp || 0;
+            const currentTs = game.rewards.lastDailyClaimTimestamp || 0;
+            if (localTs >= currentTs) {
+              game.rewards.lastDailyClaimDate = parsed.rewards.lastDailyClaimDate || game.rewards.lastDailyClaimDate;
+              game.rewards.lastDailyClaimDay = parsed.rewards.lastDailyClaimDay || game.rewards.lastDailyClaimDay;
+              game.rewards.lastDailyClaimTimestamp = localTs;
+              game.rewards.streakDays = parsed.rewards.streakDays || game.rewards.streakDays;
+            }
+            if (parsed.rewards.dailyTasks && Array.isArray(parsed.rewards.dailyTasks)) {
+              parsed.rewards.dailyTasks.forEach(pt => {
+                const gt = (game.rewards.dailyTasks || []).find(t => t.id === pt.id);
+                if (gt && pt.done) {
+                  gt.done = true;
+                  gt.current = gt.goal;
+                }
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {}
+  },
+
+  // Helper date du jour au format ISO YYYY-MM-DD
+  getTodayDateKey(game) {
+    if (game && game.clock && game.clock.year && game.clock.month !== undefined && game.clock.day) {
+      const y = game.clock.year;
+      const m = String(game.clock.month + 1).padStart(2, '0');
+      const d = String(game.clock.day).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  },
+
+  // Helper date d'hier au format ISO YYYY-MM-DD
+  getYesterdayDateKey(game) {
+    const todayStr = this.getTodayDateKey(game);
+    const parts = todayStr.split('-').map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    d.setDate(d.getDate() - 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  },
+
+  // Contrôle si la dotation quotidienne peut être réclamée
+  canClaimDailyStreak(game) {
+    if (!game || !game.stations || game.stations.length === 0) return false;
+    const r = game.rewards || {};
+    const todayKey = this.getTodayDateKey(game);
+    if (r.lastDailyClaimDate) {
+      return r.lastDailyClaimDate !== todayKey;
+    }
+    if (r.lastDailyClaimDay !== undefined && r.lastDailyClaimDay !== null) {
+      const curDayNum = game.clock ? game.clock.day : new Date().getDate();
+      return r.lastDailyClaimDay !== curDayNum;
+    }
+    return true;
+  },
+
+  // 2. Gestion des Récompenses Quotidiennes (Dotation Fédérale)
   claimDailyStreak(game) {
     if (!game.stations || game.stations.length === 0) {
       game.showToast('Antenne Requise', 'Implantez d’abord votre antenne sur la carte pour recevoir votre dotation fédérale !', 'orange');
       return;
     }
 
-    const today = game.clock.day;
-    if (game.rewards.lastDailyClaimDay === today) {
+    if (!game.rewards) {
+      this.injectAdvancedState(game);
+    }
+
+    if (!this.canClaimDailyStreak(game)) {
       game.showToast('Déjà réclamé', 'Vous avez déjà reçu votre dotation quotidienne pour aujourd’hui ! Revenez demain.', 'blue');
       return;
     }
 
-    const streak = Math.min(7, (game.rewards.streakDays || 1));
+    const todayKey = this.getTodayDateKey(game);
+    const yesterdayKey = this.getYesterdayDateKey(game);
+    const lastClaimDate = game.rewards.lastDailyClaimDate;
+
+    // Calcul de la série consécutive :
+    // Si la dernière dotation a été perçue hier : on avance dans la série (max 7)
+    // Si la dernière dotation date de plus d'1 jour ou première fois : on démarre au jour 1
+    let currentStreak = Number(game.rewards.streakDays) || 1;
+    if (lastClaimDate) {
+      if (lastClaimDate === yesterdayKey) {
+        currentStreak = currentStreak >= 7 ? 1 : (currentStreak + 1);
+      } else {
+        currentStreak = 1;
+      }
+    } else {
+      currentStreak = 1;
+    }
+
     const streakRewards = [
       { money: 300, desc: '+300 € & 2 bouteilles d’Oxygène B5 offertes', o2: 2 },
       { money: 450, desc: '+450 € & 10 points d’Agrément Préfectoral', rep: 10 },
@@ -886,21 +1000,35 @@ window.ProtecAdvanced = {
       { money: 2500, desc: 'GRAND BONUS JOUR 7 : +2 500 € et reconnaissance fédérale !', rep: 30 }
     ];
 
-    const pick = streakRewards[streak - 1];
-    game.resources.money += pick.money;
-    if (pick.o2 && game.logistics) game.logistics.oxygenBottles += pick.o2;
-    if (pick.dae && game.logistics) game.logistics.aedPads += pick.dae;
-    if (pick.kits && game.logistics) game.logistics.woundKits += pick.kits;
-    if (pick.followers) game.resources.followers += pick.followers;
-    if (pick.rep) game.resources.reputationScore += pick.rep;
+    const pick = streakRewards[currentStreak - 1] || streakRewards[0];
+    game.resources.money = (game.resources.money || 0) + pick.money;
+    if (pick.o2 && game.logistics) game.logistics.oxygenBottles = (game.logistics.oxygenBottles || 0) + pick.o2;
+    if (pick.dae && game.logistics) game.logistics.aedPads = (game.logistics.aedPads || 0) + pick.dae;
+    if (pick.kits && game.logistics) game.logistics.woundKits = (game.logistics.woundKits || 0) + pick.kits;
+    if (pick.followers) game.resources.followers = (game.resources.followers || 0) + pick.followers;
+    if (pick.rep) game.resources.reputationScore = (game.resources.reputationScore || 0) + pick.rep;
 
-    game.rewards.lastDailyClaimDay = today;
-    game.rewards.streakDays = streak >= 7 ? 1 : streak + 1;
+    const curDayNum = game.clock ? game.clock.day : new Date().getDate();
+    game.rewards.lastDailyClaimDay = curDayNum;
+    game.rewards.lastDailyClaimDate = todayKey;
+    game.rewards.lastDailyClaimTimestamp = Date.now();
+    game.rewards.streakDays = currentStreak;
+
+    // PERSISTANCE LOCALE IMMÉDIATE (GARANTIE ZÉRO PERTE)
+    this.saveRewardsLocally(game);
 
     game.updateStatsUI();
     game.saveGame(true);
     game.showToast('Récompense Quotidienne Débloquée !', pick.desc, 'green');
-    game.openModule('recompenses');
+
+    // Rafraîchir la modale si ouverte
+    if (game.currentModalKey === 'recompenses' && window.ProtecAdvancedModals) {
+      const body = document.getElementById('modal-body');
+      if (body) {
+        body.innerHTML = window.ProtecAdvancedModals.renderRewards(game);
+        if (window.lucide) window.lucide.createIcons();
+      }
+    }
   },
 
   // Détection du palier de développement de l'antenne (Tier 1: Lancement, Tier 2: Développement, Tier 3: Envergure)
@@ -967,22 +1095,25 @@ window.ProtecAdvanced = {
   syncAdaptiveTasks(game) {
     if (!game.rewards) return;
     const currentTier = this.detectAntennaTier(game);
-    const today = game.clock ? game.clock.day : new Date().getDate();
+    const todayKey = this.getTodayDateKey(game);
     const curWeek = (window.ProtecMultiplayer && window.ProtecMultiplayer.getWeekKey) ? window.ProtecMultiplayer.getWeekKey(game.clock) : 'W';
 
-    // 1. Initialisation des clés temporelles si absentes
-    if (game.rewards.lastDailyTaskResetDay === undefined) {
-      game.rewards.lastDailyTaskResetDay = today;
+    // 1. Initialisation des clés temporelles calendaires si absentes
+    if (!game.rewards.lastDailyTaskResetDate) {
+      game.rewards.lastDailyTaskResetDate = todayKey;
+      game.rewards.lastDailyTaskResetDay = game.clock ? game.clock.day : new Date().getDate();
     }
     if (game.rewards.lastWeeklyTaskResetWeek === undefined) {
       game.rewards.lastWeeklyTaskResetWeek = curWeek;
     }
 
-    // 2. Renouvellement lors d'un nouveau jour calendaire in-game
-    if (game.rewards.lastDailyTaskResetDay !== today) {
-      game.rewards.lastDailyTaskResetDay = today;
+    // 2. Renouvellement lors d'un nouveau jour calendaire réel (pas lors d'une simple réouverture)
+    if (game.rewards.lastDailyTaskResetDate !== todayKey) {
+      game.rewards.lastDailyTaskResetDate = todayKey;
+      game.rewards.lastDailyTaskResetDay = game.clock ? game.clock.day : new Date().getDate();
       const t = game.rewards.tier || currentTier;
       game.rewards.dailyTasks = this.getTasksForTier(t, false);
+      this.saveRewardsLocally(game);
     }
 
     // 3. Renouvellement lors d'une nouvelle semaine
@@ -990,6 +1121,7 @@ window.ProtecAdvanced = {
       game.rewards.lastWeeklyTaskResetWeek = curWeek;
       const t = game.rewards.tier || currentTier;
       game.rewards.weeklyTasks = this.getTasksForTier(t, true);
+      this.saveRewardsLocally(game);
     }
 
     // 4. Passage de palier (uniquement si toutes les tâches en cours sont terminées ou si la liste est vide)
@@ -997,10 +1129,12 @@ window.ProtecAdvanced = {
       game.rewards.tier = currentTier;
       game.rewards.dailyTasks = this.getTasksForTier(currentTier, false);
       game.rewards.weeklyTasks = this.getTasksForTier(currentTier, true);
+      this.saveRewardsLocally(game);
     } else if (game.rewards.tier !== currentTier && game.rewards.dailyTasks.every(t => t.done)) {
       game.rewards.tier = currentTier;
       game.rewards.dailyTasks = this.getTasksForTier(currentTier, false);
       game.rewards.weeklyTasks = this.getTasksForTier(currentTier, true);
+      this.saveRewardsLocally(game);
     }
   },
 
@@ -1124,14 +1258,25 @@ window.ProtecAdvanced = {
 
     task.done = true;
     task.current = task.goal;
-    game.resources.money += task.reward;
+    game.resources.money = (game.resources.money || 0) + task.reward;
     const repGained = task.reward >= 1000 ? 50 : (task.reward >= 500 ? 30 : 15);
-    game.resources.reputationScore += repGained;
+    game.resources.reputationScore = (game.resources.reputationScore || 0) + repGained;
+
+    // PERSISTANCE LOCALE IMMÉDIATE (GARANTIE ZÉRO PERTE)
+    this.saveRewardsLocally(game);
 
     game.updateStatsUI();
     game.saveGame(true);
     game.showToast('Objectif Accompli !', `+${task.reward} € et +${repGained} réputation versés à l’antenne !`, 'green');
-    game.openModule('recompenses');
+
+    // Rafraîchir la modale sans perturber l'affichage
+    if (game.currentModalKey === 'recompenses' && window.ProtecAdvancedModals) {
+      const body = document.getElementById('modal-body');
+      if (body) {
+        body.innerHTML = window.ProtecAdvancedModals.renderRewards(game);
+        if (window.lucide) window.lucide.createIcons();
+      }
+    }
   },
 
   // 3. Achat et Évolution des Pièces du Local

@@ -48,13 +48,15 @@ class ProtecGame {
       role: (supaUser && supaUser.role) || 'directeur'
     };
 
-    // Calendrier et Horloge Opérationnelle (Lundi 5 Octobre 2026 à 08:00)
+    // Calendrier et Horloge Opérationnelle (Synchronisée sur l'heure réelle dès l'instanciation)
+    const nowInit = new Date();
     this.clock = {
-      year: 2026,
-      month: 9, // Octobre
-      day: 5,
-      hour: 8,
-      minute: 0,
+      year: nowInit.getFullYear(),
+      month: nowInit.getMonth(),
+      day: nowInit.getDate(),
+      hour: nowInit.getHours(),
+      minute: nowInit.getMinutes(),
+      second: nowInit.getSeconds(),
       totalHoursElapsed: 0,
       monthsNames: [
         'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -1259,6 +1261,16 @@ class ProtecGame {
         } catch (ce) {}
       }
 
+      // Persistance locale de secours des récompenses pour zéro perte
+      if (this.rewards) {
+        try {
+          localStorage.setItem('protec_rewards_save', JSON.stringify({
+            rewards: this.rewards,
+            savedAt: Date.now()
+          }));
+        } catch (re) {}
+      }
+
       // 3. La sauvegarde est transmise directement et fidèlement à la BDD
       if (window.ProtecAuth && window.ProtecAuth.debouncedSaveToDatabase) {
         window.ProtecAuth.debouncedSaveToDatabase(this, forceInstant);
@@ -1308,6 +1320,17 @@ class ProtecGame {
             if (c.rewards) this.rewards = c.rewards;
           }
         } catch (ce) {}
+      }
+
+      // Restauration locale des récompenses si non encore restaurées
+      if (!this.rewards) {
+        try {
+          const rawRewards = localStorage.getItem('protec_rewards_save');
+          if (rawRewards) {
+            const parsed = JSON.parse(rawRewards);
+            if (parsed && parsed.rewards) this.rewards = parsed.rewards;
+          }
+        } catch (re) {}
       }
     } catch (e) {
       console.warn('Erreur réinitialisation état local:', e);
@@ -16824,7 +16847,12 @@ class ProtecGame {
     let hasSomethingToClaim = false;
     if (r && hasAntenna) {
       // 1. Récompense quotidienne non encore réclamée aujourd'hui
-      if (r.lastDailyClaimDay !== today) {
+      if (window.ProtecAdvanced && typeof window.ProtecAdvanced.canClaimDailyStreak === 'function') {
+        if (window.ProtecAdvanced.canClaimDailyStreak(this)) hasSomethingToClaim = true;
+      } else if (r.lastDailyClaimDate) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (r.lastDailyClaimDate !== todayStr) hasSomethingToClaim = true;
+      } else if (r.lastDailyClaimDay !== today) {
         hasSomethingToClaim = true;
       }
       // 2. Défi journalier complété prêt à être encaissé

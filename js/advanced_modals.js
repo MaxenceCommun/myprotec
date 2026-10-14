@@ -11,7 +11,9 @@ window.ProtecAdvancedModals = {
     const r = game.rewards || { streakDays: 1, dailyTasks: [], weeklyTasks: [] };
     const hasAntenna = game.stations && game.stations.length > 0;
     const today = game.clock.day;
-    const canClaimStreak = hasAntenna && (r.lastDailyClaimDay !== today);
+    const canClaimStreak = window.ProtecAdvanced && typeof window.ProtecAdvanced.canClaimDailyStreak === 'function'
+      ? window.ProtecAdvanced.canClaimDailyStreak(game)
+      : (hasAntenna && (r.lastDailyClaimDay !== today));
 
     const streakList = [
       { day: 1, title: 'Jour 1', gift: '300 € + O2', icon: '🎁' },

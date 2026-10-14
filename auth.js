@@ -1925,7 +1925,22 @@ window.ProtecAuth = {
         if (window.ProtecAds) window.ProtecAds.updateUI(game);
       }
       if (savedData.rewards) {
-        game.rewards = savedData.rewards;
+        // Fusion intelligente pour ne jamais régresser sur une récompense réclamée récemment
+        if (!game.rewards) {
+          game.rewards = savedData.rewards;
+        } else {
+          const cloudTs = savedData.rewards.lastDailyClaimTimestamp || 0;
+          const localTs = game.rewards.lastDailyClaimTimestamp || 0;
+          if (cloudTs >= localTs) {
+            game.rewards = savedData.rewards;
+          } else {
+            // Le local a une réclamation plus récente : préserver le statut réclamé local
+            if (savedData.rewards.tier) game.rewards.tier = savedData.rewards.tier;
+          }
+        }
+        if (window.ProtecAdvanced && typeof window.ProtecAdvanced.saveRewardsLocally === 'function') {
+          window.ProtecAdvanced.saveRewardsLocally(game);
+        }
       }
 
       // Purger immédiatement tout résidu local
