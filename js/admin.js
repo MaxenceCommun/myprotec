@@ -5003,11 +5003,11 @@ window.ProtecAdmin = {
         type: 'VPSP',
         name: 'Véhicule de Premiers Secours à Personnes (VPSP)',
         category: 'Secours d’Urgence',
-        desc: 'Cellule sanitaire grand volume aux normes EN 1789, brancard 3 points, oxygénothérapie et armoire d’urgence SUAP.',
+        desc: 'Cellule sanitaire grand volume aux normes EN 1789, brancard 3 points, oxygénothérapie et armoire d’urgence SUAP. Conduite autorisée avec le Permis B.',
         cost: 28500,
         capacity: 5,
         licenseRequired: 'B',
-        licenseLabel: 'Permis B (+ Habilitation P.VPSP)',
+        licenseLabel: 'Permis B',
         speedKmH: 85,
         hasTowHitch: false,
         image: 'images/vehicles/master3_vpsp.png'
@@ -5066,29 +5066,29 @@ window.ProtecAdmin = {
       },
       {
         type: 'FLIT',
-        name: 'Fourgon Lourd d’Intervention Technique (FLIT)',
+        name: 'Fourgon Lourd d’Intervention Technique & Soutien Pop (FLIT)',
         category: 'Technique & Soutien Lourd',
         desc: 'Poids Lourd de soutien lourd type FPTL/FPTSR (> 12 tonnes) avec mât d’éclairage télescopique, groupe électrogène de puissance et motopompes grande capacité.',
         cost: 95000,
         capacity: 3,
         licenseRequired: 'C',
-        licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
+        licenseLabel: 'Permis C (Poids Lourd)',
         speedKmH: 70,
         hasTowHitch: true,
-        image: 'images/vehicles/FLIT.png'
+        image: 'images/vehicles/flit_pop.png'
       },
       {
         type: 'PCM',
-        name: 'Poste de Commandement Mobile (PCM)',
+        name: 'Poste de Commandement Mobile (PCM Renault Midlum)',
         category: 'Commandement Lourd',
-        desc: 'Centre opérationnel mobile de crise avec baie de transmissions VHF/UHF, liaisons satellites et salle de crise embarquée.',
-        cost: 45000,
+        desc: 'Centre opérationnel mobile de crise sur châssis Renault Midlum avec baie de transmissions VHF/UHF, liaisons satellites et salle de crise embarquée.',
+        cost: 55000,
         capacity: 3,
         licenseRequired: 'C',
-        licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
-        speedKmH: 65,
+        licenseLabel: 'Permis C (Poids Lourd)',
+        speedKmH: 70,
         hasTowHitch: false,
-        image: 'images/vehicles/PCM.png'
+        image: 'images/vehicles/midlum_pc.png'
       },
       {
         type: 'ERS',

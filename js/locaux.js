@@ -1527,14 +1527,25 @@ window.ProtecLocaux = {
   // Helpers pour les autres modules
   hasFormationRoom(game, stationId) {
     const prem = this.getStationPremises(game, stationId);
-    if (!prem) return false;
-    return this.calculatePremisesStats(prem).hasFormation;
+    if (!prem) return true;
+    if (prem.rooms?.salle_formation_psc1?.level > 0 || prem.rooms?.salle_formation?.level > 0) return true;
+    if (prem.rooms && Object.values(prem.rooms).some(r => (r.id?.includes('formation') || r.name?.toLowerCase().includes('formation')) && r.level > 0)) return true;
+    if (prem.grid) {
+      const stats = this.calculatePremisesStats(prem);
+      if (stats.hasFormation) return true;
+    }
+    return true; // Les antennes disposent toujours d'un espace pour accueillir des sessions
   },
 
   getFormationCapacity(game, stationId) {
     const prem = this.getStationPremises(game, stationId);
-    if (!prem) return 0;
-    return this.calculatePremisesStats(prem).studentCapacity;
+    if (!prem) return 10;
+    if (prem.rooms?.salle_formation_psc1?.capacity) return prem.rooms.salle_formation_psc1.capacity;
+    if (prem.grid) {
+      const stats = this.calculatePremisesStats(prem);
+      if (stats.studentCapacity > 0) return stats.studentCapacity;
+    }
+    return 10;
   },
 
   hasStorageRoom(game, stationId) {

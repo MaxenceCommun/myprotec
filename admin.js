@@ -852,7 +852,7 @@ window.ProtecAdmin = {
 
       if (activePlayerId || activePlayerName) {
         const primaryStation = (game?.stations && game.stations[0]) || null;
-        const currentMoney = (game?.resources?.money !== undefined) ? game.resources.money : ((game?.resources?.budget !== undefined) ? game.resources.budget : 15000);
+        const currentMoney = (game?.resources?.money !== undefined) ? game.resources.money : ((game?.resources?.budget !== undefined) ? game.resources.budget : 40000);
         const currentVolunteers = game?.volunteers?.length || 4;
         const currentVehicles = game?.vehicles?.length || 1;
         const currentMissions = game?.missions?.length || 0;
@@ -1625,6 +1625,10 @@ window.ProtecAdmin = {
     const convCump = !!sData.cumpConvention?.signed;
     const convPcs = !!sData.pcsConventions?.signed;
 
+    const uDept = user.departmentCode || sData.player?.departmentCode || '75';
+    const uCity = user.city || sData.player?.city || '';
+    const pompiersAuth = window.ProtecDepartements?.getPompiersAuthority ? window.ProtecDepartements.getPompiersAuthority(uDept, uCity) : { shortName: 'SDIS' };
+
     // Graphique plateforme individuel
     const platformChartHTML = window.ProtecPlatformAnalytics?.renderPlayerPlatformChartHTML
       ? window.ProtecPlatformAnalytics.renderPlayerPlatformChartHTML(user, 'adm-support-player-platform-chart')
@@ -1804,17 +1808,17 @@ window.ProtecAdmin = {
             </button>
           </div>
 
-          <!-- Convention SDIS Pompiers -->
+          <!-- Convention Pompiers (BSPP / BMPM / SDIS) -->
           <div class="p-2.5 rounded-xl border ${convSdis ? 'bg-orange-50/70 border-orange-300' : 'bg-slate-50 border-slate-200'} flex flex-col justify-between space-y-2">
             <div>
               <div class="flex items-center justify-between">
-                <strong class="text-slate-900 text-xs">SDIS Pompiers (18/112)</strong>
+                <strong class="text-slate-900 text-xs">${pompiersAuth.shortName} (Pompiers)</strong>
                 <span class="px-1.5 py-0.5 rounded-md text-[9px] font-black ${convSdis ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600'}">${convSdis ? 'Signée' : 'Non signée'}</span>
               </div>
               <p class="text-[10px] text-slate-500 mt-0.5 leading-snug">Départs réflexes secours à victimes et gardes caserne.</p>
             </div>
             <button onclick="window.ProtecAdmin.supportToggleConvention('${user.id}', 'sdisConvention', ${!convSdis})" class="w-full py-1 rounded-lg font-bold text-[10px] cursor-pointer ${convSdis ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-orange-600 text-white hover:bg-orange-700 shadow-xs'}">
-              ${convSdis ? 'Résilier Convention' : 'Signer Convention'}
+              ${convSdis ? `Résilier Convention ${pompiersAuth.shortName}` : `Signer Convention ${pompiersAuth.shortName}`}
             </button>
           </div>
 
@@ -2997,13 +3001,33 @@ window.ProtecAdmin = {
     }
 
     const catalog = (window.ProtecEcussons?.catalog?.length ? window.ProtecEcussons.catalog : (window.ProtecEcussons?.FALLBACK_CATALOG || []));
-    const badge = catalog.find(b => b.code === badgeCode) || {
-      code: badgeCode,
-      nom: badgeCode,
-      rarete: badgeCode === 'badge_admin' ? 'historique' : 'epique'
-    };
+    let badge = catalog.find(b => b.code === badgeCode);
+    if (!badge && this.badgesCache) {
+      const bFromCache = this.badgesCache.find(b => b.code === badgeCode);
+      if (bFromCache) {
+        badge = {
+          id: bFromCache.id,
+          code: bFromCache.code,
+          nom: bFromCache.name || bFromCache.nom || badgeCode,
+          name: bFromCache.name || bFromCache.nom || badgeCode,
+          rarete: bFromCache.rarity || bFromCache.rarete || 'epique',
+          imageUrl: bFromCache.image_url || bFromCache.imageUrl
+        };
+      }
+    }
+    if (!badge) {
+      badge = {
+        code: badgeCode,
+        nom: badgeCode,
+        name: badgeCode,
+        rarete: badgeCode === 'badge_admin' ? 'historique' : 'epique'
+      };
+    }
 
+    const qty = Number(quantity || 1);
     let success = false;
+
+    // 1. Tenter l'appel au backend local sans jamais bloquer s'il est hors-ligne
     try {
       const res = await fetch('/api/admin/badges/award', {
         method: 'POST',
@@ -3011,7 +3035,7 @@ window.ProtecAdmin = {
         body: JSON.stringify({
           userId,
           badge,
-          quantity: Number(quantity || 1),
+          quantity: qty,
           notify: !!notify
         })
       });
@@ -3020,17 +3044,27 @@ window.ProtecAdmin = {
         if (data.success) success = true;
       }
     } catch (e) {
-      console.warn('Erreur /api/admin/badges/award:', e);
+      // Ignorer silencieusement en mode Cloud Supabase
     }
 
-    // Répercussion locale & cache
+    // 2. Persistance directe dans Supabase Cloud (table game_saves & antenne_ecussons)
+    if (window.ProtecSupabase && window.ProtecSupabase.client) {
+      try {
+        const supaOk = await window.ProtecSupabase.awardBadge(userId, badge, qty, notify);
+        if (supaOk) success = true;
+      } catch (errSupa) {
+        console.warn('Persistance Supabase Cloud écusson:', errSupa);
+      }
+    }
+
+    // 3. Répercussion locale & cache administrateur
     const users = this.usersCache || [];
     const applyToUser = (u) => {
       if (!u.saveData) u.saveData = {};
       if (!u.saveData.localEcussons) u.saveData.localEcussons = [];
       const ex = u.saveData.localEcussons.find(l => l.code === badgeCode);
-      if (ex) ex.quantite = (ex.quantite || 1) + Number(quantity || 1);
-      else u.saveData.localEcussons.push({ code: badgeCode, quantite: Number(quantity || 1) });
+      if (ex) ex.quantite = (ex.quantite || 1) + qty;
+      else u.saveData.localEcussons.push({ code: badgeCode, quantite: qty });
     };
 
     if (userId === 'all') {
@@ -3044,20 +3078,42 @@ window.ProtecAdmin = {
       }
     }
 
-    // Si le joueur modifié est le joueur en cours, attribuer directement dans ProtecEcussons
+    // 4. Si le joueur modifié est le joueur en cours (ou 'all')
     if (window.game) {
       const g = window.game;
       const isCur = (userId === 'all') || (g.player && g.player.id === userId) || (window.ProtecAuth?.currentUser && window.ProtecAuth.currentUser.id === userId);
       if (isCur) {
         if (window.ProtecEcussons && typeof window.ProtecEcussons.attribuerEcusson === 'function') {
-          await window.ProtecEcussons.attribuerEcusson(badgeCode, null, notify);
+          for (let i = 0; i < qty; i++) {
+            await window.ProtecEcussons.attribuerEcusson(badgeCode, null, (i === 0 && notify));
+          }
+        } else {
+          if (!g.localEcussons) g.localEcussons = [];
+          const loc = g.localEcussons.find(l => l.code === badgeCode);
+          if (loc) loc.quantite = (loc.quantite || 1) + qty;
+          else g.localEcussons.push({ code: badgeCode, quantite: qty });
+          if (typeof g.saveGame === 'function') g.saveGame();
         }
+        success = true;
       }
     }
 
+    // 5. Diffusion broadcast Realtime si pas déjà fait par ProtecSupabase
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.broadcastBadgeAwarded === 'function') {
+      window.ProtecSupabase.broadcastBadgeAwarded({
+        userId,
+        badge,
+        quantity: qty,
+        notify: !!notify
+      });
+    }
+
     if (success) {
+      const targetUser = (this.usersCache || []).find(u => u.id === userId);
+      const targetName = userId === 'all' ? 'tous les directeurs' : (targetUser?.username || 'le joueur');
+      const badgeTitle = badge.nom || badge.name || badgeCode;
       if (window.game) {
-        window.game.showToast('Écusson Distribué', `L'écusson « ${badge.nom || badgeCode} » (x${quantity}) a été décerné avec succès !`, 'green');
+        window.game.showToast('Écusson Distribué !', `L'écusson « ${badgeTitle} » (x${qty}) a été remis à ${targetName}.`, 'green');
       }
       this.renderBadgeManagerModalContent();
     } else {
@@ -3084,6 +3140,16 @@ window.ProtecAdmin = {
       }
     } catch (e) {
       console.warn('Erreur /api/admin/badges/revoke:', e);
+    }
+
+    // Persistance directe dans Supabase Cloud
+    if (window.ProtecSupabase && window.ProtecSupabase.client) {
+      try {
+        await window.ProtecSupabase.revokeBadge(userId, badgeCode, removeAll);
+        success = true;
+      } catch (errSupa) {
+        console.warn('Erreur Supabase revokeBadge:', errSupa);
+      }
     }
 
     // Mise à jour cache local
@@ -3114,7 +3180,17 @@ window.ProtecAdmin = {
           }
         }
         if (window.ProtecEcussons?.refreshPlayerEcussons) window.ProtecEcussons.refreshPlayerEcussons(g);
+        success = true;
       }
+    }
+
+    // Broadcast Supabase Realtime
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.broadcastBadgeRevoked === 'function') {
+      window.ProtecSupabase.broadcastBadgeRevoked({
+        userId,
+        badgeCode,
+        removeAll: !!removeAll
+      });
     }
 
     if (window.game) window.game.showToast('Écusson Modifié', `L'écusson a été mis à jour pour ce directeur.`, 'blue');
@@ -4927,11 +5003,11 @@ window.ProtecAdmin = {
         type: 'VPSP',
         name: 'Véhicule de Premiers Secours à Personnes (VPSP)',
         category: 'Secours d’Urgence',
-        desc: 'Cellule sanitaire grand volume aux normes EN 1789, brancard 3 points, oxygénothérapie et armoire d’urgence SUAP.',
+        desc: 'Cellule sanitaire grand volume aux normes EN 1789, brancard 3 points, oxygénothérapie et armoire d’urgence SUAP. Conduite autorisée avec le Permis B.',
         cost: 28500,
         capacity: 5,
         licenseRequired: 'B',
-        licenseLabel: 'Permis B (+ Habilitation P.VPSP)',
+        licenseLabel: 'Permis B',
         speedKmH: 85,
         hasTowHitch: false,
         image: 'images/vehicles/master3_vpsp.png'
@@ -4990,29 +5066,29 @@ window.ProtecAdmin = {
       },
       {
         type: 'FLIT',
-        name: 'Fourgon Lourd d’Intervention Technique (FLIT)',
+        name: 'Fourgon Lourd d’Intervention Technique & Soutien Pop (FLIT)',
         category: 'Technique & Soutien Lourd',
         desc: 'Poids Lourd de soutien lourd type FPTL/FPTSR (> 12 tonnes) avec mât d’éclairage télescopique, groupe électrogène de puissance et motopompes grande capacité.',
         cost: 95000,
         capacity: 3,
         licenseRequired: 'C',
-        licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
+        licenseLabel: 'Permis C (Poids Lourd)',
         speedKmH: 70,
         hasTowHitch: true,
-        image: 'images/vehicles/FLIT.png'
+        image: 'images/vehicles/flit_pop.png'
       },
       {
         type: 'PCM',
-        name: 'Poste de Commandement Mobile (PCM)',
+        name: 'Poste de Commandement Mobile (PCM Renault Midlum)',
         category: 'Commandement Lourd',
-        desc: 'Centre opérationnel mobile de crise avec baie de transmissions VHF/UHF, liaisons satellites et salle de crise embarquée.',
-        cost: 45000,
+        desc: 'Centre opérationnel mobile de crise sur châssis Renault Midlum avec baie de transmissions VHF/UHF, liaisons satellites et salle de crise embarquée.',
+        cost: 55000,
         capacity: 3,
         licenseRequired: 'C',
-        licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
-        speedKmH: 65,
+        licenseLabel: 'Permis C (Poids Lourd)',
+        speedKmH: 70,
         hasTowHitch: false,
-        image: 'images/vehicles/PCM.png'
+        image: 'images/vehicles/midlum_pc.png'
       },
       {
         type: 'ERS',
@@ -5821,6 +5897,7 @@ window.ProtecAdmin = {
             <label class="block font-bold text-slate-700 mb-1">Sélectionner le Directeur bénéficiaire :</label>
             <select id="adm-award-user" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required>
               <option value="">-- Choisir un directeur dans la base --</option>
+              <option value="all">🌟 TOUS LES DIRECTEURS (Distribution Fédérale Globale)</option>
               ${players.map(p => `
                 <option value="${p.id}">${p.username} (${p.stationName || 'Antenne'} - ${p.city || 'Ville'})</option>
               `).join('')}
@@ -5844,29 +5921,23 @@ window.ProtecAdmin = {
   },
 
   async submitAwardBadge(badgeCode) {
-    const userId = document.getElementById('adm-award-user')?.value;
-    const qty = parseInt(document.getElementById('adm-award-qty')?.value || '1', 10);
-    if (!userId) return;
-
-    const user = (this.usersCache || []).find(u => u.id === userId);
-    const badge = (this.badgesCache || []).find(b => b.code === badgeCode);
-
-    try {
-      const res = await fetch('/api/admin/badges/award', {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify({ userId, badgeCode, quantity: qty })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        document.getElementById('admin-award-badge-modal')?.classList.add('hidden');
-        if (window.game) window.game.showToast('Écusson Décerné !', `L'écusson « ${badge.name} » a été remis à ${user?.username || 'le joueur'}.`, 'green');
+    const userSelect = document.getElementById('adm-award-user');
+    const userId = userSelect?.value;
+    const qty = parseInt(document.getElementById('adm-award-qty')?.value || '1', 10) || 1;
+    if (!userId) {
+      if (window.ProtecDialog) {
+        await window.ProtecDialog.alert("Veuillez sélectionner un directeur destinataire.", "Destinataire Requis");
       } else {
-        alert(data.error || "Erreur lors de l'attribution.");
+        alert("Veuillez sélectionner un directeur destinataire.");
       }
-    } catch (e) {
-      alert("Erreur réseau lors de l'attribution de l'écusson.");
+      return;
     }
+
+    // Fermer la modale
+    document.getElementById('admin-award-badge-modal')?.classList.add('hidden');
+
+    // Déléguer au système officiel (persistance Supabase, Realtime, Cache, Backend local)
+    await this.awardBadgeToPlayer(userId, badgeCode, qty, true);
   },
 
   // =========================================================================

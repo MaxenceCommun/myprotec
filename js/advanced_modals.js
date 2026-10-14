@@ -226,7 +226,7 @@ window.ProtecAdvancedModals = {
       label: 'Rampe LED Haute Puissance & Feux Calandre',
       cost: 1250,
       icon: '🚨',
-      desc: 'Visibilité optimale de nuit et sécurité renforcée sur voies rapides et autoroute.'
+      desc: 'Visibilité optimale de nuit et vitesse d’urgence sur interventions (obligatoire sur VPSP).'
     },
     climatisation: {
       id: 'climatisation',
@@ -234,13 +234,6 @@ window.ProtecAdvancedModals = {
       cost: 1850,
       icon: '❄️',
       desc: 'Confort thermique canicule / grand froid pour les victimes et les bénévoles.'
-    },
-    converter230v: {
-      id: 'converter230v',
-      label: 'Convertisseur 230V Sinus & Maintien Charge',
-      cost: 1100,
-      icon: '⚡',
-      desc: 'Alimentation continue des DAE, électro-cardiographes, oxygène et tablettes.'
     }
   },
 
@@ -338,12 +331,14 @@ window.ProtecAdvancedModals = {
     const hasNativeTowHitch = Boolean(foundVariant?.hasTowHitch);
     let finalTowHitch = hasNativeTowHitch;
 
+    const isVPSP = vehicleType === 'VPSP' || foundVariant?.type === 'VPSP';
+
     if (!hasNativeTowHitch && selOpts.towHitch) {
       optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
       activeOptionsList.push(this.VEHICLE_OPTIONS.towHitch.label);
       finalTowHitch = true;
     }
-    if (selOpts.ledBar) {
+    if (!isVPSP && selOpts.ledBar) {
       optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
       activeOptionsList.push(this.VEHICLE_OPTIONS.ledBar.label);
     }
@@ -351,14 +346,12 @@ window.ProtecAdvancedModals = {
       optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
       activeOptionsList.push(this.VEHICLE_OPTIONS.climatisation.label);
     }
-    if (selOpts.converter230v) {
-      optionsExtraCost += this.VEHICLE_OPTIONS.converter230v.cost;
-      activeOptionsList.push(this.VEHICLE_OPTIONS.converter230v.label);
-    }
 
     const customOptions = Object.assign({}, foundVariant, {
       cost: (foundVariant?.cost || 20000) + optionsExtraCost,
       hasTowHitch: finalTowHitch,
+      hasLedBar: isVPSP || Boolean(selOpts.ledBar) || Boolean(foundVariant?.hasLedBar),
+      hasConverter230v: true,
       installedOptions: activeOptionsList
     });
 
@@ -512,6 +505,8 @@ window.ProtecAdvancedModals = {
             const isMotoLicense = currentVariant.licenseRequired === 'Moto';
             const isNoLicense = currentVariant.licenseRequired === 'None';
 
+            const isVPSP = currentVariant.type === 'VPSP';
+
             // Options configurables actives pour cette variante
             const selOpts = this.getVehicleSelectedOptions(currentVariant.id);
             let optionsExtraCost = 0;
@@ -520,14 +515,11 @@ window.ProtecAdvancedModals = {
             if (!hasNativeTowHitch && selOpts.towHitch) {
               optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
             }
-            if (selOpts.ledBar) {
+            if (!isVPSP && selOpts.ledBar) {
               optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
             }
             if (selOpts.climatisation) {
               optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
-            }
-            if (selOpts.converter230v) {
-              optionsExtraCost += this.VEHICLE_OPTIONS.converter230v.cost;
             }
 
             const totalConfigCost = currentVariant.cost + optionsExtraCost;
@@ -664,15 +656,22 @@ window.ProtecAdvancedModals = {
                         </button>
                       `}
 
-                      <!-- Option Rampe LED -->
-                      <button 
-                        type="button" 
-                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'ledBar', '${st?.id}')"
-                        class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
-                      >
-                        <span class="flex items-center gap-1.5"><span>🚨</span> Rampe LED & Calandre</span>
-                        <span class="font-mono font-black text-[10px] ${selOpts.ledBar ? 'text-pc-blue' : 'text-slate-500'}">+1 250 €</span>
-                      </button>
+                      <!-- Option Rampe LED : Obligatoire et de série sur VPSP, optionnelle sur les autres -->
+                      ${isVPSP ? `
+                        <div class="p-2 rounded-xl bg-blue-50/80 border border-blue-200 text-blue-900 font-bold flex items-center justify-between text-xs">
+                          <span class="flex items-center gap-1.5"><span>🚨</span> Rampe Gyrophares LED</span>
+                          <span class="text-[9px] font-black uppercase bg-blue-200/80 px-1.5 py-0.5 rounded text-blue-950">De Série (Obligatoire)</span>
+                        </div>
+                      ` : `
+                        <button 
+                          type="button" 
+                          onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'ledBar', '${st?.id}')"
+                          class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                        >
+                          <span class="flex items-center gap-1.5"><span>🚨</span> Rampe LED & Calandre</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.ledBar ? 'text-pc-blue' : 'text-slate-500'}">+1 250 €</span>
+                        </button>
+                      `}
 
                       <!-- Option Climatisation / Chauffage -->
                       <button 
@@ -684,15 +683,11 @@ window.ProtecAdvancedModals = {
                         <span class="font-mono font-black text-[10px] ${selOpts.climatisation ? 'text-pc-blue' : 'text-slate-500'}">+1 850 €</span>
                       </button>
 
-                      <!-- Option Convertisseur 230V -->
-                      <button 
-                        type="button" 
-                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'converter230v', '${st?.id}')"
-                        class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.converter230v ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
-                      >
+                      <!-- Équipement de Série : Convertisseur 230V Sinus (Systématique) -->
+                      <div class="p-2 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-800 font-bold flex items-center justify-between text-xs">
                         <span class="flex items-center gap-1.5"><span>⚡</span> Convertisseur 230V Sinus</span>
-                        <span class="font-mono font-black text-[10px] ${selOpts.converter230v ? 'text-pc-blue' : 'text-slate-500'}">+1 100 €</span>
-                      </button>
+                        <span class="text-[9px] font-black uppercase bg-emerald-200/70 px-1.5 py-0.5 rounded text-emerald-900">De Série</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -731,19 +726,46 @@ window.ProtecAdvancedModals = {
     // Construction d'une liste de cartes opérationnelles enrichies
     // Regroupement particulier pour le VTU Master 3 (Logistique vs Soutien aux populations)
     const operationalCards = [
-      // 1. VPSP Renault Master 3 Profilé
+      // 1. VPSP Renault Master 4 Nouvelle Génération
+      {
+        id: 'type_vpsp_master4',
+        type: 'VPSP',
+        title: 'VPSP - Ambulance Master IV (Nouvelle Génération)',
+        category: 'Secours d’Urgence',
+        roleGroup: 'secours',
+        desc: 'Ambulance grand confort de dernière génération aux normes EN 1789, brancard 3 points assisté, suspension confort et motorisation efficiente. Conduite avec Permis B.',
+        cost: 34500,
+        capacity: 5,
+        speedKmH: 90,
+        licenseRequired: 'B',
+        licenseLabel: 'Permis B',
+        hasTowHitch: false,
+        image: 'images/vehicles/master4_vpsp.png',
+        icon: '🚑',
+        specialty: 'Urgences Réflexes & SAMU 15',
+        variantOptions: {
+          id: 'master4_vpsp',
+          name: 'Renault Master IV - VPSP Nouvelle Génération',
+          model: 'Renault Master IV VPSP',
+          cost: 34500,
+          capacity: 5,
+          licenseRequired: 'B',
+          image: 'images/vehicles/master4_vpsp.png'
+        }
+      },
+      // 2. VPSP Renault Master 3 Profilé
       {
         id: 'type_vpsp_master3',
         type: 'VPSP',
         title: 'VPSP - Ambulance Profilée Standard (Master III)',
         category: 'Secours d’Urgence',
         roleGroup: 'secours',
-        desc: 'Cellule sanitaire profilée d’intervention d’urgence aux normes EN 1789, brancard 3 points et dotation SUAP.',
+        desc: 'Cellule sanitaire profilée d’intervention d’urgence aux normes EN 1789, brancard 3 points et dotation SUAP. Conduite avec Permis B (Habilitation interne P.VPSP requise uniquement pour le transport effectif de victime).',
         cost: 28500,
         capacity: 5,
         speedKmH: 85,
         licenseRequired: 'B',
-        licenseLabel: 'Permis B (+ P.VPSP)',
+        licenseLabel: 'Permis B',
         hasTowHitch: false,
         image: 'images/vehicles/master3_vpsp.png',
         icon: '🚑',
@@ -758,19 +780,19 @@ window.ProtecAdvancedModals = {
           image: 'images/vehicles/master3_vpsp.png'
         }
       },
-      // 2. VPSP Renault Master 3 Cube
+      // 3. VPSP Renault Master 3 Cube
       {
         id: 'type_vpsp_cube_master3',
         type: 'VPSP',
         title: 'VPSP - Grande Cellule Carrée Cube (Master III)',
         category: 'Secours d’Urgence',
         roleGroup: 'secours',
-        desc: 'Cellule cubique sanitaire XXL grand volume. Espace d’intervention maximal idéal pour réanimation et soins intensifs.',
+        desc: 'Cellule cubique sanitaire XXL grand volume. Espace d’intervention maximal idéal pour réanimation et soins intensifs. Conduite avec Permis B.',
         cost: 32000,
         capacity: 5,
         speedKmH: 80,
         licenseRequired: 'B',
-        licenseLabel: 'Permis B (+ P.VPSP)',
+        licenseLabel: 'Permis B',
         hasTowHitch: false,
         image: 'images/vehicles/master3_vpsp_cube.png',
         icon: '🚑',
@@ -910,41 +932,140 @@ window.ProtecAdvancedModals = {
         icon: '🚙',
         specialty: 'Accès Tout-Terrain & Crues'
       },
-      // 8. FLIT Poids Lourd (Permis C)
+      // 8. FLIT Poids Lourd Soutien Pop
       {
         id: 'type_flit_heavy',
         type: 'FLIT',
-        title: 'FLIT - Fourgon Lourd d’Intervention Technique (Poids Lourd > 12t)',
+        title: 'FLIT - Fourgon Lourd d’Intervention Technique & Soutien Pop',
         category: 'Technique & Soutien',
         roleGroup: 'heavy',
-        desc: 'Châssis Poids Lourd lourdement équipé (type FPTL / FPTSR > 12t) avec rideaux alu, groupe électrogène haute puissance, mât d’éclairage télescopique, lot PMA et pompes d’épuisement. Conducteur Permis C obligatoire.',
+        desc: 'Châssis Poids Lourd lourdement équipé avec rideaux alu, groupe électrogène haute puissance, mât d’éclairage télescopique, lot PMA et motopompes. Conducteur Permis C obligatoire.',
         cost: 95000,
         capacity: 3,
         speedKmH: 70,
         licenseRequired: 'C',
-        licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
+        licenseLabel: 'Permis C (Poids Lourd)',
         hasTowHitch: true,
-        image: 'images/vehicles/FLIT.png',
+        image: 'images/vehicles/flit_pop.png',
         icon: '🏗️',
-        specialty: 'Postes Médicaux Avancés & Crises'
+        specialty: 'Postes Médicaux Avancés & Crises',
+        variantOptions: {
+          id: 'flit_heavy',
+          name: 'FLIT - Fourgon Lourd d’Intervention Technique & Soutien Pop',
+          model: 'FLIT Poids Lourd Soutien Pop',
+          cost: 95000,
+          capacity: 3,
+          licenseRequired: 'C',
+          image: 'images/vehicles/flit_pop.png'
+        }
       },
-      // 9. PCM Poids Lourd (Permis C)
+      // 9. Renault Midliner S135 FLIT Soutien Pop
+      {
+        id: 'type_midliner_flit',
+        type: 'FLIT',
+        title: 'FLIT - Renault Midliner S135 Soutien Pop (Poids Lourd)',
+        category: 'Technique & Soutien',
+        roleGroup: 'heavy',
+        desc: 'Poids Lourd d’assistance aux populations sinistrées et soutien logistique lourd en situation de crise ou inondation.',
+        cost: 42000,
+        capacity: 3,
+        speedKmH: 75,
+        licenseRequired: 'C',
+        licenseLabel: 'Permis C (Poids Lourd)',
+        hasTowHitch: true,
+        image: 'images/vehicles/midliners135_flit_pop.png',
+        icon: '🏗️',
+        specialty: 'Catastrophes & Soutien Sinistrés',
+        variantOptions: {
+          id: 'midliners135_flit_pop',
+          name: 'Renault Midliner S135 - FLIT Soutien Pop',
+          model: 'Renault Midliner S135 FLIT',
+          cost: 42000,
+          capacity: 3,
+          licenseRequired: 'C',
+          image: 'images/vehicles/midliners135_flit_pop.png'
+        }
+      },
+      // 10. PCM Renault Midlum
       {
         id: 'type_pcm_heavy',
         type: 'PCM',
-        title: 'PCM - Poste de Commandement Mobile (> 3.5t)',
+        title: 'PCM - Poste de Commandement Mobile (Renault Midlum)',
         category: 'Commandement Lourd',
         roleGroup: 'heavy',
-        desc: 'Centre opérationnel mobile de crise avec baie de transmissions VHF/UHF, satellite et salle de crise. Conducteur Permis C obligatoire.',
-        cost: 45000,
+        desc: 'Centre opérationnel mobile de crise sur châssis Renault Midlum avec baie de transmissions VHF/UHF, satellite et salle de crise embarquée. Conducteur Permis C obligatoire.',
+        cost: 55000,
         capacity: 3,
-        speedKmH: 65,
+        speedKmH: 70,
         licenseRequired: 'C',
-        licenseLabel: 'Permis C (Poids Lourd) Requis 🚚',
+        licenseLabel: 'Permis C (Poids Lourd)',
         hasTowHitch: false,
-        image: 'images/vehicles/PCM.png',
+        image: 'images/vehicles/midlum_pc.png',
         icon: '🚍',
-        specialty: 'Coordination Grands Événements & NOVI'
+        specialty: 'Coordination Grands Événements & NOVI',
+        variantOptions: {
+          id: 'pcm_heavy',
+          name: 'Renault Midlum - PCM Poste de Commandement Mobile',
+          model: 'PCM Renault Midlum',
+          cost: 55000,
+          capacity: 3,
+          licenseRequired: 'C',
+          image: 'images/vehicles/midlum_pc.png'
+        }
+      },
+      // 11. Renault Trucks PL Soutien Pop
+      {
+        id: 'type_pl_pop',
+        type: 'VTU',
+        title: 'PL POP - Poids Lourd Soutien aux Populations (Renault Trucks)',
+        category: 'Soutien & Sauvegarde',
+        roleGroup: 'heavy',
+        desc: 'Camion Poids Lourd grand volume avec hayon élévateur pour le déploiement massif de lits picot, malles d’hébergement d’urgence et ravitaillement citoyen.',
+        cost: 58000,
+        capacity: 3,
+        speedKmH: 75,
+        licenseRequired: 'C',
+        licenseLabel: 'Permis C (Poids Lourd)',
+        hasTowHitch: true,
+        image: 'images/vehicles/pl_pop.png',
+        icon: '🚚',
+        specialty: 'Hébergement d’Urgence & Crises',
+        variantOptions: {
+          id: 'pl_pop',
+          name: 'Renault Trucks PL - Soutien aux Populations',
+          model: 'Renault Trucks PL POP',
+          cost: 58000,
+          capacity: 3,
+          licenseRequired: 'C',
+          image: 'images/vehicles/pl_pop.png'
+        }
+      },
+      // 12. Renault TRM 2000 4x4 Tout-Terrain
+      {
+        id: 'type_trm_pop',
+        type: 'VLHR',
+        title: 'TRM 2000 4x4 - Camion Tout-Terrain Soutien aux Populations',
+        category: 'Tout-Terrain Lourd',
+        roleGroup: 'heavy',
+        desc: 'Camion Poids Lourd 4x4 tout-terrain de franchissement lourd pour inondations sévères, tempêtes, pistes dégradées et accès en zone sinistrée coupée du monde.',
+        cost: 48000,
+        capacity: 3,
+        speedKmH: 70,
+        licenseRequired: 'C',
+        licenseLabel: 'Permis C (Poids Lourd)',
+        hasTowHitch: true,
+        image: 'images/vehicles/trm_pop.png',
+        icon: '🚜',
+        specialty: 'Inondations, Tempêtes & Crues',
+        variantOptions: {
+          id: 'trm_pop',
+          name: 'Renault TRM 2000 4x4 - Soutien aux Populations',
+          model: 'Renault TRM 2000 4x4',
+          cost: 48000,
+          capacity: 3,
+          licenseRequired: 'C',
+          image: 'images/vehicles/trm_pop.png'
+        }
       },
       // 10. Bateau ERS
       {
@@ -1111,19 +1232,17 @@ window.ProtecAdvancedModals = {
             // Options configurables actives pour cette carte
             const selOpts = this.getVehicleSelectedOptions(card.id);
             let optionsExtraCost = 0;
+            const isVPSP = card.type === 'VPSP';
             const hasNativeTowHitch = Boolean(card.hasTowHitch);
 
             if (!hasNativeTowHitch && selOpts.towHitch) {
               optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
             }
-            if (selOpts.ledBar) {
+            if (!isVPSP && selOpts.ledBar) {
               optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
             }
             if (selOpts.climatisation) {
               optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
-            }
-            if (selOpts.converter230v) {
-              optionsExtraCost += this.VEHICLE_OPTIONS.converter230v.cost;
             }
 
             const totalCardCost = card.cost + optionsExtraCost;
@@ -1144,7 +1263,7 @@ window.ProtecAdvancedModals = {
                     <div class="absolute bottom-2 right-2">
                       <span class="px-2 py-0.5 rounded-lg text-[9.5px] font-black tracking-wide border shadow-xs ${
                         isHeavyLicense 
-                          ? 'bg-amber-500 text-white border-amber-600 animate-pulse' 
+                          ? 'bg-amber-600 text-white border-amber-700' 
                           : (isMotoLicense 
                               ? 'bg-sky-500 text-white border-sky-600' 
                               : (isNoLicense 
@@ -1245,14 +1364,22 @@ window.ProtecAdvancedModals = {
                         </button>
                       `}
 
-                      <button 
-                        type="button" 
-                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'ledBar', '${st?.id}')"
-                        class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
-                      >
-                        <span class="flex items-center gap-1"><span>🚨</span> Rampe LED</span>
-                        <span class="font-mono font-black text-[9.5px] ${selOpts.ledBar ? 'text-pc-blue' : 'text-slate-500'}">+1 250 €</span>
-                      </button>
+                      <!-- Option Rampe LED : Obligatoire et de série sur VPSP, optionnelle sur les autres -->
+                      ${isVPSP ? `
+                        <div class="p-1.5 rounded-lg bg-blue-50/80 border border-blue-200 text-blue-900 font-bold flex items-center justify-between text-[10px]">
+                          <span class="flex items-center gap-1"><span>🚨</span> Rampe LED</span>
+                          <span class="text-[8.5px] font-black uppercase bg-blue-200/80 px-1.5 py-0.5 rounded text-blue-950">De Série (Obligatoire)</span>
+                        </div>
+                      ` : `
+                        <button 
+                          type="button" 
+                          onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'ledBar', '${st?.id}')"
+                          class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                        >
+                          <span class="flex items-center gap-1"><span>🚨</span> Rampe LED</span>
+                          <span class="font-mono font-black text-[9.5px] ${selOpts.ledBar ? 'text-pc-blue' : 'text-slate-500'}">+1 250 €</span>
+                        </button>
+                      `}
 
                       <button 
                         type="button" 
@@ -1263,14 +1390,11 @@ window.ProtecAdvancedModals = {
                         <span class="font-mono font-black text-[9.5px] ${selOpts.climatisation ? 'text-pc-blue' : 'text-slate-500'}">+1 850 €</span>
                       </button>
 
-                      <button 
-                        type="button" 
-                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'converter230v', '${st?.id}')"
-                        class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.converter230v ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
-                      >
+                      <!-- Équipement de Série : Convertisseur 230V Sinus (Systématique) -->
+                      <div class="p-1.5 rounded-lg bg-emerald-50/70 border border-emerald-200 text-emerald-800 font-bold flex items-center justify-between text-[10px]">
                         <span class="flex items-center gap-1"><span>⚡</span> 230V Pur Sinus</span>
-                        <span class="font-mono font-black text-[9.5px] ${selOpts.converter230v ? 'text-pc-blue' : 'text-slate-500'}">+1 100 €</span>
-                      </button>
+                        <span class="text-[8.5px] font-black uppercase bg-emerald-200/70 px-1.5 py-0.5 rounded text-emerald-900">De Série</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1308,10 +1432,6 @@ window.ProtecAdvancedModals = {
         optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
         activeOptionsList.push(this.VEHICLE_OPTIONS.climatisation.label);
       }
-      if (selOpts.converter230v) {
-        optionsExtraCost += this.VEHICLE_OPTIONS.converter230v.cost;
-        activeOptionsList.push(this.VEHICLE_OPTIONS.converter230v.label);
-      }
 
       const variantOptions = {
         id: isSoutienPop ? 'master3_vtu_pop' : 'master3_vtu_log',
@@ -1321,6 +1441,8 @@ window.ProtecAdvancedModals = {
         capacity: 3,
         licenseRequired: 'B',
         hasTowHitch: true, // De série sur VTU Master 3
+        hasLedBar: Boolean(selOpts.ledBar),
+        hasConverter230v: true,
         serigraphieLabel: isSoutienPop ? 'Soutien aux Populations' : 'Logistique',
         image: isSoutienPop ? 'images/vehicles/master3_vtu_pop.png' : 'images/vehicles/master3_vtu_log.png',
         specialty: isSoutienPop ? 'Assistance Sinistrés' : 'Transport Lots PMA & Tentes',
@@ -1336,7 +1458,18 @@ window.ProtecAdvancedModals = {
     const catalogItem = (window.ProtecAdvanced?.vehicleCatalog || []).find(v => v.type === vehicleType);
     let options = null;
 
-    if (cardId === 'type_vpsp_master3') {
+    if (cardId === 'type_vpsp_master4') {
+      options = {
+        id: 'master4_vpsp',
+        name: 'Renault Master IV - VPSP Nouvelle Génération',
+        model: 'Renault Master IV VPSP',
+        cost: 34500,
+        capacity: 5,
+        licenseRequired: 'B',
+        hasTowHitch: false,
+        image: 'images/vehicles/master4_vpsp.png'
+      };
+    } else if (cardId === 'type_vpsp_master3') {
       options = {
         id: 'master3_vpsp',
         name: 'Renault Master III - VPSP Cellule Standard Profilée',
@@ -1383,24 +1516,57 @@ window.ProtecAdvancedModals = {
     } else if (cardId === 'type_flit_heavy') {
       options = {
         id: 'flit_heavy',
-        name: 'FLIT - Fourgon Lourd d’Intervention Technique (Poids Lourd > 12t)',
-        model: 'FLIT Poids Lourd (Type FPTL/FPTSR)',
+        name: 'FLIT - Fourgon Lourd d’Intervention Technique & Soutien Pop',
+        model: 'FLIT Poids Lourd Soutien Pop',
         cost: 95000,
         capacity: 3,
         licenseRequired: 'C',
         hasTowHitch: true,
-        image: 'images/vehicles/FLIT.png'
+        image: 'images/vehicles/flit_pop.png'
+      };
+    } else if (cardId === 'type_midliner_flit') {
+      options = {
+        id: 'midliners135_flit_pop',
+        name: 'Renault Midliner S135 - FLIT Soutien Pop',
+        model: 'Renault Midliner S135 FLIT',
+        cost: 42000,
+        capacity: 3,
+        licenseRequired: 'C',
+        hasTowHitch: true,
+        image: 'images/vehicles/midliners135_flit_pop.png'
       };
     } else if (cardId === 'type_pcm_heavy') {
       options = {
         id: 'pcm_heavy',
-        name: 'PCM - Poste de Commandement Mobile',
-        model: 'PCM Poids Lourd',
-        cost: 45000,
+        name: 'Renault Midlum - PCM Poste de Commandement Mobile',
+        model: 'PCM Renault Midlum',
+        cost: 55000,
         capacity: 3,
         licenseRequired: 'C',
         hasTowHitch: false,
-        image: 'images/vehicles/PCM.png'
+        image: 'images/vehicles/midlum_pc.png'
+      };
+    } else if (cardId === 'type_pl_pop') {
+      options = {
+        id: 'pl_pop',
+        name: 'Renault Trucks PL - Soutien aux Populations',
+        model: 'Renault Trucks PL POP',
+        cost: 58000,
+        capacity: 3,
+        licenseRequired: 'C',
+        hasTowHitch: true,
+        image: 'images/vehicles/pl_pop.png'
+      };
+    } else if (cardId === 'type_trm_pop') {
+      options = {
+        id: 'trm_pop',
+        name: 'Renault TRM 2000 4x4 - Soutien aux Populations',
+        model: 'Renault TRM 2000 4x4',
+        cost: 48000,
+        capacity: 3,
+        licenseRequired: 'C',
+        hasTowHitch: true,
+        image: 'images/vehicles/trm_pop.png'
       };
     } else if (cardId === 'type_ers_boat') {
       options = {
@@ -1417,6 +1583,7 @@ window.ProtecAdvancedModals = {
       };
     }
 
+    const isVPSP = vehicleType === 'VPSP' || (cardId && cardId.includes('vpsp'));
     const targetOpt = options || Object.assign({}, catalogItem);
     const hasNativeTowHitch = Boolean(targetOpt.hasTowHitch);
     let finalTowHitch = hasNativeTowHitch;
@@ -1426,7 +1593,7 @@ window.ProtecAdvancedModals = {
       activeOptionsList.push(this.VEHICLE_OPTIONS.towHitch.label);
       finalTowHitch = true;
     }
-    if (selOpts.ledBar) {
+    if (!isVPSP && selOpts.ledBar) {
       optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
       activeOptionsList.push(this.VEHICLE_OPTIONS.ledBar.label);
     }
@@ -1434,13 +1601,11 @@ window.ProtecAdvancedModals = {
       optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
       activeOptionsList.push(this.VEHICLE_OPTIONS.climatisation.label);
     }
-    if (selOpts.converter230v) {
-      optionsExtraCost += this.VEHICLE_OPTIONS.converter230v.cost;
-      activeOptionsList.push(this.VEHICLE_OPTIONS.converter230v.label);
-    }
 
     targetOpt.cost = (targetOpt.cost || 20000) + optionsExtraCost;
     targetOpt.hasTowHitch = finalTowHitch;
+    targetOpt.hasLedBar = isVPSP || Boolean(selOpts.ledBar) || Boolean(targetOpt.hasLedBar);
+    targetOpt.hasConverter230v = true;
     targetOpt.installedOptions = activeOptionsList;
 
     if (window.ProtecAdvanced && typeof window.ProtecAdvanced.buySpecializedVehicle === 'function') {

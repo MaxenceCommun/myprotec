@@ -206,7 +206,8 @@ window.ProtecMarcheOccasion = {
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
                   Temps Réel Actif
                 </span>
-              <p class="text-xs text-slate-300">
+              </div>
+              <p class="text-xs text-slate-300 mt-0.5">
                 Trésorerie disponible : <strong class="text-emerald-400 font-mono text-sm">${money.toLocaleString('fr-FR')} €</strong> • Achetez et revendez directement entre antennes joueuses.
               </p>
             </div>
@@ -357,14 +358,37 @@ window.ProtecMarcheOccasion = {
     list = this.sortListings(list);
 
     if (list.length === 0) {
+      const hasFilter = Boolean(this.searchQuery) || this.subFilterVehicle !== 'all';
       return `
-        <div class="py-16 text-center space-y-3 bg-white rounded-3xl border border-dashed border-slate-300 p-6">
-          <span class="text-4xl block">🚗</span>
-          <h5 class="text-sm font-black text-slate-800">Aucun véhicule disponible avec ces critères</h5>
-          <p class="text-xs text-slate-500 max-w-sm mx-auto">Toutes les offres ont été acquises ou aucun directeur n'a publié d'annonce correspondant à votre recherche. Vous pouvez mettre en vente un de vos véhicules ou revenir plus tard.</p>
-          <button onclick="window.ProtecMarcheOccasion.openSellModal('vehicle')" class="px-4 py-2 rounded-xl bg-pc-blue text-white font-black text-xs shadow-sm hover:brightness-110 transition">
-            + Publier un Véhicule en Vente
-          </button>
+        <div class="py-16 text-center space-y-4 bg-white rounded-3xl border border-dashed border-slate-300 p-8 shadow-xs">
+          <div class="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center text-3xl mx-auto shadow-inner">
+            🚗
+          </div>
+          <div class="space-y-1">
+            <h5 class="text-sm font-black text-slate-900">
+              ${hasFilter ? 'Aucun véhicule ne correspond à vos filtres' : 'Aucun véhicule d’occasion en vente actuellement'}
+            </h5>
+            <p class="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+              ${hasFilter 
+                ? 'Essayez de réinitialiser la recherche ou de sélectionner « Tous les types » pour voir l’ensemble des offres disponibles.' 
+                : 'Le marché de l’occasion fonctionne <strong>100% entre joueurs réels</strong>. Toutes les offres ont été acquises ou aucun directeur n’a encore mis d’engin en vente. Vous pouvez publier votre premier véhicule ou actualiser la liste.'}
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-3 pt-2">
+            ${hasFilter ? `
+              <button onclick="window.ProtecMarcheOccasion.searchQuery=''; window.ProtecMarcheOccasion.subFilterVehicle='all'; window.ProtecMarcheOccasion.renderBodyContent(window.game);" class="px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs border border-slate-300 transition cursor-pointer">
+                ✕ Réinitialiser les filtres
+              </button>
+            ` : ''}
+            <button onclick="window.ProtecMarcheOccasion.openSellModal('vehicle')" class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-pc-orange to-amber-500 hover:brightness-110 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i>
+              Vendre un de mes Véhicules
+            </button>
+            <button onclick="window.ProtecMarcheOccasion.refreshListings(window.game)" class="px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-300 transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+              Actualiser
+            </button>
+          </div>
         </div>
       `;
     }
@@ -526,14 +550,37 @@ window.ProtecMarcheOccasion = {
     list = this.sortListings(list);
 
     if (list.length === 0) {
+      const hasFilter = Boolean(this.searchQuery) || this.subFilterMaterial !== 'all';
       return `
-        <div class="py-16 text-center space-y-3 bg-white rounded-3xl border border-dashed border-slate-300 p-6">
-          <span class="text-4xl block">📦</span>
-          <h5 class="text-sm font-black text-slate-800">Aucun matériel ni meuble disponible</h5>
-          <p class="text-xs text-slate-500 max-w-sm mx-auto">Aucun article ne correspond à votre filtre. Vendez vos surplus d'équipement ou vos meubles non utilisés pour renflouer votre trésorerie.</p>
-          <button onclick="window.ProtecMarcheOccasion.openSellModal('equipment')" class="px-4 py-2 rounded-xl bg-pc-blue text-white font-black text-xs shadow-sm hover:brightness-110 transition">
-            + Vendre du Matériel ou Meuble
-          </button>
+        <div class="py-16 text-center space-y-4 bg-white rounded-3xl border border-dashed border-slate-300 p-8 shadow-xs">
+          <div class="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center text-3xl mx-auto shadow-inner">
+            📦
+          </div>
+          <div class="space-y-1">
+            <h5 class="text-sm font-black text-slate-900">
+              ${hasFilter ? 'Aucun équipement ne correspond à vos filtres' : 'Aucun matériel ni équipement d’occasion en vente'}
+            </h5>
+            <p class="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+              ${hasFilter 
+                ? 'Essayez de réinitialiser la recherche ou de sélectionner « Tout » pour voir l’ensemble des lots de secours et meubles disponibles.' 
+                : 'Toutes les offres de matériel et de mobilier ont été acquises par les autres directeurs. Vous pouvez mettre en vente vos surplus d’inventaire ou actualiser la bourse.'}
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-3 pt-2">
+            ${hasFilter ? `
+              <button onclick="window.ProtecMarcheOccasion.searchQuery=''; window.ProtecMarcheOccasion.subFilterMaterial='all'; window.ProtecMarcheOccasion.renderBodyContent(window.game);" class="px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs border border-slate-300 transition cursor-pointer">
+                ✕ Réinitialiser les filtres
+              </button>
+            ` : ''}
+            <button onclick="window.ProtecMarcheOccasion.openSellModal('equipment')" class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-pc-orange to-amber-500 hover:brightness-110 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i>
+              Vendre du Matériel ou Mobilier
+            </button>
+            <button onclick="window.ProtecMarcheOccasion.refreshListings(window.game)" class="px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-300 transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+              Actualiser
+            </button>
+          </div>
         </div>
       `;
     }

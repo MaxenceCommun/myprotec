@@ -153,24 +153,38 @@ window.ProtecSystems = {
       ['critique', 'haute'].includes(mission?.urgency)
     );
 
+    // RÈGLE MÉTIER : Vérification de la présence de gyrophares / avertisseurs spéciaux sur le véhicule :
+    // - VPSP : Gyrophares obligatoires et de série
+    // - Autres véhicules : uniquement si option Rampe LED acquise
+    const hasBeacon = vehicle ? (
+      vehicle.type === 'VPSP' ||
+      Boolean(vehicle.hasLedBar) ||
+      Boolean(vehicle.hasBeacon) ||
+      Boolean(vehicle.hasGyrophare) ||
+      (Array.isArray(vehicle.installedOptions) && vehicle.installedOptions.some(opt => /gyrophare|rampe led|ledbar|avertisseur/i.test(opt)))
+    ) : false;
+
+    // Vitesse d'urgence et priorité de franchissement autorisées UNIQUEMENT sous gyrophares
+    const canUseEmergencySpeed = isEmergency && hasBeacon;
+
     // Polyline Leaflet sur la route
     const polyline = L.polyline(routeCoords, {
-      color: isEmergency ? (statusTarget === 4 ? '#ef4444' : '#f97316') : '#0284c7',
-      weight: isEmergency ? 5 : 3.5,
-      opacity: isEmergency ? 0.85 : 0.65,
-      dashArray: isEmergency ? null : '6, 6',
-      className: isEmergency ? 'route-line-animated' : 'route-line-normal'
+      color: canUseEmergencySpeed ? (statusTarget === 4 ? '#ef4444' : '#f97316') : (isEmergency ? '#eab308' : '#0284c7'),
+      weight: canUseEmergencySpeed ? 5 : 3.5,
+      opacity: canUseEmergencySpeed ? 0.85 : 0.65,
+      dashArray: canUseEmergencySpeed ? null : '6, 6',
+      className: canUseEmergencySpeed ? 'route-line-animated' : 'route-line-normal'
     }).addTo(game.map);
 
     // Détermination de l'antenne d'attache du véhicule
     const myStation = game.stations?.find(s => (s.vehicles || []).some(v => (typeof v === 'string' ? v === vehicle.id : v.id === vehicle.id))) || game.stations?.[0];
     const stationName = vehicle.stationName || myStation?.name || (myStation?.city ? `Antenne de ${myStation.city}` : 'Mon Antenne');
 
-    // Marqueur du véhicule compact : petite icône avec logo du véhicule et gyrophare sur le toit
+    // Marqueur du véhicule compact : petite icône avec logo du véhicule et gyrophare sur le toit si équipé
     const imgUrl = vehicle.image || (game.getVehicleImage ? game.getVehicleImage(vehicle.type) : `images/vehicles/${vehicle.type || 'VPSP'}.png`);
     const iconHtml = `
-      <div class="vehicle-compact-marker ${isEmergency ? 'is-emergency' : ''}" title="${vehicle.name} • ${stationName}">
-        ${isEmergency ? `
+      <div class="vehicle-compact-marker ${canUseEmergencySpeed ? 'is-emergency' : ''}" title="${vehicle.name} • ${stationName}">
+        ${canUseEmergencySpeed ? `
           <div class="vehicle-roof-beacon"></div>
           <div class="vehicle-roof-beacon-halo"></div>
         ` : ''}
@@ -185,7 +199,7 @@ window.ProtecSystems = {
       iconAnchor: [20, 20]
     });
 
-    const marker = L.marker(routeCoords[0], { icon: icon, zIndexOffset: isEmergency ? 1200 : 800 }).addTo(game.map);
+    const marker = L.marker(routeCoords[0], { icon: icon, zIndexOffset: canUseEmergencySpeed ? 1200 : 800 }).addTo(game.map);
 
     // Clic sur mon véhicule : zoomer/centrer sur le trajet et ouvrir la mission
     marker.on('click', () => {
@@ -199,7 +213,7 @@ window.ProtecSystems = {
         } catch (err) {}
         polyline.setStyle({ weight: 7, opacity: 1 });
         setTimeout(() => {
-          polyline.setStyle({ weight: isEmergency ? 5 : 3.5, opacity: isEmergency ? 0.85 : 0.65 });
+          polyline.setStyle({ weight: canUseEmergencySpeed ? 5 : 3.5, opacity: canUseEmergencySpeed ? 0.85 : 0.65 });
         }, 1800);
       }
 
@@ -226,21 +240,24 @@ window.ProtecSystems = {
       (destCoords.lng - originCoords.lng) * 111 * Math.cos(originCoords.lat * Math.PI / 180)
     ));
 
-    // Vitesse adaptée selon la réalité du terrain et la doctrine de conduite d'urgence :
-    // - Allure normale (DPS, maraude, retour antenne statut 6) : ~35 km/h en agglomération
-    // - Départ urgence (SAMU, pompiers statut 2) : ~48-50 km/h (prioritaire mais sécuritaire en zone urbaine)
-    // - Évacuation sanitaire CHU (statut 4) : ~50-52 km/h (confort et stabilité de la victime transportée)
-    const realisticSpeedKmh = isEmergency ? (statusTarget === 4 ? 52 : 48) : 35;
+    // Vitesse adaptée selon la présence de gyrophares et la doctrine opérationnelle :
+    // - Sous gyrophares (VPSP de série ou véhicule équipé d'une rampe LED) : ~48-52 km/h
+    // - Sans gyrophare (ou véhicule non équipé) : vitesse normale ~35 km/h respectant le code et le trafic urbain
+    const realisticSpeedKmh = canUseEmergencySpeed ? (statusTarget === 4 ? 52 : 48) : 35;
     const baseDurationSec = Math.max(50, Math.min(300, Math.round((distKm / realisticSpeedKmh) * 3600 * 0.85)));
     const durationMs = (baseDurationSec * 1000) / Math.max(1, game.speed || 1);
     const now = Date.now();
 
-    const modeLabel = isEmergency ? (statusTarget === 4 ? 'Statut 4 : Évacuation CHU (Urgence)' : 'Statut 2 : Départ Urgence (Gyrophare)') : (statusTarget === 6 ? 'Statut 6 : Retour Antenne (Normal)' : 'Statut 2 : Déplacement Normal');
+    const modeLabel = canUseEmergencySpeed 
+      ? (statusTarget === 4 ? 'Statut 4 : Évacuation CHU (Gyrophare)' : 'Statut 2 : Départ Urgence (Gyrophare)') 
+      : (isEmergency 
+          ? 'Statut 2 : Déplacement Urgent sans gyrophare (Vitesse normale 35 km/h)' 
+          : (statusTarget === 6 ? 'Statut 6 : Retour Antenne (Normal)' : 'Statut 2 : Déplacement Normal'));
 
     marker.bindTooltip(`
       <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
         <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
-          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${isEmergency ? '#ef4444' : '#0284c7'};"></span>
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${canUseEmergencySpeed ? '#ef4444' : (isEmergency ? '#eab308' : '#0284c7')};"></span>
           <strong style="color: #0f172a; font-size: 12px;">${vehicle.name}</strong>
         </div>
         <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName} (Mon Antenne)</div>
@@ -263,7 +280,8 @@ window.ProtecSystems = {
       vehicle: vehicle,
       mission: mission,
       statusTarget: statusTarget,
-      isEmergency: isEmergency,
+      isEmergency: canUseEmergencySpeed,
+      hasBeacon: hasBeacon,
       routeCoords: routeCoords,
       distKm: distKm,
       speedKmh: realisticSpeedKmh,
@@ -308,7 +326,7 @@ window.ProtecSystems = {
         origin: originCoords,
         dest: destCoords,
         statusTarget: statusTarget,
-        isEmergency: isEmergency,
+        isEmergency: canUseEmergencySpeed,
         missionTitle: mission?.title || 'Intervention de secours',
         speedKmh: realisticSpeedKmh,
         durationMs: durationMs
@@ -319,12 +337,27 @@ window.ProtecSystems = {
     this.playRadioChirp();
     const hospTargetName = transit.evacData?.hospital?.name || mission?.evacHospitalData?.hospital?.name || 'Urgences CHU';
     const specShort = transit.evacData?.specialtyInfo?.shortLabel || mission?.evacHospitalData?.specialtyInfo?.shortLabel || 'SAU';
-    const statusLabel = isEmergency ? (statusTarget === 4 ? `STATUT 4 : Transport ${specShort}` : 'STATUT 2 : Départ Urgent') : (statusTarget === 6 ? 'STATUT 6 : Retour Antenne' : 'STATUT 2 : En route');
+    const statusLabel = canUseEmergencySpeed 
+      ? (statusTarget === 4 ? `STATUT 4 : Transport ${specShort}` : 'STATUT 2 : Départ Urgent') 
+      : (isEmergency 
+          ? 'STATUT 2 : En route (Sans gyrophare)' 
+          : (statusTarget === 6 ? 'STATUT 6 : Retour Antenne' : 'STATUT 2 : En route'));
     const radioMsg = (statusTarget === 4)
       ? `STATUT 4 : Transport sanitaire en cours vers ${hospTargetName} [Pôle : ${specShort}] (${distKm.toFixed(1)} km).`
-      : `${statusLabel} vers ${mission ? mission.title : 'Destination'} (${distKm.toFixed(1)} km).`;
+      : (canUseEmergencySpeed
+          ? `${statusLabel} sous gyrophare vers ${mission ? mission.title : 'Destination'} (${distKm.toFixed(1)} km).`
+          : `${statusLabel} vers ${mission ? mission.title : 'Destination'} (vitesse normale, ${distKm.toFixed(1)} km).`);
     this.addRadioLog(game, vehicle.name, statusTarget, radioMsg);
-    game.showToast(statusLabel, (statusTarget === 4) ? `${vehicle.name} en route gyrophares vers ${hospTargetName} (~${distKm.toFixed(1)} km).` : `${vehicle.name} est en route vers les lieux (~${distKm.toFixed(1)} km).`, isEmergency ? 'orange' : 'blue');
+
+    const toastMsg = (statusTarget === 4) 
+      ? `${vehicle.name} en route gyrophares vers ${hospTargetName} (~${distKm.toFixed(1)} km).` 
+      : (canUseEmergencySpeed
+          ? `${vehicle.name} en route sous gyrophare vers les lieux (~${distKm.toFixed(1)} km).`
+          : (isEmergency
+              ? `${vehicle.name} (sans gyrophare) : en route vers l'urgence à allure normale (~${distKm.toFixed(1)} km).`
+              : `${vehicle.name} est en route vers les lieux (~${distKm.toFixed(1)} km).`));
+
+    game.showToast(statusLabel, toastMsg, canUseEmergencySpeed ? 'orange' : (isEmergency ? 'yellow' : 'blue'));
   },
 
   ensureTransitLoop(game) {

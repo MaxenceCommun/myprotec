@@ -901,7 +901,7 @@ window.ProtecFormations = {
     this.syncB2BWithSupabase(game, reminderProposal);
   },
 
-  // 9. SURVEILLANCE PÉRIODIQUE D'HORLOGE (DÉLIBÉRATIONS & RECYCLAGES)
+  // 9. SURVEILLANCE PÉRIODIQUE D'HORLOGE (DÉLIBÉRATIONS & RECYCLAGES & DEMANDES AUTOMATIQUES)
   processClockTick(game) {
     if (!game || !game.formationB2BProposals) return;
 
@@ -916,12 +916,127 @@ window.ProtecFormations = {
       }
     });
 
+    // Génération automatique des demandes entrantes B2B au fil de l'eau
+    if (!game._lastB2BAutoCheck) game._lastB2BAutoCheck = 0;
+    if (now - game._lastB2BAutoCheck >= 30000) {
+      game._lastB2BAutoCheck = now;
+      const spawned = this.checkAutoIncomingB2BDemands(game);
+      if (spawned) hasChanges = true;
+    }
+
     if (hasChanges && this.mainTab === 'entreprises') {
       const modal = document.getElementById('main-modal');
       if (modal && !modal.classList.contains('hidden')) {
         this.renderModal(game);
       }
     }
+  },
+
+  // Arrivée automatique des opportunités B2B selon Notoriété, Communication et Locaux
+  checkAutoIncomingB2BDemands(game) {
+    if (!game) return false;
+    if (!game.formationB2BProposals) game.formationB2BProposals = [];
+    const now = Date.now();
+
+    // 1. Nettoyage des demandes expirées non traitées
+    game.formationB2BProposals = game.formationB2BProposals.filter(p => {
+      if (p.status === 'pending_quote' && p.deadline && now > p.deadline) return false;
+      return true;
+    });
+
+    const activeCount = game.formationB2BProposals.filter(p => ['pending_quote', 'evaluating', 'accepted', 'in_progress'].includes(p.status)).length;
+
+    // Facteurs de notoriété et de communication
+    const repScore = game.resources?.reputationScore || 0;
+    const commCampaigns = (game.activeCampaigns || []).length;
+    const socialFollowers = game.socialMediaState?.followers || game.resources?.followers || 0;
+    const hasRoom = window.ProtecLocaux && typeof window.ProtecLocaux.hasFormationRoom === 'function' ? window.ProtecLocaux.hasFormationRoom(game) : true;
+
+    // Jauge cible du vivier de demandes actives (de 2 à 6)
+    let maxPool = 2;
+    if (repScore >= 60) maxPool = 3;
+    if (repScore >= 150) maxPool = 4;
+    if (repScore >= 300) maxPool = 5;
+    if (repScore >= 500) maxPool = 6;
+    if (commCampaigns > 0) maxPool += 1;
+
+    if (activeCount >= maxPool) return false;
+
+    // Probabilité d'apparition par cycle de 30s
+    let proba = 0.35 + Math.min(0.40, (repScore / 500) * 0.40);
+    if (commCampaigns > 0) proba += 0.20;
+    if (socialFollowers > 1500) proba += 0.10;
+    if (hasRoom) proba += 0.10;
+
+    if (Math.random() > proba) return false;
+
+    const station = game.stations?.[0] || { city: 'Nancy', id: 'station-1' };
+    const deptCode = game.currentDepartmentCode || game.player?.departmentCode || '54';
+
+    const roll = Math.random();
+    let trainingType = 'SST';
+    if (roll < 0.40) trainingType = 'SST';
+    else if (roll < 0.65) trainingType = 'MAC_SST';
+    else if (roll < 0.85) trainingType = 'PSC';
+    else trainingType = 'GQS';
+
+    const cfg = this.TRAINING_B2B_CONFIG[trainingType] || this.TRAINING_B2B_CONFIG['SST'];
+    const clientPreset = this.CLIENT_PRESETS[Math.floor(Math.random() * this.CLIENT_PRESETS.length)];
+    const attendeesCount = Math.floor(Math.random() * (cfg.maxAttendees - cfg.minAttendees + 1)) + cfg.minAttendees;
+    const mode = Math.random() < 0.65 ? 'intra' : 'inter';
+
+    const variation = 0.88 + Math.random() * 0.28;
+    const targetBudget = Math.round((cfg.baseBudget * variation) / 10) * 10;
+    const deadlineHours = 24 + Math.floor(Math.random() * 48);
+    const deadline = now + (deadlineHours * 3600 * 1000);
+    const proposalId = `b2b-${now}-${Math.random().toString(36).substring(2, 7)}`;
+
+    const newProposal = {
+      id: proposalId,
+      department_code: deptCode,
+      antenne_id: station.id || 'station-1',
+      client_name: clientPreset.name,
+      client_type: clientPreset.type,
+      client_label: clientPreset.label,
+      client_icon: clientPreset.icon,
+      client_city: station.city || 'Nancy',
+      training_type: trainingType,
+      attendees_count: attendeesCount,
+      mode: mode,
+      client_target_budget: targetBudget,
+      clientTargetBudget: targetBudget,
+      proposed_price: null,
+      proposedPrice: null,
+      acceptance_rate: 75,
+      acceptanceRate: 75,
+      status: 'pending_quote',
+      trainer_id: null,
+      trainerId: null,
+      vehicle_id: null,
+      vehicleId: null,
+      consumable_cost: cfg.consumableCost,
+      consumableCost: cfg.consumableCost,
+      deadline: deadline,
+      evaluation_ends_at: null,
+      evaluationEndsAt: null,
+      created_at: new Date(now).toISOString(),
+      createdAt: now
+    };
+
+    game.formationB2BProposals.unshift(newProposal);
+    this.syncB2BWithSupabase(game, newProposal);
+    game.saveGame();
+
+    if (typeof game.showToast === 'function') {
+      game.showToast(
+        'Nouvelle Demande B2B 🏢',
+        `« ${newProposal.client_name} » sollicite un devis pour une formation ${newProposal.training_type} (${newProposal.attendees_count} salariés).`,
+        'blue',
+        { type: 'module', id: 'formations' }
+      );
+    }
+
+    return true;
   },
 
   // 10. SYNCHRONISATION ROBUSTE AVEC SUPABASE POSTGRESQL
@@ -978,25 +1093,18 @@ window.ProtecFormations = {
     if (!course) return;
 
     // 1. Vérification de la salle de formation si hébergée à l'antenne
+    // Les locaux de l'antenne sont toujours autorisés à accueillir des sessions de formation
     if (locationType === 'antenne') {
-      if (window.ProtecLocaux && !window.ProtecLocaux.hasFormationRoom(game)) {
-        game.showToast(
-          'Salle de Formation Requise !',
-          'Votre antenne ne possède aucune salle pédagogique. Aménagez une salle de formation dans vos locaux ou organisez-la délocalisée chez l’entreprise partenaire.',
-          'orange'
-        );
-        return;
-      }
+      // Pas de blocage : les locaux disposent d'un espace pédagogique
     }
 
-    // 2. Vérification du kit pédagogique si dispensé par l'antenne
+    // 2. Rappel sur le kit pédagogique si dispensé par l'antenne (non bloquant à la programmation)
     if (course.kitRequired && !this.hasTrainingKit(game, course.kitRequired)) {
       game.showToast(
-        'Kit Pédagogique Manquant !',
-        `Pour dispenser la formation « ${course.title} », l’antenne doit posséder le « ${course.kitName || course.kitRequired} ». Vous pouvez l'acquérir dans la boutique Logistique ou envoyer vos bénévoles en formation externe !`,
-        'orange'
+        'Information Matériel',
+        `Session planifiée ! Pensez à acquérir le « ${course.kitName || course.kitRequired} » dans la boutique Logistique avant de certifier la formation.`,
+        'blue'
       );
-      return;
     }
 
     // 3. Calcul du tarif public appliqué
@@ -1177,6 +1285,13 @@ window.ProtecFormations = {
   assignTrainer(game, sessionId, trainerId) {
     const session = game.sessionsFormation.find(s => s.id === sessionId);
     if (!session) return;
+    if (!trainerId) {
+      session.trainerId = null;
+      session.assignedTrainer = null;
+      game.saveGame();
+      this.renderModal(game);
+      return;
+    }
     const trainer = game.volunteers.find(v => v.id === trainerId);
     if (!trainer) return;
     const course = this.catalog.find(c => c.id === session.courseId);
@@ -1188,8 +1303,51 @@ window.ProtecFormations = {
     }
 
     session.trainerId = trainer.id;
+    session.assignedTrainer = trainer;
     game.saveGame();
     game.showToast('Formateur Affecté', `${trainer.name} (${check.badge}) animera la session.`, 'green');
+    this.renderModal(game);
+  },
+
+  // Demander un renfort Formateur auprès d'autres antennes / réseau fédéral
+  requestTrainerReinforcement(game, sessionId) {
+    if (!game || !game.sessionsFormation) return;
+    const session = game.sessionsFormation.find(s => s.id === sessionId);
+    if (!session) return;
+
+    const course = this.catalog.find(c => c.id === session.courseId);
+    const extId = `ext_trainer_${Date.now()}`;
+    const extTrainer = {
+      id: extId,
+      name: 'Formateur Renfort (Antenne Partenaire)',
+      role: 'Formateur Inter-Antennes',
+      rank: 'Formateur',
+      isTrainer: true,
+      skills: ['formateur', 'formateur_psc', 'formateur_sst', 'formateur_ps'],
+      isExternal: true
+    };
+
+    session.trainerId = extId;
+    session.assignedTrainer = extTrainer;
+
+    // Prise en charge d'un défraiement de déplacement si trésorerie disponible
+    const defraiementCost = 35;
+    if (game.resources && game.resources.money >= defraiementCost) {
+      game.resources.money -= defraiementCost;
+      game.showToast(
+        'Renfort Formateur Accordé 🤝',
+        `Un formateur qualifié de l'antenne voisine a été détaché pour animer « ${course?.title || session.title} » ! (Défraiement : 35 €)`,
+        'green'
+      );
+    } else {
+      game.showToast(
+        'Renfort Formateur Accordé 🤝',
+        `Un formateur solidaire de l'antenne voisine animera gracieusement votre session « ${course?.title || session.title} » !`,
+        'green'
+      );
+    }
+
+    game.saveGame();
     this.renderModal(game);
   },
 
@@ -1554,11 +1712,10 @@ window.ProtecFormations = {
               <p class="text-xs text-slate-500 max-w-md mx-auto mt-0.5">
                 Les entreprises et mairies locales consultent régulièrement votre antenne pour leurs plans de formation sécurité au travail.
               </p>
+            <div class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-pc-blue/10 border border-pc-blue/20 text-pc-blue text-xs font-bold mx-auto">
+              <i data-lucide="clock" class="w-4 h-4"></i>
+              <span>Les demandes arrivent automatiquement selon votre notoriété, réputation et communication</span>
             </div>
-            <button onclick="window.ProtecFormations.generateB2BOpportunities(window.game, true); window.ProtecFormations.renderModal(window.game);" class="px-4 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-extrabold text-xs shadow-md transition inline-flex items-center gap-1.5 cursor-pointer">
-              <i data-lucide="sparkles" class="w-4 h-4"></i>
-              Générer une opportunité entrante
-            </button>
           </div>
         ` : `
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2020,10 +2177,10 @@ window.ProtecFormations = {
           </button>
         </div>
         ${this.mainTab === 'entreprises' ? `
-          <button onclick="window.ProtecFormations.generateB2BOpportunities(window.game, true); window.ProtecFormations.renderModal(window.game);" class="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-extrabold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-emerald-600"></i>
-            <span>Prospection Commerciale (+ Demande)</span>
-          </button>
+          <div class="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[11px] flex items-center gap-1.5 shadow-xs">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-pc-blue"></i>
+            <span>Demandes entrantes auto (Notoriété & Communication)</span>
+          </div>
         ` : ''}
       </div>
     `;
@@ -2227,7 +2384,7 @@ window.ProtecFormations = {
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             ${activeSessions.map(sess => {
-              const assignedTrainer = game.volunteers.find(v => v.id === sess.trainerId);
+              const assignedTrainer = (game.volunteers || []).find(v => v.id === sess.trainerId) || sess.assignedTrainer || (sess.trainerId && String(sess.trainerId).startsWith('ext_') ? { name: 'Formateur Renfort (Antenne Partenaire)', role: 'Formateur Inter-Antennes', rank: 'Formateur', isExternal: true } : null);
               const isInternal = sess.isInternal;
               const course = this.catalog.find(c => c.id === sess.courseId);
               const extCount = sess.externalAttendeesCount || 0;
@@ -2258,13 +2415,14 @@ window.ProtecFormations = {
                     ` : ''}
 
                     <!-- Formateur affecté -->
-                    <div class="p-2.5 rounded-xl bg-slate-50 space-y-1">
+                    <div class="p-2.5 rounded-xl bg-slate-50 space-y-1.5">
                       <span class="text-[9px] font-bold uppercase text-slate-400">Formateur responsable :</span>
                       <div class="flex items-center justify-between text-xs">
-                        <span class="font-black text-slate-800">${assignedTrainer ? `${assignedTrainer.name} (${assignedTrainer.role || assignedTrainer.rank})` : '<span class="text-amber-600 font-bold">Aucun formateur affecté</span>'}</span>
+                        <span class="font-black text-slate-800">${assignedTrainer ? `${assignedTrainer.name} (${assignedTrainer.role || assignedTrainer.rank || 'Formateur'})` : '<span class="text-amber-600 font-bold">Aucun formateur affecté</span>'}</span>
+                        ${assignedTrainer?.isExternal ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200">Renfort Externe</span>' : ''}
                       </div>
                       <select onchange="window.ProtecFormations.assignTrainer(window.game, '${sess.id}', this.value)" class="w-full text-[11px] p-1.5 rounded-lg border border-slate-200 glass-input font-medium mt-1">
-                        <option value="">Affecter un formateur qualifié...</option>
+                        <option value="">Affecter un formateur interne qualifié...</option>
                         ${trainers.map(t => {
                           const isEligible = course ? this.isEligibleTrainer(t, course) : { eligible: true };
                           return `
@@ -2274,6 +2432,10 @@ window.ProtecFormations = {
                           `;
                         }).join('')}
                       </select>
+                      <button onclick="window.ProtecFormations.requestTrainerReinforcement(window.game, '${sess.id}')" class="w-full mt-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-extrabold text-[11px] transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs">
+                        <i data-lucide="handshake" class="w-3.5 h-3.5 text-indigo-600"></i>
+                        <span>🤝 Demander un renfort Formateur (Inter-Antennes)</span>
+                      </button>
                     </div>
 
                     ${isInternal ? `

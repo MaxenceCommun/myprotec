@@ -9133,49 +9133,162 @@ class ProtecGame {
     }
   }
 
-  // Liste des équipes opérationnelles disponibles en situation de crise
+  // Liste des équipes opérationnelles d'une mission (gérées par le joueur, rien par défaut)
+  getMissionTeamsList(mission) {
+    if (!mission) return [];
+    if (!Array.isArray(mission.teams)) {
+      mission.teams = Array.isArray(mission.customCrisisTeams) ? [...mission.customCrisisTeams] : [];
+    }
+    return mission.teams;
+  }
+
   getCrisisTeamsList(mission) {
-    const defaultTeams = [
-      { id: 'psa_1', name: 'PSA 1', label: 'Équipe PSA 1 (Secours)', icon: 'shield', color: 'blue' },
-      { id: 'psa_2', name: 'PSA 2', label: 'Équipe PSA 2 (Secours)', icon: 'shield', color: 'blue' },
-      { id: 'psa_3', name: 'PSA 3', label: 'Équipe PSA 3 (Secours)', icon: 'shield', color: 'blue' },
-      { id: 'psa_4', name: 'PSA 4', label: 'Équipe PSA 4 (Secours)', icon: 'shield', color: 'blue' },
-      { id: 'vpsp_1', name: 'VPSP 1', label: 'Équipage VPSP 1 (Ambulance)', icon: 'truck', color: 'emerald' },
-      { id: 'vpsp_2', name: 'VPSP 2', label: 'Équipage VPSP 2 (Ambulance)', icon: 'truck', color: 'emerald' },
-      { id: 'pc_pma', name: 'PC / PMA', label: 'Poste de Commandement / PMA', icon: 'radio', color: 'purple' },
-      { id: 'soutien', name: 'Soutien Log', label: 'Soutien & Ravitaillement', icon: 'package', color: 'amber' },
-      { id: 'cyno_drone', name: 'Spécialités', label: 'Cynotechnie / Drone', icon: 'eye', color: 'rose' }
-    ];
-    if (mission && Array.isArray(mission.customCrisisTeams)) {
-      return [...defaultTeams, ...mission.customCrisisTeams];
-    }
-    return defaultTeams;
+    return this.getMissionTeamsList(mission);
   }
 
-  // Détermination de l'équipe de crise par défaut pour un bénévole
+  // Détermination de l'équipe pour un bénévole (RIEN par défaut, strict choix du joueur)
   getDefaultCrisisTeam(mission, vol, idx = 0) {
-    if (mission?.volunteerTeams?.[vol.id]) {
-      return mission.volunteerTeams[vol.id];
-    }
-    const role = mission?.volunteerRoles?.[vol.id];
-    if (role === 'conducteur') return 'vpsp_1';
-    if (role === 'chef_poste' || role === 'pc') return 'pc_pma';
-    if (role === 'photographe') return 'soutien';
-    if (idx === 0 || idx === 1) return 'psa_1';
-    if (idx === 2 || idx === 3) return 'psa_2';
-    if (idx === 4 || idx === 5) return 'psa_3';
-    return 'psa_4';
+    return mission?.volunteerTeams?.[vol?.id] || null;
   }
 
-  // Affectation manuelle d'un secouriste à une équipe de crise
+  // Affectation manuelle d'un secouriste à une équipe
   setVolunteerCrisisTeam(missionId, volId, teamId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
     mission.volunteerTeams = mission.volunteerTeams || {};
-    mission.volunteerTeams[volId] = teamId;
+    if (!teamId) {
+      delete mission.volunteerTeams[volId];
+    } else {
+      mission.volunteerTeams[volId] = teamId;
+    }
     this.saveGame();
     if (this.selectedMissionId === missionId) {
       this.openMissionDetails(missionId);
+    }
+  }
+
+  // Ajouter une équipe à la mission via un modèle rapide
+  addMissionTeamPreset(missionId, presetType) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    if (!Array.isArray(mission.teams)) mission.teams = [];
+
+    const existingCount = mission.teams.filter(t => t.type === presetType).length;
+    let name = '';
+    let label = '';
+    let icon = 'shield';
+    let color = 'blue';
+
+    if (presetType === 'psa') {
+      name = `PSA ${existingCount + 1}`;
+      label = `Poste de Secours PSA ${existingCount + 1}`;
+      icon = 'shield';
+      color = 'blue';
+    } else if (presetType === 'vpsp') {
+      name = `VPSP ${existingCount + 1}`;
+      label = `Équipage Ambulance VPSP ${existingCount + 1}`;
+      icon = 'truck';
+      color = 'emerald';
+    } else if (presetType === 'binome') {
+      name = `Binôme ${existingCount + 1}`;
+      label = `Binôme de Patrouille PAPS ${existingCount + 1}`;
+      icon = 'users';
+      color = 'indigo';
+    } else if (presetType === 'pc') {
+      name = `PC ${existingCount > 0 ? existingCount + 1 : ''}`.trim();
+      label = 'Poste de Commandement / PMA';
+      icon = 'radio';
+      color = 'purple';
+    } else if (presetType === 'soutien') {
+      name = `Soutien ${existingCount > 0 ? existingCount + 1 : ''}`.trim();
+      label = 'Soutien Logistique & Ravitaillement';
+      icon = 'package';
+      color = 'amber';
+    } else {
+      name = `Équipe ${mission.teams.length + 1}`;
+      label = name;
+    }
+
+    const newTeam = {
+      id: `team_${presetType}_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      name: name,
+      label: label,
+      type: presetType,
+      icon: icon,
+      color: color,
+      vehicleId: null
+    };
+
+    mission.teams.push(newTeam);
+    this.saveGame();
+    this.showToast('Équipe Ajoutée', `L'équipe « ${name} » a été créée. Affectez vos secouristes !`, 'green');
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
+  }
+
+  // Création personnalisée d'une équipe avec nom libre
+  promptCreateCustomTeam(missionId) {
+    const name = prompt('Nom de la nouvelle équipe opérationnelle (ex: Binôme 1, Équipe Maraude, VPSP Alpha, Triage...) :');
+    if (!name || !name.trim()) return;
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    if (!Array.isArray(mission.teams)) mission.teams = [];
+
+    const newTeam = {
+      id: `team_custom_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      name: name.trim(),
+      label: name.trim(),
+      type: 'custom',
+      icon: 'users',
+      color: 'blue',
+      vehicleId: null
+    };
+
+    mission.teams.push(newTeam);
+    this.saveGame();
+    this.showToast('Équipe Créée', `L'équipe « ${name.trim()} » a été créée.`, 'green');
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
+  }
+
+  // Supprimer une équipe
+  removeMissionTeam(missionId, teamId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission || !Array.isArray(mission.teams)) return;
+    const idx = mission.teams.findIndex(t => t.id === teamId);
+    if (idx !== -1) {
+      const removed = mission.teams.splice(idx, 1)[0];
+      if (mission.volunteerTeams) {
+        Object.keys(mission.volunteerTeams).forEach(vid => {
+          if (mission.volunteerTeams[vid] === teamId) {
+            delete mission.volunteerTeams[vid];
+          }
+        });
+      }
+      if (Array.isArray(mission.deployedTeams)) {
+        mission.deployedTeams = mission.deployedTeams.filter(id => id !== teamId);
+      }
+      this.saveGame();
+      this.showToast('Équipe Supprimée', `L'équipe « ${removed?.name || teamId} » a été retirée.`, 'slate');
+      if (this.selectedMissionId === missionId) {
+        this.openMissionDetails(missionId);
+      }
+    }
+  }
+
+  // Rallier un véhicule spécifique à une équipe
+  setTeamVehicle(missionId, teamId, vehicleId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission || !Array.isArray(mission.teams)) return;
+    const team = mission.teams.find(t => t.id === teamId);
+    if (team) {
+      team.vehicleId = vehicleId || null;
+      this.saveGame();
+      if (this.selectedMissionId === missionId) {
+        this.openMissionDetails(missionId);
+      }
     }
   }
 
@@ -9190,15 +9303,15 @@ class ProtecGame {
       return;
     }
 
-    const teamDef = this.getCrisisTeamsList(mission).find(t => t.id === teamId) || { name: teamId };
+    const teamDef = this.getMissionTeamsList(mission).find(t => t.id === teamId) || { name: teamId };
     const registered = mission.registeredVolunteers || [];
     const teamVols = this.volunteers.filter(v => 
       registered.includes(v.id) &&
-      (mission.volunteerTeams?.[v.id] === teamId || (!mission.volunteerTeams?.[v.id] && this.getDefaultCrisisTeam(mission, v) === teamId))
+      mission.volunteerTeams?.[v.id] === teamId
     );
 
     if (teamVols.length === 0) {
-      this.showToast('Aucun Secouriste', `Aucun personnel n'est affecté à l'équipe ${teamDef.name}.`, 'orange');
+      this.showToast('Aucun Secouriste', `Aucun personnel n'est affecté à l'équipe ${teamDef.name}. Affectez vos secouristes dans le tableau avant de la déployer !`, 'orange');
       return;
     }
 
@@ -9262,14 +9375,25 @@ class ProtecGame {
     const vehiclePrepMs = 2 * 60 * 1000;
     const vehicleDepartureAt = maxArrivalBaseAt + vehiclePrepMs;
 
-    // Phase 3 : Trajet Base -> Sinistre sous gyrophare
+    // Phase 3 : Trajet Base -> Sinistre
     const base = this.stations[0] || { lat: 48.8566, lng: 2.3522 };
     const dest = { lat: mission.lat, lng: mission.lng };
     const distBaseCrisisKm = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
       ? window.ProtecDepartements.calculateDistance(base.lat, base.lng, dest.lat, dest.lng)
       : 10;
-    // Vitesse d'urgence sous gyrophare : ~65 km/h
-    const transitCrisisMin = Math.max(2, Math.round((distBaseCrisisKm / 65) * 60));
+
+    // RÈGLE MÉTIER : Les gyrophares permettent d'aller plus vite sur les interventions urgentes (~65 km/h).
+    // Sans gyrophare, le déplacement d'urgence s'effectue à vitesse normale (~38 km/h).
+    const hasBeacon = assignedVeh ? (
+      assignedVeh.type === 'VPSP' ||
+      Boolean(assignedVeh.hasLedBar) ||
+      Boolean(assignedVeh.hasBeacon) ||
+      Boolean(assignedVeh.hasGyrophare) ||
+      (Array.isArray(assignedVeh.installedOptions) && assignedVeh.installedOptions.some(o => /gyrophare|rampe led|ledbar|avertisseur/i.test(o)))
+    ) : false;
+
+    const transitSpeedKmh = hasBeacon ? 65 : 38;
+    const transitCrisisMin = Math.max(2, Math.round((distBaseCrisisKm / transitSpeedKmh) * 60));
     const crisisArrivalAt = vehicleDepartureAt + (transitCrisisMin * 60 * 1000);
 
     mission.crisisTeamDeployments = mission.crisisTeamDeployments || {};
@@ -9279,6 +9403,7 @@ class ProtecGame {
       teamLabel: teamDef.label || teamDef.name,
       vehicleId: assignedVeh?.id || null,
       assignedVeh: assignedVeh,
+      hasBeacon: hasBeacon,
       volunteersCount: teamVols.length,
       volunteerIds: teamVols.map(v => v.id),
       slowestVolName: slowestVol?.name || teamVols[0]?.name,
@@ -9288,7 +9413,7 @@ class ProtecGame {
       crisisArrivalAt: crisisArrivalAt,
       distBaseCrisisKm: parseFloat(Number(distBaseCrisisKm).toFixed(1)),
       transitCrisisMin: transitCrisisMin,
-      status: now < maxArrivalBaseAt ? 'convergence_base' : (now < vehicleDepartureAt ? 'armement_2min' : 'en_route_gyros'),
+      status: now < maxArrivalBaseAt ? 'convergence_base' : (now < vehicleDepartureAt ? 'armement_2min' : (hasBeacon ? 'en_route_gyros' : 'en_route_normal')),
       transitStartedOnMap: false,
       loggedBaseArrival: false,
       loggedDeparture: false,
@@ -9309,7 +9434,7 @@ class ProtecGame {
       const timeStr = new Date(now).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
       mission.operationalLog.unshift({
         time: timeStr,
-        text: `Déploiement ordonné pour ${teamDef.label || teamDef.name} (${teamVols.map(v => v.name).join(', ')}). Convergence des équipiers depuis leur domicile vers la base (~${rallyMinDisplay} min), suivie de 2 min d'armement engin puis départ gyrophares.`,
+        text: `Déploiement ordonné pour ${teamDef.label || teamDef.name} (${teamVols.map(v => v.name).join(', ')}). Convergence des équipiers depuis leur domicile vers la base (~${rallyMinDisplay} min), suivie de 2 min d'armement engin puis départ ${hasBeacon ? 'sous gyrophares' : 'à vitesse normale (sans gyrophare)'}.`,
         author: 'Commandement Antenne',
         isCritical: true
       });
@@ -9317,7 +9442,7 @@ class ProtecGame {
 
     this.showToast(
       'Déploiement Équipe Initié ⚡',
-      `${teamDef.name} : équipiers en route depuis leur domicile vers la base (~${rallyMinDisplay} min), prise du véhicule (2 min) puis départ gyrophares !`,
+      `${teamDef.name} : équipiers en route depuis leur domicile vers la base (~${rallyMinDisplay} min), prise du véhicule (2 min) puis départ ${hasBeacon ? 'sous gyrophares' : 'à vitesse normale (sans gyrophare)'} !`,
       'blue'
     );
 
@@ -9341,7 +9466,7 @@ class ProtecGame {
       if (mission.deployedTeams?.includes(team.id)) return;
       const teamVols = this.volunteers.filter(v => 
         registered.includes(v.id) &&
-        (mission.volunteerTeams?.[v.id] === team.id || (!mission.volunteerTeams?.[v.id] && this.getDefaultCrisisTeam(mission, v) === team.id))
+        mission.volunteerTeams?.[v.id] === team.id
       );
       if (teamVols.length > 0) {
         this.deployCrisisTeam(missionId, team.id);
@@ -10049,9 +10174,12 @@ class ProtecGame {
     const dLat = (destLat - station.lat) * 111;
     const dLng = (destLng - station.lng) * 111 * Math.cos(station.lat * Math.PI / 180);
     const rawDist = Math.hypot(dLat, dLng);
-    const distKm = Math.max(1.2, Math.round(rawDist * 1.25 * 10) / 10);
     const isUrgency = ['samu', 'pompiers', 'crise'].includes(mission.type) || ['critique', 'haute'].includes(mission.urgency) || mission.status === 'declenche';
-    const speedKmh = isUrgency ? 48 : 35;
+    const assignedVehicles = (mission.registeredVehicles || []).map(vId => (this.vehicles || []).find(v => v.id === vId)).filter(Boolean);
+    const hasBeacon = assignedVehicles.length > 0
+      ? assignedVehicles.every(v => v.type === 'VPSP' || v.hasLedBar || v.hasBeacon || (Array.isArray(v.installedOptions) && v.installedOptions.some(o => /gyrophare|rampe led|led/i.test(o))))
+      : (mission.type === 'samu' || mission.type === 'pompiers');
+    const speedKmh = (isUrgency && hasBeacon) ? 48 : 35;
     const transitMinutes = Math.max(5, Math.round((distKm / speedKmh) * 60));
     const advanceMinutes = Math.max(5, Math.ceil(transitMinutes / 5) * 5);
     const rdvBaseDate = new Date(startDate.getTime() - advanceMinutes * 60 * 1000);
@@ -10142,13 +10270,14 @@ class ProtecGame {
       mission.isEmergencyPlan === true ||
       mission.category === 'crise'
     );
-    const crisisTeamsList = isCrisisMission ? this.getCrisisTeamsList(mission) : [];
+    const hasTeamManagement = isCrisisMission || (mission.requiredVolunteers && mission.requiredVolunteers >= 2) || (registeredVols.length >= 2) || (Array.isArray(mission.teams) && mission.teams.length > 0);
+    const crisisTeamsList = this.getMissionTeamsList(mission);
 
     const getTeamLabel = (v, idx) => {
-      if (!isCrisisMission) return '';
-      const teamId = mission.volunteerTeams?.[v.id] || this.getDefaultCrisisTeam(mission, v, idx);
+      const teamId = mission.volunteerTeams?.[v.id] || null;
+      if (!teamId) return '<span class="text-slate-400 italic text-[9px]">Sans équipe</span>';
       const teamObj = crisisTeamsList.find(t => t.id === teamId);
-      return teamObj ? teamObj.name : 'PSA 1';
+      return teamObj ? teamObj.name : 'Équipe';
     };
 
     const pse2Count = registeredVols.filter(v => v.rank === 'PSE2' || (v.skills || []).includes('pse2')).length;
@@ -10724,155 +10853,217 @@ class ProtecGame {
               </div>
             </div>
 
-            ${isCrisisMission ? `
-              <!-- PANNEAU D'ORGANISATION & DÉPLOIEMENT DES ÉQUIPES DE CRISE -->
+            ${hasTeamManagement ? `
+              <!-- PANNEAU D'ORGANISATION DES ÉQUIPES OPÉRATIONNELLES (CONTRÔLE TOTAL DU JOUEUR, RIEN PAR DÉFAUT) -->
               <div class="p-4 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl space-y-3.5 border border-indigo-400/30">
-                <div class="flex items-center justify-between">
+                <div class="flex items-center justify-between flex-wrap gap-2">
                   <div class="flex items-center gap-2.5">
-                    <div class="w-9 h-9 rounded-2xl bg-red-600/30 text-red-400 flex items-center justify-center text-lg border border-red-500/40 shadow-xs">
-                      🚨
+                    <div class="w-9 h-9 rounded-2xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-lg border border-indigo-500/40 shadow-xs">
+                      👥
                     </div>
                     <div>
                       <div class="flex items-center gap-2">
-                        <h4 class="text-xs font-black uppercase text-white tracking-wider">Organisation & Déploiement des Équipes</h4>
-                        <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-red-500 text-white animate-pulse">Crise</span>
+                        <h4 class="text-xs font-black uppercase text-white tracking-wider">Organisation des Équipes Opérationnelles</h4>
+                        ${isCrisisMission ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-red-500 text-white animate-pulse">Crise</span>' : '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-500 text-white">Dispositif</span>'}
                       </div>
-                      <p class="text-[10px] text-slate-300">Affectez vos secouristes aux équipes ci-dessous et déployez-les au fur et à mesure sur le théâtre des opérations.</p>
+                      <p class="text-[10px] text-slate-300">Créez vos équipes et affectez vos secouristes. Rien n'est imposé par défaut : vous avez la main totale.</p>
                     </div>
                   </div>
-                  <div class="text-right">
-                    <span class="text-[10px] text-slate-400 block font-bold">Déployées en zone</span>
-                    <strong class="text-emerald-400 text-xs mono-num">${(mission.deployedTeams || []).length} équipe(s)</strong>
+                  <div class="flex items-center gap-2">
+                    ${isCrisisMission ? `
+                      <div class="text-right mr-1">
+                        <span class="text-[9px] text-slate-400 block font-bold">Déployées en zone</span>
+                        <strong class="text-emerald-400 text-xs mono-num">${(mission.deployedTeams || []).length} / ${crisisTeamsList.length}</strong>
+                      </div>
+                    ` : ''}
                   </div>
                 </div>
 
-                <!-- Grille des Équipes de Crise Constituée -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  ${crisisTeamsList.map(team => {
-                    const members = registeredVols.filter(v => (mission.volunteerTeams?.[v.id] || this.getDefaultCrisisTeam(mission, v)) === team.id);
-                    if (members.length === 0) return '';
-                    const isDeployed = (mission.deployedTeams || []).includes(team.id);
-                    const allEngaged = members.every(v => (mission.engagedVolunteers || []).includes(v.id));
-
-                    return `
-                      <div class="p-3 rounded-2xl ${isDeployed ? 'bg-emerald-950/40 border border-emerald-500/50' : 'bg-white/10 border border-white/15'} flex flex-col justify-between space-y-2.5 shadow-sm">
-                        <div class="flex items-center justify-between">
-                          <div class="flex items-center gap-1.5">
-                            <span class="px-2 py-0.5 rounded-lg text-[10px] font-black ${isDeployed ? 'bg-emerald-500 text-white' : 'bg-pc-blue text-white'}">
-                              ${team.name}
-                            </span>
-                            <span class="text-[11px] font-bold text-white">${team.label || team.name}</span>
-                          </div>
-                          <span class="text-[10px] font-bold ${isDeployed ? 'text-emerald-300' : 'text-slate-300'}">
-                            ${members.length} secouriste(s)
-                          </span>
-                        </div>
-
-                        <!-- Membres dans cette équipe -->
-                        <div class="text-[10px] text-slate-300 flex items-center gap-1 flex-wrap">
-                          ${members.map(m => `
-                            <span class="px-2 py-0.5 rounded-lg bg-white/10 border border-white/10 text-white font-semibold flex items-center gap-1">
-                              ${m.name} <span class="text-[8px] text-slate-400">(${m.rank || 'Secouriste'})</span>
-                            </span>
-                          `).join('')}
-                        </div>
-
-                        <!-- Statut et Action de Déploiement -->
-                        <div class="pt-1.5 border-t border-white/10 flex items-center justify-between">
-                          ${isDeployed ? (() => {
-                            const dep = mission.crisisTeamDeployments?.[team.id];
-                            const nowTs = Date.now() + (this.serverTimeOffset || 0);
-                            if (dep) {
-                              if (dep.status === 'convergence_base' || nowTs < dep.maxArrivalBaseAt) {
-                                const minsLeft = Math.max(1, Math.ceil((dep.maxArrivalBaseAt - nowTs) / 60000));
-                                return `
-                                  <div class="w-full flex items-center justify-between">
-                                    <div class="space-y-0.5">
-                                      <span class="text-[10px] font-black text-amber-400 flex items-center gap-1.5">
-                                        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                                        🚗 1. Ralliement Base (~${minsLeft} min)
-                                      </span>
-                                      <p class="text-[9px] text-slate-300">Regroupement de l'équipage à la base</p>
-                                    </div>
-                                    <span class="text-[10px] font-bold text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">
-                                      Attente base
-                                    </span>
-                                  </div>
-                                `;
-                              }
-                              if (dep.status === 'armement_2min' || nowTs < dep.vehicleDepartureAt) {
-                                const secLeft = Math.max(1, Math.ceil((dep.vehicleDepartureAt - nowTs) / 1000));
-                                return `
-                                  <div class="w-full flex items-center justify-between">
-                                    <div class="space-y-0.5">
-                                      <span class="text-[10px] font-black text-indigo-400 flex items-center gap-1.5">
-                                        <span class="w-2 h-2 rounded-full bg-indigo-400 animate-spin"></span>
-                                        ⏱️ 2. Prise véhicule (~${secLeft}s)
-                                      </span>
-                                      <p class="text-[9px] text-slate-300">Équipage réuni • Armement engin (délai 2 min)</p>
-                                    </div>
-                                    <span class="text-[10px] font-bold text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-500/30">
-                                      Départ imminent
-                                    </span>
-                                  </div>
-                                `;
-                              }
-                              if (dep.status === 'en_route_gyros' || nowTs < dep.crisisArrivalAt) {
-                                const minsLeft = Math.max(1, Math.ceil((dep.crisisArrivalAt - nowTs) / 60000));
-                                return `
-                                  <div class="w-full flex items-center justify-between">
-                                    <div class="space-y-0.5">
-                                      <span class="text-[10px] font-black text-rose-400 flex items-center gap-1.5">
-                                        <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
-                                        🚨 3. En route gyrophares (~${minsLeft} min)
-                                      </span>
-                                      <p class="text-[9px] text-slate-300">Trajet urgent Base ➔ Crise (${dep.distBaseCrisisKm || 10} km)</p>
-                                    </div>
-                                    <span class="text-[10px] font-bold text-rose-300 bg-rose-950/60 px-2 py-0.5 rounded border border-rose-500/30">
-                                      Sous gyros
-                                    </span>
-                                  </div>
-                                `;
-                              }
-                              if (dep.status === 'sur_les_lieux' || nowTs >= dep.crisisArrivalAt) {
-                                return `
-                                  <div class="w-full flex items-center justify-between">
-                                    <div class="space-y-0.5">
-                                      <span class="text-[10px] font-extrabold text-emerald-400 flex items-center gap-1.5">
-                                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                                        🟢 4. Sur les lieux (Opérationnelle)
-                                      </span>
-                                      <p class="text-[9px] text-slate-300">Équipe engagée sur le théâtre de crise</p>
-                                    </div>
-                                    <span class="text-[10px] font-bold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
-                                      Active sur site
-                                    </span>
-                                  </div>
-                                `;
-                              }
-                            }
-                            return `
-                              <span class="text-[10px] font-extrabold text-emerald-400 flex items-center gap-1.5">
-                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                                Déployée sur le sinistre
-                              </span>
-                            `;
-                          })() : `
-                            <span class="text-[10px] text-amber-300 font-semibold">
-                              ${allEngaged ? 'Prête au départ' : 'À engager'}
-                            </span>
-                            <button
-                              onclick="window.game.deployCrisisTeam('${mission.id}', '${team.id}')"
-                              class="px-3 py-1.5 rounded-xl text-[10px] font-black bg-gradient-to-r from-red-600 to-pc-orange hover:brightness-110 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer">
-                              <i data-lucide="send" class="w-3 h-3"></i>
-                              <span>Déployer l'Équipe</span>
-                            </button>
-                          `}
-                        </div>
-                      </div>
-                    `;
-                  }).filter(Boolean).join('')}
+                <!-- Barre d'outils de création d'équipes -->
+                <div class="p-2.5 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-1.5 flex-wrap">
+                  <span class="text-[10px] font-bold text-slate-300 mr-1 flex items-center gap-1">
+                    <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-pc-blue"></i>
+                    <span>Ajouter une équipe :</span>
+                  </span>
+                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'psa')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-blue-600/80 hover:bg-blue-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un Poste de Secours (PSA)">
+                    <span>+ Équipe PSA</span>
+                  </button>
+                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'vpsp')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-600/80 hover:bg-emerald-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un équipage Ambulance (VPSP)">
+                    <span>+ Équipage VPSP</span>
+                  </button>
+                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'binome')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600/80 hover:bg-indigo-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un Binôme de Patrouille PAPS">
+                    <span>+ Binôme PAPS</span>
+                  </button>
+                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'pc')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-purple-600/80 hover:bg-purple-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un Poste de Commandement / PMA">
+                    <span>+ PC / PMA</span>
+                  </button>
+                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'soutien')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-600/80 hover:bg-amber-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un soutien logistique">
+                    <span>+ Soutien Log</span>
+                  </button>
+                  <button type="button" onclick="window.game.promptCreateCustomTeam('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-white/10 hover:bg-white/20 text-white border border-white/20 transition flex items-center gap-1 cursor-pointer ml-auto" title="Créer une équipe personnalisée">
+                    <span>+ Équipe Libre...</span>
+                  </button>
                 </div>
+
+                <!-- Grille des Équipes de la mission -->
+                ${crisisTeamsList.length === 0 ? `
+                  <div class="p-3.5 rounded-2xl bg-white/5 border border-dashed border-white/20 text-center space-y-1">
+                    <p class="text-xs font-bold text-slate-200">Aucune équipe n'est encore constituée pour ce dispositif.</p>
+                    <p class="text-[10px] text-slate-400">Cliquez sur un des boutons ci-dessus pour ajouter vos équipes (ex: PSA, VPSP, Binôme), puis affectez vos secouristes dans le tableau.</p>
+                  </div>
+                ` : `
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    ${crisisTeamsList.map(team => {
+                      const members = registeredVols.filter(v => mission.volunteerTeams?.[v.id] === team.id);
+                      const isDeployed = (mission.deployedTeams || []).includes(team.id);
+                      const allEngaged = members.length > 0 && members.every(v => (mission.engagedVolunteers || []).includes(v.id));
+                      const assignedVehiclesList = (mission.assignedVehicles || []).map(id => this.vehicles.find(veh => veh.id === id)).filter(Boolean);
+
+                      return `
+                        <div class="p-3 rounded-2xl ${isDeployed ? 'bg-emerald-950/40 border border-emerald-500/50' : 'bg-white/10 border border-white/15'} flex flex-col justify-between space-y-2.5 shadow-sm">
+                          <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                              <span class="px-2 py-0.5 rounded-lg text-[10px] font-black ${isDeployed ? 'bg-emerald-500 text-white' : 'bg-pc-blue text-white'}">
+                                ${team.name}
+                              </span>
+                              <span class="text-[11px] font-bold text-white truncate max-w-[150px]">${team.label || team.name}</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                              <span class="text-[10px] font-bold ${members.length > 0 ? (isDeployed ? 'text-emerald-300' : 'text-slate-300') : 'text-amber-300'}">
+                                ${members.length} secouriste(s)
+                              </span>
+                              <button type="button" onclick="window.game.removeMissionTeam('${mission.id}', '${team.id}')" class="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 transition cursor-pointer" title="Supprimer cette équipe">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                              </button>
+                            </div>
+                          </div>
+
+                          <!-- Véhicule associé à l'équipe -->
+                          ${assignedVehiclesList.length > 0 ? `
+                            <div class="flex items-center gap-1.5 text-[10px]">
+                              <span class="text-slate-400 font-semibold shrink-0">Engin :</span>
+                              <select onchange="window.game.setTeamVehicle('${mission.id}', '${team.id}', this.value)" class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-black/40 text-slate-200 border border-white/20 cursor-pointer focus:ring-1 focus:ring-pc-blue w-full">
+                                <option value="" ${!team.vehicleId ? 'selected' : ''}>-- Sans véhicule assigné --</option>
+                                ${assignedVehiclesList.map(veh => `
+                                  <option value="${veh.id}" ${team.vehicleId === veh.id ? 'selected' : ''}>${veh.name} (${veh.type || 'Véhicule'})</option>
+                                `).join('')}
+                              </select>
+                            </div>
+                          ` : ''}
+
+                          <!-- Membres dans cette équipe -->
+                          <div class="text-[10px] text-slate-300 flex items-center gap-1 flex-wrap min-h-[24px]">
+                            ${members.length === 0 ? `
+                              <span class="text-[9px] text-slate-400 italic">Aucun secouriste affecté. Sélectionnez cette équipe dans le tableau ci-dessous.</span>
+                            ` : members.map(m => `
+                              <span class="px-2 py-0.5 rounded-lg bg-white/10 border border-white/10 text-white font-semibold flex items-center gap-1">
+                                <span>${m.name}</span>
+                                <span class="text-[8px] text-slate-400">(${m.rank || 'Secouriste'})</span>
+                                <button type="button" onclick="window.game.setVolunteerCrisisTeam('${mission.id}', '${m.id}', '')" class="text-slate-400 hover:text-rose-300 ml-0.5 font-bold cursor-pointer" title="Retirer de l'équipe">×</button>
+                              </span>
+                            `).join('')}
+                          </div>
+
+                          <!-- Statut et Action de Déploiement (si mission de crise) -->
+                          ${isCrisisMission ? `
+                            <div class="pt-1.5 border-t border-white/10 flex items-center justify-between">
+                              ${isDeployed ? (() => {
+                                const dep = mission.crisisTeamDeployments?.[team.id];
+                                const nowTs = Date.now() + (this.serverTimeOffset || 0);
+                                if (dep) {
+                                  if (dep.status === 'convergence_base' || nowTs < dep.maxArrivalBaseAt) {
+                                    const minsLeft = Math.max(1, Math.ceil((dep.maxArrivalBaseAt - nowTs) / 60000));
+                                    return `
+                                      <div class="w-full flex items-center justify-between">
+                                        <div class="space-y-0.5">
+                                          <span class="text-[10px] font-black text-amber-400 flex items-center gap-1.5">
+                                            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                                            🚗 1. Ralliement Base (~${minsLeft} min)
+                                          </span>
+                                          <p class="text-[9px] text-slate-300">Regroupement de l'équipage à la base</p>
+                                        </div>
+                                        <span class="text-[10px] font-bold text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">
+                                          Attente base
+                                        </span>
+                                      </div>
+                                    `;
+                                  }
+                                  if (dep.status === 'armement_2min' || nowTs < dep.vehicleDepartureAt) {
+                                    const secLeft = Math.max(1, Math.ceil((dep.vehicleDepartureAt - nowTs) / 1000));
+                                    return `
+                                      <div class="w-full flex items-center justify-between">
+                                        <div class="space-y-0.5">
+                                          <span class="text-[10px] font-black text-indigo-400 flex items-center gap-1.5">
+                                            <span class="w-2 h-2 rounded-full bg-indigo-400 animate-spin"></span>
+                                            ⏱️ 2. Prise véhicule (~${secLeft}s)
+                                          </span>
+                                          <p class="text-[9px] text-slate-300">Équipage réuni • Armement engin (délai 2 min)</p>
+                                        </div>
+                                        <span class="text-[10px] font-bold text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-500/30">
+                                          Départ imminent
+                                        </span>
+                                      </div>
+                                    `;
+                                  }
+                                  if (dep.status === 'en_route_gyros' || dep.status === 'en_route_normal' || nowTs < dep.crisisArrivalAt) {
+                                    const minsLeft = Math.max(1, Math.ceil((dep.crisisArrivalAt - nowTs) / 60000));
+                                    const withGyros = dep.hasBeacon !== false;
+                                    return `
+                                      <div class="w-full flex items-center justify-between">
+                                        <div class="space-y-0.5">
+                                          <span class="text-[10px] font-black ${withGyros ? 'text-rose-400' : 'text-amber-400'} flex items-center gap-1.5">
+                                            <span class="w-2 h-2 rounded-full ${withGyros ? 'bg-rose-500 animate-ping' : 'bg-amber-500'}"></span>
+                                            ${withGyros ? `🚨 3. En route gyrophares (~${minsLeft} min)` : `🚗 3. En route sans gyrophare (~${minsLeft} min)`}
+                                          </span>
+                                          <p class="text-[9px] text-slate-300">Trajet ${withGyros ? 'urgent sous gyrophares' : 'à allure normale'} Base ➔ Crise (${dep.distBaseCrisisKm || 10} km)</p>
+                                        </div>
+                                        <span class="text-[10px] font-bold ${withGyros ? 'text-rose-300 bg-rose-950/60 border-rose-500/30' : 'text-amber-300 bg-amber-950/60 border-amber-500/30'} px-2 py-0.5 rounded border">
+                                          ${withGyros ? 'Sous gyros' : 'Allure normale'}
+                                        </span>
+                                      </div>
+                                    `;
+                                  }
+                                  if (dep.status === 'sur_les_lieux' || nowTs >= dep.crisisArrivalAt) {
+                                    return `
+                                      <div class="w-full flex items-center justify-between">
+                                        <div class="space-y-0.5">
+                                          <span class="text-[10px] font-extrabold text-emerald-400 flex items-center gap-1.5">
+                                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                            🟢 4. Sur les lieux (Opérationnelle)
+                                          </span>
+                                          <p class="text-[9px] text-slate-300">Équipe engagée sur le théâtre de crise</p>
+                                        </div>
+                                        <span class="text-[10px] font-bold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                                          Active sur site
+                                        </span>
+                                      </div>
+                                    `;
+                                  }
+                                }
+                                return `
+                                  <span class="text-[10px] font-extrabold text-emerald-400 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                    Déployée sur le sinistre
+                                  </span>
+                                `;
+                              })() : `
+                                <span class="text-[10px] text-amber-300 font-semibold">
+                                  ${allEngaged ? 'Prête au départ' : (members.length === 0 ? 'Équipe vide' : 'À engager')}
+                                </span>
+                                <button
+                                  onclick="window.game.deployCrisisTeam('${mission.id}', '${team.id}')"
+                                  class="px-3 py-1.5 rounded-xl text-[10px] font-black bg-gradient-to-r from-red-600 to-pc-orange hover:brightness-110 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                                  <i data-lucide="send" class="w-3 h-3"></i>
+                                  <span>Déployer l'Équipe</span>
+                                </button>
+                              `}
+                            </div>
+                          ` : ''}
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                `}
               </div>
             ` : ''}
 
@@ -10884,14 +11075,14 @@ class ProtecGame {
                     <th class="py-2.5 px-3 w-10">Image</th>
                     <th class="py-2.5 px-3">Personnel</th>
                     <th class="py-2.5 px-3">Fonction</th>
-                    ${isCrisisMission ? '<th class="py-2.5 px-3">Équipe</th>' : ''}
+                    ${hasTeamManagement ? '<th class="py-2.5 px-3">Équipe</th>' : ''}
                     <th class="py-2.5 px-2 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                   ${registeredVols.length === 0 ? `
                     <tr>
-                      <td colspan="${isCrisisMission ? 5 : 4}" class="p-4 text-center text-xs text-amber-700 bg-amber-50/50">
+                      <td colspan="${hasTeamManagement ? 5 : 4}" class="p-4 text-center text-xs text-amber-700 bg-amber-50/50">
                         Aucun secouriste n’a encore validé sa disponibilité. Cliquez sur « Alerte SMS » pour sonder vos bénévoles.
                       </td>
                     </tr>
@@ -10902,7 +11093,7 @@ class ProtecGame {
                     const isRoleMissing = !currentRole;
                     const isEngaged = (mission.engagedVolunteers || []).includes(v.id);
                     const teamLabel = getTeamLabel(v, idx);
-                    const assignedTeamId = mission.volunteerTeams?.[v.id] || this.getDefaultCrisisTeam(mission, v, idx);
+                    const assignedTeamId = mission.volunteerTeams?.[v.id] || '';
 
                     return `
                       <tr class="hover:bg-slate-50/80 transition ${isRoleMissing && isEngaged ? 'bg-amber-50/20' : ''}">
@@ -10947,12 +11138,13 @@ class ProtecGame {
                             `).join('')}
                           </select>
                         </td>
-                        ${isCrisisMission ? `
+                        ${hasTeamManagement ? `
                           <td class="py-2 px-3">
                             <select
                               onchange="window.game.setVolunteerCrisisTeam('${mission.id}', '${v.id}', this.value)"
-                              class="text-[10px] font-bold px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-pc-blue border border-blue-200 cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[130px]"
-                              title="Affecter ce secouriste à une équipe de crise">
+                              class="text-[10px] font-bold px-2 py-1 rounded-lg ${assignedTeamId ? 'bg-blue-50 text-pc-blue border-blue-200' : 'bg-slate-50 text-slate-500 border-slate-300'} border cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[140px]"
+                              title="Affecter ce secouriste à une équipe">
+                              <option value="" ${!assignedTeamId ? 'selected' : ''}>⚠️ Aucune équipe</option>
                               ${crisisTeamsList.map(t => `
                                 <option value="${t.id}" ${t.id === assignedTeamId ? 'selected' : ''}>${t.name}</option>
                               `).join('')}
@@ -18593,10 +18785,12 @@ class ProtecGame {
                   }
                 }
               }
-              // Phase 3 : Départ d'urgence sous gyrophares Base -> Sinistre
+              // Phase 3 : Départ d'urgence Base -> Sinistre
               else if (currentTime >= dep.vehicleDepartureAt && currentTime < dep.crisisArrivalAt) {
-                if (dep.status !== 'en_route_gyros') {
-                  dep.status = 'en_route_gyros';
+                const withGyros = dep.hasBeacon !== false;
+                const targetStatus = withGyros ? 'en_route_gyros' : 'en_route_normal';
+                if (dep.status !== targetStatus) {
+                  dep.status = targetStatus;
                   hasCrisisChanges = true;
                 }
                 if (!dep.loggedDeparture) {
@@ -18605,7 +18799,9 @@ class ProtecGame {
                   if (m.operationalLog) {
                     m.operationalLog.unshift({
                       time: timeStr,
-                      text: `Départ urgent : Équipe ${dep.teamName} partie sous gyrophares vers « ${m.title} » (trajet routier estimé : ${dep.transitCrisisMin} min).`,
+                      text: withGyros 
+                        ? `Départ urgent : Équipe ${dep.teamName} partie sous gyrophares vers « ${m.title} » (trajet routier estimé : ${dep.transitCrisisMin} min).`
+                        : `Départ urgent : Équipe ${dep.teamName} partie sans gyrophare à vitesse normale vers « ${m.title} » (trajet routier estimé : ${dep.transitCrisisMin} min).`,
                       author: 'PC Radio',
                       isCritical: true
                     });
@@ -18785,6 +18981,15 @@ class ProtecGame {
               m.eventDate.minute || 0
             ).getTime() : (currentTime - 1800000));
 
+            // Délai minimum garanti de 15 secondes réelles pour voir et répondre à l'alerte
+            if (!m.spawnedRealTime) {
+              m.spawnedRealTime = Date.now();
+            }
+            const realElapsedSec = (Date.now() - m.spawnedRealTime) / 1000;
+            if (realElapsedSec < 15) {
+              return; // Bloque toute clôture prématurée pendant les 15 premières secondes
+            }
+
             const elapsedMinutes = (currentTime - spawnedTime) / 60000;
             const maxResponse = m.maxResponseMinutes || 25;
             const missionDurationSec = m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 2400);
@@ -18855,7 +19060,11 @@ class ProtecGame {
             const rawDist = Math.hypot(dLat, dLng);
             const distKm = Math.max(1.2, Math.round(rawDist * 1.25 * 10) / 10);
             const isUrgency = ['samu', 'pompiers', 'crise'].includes(m.type) || ['critique', 'haute'].includes(m.urgency) || m.status === 'declenche';
-            const speedKmh = isUrgency ? 48 : 35;
+            const assignedVehicles = (m.registeredVehicles || []).map(vId => (this.vehicles || []).find(v => v.id === vId)).filter(Boolean);
+            const hasBeacon = assignedVehicles.length > 0
+              ? assignedVehicles.every(v => v.type === 'VPSP' || v.hasLedBar || v.hasBeacon || (Array.isArray(v.installedOptions) && v.installedOptions.some(o => /gyrophare|rampe led|led/i.test(o))))
+              : (m.type === 'samu' || m.type === 'pompiers');
+            const speedKmh = (isUrgency && hasBeacon) ? 48 : 35;
             const transitMinutes = Math.max(5, Math.round((distKm / speedKmh) * 60));
             const advanceMinutes = Math.max(5, Math.ceil(transitMinutes / 5) * 5);
             const departureDate = new Date(plannedStartDate.getTime() - advanceMinutes * 60 * 1000);
@@ -20468,6 +20677,10 @@ class ProtecGame {
     if (color === 'purple') { iconBg = 'bg-purple-100 text-purple-600'; iconName = 'camera'; }
     if (color === 'red') { iconBg = 'bg-rose-100 text-rose-600'; iconName = 'alert-octagon'; }
 
+    const isAlert = color === 'red' || color === 'orange' || (target && ['mission', 'crise'].includes(target.type)) || (typeof title === 'string' && /alerte|urgence|samu|sdis|crise|départ réflexe|renfort/i.test(title));
+    const toastDuration = isAlert ? 15000 : 4500;
+    const barId = `toast-bar-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+
     toast.innerHTML = `
       <div class="w-7 h-7 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 mt-0.5">
         <i data-lucide="${iconName}" class="w-4 h-4"></i>
@@ -20475,9 +20688,17 @@ class ProtecGame {
       <div class="flex-1 pr-2">
         <div class="flex items-center justify-between">
           <h5 class="text-xs font-extrabold text-slate-900 leading-tight">${title}</h5>
-          ${hasTarget ? `<span class="text-[9px] font-bold text-pc-blue underline ml-1">${resolvedTarget.label || 'Voir ➜'}</span>` : ''}
+          <div class="flex items-center gap-1.5 ml-1">
+            ${isAlert ? `<span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-rose-500 text-white animate-pulse">ALERTE (15s)</span>` : ''}
+            ${hasTarget ? `<span class="text-[9px] font-bold text-pc-blue underline">${resolvedTarget.label || 'Voir ➜'}</span>` : ''}
+          </div>
         </div>
         <p class="text-[11px] text-slate-600 mt-0.5 leading-normal">${message}</p>
+        ${isAlert ? `
+          <div class="w-full bg-slate-200/80 h-1 rounded-full overflow-hidden mt-1.5">
+            <div id="${barId}" class="bg-rose-500 h-full transition-all duration-[15000ms] ease-linear w-full"></div>
+          </div>
+        ` : ''}
       </div>
       <button onclick="event.stopPropagation(); this.closest('.glass-panel-heavy').remove()" class="text-slate-400 hover:text-slate-600 p-0.5" title="Fermer">
         <i data-lucide="x" class="w-3.5 h-3.5"></i>
@@ -20502,11 +20723,18 @@ class ProtecGame {
     container.appendChild(toast);
     if (window.lucide) window.lucide.createIcons();
 
-    setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 20);
+    setTimeout(() => {
+      toast.classList.remove('translate-y-2', 'opacity-0');
+      if (isAlert) {
+        const bar = document.getElementById(barId);
+        if (bar) bar.style.width = '0%';
+      }
+    }, 20);
+
     setTimeout(() => {
       toast.classList.add('opacity-0', 'translate-x-4');
       setTimeout(() => toast.remove(), 300);
-    }, 4500);
+    }, toastDuration);
   }
 }
 
