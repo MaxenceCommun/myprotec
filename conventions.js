@@ -16,9 +16,13 @@ window.ProtecConventions = {
     const body = document.getElementById('modal-body');
     const prevScroll = body ? body.scrollTop : 0;
 
+    const pompiersAuth = (typeof game.getPompiersAuthority === 'function')
+      ? game.getPompiersAuthority()
+      : (window.ProtecDepartements ? window.ProtecDepartements.getPompiersAuthority(game.currentDepartmentCode) : { shortName: 'SDIS', fullName: 'SDIS', badge: 'SDIS • Gardes Pompiers', badgeLight: 'bg-orange-100 text-orange-900 border-orange-200', conventionTitle: 'Convention Partenariale SDIS (Pompiers)', conventionDesc: 'Mise à disposition conventionnée d\'un équipage VPSP pour gardes caserne ou astreintes renforcées au profit du CODIS.', indemnisationLabel: 'Indemnisation SDIS :', indemnisationRate: '45 € / heure de garde VPSP', cadreIntervention: 'Gardes caserne VPSP & renforts secours d\'urgence au profit du CODIS', codisName: 'CODIS', etatMajorName: 'l\'État-Major SDIS' });
+
     modal.classList.remove('hidden');
     title.textContent = 'Conventions Opérationnelles & Partenariats Officiels';
-    subtitle.textContent = 'Accords-cadres avec les services de l\'État, SAMU, SDIS, SNCF et collectivités territoriales';
+    subtitle.textContent = `Accords-cadres avec les services de l'État, SAMU, ${pompiersAuth.shortName}, SNCF et collectivités territoriales`;
     icon.setAttribute('data-lucide', 'file-text');
 
     const cump = game.cumpConvention || {};
@@ -47,7 +51,7 @@ window.ProtecConventions = {
             </div>
             <div>
               <h4 class="text-base font-black">Conventions Opérationnelles & Partenariats Officiels</h4>
-              <p class="text-xs text-white/80">Accords-cadres avec les services de l'État, SAMU, SDIS, SNCF et collectivités territoriales</p>
+              <p class="text-xs text-white/80">Accords-cadres avec les services de l'État, SAMU, ${pompiersAuth.shortName}, SNCF et collectivités territoriales</p>
             </div>
           </div>
           <span class="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
@@ -62,7 +66,7 @@ window.ProtecConventions = {
               <span class="text-lg">📬</span>
               <div>
                 <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wider">Relations Institutionnelles & Retours Partenaires</h4>
-                <p class="text-[11px] text-slate-500">Coordination continue avec le SAMU 15, le SDIS 18, la SNCF, les Mairies et les Organisateurs</p>
+                <p class="text-[11px] text-slate-500">Coordination continue avec le SAMU 15, le ${pompiersAuth.shortName}, la SNCF, les Mairies et les Organisateurs</p>
               </div>
             </div>
             <button onclick="if (window.ProtecMessaging?.openInstitutionsChannel) { window.ProtecMessaging.openInstitutionsChannel(window.game); } else { window.game.openModule('tchat'); }" class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-pc-blue hover:bg-pc-blue-light transition shadow-xs flex items-center gap-1.5 cursor-pointer">
@@ -138,7 +142,7 @@ window.ProtecConventions = {
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] font-semibold text-slate-700">
             <div class="p-2.5 rounded-xl bg-white/80 border border-slate-200">
               <span class="text-[10px] text-slate-500 block uppercase">Missions autorisées</span>
-              <span class="font-bold text-slate-900">DPS, SAMU 15, SDIS & Réquisitions</span>
+              <span class="font-bold text-slate-900">DPS, SAMU 15, ${pompiersAuth.shortName} & Réquisitions</span>
             </div>
             <div class="p-2.5 rounded-xl bg-white/80 border border-slate-200">
               <span class="text-[10px] text-slate-500 block uppercase">Autorité de Tutelle</span>
@@ -270,12 +274,12 @@ window.ProtecConventions = {
             </div>
           </div>
 
-          <!-- 2. CONVENTION SDIS (POMPIERS) -->
+          <!-- 2. CONVENTION POMPIERS (BSPP à Paris/Petite Couronne, BMPM à Marseille, SDIS ailleurs) -->
           <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${game.sdisConvention?.signed ? 'border-orange-300 ring-1 ring-orange-300/30' : 'border-slate-200'}">
             <div class="space-y-2">
               <div class="flex items-center justify-between">
-                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase bg-orange-100 text-orange-900 border border-orange-200">
-                  SDIS • Gardes Pompiers
+                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase ${pompiersAuth.badgeLight}">
+                  ${pompiersAuth.badge}
                 </span>
                 <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${
                   game.sdisConvention?.signed 
@@ -303,14 +307,14 @@ window.ProtecConventions = {
               </div>
 
               <div>
-                <h5 class="text-xs font-black text-slate-900">Convention Partenariale SDIS (Pompiers)</h5>
-                <p class="text-[11px] text-slate-600 mt-1">Mise à disposition conventionnée d'un équipage VPSP pour gardes caserne ou astreintes renforcées au profit du CODIS.</p>
+                <h5 class="text-xs font-black text-slate-900">${pompiersAuth.conventionTitle}</h5>
+                <p class="text-[11px] text-slate-600 mt-1">${pompiersAuth.conventionDesc}</p>
               </div>
 
               <div class="p-2.5 rounded-xl bg-slate-50 text-[10px] space-y-1 font-semibold text-slate-700">
                 <div class="flex justify-between">
-                  <span>Indemnisation SDIS :</span>
-                  <span class="text-emerald-700 font-bold">45 € / heure de garde VPSP</span>
+                  <span>${pompiersAuth.indemnisationLabel}</span>
+                  <span class="text-emerald-700 font-bold">${pompiersAuth.indemnisationRate}</span>
                 </div>
                 <div class="flex justify-between">
                   <span>Dotation de signature :</span>
@@ -318,14 +322,14 @@ window.ProtecConventions = {
                 </div>
                 <div class="flex justify-between">
                   <span>Cadre d'intervention :</span>
-                  <span>Gardes caserne VPSP & renforts secours d'urgence au profit du CODIS</span>
+                  <span>${pompiersAuth.cadreIntervention}</span>
                 </div>
               </div>
 
               ${game.sdisConvention?.requestStatus === 'rejected' && game.sdisConvention?.rejectReason ? `
                 <div class="p-2 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 space-y-0.5">
                   <div class="font-bold flex items-center gap-1">
-                    <span>⚠️ Motif du refus du commandement SDIS :</span>
+                    <span>⚠️ Motif du refus du commandement ${pompiersAuth.shortName} :</span>
                   </div>
                   <div>${game.sdisConvention.rejectReason}</div>
                 </div>
@@ -334,13 +338,13 @@ window.ProtecConventions = {
               ${game.sdisConvention?.requestStatus === 'instruction' ? `
                 <div class="p-2 rounded-xl bg-amber-50 border border-amber-200 text-[10px] text-amber-800 space-y-1">
                   <div class="font-bold flex items-center justify-between">
-                    <span>Dossier en cours d'instruction par l'État-Major SDIS</span>
+                    <span>Dossier en cours d'instruction par ${pompiersAuth.etatMajorName}</span>
                     <span>${Math.max(1, Math.ceil((game.sdisConvention.reviewTimer || 0) / 60))} min</span>
                   </div>
                   <div class="w-full bg-amber-200 h-1.5 rounded-full overflow-hidden">
                     <div class="bg-amber-600 h-full rounded-full transition-all duration-300" style="width: ${Math.min(100, Math.max(5, 100 - (((game.sdisConvention.reviewTimer || 1) / (game.sdisConvention.initialTimer || 120)) * 100)))}%"></div>
                   </div>
-                  <div class="text-[9px] text-amber-700 italic">Le SDIS vérifie l'expérience opérationnelle et la fiabilité de vos équipages...</div>
+                  <div class="text-[9px] text-amber-700 italic">Le ${pompiersAuth.shortName} vérifie l'expérience opérationnelle et la fiabilité de vos équipages...</div>
                 </div>
               ` : ''}
             </div>
@@ -348,7 +352,7 @@ window.ProtecConventions = {
             <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
               ${game.sdisConvention?.signed ? `
                 <button onclick="window.game.openModule('pompiers')" class="px-3.5 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs shadow-sm transition">
-                  Gérer la Garde SDIS
+                  Gérer la Garde ${pompiersAuth.shortName}
                 </button>
                 <button onclick="window.game.terminateSdisConvention()" class="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 transition border border-rose-200">
                   Résilier
@@ -366,7 +370,7 @@ window.ProtecConventions = {
               ` : `
                 <button onclick="window.game.requestSdisConvention()" class="w-full px-3.5 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
                   <span>📑</span>
-                  <span>${game.sdisConvention?.requestStatus === 'rejected' ? 'Renouveler la Demande au SDIS' : 'Déposer une Demande de Conventionnement SDIS'}</span>
+                  <span>${game.sdisConvention?.requestStatus === 'rejected' ? `Renouveler la Demande (${pompiersAuth.shortName})` : `Déposer une Demande de Conventionnement ${pompiersAuth.shortName}`}</span>
                 </button>
               `}
             </div>
@@ -1471,9 +1475,13 @@ if (numVehicles > 0 && totalCrew > 0) {
     game[convKey].requestedAt = Date.now();
     game[convKey].rejectReason = null;
 
+    const pompiersAuth = (typeof game.getPompiersAuthority === 'function')
+      ? game.getPompiersAuthority()
+      : (window.ProtecDepartements ? window.ProtecDepartements.getPompiersAuthority(game.currentDepartmentCode) : { shortName: 'SDIS', fullName: 'SDIS', etatMajorName: 'l\'État-Major SDIS' });
+
     const names = {
       samu: 'SAMU 15 (Centre Hospitalier Universitaire)',
-      sdis: 'SDIS (État-Major des Sapeurs-Pompiers)',
+      sdis: `${pompiersAuth.fullName} (${pompiersAuth.etatMajorName})`,
       sncf: 'SNCF Voyageurs (Direction de Crise Nationale)',
       cump: 'Cellule CUMP (Coordination Médico-Psychologique SAMU 15)'
     };
@@ -1521,6 +1529,10 @@ if (numVehicles > 0 && totalCrew > 0) {
     const convKey = type === 'samu' ? 'samuConvention' : (type === 'sdis' ? 'sdisConvention' : (type === 'sncf' ? 'sncfConvention' : 'cumpConvention'));
     const conv = game[convKey] || {};
 
+    const pompiersAuth = (typeof game.getPompiersAuthority === 'function')
+      ? game.getPompiersAuthority()
+      : (window.ProtecDepartements ? window.ProtecDepartements.getPompiersAuthority(game.currentDepartmentCode) : { shortName: 'SDIS', fullName: 'SDIS', etatMajorName: 'l\'État-Major SDIS' });
+
     const completedDps = (game.missions || []).filter(m => m.status === 'completed' && m.type !== 'formation').length;
     const totalVols = (game.volunteers || []).filter(v => !v.isBurnout && v.status !== 'burnout').length;
     const vpsps = (game.vehicles || []).filter(v => v.type === 'VPSP' && v.status !== 'panne').length;
@@ -1561,7 +1573,7 @@ if (numVehicles > 0 && totalCrew > 0) {
       }
       if (vpsps < 1) {
         accepted = false;
-        reasons.push("Aucun véhicule de premiers secours à personnes (VPSP) disponible pour assurer les gardes caserne.");
+        reasons.push(`Aucun véhicule de premiers secours à personnes (VPSP) disponible pour assurer les gardes auprès de ${pompiersAuth.shortName}.`);
       }
       if (pseQualified < 3) {
         accepted = false;
@@ -1569,11 +1581,11 @@ if (numVehicles > 0 && totalCrew > 0) {
       }
       if (completedDps < 3) {
         accepted = false;
-        reasons.push("Expérience opérationnelle sur le terrain encore trop limitée pour intégrer les renforts départementaux du SDIS.");
+        reasons.push(`Expérience opérationnelle sur le terrain encore trop limitée pour intégrer les renforts de ${pompiersAuth.shortName}.`);
       }
       if (sdisRep < 42) {
         accepted = false;
-        reasons.push("Niveau de réputation et d'implantation auprès de l'État-Major SDIS encore fragile.");
+        reasons.push(`Niveau de réputation et d'implantation auprès de ${pompiersAuth.etatMajorName} encore fragile.`);
       }
     } else if (type === 'sncf') {
       if (allVehs < 1) {
@@ -1614,7 +1626,7 @@ if (numVehicles > 0 && totalCrew > 0) {
 
     const partnerNames = {
       samu: 'SAMU 15',
-      sdis: 'SDIS 18',
+      sdis: pompiersAuth.shortName,
       sncf: 'SNCF Voyageurs',
       cump: 'Cellule CUMP SAMU 15'
     };

@@ -16,9 +16,13 @@ window.ProtecConventions = {
     const body = document.getElementById('modal-body');
     const prevScroll = body ? body.scrollTop : 0;
 
+    const pompiersAuth = (typeof game.getPompiersAuthority === 'function')
+      ? game.getPompiersAuthority()
+      : (window.ProtecDepartements ? window.ProtecDepartements.getPompiersAuthority(game.currentDepartmentCode) : { shortName: 'SDIS', fullName: 'SDIS', badge: 'SDIS • Gardes Pompiers', badgeLight: 'bg-orange-100 text-orange-900 border-orange-200', conventionTitle: 'Convention Partenariale SDIS (Pompiers)', conventionDesc: 'Mise à disposition conventionnée d\'un équipage VPSP pour gardes caserne ou astreintes renforcées au profit du CODIS.', indemnisationLabel: 'Indemnisation SDIS :', indemnisationRate: '45 € / heure de garde VPSP', cadreIntervention: 'Gardes caserne VPSP & renforts secours d\'urgence au profit du CODIS', codisName: 'CODIS', etatMajorName: 'l\'État-Major SDIS' });
+
     modal.classList.remove('hidden');
     title.textContent = 'Conventions Opérationnelles & Partenariats Officiels';
-    subtitle.textContent = 'Accords-cadres avec les services de l\'État, SAMU, SDIS, SNCF et collectivités territoriales';
+    subtitle.textContent = `Accords-cadres avec les services de l'État, SAMU, ${pompiersAuth.shortName}, SNCF et collectivités territoriales`;
     icon.setAttribute('data-lucide', 'file-text');
 
     const cump = game.cumpConvention || {};
@@ -36,10 +40,6 @@ window.ProtecConventions = {
       game.reputation_villes[baseCity] = 55;
     }
 
-    const pompiersAuth = (typeof game.getPompiersAuthority === 'function')
-      ? game.getPompiersAuthority()
-      : (window.ProtecDepartements ? window.ProtecDepartements.getPompiersAuthority(game.currentDepartmentCode) : { shortName: 'SDIS', fullName: 'SDIS', badge: 'SDIS • Gardes Pompiers', badgeLight: 'bg-orange-100 text-orange-900 border-orange-200', conventionTitle: 'Convention Partenariale SDIS (Pompiers)', conventionDesc: 'Mise à disposition conventionnée d\'un équipage VPSP pour gardes caserne ou astreintes renforcées au profit du CODIS.', indemnisationLabel: 'Indemnisation SDIS :', indemnisationRate: '45 € / heure de garde VPSP', cadreIntervention: 'Gardes caserne VPSP & renforts secours d\'urgence au profit du CODIS', codisName: 'CODIS', etatMajorName: 'l\'État-Major SDIS' });
-
     body.innerHTML = `
       <div class="space-y-6">
 
@@ -51,7 +51,7 @@ window.ProtecConventions = {
             </div>
             <div>
               <h4 class="text-base font-black">Conventions Opérationnelles & Partenariats Officiels</h4>
-              <p class="text-xs text-white/80">Accords-cadres avec les services de l'État, SAMU, SDIS, SNCF et collectivités territoriales</p>
+              <p class="text-xs text-white/80">Accords-cadres avec les services de l'État, SAMU, ${pompiersAuth.shortName}, SNCF et collectivités territoriales</p>
             </div>
           </div>
           <span class="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
@@ -66,7 +66,7 @@ window.ProtecConventions = {
               <span class="text-lg">📬</span>
               <div>
                 <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wider">Relations Institutionnelles & Retours Partenaires</h4>
-                <p class="text-[11px] text-slate-500">Coordination continue avec le SAMU 15, le SDIS 18, la SNCF, les Mairies et les Organisateurs</p>
+                <p class="text-[11px] text-slate-500">Coordination continue avec le SAMU 15, le ${pompiersAuth.shortName}, la SNCF, les Mairies et les Organisateurs</p>
               </div>
             </div>
             <button onclick="if (window.ProtecMessaging?.openInstitutionsChannel) { window.ProtecMessaging.openInstitutionsChannel(window.game); } else { window.game.openModule('tchat'); }" class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-pc-blue hover:bg-pc-blue-light transition shadow-xs flex items-center gap-1.5 cursor-pointer">
@@ -142,7 +142,7 @@ window.ProtecConventions = {
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] font-semibold text-slate-700">
             <div class="p-2.5 rounded-xl bg-white/80 border border-slate-200">
               <span class="text-[10px] text-slate-500 block uppercase">Missions autorisées</span>
-              <span class="font-bold text-slate-900">DPS, SAMU 15, SDIS & Réquisitions</span>
+              <span class="font-bold text-slate-900">DPS, SAMU 15, ${pompiersAuth.shortName} & Réquisitions</span>
             </div>
             <div class="p-2.5 rounded-xl bg-white/80 border border-slate-200">
               <span class="text-[10px] text-slate-500 block uppercase">Autorité de Tutelle</span>

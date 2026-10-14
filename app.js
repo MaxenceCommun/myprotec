@@ -291,35 +291,14 @@ class ProtecGame {
   }
 
   // Autorité Pompiers officielle territorialisée (BSPP à Paris/petite couronne, BMPM à Marseille, SDIS ailleurs)
-  getPompierAuthority(deptCode = null) {
-    const code = String(deptCode || this.stations?.[0]?.departmentCode || this.currentDepartmentCode || '75').trim();
-    if (['75', '92', '93', '94'].includes(code)) {
-      return {
-        code: 'BSPP',
-        label: 'BSPP',
-        shortGarde: 'Garde BSPP',
-        fullLabel: 'Brigade de Sapeurs-Pompiers de Paris',
-        codisLabel: 'COSS / BSPP',
-        caserneLabel: 'Caserne BSPP'
-      };
-    }
-    if (code === '13') {
-      return {
-        code: 'BMPM',
-        label: 'BMPM',
-        shortGarde: 'Garde BMPM',
-        fullLabel: 'Bataillon de Marins-Pompiers de Marseille',
-        codisLabel: 'COSS / BMPM',
-        caserneLabel: 'Caserne BMPM'
-      };
-    }
+  getPompierAuthority(deptCode = null, city = null) {
+    const auth = this.getPompiersAuthority(deptCode, city);
     return {
-      code: 'SDIS',
-      label: `SDIS ${code}`.trim(),
-      shortGarde: `Garde SDIS ${code}`.trim(),
-      fullLabel: `Service Départemental d'Incendie et de Secours (${code})`,
-      codisLabel: `CODIS / SDIS ${code}`.trim(),
-      caserneLabel: 'Caserne Pompiers'
+      ...auth,
+      label: auth.shortName || auth.code || 'SDIS',
+      shortGarde: `Garde ${auth.shortName || auth.code || 'SDIS'}`,
+      codisLabel: auth.codisName || `CODIS / ${auth.shortName || 'SDIS'}`,
+      caserneLabel: auth.centerType || (auth.code === 'BSPP' ? 'Centre de Secours BSPP' : (auth.code === 'BMPM' ? 'Caserne BMPM' : 'Caserne Pompiers'))
     };
   }
 
@@ -5718,14 +5697,14 @@ class ProtecGame {
   }
 
   // --- RÉFÉRENTIEL DE L'AUTORITÉ POMPIERS (BSPP à Paris/Petite Couronne, BMPM à Marseille, SDIS ailleurs) ---
-  getPompiersAuthority() {
-    const deptCode = this.currentDepartmentCode || this.player?.departmentCode || this.stations?.[0]?.departmentCode || '75';
-    const city = this.stations?.[0]?.city || this.player?.city || '';
+  getPompiersAuthority(deptCode = null, city = null) {
+    const targetDept = deptCode || this.currentDepartmentCode || this.player?.departmentCode || this.stations?.[0]?.departmentCode || '75';
+    const targetCity = city || this.stations?.[0]?.city || this.player?.city || '';
     if (window.ProtecDepartements && typeof window.ProtecDepartements.getPompiersAuthority === 'function') {
-      return window.ProtecDepartements.getPompiersAuthority(deptCode, city);
+      return window.ProtecDepartements.getPompiersAuthority(targetDept, targetCity);
     }
-    const rawDept = String(deptCode || '').trim();
-    if (['75', '92', '93', '94'].includes(rawDept) || String(city).toLowerCase().includes('paris')) {
+    const rawDept = String(targetDept || '').trim();
+    if (['75', '92', '93', '94'].includes(rawDept) || String(targetCity).toLowerCase().includes('paris')) {
       return {
         type: 'bspp',
         code: 'BSPP',
