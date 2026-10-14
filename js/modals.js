@@ -100,8 +100,8 @@ window.ProtecModals = {
         <!-- Bannière Matériel Opérationnel, Lots de Crise & Conditions de Travail -->
         <div class="p-4 rounded-2xl bg-gradient-to-r from-blue-700 to-indigo-700 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
           <div class="flex items-center gap-3">
-            <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
-              📦
+            <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner">
+              <i data-lucide="package" class="w-6 h-6"></i>
             </div>
             <div>
               <h4 class="text-sm font-black leading-tight">Parc Matériel, Gammes d’Équipements & Inventaire</h4>
@@ -202,7 +202,7 @@ window.ProtecModals = {
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-3">
                       <div class="w-14 h-10 bg-slate-100 rounded-xl p-1 flex items-center justify-center flex-shrink-0 border border-slate-200/60 shadow-inner">
-                        <img src="${v.image || (window.game?.getVehicleImage ? window.game.getVehicleImage(v.type) : `images/vehicles/${v.type}.png`)}" alt="${v.name}" class="max-h-full max-w-full object-contain drop-shadow-sm" onerror="this.outerHTML='<span class=\'text-xl\'>🚑</span>'" />
+                        <img src="${v.image || (window.game?.getVehicleImage ? window.game.getVehicleImage(v.type) : `images/vehicles/${v.type}.png`)}" alt="${v.name}" class="max-h-full max-w-full object-contain drop-shadow-sm" onerror="this.outerHTML='<i data-lucide=\'truck\' class=\'w-6 h-6 text-slate-400\'></i>'; if(window.lucide) window.lucide.createIcons();" />
                       </div>
                       <div>
                         <h5 class="text-xs font-black text-slate-900 leading-tight">${v.name}</h5>

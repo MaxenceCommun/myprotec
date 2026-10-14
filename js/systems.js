@@ -219,6 +219,7 @@ window.ProtecSystems = {
       currentStep: 0,
       polyline: polyline,
       marker: marker,
+      evacData: mission?.evacHospitalData || null,
       onArrival: onArrivalCallback
     };
 
@@ -241,9 +242,14 @@ window.ProtecSystems = {
 
     // Bip radio et message de départ
     this.playRadioChirp();
-    const statusLabel = isEmergency ? (statusTarget === 4 ? 'STATUT 4 : Transport CHU' : 'STATUT 2 : Départ Urgent') : (statusTarget === 6 ? 'STATUT 6 : Retour Antenne' : 'STATUT 2 : En route');
-    this.addRadioLog(game, vehicle.name, statusTarget, `${statusLabel} vers ${mission ? mission.title : 'Destination'} (${distKm.toFixed(1)} km).`);
-    game.showToast(statusLabel, `${vehicle.name} est en route vers les lieux (~${distKm.toFixed(1)} km).`, isEmergency ? 'orange' : 'blue');
+    const hospTargetName = transit.evacData?.hospital?.name || mission?.evacHospitalData?.hospital?.name || 'Urgences CHU';
+    const specShort = transit.evacData?.specialtyInfo?.shortLabel || mission?.evacHospitalData?.specialtyInfo?.shortLabel || 'SAU';
+    const statusLabel = isEmergency ? (statusTarget === 4 ? `STATUT 4 : Transport ${specShort}` : 'STATUT 2 : Départ Urgent') : (statusTarget === 6 ? 'STATUT 6 : Retour Antenne' : 'STATUT 2 : En route');
+    const radioMsg = (statusTarget === 4)
+      ? `STATUT 4 : Transport sanitaire en cours vers ${hospTargetName} [Pôle : ${specShort}] (${distKm.toFixed(1)} km).`
+      : `${statusLabel} vers ${mission ? mission.title : 'Destination'} (${distKm.toFixed(1)} km).`;
+    this.addRadioLog(game, vehicle.name, statusTarget, radioMsg);
+    game.showToast(statusLabel, (statusTarget === 4) ? `${vehicle.name} en route gyrophares vers ${hospTargetName} (~${distKm.toFixed(1)} km).` : `${vehicle.name} est en route vers les lieux (~${distKm.toFixed(1)} km).`, isEmergency ? 'orange' : 'blue');
   },
 
   ensureTransitLoop(game) {
@@ -288,11 +294,29 @@ window.ProtecSystems = {
           t.marker.setLatLng(currentPos);
           const remainingKm = (t.distKm * (1 - progress)).toFixed(1);
           const remainingSec = Math.max(1, Math.round((t.durationMs - elapsed) / 1000));
+          const hospName = t.evacData?.hospital?.name || t.mission?.evacHospitalData?.hospital?.name || 'Urgences de Secteur';
+          const specLabel = t.evacData?.specialtyInfo?.label || t.mission?.evacHospitalData?.specialtyInfo?.label || 'Urgences Générales';
+          const specClass = t.evacData?.specialtyInfo?.badgeClass || 'bg-blue-100 text-blue-900 border-blue-300';
+          
+          let statusBadgeText = '🚑 En route vers la Mission';
+          if (t.statusTarget === 4) {
+            statusBadgeText = `
+              <div class="space-y-0.5 mt-0.5">
+                <div class="font-bold text-red-600 flex items-center gap-1">🚨 Évacuation vers : <span class="text-slate-900">${hospName}</span></div>
+                <div class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[8.5px] font-black border ${specClass}">
+                  Pôle : ${specLabel}
+                </div>
+              </div>
+            `;
+          } else if (t.statusTarget === 6) {
+            statusBadgeText = '<div class="text-[9px] font-bold text-slate-500">🏠 Retour vers l’Antenne</div>';
+          }
+
           t.marker.setTooltipContent(`
             <div class="text-xs space-y-0.5">
               <strong class="text-pc-blue block">${t.vehicle.name}</strong>
               <div class="text-[10px] text-slate-600">Vitesse : <span class="font-bold ${t.isEmergency ? 'text-red-600' : 'text-slate-800'}">${t.speedKmh} km/h</span> • Reste : <strong>${remainingKm} km</strong> (~${remainingSec}s)</div>
-              <div class="text-[9px] font-bold text-slate-500">${t.statusTarget === 4 ? '🚨 Transport Sanitaire vers Urgences CHU' : (t.statusTarget === 6 ? '🏠 Retour vers l’Antenne' : '🚑 En route vers la Mission')}</div>
+              ${t.statusTarget === 4 ? statusBadgeText : `<div class="text-[9px] font-bold text-slate-500">${statusBadgeText}</div>`}
             </div>
           `);
         }
@@ -311,9 +335,10 @@ window.ProtecSystems = {
           this.addRadioLog(game, t.vehicle.name, 3, `STATUT 3 : Sur les lieux. Dispositif en place pour « ${t.mission?.title} ».`);
           game.showToast('Arrivée sur les lieux', `${t.vehicle.name} est au contact. Statut 3 activé.`, 'green');
         } else if (t.statusTarget === 4) {
+          const hospName = t.evacData?.hospital?.name || t.mission?.evacHospitalData?.hospital?.name || 'Urgences Hospitalières';
           if (t.vehicle) t.vehicle.status = 'urgences_chu';
-          this.addRadioLog(game, t.vehicle.name, 5, `STATUT 5 : Arrivée aux Urgences Hospitalières de secteur. Prise en charge médicale.`);
-          game.showToast('Arrivée Urgences CHU', `${t.vehicle.name} est arrivé aux Urgences hospitalières. Relève effectuée.`, 'green');
+          this.addRadioLog(game, t.vehicle.name, 5, `STATUT 5 : Arrivée à ${hospName}. Transmission de la victime aux équipes médicales.`);
+          game.showToast('Arrivée Urgences', `${t.vehicle.name} est arrivé à ${hospName}. Relève effectuée.`, 'green');
         } else if (t.statusTarget === 6) {
           if (t.vehicle) {
             t.vehicle.status = 'dispo';
@@ -687,7 +712,26 @@ window.ProtecSystems = {
   },
 
   // Récupération dynamique et détection des Hôpitaux de secteur
-  getNearestHospital(game, lat, lng) {
+  getNearestHospital(game, lat, lng, mission = null) {
+    // 0. Si le module avancé des spécialités médicales et d'orientation SAMU est disponible
+    if (window.ProtecHealthInfrastructures && typeof window.ProtecHealthInfrastructures.findBestEvacuationHospital === 'function') {
+      try {
+        const best = window.ProtecHealthInfrastructures.findBestEvacuationHospital(game, mission, { lat, lng });
+        if (best && best.hospital) {
+          // Attacher les métadonnées d'orientation SAMU à l'objet hôpital
+          const hosp = best.hospital;
+          hosp.requiredSpecialty = best.requiredSpecialty;
+          hosp.specialtyInfo = best.specialtyInfo;
+          hosp.isSpecialized = best.isSpecialized;
+          hosp.routingReason = best.reason;
+          hosp.distKm = best.distanceKm;
+          return hosp;
+        }
+      } catch (err) {
+        console.warn('Erreur findBestEvacuationHospital, repli:', err);
+      }
+    }
+
     // 1. Si des hôpitaux de secteur ont été récupérés en arrière-plan (OSM Overpass)
     if (game.sectorHospitals && game.sectorHospitals.length > 0) {
       let nearest = game.sectorHospitals[0];

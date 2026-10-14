@@ -228,21 +228,29 @@ window.ProtecCommunication = {
     const authorName = authorVol ? authorVol.name : 'Équipe d’Antenne';
     const authorRole = authorVol ? (authorVol.role || authorVol.rank || 'Secouriste') : 'Bénévole';
 
-    // Gains immédiats de visibilité et notoriété
+    // Détection du matériel photo d'antenne pour moduler l'impact visuel de la communication
+    const photoTier = (game.equipmentTiers && game.equipmentTiers.appareil_photo) || 1;
+    const photoDef = window.ProtecEquipements?.TIERED_EQUIPMENT_CATALOG?.appareil_photo?.tiers?.find(t => t.level === photoTier);
+    const photoBonusRatio = photoDef?.stats?.comImpactBonus || 0.10;
+    const photoTitle = photoDef ? photoDef.title : 'Smartphone Basique';
+
+    // Gains immédiats de visibilité et notoriété bonifiés par la qualité des photos
     const oldScore = game.socialMedia.visibilityScore || 50;
-    const gain = theme.visibilityGain || 20;
+    const baseGain = theme.visibilityGain || 20;
+    const gain = Math.round(baseGain * (1 + photoBonusRatio));
     const newScore = Math.min(100, oldScore + gain);
     game.socialMedia.visibilityScore = newScore;
     game.socialMedia.lastPostTimestamp = now;
     game.socialMedia.totalPosts = (game.socialMedia.totalPosts || 0) + 1;
 
-    // Réputation d'antenne
-    const repGain = theme.repGain || 10;
+    // Réputation d'antenne bonifiée par l'appareil photo
+    const baseRep = theme.repGain || 10;
+    const repGain = Math.round(baseRep * (1 + photoBonusRatio));
     game.resources.reputationScore = (game.resources.reputationScore || 0) + repGain;
 
-    // Simulation de l'impact social (Likes, partages, commentaires)
-    const postLikes = Math.floor(45 + Math.random() * 85);
-    const postShares = Math.floor(6 + Math.random() * 20);
+    // Simulation de l'impact social bonifié (Likes, partages, commentaires)
+    const postLikes = Math.floor((45 + Math.random() * 85) * (1 + photoBonusRatio * 1.5));
+    const postShares = Math.floor((6 + Math.random() * 20) * (1 + photoBonusRatio * 1.5));
     game.socialMedia.totalLikes = (game.socialMedia.totalLikes || 0) + postLikes;
     game.socialMedia.totalShares = (game.socialMedia.totalShares || 0) + postShares;
 
@@ -297,7 +305,7 @@ window.ProtecCommunication = {
 
     game.showToast(
       'Publication Publiée ! 📱 (0 €)',
-      `Votre post sur « ${theme.title} » est en ligne ! +${gain}% de visibilité et +${repGain} réputation.${impactDetail}`,
+      `Votre post sur « ${theme.title} » est en ligne (visuels : ${photoTitle}) ! +${gain}% de visibilité et +${repGain} réputation.${impactDetail}`,
       'purple'
     );
 

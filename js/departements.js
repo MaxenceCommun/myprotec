@@ -279,6 +279,121 @@ window.ProtecDepartements = {
     return parseFloat((R * c).toFixed(2));
   },
 
+  /**
+   * Détermine l'autorité compétente en matière d'incendie et de secours (pompiers) :
+   * - BSPP à Paris et petite couronne (75, 92, 93, 94)
+   * - BMPM à Marseille (13 Marseille)
+   * - SDIS partout ailleurs en France (SDIS XX)
+   */
+  getPompiersAuthority(deptCode, city = '') {
+    const rawDept = String(deptCode || '').trim();
+    const cleanCity = String(city || '').trim().toLowerCase();
+
+    // 1. BSPP : Paris et la petite couronne (75, 92, 93, 94)
+    if (['75', '92', '93', '94'].includes(rawDept) || cleanCity.includes('paris')) {
+      return {
+        type: 'bspp',
+        code: 'BSPP',
+        shortName: 'BSPP',
+        fullName: 'Brigade de Sapeurs-Pompiers de Paris (BSPP)',
+        badge: 'BSPP • Pompiers de Paris',
+        badgeColor: 'bg-red-950 text-red-200 border-red-700',
+        badgeLight: 'bg-red-100 text-red-900 border-red-200',
+        conventionTitle: 'Convention Partenariale BSPP (Pompiers de Paris)',
+        conventionDesc: 'Mise à disposition conventionnée d’un équipage VPSP pour gardes en Centre de Secours (CS) BSPP ou astreintes renforcées au profit du CTAU/CSO.',
+        indemnisationLabel: 'Indemnisation BSPP :',
+        indemnisationRate: '45 € / heure de garde VPSP',
+        cadreIntervention: 'Gardes en Centre de Secours (CS) BSPP & renforts secours d’urgence (75, 92, 93, 94)',
+        codisName: 'CTAU / CSO BSPP (Champerret)',
+        centerType: 'Centre de Secours (CS)',
+        commandementName: 'Commandement de la BSPP',
+        etatMajorName: 'l’État-Major BSPP (Champerret)',
+        gardeTitle: 'Garde Centre de Secours Pompiers de Paris (BSPP)',
+        gardeSubtitle: 'Mise à disposition opérationnelle VPSP en Centre de Secours BSPP et équipes d’astreinte rappelables',
+        signatureTitle: 'Convention Partenariale BSPP (Pompiers de Paris)',
+        signatureSubtitle: 'Brigade de Sapeurs-Pompiers de Paris • Secteur Paris & Petite Couronne (75, 92, 93, 94)',
+        signatureInstitution: 'BSPP & PRÉFECTURE DE POLICE DE PARIS',
+        partnerName: 'État-Major de la Brigade de Sapeurs-Pompiers de Paris (BSPP)',
+        stampText: 'CONVENTION BSPP RATIFIÉE ✓',
+        clauses: [
+          'Armement de dispositifs conjoints et gardes en Centre de Secours (CS) BSPP avec équipage VPSP.',
+          'Intégration au secteur opérationnel de la Brigade de Sapeurs-Pompiers de Paris (75, 92, 93, 94).',
+          'Indemnisation horaire de 45 €/h de garde VPSP (+350 € dotation de signature).'
+        ],
+        territoryLabel: 'Paris & Petite Couronne (75, 92, 93, 94)'
+      };
+    }
+
+    // 2. BMPM : Marseille (13 Marseille)
+    if (rawDept === '13' && (cleanCity.includes('marseille') || !cleanCity)) {
+      return {
+        type: 'bmpm',
+        code: 'BMPM',
+        shortName: 'BMPM',
+        fullName: 'Bataillon de Marins-Pompiers de Marseille (BMPM)',
+        badge: 'BMPM • Marins-Pompiers',
+        badgeColor: 'bg-sky-950 text-sky-200 border-sky-700',
+        badgeLight: 'bg-sky-100 text-sky-900 border-sky-200',
+        conventionTitle: 'Convention Partenariale BMPM (Marins-Pompiers de Marseille)',
+        conventionDesc: 'Mise à disposition conventionnée d’un équipage VPSP pour gardes caserne ou astreintes au profit du COSSIM.',
+        indemnisationLabel: 'Indemnisation BMPM :',
+        indemnisationRate: '45 € / heure de garde VPSP',
+        cadreIntervention: 'Gardes caserne VPSP & renforts secours d’urgence au profit du COSSIM (Marseille)',
+        codisName: 'COSSIM (Marins-Pompiers de Marseille)',
+        centerType: 'Caserne des Marins-Pompiers',
+        commandementName: 'Commandement du BMPM',
+        etatMajorName: 'l’État-Major du BMPM',
+        gardeTitle: 'Garde Caserne Marins-Pompiers (BMPM)',
+        gardeSubtitle: 'Mise à disposition opérationnelle VPSP en caserne des marins-pompiers et équipes d’astreinte rappelables',
+        signatureTitle: 'Convention Partenariale BMPM (Marins-Pompiers de Marseille)',
+        signatureSubtitle: 'Bataillon de Marins-Pompiers de Marseille • Centre Opérationnel (COSSIM)',
+        signatureInstitution: 'BMPM & VILLE DE MARSEILLE',
+        partnerName: 'Bataillon de Marins-Pompiers de Marseille (BMPM)',
+        stampText: 'CONVENTION BMPM RATIFIÉE ✓',
+        clauses: [
+          'Armement de dispositifs conjoints et gardes casernes avec équipage VPSP.',
+          'Intégration au dispositif opérationnel de secours d’urgence aux personnes de la cité phocéenne.',
+          'Indemnisation horaire de 45 €/h de garde VPSP (+350 € dotation de signature).'
+        ],
+        territoryLabel: 'Marseille & Grand Port Maritime'
+      };
+    }
+
+    // 3. SDIS : Reste de la France (SDIS XX)
+    const deptDisplay = rawDept ? `SDIS ${rawDept}` : 'SDIS';
+    return {
+      type: 'sdis',
+      code: deptDisplay,
+      shortName: deptDisplay,
+      fullName: `Service Départemental d’Incendie et de Secours (${deptDisplay})`,
+      badge: `${deptDisplay} • Gardes Pompiers`,
+      badgeColor: 'bg-orange-950 text-orange-200 border-orange-700',
+      badgeLight: 'bg-orange-100 text-orange-900 border-orange-200',
+      conventionTitle: `Convention Partenariale ${deptDisplay} (Pompiers)`,
+      conventionDesc: `Mise à disposition conventionnée d’un équipage VPSP pour gardes caserne ou astreintes renforcées au profit du CODIS ${rawDept || ''}.`,
+      indemnisationLabel: `Indemnisation ${deptDisplay} :`,
+      indemnisationRate: '45 € / heure de garde VPSP',
+      cadreIntervention: `Gardes caserne VPSP & renforts secours d’urgence au profit du CODIS ${rawDept || ''}`,
+      codisName: `CODIS ${rawDept || ''}`.trim(),
+      centerType: 'Centre de Secours (CIS / CS)',
+      commandementName: `Commandement du ${deptDisplay}`,
+      etatMajorName: `l’État-Major ${deptDisplay}`,
+      gardeTitle: `Garde Caserne Pompiers & Astreinte (${deptDisplay})`,
+      gardeSubtitle: `Mise à disposition opérationnelle VPSP en caserne pompiers et équipes d’astreinte rappelables`,
+      signatureTitle: `Convention Partenariale ${deptDisplay} (Sapeurs-Pompiers)`,
+      signatureSubtitle: `Service Départemental d’Incendie et de Secours (${rawDept}) • Centre Opérationnel (CODIS)`,
+      signatureInstitution: `${deptDisplay} & CORPS DÉPARTEMENTAL DES SAPEURS-POMPIERS`,
+      partnerName: `Direction Départementale des Pompiers (${deptDisplay})`,
+      stampText: `CONVENTION ${deptDisplay} RATIFIÉE ✓`,
+      clauses: [
+        'Armement de dispositifs conjoints et gardes casernes avec équipage VPSP.',
+        'Intégration au dispositif opérationnel de secours d’urgence aux personnes (SUAP).',
+        'Indemnisation horaire de 45 €/h de garde VPSP (+350 € dotation de signature).'
+      ],
+      territoryLabel: `Département ${rawDept}`
+    };
+  },
+
   // Référentiel des communes et centres-villes réels par département (centres administratifs, mairies, sous-préfectures)
   COMMUNES_PAR_DEPARTEMENT: {
     '01': [

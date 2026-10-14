@@ -3,6 +3,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
 
 :root {
+  color-scheme: light !important;
   --pc-blue: #002E6D;
   --pc-blue-light: #0B4EA2;
   --pc-blue-dark: #001A3D;
@@ -50,11 +51,13 @@ html, body {
 }
 
 .glass-panel-heavy {
-  background: #f8fafc !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
   backdrop-filter: blur(26px) saturate(190%) !important;
   -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
   border: 1.5px solid #cbd5e1 !important;
   box-shadow: 0 20px 48px -12px rgba(0, 46, 109, 0.2), 0 0 0 1px rgba(15, 23, 42, 0.08) !important;
+  color: #0f172a !important;
 }
 
 /* Désactivation stricte du module de publicité pour les joueurs */
@@ -146,43 +149,38 @@ html, body {
 }
 
 .glass-card-blue {
-  background: rgba(0, 46, 109, 0.05) !important;
-  backdrop-filter: blur(14px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
-  border: 1px solid rgba(0, 46, 109, 0.15) !important;
-  box-shadow: 0 4px 16px 0 rgba(0, 46, 109, 0.04), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+  background: #f0f7ff !important;
+  border: 1.5px solid #bae6fd !important;
+  color: #0c4a6e !important;
+  box-shadow: 0 4px 16px 0 rgba(0, 46, 109, 0.04) !important;
 }
 
 .glass-card-orange {
-  background: rgba(255, 102, 0, 0.06) !important;
-  backdrop-filter: blur(14px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
-  border: 1px solid rgba(255, 102, 0, 0.22) !important;
-  box-shadow: 0 4px 16px 0 rgba(255, 102, 0, 0.05), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+  background: #fff7ed !important;
+  border: 1.5px solid #fed7aa !important;
+  color: #7c2d12 !important;
+  box-shadow: 0 4px 16px 0 rgba(255, 102, 0, 0.05) !important;
 }
 
 .glass-card-emerald {
-  background: rgba(16, 185, 129, 0.06) !important;
-  backdrop-filter: blur(14px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
-  border: 1px solid rgba(16, 185, 129, 0.22) !important;
-  box-shadow: 0 4px 16px 0 rgba(16, 185, 129, 0.04), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+  background: #ecfdf5 !important;
+  border: 1.5px solid #a7f3d0 !important;
+  color: #065f46 !important;
+  box-shadow: 0 4px 16px 0 rgba(16, 185, 129, 0.04) !important;
 }
 
 .glass-card-amber {
-  background: rgba(245, 158, 11, 0.06) !important;
-  backdrop-filter: blur(14px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
-  border: 1px solid rgba(245, 158, 11, 0.22) !important;
-  box-shadow: 0 4px 16px 0 rgba(245, 158, 11, 0.04), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+  background: #fffbeb !important;
+  border: 1.5px solid #fde68a !important;
+  color: #78350f !important;
+  box-shadow: 0 4px 16px 0 rgba(245, 158, 11, 0.04) !important;
 }
 
 .glass-card-purple {
-  background: rgba(147, 51, 234, 0.06) !important;
-  backdrop-filter: blur(14px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
-  border: 1px solid rgba(147, 51, 234, 0.2) !important;
-  box-shadow: 0 4px 16px 0 rgba(147, 51, 234, 0.04), inset 0 1px 0.5px rgba(255, 255, 255, 0.9) !important;
+  background: #faf5ff !important;
+  border: 1.5px solid #e9d5ff !important;
+  color: #581c87 !important;
+  box-shadow: 0 4px 16px 0 rgba(147, 51, 234, 0.04) !important;
 }
 
 /* Custom Scrollbar */
@@ -591,6 +589,42 @@ html, body {
     border-bottom-right-radius: 0 !important;
     border-top-left-radius: 1.5rem !important;
     border-top-right-radius: 1.5rem !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  #main-modal #modal-body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  #main-modal .border-b.border-slate-100 {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+  }
+
+  #main-modal .glass-card,
+  #main-modal .glass-card-amber,
+  #main-modal .glass-card-blue,
+  #main-modal .glass-card-orange,
+  #main-modal .glass-card-emerald,
+  #main-modal .glass-card-purple {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  #main-modal .glass-card {
+    background-color: #ffffff !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  #main-modal input:not([type="checkbox"]):not([type="radio"]),
+  #main-modal select,
+  #main-modal textarea {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
   }
 
   /* Repositionnement des contrôles Leaflet sur mobile pour ne pas chevaucher le dock */

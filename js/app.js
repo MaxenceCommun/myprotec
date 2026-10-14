@@ -138,6 +138,10 @@ class ProtecGame {
     this.reputation_villes = {};
     this.devisTab = 'ponctuels';
 
+    // Infrastructures de Santé & d'Urgence par département (Hôpitaux, SMUR, Casernes avec spécialités)
+    this.departmentInfrastructures = {};
+    window.gameState = this;
+
     // Données Multijoueur & Alliances
     this.alliances = [];
     this.allianceStations = [];
@@ -1082,6 +1086,12 @@ class ProtecGame {
     }
     localStorage.setItem('protec_department_code', targetDept);
     this.populateDepartmentSelector();
+
+    // Initialisation et enrichissement des infrastructures hospitalières avec spécialités médicales
+    if (window.ProtecHealthInfrastructures && typeof window.ProtecHealthInfrastructures.ensureDepartmentInfrastructures === 'function') {
+      const baseStation = this.stations?.[0];
+      window.ProtecHealthInfrastructures.ensureDepartmentInfrastructures(this, targetDept, baseStation ? { lat: baseStation.lat, lng: baseStation.lng } : null);
+    }
   }
 
   // Chargement en continu des antennes de tous les directeurs et confrères connectés ou enregistrés
@@ -1255,6 +1265,7 @@ class ProtecGame {
             financesHistory: this.financesHistory || [],
             alertSubscription: this.alertSubscription,
             rewards: this.rewards,
+            departmentInfrastructures: this.departmentInfrastructures || {},
             savedAt: Date.now()
           };
           sessionStorage.setItem('myprotec_instant_cache', JSON.stringify(cacheData));
@@ -1292,6 +1303,7 @@ class ProtecGame {
       this.formations = [];
       this.renforts = [];
       this.annualContracts = [];
+      this.departmentInfrastructures = this.departmentInfrastructures || {};
 
       // Pré-restauration instantanée depuis le cache de session si disponible
       const rawCache = sessionStorage.getItem('myprotec_instant_cache');
@@ -1318,6 +1330,7 @@ class ProtecGame {
             if (c.financesHistory) this.financesHistory = c.financesHistory;
             if (c.alertSubscription) this.alertSubscription = c.alertSubscription;
             if (c.rewards) this.rewards = c.rewards;
+            if (c.departmentInfrastructures) this.departmentInfrastructures = c.departmentInfrastructures;
           }
         } catch (ce) {}
       }
@@ -2278,6 +2291,11 @@ class ProtecGame {
       window.ProtecEvenementsReels.initStationEvents(this, newStation);
     }
 
+    // Enregistrement des hôpitaux, spécialités médicales et structures d'urgence du département
+    if (window.ProtecHealthInfrastructures && typeof window.ProtecHealthInfrastructures.ensureDepartmentInfrastructures === 'function') {
+      window.ProtecHealthInfrastructures.ensureDepartmentInfrastructures(this, newStation.departmentCode || this.currentDepartmentCode, { lat: newStation.lat, lng: newStation.lng });
+    }
+
     this.showToast('Bâtiment Implanté !', `${stationName} est désormais implantée sur le secteur. Ouverture du plan d'aménagement...`, 'green');
     if (window.ProtecLocaux && typeof window.ProtecLocaux.openInitialSetupModal === 'function') {
       setTimeout(() => {
@@ -2643,6 +2661,13 @@ class ProtecGame {
 
     const currentCity = item.commune || this.stations[0]?.city || 'Nancy';
 
+    if (item.venue && item.isOsmRealLocation) {
+      if (!item.address) {
+        item.address = `${item.venue}, ${item.commune || currentCity}`;
+      }
+      return;
+    }
+
     if (isMaraude) {
       item.isSector = true;
       item.sector = `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${currentCity})`;
@@ -2800,6 +2825,31 @@ class ProtecGame {
   }
 
   generateStarterDevis(centerLatLng) {
+    if (window.ProtecDPSGenerator && typeof window.ProtecDPSGenerator.generateDPSWithOSMLocation === 'function') {
+      const baseStation = {
+        lat: centerLatLng.lat,
+        lng: centerLatLng.lng,
+        city: this.stations?.[0]?.city || 'Secteur',
+        departmentCode: this.currentDepartmentCode || this.player?.departmentCode || '75'
+      };
+      window.ProtecDPSGenerator.generateDPSWithOSMLocation(this, { baseStation, templateId: 'football' }).then(d => {
+        if (d) {
+          this.devis.push(d);
+          this.saveGame();
+          if (typeof this.renderMissions === 'function') this.renderMissions();
+          if (typeof this.updateStatsUI === 'function') this.updateStatsUI();
+        } else {
+          this._fallbackStarterDevis(centerLatLng);
+        }
+      }).catch(() => {
+        this._fallbackStarterDevis(centerLatLng);
+      });
+      return;
+    }
+    this._fallbackStarterDevis(centerLatLng);
+  }
+
+  _fallbackStarterDevis(centerLatLng) {
     const eventDate = this.createDateOffset(5, 10);
     const coords = this.calculateRealisticMissionLocation({ lat: centerLatLng.lat, lng: centerLatLng.lng }, 'dps');
     const d = {
@@ -2939,7 +2989,40 @@ class ProtecGame {
       return; // Limite invisible atteinte : aucune nouvelle demande tant qu'un devis n'est pas traité
     }
 
-    // Priorité absolue au vivier d'événements réels du territoire (clubs, festivals, salons)
+    const base = this.stations[Math.floor(Math.random() * this.stations.length)];
+
+    // 1. MOTEUR DYNAMIQUE DE DPS PAR LIEU RÉEL OPENSTREETMAP (Scénario métier -> Recherche ciblée OSM)
+    // Utilisé prioritairement pour varier à l'infini les lieux réels sans alourdir la sauvegarde
+    const preferOsmEngine = !this.territoryEventsPool || this.territoryEventsPool.length === 0 || Math.random() < 0.70;
+    if (preferOsmEngine && window.ProtecDPSGenerator && typeof window.ProtecDPSGenerator.generateDPSWithOSMLocation === 'function') {
+      window.ProtecDPSGenerator.generateDPSWithOSMLocation(this, { baseStation: base }).then(d => {
+        if (!d) return;
+
+        // Contrôle de sécurité de la limite simultanée au retour asynchrone
+        const curPending = (this.devis || []).filter(item => item.status === 'pending').length;
+        if (curPending >= this.getSimultaneousDevisLimit()) return;
+
+        this.devis.push(d);
+        this.updateStatsUI();
+        this.saveGame();
+
+        if (window.ProtecNotifications) {
+          window.ProtecNotifications.notifyCategory(
+            'dps',
+            `📬 Nouvelle Demande de DPS`,
+            `${d.clientName || 'Un organisateur'} vous sollicite pour « ${d.eventName} » (${d.scale || 'DPS'}). Consultez et validez le devis !`,
+            `dps-${d.id}`
+          );
+        }
+
+        this.showToast('Nouvelle Demande Organisateur', `« ${d.eventName} » (${d.scale}) vous a sollicité pour un devis.`, 'blue');
+      }).catch(err => {
+        console.warn('Erreur generateDPSWithOSMLocation, bascule fallback:', err);
+      });
+      return;
+    }
+
+    // 2. Repli vers le vivier d'événements réels du territoire (clubs, festivals, salons)
     if (this.territoryEventsPool && this.territoryEventsPool.length > 0) {
       const existingNames = new Set((this.devis || []).map(d => (d.eventName || '').trim().toLowerCase()));
       const nextRealIndex = this.territoryEventsPool.findIndex(e => !existingNames.has((e.eventName || '').trim().toLowerCase()));
@@ -2964,7 +3047,6 @@ class ProtecGame {
       }
     }
 
-    const base = this.stations[Math.floor(Math.random() * this.stations.length)];
     const cap = this.calculatePlayerCapacity ? this.calculatePlayerCapacity() : { tier: 1 };
     const deptCode = this.currentDepartmentCode || this.player.departmentCode || '75';
 
@@ -3106,6 +3188,23 @@ class ProtecGame {
     }
 
     this.showToast('Nouvelle Demande Organisateur', `« ${pick.name} » (${pick.scale}) vous a sollicité pour un devis.`, 'blue');
+  }
+
+  // Déclencheur manuel ou scripté pour forcer la génération d'un DPS ciblé avec POI OSM
+  async spawnDynamicOSMDps(templateId = null) {
+    if (this.stations.length === 0) return null;
+    const base = this.stations[0];
+    if (window.ProtecDPSGenerator && typeof window.ProtecDPSGenerator.generateDPSWithOSMLocation === 'function') {
+      const d = await window.ProtecDPSGenerator.generateDPSWithOSMLocation(this, { baseStation: base, templateId });
+      if (d) {
+        this.devis.push(d);
+        this.updateStatsUI();
+        this.saveGame();
+        this.showToast('Nouveau DPS Généré', `« ${d.eventName} » (${d.scale}) ajouté aux devis.`, 'green');
+      }
+      return d;
+    }
+    return null;
   }
 
   setPlanningTab(tab) {
@@ -5568,8 +5667,117 @@ class ProtecGame {
     else if (this.currentModalKey === 'conventions') window.ProtecConventions.renderModal(this);
   }
 
-  // --- CONVENTION PARTENARIALE SDIS (GARDES CASERNE POMPIERS) ---
+  // --- RÉFÉRENTIEL DE L'AUTORITÉ POMPIERS (BSPP à Paris/Petite Couronne, BMPM à Marseille, SDIS ailleurs) ---
+  getPompiersAuthority() {
+    const deptCode = this.currentDepartmentCode || this.player?.departmentCode || this.stations?.[0]?.departmentCode || '75';
+    const city = this.stations?.[0]?.city || this.player?.city || '';
+    if (window.ProtecDepartements && typeof window.ProtecDepartements.getPompiersAuthority === 'function') {
+      return window.ProtecDepartements.getPompiersAuthority(deptCode, city);
+    }
+    const rawDept = String(deptCode || '').trim();
+    if (['75', '92', '93', '94'].includes(rawDept) || String(city).toLowerCase().includes('paris')) {
+      return {
+        type: 'bspp',
+        code: 'BSPP',
+        shortName: 'BSPP',
+        fullName: 'Brigade de Sapeurs-Pompiers de Paris (BSPP)',
+        badge: 'BSPP • Pompiers de Paris',
+        badgeColor: 'bg-red-950 text-red-200 border-red-700',
+        badgeLight: 'bg-red-100 text-red-900 border-red-200',
+        conventionTitle: 'Convention Partenariale BSPP (Pompiers de Paris)',
+        conventionDesc: 'Mise à disposition conventionnée d’un équipage VPSP pour gardes en Centre de Secours (CS) BSPP ou astreintes renforcées au profit du CTAU/CSO.',
+        indemnisationLabel: 'Indemnisation BSPP :',
+        indemnisationRate: '45 € / heure de garde VPSP',
+        cadreIntervention: 'Gardes en Centre de Secours (CS) BSPP & renforts secours d’urgence (75, 92, 93, 94)',
+        codisName: 'CTAU / CSO BSPP (Champerret)',
+        centerType: 'Centre de Secours (CS)',
+        commandementName: 'Commandement de la BSPP',
+        etatMajorName: 'l’État-Major BSPP (Champerret)',
+        gardeTitle: 'Garde Centre de Secours Pompiers de Paris (BSPP)',
+        gardeSubtitle: 'Mise à disposition opérationnelle VPSP en Centre de Secours BSPP et équipes d’astreinte rappelables',
+        signatureTitle: 'Convention Partenariale BSPP (Pompiers de Paris)',
+        signatureSubtitle: 'Brigade de Sapeurs-Pompiers de Paris • Secteur Paris & Petite Couronne (75, 92, 93, 94)',
+        signatureInstitution: 'BSPP & PRÉFECTURE DE POLICE DE PARIS',
+        partnerName: 'État-Major de la Brigade de Sapeurs-Pompiers de Paris (BSPP)',
+        stampText: 'CONVENTION BSPP RATIFIÉE ✓',
+        clauses: [
+          'Armement de dispositifs conjoints et gardes en Centre de Secours (CS) BSPP avec équipage VPSP.',
+          'Intégration au secteur opérationnel de la Brigade de Sapeurs-Pompiers de Paris (75, 92, 93, 94).',
+          'Indemnisation horaire de 45 €/h de garde VPSP (+350 € dotation de signature).'
+        ],
+        territoryLabel: 'Paris & Petite Couronne (75, 92, 93, 94)'
+      };
+    }
+    if (rawDept === '13' && (String(city).toLowerCase().includes('marseille') || !city)) {
+      return {
+        type: 'bmpm',
+        code: 'BMPM',
+        shortName: 'BMPM',
+        fullName: 'Bataillon de Marins-Pompiers de Marseille (BMPM)',
+        badge: 'BMPM • Marins-Pompiers',
+        badgeColor: 'bg-sky-950 text-sky-200 border-sky-700',
+        badgeLight: 'bg-sky-100 text-sky-900 border-sky-200',
+        conventionTitle: 'Convention Partenariale BMPM (Marins-Pompiers de Marseille)',
+        conventionDesc: 'Mise à disposition conventionnée d’un équipage VPSP pour gardes caserne ou astreintes au profit du COSSIM.',
+        indemnisationLabel: 'Indemnisation BMPM :',
+        indemnisationRate: '45 € / heure de garde VPSP',
+        cadreIntervention: 'Gardes caserne VPSP & renforts secours d’urgence au profit du COSSIM (Marseille)',
+        codisName: 'COSSIM (Marins-Pompiers de Marseille)',
+        centerType: 'Caserne des Marins-Pompiers',
+        commandementName: 'Commandement du BMPM',
+        etatMajorName: 'l’État-Major du BMPM',
+        gardeTitle: 'Garde Caserne Marins-Pompiers (BMPM)',
+        gardeSubtitle: 'Mise à disposition opérationnelle VPSP en caserne des marins-pompiers et équipes d’astreinte rappelables',
+        signatureTitle: 'Convention Partenariale BMPM (Marins-Pompiers de Marseille)',
+        signatureSubtitle: 'Bataillon de Marins-Pompiers de Marseille • Centre Opérationnel (COSSIM)',
+        signatureInstitution: 'BMPM & VILLE DE MARSEILLE',
+        partnerName: 'Bataillon de Marins-Pompiers de Marseille (BMPM)',
+        stampText: 'CONVENTION BMPM RATIFIÉE ✓',
+        clauses: [
+          'Armement de dispositifs conjoints et gardes casernes avec équipage VPSP.',
+          'Intégration au dispositif opérationnel de secours d’urgence aux personnes de la cité phocéenne.',
+          'Indemnisation horaire de 45 €/h de garde VPSP (+350 € dotation de signature).'
+        ],
+        territoryLabel: 'Marseille & Grand Port Maritime'
+      };
+    }
+    const deptDisplay = rawDept ? `SDIS ${rawDept}` : 'SDIS';
+    return {
+      type: 'sdis',
+      code: deptDisplay,
+      shortName: deptDisplay,
+      fullName: `Service Départemental d’Incendie et de Secours (${deptDisplay})`,
+      badge: `${deptDisplay} • Gardes Pompiers`,
+      badgeColor: 'bg-orange-950 text-orange-200 border-orange-700',
+      badgeLight: 'bg-orange-100 text-orange-900 border-orange-200',
+      conventionTitle: `Convention Partenariale ${deptDisplay} (Pompiers)`,
+      conventionDesc: `Mise à disposition conventionnée d’un équipage VPSP pour gardes caserne ou astreintes renforcées au profit du CODIS ${rawDept || ''}.`,
+      indemnisationLabel: `Indemnisation ${deptDisplay} :`,
+      indemnisationRate: '45 € / heure de garde VPSP',
+      cadreIntervention: `Gardes caserne VPSP & renforts secours d’urgence au profit du CODIS ${rawDept || ''}`,
+      codisName: `CODIS ${rawDept || ''}`.trim(),
+      centerType: 'Centre de Secours (CIS / CS)',
+      commandementName: `Commandement du ${deptDisplay}`,
+      etatMajorName: `l’État-Major ${deptDisplay}`,
+      gardeTitle: `Garde Caserne Pompiers & Astreinte (${deptDisplay})`,
+      gardeSubtitle: `Mise à disposition opérationnelle VPSP en caserne pompiers et équipes d’astreinte rappelables`,
+      signatureTitle: `Convention Partenariale ${deptDisplay} (Sapeurs-Pompiers)`,
+      signatureSubtitle: `Service Départemental d’Incendie et de Secours (${rawDept}) • Centre Opérationnel (CODIS)`,
+      signatureInstitution: `${deptDisplay} & CORPS DÉPARTEMENTAL DES SAPEURS-POMPIERS`,
+      partnerName: `Direction Départementale des Pompiers (${deptDisplay})`,
+      stampText: `CONVENTION ${deptDisplay} RATIFIÉE ✓`,
+      clauses: [
+        'Armement de dispositifs conjoints et gardes casernes avec équipage VPSP.',
+        'Intégration au dispositif opérationnel de secours d’urgence aux personnes (SUAP).',
+        'Indemnisation horaire de 45 €/h de garde VPSP (+350 € dotation de signature).'
+      ],
+      territoryLabel: `Département ${rawDept}`
+    };
+  }
+
+  // --- CONVENTION PARTENARIALE POMPIERS (BSPP / BMPM / SDIS) ---
   signSdisConvention(bypassSimulator = false) {
+    const auth = this.getPompiersAuthority();
     if (!this.aascConvention || !this.aascConvention.signed) {
       this.showToast('Convention AASC Requise ⚠️', 'Votre antenne doit préalablement souscrire sa Convention d’AASC auprès de la Préfecture.', 'orange');
       this.openModule('conventions');
@@ -5578,24 +5786,20 @@ class ProtecGame {
     const vpsps = this.vehicles.filter(v => v.type === 'VPSP');
     const qualified = this.volunteers.filter(v => ['CE', 'PSE2', 'PSE1'].includes(v.rank));
     if (vpsps.length < 1 || qualified.length < 3) {
-      this.showToast('Critères Non Remplis', 'Pour conventionner avec le SDIS, votre antenne doit disposer d’au moins 1 ambulance VPSP et 3 secouristes qualifiés.', 'orange');
+      this.showToast('Critères Non Remplis', `Pour conventionner avec ${auth.shortName}, votre antenne doit disposer d’au moins 1 ambulance VPSP et 3 secouristes qualifiés.`, 'orange');
       return;
     }
 
     if (!bypassSimulator && window.ProtecSignature) {
       window.ProtecSignature.openSignatureModal({
         type: 'sdis',
-        title: 'Convention Partenariale SDIS (Sapeurs-Pompiers)',
-        subtitle: 'Service Départemental d’Incendie et de Secours • Centre Opérationnel (CODIS)',
-        institution: 'SDIS & CORPS DÉPARTEMENTAL DES SAPEURS-POMPIERS',
-        partnerName: 'Direction Départementale des Pompiers (SDIS)',
+        title: auth.signatureTitle,
+        subtitle: auth.signatureSubtitle,
+        institution: auth.signatureInstitution,
+        partnerName: auth.partnerName,
         dotation: 350,
-        stampText: 'CONVENTION SDIS RATIFIÉE ✓',
-        clauses: [
-          'Armement de dispositifs conjoints et gardes casernes avec équipage VPSP.',
-          'Intégration au dispositif opérationnel de secours d’urgence aux personnes (SUAP).',
-          'Indemnisation horaire de 45 €/h de garde VPSP (+350 € dotation de signature).'
-        ],
+        stampText: auth.stampText,
+        clauses: auth.clauses,
         onSigned: (signatureDataUrl) => {
           this.signSdisConvention(true);
         }
@@ -5606,21 +5810,23 @@ class ProtecGame {
     this.sdisConvention = {
       signed: true,
       signedAt: Date.now(),
-      totalInterventions: 0
+      totalInterventions: 0,
+      authorityType: auth.type,
+      authorityName: auth.shortName
     };
-    this.resources.money += 350; // Dotation de mise en route SDIS
+    this.resources.money += 350; // Dotation de mise en route
     if (window.ProtecFinances) {
       window.ProtecFinances.recordTransaction(
         this,
         350,
-        'Dotation initiale de partenariat SDIS (Pompiers)',
+        `Dotation initiale de partenariat ${auth.shortName} (Pompiers)`,
         'subvention',
-        'CONV-SDIS',
-        'SDIS'
+        `CONV-${auth.type.toUpperCase()}`,
+        auth.shortName
       );
     }
     this.resources.reputationScore = (this.resources.reputationScore || 0) + 20;
-    this.showToast('Convention SDIS Signée ! 🚒', 'Partenariat avec le Service Départemental d’Incendie et de Secours activé (+350 € dotation). Vous pouvez armer les gardes pompiers.', 'green');
+    this.showToast(`Convention ${auth.shortName} Signée ! 🚒`, `Partenariat avec ${auth.fullName} activé (+350 € dotation). Vous pouvez armer les gardes pompiers.`, 'green');
     this.saveGame(true);
     this.updateStatsUI();
 
@@ -5632,11 +5838,12 @@ class ProtecGame {
   }
 
   terminateSdisConvention() {
+    const auth = this.getPompiersAuthority();
     if (this.sdisGarde && this.sdisGarde.active) {
       this.disarmSdisDispositif();
     }
     this.sdisConvention = { signed: false, signedAt: null, totalInterventions: 0 };
-    this.showToast('Convention SDIS Résiliée', 'La convention partenariale avec les pompiers a été suspendue.', 'slate');
+    this.showToast(`Convention ${auth.shortName} Résiliée`, `La convention partenariale avec ${auth.shortName} a été suspendue.`, 'slate');
     this.saveGame(true);
     this.updateStatsUI();
     if (this.currentModalKey === 'pompiers') this.openModule('pompiers');
@@ -6449,15 +6656,81 @@ class ProtecGame {
         }
         this.resources.reputationScore = currentRep + repGain;
 
-        // Bénévoles fiers et motivés
-        crew.forEach(v => {
-          v.motivation = Math.min(100, (v.motivation || 75) + 6);
-          v.humeur = Math.min(100, (v.humeur || 75) + 6);
+        // Évaluation de la dotation en Moniteurs Multiparamétriques (confort et qualité de travail des secouristes)
+        const paramTier = (this.equipmentTiers && this.equipmentTiers.prise_parametres) || 1;
+        const paramDef = window.ProtecEquipements?.TIERED_EQUIPMENT_CATALOG?.prise_parametres?.tiers?.find(t => t.level === paramTier);
+        const secouristeMoralBonus = 6 + (paramDef?.stats?.crewMoralBonus ? Math.round(paramDef.stats.crewMoralBonus * 0.7) : 0);
+
+        // Distinction opérationnels vs photographes
+        const photographes = crew.filter(v => mission.volunteerRoles?.[v.id] === 'photographe');
+        const secouristesOp = crew.filter(v => mission.volunteerRoles?.[v.id] !== 'photographe');
+
+        // Bénévoles secouristes opérationnels : motivation et confort de travail
+        secouristesOp.forEach(v => {
+          v.motivation = Math.min(100, (v.motivation || 75) + secouristeMoralBonus);
+          v.humeur = Math.min(100, (v.humeur || 75) + secouristeMoralBonus);
+          if (paramTier >= 2) {
+            // Moins de fatigue physique et mentale grâce au multiparamétrique moderne
+            v.energy = Math.min(100, (v.energy || 70) + 6);
+          }
         });
 
+        // Traitement spécifique des personnels photographes/vidéastes selon l'appareil photo possédé
+        let photoToastMsg = '';
+        if (photographes.length > 0) {
+          const photoTier = (this.equipmentTiers && this.equipmentTiers.appareil_photo) || 1;
+          const photoDef = window.ProtecEquipements?.TIERED_EQUIPMENT_CATALOG?.appareil_photo?.tiers?.find(t => t.level === photoTier);
+          const photoTitle = photoDef ? photoDef.title : 'Smartphone Dédié & Compact';
+          const photoMoralGain = photoDef?.stats?.photoMoralBonus || 10;
+          const photoMotivGain = photoDef?.stats?.photoMotivationBonus || 12;
+          const repPhotoGain = photoDef?.stats?.repBonusPerMission || 2;
+          const comImpact = photoDef?.stats?.comImpactBonus || 0.15;
+
+          // L'appareil photo influence directement l'humeur et la motivation des personnels photographes
+          photographes.forEach(p => {
+            p.motivation = Math.min(100, (p.motivation || 75) + photoMotivGain);
+            p.humeur = Math.min(100, (p.humeur || 75) + photoMoralGain);
+            p.energy = Math.min(100, (p.energy || 70) + 8);
+          });
+
+          // Gain supplémentaire de réputation d'antenne grâce à la couverture médiatique
+          this.resources.reputationScore = (this.resources.reputationScore || 0) + repPhotoGain;
+
+          // Boost de la communication et publication d'un reportage photo dans les réseaux sociaux
+          if (window.ProtecCommunication) {
+            window.ProtecCommunication.injectState(this);
+            if (this.socialMedia) {
+              const currentVis = this.socialMedia.visibilityScore || 50;
+              this.socialMedia.visibilityScore = Math.min(100, currentVis + Math.round(12 * (1 + comImpact)));
+              this.socialMedia.totalLikes = (this.socialMedia.totalLikes || 0) + Math.floor(40 * (1 + comImpact));
+              this.socialMedia.totalShares = (this.socialMedia.totalShares || 0) + Math.floor(8 * (1 + comImpact));
+
+              const photographeNames = photographes.map(p => p.name).join(', ');
+              this.socialMedia.feed.unshift({
+                id: 'post-mission-' + mission.id + '-' + Date.now(),
+                timestamp: Date.now(),
+                themeId: 'dps',
+                themeTitle: 'Couverture Photo de Dispositif',
+                authorName: photographeNames,
+                authorRole: 'Photographe / Vidéaste d’Antenne',
+                text: `📸 Retour en images sur notre mission « ${mission.title} » ! Clichés capturés par ${photographeNames} avec notre matériel ${photoTitle}. Bravo aux secouristes déployés sur le terrain ! 🧡💙 #ProtectionCivile #Secourisme #ReportageTerrain`,
+                likes: Math.floor(55 * (1 + comImpact * 2)),
+                shares: Math.floor(10 * (1 + comImpact * 2)),
+                commentsCount: Math.floor(4 * (1 + comImpact)),
+                topComment: `Superbe série de photos, vous valorisez magnifiquement vos bénévoles ! 👏📸`,
+                isAutoPilot: false
+              });
+              if (this.socialMedia.feed.length > 20) this.socialMedia.feed.pop();
+            }
+          }
+
+          photoToastMsg = ` • 📸 Couverture photo par ${photographes.map(p => p.name).join(', ')} (${photoTitle}) : +${repPhotoGain} réputation & photographes comblés !`;
+        }
+
+        const paramDetail = paramTier >= 2 ? ` (Multiparamétrique : +${paramDef?.stats?.samuRepBonus || 5} appréciation SAMU)` : '';
         this.showToast(
           'Bilan Organisateur : Parfait !',
-          `L’organisateur de « ${mission.title} » est comblé par le professionnalisme de vos secouristes (+${repGain} popularité, -${consumableCost} € consommables).`,
+          `L’organisateur de « ${mission.title} » est comblé par le professionnalisme de vos secouristes (+${repGain} popularité, -${consumableCost} € consommables)${paramDetail}.${photoToastMsg}`,
           'green'
         );
 
@@ -7476,6 +7749,120 @@ class ProtecGame {
     }
   }
 
+  // Affectation spécifique d'un personnel en rôle Photographe / Vidéaste (hors effectifs opérationnels RNDPS)
+  assignPhotographerToMission(missionId, volId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
+    if (!mission.volunteerRoles) mission.volunteerRoles = {};
+
+    if (!mission.registeredVolunteers.includes(volId)) {
+      mission.registeredVolunteers.push(volId);
+    }
+    mission.volunteerRoles[volId] = 'photographe';
+
+    const vol = this.volunteers.find(v => v.id === volId);
+    const volName = vol ? vol.name : 'Le bénévole';
+    this.showToast(
+      '📸 Photographe Engagé !',
+      `${volName} a été affecté(e) à la couverture photo/vidéo sur « ${mission.title} » (hors effectifs opérationnels RNDPS).`,
+      'purple'
+    );
+
+    this.saveGame();
+    this.renderMissions();
+    this.updateStatsUI();
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
+  }
+
+  // Modale de sélection pour affecter un photographe/vidéaste sur la mission
+  openAddPhotographerModal(missionId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+
+    const availableVols = this.volunteers.filter(v => 
+      v.status !== 'mission' && 
+      !v.isBurnout &&
+      (!mission.registeredVolunteers?.includes(v.id) || mission.volunteerRoles?.[v.id] !== 'photographe')
+    );
+
+    if (availableVols.length === 0) {
+      this.showToast('Aucun bénévole disponible', 'Tous vos personnels sont actuellement engagés ou en repos.', 'orange');
+      return;
+    }
+
+    const photoTier = (this.equipmentTiers && this.equipmentTiers.appareil_photo) || 1;
+    const photoDef = window.ProtecEquipements?.TIERED_EQUIPMENT_CATALOG?.appareil_photo?.tiers?.find(t => t.level === photoTier);
+    const cameraName = photoDef ? photoDef.title : 'Smartphone Dédié & Compact';
+
+    const modal = document.getElementById('main-modal');
+    const title = document.getElementById('modal-title');
+    const subtitle = document.getElementById('modal-subtitle');
+    const icon = document.getElementById('modal-icon');
+    const body = document.getElementById('modal-body');
+    const backBtn = document.getElementById('modal-back-btn');
+
+    if (!modal || !title || !body) return;
+    modal.classList.remove('hidden');
+    title.textContent = 'Désigner un Photographe / Vidéaste';
+    subtitle.textContent = 'Couverture audiovisuelle du dispositif (hors quotas opérationnels RNDPS)';
+    if (icon) icon.setAttribute('data-lucide', 'camera');
+    if (backBtn) backBtn.classList.add('hidden');
+
+    body.innerHTML = `
+      <div class="space-y-4">
+        <div class="p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-xs text-purple-900 space-y-2">
+          <div class="flex items-center gap-2 font-black text-sm">
+            <span>📸</span>
+            <span>Affecter un Personnel en Rôle Photographe / Vidéaste</span>
+          </div>
+          <p class="text-[11px] text-purple-800 leading-relaxed">
+            Les photographes et vidéastes ne sont <strong>ni comptés dans le devis</strong>, <strong>ni dans les effectifs opérationnels</strong> imposés par le Référentiel National (RNDPS). Ils couvrent l’événement pour valoriser vos secouristes, nourrir vos réseaux sociaux et booster le moral de l’équipe !
+          </p>
+          <div class="flex items-center justify-between gap-2 pt-1 border-t border-purple-200/80 text-[11px] font-bold text-purple-950 flex-wrap">
+            <span>Matériel photo actuel de l’antenne :</span>
+            <span class="px-2.5 py-0.5 rounded-lg bg-white border border-purple-300 font-extrabold text-purple-900">
+              ${cameraName} (Niveau ${photoTier})
+            </span>
+          </div>
+        </div>
+
+        <div class="space-y-2 max-h-80 overflow-y-auto">
+          ${availableVols.map(v => {
+            const hasComSkill = (v.skills || []).some(s => ['communication', 'photographe', 'photo', 'media'].includes(s.toLowerCase()));
+            const isRegisteredAsSecours = (mission.registeredVolunteers || []).includes(v.id);
+            return `
+              <div class="p-3 rounded-2xl bg-white border border-slate-200 hover:border-purple-300 transition flex items-center justify-between gap-3 shadow-2xs">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  ${this.getVolunteerAvatarHTML(v, 'w-9 h-9 text-xs')}
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <strong class="text-xs text-slate-800 truncate">${v.name}</strong>
+                      <span class="text-[10px] text-slate-500 font-semibold px-1.5 py-0.2 bg-slate-100 rounded">${v.rank || 'Secouriste'}</span>
+                      ${hasComSkill ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-purple-100 text-purple-800 border border-purple-300">📸 Passionné Photo</span>` : ''}
+                      ${isRegisteredAsSecours ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800">Inscrit en secours</span>` : ''}
+                    </div>
+                    <div class="text-[10px] text-slate-500 mt-0.5">
+                      Motivation : <strong class="text-slate-700">${v.motivation || 70}%</strong> • Énergie : <strong class="text-slate-700">${v.energy || 80}%</strong>
+                    </div>
+                  </div>
+                </div>
+                <button onclick="window.game.assignPhotographerToMission('${mission.id}', '${v.id}'); window.game.closeModal();" class="px-3 py-1.5 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition cursor-pointer shrink-0 flex items-center gap-1.5">
+                  <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                  <span>${isRegisteredAsSecours ? 'Basculer en Photo' : 'Désigner Photographe'}</span>
+                </button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
   autoAssignMissionRoles(missionId) {
     if (window.ProtecRNMSC && typeof window.ProtecRNMSC.autoAssignMissionRoles === 'function') {
       return window.ProtecRNMSC.autoAssignMissionRoles(this, missionId);
@@ -7748,7 +8135,10 @@ class ProtecGame {
       headerIcon.setAttribute('data-lucide', 'calendar');
 
       const registeredVols = this.volunteers.filter(v => (mission.registeredVolunteers || []).includes(v.id));
-      const isComplete = registeredVols.length >= (mission.requiredVolunteers || 1);
+      // Règle RNDPS : Les photographes/vidéastes ne comptent ni dans le devis, ni dans les effectifs opérationnels
+      const operationalVols = registeredVols.filter(v => mission.volunteerRoles?.[v.id] !== 'photographe');
+      const photographeVols = registeredVols.filter(v => mission.volunteerRoles?.[v.id] === 'photographe');
+      const isComplete = operationalVols.length >= (mission.requiredVolunteers || 1);
 
     let progressPct = 0;
     let remainingTimeText = '';
@@ -7993,6 +8383,16 @@ class ProtecGame {
               <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden shimmer-bar">
                 <div id="mission-ongoing-bar" class="bg-gradient-to-r from-pc-blue to-pc-orange h-full rounded-full transition-all duration-300" style="width: ${progressPct}%"></div>
               </div>
+
+              <!-- Fiche d'orientation sanitaire & Spécialités médicales de l'établissement -->
+              ${(() => {
+                if (window.ProtecHealthInfrastructures && typeof window.ProtecHealthInfrastructures.findBestEvacuationHospital === 'function') {
+                  const origin = { lat: mission.lat, lng: mission.lng };
+                  const routing = mission.evacHospitalData || window.ProtecHealthInfrastructures.findBestEvacuationHospital(this, mission, origin);
+                  return window.ProtecHealthInfrastructures.renderEvacuationRoutingCard(routing);
+                }
+                return '';
+              })()}
               
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 <button onclick="window.game.evacuateToNearestHospital('${mission.id}', '${mission.assignedCrew?.vehicles[0]?.id}')" class="py-2 px-3 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer" title="Déclencher le transport sanitaire vers les Urgences de l'Hôpital de secteur">
@@ -8263,16 +8663,27 @@ class ProtecGame {
                 </div>
               </div>
 
-              <div class="flex items-center gap-2">
-                <div class="w-20 sm:w-28 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
-                  <div class="bg-emerald-500 h-full rounded-full transition-all" style="width: ${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}%"></div>
+              <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-16 sm:w-24 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
+                    <div class="bg-emerald-500 h-full rounded-full transition-all" style="width: ${Math.min(100, Math.round((operationalVols.length / (mission.requiredVolunteers || 1)) * 100))}%"></div>
+                  </div>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${operationalVols.length < (mission.requiredVolunteers || 1) ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}" title="Effectifs opérationnels requis par le RNDPS">
+                    Opé RNDPS : ${operationalVols.length}/${mission.requiredVolunteers || 1}
+                  </span>
                 </div>
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${registeredVols.length < mission.requiredVolunteers ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
-                  ${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}% ${registeredVols.length}/${mission.requiredVolunteers}
-                </span>
+                ${photographeVols.length > 0 ? `
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1" title="Personnels photographes/vidéastes engagés en sus (hors quota RNDPS)">
+                    <span>📸 Média : ${photographeVols.length}</span>
+                  </span>
+                ` : ''}
               </div>
 
               <div class="flex items-center gap-1.5 flex-wrap">
+                <button onclick="window.game.openAddPhotographerModal('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition flex items-center gap-1 cursor-pointer" title="Ajouter un personnel en rôle photographe/vidéaste (hors effectifs opérationnels RNDPS)">
+                  <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                  <span>+ Photographe</span>
+                </button>
                 <button onclick="window.game.autoAssignMissionRoles('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue/10 hover:bg-pc-blue hover:text-white text-pc-blue transition flex items-center gap-1 cursor-pointer" title="Affecter automatiquement les rôles optimaux">
                   <i data-lucide="wand-2" class="w-3 h-3"></i>
                   <span>Auto-Rôles</span>
@@ -8324,8 +8735,8 @@ class ProtecGame {
                         <td class="py-2 px-3">
                           <div class="font-bold text-slate-900 leading-tight">${v.name}</div>
                           <div class="flex items-center gap-1 mt-0.5 flex-wrap">
-                            <span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-rose-600 text-white uppercase tracking-wider flex items-center gap-0.5">
-                              Engagé <span class="opacity-80">(i)</span>
+                            <span class="px-1.5 py-0.2 rounded text-[8px] font-black ${currentRole === 'photographe' ? 'bg-purple-600 text-white' : 'bg-rose-600 text-white'} uppercase tracking-wider flex items-center gap-0.5">
+                              ${currentRole === 'photographe' ? '📸 Média (Non Opé RNDPS)' : 'Engagé <span class="opacity-80">(i)</span>'}
                             </span>
                             <span class="text-[9px] font-bold text-slate-600 px-1 py-0.2 bg-slate-100 rounded border border-slate-200">${v.rank || 'Secouriste'}</span>
                             ${isRoleMissing ? '<span class="text-[8px] font-black text-amber-700 bg-amber-100 px-1 py-0.2 rounded">Rôle requis</span>' : ''}
@@ -8463,6 +8874,10 @@ class ProtecGame {
                           <button onclick="window.game.callVolunteerIndividually('${mission.id}', '${v.id}')" class="px-2 py-1 rounded text-[10px] font-black bg-blue-50 hover:bg-blue-100 text-pc-blue border border-blue-200 transition flex items-center gap-1" title="Passer un appel téléphonique direct pour solliciter un dépannage">
                             <i data-lucide="phone" class="w-3 h-3 text-pc-blue"></i>
                             <span>Appeler</span>
+                          </button>
+                          <button onclick="window.game.assignPhotographerToMission('${mission.id}', '${v.id}')" class="px-2 py-1 rounded text-[10px] font-black bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition flex items-center gap-1" title="Affecter comme photographe/vidéaste (hors effectif opérationnel RNDPS)">
+                            <i data-lucide="camera" class="w-3 h-3 text-purple-600"></i>
+                            <span>+ Photo</span>
                           </button>
                           ${isAvailable ? `
                             <button onclick="window.game.proposeVolunteerSwitch('${v.id}', '${mission.id}')" class="px-2 py-1 rounded text-[10px] font-extrabold bg-emerald-100 hover:bg-emerald-200 text-emerald-900 transition" title="Affecter ce bénévole confirmé disponible">
@@ -9133,7 +9548,7 @@ class ProtecGame {
     this.openMissionDetails(missionId);
   }
 
-  // Évacuation sanitaire directe vers les urgences de secteur (sans fiches bilans fastidieuses)
+  // Évacuation sanitaire directe vers les urgences de secteur (avec orientation intelligente selon la spécialité)
   evacuateToNearestHospital(missionId, vehicleId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
@@ -9142,15 +9557,27 @@ class ProtecGame {
 
     if (window.ProtecSystems) {
       window.ProtecSystems.consumeSupply(this, 'oxygenBottles', 1);
-      const hospital = window.ProtecSystems.getNearestHospital(this, mission.lat, mission.lng);
+
       const origin = { lat: mission.lat, lng: mission.lng };
+      let evacData = null;
+      if (window.ProtecHealthInfrastructures && typeof window.ProtecHealthInfrastructures.findBestEvacuationHospital === 'function') {
+        evacData = window.ProtecHealthInfrastructures.findBestEvacuationHospital(this, mission, origin);
+      }
+
+      const hospital = evacData?.hospital || window.ProtecSystems.getNearestHospital(this, mission.lat, mission.lng, mission);
+      mission.evacHospitalData = evacData;
       const dest = { lat: hospital.lat, lng: hospital.lng };
 
-      this.showToast('Départ vers les Urgences', `Ambulance ${vehicle?.name || 'VPSP'} en route sous gyrophare vers ${hospital.name} (Statut 4).`, 'orange');
+      const specLabel = evacData?.specialtyInfo?.label || 'Urgences Générales';
+      const toastTitle = evacData?.isSpecialized ? `Régulation SAMU : Pôle ${evacData.specialtyInfo?.shortLabel || 'Spécialisé'}` : 'Départ vers les Urgences (Statut 4)';
+      const toastDesc = evacData ? evacData.reason : `Ambulance ${vehicle?.name || 'VPSP'} en route sous gyrophare vers ${hospital.name} (Statut 4).`;
+
+      this.showToast(toastTitle, toastDesc, 'orange');
 
       window.ProtecSystems.startTransit(this, vehicle, origin, dest, mission, 4, () => {
         // Arrivée aux Urgences : dépôt de la victime puis retour disponible
-        this.showToast('Admission Urgences Réussie', `Victime transmise aux équipes médicales de ${hospital.name}. Nettoyage et retour antenne.`, 'green');
+        const arrivalHospName = hospital.name || 'le centre hospitalier';
+        this.showToast('Admission Urgences Réussie', `Victime transmise aux équipes médicales de ${arrivalHospName} (${specLabel}). Nettoyage et retour antenne.`, 'green');
         this.completeMission(mission);
 
         // Retour vers l'antenne (Statut 6 -> 1)
@@ -11789,51 +12216,51 @@ class ProtecGame {
               <!-- Filtre Pôle Secours & DPS (Bleu marine) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('dps')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.dps ? 'bg-pc-blue text-white border-pc-blue shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.dps ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-white text-pc-blue border-pc-blue/40 hover:bg-blue-50/50'}"
                 title="${filters.dps ? 'Cliquer pour masquer Secours & DPS' : 'Cliquer pour afficher Secours & DPS'}"
               >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.dps ? 'bg-white' : 'bg-slate-300'}"></span>
-                <span>🔵 Secours & DPS (${poleCounts.dps})</span>
+                <span class="w-2.5 h-2.5 rounded-full ${filters.dps ? 'bg-white' : 'bg-pc-blue'}"></span>
+                <span>🔵 Secours DPS (${poleCounts.dps})</span>
               </button>
 
-              <!-- Filtre Pôle Postes Prévisionnels (Ambre / Orange) -->
+              <!-- Filtre Pôle Postes Prévisionnels (Ambre / Jaune-orange) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('previ')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.previ ? 'bg-amber-500 text-white border-amber-600 shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.previ ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-white text-amber-700 border-amber-400 hover:bg-amber-50/50'}"
                 title="${filters.previ ? 'Cliquer pour masquer Postes Prévisionnels' : 'Cliquer pour afficher Postes Prévisionnels'}"
               >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.previ ? 'bg-white' : 'bg-slate-300'}"></span>
-                <span>⏳ Postes Prévi (${poleCounts.previ})</span>
+                <span class="w-2.5 h-2.5 rounded-full ${filters.previ ? 'bg-white' : 'bg-amber-500'}"></span>
+                <span>⏳ Prévi (${poleCounts.previ})</span>
               </button>
 
               <!-- Filtre Pôle Demandes de Devis (Bleu ciel / Sky) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('devis')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.devis ? 'bg-sky-500 text-white border-sky-600 shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.devis ? 'bg-sky-500 text-white border-sky-600 shadow-sm' : 'bg-white text-sky-700 border-sky-400 hover:bg-sky-50/50'}"
                 title="${filters.devis ? 'Cliquer pour masquer Demandes de Devis' : 'Cliquer pour afficher Demandes de Devis'}"
               >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.devis ? 'bg-white' : 'bg-slate-300'}"></span>
-                <span>📋 Demandes Devis (${poleCounts.devis})</span>
+                <span class="w-2.5 h-2.5 rounded-full ${filters.devis ? 'bg-white' : 'bg-sky-500'}"></span>
+                <span>📋 Devis (${poleCounts.devis})</span>
               </button>
 
               <!-- Filtre Pôle Formations (Vert émeraude) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('formations')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.formations ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.formations ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white text-emerald-700 border-emerald-400 hover:bg-emerald-50/50'}"
                 title="${filters.formations ? 'Cliquer pour masquer Formations' : 'Cliquer pour afficher Formations'}"
               >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.formations ? 'bg-white' : 'bg-slate-300'}"></span>
-                <span>🎓 Formations (${poleCounts.formations})</span>
+                <span class="w-2.5 h-2.5 rounded-full ${filters.formations ? 'bg-white' : 'bg-emerald-600'}"></span>
+                <span>🎓 Formation (${poleCounts.formations})</span>
               </button>
 
               <!-- Filtre Pôle Action Sociale (Violet) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('social')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${filters.social ? 'bg-purple-600 text-white border-purple-700 shadow-xs' : 'bg-white text-slate-400 border-slate-200 opacity-60 line-through'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.social ? 'bg-purple-600 text-white border-purple-700 shadow-sm' : 'bg-white text-purple-700 border-purple-400 hover:bg-purple-50/50'}"
                 title="${filters.social ? 'Cliquer pour masquer Action Sociale' : 'Cliquer pour afficher Action Sociale'}"
               >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.social ? 'bg-white' : 'bg-slate-300'}"></span>
-                <span>🥫 Action Sociale (${poleCounts.social})</span>
+                <span class="w-2.5 h-2.5 rounded-full ${filters.social ? 'bg-white' : 'bg-purple-600'}"></span>
+                <span>🥫 Maraude (${poleCounts.social})</span>
               </button>
             </div>
 
@@ -11985,9 +12412,6 @@ class ProtecGame {
                       }).join('')}
                     </div>
                   </div>
-
-                  <!-- Système d'Alerte & Rappel Automatisé (E-Alerte SaaS) placé SOUS le calendrier -->
-                  ${this.renderAlertSubscriptionBannerHTML()}
                 </div>
 
                 <!-- Colonne Droite : Détail de la journée sélectionnée (légende intégrée aux filtres) -->
@@ -12307,6 +12731,11 @@ class ProtecGame {
                   </div>
                 </div>
               </div>
+
+              <!-- Système d'Alerte & Rappel Automatisé (E-Alerte SaaS) placé SOUS le calendrier et le planning -->
+              <div class="pt-2">
+                ${this.renderAlertSubscriptionBannerHTML()}
+              </div>
             </div>
           ` : `
             <!-- VUE LISTE CHRONOLOGIQUE TOUS PÔLES -->
@@ -12421,26 +12850,26 @@ class ProtecGame {
           <!-- Barre de bascule DPS : Planning vs Devis Ponctuels vs Contrats Annuels -->
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
             <div class="flex items-center gap-2">
-              <button onclick="window.game.openModule('planning')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer">
+              <button onclick="window.game.openModule('planning')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 cursor-pointer">
                 <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
                 Vue Calendrier DPS
               </button>
-              <button onclick="window.game.devisTab = 'ponctuels'; window.game.openModule('devis', true);" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${activeTab === 'ponctuels' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'} cursor-pointer">
+              <button onclick="window.game.devisTab = 'ponctuels'; window.game.openModule('devis', true);" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${activeTab === 'ponctuels' ? 'bg-amber-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'} cursor-pointer">
                 <i data-lucide="file-check" class="w-4 h-4"></i>
                 Devis & Prévisionnels (${pendingDevis.length + previsionnelDevis.length + inReviewDevis.length})
               </button>
-              <button onclick="window.game.devisTab = 'contrats'; window.game.openModule('devis', true);" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${activeTab === 'contrats' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'} cursor-pointer">
+              <button onclick="window.game.devisTab = 'contrats'; window.game.openModule('devis', true);" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${activeTab === 'contrats' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'} cursor-pointer">
                 <i data-lucide="repeat" class="w-4 h-4"></i>
                 Contrats Annuels Réguliers (${activeContractsCount})
               </button>
             </div>
-            <div class="text-xs text-slate-500 font-bold flex items-center gap-2">
+            <div class="text-xs text-slate-600 font-bold flex items-center gap-2">
               ${activeTab === 'ponctuels' ? `
                 <span><strong>${pendingDevis.length}</strong> nouveau(x)</span>
-                ${previsionnelDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-extrabold">⏳ ${previsionnelDevis.length} prévisionnel(s)</span>` : ''}
-                ${inReviewDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 font-extrabold">⚖️ ${inReviewDevis.length} délibération</span>` : ''}
+                ${previsionnelDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 font-extrabold">⏳ ${previsionnelDevis.length} prévisionnel(s)</span>` : ''}
+                ${inReviewDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-300 font-extrabold">⚖️ ${inReviewDevis.length} délibération</span>` : ''}
               ` : `
-                <span class="px-2.5 py-0.5 rounded-md bg-indigo-100 text-indigo-800 font-black">Accords-cadres & Partenariats pluriannuels</span>
+                <span class="px-2.5 py-0.5 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-300 font-black">Accords-cadres & Partenariats pluriannuels</span>
               `}
             </div>
           </div>
@@ -12451,21 +12880,21 @@ class ProtecGame {
             </div>
           ` : `
 
-          <div class="p-4 rounded-2xl glass-card-amber text-xs text-amber-950 space-y-2">
+          <div class="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-xs text-amber-950 space-y-2 shadow-xs">
             <div class="flex items-center justify-between">
-              <span class="font-extrabold flex items-center gap-1.5 text-amber-900">
+              <span class="font-extrabold flex items-center gap-1.5 text-amber-950">
                 <i data-lucide="scale" class="w-4 h-4 text-amber-600"></i>
                 Barème Réglementaire & Négociation DPS (RNMSC)
               </span>
-              <span class="text-[11px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-lg">Mise en Concurrence Active</span>
+              <span class="text-[11px] font-bold text-amber-900 bg-amber-200/90 px-2 py-0.5 rounded-lg border border-amber-300">Mise en Concurrence Active</span>
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-amber-800">
-              <div class="p-2 glass-card rounded-xl">Vacation secouriste : <strong>18,00 €/h</strong></div>
-              <div class="p-2 glass-card rounded-xl">Ambulance VPSP : <strong>110,00 €</strong></div>
-              <div class="p-2 glass-card rounded-xl">Matériel & DSA : <strong>35 à 120 €</strong></div>
-              <div class="p-2 glass-card rounded-xl">Frais convention : <strong>40,00 €</strong></div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-slate-800">
+              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Vacation secouriste : <strong class="text-amber-950 font-black">18,00 €/h</strong></div>
+              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Ambulance VPSP : <strong class="text-amber-950 font-black">110,00 €</strong></div>
+              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Matériel & DSA : <strong class="text-amber-950 font-black">35 à 120 €</strong></div>
+              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Frais convention : <strong class="text-amber-950 font-black">40,00 €</strong></div>
             </div>
-            <p class="text-[11px] text-amber-700 italic">
+            <p class="text-[11px] text-amber-900 font-medium italic">
               <strong>💡 Nouveauté Gestion :</strong> Vous pouvez <strong>mettre en prévisionnel</strong> un événement pour bloquer la date et sonder vos bénévoles avant de vous engager. En cas de délai court (urgence J-2 à J-5), les organisateurs acceptent des tarifs supérieurs. Vous pouvez également <strong>décliner</strong> poliment une demande sans pénalité.
             </p>
           </div>
@@ -13664,6 +14093,11 @@ class ProtecGame {
       const currentCrew = isGuardActive ? this.volunteers.filter(v => this.samuGarde.crewVolunteerIds.includes(v.id)) : [];
       const samuMissions = this.missions.filter(m => m.type === 'samu');
 
+      const deptCode = this.currentDepartmentCode || '54';
+      const deptInfra = this.departmentInfrastructures?.[deptCode] || (window.ProtecHealthInfrastructures ? window.ProtecHealthInfrastructures.ensureDepartmentInfrastructures(this, deptCode) : null);
+      const partnerHosp = deptInfra?.hospitals?.find(h => h.samuStation) || deptInfra?.hospitals?.find(h => h.hasSmur) || deptInfra?.hospitals?.[0] || { name: 'CHRU de Secteur', city: 'Département', specialites: ['urgences_generales'] };
+      const partnerBadges = (window.ProtecHealthInfrastructures && partnerHosp) ? window.ProtecHealthInfrastructures.renderHospitalSpecialtiesBadges(partnerHosp, { maxItems: 5 }) : '';
+
       body.innerHTML = `
         <div class="space-y-5">
           <!-- Carte Convention SAMU 15 -->
@@ -13693,6 +14127,27 @@ class ProtecGame {
               <div class="flex justify-between">
                 <span>Équipage réglementaire requis :</span>
                 <strong class="text-slate-800">1 VPSP + 3 à 4 secouristes (minimum 1 CE + 1 PSE2 + 1 PSE1)</strong>
+              </div>
+            </div>
+
+            <!-- Lieu d'affectation imposé par la régulation SAMU 15 -->
+            <div class="p-3 rounded-xl bg-indigo-50/80 border border-indigo-200 text-xs text-slate-800 space-y-1.5">
+              <div class="flex items-center justify-between">
+                <span class="font-extrabold text-indigo-950 flex items-center gap-1.5">
+                  <span>🏥</span> Hôpital Partenaire & Base Opérationnelle SAMU
+                </span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-200 text-indigo-900">
+                  Lieu Imposé (15)
+                </span>
+              </div>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
+                <div>
+                  <strong>${partnerHosp.name}</strong> (${partnerHosp.city || 'Département'})
+                  <span class="text-slate-600 block text-[10px]">${partnerHosp.hasSmur ? `Affectation au service d'urgence & appui SMUR (${partnerHosp.smurVehiclesCount || 1} UMH rattachées)` : 'Service d’Accueil des Urgences (SAU)'}</span>
+                </div>
+                <div class="shrink-0 mt-1 sm:mt-0">
+                  ${partnerBadges}
+                </div>
               </div>
             </div>
 
@@ -13821,8 +14276,9 @@ class ProtecGame {
         </div>
       `;
     } else if (moduleKey === 'pompiers') {
-      title.textContent = 'Garde Caserne Pompiers & Astreinte Domicile (SDIS)';
-      subtitle.textContent = 'Mise à disposition opérationnelle VPSP en caserne pompiers et équipes d’astreinte rappelables';
+      const auth = this.getPompiersAuthority();
+      title.textContent = auth.gardeTitle || 'Garde Caserne Pompiers & Astreinte Domicile (SDIS)';
+      subtitle.textContent = auth.gardeSubtitle || 'Mise à disposition opérationnelle VPSP en caserne pompiers et équipes d’astreinte rappelables';
       icon.setAttribute('data-lucide', 'flame');
 
       const sdis = this.sdisGarde || {};
@@ -13874,6 +14330,10 @@ class ProtecGame {
 
       const sdisMissions = this.missions.filter(m => m.type === 'pompiers');
 
+      const deptCode = this.currentDepartmentCode || '54';
+      const deptInfra = this.departmentInfrastructures?.[deptCode] || (window.ProtecHealthInfrastructures ? window.ProtecHealthInfrastructures.ensureDepartmentInfrastructures(this, deptCode) : null);
+      const assignedCaserne = deptInfra?.casernes?.[0] || { name: `Caserne Principale (${auth.shortName})`, city: 'Secteur', authority: auth.shortName };
+
       body.innerHTML = `
         <div class="space-y-5">
           
@@ -13915,10 +14375,10 @@ class ProtecGame {
                 </div>
                 <div>
                   <h4 class="text-sm font-black text-slate-900">
-                    ${isGuardActive ? `Garde SDIS en cours : ${sdis.eventName || 'Dispositif Sécuritaire'}` : 'Organiser une Garde Caserne & Astreinte Domicile'}
+                    ${isGuardActive ? `Garde ${auth.shortName} en cours : ${sdis.eventName || 'Dispositif Sécuritaire'}` : `Organiser une Garde Caserne & Astreinte (${auth.shortName})`}
                   </h4>
                   <p class="text-[11px] text-slate-500">
-                    ${isGuardActive ? sdis.eventReason : 'En cas de violences urbaines, mouvements sociaux ou festivités sensibles, positionnez un VPSP en caserne pompiers et une équipe d’astreinte à domicile.'}
+                    ${isGuardActive ? sdis.eventReason : `En cas de violences urbaines, mouvements sociaux ou festivités sensibles, positionnez un VPSP en caserne ${auth.shortName} et une équipe d’astreinte à domicile.`}
                   </p>
                 </div>
               </div>
@@ -13928,24 +14388,40 @@ class ProtecGame {
               </span>
             </div>
 
+            <!-- Lieu d'affectation imposé par le commandement pompiers -->
+            <div class="p-3 rounded-xl bg-red-50/80 border border-red-200 text-xs text-slate-800 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-extrabold text-red-950 flex items-center gap-1.5">
+                  <span>🚒</span> Caserne d'Affectation Imposée par le ${auth.codisName}
+                </span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-200 text-red-900">
+                  ${auth.shortName}
+                </span>
+              </div>
+              <div class="text-[11px]">
+                <strong>${assignedCaserne.name}</strong> (${assignedCaserne.city || 'Centre de Secours'})
+                <p class="text-slate-600 text-[10px] mt-0.5">Affectation territoriale officielle : l'équipage VPSP est posté dans cette caserne pour assurer les départs réflexes ordonnés par le ${auth.codisName}.</p>
+              </div>
+            </div>
+
             ${!this.sdisConvention?.signed ? `
-              <!-- Avertissement et prérequis convention SDIS requise -->
+              <!-- Avertissement et prérequis convention requise -->
               <div class="p-4 rounded-xl bg-amber-50/70 border border-amber-200 space-y-3">
                 <div class="flex items-start gap-3">
                   <span class="text-2xl">🚒</span>
                   <div>
                     <h5 class="text-xs font-black text-amber-950 uppercase tracking-wider">
-                      Convention Partenariale SDIS Requise
+                      Convention Partenariale ${auth.shortName} Requise
                     </h5>
                     <p class="text-[11.5px] text-amber-900 mt-0.5 leading-relaxed">
-                      Pour intégrer le schéma de réponse opérationnelle des Sapeurs-Pompiers (SDIS / CTA-CODIS) et assurer des gardes caserne avec un VPSP, votre antenne doit être signataire de la <strong>Convention Partenariale SDIS</strong>.
+                      Pour intégrer le schéma de réponse opérationnelle (${auth.fullName} / ${auth.codisName}) et assurer des gardes avec un VPSP, votre antenne doit être signataire de la <strong>Convention Partenariale ${auth.shortName}</strong>.
                     </p>
                   </div>
                 </div>
 
                 <div class="pt-2 border-t border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div class="text-[10.5px] text-amber-800 font-bold">
-                    ${!this.aascConvention?.signed ? 'Étape requise : Convention Préfectorale d’AASC (800 €)' : 'Prérequis SDIS : 1 ambulance VPSP et 3 secouristes qualifiés'}
+                    ${!this.aascConvention?.signed ? 'Étape requise : Convention Préfectorale d’AASC (800 €)' : `Prérequis ${auth.shortName} : 1 ambulance VPSP et 3 secouristes qualifiés`}
                   </div>
                   ${!this.aascConvention?.signed ? `
                     <button onclick="window.game.openModule('conventions')" class="px-4 py-2 rounded-xl text-xs font-black bg-amber-700 hover:bg-amber-800 text-white shadow-sm transition cursor-pointer">
@@ -13953,7 +14429,7 @@ class ProtecGame {
                     </button>
                   ` : `
                     <button onclick="window.game.signSdisConvention()" ${vpsps.length === 0 || dispoVolunteers.length < 3 ? 'disabled class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed"' : 'class="px-4 py-2 rounded-xl text-xs font-black bg-red-600 hover:bg-red-700 text-white shadow-md transition cursor-pointer"'}>
-                      ✍️ Signer la Convention SDIS (+350 €)
+                      ✍️ Signer la Convention ${auth.shortName} (+350 €)
                     </button>
                   `}
                 </div>
@@ -13969,7 +14445,7 @@ class ProtecGame {
                     </span>
                   </div>
                   <p class="text-[10px] text-slate-500 mt-0.5">
-                    ${sdis?.mode === 'poste' ? 'Départ automatique immédiat dès alerte CODIS (0 clic, réactivité max, fatigue accrue -15).' : 'L’équipage attend vos ordres, vous déclenchez vous-même le départ (moins fatiguant -5).'}
+                    ${sdis?.mode === 'poste' ? `Départ automatique immédiat dès alerte ${auth.codisName} (0 clic, réactivité max, fatigue accrue -15).` : 'L’équipage attend vos ordres, vous déclenchez vous-même le départ (moins fatiguant -5).'}
                   </p>
                 </div>
                 <div class="flex items-center gap-1.5 shrink-0">
@@ -13991,7 +14467,7 @@ class ProtecGame {
                       <option value="violences_urbaines">Violences urbaines & Mouvements lycéens (Tension élevée)</option>
                       <option value="fete_nationale">Dispositif renforcé Nuit du 14 Juillet</option>
                       <option value="greve_transports">Astreinte Débordements & Grands Rassemblements</option>
-                      <option value="garde_sdis_renfort">Garde Caserne Pompier Classique (Renfort VSAV)</option>
+                      <option value="garde_sdis_renfort">Garde Caserne ${auth.shortName} Classique (Renfort secours)</option>
                     </select>
                   </div>
 

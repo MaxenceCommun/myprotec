@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Reflet Masqué - Écusson Membre Fondateur</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      background-color: #0b1120;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      font-family: sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div class="text-center space-y-2">
+    <h1 class="text-2xl font-black text-amber-400">Écusson Membre Fondateur • Reflet Spéculaire Masqué</h1>
+    <p class="text-sm text-slate-400">Le reflet est masqué précisément sur le calque utilisateur sans afficher la texture elle-même.</p>
+  </div>
+
+  <div class="flex items-center gap-8 p-8 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-2xl">
+    <!-- Format Miniature (Tableau de bord / Inventaire) -->
+    <div class="flex flex-col items-center gap-2">
+      <span class="text-xs text-slate-400 font-bold">Miniature (68px)</span>
+      <div id="badge-small"></div>
+    </div>
+
+    <!-- Format Moyen (Modale détail) -->
+    <div class="flex flex-col items-center gap-2">
+      <span class="text-xs text-slate-400 font-bold">Modale (110px)</span>
+      <div id="badge-medium"></div>
+    </div>
+
+    <!-- Format Grand (Zoom haute définition) -->
+    <div class="flex flex-col items-center gap-2">
+      <span class="text-xs text-slate-400 font-bold">Grand Format (200px)</span>
+      <div id="badge-large"></div>
+    </div>
+  </div>
+
+  <script src="js/ecussons.js"></script>
+  <script>
+    const badge = {
+      code: 'renf_fondateur',
+      nom: 'Membre Fondateur',
+      imageUrl: 'images/badges/membre_fondateur.png'
+    };
+
+    document.getElementById('badge-small').innerHTML = ProtecEcussons.renderBadgeIconSvg(badge, 68);
+    document.getElementById('badge-medium').innerHTML = ProtecEcussons.renderBadgeIconSvg(badge, 110);
+    document.getElementById('badge-large').innerHTML = ProtecEcussons.renderBadgeIconSvg(badge, 200);
+  </script>
+</body>
+</html>

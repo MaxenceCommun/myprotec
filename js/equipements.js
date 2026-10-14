@@ -29,7 +29,8 @@ window.ProtecEquipements = {
       id: 'mannequin_rcp_adulte',
       category: 'formation',
       name: 'Mannequin RCP Adulte (Massage & Insufflation)',
-      icon: '🩺',
+      lucideIcon: 'heart-pulse',
+      image: 'images/equipements/mannequin_rcp_adulte.png',
       desc: 'Matériel pédagogique fondamental pour les ateliers GQS, formations PSC1 et recyclages opérationnels PSE.',
       tiers: [
         {
@@ -85,7 +86,8 @@ window.ProtecEquipements = {
       id: 'dsa_formation',
       category: 'formation',
       name: 'Défibrillateur d’Entraînement Pédagogique (DSA)',
-      icon: '⚡',
+      lucideIcon: 'zap',
+      image: 'images/equipements/dsa_formation.png',
       desc: 'Simulateur d’arrêt cardiaque pour l’apprentissage de la défibrillation automatisée précoce.',
       tiers: [
         {
@@ -124,54 +126,117 @@ window.ProtecEquipements = {
     prise_parametres: {
       id: 'prise_parametres',
       category: 'secours',
-      name: 'Kit de Prise de Constantes & Paramètres Vitaux',
-      icon: '🩺',
-      desc: 'Dotation fondamentale embarquée dans les VPSP et postes de secours pour l’examen clinique.',
+      name: 'Moniteurs Multiparamétriques & Prise de Constantes',
+      lucideIcon: 'activity',
+      image: 'images/equipements/prise_parametres.png',
+      desc: 'Moniteurs de diagnostic vital et surveillance clinique embarqués dans les VPSP et postes de secours. Augmentent considérablement la qualité et le confort de travail des secouristes.',
       tiers: [
         {
           level: 1,
-          badge: 'Niveau 1 : Manuel Classique',
+          badge: 'Niveau 1 : Tensiomètre & Saturomètre Compacts',
           badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-          title: 'Kit Manuel Classique (Stéthoscope + Tensiomètre Poire)',
-          price: 80,
-          maintenanceCostAnnual: 10,
-          desc: 'Tensiomètre anéroïde manuel, stéthoscope standard et saturomètre à pince d’entrée de gamme.',
+          title: 'Tensiomètre Électronique NIBP & Saturomètre Compact',
+          price: 180,
+          maintenanceCostAnnual: 15,
+          desc: 'Tensiomètre automatique au bras avec affichage digital et saturomètre SpO2 de pouls compact à pince.',
           bullets: [
-            '⚠️ Vitesse de bilan standard (mesure manuelle chronophage)',
-            '⚠️ 15% de risque d’erreur de mesure sur victime agitée ou en mouvement'
+            '⚡ Prise des constantes automatisée (tension artérielle et oxygénation)',
+            '✓ Qualité de travail basique sur les postes de secours',
+            '✓ Réduit la charge mentale des secouristes lors des bilans simples'
           ],
-          stats: { speedBonus: 0, errorRisk: 0.15, samuRepBonus: 0, crewMoralBonus: 0, regulationSpeed: 1.0 }
+          stats: { speedBonus: 0.15, errorRisk: 0.05, samuRepBonus: 2, crewMoralBonus: 5, regulationSpeed: 1.15 }
         },
         {
           level: 2,
-          badge: 'Niveau 2 : Multiparamétrique Moderne',
-          badgeColor: 'bg-blue-100 text-pc-blue border-blue-300',
-          title: 'Multiparamétrique Moderne (NIBP Auto + SpO2 + Temp IR)',
-          price: 900,
-          maintenanceCostAnnual: 60,
-          desc: 'Tensiomètre automatique oscillométrique NIBP, saturomètre de pouls à capteur silicone et thermomètre infrarouge tympanique.',
+          badge: 'Niveau 2 : Moniteur Multiparamétrique de Transport',
+          badgeColor: 'bg-blue-100 text-pc-blue border-blue-300 ring-1 ring-blue-400',
+          title: 'Moniteur Multiparamétrique Clinique de Transport (7 pouces)',
+          price: 950,
+          maintenanceCostAnnual: 55,
+          desc: 'Moniteur médical avec grand écran couleur 7 pouces, NIBP oscillométrique adulte/enfant, SpO2 technologie Masimo anti-artefacts et thermomètre tympanique.',
           bullets: [
-            '⚡ Bilan secouriste 30% plus rapide en intervention',
-            '✓ 0% d’erreur de transcription ou de mesure',
-            '✓ Excellente appréciation de la régulation SAMU 15'
+            '⚡ Bilan secouriste 35% plus rapide et surveillance continue de la victime',
+            '✓ 0% d’erreur de mesure ou de transcription manuscrite',
+            '💪 Confort et qualité de travail accrus pour les équipiers (+10 motivation/humeur)',
+            '🏥 Précision saluée lors des bilans passés à la régulation SAMU 15 (+6 réputation)'
           ],
-          stats: { speedBonus: 0.30, errorRisk: 0, samuRepBonus: 5, crewMoralBonus: 5, regulationSpeed: 1.3 }
+          stats: { speedBonus: 0.35, errorRisk: 0, samuRepBonus: 6, crewMoralBonus: 10, regulationSpeed: 1.4 }
         },
         {
           level: 3,
-          badge: 'Niveau 3 : Moniteur Pro ECG & Bluetooth',
+          badge: 'Niveau 3 : Moniteur Réanimation ECG 12D & Capnographie',
           badgeColor: 'bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400',
-          title: 'Moniteur Multiparamétrique Professionnel (ECG & Bluetooth)',
-          price: 3500,
-          maintenanceCostAnnual: 150,
-          desc: 'Moniteur médical durci IP54 avec transmission Bluetooth directe des constantes et du tracé ECG vers la régulation SAMU 15.',
+          title: 'Moniteur Multiparamétrique Réanimation (ECG 12D + Capnographie EtCO2 + 4G)',
+          price: 3600,
+          maintenanceCostAnnual: 140,
+          desc: 'Station diagnostique d’urgence durcie IP54 avec tracé ECG 12 dérivations, capnométrie/capnographie EtCO2 (vital pour arrêts cardiaques) et transmission 4G temps réel vers le SAMU.',
           bullets: [
-            '⚡ Bilan vital instantané (-50% temps de prise en charge)',
-            '🚑 Libération accélérée du VPSP aux Urgences/SAMU (-40% attente)',
-            '🏥 Reconnaissance et confiance maximale du SAMU 15 lors des bilans',
-            '💪 Confiance et fierté totale des secouristes en intervention'
+            '⚡ Bilan vital instantané et exhaustif (-50% temps de prise en charge)',
+            '🫀 Diagnostic immédiat des arrêts cardiaques et détresses respiratoires graves',
+            '🏥 Confiance totale et valorisation d’excellence par le SAMU 15 (+12 réputation)',
+            '🌟 Qualité de travail exceptionnelle : secouristes sereins et hautement valorisés (+20 moral)',
+            '🚑 Libération accélérée du VPSP aux Urgences hospitalières (-40% attente)'
           ],
-          stats: { speedBonus: 0.50, errorRisk: 0, samuRepBonus: 10, crewMoralBonus: 10, regulationSpeed: 2.0, fastHospitalRelease: true }
+          stats: { speedBonus: 0.50, errorRisk: 0, samuRepBonus: 12, crewMoralBonus: 20, regulationSpeed: 2.0, fastHospitalRelease: true }
+        }
+      ]
+    },
+
+    appareil_photo: {
+      id: 'appareil_photo',
+      category: 'communication',
+      name: 'Matériel Audiovisuel & Appareils Photo (Couverture DPS & Événements)',
+      lucideIcon: 'camera',
+      image: 'images/equipements/appareil_photo.png',
+      desc: 'Équipement photographique et vidéo mis à disposition des personnels photographes/vidéastes pour valoriser les missions, booster le moral des équipes et amplifier l’impact des communications d’antenne.',
+      tiers: [
+        {
+          level: 1,
+          badge: 'Niveau 1 : Smartphone Équipé & Compact',
+          badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
+          title: 'Smartphone Dédié & Compact Numérique Basique',
+          price: 180,
+          maintenanceCostAnnual: 15,
+          desc: 'Photos de smartphone standards et compact d’appoint. Prises de vue simples pour les réseaux sociaux.',
+          bullets: [
+            '📸 Prises de vue souvenirs de poste en plein jour convenables',
+            '⚠️ Bruit numérique sur événements nocturnes ou concerts',
+            '🙂 +8 Humeur et Motivation des personnels photographes/vidéastes sur mission',
+            '📱 +10% de portée et d’impact sur les publications d’événements'
+          ],
+          stats: { photoMoralBonus: 8, photoMotivationBonus: 10, comImpactBonus: 0.10, repBonusPerMission: 1, photoQuality: 'standard' }
+        },
+        {
+          level: 2,
+          badge: 'Niveau 2 : Boîtier Hybride Semi-Pro 4K',
+          badgeColor: 'bg-blue-100 text-pc-blue border-blue-300 ring-1 ring-blue-400',
+          title: 'Boîtier Hybride Semi-Pro 4K avec Objectif Stabilisé',
+          price: 1100,
+          maintenanceCostAnnual: 45,
+          desc: 'Appareil photo hybride APS-C capteur haute sensibilité, autofocus ultra-rapide sur le regard et vidéo 4K nette même sous éclairage difficile.',
+          bullets: [
+            '🌟 Clichés d’action d’excellente qualité pour valoriser les secouristes en intervention',
+            '💪 +18 Humeur et Motivation des photographes (fierté et grand plaisir de shooter)',
+            '⚡ +25% de visibilité, likes et partages sur les publications de l’antenne',
+            '🏛️ Valorise la réputation d’antenne auprès des mairies et organisateurs (+3 rep/événement)'
+          ],
+          stats: { photoMoralBonus: 18, photoMotivationBonus: 22, comImpactBonus: 0.25, repBonusPerMission: 3, photoQuality: 'semipro' }
+        },
+        {
+          level: 3,
+          badge: 'Niveau 3 : Boîtier Plein Format Pro & Kit Vidéo / Gimbal',
+          badgeColor: 'bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400',
+          title: 'Boîtier Plein Format Tropicalisé & Kit Vidéo / Gimbal 4K',
+          price: 3400,
+          maintenanceCostAnnual: 110,
+          desc: 'Boîtier plein format tropicalisé résistant à la pluie, optiques série L f/2.8 lumineuses, micro cravate HF et gimbal motorisé pour reportages vidéo cinématiques.',
+          bullets: [
+            '🏆 Rendu visuel digne des médias nationaux et de la communication de crise',
+            '🔥 +30 Humeur et Motivation des photographes (passion comblée, moral au zénith)',
+            '🚀 +50% d’impact des publications, forte viralité et afflux de nouveaux bénévoles',
+            '🤝 Retombées immédiates en dons et reconnaissance des partenaires (+6 rep/événement)'
+          ],
+          stats: { photoMoralBonus: 30, photoMotivationBonus: 35, comImpactBonus: 0.50, repBonusPerMission: 6, photoQuality: 'pro', recruitBoost: true }
         }
       ]
     },
@@ -180,7 +245,8 @@ window.ProtecEquipements = {
       id: 'brancardage_immobilisation',
       category: 'secours',
       name: 'Matériel d’Immobilisation & Brancardage',
-      icon: '🩼',
+      lucideIcon: 'stretch-horizontal',
+      image: 'images/equipements/brancardage_immobilisation.png',
       desc: 'Conditionnement des polytraumatisés, extractions et évacuations sanitaires en VPSP.',
       tiers: [
         {
@@ -219,7 +285,8 @@ window.ProtecEquipements = {
       id: 'radio_communication',
       category: 'secours',
       name: 'Réseau Radio & Télécommunications de Poste',
-      icon: '📻',
+      lucideIcon: 'radio',
+      image: 'images/equipements/radio_communication.png',
       desc: 'Liaison tactique entre les binômes PAPS, les VPSP, le chef de dispositif et le CODIS/SAMU.',
       tiers: [
         {
@@ -259,7 +326,8 @@ window.ProtecEquipements = {
       id: 'outillage_logistique',
       category: 'logistique',
       name: 'Outillage Logistique & Aménagement de Dispositif',
-      icon: '🧰',
+      lucideIcon: 'wrench',
+      image: 'images/equipements/outillage_logistique.png',
       desc: 'Montage et démontage des tentes de poste, barnums, balisages et installations de crise.',
       tiers: [
         {
@@ -298,7 +366,8 @@ window.ProtecEquipements = {
       id: 'vetements_eup',
       category: 'tenues',
       name: 'Tenues Opérationnelles & Équipements de Protection (EPI)',
-      icon: '👕',
+      lucideIcon: 'shirt',
+      image: 'images/equipements/vetements_eup.png',
       desc: 'Parkas de protection intempéries, pantalons F1 Protec, casques et chasubles d’intervention.',
       tiers: [
         {
@@ -341,7 +410,8 @@ window.ProtecEquipements = {
     {
       id: 'lot_secours_a',
       name: 'Lot A (Secours à personne standard)',
-      icon: '🎒',
+      lucideIcon: 'briefcase',
+      image: 'images/equipements/lot_secours_a.png',
       price: 850,
       storageSize: 1,
       badge: 'Secours à Personne Standard',
@@ -352,7 +422,8 @@ window.ProtecEquipements = {
     {
       id: 'lot_secours_b',
       name: 'Lot B (Immobilisation et relevage)',
-      icon: '🩼',
+      lucideIcon: 'stretch-horizontal',
+      image: 'images/equipements/lot_secours_b.png',
       price: 1250,
       storageSize: 2,
       badge: 'Immobilisation & Traumatologie',
@@ -363,7 +434,8 @@ window.ProtecEquipements = {
     {
       id: 'lot_secours_c',
       name: 'Lot C (Poste de Secours fixe / Renfort)',
-      icon: '⛺',
+      lucideIcon: 'tent',
+      image: 'images/equipements/lot_secours_c.png',
       price: 1750,
       storageSize: 3,
       badge: 'Poste Fixe & Accueil Victimes',
@@ -374,7 +446,8 @@ window.ProtecEquipements = {
     {
       id: 'lot_tronconnage',
       name: 'Lot Tronçonnage / Dégagement',
-      icon: '🪚',
+      lucideIcon: 'axe',
+      image: 'images/equipements/lot_tronconnage.png',
       price: 1450,
       storageSize: 2,
       badge: 'Tempêtes & Axes Routiers',
@@ -385,7 +458,8 @@ window.ProtecEquipements = {
     {
       id: 'lot_pompage',
       name: 'Lot Épuisement / Pompage',
-      icon: '🚰',
+      lucideIcon: 'waves',
+      image: 'images/equipements/lot_pompage.png',
       price: 1850,
       storageSize: 3,
       badge: 'Inondations & Crues',
@@ -396,7 +470,8 @@ window.ProtecEquipements = {
     {
       id: 'lot_eclairage',
       name: 'Lot Éclairage d’urgence',
-      icon: '💡',
+      lucideIcon: 'lightbulb',
+      image: 'images/equipements/lot_eclairage.png',
       price: 1600,
       storageSize: 2,
       badge: 'Nuit, Black-out & PMA',
@@ -407,7 +482,8 @@ window.ProtecEquipements = {
     {
       id: 'lot_bachage',
       name: 'Lot Bâchage & Consolidation',
-      icon: '🛖',
+      lucideIcon: 'home',
+      image: 'images/equipements/lot_bachage.png',
       price: 980,
       storageSize: 2,
       badge: 'Intempéries & Toitures',
@@ -418,7 +494,8 @@ window.ProtecEquipements = {
     {
       id: 'lot_hebergement',
       name: 'Lot Hébergement d’urgence',
-      icon: '🛏️',
+      lucideIcon: 'bed-double',
+      image: 'images/equipements/lot_hebergement.png',
       price: 2100,
       storageSize: 4,
       badge: 'Gymnases & Plan PCS',
@@ -429,7 +506,8 @@ window.ProtecEquipements = {
     {
       id: 'lot_ravitaillement',
       name: 'Lot Ravitaillement / Cuisine de crise',
-      icon: '🍲',
+      lucideIcon: 'utensils',
+      image: 'images/equipements/lot_ravitaillement.png',
       price: 1350,
       storageSize: 3,
       badge: 'Logistique Alimentaire & Crise',
@@ -440,7 +518,8 @@ window.ProtecEquipements = {
     {
       id: 'lot_soutien_psy',
       name: 'Lot Soutien psychologique & Accueil (CAI, CHU)',
-      icon: '🫂',
+      lucideIcon: 'heart-handshake',
+      image: 'images/equipements/lot_soutien_psy.png',
       price: 1200,
       storageSize: 2,
       badge: 'Centre d’Accueil Impliqués (CAI)',
@@ -451,7 +530,8 @@ window.ProtecEquipements = {
     {
       id: 'lot_poste_commandement_mobile',
       name: 'Poste de Commandement Mobile (Pack PC Embarqué)',
-      icon: '📡',
+      lucideIcon: 'satellite',
+      image: 'images/equipements/lot_poste_commandement_mobile.png',
       price: 2800,
       storageSize: 2,
       badge: 'Commandement & Crise (VLC)',
@@ -468,7 +548,8 @@ window.ProtecEquipements = {
     {
       id: 'tablettes',
       name: 'Tablettes Tactiles Embarquées (TLO)',
-      icon: '📱',
+      lucideIcon: 'tablet',
+      image: 'images/equipements/tablettes.png',
       price: 650,
       badge: 'Informatique Embarquée',
       badgeColor: 'bg-blue-100 text-pc-blue border-blue-200',
@@ -478,7 +559,8 @@ window.ProtecEquipements = {
     {
       id: 'phones',
       name: 'Smartphones d’Astreinte Sécurisés',
-      icon: '📞',
+      lucideIcon: 'phone',
+      image: 'images/equipements/phones.png',
       price: 320,
       badge: 'Alerte & Disponibilité',
       badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -488,7 +570,8 @@ window.ProtecEquipements = {
     {
       id: 'pcs',
       name: 'Station PC & Ordinateurs Portables Antenne',
-      icon: '💻',
+      lucideIcon: 'laptop',
+      image: 'images/equipements/pcs.png',
       price: 1100,
       badge: 'Gestion Administrative & RH',
       badgeColor: 'bg-slate-200 text-slate-800 border-slate-300',
@@ -498,7 +581,8 @@ window.ProtecEquipements = {
     {
       id: 'fauteuils',
       name: 'Fauteuils Ergonomiques & Espace Repos',
-      icon: '🛋️',
+      lucideIcon: 'armchair',
+      image: 'images/equipements/fauteuils.png',
       price: 750,
       badge: 'Santé au Travail & Ergonomie',
       badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -508,7 +592,8 @@ window.ProtecEquipements = {
     {
       id: 'cafe',
       name: 'Machine à Café Pro & Espace Convivialité',
-      icon: '☕',
+      lucideIcon: 'coffee',
+      image: 'images/equipements/cafe.png',
       price: 380,
       badge: 'Vie d’Antenne & Convivialité',
       badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
@@ -548,6 +633,7 @@ window.ProtecEquipements = {
         mannequin_rcp_adulte: 1,
         dsa_formation: 1,
         prise_parametres: 1,
+        appareil_photo: 1,
         brancardage_immobilisation: 1,
         radio_communication: game.workplaceEquipment.radios > 0 ? 2 : 1,
         outillage_logistique: 1,
@@ -559,6 +645,7 @@ window.ProtecEquipements = {
         mannequin_rcp_adulte: 1,
         dsa_formation: 1,
         prise_parametres: 1,
+        appareil_photo: 1,
         brancardage_immobilisation: 1,
         radio_communication: 1,
         outillage_logistique: 1,
@@ -949,6 +1036,31 @@ window.ProtecEquipements = {
     this.renderModal(game);
   },
 
+  formatBullet(text) {
+    if (!text) return '';
+    return text
+      .replace(/^⚠️\s*/, '<i data-lucide="alert-triangle" class="w-3.5 h-3.5 inline text-amber-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^📉\s*/, '<i data-lucide="trending-down" class="w-3.5 h-3.5 inline text-rose-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^❌\s*/, '<i data-lucide="x" class="w-3.5 h-3.5 inline text-rose-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^✓\s*/, '<i data-lucide="check" class="w-3.5 h-3.5 inline text-emerald-600 mr-1 flex-shrink-0"></i>')
+      .replace(/^🌟\s*/, '<i data-lucide="star" class="w-3.5 h-3.5 inline text-amber-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^⚡\s*/, '<i data-lucide="zap" class="w-3.5 h-3.5 inline text-blue-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^💪\s*/, '<i data-lucide="award" class="w-3.5 h-3.5 inline text-indigo-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^🏛️\s*/, '<i data-lucide="landmark" class="w-3.5 h-3.5 inline text-blue-600 mr-1 flex-shrink-0"></i>')
+      .replace(/^🏆\s*/, '<i data-lucide="trophy" class="w-3.5 h-3.5 inline text-amber-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^🔥\s*/, '<i data-lucide="flame" class="w-3.5 h-3.5 inline text-orange-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^🚀\s*/, '<i data-lucide="trending-up" class="w-3.5 h-3.5 inline text-emerald-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^🤝\s*/, '<i data-lucide="handshake" class="w-3.5 h-3.5 inline text-sky-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^📱\s*/, '<i data-lucide="smartphone" class="w-3.5 h-3.5 inline text-blue-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^🙂\s*/, '<i data-lucide="smile" class="w-3.5 h-3.5 inline text-emerald-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^🌙\s*/, '<i data-lucide="moon" class="w-3.5 h-3.5 inline text-indigo-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^⚪\s*/, '<i data-lucide="circle" class="w-3.5 h-3.5 inline text-slate-400 mr-1 flex-shrink-0"></i>')
+      .replace(/^📸\s*/, '<i data-lucide="camera" class="w-3.5 h-3.5 inline text-pink-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^🫀\s*/, '<i data-lucide="heart" class="w-3.5 h-3.5 inline text-rose-500 mr-1 flex-shrink-0"></i>')
+      .replace(/^🏥\s*/, '<i data-lucide="cross" class="w-3.5 h-3.5 inline text-blue-600 mr-1 flex-shrink-0"></i>')
+      .replace(/^🚑\s*/, '<i data-lucide="truck" class="w-3.5 h-3.5 inline text-blue-600 mr-1 flex-shrink-0"></i>');
+  },
+
   // =========================================================================
   // 8. INTERFACE COMPLÈTE DE LA BOUTIQUE & INVENTAIRE MODULAIRE
   // =========================================================================
@@ -1001,8 +1113,8 @@ window.ProtecEquipements = {
           <!-- Trésorerie Disponible -->
           <div class="p-4 rounded-3xl bg-gradient-to-r from-pc-blue to-indigo-900 text-white flex items-center justify-between shadow-md">
             <div class="flex items-center gap-3">
-              <div class="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center text-2xl">
-                💶
+              <div class="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center text-white">
+                <i data-lucide="wallet" class="w-6 h-6"></i>
               </div>
               <div>
                 <span class="text-[10px] uppercase font-bold text-white/70 block">Trésorerie Antenne</span>
@@ -1017,8 +1129,8 @@ window.ProtecEquipements = {
           <!-- Modernité & Fierté du Matériel -->
           <div class="p-4 rounded-3xl glass-card border border-slate-200 flex items-center justify-between shadow-xs">
             <div class="flex items-center gap-3">
-              <div class="w-11 h-11 rounded-2xl ${modernityScore >= 75 ? 'bg-purple-100 text-purple-800' : (modernityScore >= 50 ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700')} flex items-center justify-center text-2xl">
-                ${modernityScore >= 75 ? '⭐' : '🛠️'}
+              <div class="w-11 h-11 rounded-2xl ${modernityScore >= 75 ? 'bg-purple-100 text-purple-800' : (modernityScore >= 50 ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700')} flex items-center justify-center">
+                <i data-lucide="${modernityScore >= 75 ? 'star' : 'wrench'}" class="w-6 h-6"></i>
               </div>
               <div class="space-y-0.5">
                 <div class="flex items-center gap-1.5">
@@ -1043,8 +1155,8 @@ window.ProtecEquipements = {
           <!-- Entretien & Maintenance Annuelle -->
           <div class="p-4 rounded-3xl glass-card border border-slate-200 flex items-center justify-between shadow-xs">
             <div class="flex items-center gap-3">
-              <div class="w-11 h-11 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-2xl">
-                🔧
+              <div class="w-11 h-11 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                <i data-lucide="wrench" class="w-6 h-6 text-amber-700"></i>
               </div>
               <div>
                 <span class="text-[10px] uppercase font-bold text-slate-500 block">Maintenance & Entretien</span>
@@ -1052,8 +1164,9 @@ window.ProtecEquipements = {
                 <p class="text-[9.5px] text-slate-400 font-semibold">~${monthlyMaintenance} € / mois prélevés</p>
               </div>
             </div>
-            <span class="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-xl">
-              Prêt O2/CT ✓
+            <span class="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-xl flex items-center gap-1">
+              <i data-lucide="check" class="w-3 h-3 text-emerald-600"></i>
+              <span>Prêt O2/CT</span>
             </span>
           </div>
 
@@ -1062,15 +1175,18 @@ window.ProtecEquipements = {
         <!-- Raccourci vers la Bourse de l'Occasion -->
         <div class="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
           <div class="flex items-center gap-2.5">
-            <span class="text-xl">🏷️</span>
+            <div class="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600 flex-shrink-0">
+              <i data-lucide="tag" class="w-4 h-4"></i>
+            </div>
             <div>
               <strong class="text-slate-800 text-xs block">Bourse de l'Occasion & Revente Inter-Antennes</strong>
               <span class="text-[11px] text-slate-500">Achetez du matériel révisé ou revendez vos surplus pour récupérer des fonds.</span>
             </div>
           </div>
           <div class="flex items-center gap-2 self-end sm:self-auto">
-            <button onclick="window.game.openModule('marche_occasion')" class="px-3 py-1.5 rounded-xl bg-pc-orange hover:bg-orange-600 active:scale-95 text-white font-extrabold text-xs shadow-xs transition cursor-pointer">
-              Bourse de l'Occasion 🏷️
+            <button onclick="window.game.openModule('marche_occasion')" class="px-3 py-1.5 rounded-xl bg-pc-orange hover:bg-orange-600 active:scale-95 text-white font-extrabold text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5">
+              <i data-lucide="tag" class="w-3.5 h-3.5"></i>
+              <span>Bourse de l'Occasion</span>
             </button>
             <button onclick="window.ProtecMarcheOccasion.openSellModal('equipment')" class="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-extrabold text-xs border border-slate-300 shadow-xs transition cursor-pointer">
               Vendre du Matériel
@@ -1085,7 +1201,9 @@ window.ProtecEquipements = {
           <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="text-lg">🚑</span>
+                <div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-pc-blue flex-shrink-0">
+                  <i data-lucide="truck" class="w-4 h-4"></i>
+                </div>
                 <div>
                   <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide">Dotation Flotte VPSP & Postes</h5>
                   <p class="text-[10px] text-slate-500">Matériel embarqué dans les ambulances d'antenne</p>
@@ -1098,15 +1216,15 @@ window.ProtecEquipements = {
             <div class="grid grid-cols-3 gap-2 text-[10.5px]">
               <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
                 <span class="text-[9.5px] text-slate-400 block font-bold">Constantes</span>
-                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.prise_parametres} ${game.equipmentTiers.prise_parametres === 3 ? '🌟 ECG' : (game.equipmentTiers.prise_parametres === 2 ? '⚡ Auto' : 'Manuel')}</strong>
+                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.prise_parametres} <span class="text-[10px] text-slate-500 font-normal">(${game.equipmentTiers.prise_parametres === 3 ? 'ECG 12D' : (game.equipmentTiers.prise_parametres === 2 ? 'Auto' : 'Manuel')})</span></strong>
               </div>
               <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
                 <span class="text-[9.5px] text-slate-400 block font-bold">Immobilisation</span>
-                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.brancardage_immobilisation} ${game.equipmentTiers.brancardage_immobilisation === 2 ? '⚡ Électrique' : 'Manuel'}</strong>
+                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.brancardage_immobilisation} <span class="text-[10px] text-slate-500 font-normal">(${game.equipmentTiers.brancardage_immobilisation === 2 ? 'Électrique' : 'Manuel'})</span></strong>
               </div>
               <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
                 <span class="text-[9.5px] text-slate-400 block font-bold">Réseau Radio</span>
-                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.radio_communication} ${game.equipmentTiers.radio_communication === 2 ? '📡 ANTARES' : 'PMR446'}</strong>
+                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.radio_communication} <span class="text-[10px] text-slate-500 font-normal">(${game.equipmentTiers.radio_communication === 2 ? 'ANTARES' : 'PMR446'})</span></strong>
               </div>
             </div>
           </div>
@@ -1115,7 +1233,9 @@ window.ProtecEquipements = {
           <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="text-lg">🎓</span>
+                <div class="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center text-purple-700 flex-shrink-0">
+                  <i data-lucide="graduation-cap" class="w-4 h-4"></i>
+                </div>
                 <div>
                   <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide">Dotation Salle Formation PSC1</h5>
                   <p class="text-[10px] text-slate-500">Matériel pédagogique grand public et interne</p>
@@ -1128,36 +1248,79 @@ window.ProtecEquipements = {
             <div class="grid grid-cols-2 gap-2 text-[10.5px]">
               <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
                 <span class="text-[9.5px] text-slate-400 block font-bold">Mannequins RCP</span>
-                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.mannequin_rcp_adulte} ${game.equipmentTiers.mannequin_rcp_adulte === 3 ? '🌟 QCPR Connecté' : (game.equipmentTiers.mannequin_rcp_adulte === 2 ? '✓ Clicker' : 'Mousse')}</strong>
+                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.mannequin_rcp_adulte} <span class="text-[10px] text-slate-500 font-normal">(${game.equipmentTiers.mannequin_rcp_adulte === 3 ? 'QCPR' : (game.equipmentTiers.mannequin_rcp_adulte === 2 ? 'Clicker' : 'Mousse')})</span></strong>
               </div>
               <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
                 <span class="text-[9.5px] text-slate-400 block font-bold">Simulateur DSA</span>
-                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.dsa_formation} ${game.equipmentTiers.dsa_formation === 2 ? '⚡ Télécommande HF' : 'Pré-programmé'}</strong>
+                <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.dsa_formation} <span class="text-[10px] text-slate-500 font-normal">(${game.equipmentTiers.dsa_formation === 2 ? 'HF' : 'Pré-prog'})</span></strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dotation Média, Communication & Reportage Photo -->
+          <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2 md:col-span-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-pink-50 flex items-center justify-center text-pink-700 flex-shrink-0">
+                  <i data-lucide="camera" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide">Dotation Média, Communication & Reportages</h5>
+                  <p class="text-[10px] text-slate-500">Appareils photo & vidéo pour photographes d'antenne (hors quotas opérationnels RNDPS)</p>
+                </div>
+              </div>
+              <span class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-pink-50 text-pink-700">
+                Couverture Audiovisuelle DPS
+              </span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10.5px]">
+              <div class="p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <div>
+                  <span class="text-[9.5px] text-slate-400 block font-bold">Appareil Photo d'Antenne</span>
+                  <strong class="text-slate-800 font-extrabold">Niv. ${game.equipmentTiers.appareil_photo || 1} <span class="text-[10px] text-slate-500 font-normal">(${game.equipmentTiers.appareil_photo === 3 ? 'Plein Format & Gimbal' : (game.equipmentTiers.appareil_photo === 2 ? 'Hybride 4K Pro' : 'Smartphone')})</span></strong>
+                </div>
+                <span class="text-[10px] font-black ${game.equipmentTiers.appareil_photo === 3 ? 'text-purple-700 bg-purple-50' : (game.equipmentTiers.appareil_photo === 2 ? 'text-blue-700 bg-blue-50' : 'text-slate-600 bg-slate-100')} px-2 py-0.5 rounded">
+                  ${game.equipmentTiers.appareil_photo === 3 ? '+50% Impact Com' : (game.equipmentTiers.appareil_photo === 2 ? '+25% Impact Com' : '+10% Impact')}
+                </span>
+              </div>
+              <div class="p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <div>
+                  <span class="text-[9.5px] text-slate-400 block font-bold">Bénévoles Photographes</span>
+                  <strong class="text-slate-800 font-extrabold">${game.volunteers?.filter(v => (v.skills || []).some(s => ['communication', 'photographe', 'photo'].includes(s.toLowerCase()))).length || 0} qualifié(s)</strong>
+                </div>
+                <span class="text-[10px] font-bold text-slate-500">
+                  Motivation & Humeur boostées sur mission
+                </span>
               </div>
             </div>
           </div>
 
         </div>
 
-        <!-- Barre de Navigation entre les 4 Pôles d'Équipement -->
-        <div class="flex p-1 bg-slate-100 rounded-2xl max-w-2xl mx-auto overflow-x-auto text-xs font-bold gap-1">
+        <!-- Barre de Navigation entre les 5 Pôles d'Équipement -->
+        <div class="flex p-1 bg-slate-100 rounded-2xl max-w-3xl mx-auto overflow-x-auto text-xs font-bold gap-1">
           <button onclick="window.ProtecEquipements.setTab('secours', window.game)" class="flex-1 py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === 'secours' ? 'bg-white text-pc-blue shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'}">
-            <span>🩺</span>
+            <i data-lucide="activity" class="w-4 h-4"></i>
             <span>Secours & Opérations</span>
             <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 text-pc-blue">3</span>
           </button>
           <button onclick="window.ProtecEquipements.setTab('formation', window.game)" class="flex-1 py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === 'formation' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
-            <span>🎓</span>
+            <i data-lucide="graduation-cap" class="w-4 h-4"></i>
             <span>Formation & Pédagogie</span>
             <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-100 text-purple-700">2</span>
           </button>
+          <button onclick="window.ProtecEquipements.setTab('communication', window.game)" class="flex-1 py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === 'communication' ? 'bg-white text-pc-blue shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'}">
+            <i data-lucide="camera" class="w-4 h-4"></i>
+            <span>Média & Photo</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-pink-100 text-pink-700">1</span>
+          </button>
           <button onclick="window.ProtecEquipements.setTab('logistique', window.game)" class="flex-1 py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === 'logistique' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
-            <span>📦</span>
+            <i data-lucide="package" class="w-4 h-4"></i>
             <span>Logistique & Crise</span>
             <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800">11</span>
           </button>
           <button onclick="window.ProtecEquipements.setTab('tenues', window.game)" class="flex-1 py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === 'tenues' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
-            <span>👕</span>
+            <i data-lucide="shirt" class="w-4 h-4"></i>
             <span>Tenues & Confort RH</span>
             <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-100 text-emerald-800">6</span>
           </button>
@@ -1165,13 +1328,14 @@ window.ProtecEquipements = {
 
         <!-- Barre de Recherche -->
         <div class="relative max-w-xl mx-auto w-full">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
           <input 
             type="text" 
             id="equipment-search-input"
             value="${this.searchQuery || ''}" 
             oninput="window.ProtecEquipements.setSearchQuery(this.value, window.game)" 
-            placeholder="🔍 Rechercher (ex: multiparamétrique, QCPR, brancard, radio, outillage, parka, tente...)" 
-            class="w-full pl-4 pr-10 py-2.5 rounded-2xl bg-white border border-slate-300 shadow-xs font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
+            placeholder="Rechercher (multiparamétrique, QCPR, appareil photo, brancard, radio...)" 
+            class="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-white border border-slate-300 shadow-xs font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
           />
           ${this.searchQuery ? `
             <button onclick="window.ProtecEquipements.setSearchQuery('', window.game)" class="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
@@ -1201,7 +1365,15 @@ window.ProtecEquipements = {
                   <div class="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                       <div class="flex items-center gap-3">
-                        <span class="text-3xl p-2 rounded-2xl bg-slate-50 border border-slate-200">${item.icon}</span>
+                        <div class="relative w-14 h-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-2xs">
+                          <img src="${item.image || 'images/equipements/' + item.id + '.png'}" 
+                               alt="${item.name}" 
+                               class="w-full h-full object-contain p-1"
+                               onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
+                          <div class="fallback-icon hidden w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
+                            <i data-lucide="${item.lucideIcon || 'package'}" class="w-7 h-7 text-pc-blue stroke-[1.75]"></i>
+                          </div>
+                        </div>
                         <div>
                           <h4 class="text-sm font-black text-slate-900 leading-tight">${item.name}</h4>
                           <p class="text-xs text-slate-500 mt-0.5">${item.desc}</p>
@@ -1251,7 +1423,7 @@ window.ProtecEquipements = {
                               <!-- Avantages Clés & Modificateurs -->
                               <div class="space-y-1 pt-1 border-t border-slate-100 text-[10.5px]">
                                 ${tier.bullets.map(b => `
-                                  <div class="text-slate-700 font-medium leading-tight">${b}</div>
+                                  <div class="text-slate-700 font-medium leading-tight flex items-start gap-1">${this.formatBullet(b)}</div>
                                 `).join('')}
                               </div>
                             </div>
@@ -1297,8 +1469,9 @@ window.ProtecEquipements = {
                   <h4 class="text-xs font-black text-slate-800 uppercase tracking-wide">Lots d’Intervention Spécialisés & Matériel de Crise</h4>
                   <p class="text-[11px] text-slate-500">Stockés en réserve de l'antenne pour intempéries, inondations, tempêtes et plans PCS</p>
                 </div>
-                <span class="text-xs font-black text-amber-800 bg-amber-100 px-2.5 py-1 rounded-xl">
-                  Réserve : ${usedStorage}/${maxStorage} unités
+                <span class="text-xs font-black text-amber-800 bg-amber-100 px-2.5 py-1 rounded-xl flex items-center gap-1.5">
+                  <i data-lucide="package" class="w-3.5 h-3.5 text-amber-700"></i>
+                  <span>Réserve : ${usedStorage}/${maxStorage} unités</span>
                 </span>
               </div>
 
@@ -1313,16 +1486,25 @@ window.ProtecEquipements = {
                     <div class="p-4 rounded-3xl glass-card border-2 ${isOwned ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200'} flex flex-col justify-between space-y-3">
                       <div class="space-y-2">
                         <div class="flex items-start justify-between gap-2">
-                          <div class="flex items-center gap-2.5">
-                            <span class="text-2xl p-1.5 rounded-xl bg-white shadow-2xs border border-slate-100">${lot.icon}</span>
+                          <div class="flex items-center gap-3">
+                            <div class="relative w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-2xs">
+                              <img src="${lot.image || 'images/equipements/' + lot.id + '.png'}" 
+                                   alt="${lot.name}" 
+                                   class="w-full h-full object-contain p-1"
+                                   onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
+                              <div class="fallback-icon hidden w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
+                                <i data-lucide="${lot.lucideIcon || 'package'}" class="w-6 h-6 text-pc-blue stroke-[1.75]"></i>
+                              </div>
+                            </div>
                             <div>
                               <h5 class="text-xs font-black text-slate-900 leading-tight">${lot.name}</h5>
                               <div class="flex items-center gap-1.5 mt-0.5">
                                 <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border ${lot.badgeColor}">
                                   ${lot.badge}
                                 </span>
-                                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600">
-                                  📦 ${lot.storageSize} u
+                                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600 flex items-center gap-0.5">
+                                  <i data-lucide="package" class="w-2.5 h-2.5 text-slate-500"></i>
+                                  <span>${lot.storageSize} u</span>
                                 </span>
                               </div>
                             </div>
@@ -1375,8 +1557,16 @@ window.ProtecEquipements = {
                     <div class="p-4 rounded-3xl glass-card border-2 ${isOwned ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200'} flex flex-col justify-between space-y-3">
                       <div class="space-y-2">
                         <div class="flex items-start justify-between gap-2">
-                          <div class="flex items-center gap-2.5">
-                            <span class="text-2xl p-1.5 rounded-xl bg-white shadow-2xs border border-slate-100">${item.icon}</span>
+                          <div class="flex items-center gap-3">
+                            <div class="relative w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-2xs">
+                              <img src="${item.image || 'images/equipements/' + item.id + '.png'}" 
+                                   alt="${item.name}" 
+                                   class="w-full h-full object-contain p-1"
+                                   onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
+                              <div class="fallback-icon hidden w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
+                                <i data-lucide="${item.lucideIcon || 'armchair'}" class="w-6 h-6 text-pc-blue stroke-[1.75]"></i>
+                              </div>
+                            </div>
                             <div>
                               <h5 class="text-xs font-black text-slate-900 leading-tight">${item.name}</h5>
                               <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border ${item.badgeColor}">

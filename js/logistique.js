@@ -20,14 +20,14 @@ window.ProtecLogistique = {
   // 1. CATALOGUE OFFICIEL CENTRAL D'ACHATS PROTECTION CIVILE
   // =========================================================================
   CATEGORIES: [
-    { id: 'all', label: 'Tout le Catalogue', icon: '🏪' },
-    { id: 'pharmacie', label: 'Pharmacie & Consommables', icon: '🚑' },
-    { id: 'lots_secours', label: 'Lots de Secours A/B/C', icon: '🎒' },
-    { id: 'technique_crise', label: 'Technique & Crise', icon: '🛠️' },
-    { id: 'tenues_epi', label: 'Tenues & Équipements EPI', icon: '🦺' },
-    { id: 'social_hebergement', label: 'Ravitaillement & Social', icon: '🥫' },
-    { id: 'transmissions', label: 'Transmissions & Radio', icon: '📻' },
-    { id: 'kits_formation', label: 'Kits Pédagogiques (Formations)', icon: '🎓' }
+    { id: 'all', label: 'Tout le Catalogue', iconLucide: 'layout-grid' },
+    { id: 'pharmacie', label: 'Pharmacie & Consommables', iconLucide: 'cross' },
+    { id: 'lots_secours', label: 'Lots de Secours A/B/C', iconLucide: 'briefcase' },
+    { id: 'technique_crise', label: 'Technique & Crise', iconLucide: 'wrench' },
+    { id: 'tenues_epi', label: 'Tenues & Équipements EPI', iconLucide: 'shield' },
+    { id: 'social_hebergement', label: 'Ravitaillement & Social', iconLucide: 'heart-handshake' },
+    { id: 'transmissions', label: 'Transmissions & Radio', iconLucide: 'radio' },
+    { id: 'kits_formation', label: 'Kits Pédagogiques (Formations)', iconLucide: 'graduation-cap' }
   ],
 
   CATALOG: [
@@ -36,7 +36,8 @@ window.ProtecLogistique = {
       id: 'oxygenBottles',
       category: 'pharmacie',
       name: 'Bouteille Oxygène Médical 5L (O2 B5)',
-      icon: '🫁',
+      lucideIcon: 'cylinder',
+      image: 'images/equipements/oxygenBottles.png',
       price: 45,
       unit: 'bouteille',
       badge: 'Urgence Vitale',
@@ -48,7 +49,8 @@ window.ProtecLogistique = {
       id: 'aedPads',
       category: 'pharmacie',
       name: 'Électrodes Défibrillateur DAE (Adulte/Enfant)',
-      icon: '⚡',
+      lucideIcon: 'zap',
+      image: 'images/equipements/aedPads.png',
       price: 38,
       unit: 'paire',
       badge: 'Défibrillation',
@@ -60,7 +62,8 @@ window.ProtecLogistique = {
       id: 'woundKits',
       category: 'pharmacie',
       name: 'Trousse Plaies, Pansements & Bandages',
-      icon: '🩹',
+      lucideIcon: 'cross',
+      image: 'images/equipements/woundKits.png',
       price: 20,
       unit: 'trousse',
       badge: 'Soins & Plaies',
@@ -72,7 +75,8 @@ window.ProtecLogistique = {
       id: 'cervicalCollars',
       category: 'pharmacie',
       name: 'Collier Cervical Multiposture Réglable',
-      icon: '🩻',
+      lucideIcon: 'shield',
+      image: 'images/equipements/cervicalCollars.png',
       price: 22,
       unit: 'collier',
       badge: 'Immobilisation',
@@ -84,7 +88,8 @@ window.ProtecLogistique = {
       id: 'tourniquets',
       category: 'pharmacie',
       name: 'Garrot Tourniquet Hémostatique Tactique (CAT)',
-      icon: '🩸',
+      lucideIcon: 'droplet',
+      image: 'images/equipements/tourniquets.png',
       price: 35,
       unit: 'garrot',
       badge: 'Hémorragie Massive',
@@ -96,7 +101,8 @@ window.ProtecLogistique = {
       id: 'attelles_pack',
       category: 'pharmacie',
       name: 'Pack Attelles Modelables Aluform & Dépression',
-      icon: '🦴',
+      lucideIcon: 'bone',
+      image: 'images/equipements/attelles_pack.png',
       price: 110,
       unit: 'pack',
       badge: 'Traumatologie',
@@ -108,7 +114,8 @@ window.ProtecLogistique = {
       id: 'bavu_ambu',
       category: 'pharmacie',
       name: 'Insufflateur Manuel BAVU avec Masques O2',
-      icon: '💨',
+      lucideIcon: 'activity',
+      image: 'images/equipements/bavu_ambu.png',
       price: 65,
       unit: 'bavu',
       badge: 'Ventilation',
@@ -120,7 +127,8 @@ window.ProtecLogistique = {
       id: 'trousse_brulures',
       category: 'pharmacie',
       name: 'Trousse Brûlures Hydrogel Water-Jel',
-      icon: '🔥',
+      lucideIcon: 'flame',
+      image: 'images/equipements/trousse_brulures.png',
       price: 55,
       unit: 'trousse',
       badge: 'Thermique',
@@ -134,7 +142,8 @@ window.ProtecLogistique = {
       id: 'lot_secours_a',
       category: 'lots_secours',
       name: 'Lot A (Secours à Personne Standard - Sac PS)',
-      icon: '🎒',
+      lucideIcon: 'briefcase',
+      image: 'images/equipements/lot_secours_a.png',
       price: 850,
       unit: 'lot complet',
       badge: 'Dotation Majeure',
@@ -146,7 +155,8 @@ window.ProtecLogistique = {
       id: 'lot_secours_b',
       category: 'lots_secours',
       name: 'Lot B (Immobilisation, Matelas Coquille, Plan Dur)',
-      icon: '🩼',
+      lucideIcon: 'stretch-horizontal',
+      image: 'images/equipements/lot_secours_b.png',
       price: 1250,
       unit: 'lot complet',
       badge: 'Traumatologie Lourde',
@@ -158,7 +168,8 @@ window.ProtecLogistique = {
       id: 'lot_secours_c',
       category: 'lots_secours',
       name: 'Lot C (Poste de Secours Fixe & Barnum 16m²)',
-      icon: '⛺',
+      lucideIcon: 'tent',
+      image: 'images/equipements/lot_secours_c.png',
       price: 1750,
       unit: 'lot complet',
       badge: 'Grands Dispositifs',
@@ -170,7 +181,8 @@ window.ProtecLogistique = {
       id: 'sac_pedestre',
       category: 'lots_secours',
       name: 'Sacoche Binôme Secouriste Pédestre',
-      icon: '🚶',
+      lucideIcon: 'backpack',
+      image: 'images/equipements/sac_pedestre.png',
       price: 320,
       unit: 'sacoche',
       badge: 'Mobilité Foule',
@@ -182,7 +194,8 @@ window.ProtecLogistique = {
       id: 'chaise_transport',
       category: 'lots_secours',
       name: 'Chaise de Transport d’Escalier Pliable Alu',
-      icon: '💺',
+      lucideIcon: 'chevrons-up-down',
+      image: 'images/equipements/chaise_transport.png',
       price: 450,
       unit: 'chaise',
       badge: 'Évacuation',
@@ -196,7 +209,8 @@ window.ProtecLogistique = {
       id: 'lot_tronconnage',
       category: 'technique_crise',
       name: 'Lot Tronçonnage / Dégagement Voirie',
-      icon: '🪚',
+      lucideIcon: 'axe',
+      image: 'images/equipements/lot_tronconnage.png',
       price: 1450,
       unit: 'lot complet',
       badge: 'Tempêtes & Axes',
@@ -208,7 +222,8 @@ window.ProtecLogistique = {
       id: 'lot_pompage',
       category: 'technique_crise',
       name: 'Lot Épuisement / Pompage Eaux Chargées',
-      icon: '🚰',
+      lucideIcon: 'waves',
+      image: 'images/equipements/lot_pompage.png',
       price: 1850,
       unit: 'lot complet',
       badge: 'Inondations & Crues',
@@ -220,7 +235,8 @@ window.ProtecLogistique = {
       id: 'lot_eclairage',
       category: 'technique_crise',
       name: 'Lot Éclairage de Crise & Mât Télescopique',
-      icon: '💡',
+      lucideIcon: 'lightbulb',
+      image: 'images/equipements/lot_eclairage.png',
       price: 1600,
       unit: 'lot complet',
       badge: 'Nocturne & PMA',
@@ -232,7 +248,8 @@ window.ProtecLogistique = {
       id: 'lot_bachage',
       category: 'technique_crise',
       name: 'Lot Bâchage Toitures & Consolidation Sinistres',
-      icon: '🛖',
+      lucideIcon: 'home',
+      image: 'images/equipements/lot_bachage.png',
       price: 980,
       unit: 'lot complet',
       badge: 'Intempéries',
@@ -244,7 +261,8 @@ window.ProtecLogistique = {
       id: 'groupe_electro',
       category: 'technique_crise',
       name: 'Groupe Électrogène Inverter Insonorisé 3.5 kVA',
-      icon: '🔌',
+      lucideIcon: 'zap',
+      image: 'images/equipements/groupe_electro.png',
       price: 890,
       unit: 'appareil',
       badge: 'Énergie',
@@ -258,7 +276,8 @@ window.ProtecLogistique = {
       id: 'tenue_f1',
       category: 'tenues_epi',
       name: 'Pack Tenue F1 Homologuée (Parka, Pantalon, Polo)',
-      icon: '🧥',
+      lucideIcon: 'shirt',
+      image: 'images/equipements/tenue_f1.png',
       price: 160,
       unit: 'pack tenue',
       badge: 'Identité Fédérale',
@@ -270,7 +289,8 @@ window.ProtecLogistique = {
       id: 'casque_f2',
       category: 'tenues_epi',
       name: 'Casque de Secours F2 avec Visière Intégrée',
-      icon: '🪖',
+      lucideIcon: 'hard-hat',
+      image: 'images/equipements/casque_f2.png',
       price: 120,
       unit: 'casque',
       badge: 'Protection Chocs',
@@ -282,7 +302,8 @@ window.ProtecLogistique = {
       id: 'rangers_secours',
       category: 'tenues_epi',
       name: 'Rangers d’Intervention Secouriste Anti-Perforation',
-      icon: '🥾',
+      lucideIcon: 'footprints',
+      image: 'images/equipements/rangers_secours.png',
       price: 110,
       unit: 'paire',
       badge: 'Sécurité Pieds',
@@ -294,7 +315,8 @@ window.ProtecLogistique = {
       id: 'gants_intervention',
       category: 'tenues_epi',
       name: 'Lot de 10 Paires de Gants Anti-Coupure Secours',
-      icon: '🧤',
+      lucideIcon: 'hand',
+      image: 'images/equipements/gants_intervention.png',
       price: 95,
       unit: 'lot de 10',
       badge: 'Protection Mains',
@@ -308,7 +330,8 @@ window.ProtecLogistique = {
       id: 'lot_hebergement',
       category: 'social_hebergement',
       name: 'Lot Hébergement d’Urgence (30 Lits Picots + Duvets)',
-      icon: '🛏️',
+      lucideIcon: 'bed-double',
+      image: 'images/equipements/lot_hebergement.png',
       price: 2100,
       unit: 'lot complet',
       badge: 'Plan PCS Sinistrés',
@@ -320,7 +343,8 @@ window.ProtecLogistique = {
       id: 'lot_ravitaillement',
       category: 'social_hebergement',
       name: 'Lot Ravitaillement / Cuisine de Crise & Percolateur',
-      icon: '🍲',
+      lucideIcon: 'utensils',
+      image: 'images/equipements/lot_ravitaillement.png',
       price: 1350,
       unit: 'lot complet',
       badge: 'Soutien des Troupes',
@@ -332,7 +356,8 @@ window.ProtecLogistique = {
       id: 'lot_soutien_psy',
       category: 'social_hebergement',
       name: 'Lot Soutien Psychologique CAI & Peluches Enfants',
-      icon: '🫂',
+      lucideIcon: 'heart-handshake',
+      image: 'images/equipements/lot_soutien_psy.png',
       price: 1200,
       unit: 'lot complet',
       badge: 'Cellule d’Accueil',
@@ -344,7 +369,8 @@ window.ProtecLogistique = {
       id: 'couvertures_pack',
       category: 'social_hebergement',
       name: 'Carton de 50 Couvertures de Survie Or/Argent',
-      icon: '✨',
+      lucideIcon: 'sparkles',
+      image: 'images/equipements/couvertures_pack.png',
       price: 45,
       unit: 'carton 50 ex',
       badge: 'Hypothermie',
@@ -356,7 +382,8 @@ window.ProtecLogistique = {
       id: 'kits_hygiene',
       category: 'social_hebergement',
       name: 'Lot de 20 Trousses d’Hygiène Sinistrés Complètes',
-      icon: '🧴',
+      lucideIcon: 'bath',
+      image: 'images/equipements/kits_hygiene.png',
       price: 70,
       unit: 'lot de 20',
       badge: 'Dignité Humaine',
@@ -370,7 +397,8 @@ window.ProtecLogistique = {
       id: 'radio_antares',
       category: 'transmissions',
       name: 'Portatif Radio Numérique ANTARES (VHF/UHF)',
-      icon: '📻',
+      lucideIcon: 'radio',
+      image: 'images/equipements/radio_antares.png',
       price: 450,
       unit: 'portatif',
       badge: 'Réseau Inter-Services',
@@ -382,7 +410,8 @@ window.ProtecLogistique = {
       id: 'tablette_tlo',
       category: 'transmissions',
       name: 'Tablette Tactique d’Engagement TLO Véhicule',
-      icon: '📱',
+      lucideIcon: 'tablet',
+      image: 'images/equipements/tablette_tlo.png',
       price: 550,
       unit: 'tablette',
       badge: 'Numérisation',
@@ -394,7 +423,8 @@ window.ProtecLogistique = {
       id: 'chargeur_radios',
       category: 'transmissions',
       name: 'Baie Chargeur Multiple 6 Postes ANTARES',
-      icon: '🔋',
+      lucideIcon: 'battery-charging',
+      image: 'images/equipements/chargeur_radios.png',
       price: 190,
       unit: 'chargeur 6 slots',
       badge: 'Vie d’Antenne',
@@ -406,7 +436,8 @@ window.ProtecLogistique = {
       id: 'lot_poste_commandement_mobile',
       category: 'transmissions',
       name: 'Poste de Commandement Mobile (Pack PC Embarqué)',
-      icon: '📡',
+      lucideIcon: 'satellite',
+      image: 'images/equipements/lot_poste_commandement_mobile.png',
       price: 2800,
       unit: 'lot complet',
       badge: 'Commandement de Crise (VLC)',
@@ -420,7 +451,8 @@ window.ProtecLogistique = {
       id: 'kit_pedago_psc',
       category: 'kits_formation',
       name: 'Kit Pédagogique PSC (Prévention et Secours Civiques)',
-      icon: '🎓',
+      lucideIcon: 'graduation-cap',
+      image: 'images/equipements/kit_pedago_psc.png',
       price: 1200,
       unit: 'kit complet',
       badge: 'Filière Citoyenne',
@@ -432,7 +464,8 @@ window.ProtecLogistique = {
       id: 'kit_pedago_sst',
       category: 'kits_formation',
       name: 'Kit Pédagogique SST (Sauveteur Secouriste du Travail)',
-      icon: '💼',
+      lucideIcon: 'briefcase',
+      image: 'images/equipements/kit_pedago_sst.png',
       price: 1100,
       unit: 'kit complet',
       badge: 'Santé Travail INRS',
@@ -444,7 +477,8 @@ window.ProtecLogistique = {
       id: 'kit_pedago_pse1',
       category: 'kits_formation',
       name: 'Kit Pédagogique PSE1 (Secouriste)',
-      icon: '🎒',
+      lucideIcon: 'backpack',
+      image: 'images/equipements/kit_pedago_pse1.png',
       price: 1600,
       unit: 'kit complet',
       badge: 'Filière Opérationnelle',
@@ -456,7 +490,8 @@ window.ProtecLogistique = {
       id: 'kit_pedago_pse2',
       category: 'kits_formation',
       name: 'Kit Pédagogique PSE2 (Équipier Secouriste)',
-      icon: '🩼',
+      lucideIcon: 'stretch-horizontal',
+      image: 'images/equipements/kit_pedago_pse2.png',
       price: 2200,
       unit: 'kit complet',
       badge: 'Traumatologie & VPSP',
@@ -468,7 +503,8 @@ window.ProtecLogistique = {
       id: 'kit_pedago_extincteur',
       category: 'kits_formation',
       name: 'Kit Manipulation Extincteurs (EPI Incendie)',
-      icon: '🧯',
+      lucideIcon: 'flame',
+      image: 'images/equipements/kit_pedago_extincteur.png',
       price: 1400,
       unit: 'kit complet',
       badge: 'Sécurité Incendie',
@@ -480,7 +516,8 @@ window.ProtecLogistique = {
       id: 'kit_pedago_picf',
       category: 'kits_formation',
       name: 'Kit Pédagogique PIC F (Pédagogie de Formateur)',
-      icon: '📋',
+      lucideIcon: 'clipboard-list',
+      image: 'images/equipements/kit_pedago_picf.png',
       price: 850,
       unit: 'kit complet',
       badge: 'Filière Cadres Formateurs',
@@ -492,7 +529,8 @@ window.ProtecLogistique = {
       id: 'kit_pedago_ssa',
       category: 'kits_formation',
       name: 'Kit Pédagogique SSA (Sauvetage Aquatique)',
-      icon: '🏊',
+      lucideIcon: 'life-buoy',
+      image: 'images/equipements/kit_pedago_ssa.png',
       price: 1300,
       unit: 'kit complet',
       badge: 'Spécialité Aquatique',
@@ -715,7 +753,7 @@ window.ProtecLogistique = {
           <!-- Choix de l'antenne concernée -->
           <div class="flex items-center gap-2.5 flex-wrap">
             <span class="text-xs font-black text-slate-700 flex items-center gap-1.5">
-              <span class="text-base">🏢</span>
+              <i data-lucide="building-2" class="w-4 h-4 text-pc-blue flex-shrink-0"></i>
               <span>Antenne de Destination :</span>
             </span>
             <select onchange="window.ProtecLogistique.setStation(this.value)" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-black text-slate-800 focus:ring-2 focus:ring-pc-blue">
@@ -730,19 +768,19 @@ window.ProtecLogistique = {
             </span>
           </div>
 
-          <!-- Onglets Principaux [ 🛒 Boutique | 📦 Mon Stock | 🚑 Flotte ] -->
+          <!-- Onglets Principaux [ Boutique | Stock | Flotte ] -->
           <div class="flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-black self-start md:self-auto">
             <button onclick="window.ProtecLogistique.setTab('boutique')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'boutique' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
-              <span>🛒</span>
+              <i data-lucide="shopping-bag" class="w-4 h-4"></i>
               <span>Boutique en Ligne</span>
               ${cartCount > 0 ? `<span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400 text-slate-900 font-black">${cartCount}</span>` : ''}
             </button>
             <button onclick="window.ProtecLogistique.setTab('stock')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'stock' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
-              <span>📦</span>
+              <i data-lucide="package" class="w-4 h-4"></i>
               <span>Stock de l'Antenne</span>
             </button>
             <button onclick="window.ProtecLogistique.setTab('flotte')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'flotte' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
-              <span>🚑</span>
+              <i data-lucide="truck" class="w-4 h-4"></i>
               <span>Flotte & Garage</span>
             </button>
           </div>
@@ -776,8 +814,8 @@ window.ProtecLogistique = {
       <!-- BANNIÈRE PROMO CENTRALE D'ACHATS -->
       <div class="p-3.5 rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-sky-700 text-white flex items-center justify-between gap-3 shadow-md">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center text-xl shadow-inner flex-shrink-0">
-            🚚
+          <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center shadow-inner flex-shrink-0">
+            <i data-lucide="truck" class="w-5 h-5 text-white"></i>
           </div>
           <div>
             <h4 class="text-xs sm:text-sm font-black leading-tight">Centrale d'Approvisionnement Fédérale</h4>
@@ -798,7 +836,7 @@ window.ProtecLogistique = {
           <div class="flex items-center gap-1.5 overflow-x-auto py-1 max-w-full">
             ${this.CATEGORIES.map(c => `
               <button onclick="window.ProtecLogistique.setCategory('${c.id}')" class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap ${this.selectedCategory === c.id ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
-                <span>${c.icon}</span>
+                <i data-lucide="${c.iconLucide || 'layout-grid'}" class="w-3.5 h-3.5"></i>
                 <span>${c.label}</span>
               </button>
             `).join('')}
@@ -806,8 +844,8 @@ window.ProtecLogistique = {
 
           <!-- Recherche rapide -->
           <div class="relative w-full sm:w-64">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
             <input type="text" id="logistique-search-input" value="${this.searchQuery}" oninput="window.ProtecLogistique.setSearch(this.value)" placeholder="Rechercher du matériel..." class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-pc-blue" />
-            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
           </div>
         </div>
       </div>
@@ -830,19 +868,22 @@ window.ProtecLogistique = {
               return `
                 <div class="p-3.5 rounded-2xl bg-white border border-slate-200/90 hover:border-pc-blue/60 shadow-xs hover:shadow-md transition flex flex-col justify-between gap-2.5 group">
                   <div>
-                    <!-- En-tête produit : Icône, Badge et Stock actuel -->
-                    <div class="flex items-start justify-between gap-2 mb-2">
-                      <div class="w-11 h-11 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-2xl group-hover:scale-105 transition flex-shrink-0">
-                        ${item.icon}
+                    <!-- Zone image PNG avec fallback icône Lucide vectorielle -->
+                    <div class="relative w-full h-32 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden mb-2.5 group-hover:border-pc-blue/30 transition">
+                      <img src="${item.image || 'images/equipements/' + item.id + '.png'}" 
+                           alt="${item.name}" 
+                           class="w-full h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
+                           onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
+                      <div class="fallback-icon hidden w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1 bg-slate-50">
+                        <i data-lucide="${item.lucideIcon || 'package'}" class="w-9 h-9 text-pc-blue stroke-[1.75]"></i>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">${item.unit}</span>
                       </div>
-                      <div class="flex flex-col items-end gap-1">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-black border ${item.badgeColor}">
-                          ${item.badge}
-                        </span>
-                        <span class="text-[10px] text-slate-500 font-semibold">
-                          En réserve : <strong class="text-slate-800 font-mono">${currentStock}</strong>
-                        </span>
-                      </div>
+                      <span class="px-2 py-0.5 rounded text-[9.5px] font-black border backdrop-blur-md shadow-xs absolute top-2 left-2 ${item.badgeColor}">
+                        ${item.badge}
+                      </span>
+                      <span class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/95 border border-slate-200 text-slate-700 shadow-xs">
+                        En réserve : ${currentStock}
+                      </span>
                     </div>
 
                     <!-- Titre & Description -->
@@ -850,8 +891,9 @@ window.ProtecLogistique = {
                     <p class="text-[11px] text-slate-500 mt-1 leading-relaxed line-clamp-2">${item.desc}</p>
                     
                     ${item.usage ? `
-                      <p class="text-[10px] text-emerald-700 bg-emerald-50/70 border border-emerald-200/70 p-1.5 rounded-lg mt-2 font-medium">
-                        💡 ${item.usage}
+                      <p class="text-[10px] text-emerald-800 bg-emerald-50/80 border border-emerald-200/80 p-1.5 rounded-lg mt-2 font-medium flex items-center gap-1.5">
+                        <i data-lucide="info" class="w-3.5 h-3.5 text-emerald-600 flex-shrink-0"></i>
+                        <span>${item.usage}</span>
                       </p>
                     ` : ''}
                   </div>
@@ -872,7 +914,7 @@ window.ProtecLogistique = {
                         </div>
                       ` : `
                         <button onclick="window.ProtecLogistique.addToCart('${item.id}', 1)" class="px-3 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 active:scale-95">
-                          <span>+</span>
+                          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                           <span>Panier</span>
                         </button>
                       `}
@@ -889,7 +931,7 @@ window.ProtecLogistique = {
           
           <div class="flex items-center justify-between border-b border-slate-800 pb-3">
             <div class="flex items-center gap-2">
-              <span class="text-xl">🛒</span>
+              <i data-lucide="shopping-cart" class="w-4 h-4 text-blue-400"></i>
               <div>
                 <h4 class="text-xs font-black uppercase tracking-wider text-slate-200">Mon Panier</h4>
                 <span class="text-[10px] text-slate-400">Livraison à ${station?.name || 'l\'antenne'}</span>
@@ -904,7 +946,7 @@ window.ProtecLogistique = {
           <div class="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
             ${cartCount === 0 ? `
               <div class="py-8 text-center space-y-2 text-slate-400">
-                <span class="text-3xl block opacity-60">🛍️</span>
+                <i data-lucide="shopping-bag" class="w-9 h-9 mx-auto text-slate-600 stroke-1 block opacity-70"></i>
                 <p class="text-xs">Votre panier est vide.</p>
                 <p class="text-[10.5px] text-slate-500">Ajoutez des lots, médicaments ou tenues depuis le catalogue.</p>
               </div>
@@ -926,8 +968,8 @@ window.ProtecLogistique = {
                       <span class="w-5 text-center font-mono font-bold text-[11px] text-white">${qty}</span>
                       <button onclick="window.ProtecLogistique.updateCartQty('${id}', ${qty + 1})" class="w-5 h-5 rounded text-slate-300 hover:text-white flex items-center justify-center font-black">+</button>
                     </div>
-                    <button onclick="window.ProtecLogistique.removeFromCart('${id}')" class="text-slate-500 hover:text-rose-400 p-1 transition" title="Supprimer">
-                      🗑️
+                    <button onclick="window.ProtecLogistique.removeFromCart('${id}')" class="text-slate-400 hover:text-rose-400 p-1 transition" title="Supprimer">
+                      <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                     </button>
                   </div>
                 </div>
@@ -961,7 +1003,7 @@ window.ProtecLogistique = {
           <div class="space-y-2 pt-1">
             ${cartCount > 0 ? `
               <button onclick="window.ProtecLogistique.checkout(window.game)" class="w-full py-3 rounded-2xl ${game.resources.money >= cartTotal ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white shadow-lg cursor-pointer' : 'bg-slate-700 text-slate-400 cursor-not-allowed'} font-black text-xs transition flex items-center justify-center gap-2 active:scale-95" ${game.resources.money < cartTotal ? 'disabled' : ''}>
-                <span>💳</span>
+                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
                 <span>${game.resources.money >= cartTotal ? `Valider la Commande (${cartTotal.toLocaleString('fr-FR')} €)` : 'Trésorerie Insuffisante'}</span>
               </button>
 
@@ -1010,7 +1052,7 @@ window.ProtecLogistique = {
         <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
           <div class="flex items-center justify-between text-xs font-black text-slate-500">
             <span>Articles en Réserve</span>
-            <span class="text-base">📦</span>
+            <i data-lucide="package" class="w-4 h-4 text-slate-400"></i>
           </div>
           <div class="text-2xl font-black text-slate-900 font-mono">${totalItemsCount}</div>
           <p class="text-[10.5px] text-slate-500">${stockEntries.length} références différentes</p>
@@ -1019,7 +1061,7 @@ window.ProtecLogistique = {
         <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
           <div class="flex items-center justify-between text-xs font-black text-slate-500">
             <span>Valeur Marchande du Stock</span>
-            <span class="text-base">💶</span>
+            <i data-lucide="wallet" class="w-4 h-4 text-emerald-500"></i>
           </div>
           <div class="text-2xl font-black text-pc-blue font-mono">${totalStockValue.toLocaleString('fr-FR')} €</div>
           <p class="text-[10.5px] text-slate-500">Actifs matériels de la caserne</p>
@@ -1028,11 +1070,12 @@ window.ProtecLogistique = {
         <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
           <div class="flex items-center justify-between text-xs font-black text-slate-500">
             <span>Localisation du Stock</span>
-            <span class="text-base">🏛️</span>
+            <i data-lucide="building-2" class="w-4 h-4 text-pc-blue"></i>
           </div>
           <div class="text-sm font-black text-slate-900 truncate">${station.name}</div>
-          <button onclick="window.ProtecLogistique.setTab('boutique')" class="text-[11px] font-black text-pc-blue hover:underline">
-            + Commander du réassort →
+          <button onclick="window.ProtecLogistique.setTab('boutique')" class="text-[11px] font-black text-pc-blue hover:underline flex items-center gap-1 mt-1">
+            <span>+ Commander du réassort</span>
+            <i data-lucide="arrow-right" class="w-3 h-3"></i>
           </button>
         </div>
       </div>
@@ -1046,11 +1089,12 @@ window.ProtecLogistique = {
 
         ${stockEntries.length === 0 ? `
           <div class="py-12 text-center space-y-2 text-slate-400">
-            <span class="text-4xl block opacity-60">📦</span>
+            <i data-lucide="package-open" class="w-10 h-10 mx-auto text-slate-300 stroke-1 block"></i>
             <p class="text-xs font-bold text-slate-600">Aucun matériel entreposé dans cette antenne.</p>
             <p class="text-[11px] text-slate-500">Visitez la centrale d’achats pour équiper votre réserve en lots et médicaments.</p>
-            <button onclick="window.ProtecLogistique.setTab('boutique')" class="mt-2 px-4 py-2 rounded-xl bg-pc-blue text-white text-xs font-black shadow transition">
-              Ouvrir la Boutique en Ligne
+            <button onclick="window.ProtecLogistique.setTab('boutique')" class="mt-2 px-4 py-2 rounded-xl bg-pc-blue text-white text-xs font-black shadow transition flex items-center gap-1.5 mx-auto">
+              <i data-lucide="shopping-bag" class="w-3.5 h-3.5"></i>
+              <span>Ouvrir la Boutique en Ligne</span>
             </button>
           </div>
         ` : `
@@ -1062,8 +1106,14 @@ window.ProtecLogistique = {
               return `
                 <div class="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200 flex items-start justify-between gap-3">
                   <div class="flex items-start gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-xl flex-shrink-0 shadow-2xs">
-                      ${item.icon}
+                    <div class="relative w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 shadow-2xs overflow-hidden">
+                      <img src="${item.image || 'images/equipements/' + item.id + '.png'}" 
+                           alt="${item.name}" 
+                           class="w-full h-full object-contain p-1"
+                           onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
+                      <div class="fallback-icon hidden w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
+                        <i data-lucide="${item.lucideIcon || 'package'}" class="w-6 h-6 text-pc-blue stroke-[1.75]"></i>
+                      </div>
                     </div>
                     <div>
                       <h5 class="text-xs font-black text-slate-900 leading-snug">${item.name}</h5>
@@ -1076,8 +1126,9 @@ window.ProtecLogistique = {
                     <span class="px-2.5 py-1 rounded-xl bg-blue-100/80 text-pc-blue border border-blue-200 font-mono font-black text-xs">
                       ${qty} ${item.unit || 'unités'}
                     </span>
-                    <button onclick="window.ProtecLogistique.addToCart('${item.id}', 1)" class="text-[10px] font-bold text-pc-blue hover:underline">
-                      + Racheter
+                    <button onclick="window.ProtecLogistique.addToCart('${item.id}', 1)" class="text-[10px] font-bold text-pc-blue hover:underline flex items-center gap-1">
+                      <i data-lucide="plus" class="w-3 h-3"></i>
+                      <span>Racheter</span>
                     </button>
                   </div>
                 </div>
@@ -1259,9 +1310,9 @@ window.ProtecLogistique = {
 
             let statusBadge = '';
             if (isBroken) {
-              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white animate-pulse">🚨 EN PANNE (GARAGE)</span>';
+              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white flex items-center gap-1 animate-pulse"><i data-lucide="alert-octagon" class="w-3 h-3"></i> EN PANNE</span>';
             } else if (isRearmNeeded) {
-              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-100 text-red-800 border border-red-300 animate-pulse">⚠️ À RÉARMER & DÉSINFECTER</span>';
+              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-100 text-red-800 border border-red-300 flex items-center gap-1 animate-pulse"><i data-lucide="alert-triangle" class="w-3 h-3"></i> À RÉARMER</span>';
             } else if (v.status === 'dispo') {
               statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200">DISPONIBLE</span>';
             } else {
@@ -1277,16 +1328,16 @@ window.ProtecLogistique = {
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-3">
                     <div class="w-14 h-10 ${isVLC ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-100 border-slate-200'} rounded-xl p-1 flex items-center justify-center flex-shrink-0 border shadow-inner">
-                      <img src="${v.image || (game.getVehicleImage ? game.getVehicleImage(v.type) : `images/vehicles/${v.type}.png`)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='<span class=\\'text-xl\\'>🚑</span>'" />
+                      <img src="${v.image || (game.getVehicleImage ? game.getVehicleImage(v.type) : `images/vehicles/${v.type}.png`)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='<i data-lucide=\\'truck\\' class=\\'w-6 h-6 text-slate-500\\'></i>'" />
                     </div>
                     <div>
                       <div class="flex items-center gap-1.5">
                         <h5 class="text-xs font-black text-slate-900 leading-tight">${v.name}</h5>
-                        ${isVLC ? '<span class="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase bg-indigo-600 text-white tracking-wider">📡 VLC</span>' : ''}
+                        ${isVLC ? '<span class="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase bg-indigo-600 text-white tracking-wider flex items-center gap-1"><i data-lucide="radio" class="w-2.5 h-2.5"></i> VLC</span>' : ''}
                       </div>
                       <span class="text-[10px] text-slate-500 font-semibold block">
                         ${v.label || v.type} • ${km.toLocaleString('fr-FR')} km
-                        ${cmdLeader ? ` • <strong class="text-indigo-700">👤 ${cmdLeader.name} (${cmdLeader.rank})</strong>` : ''}
+                        ${cmdLeader ? ` • <strong class="text-indigo-700 flex items-center gap-1 inline-flex"><i data-lucide="user" class="w-3 h-3"></i> ${cmdLeader.name} (${cmdLeader.rank})</strong>` : ''}
                       </span>
                     </div>
                   </div>
@@ -1318,7 +1369,7 @@ window.ProtecLogistique = {
 
                 ${isCtNeeded ? `
                   <div class="p-2 rounded-xl bg-amber-50 border border-amber-200 text-[10.5px] text-amber-800 flex items-center justify-between">
-                    <span>⚠️ Contrôle Technique expiré (> 25 000 km)</span>
+                    <span class="flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-600"></i> Contrôle Technique expiré (> 25 000 km)</span>
                     <button onclick="window.ProtecLogistique.passControleTechnique(window.game, '${v.id}')" class="px-2 py-0.5 rounded-lg bg-amber-600 text-white font-bold hover:bg-amber-700 transition">
                       Passer CT (120 €)
                     </button>
@@ -1350,9 +1401,10 @@ window.ProtecLogistique = {
                     <button 
                       type="button" 
                       onclick="window.ProtecCommandement.openCommandModal(window.game, '${v.id}')"
-                      class="px-2.5 py-1 rounded-xl text-[10.5px] font-black ${isVLC ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200' : 'bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-900 border border-slate-200'} transition cursor-pointer"
+                      class="px-2.5 py-1 rounded-xl text-[10.5px] font-black ${isVLC ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200' : 'bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-900 border border-slate-200'} transition cursor-pointer flex items-center gap-1"
                     >
-                      ${isVLC ? '📡 Gérer VL Commandement' : '📡 Configurer VLC'}
+                      <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                      <span>${isVLC ? 'Gérer VL Commandement' : 'Configurer VLC'}</span>
                     </button>
                   </div>
                 ` : ''}

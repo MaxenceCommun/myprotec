@@ -1625,6 +1625,10 @@ window.ProtecAdmin = {
     const convCump = !!sData.cumpConvention?.signed;
     const convPcs = !!sData.pcsConventions?.signed;
 
+    const uDept = user.departmentCode || sData.player?.departmentCode || '75';
+    const uCity = user.city || sData.player?.city || '';
+    const pompiersAuth = window.ProtecDepartements?.getPompiersAuthority ? window.ProtecDepartements.getPompiersAuthority(uDept, uCity) : { shortName: 'SDIS' };
+
     // Graphique plateforme individuel
     const platformChartHTML = window.ProtecPlatformAnalytics?.renderPlayerPlatformChartHTML
       ? window.ProtecPlatformAnalytics.renderPlayerPlatformChartHTML(user, 'adm-support-player-platform-chart')
@@ -1804,17 +1808,17 @@ window.ProtecAdmin = {
             </button>
           </div>
 
-          <!-- Convention SDIS Pompiers -->
+          <!-- Convention Pompiers (BSPP / BMPM / SDIS) -->
           <div class="p-2.5 rounded-xl border ${convSdis ? 'bg-orange-50/70 border-orange-300' : 'bg-slate-50 border-slate-200'} flex flex-col justify-between space-y-2">
             <div>
               <div class="flex items-center justify-between">
-                <strong class="text-slate-900 text-xs">SDIS Pompiers (18/112)</strong>
+                <strong class="text-slate-900 text-xs">${pompiersAuth.shortName} (Pompiers)</strong>
                 <span class="px-1.5 py-0.5 rounded-md text-[9px] font-black ${convSdis ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600'}">${convSdis ? 'Signée' : 'Non signée'}</span>
               </div>
               <p class="text-[10px] text-slate-500 mt-0.5 leading-snug">Départs réflexes secours à victimes et gardes caserne.</p>
             </div>
             <button onclick="window.ProtecAdmin.supportToggleConvention('${user.id}', 'sdisConvention', ${!convSdis})" class="w-full py-1 rounded-lg font-bold text-[10px] cursor-pointer ${convSdis ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-orange-600 text-white hover:bg-orange-700 shadow-xs'}">
-              ${convSdis ? 'Résilier Convention' : 'Signer Convention'}
+              ${convSdis ? `Résilier Convention ${pompiersAuth.shortName}` : `Signer Convention ${pompiersAuth.shortName}`}
             </button>
           </div>
 

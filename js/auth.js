@@ -1796,6 +1796,7 @@ window.ProtecAuth = {
           reputation_sdis: game.reputation_sdis !== undefined ? game.reputation_sdis : 50,
           reputation_prefecture: game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50,
           reputation_villes: game.reputation_villes || {},
+          departmentInfrastructures: game.departmentInfrastructures || {},
           platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(this.currentUser, game)) || null,
           lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null
         };
@@ -1912,6 +1913,9 @@ window.ProtecAuth = {
       if (savedData.bureau) game.bureau = savedData.bureau;
       if (savedData.samuGarde) game.samuGarde = savedData.samuGarde;
       if (savedData.sdisGarde) game.sdisGarde = savedData.sdisGarde;
+      if (savedData.departmentInfrastructures && typeof savedData.departmentInfrastructures === 'object') {
+        game.departmentInfrastructures = savedData.departmentInfrastructures;
+      }
 
       if (savedData.clock) game.clock = savedData.clock;
       if (savedData.grants) game.grants = savedData.grants;
