@@ -65,11 +65,41 @@ window.ProtecOnboarding = {
   // 4. Affiliation FNPC
   fnpcSigned: false,
 
+  // Génération aléatoire d'une composition d'équipe constitutive variée
+  randomizeVolunteers(notify = true) {
+    if (window.ProtecPersonnel && typeof window.ProtecPersonnel.generateStarterVolunteers === 'function') {
+      const generated = window.ProtecPersonnel.generateStarterVolunteers(5);
+      this.volunteersList = generated.map((v, idx) => ({
+        id: `vol_${idx + 1}`,
+        name: v.name,
+        role: v.role,
+        rank: v.rank,
+        gender: v.gender,
+        avatar: v.avatar,
+        skills: v.skills || [],
+        exp: v.exp || 20,
+        motivation: v.motivation || 85,
+        dispoType: v.dispoType || 'salarié',
+        dispoJours: v.dispoJours || ['Samedi', 'Dimanche'],
+        trait: v.trait || 'devoue'
+      }));
+    }
+    if (this.currentStep === 1) {
+      this.renderWizard();
+    }
+    if (notify && this.game && typeof this.game.showToast === 'function') {
+      this.game.showToast('Équipe Régénérée 🎲', 'Une nouvelle composition d’équipiers diversifiée a été attribuée à l’antenne.', 'blue');
+    }
+  },
+
   // Initialisation du Tuto à 4 étapes
   showWizard(game, options = {}) {
     this.game = game || window.game;
     this.currentStep = 1;
     this.fnpcSigned = false;
+
+    // Générer une composition d'équipe fraîche et diversifiée à chaque ouverture
+    this.randomizeVolunteers(false);
 
     let supaUser = null;
     try {
@@ -222,7 +252,15 @@ window.ProtecOnboarding = {
           <h2 class="text-xl sm:text-2xl font-black text-slate-900">1. Présentation de votre Équipe de Base</h2>
           <p class="text-xs text-slate-600 max-w-lg mx-auto">
             Voici les 5 bénévoles constitutifs qui fondent votre antenne avec vous. Vous pouvez personnaliser leurs noms et avatars avant de démarrer.
-          </p>
+        </div>
+
+        <!-- En-tête de section avec bouton pour varier l'équipe -->
+        <div class="flex items-center justify-between px-1 pt-1">
+          <span class="text-xs font-black text-slate-700 uppercase tracking-wide">Membres constitutifs (#1 à #5)</span>
+          <button type="button" onclick="window.ProtecOnboarding.randomizeVolunteers(true)" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 text-[11px] font-black transition flex items-center gap-1.5 shadow-2xs cursor-pointer border border-slate-200" title="Générer une autre composition d'équipe aléatoire">
+            <i data-lucide="shuffle" class="w-3.5 h-3.5 text-pc-blue"></i>
+            <span>🎲 Régénérer l'équipe</span>
+          </button>
         </div>
 
         <!-- Liste des 5 secouristes personnalisables -->
@@ -598,7 +636,7 @@ window.ProtecOnboarding = {
   // ÉTAPE 3 : AMÉNAGEMENT DU BÂTIMENT (GESTION DES SALLES & PLACEMENT DU MOBILIER)
   // -------------------------------------------------------------
   renderStep3() {
-    const currentMoney = 15000 - this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
+    const currentMoney = 40000 - this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
     const activeRoom = this.roomsConfig.find(r => r.id === this.selectedRoomId) || this.roomsConfig[0];
     const activeRoomFurniture = this.placedFurniture.filter(f => f.room === activeRoom.id);
 
@@ -786,7 +824,7 @@ window.ProtecOnboarding = {
     const item = this.furnitureCatalog.find(x => x.id === typeId);
     if (!item) return;
 
-    const currentMoney = 15000 - this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
+    const currentMoney = 40000 - this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
     if (currentMoney < item.cost) {
       window.ProtecDialog.alert("Dotation municipale insuffisante pour acheter ce meuble !", "Fonds Insuffisants");
       return;
@@ -1145,32 +1183,43 @@ window.ProtecOnboarding = {
       cost: 800
     };
 
-    // 5. Enregistrement des 5 bénévoles constitutifs personnalisés
-    game.volunteers = this.volunteersList.map(v => ({
-      id: `vol-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      name: v.name,
-      role: v.role,
-      rank: v.rank,
-      exp: v.exp,
-      energy: 100,
-      motivation: v.motivation,
-      humeur: 85,
-      contractType: 'benevole',
-      profilSocial: v.dispoType === 'étudiante' ? 'etudiant' : 'salarie',
-      status: 'dispo',
-      stationId: stationId,
-      avatar: v.avatar,
-      gender: v.gender || (v.dispoType === 'étudiante' ? 'f' : 'h'),
-      dispoType: v.dispoType,
-      dispoJours: v.dispoJours,
-      skills: v.skills || []
-    }));
+    // 5. Enregistrement des 5 bénévoles constitutifs personnalisés et variés
+    game.volunteers = this.volunteersList.map(v => {
+      const vol = {
+        id: `vol-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        name: v.name,
+        role: v.role,
+        rank: v.rank,
+        exp: v.exp,
+        energy: 100,
+        motivation: v.motivation,
+        humeur: 85,
+        trait: v.trait || 'devoue',
+        contractType: 'benevole',
+        profilSocial: (v.dispoType === 'étudiante' || v.dispoType === 'etudiant') ? 'etudiant' : 'salarie',
+        status: 'dispo',
+        stationId: stationId,
+        avatar: v.avatar,
+        gender: v.gender || (v.dispoType === 'étudiante' ? 'f' : 'h'),
+        dispoType: v.dispoType,
+        dispoJours: v.dispoJours,
+        skills: v.skills || []
+      };
+      if (window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
+        window.ProtecPersonnel.ensureVolunteerResidence(vol, game);
+      }
+      return vol;
+    });
+
+    if (window.ProtecPersonnel && typeof window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences === 'function') {
+      window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences(game);
+    }
 
     game.stations = [newStation];
 
-    // Déduction des dépenses d'ameublement du trésor initial (15 000 €)
+    // Déduction des dépenses d'ameublement du trésor initial (40 000 €)
     const spentFurniture = this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
-    game.resources.money = Math.max(2000, 15000 - spentFurniture);
+    game.resources.money = Math.max(5000, 40000 - spentFurniture);
 
     // Mettre à jour l'identité du joueur
     if (game.player) {

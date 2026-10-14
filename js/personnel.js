@@ -2736,6 +2736,185 @@ window.ProtecPersonnel = {
     if (volunteer.permis_moto && !volunteer.skills.includes('permis_moto')) {
       volunteer.skills.push('permis_moto');
     }
+  },
+
+  // 6. Générateur d'effectifs constitutifs variés lors de la création d'antenne
+  generateStarterVolunteers(count = 5, stationId = null, game = null) {
+    const maleFirstNames = [
+      'Alexandre', 'Thomas', 'Lucas', 'Julien', 'Maxime', 'Nicolas', 'Antoine', 'Hugo', 'Gabriel', 'Clément',
+      'Mathis', 'Romain', 'Quentin', 'Enzo', 'Valentin', 'Florian', 'Louis', 'Léo', 'Arthur', 'Nathan',
+      'Baptiste', 'Kévin', 'Damien', 'Sébastien', 'Pierre', 'Guillaume', 'Alexis', 'Théo', 'Adrien', 'Mathieu',
+      'Benjamin', 'Vincent', 'Fabien', 'Thibault', 'Mickaël', 'Cédric', 'Arnaud'
+    ];
+
+    const femaleFirstNames = [
+      'Sarah', 'Élodie', 'Camille', 'Inès', 'Chloé', 'Léa', 'Manon', 'Jade', 'Clara', 'Emma',
+      'Charlotte', 'Juliette', 'Pauline', 'Marion', 'Laura', 'Sophie', 'Lucie', 'Mathilde', 'Océane', 'Audrey',
+      'Céline', 'Amélie', 'Mélanie', 'Marine', 'Alice', 'Noémie', 'Julie', 'Margaux', 'Anaïs', 'Justine',
+      'Émilie', 'Morgane', 'Estelle', 'Romane', 'Laure', 'Sabrina', 'Éléonore'
+    ];
+
+    const lastNames = [
+      'Roux', 'Girard', 'Martin', 'Leroy', 'Bernard', 'Dubois', 'Thomas', 'Robert', 'Richard', 'Petit',
+      'Durand', 'Moreau', 'Laurent', 'Simon', 'Michel', 'Lefebvre', 'Garcia', 'David', 'Bertrand', 'Morel',
+      'Fournier', 'Benali', 'Fontaine', 'Chevalier', 'Robin', 'Masson', 'Sanchez', 'Gérard', 'Mercier', 'Blanc',
+      'Guérin', 'Boyer', 'Garnier', 'Legrand', 'Gauthier', 'Perrin', 'Faure', 'Lemoine', 'Caron', 'Renard',
+      'Dumont', 'Gros', 'Picard', 'Colin', 'Vidal', 'Aubry', 'Marchand', 'Meunier', 'Lemaire', 'Gaillard'
+    ];
+
+    const maleAvatars = ['👨‍💼', '🧑‍🚒', '🙋‍♂️', '👨‍🦱', '🧔', '👱‍♂️', '👨‍🦰', '👨‍⚕️', '🧑'];
+    const femaleAvatars = ['👩‍🚒', '👩', '👩‍🦰', '🧕', '👩‍🦱', '👱‍♀️', '👩‍⚕️', '🧑'];
+
+    const pickUnique = (arr, usedSet) => {
+      const available = arr.filter(item => !usedSet.has(item));
+      const pool = available.length > 0 ? available : arr;
+      const chosen = pool[Math.floor(Math.random() * pool.length)];
+      usedSet.add(chosen);
+      return chosen;
+    };
+
+    const usedFirstNames = new Set();
+    const usedLastNames = new Set();
+
+    // Parité équilibrée (2 à 3 femmes, 2 à 3 hommes)
+    const femaleCount = Math.random() < 0.5 ? 2 : 3;
+    const genders = [];
+    for (let i = 0; i < count; i++) {
+      genders.push(i < femaleCount ? 'f' : 'h');
+    }
+    genders.sort(() => Math.random() - 0.5);
+
+    const dispoSchedules = [
+      ['Vendredi', 'Samedi', 'Dimanche'],
+      ['Samedi', 'Dimanche'],
+      ['Mardi', 'Samedi', 'Dimanche'],
+      ['Mercredi', 'Vendredi', 'Samedi'],
+      ['Lundi', 'Vendredi', 'Samedi'],
+      ['Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+      ['Mercredi', 'Samedi', 'Dimanche'],
+      ['Mardi', 'Jeudi', 'Samedi'],
+      ['Vendredi', 'Samedi']
+    ];
+
+    const traits = ['devoue', 'rigoureux', 'calme', 'dynamique', 'pedagogue', 'enthousiaste', 'ponctuel', 'equilibre'];
+
+    // Profils équilibrés pour une antenne immédiatement opérationnelle
+    const slotTemplates = [
+      // 1. Cadre d'antenne / Chef d'équipe expérimenté (CE)
+      {
+        role: 'Chef d’Équipe',
+        rank: 'CE',
+        baseExp: 30 + Math.floor(Math.random() * 12),
+        mandatorySkills: ['ce', 'pse2', 'pse1', 'permis_b'],
+        bonusSkillPool: ['permis_vpsp', 'commandement', 'communication_1'],
+        socialTypes: ['salarie', 'actif', 'fonctionnaire'],
+        preferredTrait: ['rigoureux', 'calme', 'pedagogue', 'devoue']
+      },
+      // 2. Équipier secouriste confirmé (PSE2)
+      {
+        role: 'Équipier Secouriste',
+        rank: 'PSE2',
+        baseExp: 22 + Math.floor(Math.random() * 10),
+        mandatorySkills: ['pse2', 'pse1'],
+        bonusSkillPool: ['permis_b', 'permis_vpsp', 'pma'],
+        socialTypes: ['etudiant', 'salarie', 'independant'],
+        preferredTrait: ['dynamique', 'devoue', 'enthousiaste']
+      },
+      // 3. Second Équipier secouriste (PSE2 ou Chauffeur)
+      {
+        role: Math.random() < 0.4 ? 'Secouriste Chauffeur' : 'Équipier Secouriste',
+        rank: 'PSE2',
+        baseExp: 18 + Math.floor(Math.random() * 10),
+        mandatorySkills: ['pse2', 'pse1'],
+        bonusSkillPool: ['permis_b', 'permis_vpsp', 'logistique', 'qcpr'],
+        socialTypes: ['salarie', 'parent', 'actif'],
+        preferredTrait: ['calme', 'ponctuel', 'equilibre']
+      },
+      // 4. Secouriste opérationnel (PSE1)
+      {
+        role: 'Secouriste',
+        rank: 'PSE1',
+        baseExp: 12 + Math.floor(Math.random() * 8),
+        mandatorySkills: ['pse1'],
+        bonusSkillPool: ['permis_b', 'communication_1', 'qcpr'],
+        socialTypes: ['etudiant', 'salarie', 'parent'],
+        preferredTrait: ['enthousiaste', 'dynamique', 'devoue']
+      },
+      // 5. Secouriste ou nouvel engagé (PSE1 à 80% ou Stagiaire à 20%)
+      {
+        role: Math.random() < 0.2 ? 'Bénévole Stagiaire' : 'Secouriste',
+        rank: Math.random() < 0.2 ? 'Stagiaire' : 'PSE1',
+        baseExp: 6 + Math.floor(Math.random() * 8),
+        mandatorySkills: ['pse1'],
+        bonusSkillPool: ['permis_b', 'communication_1'],
+        socialTypes: ['etudiant', 'salarie'],
+        preferredTrait: ['enthousiaste', 'curieux', 'devoue']
+      }
+    ];
+
+    const volunteers = [];
+
+    for (let i = 0; i < count; i++) {
+      const template = slotTemplates[i] || slotTemplates[slotTemplates.length - 1];
+      const isFemale = genders[i] === 'f';
+      const fn = isFemale ? pickUnique(femaleFirstNames, usedFirstNames) : pickUnique(maleFirstNames, usedFirstNames);
+      const ln = pickUnique(lastNames, usedLastNames);
+      const avatar = isFemale 
+        ? femaleAvatars[Math.floor(Math.random() * femaleAvatars.length)] 
+        : maleAvatars[Math.floor(Math.random() * maleAvatars.length)];
+
+      const socialChoice = template.socialTypes[Math.floor(Math.random() * template.socialTypes.length)];
+      const dispoType = isFemale && socialChoice === 'etudiant' ? 'étudiante' : socialChoice;
+      const dispoJours = dispoSchedules[Math.floor(Math.random() * dispoSchedules.length)];
+
+      const skills = [...template.mandatorySkills];
+      if (template.rank === 'Stagiaire') {
+        skills.length = 0;
+        skills.push('psc1');
+      }
+
+      // Ajout de 1 à 2 compétences bonus adaptées
+      const bonusCandidate = template.bonusSkillPool[Math.floor(Math.random() * template.bonusSkillPool.length)];
+      if (bonusCandidate && !skills.includes(bonusCandidate)) {
+        skills.push(bonusCandidate);
+      }
+      if (Math.random() < 0.6 && !skills.includes('permis_b') && template.rank !== 'Stagiaire') {
+        skills.push('permis_b');
+      }
+
+      const trait = template.preferredTrait[Math.floor(Math.random() * template.preferredTrait.length)] || traits[Math.floor(Math.random() * traits.length)];
+      const motivation = Math.round(78 + Math.random() * 18); // 78% à 96%
+
+      const vol = {
+        id: `vol-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 6)}`,
+        name: `${fn} ${ln}`,
+        role: template.role,
+        rank: template.rank,
+        gender: isFemale ? 'f' : 'h',
+        avatar: avatar,
+        exp: template.baseExp,
+        energy: 100,
+        motivation: motivation,
+        humeur: 85,
+        trait: trait,
+        contractType: 'benevole',
+        profilSocial: socialChoice === 'etudiant' ? 'etudiant' : 'salarie',
+        status: 'dispo',
+        stationId: stationId,
+        isTrainer: skills.includes('ce') && Math.random() < 0.25,
+        dispoType: dispoType,
+        dispoJours: dispoJours,
+        skills: skills
+      };
+
+      if (game && this.ensureVolunteerResidence) {
+        this.ensureVolunteerResidence(vol, game);
+      }
+
+      volunteers.push(vol);
+    }
+
+    return volunteers;
   }
 };
 

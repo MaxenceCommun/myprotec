@@ -69,7 +69,7 @@ class ProtecGame {
 
     // Ressources et Notoriété
     this.resources = {
-      money: 15000,
+      money: 40000,
       reputationScore: 0,
       reputationLevel: 1,
       followers: 140,
@@ -244,7 +244,7 @@ class ProtecGame {
   initReactiveResources() {
     if (!this.resources) {
       this.resources = {
-        _money: 15000,
+        _money: 40000,
         reputationScore: 0,
         reputationLevel: 1,
         followers: 140,
@@ -256,7 +256,7 @@ class ProtecGame {
       this.resources.agrements = { D: true, A: false, B: false, C: false };
     }
 
-    let initialMoney = 15000;
+    let initialMoney = 40000;
     if (typeof this.resources._money === 'number') {
       initialMoney = this.resources._money;
     } else if (typeof this.resources.money === 'number') {
@@ -270,7 +270,7 @@ class ProtecGame {
     try {
       Object.defineProperty(this.resources, 'money', {
         get() {
-          return this._money !== undefined ? this._money : 15000;
+          return this._money !== undefined ? this._money : 40000;
         },
         set(val) {
           const num = Math.round(Number(val) || 0);
@@ -1288,7 +1288,7 @@ class ProtecGame {
   saveGame(forceInstant = false) {
     try {
       // 1. Synchronisation stricte de l'argent dans resources
-      const moneyVal = (this.resources?.money !== undefined) ? this.resources.money : ((this.resources?.budget !== undefined) ? this.resources.budget : 15000);
+      const moneyVal = (this.resources?.money !== undefined) ? this.resources.money : ((this.resources?.budget !== undefined) ? this.resources.budget : 40000);
       if (this.resources) {
         this.resources.money = moneyVal;
         this.resources.budget = moneyVal;
@@ -2322,38 +2322,20 @@ class ProtecGame {
     const isFirst = this.stations.length === 0;
     this.stations.push(newStation);
     if (isFirst) {
-      // 1. VPSP OPÉRATIONNEL AU DÉPART (Indispensable pour lancer l'activité de secours et les premiers DPS)
-      const startVpspId = `vpsp-${Date.now()}`;
-      const vpspName = this.generateVehicleCallsign('VPSP', stationId, newStation);
-      const starterVpsp = {
-        id: startVpspId,
-        name: vpspName,
-        type: 'VPSP',
-        label: 'Véhicule de Premiers Secours à Personnes (VPSP)',
-        model: 'Renault Master 2.3 dCi 135 L2H2',
-        year: 2018,
-        mileage: 118400,
-        capacity: 5,
-        seatsCount: 5,
-        status: 'dispo',
-        fuel: 100,
-        mechanical: 92,
-        ctStatus: 'valide',
-        ctExpiryTimestamp: Date.now() + (180 * 24 * 3600 * 1000), // CT valide pendant 6 mois
-        insuranceStatus: 'assure',
-        insuranceMonthlyCost: 95,
-        stationId: stationId,
-        image: this.getVehicleImage('VPSP'),
-        hasTowHitch: false,
-        requiresTrailer: false,
-        reqSkills: ['permis_vpsp']
-      };
-      this.vehicles = [starterVpsp];
-      newStation.vehicles = [startVpspId];
+      // 1. ZÉRO VÉHICULE AU DÉPART (L'antenne démarre sans véhicule, dotation de 40 000 € en trésorerie pour acheter son parc)
+      this.vehicles = [];
+      newStation.vehicles = [];
 
       // 2. ZÉRO MATÉRIEL AU DÉPART (stock vierge)
       newStation.stock = {};
       this.logistics = { oxygenBottles: 0, aedPads: 0, woundKits: 0, cervicalCollars: 0 };
+
+      // Dotation initiale de trésorerie (40 000 €)
+      if (this.resources) {
+        this.resources.money = 40000;
+        this.resources.budget = 40000;
+        this.resources.funds = 40000;
+      }
 
       // 3. CONVENTION FONDATRICE AASC (Octroyée dès l'affiliation FNPC lors du tutoriel)
       this.aascConvention = { signed: true, signedAt: Date.now(), cost: 800 };
@@ -2363,19 +2345,21 @@ class ProtecGame {
       this.cumpConvention = { signed: false, signedAt: null, totalMissions: 0, successfulMissions: 0, normCompliant: false };
       this.sdisGarde = { active: false, vehicleId: null, caserneCrew: [], astreinteCrew: [], mode: 'poste' };
 
-      // 4. EXACTEMENT 5 BÉNÉVOLES AVEC COMPÉTENCES DE BASE (1 CE, 2 PSE2, 2 PSE1)
-      const starters = [
-        { name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', exp: 30, isTrainer: false, avatar: '👨‍💼', dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'], motivation: 85, skills: ['ce', 'pse2', 'pse1', 'permis_b', 'permis_vpsp'] },
-        { name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', exp: 25, isTrainer: false, avatar: '👩‍🚒', dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b', 'permis_vpsp'] },
-        { name: 'Thomas Girard', role: 'Équipier Secouriste', rank: 'PSE2', exp: 20, isTrainer: false, avatar: '🧑‍🚒', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b'] },
-        { name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', exp: 15, isTrainer: false, avatar: '🙋‍♂️', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 75, skills: ['pse1', 'permis_b', 'communication_1'] },
-        { name: 'Élodie Leroy', role: 'Secouriste', rank: 'PSE1', exp: 10, isTrainer: false, avatar: '🧑', dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'], motivation: 85, skills: ['pse1'] }
-      ];
+      // 4. EFFECTIFS CONSTITUTIFS VARIÉS (1 CE, 2 PSE2, 2 PSE1)
+      const starters = (window.ProtecPersonnel && typeof window.ProtecPersonnel.generateStarterVolunteers === 'function')
+        ? window.ProtecPersonnel.generateStarterVolunteers(5, stationId, this)
+        : [
+            { name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', exp: 30, isTrainer: false, avatar: '👨‍💼', dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'], motivation: 85, skills: ['ce', 'pse2', 'pse1', 'permis_b', 'permis_vpsp'] },
+            { name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', exp: 25, isTrainer: false, avatar: '👩‍🚒', dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b', 'permis_vpsp'] },
+            { name: 'Thomas Girard', role: 'Équipier Secouriste', rank: 'PSE2', exp: 20, isTrainer: false, avatar: '🧑‍🚒', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b'] },
+            { name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', exp: 15, isTrainer: false, avatar: '🙋‍♂️', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 75, skills: ['pse1', 'permis_b', 'communication_1'] },
+            { name: 'Élodie Leroy', role: 'Secouriste', rank: 'PSE1', exp: 10, isTrainer: false, avatar: '🧑', dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'], motivation: 85, skills: ['pse1'] }
+          ];
 
       this.volunteers = [];
       starters.forEach(s => {
         const newVol = {
-          id: `vol-${Date.now()}-${Math.random()}`,
+          id: s.id || `vol-${Date.now()}-${Math.random()}`,
           name: s.name,
           role: s.role,
           rank: s.rank,
@@ -2383,12 +2367,14 @@ class ProtecGame {
           energy: 100,
           motivation: s.motivation,
           humeur: 85,
+          trait: s.trait || 'devoue',
           contractType: 'benevole',
-          profilSocial: s.dispoType === 'étudiante' ? 'etudiant' : 'salarie',
+          profilSocial: (s.dispoType === 'étudiante' || s.dispoType === 'etudiant') ? 'etudiant' : 'salarie',
           status: 'dispo',
           stationId: stationId,
-          isTrainer: s.isTrainer,
+          isTrainer: !!s.isTrainer,
           avatar: s.avatar,
+          gender: s.gender || (s.dispoType === 'étudiante' ? 'f' : 'h'),
           dispoType: s.dispoType,
           dispoJours: s.dispoJours,
           skills: s.skills || []
@@ -6452,10 +6438,15 @@ class ProtecGame {
       );
     }
 
+    if (window.ProtecAudio && typeof window.ProtecAudio.playCrisisAlertSound === 'function') {
+      window.ProtecAudio.playCrisisAlertSound();
+    }
+
     this.showToast(
       `🟡 PRÉALERTE REÇUE : ${pick.authorityLabel}`,
       `Fiche de situation : « ${pick.title} ». Cliquez pour consulter les besoins et statuer sur la mobilisation.`,
-      'amber'
+      'amber',
+      { type: 'crise', id: newMission.id, status: 'prealerte' }
     );
   }
 
@@ -6471,11 +6462,15 @@ class ProtecGame {
   // Réception en direct d'une alerte de crise départementale partagée
   handleDepartmentCrisisAlert(payload) {
     if (!payload || !payload.crisisData) return;
-    const myDept = this.currentDepartmentCode || this.stations?.[0]?.departmentCode || this.player?.departmentCode || '54';
+    const myDepts = (this.stations || []).map(s => String(s.departmentCode || '')).filter(Boolean);
+    if (this.currentDepartmentCode) myDepts.push(String(this.currentDepartmentCode));
+    if (this.player?.departmentCode) myDepts.push(String(this.player.departmentCode));
+    if (myDepts.length === 0) myDepts.push('54');
+
     const crisisDept = payload.departmentCode || payload.crisisData.departmentCode;
 
-    // Ne traiter que si la crise concerne notre département
-    if (crisisDept && String(crisisDept) !== String(myDept)) return;
+    // Ne rejeter que si le département de crise est spécifié et n'appartient à aucune antenne du joueur
+    if (crisisDept && !myDepts.includes(String(crisisDept))) return;
 
     // Si nous sommes l'émetteur de l'alerte, nous l'avons déjà intégrée
     if (payload.senderId && this.player?.id && String(payload.senderId) === String(this.player.id)) return;
@@ -6494,19 +6489,34 @@ class ProtecGame {
     }
 
     const authName = crisis.authorityLabel || 'Préfecture';
+
+    // Notification Push système et vibration sur mobile/desktop
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.notifyCategory(
+        'weather',
+        `🚨 CRISE DÉPARTEMENTALE [Dpt ${crisisDept || '54'}]`,
+        `${crisis.title} (${authName}). Fiche d'intervention reçue. Mobilisation inter-antennes en cours.`,
+        `crisis-${crisis.id}`
+      );
+    }
+
     this.showToast(
-      `🚨 CRISE DÉPARTEMENTALE [Dpt ${crisisDept}]`,
+      `🚨 CRISE DÉPARTEMENTALE [Dpt ${crisisDept || '54'}]`,
       `Alerte partagée reçue de ${authName} : « ${crisis.title} ». Tous les directeurs du département sont mobilisés !`,
       'red',
-      { type: 'crise', id: crisis.id }
+      { type: 'mission', id: crisis.id }
     );
   }
 
   // Réception en direct d'une mise à jour de crise départementale (aggravation, renforts, levée)
   handleDepartmentCrisisUpdate(payload) {
     if (!payload) return;
-    const myDept = this.currentDepartmentCode || this.stations?.[0]?.departmentCode || this.player?.departmentCode || '54';
-    if (payload.departmentCode && String(payload.departmentCode) !== String(myDept)) return;
+    const myDepts = (this.stations || []).map(s => String(s.departmentCode || '')).filter(Boolean);
+    if (this.currentDepartmentCode) myDepts.push(String(this.currentDepartmentCode));
+    if (this.player?.departmentCode) myDepts.push(String(this.player.departmentCode));
+    if (myDepts.length === 0) myDepts.push('54');
+
+    if (payload.departmentCode && !myDepts.includes(String(payload.departmentCode))) return;
 
     const targetId = payload.id || payload.crisisData?.id;
     if (!targetId) return;
@@ -6526,9 +6536,16 @@ class ProtecGame {
     if (!mission) return;
 
     if (payload.status) {
+      const prevStatus = mission.status;
       mission.status = payload.status;
       if (payload.status === 'declenche' && !mission.title.includes('[ALERTE ACTIVE]')) {
         mission.title = mission.title.replace('[Préalerte] ', '[ALERTE ACTIVE] ');
+      }
+      // Si la crise passe d'une préalerte à une alerte confirmée, déclencher l'alerte de crise
+      if (prevStatus === 'prealerte' && payload.status === 'declenche') {
+        if (window.ProtecAudio && typeof window.ProtecAudio.playCrisisAlertSound === 'function') {
+          window.ProtecAudio.playCrisisAlertSound();
+        }
       }
     }
     if (payload.crisisData) {
@@ -6815,7 +6832,11 @@ class ProtecGame {
       );
     }
 
-    this.showToast('🔴 ALERTE RÉELLE CONFIRMÉE !', `Confirmation de réquisition par ${originName} !${readyNote}`, 'red');
+    if (window.ProtecAudio && typeof window.ProtecAudio.playCrisisAlertSound === 'function') {
+      window.ProtecAudio.playCrisisAlertSound();
+    }
+
+    this.showToast('🔴 ALERTE RÉELLE CONFIRMÉE !', `Confirmation de réquisition par ${originName} !${readyNote}`, 'red', { type: 'crise', id: mission.id, status: 'declenche' });
 
     this.saveGame();
     this.renderMissions();
@@ -9105,6 +9126,12 @@ class ProtecGame {
         mission.assignedVehicleIds = [];
       }
 
+      // Liste des identifiants des véhicules déjà assignés
+      const assignedVehIds = (mission.assignedCrew?.vehicles || [])
+        .map(v => (typeof v === 'object' && v !== null) ? v.id : v)
+        .concat(mission.assignedVehicleIds || [])
+        .filter(Boolean);
+
       this.selectedMissionId = missionId;
       const drawer = document.getElementById('context-drawer');
       const title = document.getElementById('drawer-title');
@@ -9167,11 +9194,7 @@ class ProtecGame {
       return true;
     });
 
-    // Liste des identifiants des véhicules déjà assignés
-    const assignedVehIds = (mission.assignedCrew?.vehicles || [])
-      .map(v => (typeof v === 'object' && v !== null) ? v.id : v)
-      .concat(mission.assignedVehicleIds || [])
-      .filter(Boolean);
+    // Liste des identifiants des véhicules déjà assignés (déclarée en début de méthode)
 
     // Calcul des durées et 3 horaires clés
     let missionSec = mission.durationSeconds;
@@ -11467,14 +11490,14 @@ class ProtecGame {
               const cmdLeader = isVLC && window.ProtecCommandement ? window.ProtecCommandement.getLeader(this, v) : null;
 
               return `
-              <div class="p-2.5 rounded-xl bg-white border ${isVLC ? 'border-indigo-300 ring-1 ring-indigo-200 shadow-sm' : 'border-slate-300'} shadow-xs flex items-center justify-between text-xs hover:border-slate-400 transition">
+              <div onclick="window.game.openVehicleDetailsModal('${v.id}')" class="p-2.5 rounded-xl bg-white border ${isVLC ? 'border-indigo-300 ring-1 ring-indigo-200 shadow-sm' : 'border-slate-300'} shadow-xs flex items-center justify-between text-xs hover:border-pc-blue/80 hover:shadow-sm hover:bg-slate-50/60 transition cursor-pointer group" title="Cliquer pour afficher la fiche détaillée de ${v.name}">
                 <div class="flex items-center gap-2.5">
                   <div class="w-10 h-7 ${isVLC ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-100 border-slate-300'} rounded-lg p-0.5 flex items-center justify-center flex-shrink-0 border shadow-inner">
                     <img src="${v.image || window.game.getVehicleImage(v.type)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='🚑'" />
                   </div>
                   <div>
                     <div class="flex items-center gap-1.5">
-                      <span class="font-black text-slate-900 leading-tight block">${v.name}</span>
+                      <span class="font-black text-slate-900 group-hover:text-pc-blue transition leading-tight block">${v.name}</span>
                       ${isVLC ? `
                         <span class="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase bg-indigo-600 text-white tracking-wider">
                           📡 VLC
@@ -11490,9 +11513,20 @@ class ProtecGame {
                   </div>
                 </div>
                 <div class="flex items-center gap-1.5">
+                  <button 
+                    type="button" 
+                    onclick="event.stopPropagation(); window.game.centerMapOnVehicle('${v.id}')" 
+                    class="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 hover:bg-blue-100 text-pc-blue border border-blue-200 transition cursor-pointer flex items-center gap-1 shadow-2xs" 
+                    title="Centrer la caméra sur la position actuelle de ${v.name}"
+                  >
+                    <i data-lucide="crosshair" class="w-3 h-3"></i>
+                    <span>Position</span>
+                  </button>
+
                   ${isCmdEligible ? `
                     <button 
-                      onclick="window.ProtecCommandement.openCommandModal(window.game, '${v.id}')" 
+                      type="button"
+                      onclick="event.stopPropagation(); window.ProtecCommandement.openCommandModal(window.game, '${v.id}')" 
                       class="px-2 py-0.5 rounded text-[10px] font-bold ${isVLC ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-300' : 'bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-900 border border-slate-200'} transition cursor-pointer"
                       title="${isVLC ? 'Gérer le Poste de Commandement Mobile et le chef en gestion' : 'Équiper le Poste de Commandement Mobile'}"
                     >
@@ -16175,6 +16209,16 @@ class ProtecGame {
                     </div>
 
                     <div class="flex items-center flex-wrap gap-2">
+                      <button onclick="window.game.openVehicleDetailsModal('${v.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition flex items-center gap-1.5 cursor-pointer" title="Voir la fiche détaillée du véhicule">
+                        <span>ℹ️</span>
+                        <span>Détails</span>
+                      </button>
+
+                      <button onclick="window.game.closeModal(); window.game.centerMapOnVehicle('${v.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-pc-blue border border-blue-200 transition flex items-center gap-1.5 cursor-pointer shadow-2xs" title="Centrer la caméra sur la position du véhicule">
+                        <span>📍</span>
+                        <span>Position</span>
+                      </button>
+
                       <button onclick="window.game.passerControleTechnique('${v.id}')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${cond.ctExpired ? 'bg-red-600 hover:bg-red-700 text-white shadow-sm animate-pulse' : (cond.ctWarning ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'glass-button text-slate-700')}">
                         <span>🔧</span>
                         <span>Passer le CT (95 €)</span>
@@ -16792,42 +16836,9 @@ class ProtecGame {
   }
 
   ensureStarterVehicle() {
-    if (!this.stations || this.stations.length === 0) return;
-    if (this.vehicles && this.vehicles.length > 0) return;
-
-    const primaryStation = this.stations[0];
-    const starterId = `vpsp-${Date.now()}`;
-    const callsign = this.generateVehicleCallsign('VPSP', primaryStation.id, primaryStation);
-    const starterVpsp = {
-      id: starterId,
-      name: callsign,
-      type: 'VPSP',
-      label: 'Véhicule de Premiers Secours à Personnes (VPSP)',
-      model: 'Renault Master 2.3 dCi 135 L2H2',
-      year: 2018,
-      mileage: 118400,
-      capacity: 5,
-      seatsCount: 5,
-      status: 'dispo',
-      fuel: 100,
-      mechanical: 92,
-      ctStatus: 'valide',
-      ctExpiryTimestamp: Date.now() + (180 * 24 * 3600 * 1000),
-      insuranceStatus: 'assure',
-      insuranceMonthlyCost: 95,
-      stationId: primaryStation.id,
-      image: this.getVehicleImage('VPSP'),
-      hasTowHitch: false,
-      requiresTrailer: false,
-      reqSkills: ['permis_vpsp']
-    };
-
-    this.vehicles = [starterVpsp];
-    if (!primaryStation.vehicles) primaryStation.vehicles = [];
-    if (!primaryStation.vehicles.includes(starterId)) {
-      primaryStation.vehicles.push(starterId);
-    }
-    this.saveGame();
+    // RÈGLE OFFICIELLE : L'antenne commence sans véhicule par défaut (0 véhicule).
+    // Le joueur dispose de 40 000 € en trésorerie pour acheter et équiper sa flotte.
+    return;
   }
 
   normalizeAllVehicles() {
@@ -17049,6 +17060,300 @@ class ProtecGame {
       this.showToast('Véhicule renommé', `Nouvel indicatif : ${v.name}`, 'blue');
       this.openModule('flotte', true);
     }
+  }
+
+  // --- GÉOLOCALISATION ET CENTRAGE CAMÉRA SUR LA POSITION D'UN VÉHICULE ---
+  centerMapOnVehicle(vehicleId) {
+    const v = (this.vehicles || []).find(veh => veh.id === vehicleId);
+    if (!v) return;
+
+    let coords = null;
+    let locationLabel = 'à l’antenne';
+
+    // 1. Vérifier si le véhicule est en transit actif
+    const transit = (this.transits || []).find(t => 
+      t.vehicle?.id === v.id || 
+      t.vehicle?.name === v.name || 
+      t.vehicleId === v.id
+    );
+
+    if (transit && transit.marker) {
+      const latlng = transit.marker.getLatLng();
+      coords = { lat: latlng.lat, lng: latlng.lng };
+      locationLabel = `en transit vers « ${transit.missionTitle || 'mission'} »`;
+    }
+
+    // 2. Si non trouvé en transit, vérifier s'il est engagé sur une mission active
+    if (!coords) {
+      const mission = (this.missions || []).find(m => 
+        (Array.isArray(m.assignedVehicles) && m.assignedVehicles.includes(v.id)) ||
+        (m.assignedCrew && Array.isArray(m.assignedCrew.vehicles) && m.assignedCrew.vehicles.includes(v.id)) ||
+        (Array.isArray(m.vehicles) && m.vehicles.includes(v.id))
+      );
+
+      if (mission && mission.lat && mission.lng) {
+        coords = { lat: Number(mission.lat), lng: Number(mission.lng) };
+        locationLabel = `sur les lieux de « ${mission.title} »`;
+      }
+    }
+
+    // 3. Si non trouvé en mission, centrer sur son antenne de rattachement
+    if (!coords) {
+      const station = (this.stations || []).find(s => 
+        s.id === v.stationId || 
+        (Array.isArray(s.vehicles) && s.vehicles.includes(v.id))
+      ) || this.stations?.[0];
+
+      if (station && station.lat && station.lng) {
+        coords = { lat: Number(station.lat), lng: Number(station.lng) };
+        locationLabel = `au garage de ${station.name}`;
+      }
+    }
+
+    if (!coords) {
+      this.showToast('Position Introuvable', `Impossible de déterminer la position de ${v.name}.`, 'orange');
+      return;
+    }
+
+    if (this.map) {
+      this.map.flyTo([coords.lat, coords.lng], Math.max(this.map.getZoom(), 16), {
+        duration: 1.2
+      });
+
+      this.showToast(
+        `📍 Position de ${v.name}`,
+        `Caméra centrée sur ${v.name} (${locationLabel}).`,
+        'blue'
+      );
+    }
+  }
+
+  // --- MODALE DES DÉTAILS D'UN VÉHICULE DE LA FLOTTE ---
+  openVehicleDetailsModal(vehicleId) {
+    const v = (this.vehicles || []).find(veh => veh.id === vehicleId);
+    if (!v) return;
+
+    const station = (this.stations || []).find(s => s.id === v.stationId || (Array.isArray(s.vehicles) && s.vehicles.includes(v.id))) || this.stations?.[0] || { name: 'Antenne Locale' };
+    const cond = this.getVehicleCondition(v);
+    const isDispo = v.status === 'dispo' || v.status === 'disponible';
+    const isBroken = !!v.isBrokenDown;
+
+    let statusLabel = 'Indisponible';
+    let statusBadgeClass = 'bg-slate-100 text-slate-800 border-slate-300';
+    let dotClass = 'bg-slate-400';
+
+    if (isBroken) {
+      statusLabel = 'En panne mécanique';
+      statusBadgeClass = 'bg-red-50 text-red-700 border-red-300';
+      dotClass = 'bg-red-500 animate-ping';
+    } else if (v.status === 'transit') {
+      statusLabel = 'En transit routier (S2/S4/S6)';
+      statusBadgeClass = 'bg-sky-50 text-sky-800 border-sky-300';
+      dotClass = 'bg-sky-500 animate-pulse';
+    } else if (v.status === 'sur_les_lieux') {
+      statusLabel = 'Sur les lieux d’intervention (S3)';
+      statusBadgeClass = 'bg-amber-50 text-amber-900 border-amber-300';
+      dotClass = 'bg-amber-500 animate-pulse';
+    } else if (v.status === 'urgences_chu') {
+      statusLabel = 'Aux urgences CHU (S5)';
+      statusBadgeClass = 'bg-purple-50 text-purple-900 border-purple-300';
+      dotClass = 'bg-purple-500 animate-pulse';
+    } else if (v.status === 'a_rearme' || v.status === 'rearmement' || v.needsRearming) {
+      statusLabel = 'Réarmement requis';
+      statusBadgeClass = 'bg-orange-50 text-orange-900 border-orange-300';
+      dotClass = 'bg-orange-500 animate-pulse';
+    } else if (v.status === 'samu_garde') {
+      statusLabel = 'Garde SAMU 15 active';
+      statusBadgeClass = 'bg-orange-50 text-orange-800 border-orange-300';
+      dotClass = 'bg-orange-500 animate-pulse';
+    } else if (v.status && v.status.startsWith('sdis')) {
+      statusLabel = 'Garde SDIS Pompiers';
+      statusBadgeClass = 'bg-red-50 text-red-800 border-red-300';
+      dotClass = 'bg-red-500 animate-pulse';
+    } else if (v.status === 'ongoing' || v.status === 'engaged' || v.status === 'mission') {
+      statusLabel = 'Engagé en mission (DPS)';
+      statusBadgeClass = 'bg-amber-50 text-amber-800 border-amber-300';
+      dotClass = 'bg-amber-500 animate-pulse';
+    } else if (isDispo) {
+      statusLabel = 'Disponible au garage (S1)';
+      statusBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-300';
+      dotClass = 'bg-emerald-500';
+    }
+
+    const isVLC = Boolean(v.isCommandement || v.hasCommandementKit);
+    const cmdLeader = isVLC && window.ProtecCommandement ? window.ProtecCommandement.getLeader(this, v) : null;
+    const isCmdEligible = window.ProtecCommandement && window.ProtecCommandement.isEligible(v);
+
+    const modalId = 'vehicle-details-modal';
+    let modal = document.getElementById(modalId);
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = modalId;
+      modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs';
+      document.body.appendChild(modal);
+    }
+
+    const imgUrl = v.image || this.getVehicleImage(v.type);
+
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-xl max-h-[90vh] flex flex-col p-5 sm:p-6 shadow-2xl border border-white/95 animate-scale-in overflow-hidden">
+        <!-- En-tête -->
+        <div class="flex items-center justify-between pb-3.5 border-b border-slate-200">
+          <div class="flex items-center gap-3">
+            <div class="w-14 h-11 rounded-xl bg-slate-100 border border-slate-300 p-1 flex items-center justify-center shadow-inner flex-shrink-0">
+              <img src="${imgUrl}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='🚑'" />
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-base font-black text-slate-900 tracking-wide">${v.name}</h3>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${cond.badgeClass}">${cond.label}</span>
+                <button type="button" onclick="window.game.openRenameVehicleModal('${v.id}'); document.getElementById('${modalId}').remove();" class="text-slate-400 hover:text-pc-blue text-xs p-0.5 rounded transition cursor-pointer" title="Renommer l'indicatif">✏️</button>
+              </div>
+              <p class="text-xs text-slate-500 font-semibold mt-0.5">${v.model || v.label || v.type} • Antenne : <strong class="text-slate-700">${station.name}</strong></p>
+            </div>
+          </div>
+          <button type="button" onclick="document.getElementById('${modalId}').remove()" class="p-1.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition cursor-pointer">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <!-- Contenu avec défilement -->
+        <div class="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+          <!-- Statut et Bouton de centrage caméra -->
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-1 rounded-xl text-xs font-black border ${statusBadgeClass} flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full ${dotClass}"></span>
+                ${statusLabel}
+              </span>
+              ${isVLC ? `<span class="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-600 text-white tracking-wider">📡 VLC</span>` : ''}
+            </div>
+            <button 
+              type="button" 
+              onclick="window.game.centerMapOnVehicle('${v.id}'); document.getElementById('${modalId}').remove();" 
+              class="px-3.5 py-2 rounded-xl bg-pc-blue hover:brightness-110 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer self-start sm:self-auto"
+            >
+              <i data-lucide="crosshair" class="w-4 h-4"></i>
+              <span>Centrer la caméra sur sa position</span>
+            </button>
+          </div>
+
+          <!-- Caractéristiques Techniques -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+            <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-0.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Compteur</span>
+              <strong class="text-sm font-black text-slate-800">${(v.mileage || 115000).toLocaleString('fr-FR')} km</strong>
+            </div>
+            <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-0.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Places Assises</span>
+              <strong class="text-sm font-black text-slate-800">${v.capacity || v.seatsCount || 4} places</strong>
+            </div>
+            <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-0.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Mise en Circulation</span>
+              <strong class="text-sm font-black text-slate-800">${v.year || 2018} (${cond.age} ans)</strong>
+            </div>
+            <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-0.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contrôle Technique</span>
+              <strong class="text-xs font-black ${cond.ctExpired ? 'text-red-600' : (cond.ctWarning ? 'text-amber-600' : 'text-emerald-700')}">
+                ${cond.ctExpired ? '🚨 Expiré' : `Valide (${cond.ctDaysLeft}j)`}
+              </strong>
+            </div>
+            <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-0.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assurance Flotte</span>
+              <strong class="text-xs font-black text-sky-700">${v.insuranceMonthlyCost || 95} €/mois</strong>
+            </div>
+            <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-0.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Catégorie</span>
+              <strong class="text-xs font-black text-slate-800">${v.type}</strong>
+            </div>
+          </div>
+
+          <!-- Jauge d'état mécanique -->
+          <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-extrabold text-slate-700 flex items-center gap-1.5">
+                <span>🔩</span> État Mécanique & Entretien
+              </span>
+              <span class="font-mono font-black ${(v.mechanical || 90) > 70 ? 'text-emerald-600' : ((v.mechanical || 90) > 40 ? 'text-amber-600' : 'text-red-600')}">
+                ${v.mechanical || 90}%
+              </span>
+            </div>
+            <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
+              <div class="h-full rounded-full transition-all duration-300 ${(v.mechanical || 90) > 70 ? 'bg-emerald-500' : ((v.mechanical || 90) > 40 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${v.mechanical || 90}%"></div>
+            </div>
+          </div>
+
+          ${isVLC && cmdLeader ? `
+            <div class="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs flex items-center justify-between">
+              <div>
+                <span class="font-black text-indigo-900 block">Poste de Commandement Tactique (VLC)</span>
+                <span class="text-indigo-700 text-[11px]">Chef de dispositif affecté : <strong>${cmdLeader.name}</strong> (${cmdLeader.rank})</span>
+              </div>
+              <button 
+                type="button" 
+                onclick="window.ProtecCommandement.openCommandModal(window.game, '${v.id}'); document.getElementById('${modalId}').remove();" 
+                class="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition"
+              >
+                Gérer PC
+              </button>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Actions Footer -->
+        <div class="pt-3.5 border-t border-slate-200 flex flex-wrap items-center justify-end gap-2">
+          ${isCmdEligible && !isVLC ? `
+            <button 
+              type="button" 
+              onclick="window.ProtecCommandement.openCommandModal(window.game, '${v.id}'); document.getElementById('${modalId}').remove();" 
+              class="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+            >
+              <span>📡</span>
+              <span>Équiper VLC</span>
+            </button>
+          ` : ''}
+
+          <button 
+            type="button" 
+            onclick="window.game.passerControleTechnique('${v.id}'); document.getElementById('${modalId}').remove();" 
+            class="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer ${cond.ctExpired ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}"
+          >
+            <span>🔧</span>
+            <span>Passer CT (95 €)</span>
+          </button>
+
+          ${(isBroken || (v.mechanical || 90) < 80) ? `
+            <button 
+              type="button" 
+              onclick="window.game.reparerVehiculeGarage('${v.id}'); document.getElementById('${modalId}').remove();" 
+              class="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition flex items-center gap-1 cursor-pointer"
+            >
+              <span>🔩</span>
+              <span>Révision Garage</span>
+            </button>
+          ` : ''}
+
+          <button 
+            type="button" 
+            onclick="window.ProtecLogistique.selectedStationId='${station.id}'; window.ProtecLogistique.activeTab='stock'; window.game.openModule('logistique'); document.getElementById('${modalId}').remove();" 
+            class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+          >
+            <span>📦</span>
+            <span>Armement</span>
+          </button>
+
+          <button 
+            type="button" 
+            onclick="document.getElementById('${modalId}').remove()" 
+            class="px-4 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition cursor-pointer"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    `;
+
+    if (window.lucide) window.lucide.createIcons();
   }
 
   // --- RAFRAÎCHISSEMENT DOUX SANS RECHARGEMENT DE PAGE POUR LES MODALS OUVERTS ---

@@ -1,12 +1,13 @@
 /**
  * PROTEC LIVE - GESTIONNAIRE D'EFFETS SONORES IMMERSIFS
  * 
- * 5 Sons Officiels Intégrés :
- * 1. notif.mp3    : Messages des bénévoles (sondages, réponses, convocations, relances)
- * 2. info.mp3     : Informations diverses (nouveau devis, nouvelle candidature, etc.)
- * 3. expire.mp3   : Notifications d'information qui expirent (délai devis dépassé, etc.)
- * 4. erreur.mp3   : En cas de problème ou d'erreur (fonds insuffisants, effectif manquant, action refusée)
- * 5. attention.mp3: En cas d'alertes de crises (départementale, zone de défense ou nationale - hors renforts)
+ * 6 Sons Officiels Intégrés :
+ * 1. notif.mp3        : Messages des bénévoles (sondages, réponses, convocations, relances)
+ * 2. info.mp3         : Informations diverses (nouveau devis, nouvelle candidature, etc.)
+ * 3. expire.mp3       : Notifications d'information qui expirent (délai devis dépassé, etc.)
+ * 4. erreur.mp3       : En cas de problème ou d'erreur (fonds insuffisants, effectif manquant, action refusée)
+ * 5. attention.mp3    : Avertissements généraux et vigilances administratives
+ * 6. alerte_crise.mp3 : En cas de crise (préalerte et alerte) - PAS les mises à jour
  */
 
 window.ProtecAudio = {
@@ -14,13 +15,14 @@ window.ProtecAudio = {
   muted: false,
   soundPool: {},
 
-  // Chemins d'accès aux 5 sons officiels
+  // Chemins d'accès aux 6 sons officiels
   files: {
     notif: 'sons/notif.mp3',
     info: 'sons/info.mp3',
     expire: 'sons/expire.mp3',
     erreur: 'sons/erreur.mp3',
-    attention: 'sons/attention.mp3'
+    attention: 'sons/attention.mp3',
+    alerte_crise: 'sons/alerte_crise.mp3'
   },
 
   userInteracted: false,
@@ -125,7 +127,7 @@ window.ProtecAudio = {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
-      if (key === 'attention') {
+      if (key === 'attention' || key === 'alerte_crise') {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(440, now);
         osc.frequency.linearRampToValueAtTime(880, now + 0.3);
@@ -205,10 +207,20 @@ window.ProtecAudio = {
   },
 
   /**
-   * 5. attention.mp3 : en cas d'alertes de crises départementale, zone de défense ou nationale (PAS les demandes de renfort, les crises)
+   * 5. attention.mp3 : avertissements administratifs ou vigilances
+   */
+  playAttentionSound() {
+    this.playFile('attention');
+  },
+
+  /**
+   * 6. alerte_crise.mp3 : en cas de crise (préalerte et alerte de crise majeure) - PAS les mises à jour
    */
   playCrisisAlertSound() {
-    this.playFile('attention');
+    this.playFile('alerte_crise');
+  },
+  playCrisisPrealertSound() {
+    this.playFile('alerte_crise');
   },
 
   // =========================================================================
@@ -220,21 +232,39 @@ window.ProtecAudio = {
     const t = (title || '').toLowerCase();
     const m = (message || '').toLowerCase();
 
-    // 1. Alertes de crises (départementale, zone de défense, nationale)
-    // RÈGLE STRICTE : Exclure impérativement les simples demandes de renfort !
+    // RÈGLE STRICTE 1 : Exclure impérativement les simples demandes de renfort !
     const isRenfort = t.includes('renfort') || m.includes('renfort') || t.includes('alliance');
-    const isCrisis = !isRenfort && (
-      t.includes('crise') || m.includes('crise') ||
-      t.includes('novi') || m.includes('novi') ||
-      t.includes('orsec') || m.includes('orsec') ||
-      t.includes('catastrophe') || m.includes('catastrophe') ||
-      t.includes('plan d\'urgence') || m.includes('plan d\'urgence') ||
-      t.includes('zone de défense') || m.includes('zone de défense') ||
-      t.includes('alerte préfectorale') || m.includes('alerte préfectorale') ||
-      target?.type === 'crise'
+
+    // RÈGLE STRICTE 2 : Exclure impérativement les simples mises à jour, évolutions, sitreps, relèves, clôtures
+    const isUpdate = t.includes('mise à jour') || m.includes('mise à jour') ||
+                     t.includes('évolution') || m.includes('évolution') ||
+                     t.includes('sitrep') || m.includes('sitrep') ||
+                     t.includes('point de situation') || m.includes('point de situation') ||
+                     t.includes('bulletin') || m.includes('bulletin') ||
+                     t.includes('journal') || m.includes('journal') ||
+                     t.includes('relève') || m.includes('relève') ||
+                     t.includes('clôture') || m.includes('clôture') ||
+                     t.includes('terminée') || m.includes('terminée') ||
+                     t.includes('réussie') || m.includes('réussie') ||
+                     t.includes('engagé') || m.includes('engagé') ||
+                     t.includes('vecteur') || m.includes('vecteur') ||
+                     t.includes('astreinte') || m.includes('bénévole sur base');
+
+    // 1. Alertes de crises (départementale, préalerte, plan d'urgence, alerte confirmée, NOVI, ORSEC)
+    // Se déclenche sur : préalerte ET alerte - mais JAMAIS sur les simples mises à jour
+    const isCrisisAlertOrPrealert = !isRenfort && !isUpdate && (
+      t.includes('préalerte') || t.includes('prealerte') || m.includes('préalerte') || m.includes('prealerte') ||
+      t.includes('alerte de crise') || m.includes('alerte de crise') ||
+      t.includes('crise départementale') || m.includes('crise départementale') ||
+      t.includes('plan d\'urgence déclenché') || m.includes('plan d\'urgence déclenché') ||
+      t.includes('alerte réelle confirmée') || m.includes('alerte réelle confirmée') ||
+      t.includes('alerte active') || m.includes('alerte active') ||
+      t.includes('scénario déclenché') || m.includes('scénario déclenché') ||
+      ((t.includes('crise') || t.includes('novi') || t.includes('orsec') || t.includes('catastrophe') || target?.type === 'crise') &&
+       (t.includes('alerte') || t.includes('déclench') || m.includes('déclench') || m.includes('alerte') || target?.isNewCrisis || color === 'red'))
     );
 
-    if (isCrisis) {
+    if (isCrisisAlertOrPrealert) {
       this.playCrisisAlertSound();
       return;
     }

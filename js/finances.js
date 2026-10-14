@@ -225,7 +225,7 @@ window.ProtecFinances = {
       return true;
     });
 
-    const currentMoney = Number(game.resources?.money) || 15000;
+    const currentMoney = Number(game.resources?.money) || 40000;
     const now = Date.now();
 
     // 2. Vérifier si une dotation initiale d'ouverture existe
@@ -265,7 +265,7 @@ window.ProtecFinances = {
     if (Math.abs(gap) > 0 && game.financesHistory.length > 0) {
       game.financesHistory[0].amount += gap;
       if (game.financesHistory[0].amount <= 0) {
-        game.financesHistory[0].amount = 15000;
+        game.financesHistory[0].amount = 40000;
       }
     }
 

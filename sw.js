@@ -10,7 +10,7 @@
  * - En cas de coupure réseau, le client bloque immédiatement l'accès au jeu.
  */
 
-const CACHE_VERSION = 'myprotec-online-v2.0.2';
+const CACHE_VERSION = 'myprotec-online-v2.1.0';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 
 // Assets statiques essentiels mis en cache pour la rapidité de chargement
@@ -24,6 +24,7 @@ const STATIC_ASSETS = [
   'landing.css',
   'styles.css',
   'app.js',
+  'js/app.js',
   'manifest.json',
   'favicon.ico',
   'logo_myprotec.png',
@@ -76,7 +77,13 @@ const STATIC_ASSETS = [
   'js/onboarding.js',
   'js/tutorial.js',
   'js/veille_operationnelle.js',
-  'js/multijoueur.js'
+  'js/multijoueur.js',
+  'sons/notif.mp3',
+  'sons/info.mp3',
+  'sons/expire.mp3',
+  'sons/erreur.mp3',
+  'sons/attention.mp3',
+  'sons/alerte_crise.mp3'
 ];
 
 // 1. INSTALLATION : Mise en cache des assets statiques pour accélérer le premier rendu
@@ -129,8 +136,9 @@ self.addEventListener('fetch', (event) => {
     return; // Laisser le réseau natif traiter la requête
   }
 
-  // B. Navigation HTML principale : Network-First obligatoire pour garantir le code à jour
-  if (request.mode === 'navigate') {
+  // B. Navigation HTML principale & Scripts JS : Network-First obligatoire pour garantir le code à jour
+  const isScript = request.destination === 'script' || url.pathname.endsWith('.js');
+  if (request.mode === 'navigate' || isScript) {
     event.respondWith(
       fetch(request)
         .then((networkResponse) => {
@@ -141,8 +149,12 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => {
-          // Si le réseau est coupé, renvoyer la page en cache (qui affichera immédiatement l'écran de blocage hors-ligne)
-          return caches.match('/index.html');
+          // Si le réseau est coupé, renvoyer la ressource en cache
+          return caches.match(request).then((cached) => {
+            if (cached) return cached;
+            if (request.mode === 'navigate') return caches.match('/index.html');
+            return null;
+          });
         })
     );
     return;
@@ -153,7 +165,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // D. Assets statiques locaux : Cache avec mise à jour en tâche de fond (Stale-While-Revalidate)
+  // D. Assets statiques locaux (images, css, polices) : Stale-While-Revalidate
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       const fetchPromise = fetch(request)
@@ -171,11 +183,12 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// 4. NOTIFICATIONS PUSH (Optionnelles si le jeu est fermé sur le terminal)
+// 4. NOTIFICATIONS PUSH (Optionnelles si le jeu est actif au premier plan)
 self.addEventListener('push', (event) => {
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      if (clientList && clientList.length > 0) return; // Jeu ouvert : pas de notification externe
+      const isForeground = clientList && clientList.some(c => c.visibilityState === 'visible' && c.focused);
+      if (isForeground) return; // Jeu visible et au premier plan : les toasts in-app suffisent
 
       let data = {
         title: '🚨 Alerte Protection Civile',

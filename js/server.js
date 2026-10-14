@@ -696,7 +696,7 @@ const server = http.createServer((req, res) => {
             departmentCode: st0?.departmentCode || p.departmentCode || '75',
             createdAt: new Date().toISOString(),
             lastLogin: new Date(p.lastSeen || Date.now()).toISOString(),
-            money: 15000,
+            money: 40000,
             volunteersCount: p.volunteersCount || 4,
             vehiclesCount: p.vehiclesCount || 1,
             stationsCount: (p.stations && p.stations.length) || 1,

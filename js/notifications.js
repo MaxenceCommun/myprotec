@@ -28,11 +28,13 @@ window.ProtecNotifications = {
     return true;
   },
 
-  // Contrôle strict de l'envoi de notification système OS :
-  // RÈGLE FORMELLE : Inactivité = le joueur n'a VRAIMENT PAS le jeu ouvert.
-  // Tant que le jeu est ouvert quelque part -> AUCUNE push notification système !
+  // Contrôle de l'envoi de notification système OS (mobile et PC)
   shouldSendSystemNotification() {
-    return false;
+    if (!('Notification' in window) && !this.swRegistration) return false;
+    const perm = window.Notification ? Notification.permission : this.permission;
+    if (perm !== 'granted') return false;
+    if (!this.config.enabled) return false;
+    return true;
   },
 
   // Configuration utilisateur (sauvegardée en localStorage)
@@ -495,9 +497,9 @@ window.ProtecNotifications = {
     if (category === 'sdis' && !this.config.sdisAlerts) return;
     if (category === 'dps' && !this.config.dpsAlerts) return;
     if (category === 'rh' && !this.config.rhAlerts) return;
-    if (category === 'weather' && !this.config.weatherAlerts) return;
+    if ((category === 'weather' || category === 'meteo') && !this.config.weatherAlerts) return;
 
-    this.sendPushNotification(title, body, { tag: `${category}-${tag}` });
+    this.sendPushNotification(title, body, { tag: `${category}-${tag}`, category: category });
   },
 
   // --- MOTEUR D'INCITATION À LA RECONNEXION ---

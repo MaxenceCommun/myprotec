@@ -229,7 +229,7 @@ window.MyProtecLanding = {
           </div>
           <button onclick="window.MyProtecLanding.enterGame()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-gradient-to-r from-[#0055b8] to-[#0284c7] hover:from-[#004494] hover:to-[#0270a8] shadow-md transition flex items-center gap-1.5 cursor-pointer">
             <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
-            <span>Poste de Commandement</span>
+            <span>Mon Antenne</span>
           </button>
           <button onclick="window.ProtecAuth.logout(); window.MyProtecLanding.updateAuthButtonsState();" class="p-2 rounded-xl text-xs font-bold text-slate-500 hover:text-rose-600 bg-white hover:bg-rose-50 border border-slate-200 transition cursor-pointer" title="Se déconnecter">
             <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
@@ -241,7 +241,7 @@ window.MyProtecLanding = {
         heroActions.innerHTML = `
           <button onclick="window.MyProtecLanding.enterGame()" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-gradient-to-r from-[#0055b8] to-[#0284c7] hover:from-[#004494] hover:to-[#0270a8] text-white font-black text-sm shadow-xl hover:shadow-2xl transition flex items-center justify-center gap-2 cursor-pointer group">
             <i data-lucide="play" class="w-4 h-4 fill-current"></i>
-            <span>Accéder au Poste de Commandement</span>
+            <span>Accéder à mon Antenne</span>
             <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
           </button>
           <button onclick="window.ProtecAuth.logout(); window.MyProtecLanding.updateAuthButtonsState();" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/85 hover:bg-white text-slate-700 hover:text-rose-600 font-extrabold text-sm border border-slate-200/90 shadow-md transition flex items-center justify-center gap-2 cursor-pointer">

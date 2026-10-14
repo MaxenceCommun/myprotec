@@ -1613,7 +1613,7 @@ window.ProtecAuth = {
       // Nouveau compte : état d'antenne vierge et remise à zéro pour démarrer l'implantation
       // Bonus de bienvenue parrainage (+1 500 €) si le code parrain était valide et certifié
       const hasReferralBonus = !!(data.refereeBonusGranted || (data.referralStatus && data.referralStatus.success));
-      const startingMoney = 15000 + (hasReferralBonus ? 1500 : 0);
+      const startingMoney = 40000 + (hasReferralBonus ? 1500 : 0);
 
       game.stations = [];
       game.vehicles = [];
@@ -1791,7 +1791,7 @@ window.ProtecAuth = {
 
       // 2. Synchronisation de redondance avec le serveur local
       if (this.token && !this.token.startsWith('supa-')) {
-        const moneyVal = (game.resources?.money !== undefined) ? game.resources.money : ((game.resources?.budget !== undefined) ? game.resources.budget : 15000);
+        const moneyVal = (game.resources?.money !== undefined) ? game.resources.money : ((game.resources?.budget !== undefined) ? game.resources.budget : 40000);
         if (game.resources) {
           game.resources.money = moneyVal;
           game.resources.budget = moneyVal;
@@ -1936,7 +1936,7 @@ window.ProtecAuth = {
 
       if (savedData.resources) {
         game.resources = savedData.resources;
-        const m = (game.resources.money !== undefined) ? game.resources.money : ((game.resources.budget !== undefined) ? game.resources.budget : 15000);
+        const m = (game.resources.money !== undefined) ? game.resources.money : ((game.resources.budget !== undefined) ? game.resources.budget : 40000);
         game.resources.money = m;
         game.resources.budget = m;
         game.resources.funds = m;

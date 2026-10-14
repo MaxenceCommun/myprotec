@@ -513,7 +513,7 @@ window.ProtecSupabase = {
             user_id: isUUID ? targetUserId : null,
             username: isUUID ? null : targetUserId,
             save_data: sData,
-            funds: 15000,
+            funds: 40000,
             updated_at: new Date().toISOString()
           });
         }
@@ -625,7 +625,7 @@ window.ProtecSupabase = {
           departmentCode: p.department_code || '75',
           createdAt: p.created_at,
           lastLogin: p.last_login,
-          money: (sData?.resources?.money !== undefined) ? sData.resources.money : (s?.funds ?? 15000),
+          money: (sData?.resources?.money !== undefined) ? sData.resources.money : (s?.funds ?? 40000),
           volunteersCount: (sData?.volunteers?.length !== undefined) ? sData.volunteers.length : (s?.volunteers_count ?? 4),
           vehiclesCount: (sData?.vehicles?.length !== undefined) ? sData.vehicles.length : (s?.vehicles_count ?? 1),
           stationsCount: (sData?.stations?.length !== undefined) ? sData.stations.length : (s?.stations_count ?? 1),
@@ -684,7 +684,7 @@ window.ProtecSupabase = {
           user_id: isUUID ? playerId : null,
           username: updates.username || (saveRecord ? saveRecord.username : null),
           save_data: sData,
-          funds: updates.money !== undefined ? Number(updates.money) : (saveRecord?.funds ?? 15000),
+          funds: updates.money !== undefined ? Number(updates.money) : (saveRecord?.funds ?? 40000),
           updated_at: new Date().toISOString()
         }, { onConflict: isUUID ? 'user_id' : 'username' });
       }

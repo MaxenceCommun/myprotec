@@ -451,7 +451,7 @@ class Database {
         departmentCode: u.departmentCode || '75',
         createdAt: u.createdAt,
         lastLogin: u.lastLogin,
-        money: gData?.resources?.money ?? 15000,
+        money: gData?.resources?.money ?? 40000,
         volunteersCount: gData?.volunteers?.length ?? 4,
         vehiclesCount: gData?.vehicles?.length ?? 1,
         stationsCount: gData?.stations?.length ?? 1,
@@ -522,7 +522,7 @@ class Database {
       if (!this.data.savedGames[userId]) {
         this.data.savedGames[userId] = {
           savedAt: new Date().toISOString(),
-          data: { resources: { money: Number(updates.money || 15000) } }
+          data: { resources: { money: Number(updates.money || 40000) } }
         };
       }
       const saveRecord = this.data.savedGames[userId];

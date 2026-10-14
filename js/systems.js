@@ -162,25 +162,63 @@ window.ProtecSystems = {
       className: isEmergency ? 'route-line-animated' : 'route-line-normal'
     }).addTo(game.map);
 
-    // Marqueur du véhicule : gyrophare clignotant UNIQUEMENT en urgence, puce discrète en allure normale
-    const imgUrl = vehicle.image || (game.getVehicleImage ? game.getVehicleImage(vehicle.type) : `images/vehicles/${vehicle.type}.png`);
+    // Détermination de l'antenne d'attache du véhicule
+    const myStation = game.stations?.find(s => (s.vehicles || []).some(v => (typeof v === 'string' ? v === vehicle.id : v.id === vehicle.id))) || game.stations?.[0];
+    const stationName = myStation?.name || (myStation?.city ? `Antenne de ${myStation.city}` : 'Mon Antenne');
+
+    // Marqueur du véhicule compact : petite icône avec logo du véhicule et gyrophare sur le toit
+    const imgUrl = vehicle.image || (game.getVehicleImage ? game.getVehicleImage(vehicle.type) : `images/vehicles/${vehicle.type || 'VPSP'}.png`);
     const iconHtml = `
-      <div class="vehicle-marker-container flex items-center gap-1.5 px-2 py-1 rounded-xl bg-white/95 border-2 ${isEmergency ? (statusTarget === 4 ? 'border-red-500 ring-2 ring-red-400/50' : 'border-pc-orange ring-1 ring-orange-400/40') : 'border-slate-300 shadow-md'} shadow-xl text-slate-800 text-[10px] font-black cursor-pointer">
-        ${isEmergency ? '<div class="beacon-flash"></div>' : '<div class="w-2 h-2 rounded-full bg-slate-400"></div>'}
-        <img src="${imgUrl}" alt="${vehicle.name}" class="h-4 w-7 object-contain flex-shrink-0 drop-shadow-sm" onerror="this.style.display='none'" />
-        <span class="tracking-tight">${vehicle.name}</span>
-        ${isEmergency ? '<span class="text-[8px] px-1 py-0.2 rounded font-extrabold bg-red-100 text-red-700 uppercase">Urgence</span>' : ''}
+      <div class="vehicle-compact-marker ${isEmergency ? 'is-emergency' : ''}" title="${vehicle.name}">
+        ${isEmergency ? `
+          <div class="vehicle-roof-beacon"></div>
+          <div class="vehicle-roof-beacon-halo"></div>
+        ` : ''}
+        <img src="${imgUrl}" alt="${vehicle.name}" class="vehicle-compact-img" onerror="this.src='images/vehicles/VPSP.png'" />
       </div>
     `;
 
     const icon = L.divIcon({
       html: iconHtml,
-      className: 'vehicle-leaflet-icon',
-      iconSize: [126, 32],
-      iconAnchor: [63, 16]
+      className: 'vehicle-leaflet-icon-clean',
+      iconSize: [40, 40],
+      iconAnchor: [20, 20]
     });
 
     const marker = L.marker(routeCoords[0], { icon: icon, zIndexOffset: isEmergency ? 1200 : 800 }).addTo(game.map);
+
+    // Clic sur mon véhicule : zoomer/centrer sur le trajet et ouvrir la mission
+    marker.on('click', () => {
+      // 1. Tracer et cadrer le trajet complet
+      if (game.map && polyline) {
+        try {
+          const bounds = polyline.getBounds();
+          if (bounds && bounds.isValid()) {
+            game.map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
+          }
+        } catch (err) {}
+        polyline.setStyle({ weight: 7, opacity: 1 });
+        setTimeout(() => {
+          polyline.setStyle({ weight: isEmergency ? 5 : 3.5, opacity: isEmergency ? 0.85 : 0.65 });
+        }, 1800);
+      }
+
+      // 2. Retrouver et ouvrir la fiche détaillée de la mission
+      if (mission && mission.id) {
+        if (typeof game.openMissionDetails === 'function') {
+          game.openMissionDetails(mission.id);
+        } else if (typeof game.openMissionDrawer === 'function') {
+          game.openMissionDrawer(mission.id);
+        }
+        if (typeof game.showToast === 'function') {
+          game.showToast('Suivi de Véhicule 🚑', `Centrage sur ${vehicle.name} (${stationName}) vers « ${mission.title} »`, 'blue', { type: 'mission', id: mission.id });
+        }
+      } else {
+        if (typeof game.showToast === 'function') {
+          game.showToast('Véhicule en Déplacement 🚑', `${vehicle.name} • ${stationName}`, 'blue');
+        }
+      }
+    });
 
     // Calcul de la distance réelle en kilomètres
     const distKm = Math.max(0.8, Math.hypot(
@@ -199,10 +237,24 @@ window.ProtecSystems = {
 
     const modeLabel = isEmergency ? (statusTarget === 4 ? 'Statut 4 : Évacuation CHU (Urgence)' : 'Statut 2 : Départ Urgence (Gyrophare)') : (statusTarget === 6 ? 'Statut 6 : Retour Antenne (Normal)' : 'Statut 2 : Déplacement Normal');
 
-    marker.bindTooltip(`<strong>${vehicle.name}</strong><br>Vitesse : ~${realisticSpeedKmh} km/h • Distance : ${distKm.toFixed(1)} km<br>${modeLabel}`, {
+    marker.bindTooltip(`
+      <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${isEmergency ? '#ef4444' : '#0284c7'};"></span>
+          <strong style="color: #0f172a; font-size: 12px;">${vehicle.name}</strong>
+        </div>
+        <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName} (Mon Antenne)</div>
+        <div style="color: #475569; font-size: 10px; margin-top: 1px;">${modeLabel}</div>
+        <div style="color: #0284c7; font-size: 10px; margin-top: 1px;">Vitesse : ~${realisticSpeedKmh} km/h • Reste : <strong>${distKm.toFixed(1)} km</strong></div>
+        ${mission?.title ? `<div style="color: #334155; font-size: 10px; margin-top: 2px; font-weight: 600;">🎯 Mission : ${mission.title}</div>` : ''}
+        <div style="margin-top: 5px; padding: 3px 6px; background: #eff6ff; color: #1d4ed8; border-radius: 6px; font-weight: 800; font-size: 9px; text-align: center; border: 1px solid #bfdbfe;">
+          👉 Cliquer pour tracer le trajet & retrouver la mission
+        </div>
+      </div>
+    `, {
       direction: 'top',
-      offset: [0, -18],
-      className: 'glass-panel text-xs p-2'
+      offset: [0, -22],
+      className: 'glass-panel p-2 shadow-xl border border-white/80'
     });
 
     const transit = {
@@ -221,6 +273,7 @@ window.ProtecSystems = {
       polyline: polyline,
       marker: marker,
       evacData: mission?.evacHospitalData || null,
+      stationName: stationName,
       onArrival: onArrivalCallback
     };
 
@@ -355,11 +408,20 @@ window.ProtecSystems = {
             statusBadgeText = '<div class="text-[9px] font-bold text-slate-500">🏠 Retour vers l’Antenne</div>';
           }
 
+          const stName = t.stationName || 'Mon Antenne';
           t.marker.setTooltipContent(`
-            <div class="text-xs space-y-0.5">
-              <strong class="text-pc-blue block">${t.vehicle.name}</strong>
-              <div class="text-[10px] text-slate-600">Vitesse : <span class="font-bold ${t.isEmergency ? 'text-red-600' : 'text-slate-800'}">${t.speedKmh} km/h</span> • Reste : <strong>${remainingKm} km</strong> (~${remainingSec}s)</div>
+            <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
+              <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${t.isEmergency ? '#ef4444' : '#0284c7'};"></span>
+                <strong style="color: #0f172a; font-size: 12px;">${t.vehicle.name}</strong>
+              </div>
+              <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stName} (Mon Antenne)</div>
+              <div style="color: #475569; font-size: 10px; margin-top: 1px;">Vitesse : <span class="font-bold ${t.isEmergency ? 'text-red-600' : 'text-slate-800'}">${t.speedKmh} km/h</span> • Reste : <strong>${remainingKm} km</strong> (~${remainingSec}s)</div>
+              ${t.mission?.title ? `<div style="color: #334155; font-size: 10px; margin-top: 2px; font-weight: 600;">🎯 Mission : ${t.mission.title}</div>` : ''}
               ${t.statusTarget === 4 ? statusBadgeText : `<div class="text-[9px] font-bold text-slate-500">${statusBadgeText}</div>`}
+              <div style="margin-top: 5px; padding: 3px 6px; background: #eff6ff; color: #1d4ed8; border-radius: 6px; font-weight: 800; font-size: 9px; text-align: center; border: 1px solid #bfdbfe;">
+                👉 Cliquer pour tracer le trajet & retrouver la mission
+              </div>
             </div>
           `);
         }
@@ -441,23 +503,56 @@ window.ProtecSystems = {
     const cityName = data.city || '';
     const imgUrl = game.getVehicleImage ? game.getVehicleImage(data.vehicleType || 'VPSP') : `images/vehicles/${data.vehicleType || 'VPSP'}.png`;
 
+    const isMine = (data.senderId && game.player?.id && String(data.senderId) === String(game.player.id)) ||
+                   (game.vehicles && game.vehicles.some(v => v.id === data.vehicleId || v.name === data.vehicleName));
+
     const iconHtml = `
-      <div class="vehicle-marker-container flex items-center gap-1.5 px-2 py-1 rounded-xl bg-white/95 border-2 ${isEmergency ? 'border-indigo-600 ring-2 ring-indigo-400/50' : 'border-indigo-300 shadow-md'} shadow-xl text-slate-800 text-[10px] font-black cursor-pointer">
-        ${isEmergency ? '<div class="beacon-flash" style="background:#4f46e5 !important; box-shadow:0 0 10px #6366f1 !important;"></div>' : '<div class="w-2 h-2 rounded-full bg-indigo-500"></div>'}
-        <img src="${imgUrl}" alt="${vehName}" class="h-4 w-7 object-contain flex-shrink-0 drop-shadow-sm" onerror="this.style.display='none'" />
-        <span class="tracking-tight">${vehName}</span>
-        <span class="text-[8px] px-1 py-0.2 rounded font-extrabold bg-indigo-100 text-indigo-700 uppercase">${playerName}</span>
+      <div class="vehicle-compact-marker is-remote ${isEmergency ? 'is-emergency' : ''}" title="${vehName}">
+        ${isEmergency ? `
+          <div class="vehicle-roof-beacon"></div>
+          <div class="vehicle-roof-beacon-halo"></div>
+        ` : ''}
+        <img src="${imgUrl}" alt="${vehName}" class="vehicle-compact-img" onerror="this.src='images/vehicles/VPSP.png'" />
       </div>
     `;
 
     const icon = L.divIcon({
       html: iconHtml,
-      className: 'vehicle-leaflet-icon',
-      iconSize: [142, 32],
-      iconAnchor: [71, 16]
+      className: 'vehicle-leaflet-icon-clean',
+      iconSize: [40, 40],
+      iconAnchor: [20, 20]
     });
 
     const marker = L.marker(routeCoords[0], { icon: icon, zIndexOffset: isEmergency ? 1100 : 750 }).addTo(game.map);
+
+    // Clic sur le véhicule distant / allié : tracer le trajet et si c'est le mien, ouvrir la mission
+    marker.on('click', () => {
+      if (game.map && polyline) {
+        try {
+          const bounds = polyline.getBounds();
+          if (bounds && bounds.isValid()) {
+            game.map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
+          }
+        } catch (e) {}
+        polyline.setStyle({ weight: 7, opacity: 1 });
+        setTimeout(() => polyline.setStyle({ weight: 4, opacity: 0.8 }), 1800);
+      }
+
+      if (isMine && data.missionId) {
+        if (typeof game.openMissionDetails === 'function') {
+          game.openMissionDetails(data.missionId);
+        } else if (typeof game.openMissionDrawer === 'function') {
+          game.openMissionDrawer(data.missionId);
+        }
+        if (typeof game.showToast === 'function') {
+          game.showToast('Suivi de Mon Véhicule 🚑', `Centrage sur ${vehName} (${stationName})`, 'blue', { type: 'mission', id: data.missionId });
+        }
+      } else {
+        if (typeof game.showToast === 'function') {
+          game.showToast('Antenne Partenaire 🚑', `${vehName} (${stationName}) • Directeur : ${playerName}`, 'indigo');
+        }
+      }
+    });
 
     const distKm = Math.max(0.8, Math.hypot(
       (data.dest.lat - data.origin.lat) * 111,
@@ -468,17 +563,27 @@ window.ProtecSystems = {
     const durationMs = data.durationMs || Math.max(45000, Math.round((distKm / realisticSpeedKmh) * 3600 * 1000 * 0.85));
 
     marker.bindTooltip(`
-      <div style="font-family: inherit; font-size: 11px; line-height: 1.35;">
-        <strong style="color: #1e1b4b; font-size: 12px;">${vehName}</strong><br>
-        <span style="color: #4f46e5; font-weight: 700;">Directeur : ${playerName}</span><br>
-        <span style="color: #64748b;">${stationName} (${cityName})</span><br>
-        <span style="color: #0369a1;">Vitesse : ~${realisticSpeedKmh} km/h • Distance : ${distKm.toFixed(1)} km</span><br>
-        <span style="color: ${isEmergency ? '#dc2626' : '#475569'}; font-weight: 700;">${isEmergency ? '🚨 Départ Urgence' : 'Déplacement Normal'}</span>
+      <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${isEmergency ? '#ef4444' : '#6366f1'};"></span>
+          <strong style="color: #1e1b4b; font-size: 12px;">${vehName}</strong>
+        </div>
+        <div style="color: #4338ca; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName} (${cityName || 'Secteur'})</div>
+        <div style="color: #475569; font-size: 10px;">👤 Directeur : ${playerName}</div>
+        <div style="color: #0369a1; font-size: 10px; margin-top: 1px;">Vitesse : ~${realisticSpeedKmh} km/h • Reste : <strong>${distKm.toFixed(1)} km</strong></div>
+        <div style="color: ${isEmergency ? '#dc2626' : '#475569'}; font-weight: 700; font-size: 10px; margin-top: 2px;">
+          ${isEmergency ? '🚨 Départ Urgence' : 'Déplacement Normal'} • ${data.missionTitle || 'Opérations'}
+        </div>
+        ${isMine ? `
+          <div style="margin-top: 5px; padding: 3px 6px; background: #eff6ff; color: #1d4ed8; border-radius: 6px; font-weight: 800; font-size: 9px; text-align: center; border: 1px solid #bfdbfe;">
+            👉 Cliquer pour tracer le trajet & retrouver la mission
+          </div>
+        ` : ''}
       </div>
     `, {
       direction: 'top',
-      offset: [0, -18],
-      className: 'glass-panel text-xs p-2'
+      offset: [0, -22],
+      className: 'glass-panel p-2 shadow-xl border border-white/80'
     });
 
     const transit = {
@@ -706,26 +811,29 @@ window.ProtecSystems = {
         </div>
       `;
     } else if (phase === 3) {
+      const vType = mission.assignedCrew?.vehicles?.[0]?.type || mission.requiredVehicles?.[0] || 'VPSP';
+      const imgUrl = game?.getVehicleImage ? game.getVehicleImage(vType) : `images/vehicles/${vType}.png`;
       iconHtml = `
-        <div class="timeline-marker flex items-center gap-1.5 px-2 py-1 rounded-xl bg-red-600 text-white border-2 border-red-300 ring-2 ring-red-400/50 shadow-xl text-[10px] font-black cursor-pointer">
-          <div class="beacon-flash"></div>
-          <span>🚨 ${vehName}</span>
-          <span class="text-[8px] bg-red-900 px-1 py-0.5 rounded font-bold uppercase">Urgence</span>
+        <div class="vehicle-compact-marker is-emergency" title="${vehName}">
+          <div class="vehicle-roof-beacon"></div>
+          <div class="vehicle-roof-beacon-halo"></div>
+          <img src="${imgUrl}" alt="${vehName}" class="vehicle-compact-img" onerror="this.src='images/vehicles/VPSP.png'" />
         </div>
       `;
     } else if (phase === 4) {
+      const vType = mission.assignedCrew?.vehicles?.[0]?.type || mission.requiredVehicles?.[0] || 'VPSP';
+      const imgUrl = game?.getVehicleImage ? game.getVehicleImage(vType) : `images/vehicles/${vType}.png`;
       iconHtml = `
-        <div class="timeline-marker flex items-center gap-1.5 px-2 py-1 rounded-xl bg-emerald-600 text-white border-2 border-white shadow-xl text-[10px] font-black cursor-pointer">
-          <span class="text-xs">🏥</span>
-          <span>${vehName} sur place</span>
+        <div class="vehicle-compact-marker" title="${vehName} sur place">
+          <img src="${imgUrl}" alt="${vehName}" class="vehicle-compact-img" onerror="this.src='images/vehicles/VPSP.png'" />
         </div>
       `;
     } else if (phase === 5) {
+      const vType = mission.assignedCrew?.vehicles?.[0]?.type || mission.requiredVehicles?.[0] || 'VPSP';
+      const imgUrl = game?.getVehicleImage ? game.getVehicleImage(vType) : `images/vehicles/${vType}.png`;
       iconHtml = `
-        <div class="timeline-marker flex items-center gap-1.5 px-2 py-1 rounded-xl bg-sky-700 text-white border-2 border-sky-300 shadow-xl text-[10px] font-black cursor-pointer">
-          <span class="text-xs">🚑</span>
-          <span>${vehName} (Statut 6)</span>
-          <span class="text-[8px] bg-sky-900 px-1 py-0.5 rounded">Retour</span>
+        <div class="vehicle-compact-marker" title="${vehName} retour">
+          <img src="${imgUrl}" alt="${vehName}" class="vehicle-compact-img" onerror="this.src='images/vehicles/VPSP.png'" />
         </div>
       `;
     } else {
@@ -830,26 +938,39 @@ window.ProtecSystems = {
         return;
       }
 
+      const isVehiclePhase = pos.phase >= 3;
+      const myStation = game.stations?.find(s => String(s.id) === String(m.stationId)) || game.stations?.[0];
+      const stationName = myStation?.name || (myStation?.city ? `Antenne de ${myStation.city}` : 'Mon Antenne');
+
       // Création ou mise à jour du marqueur Leaflet
       if (!m._timelineMarker) {
         const icon = L.divIcon({
-          className: 'timeline-leaflet-icon',
+          className: isVehiclePhase ? 'vehicle-leaflet-icon-clean' : 'timeline-leaflet-icon',
           html: pos.iconHtml,
-          iconSize: [140, 32],
-          iconAnchor: [70, 16]
+          iconSize: isVehiclePhase ? [40, 40] : [110, 30],
+          iconAnchor: isVehiclePhase ? [20, 20] : [55, 15]
         });
 
         const marker = L.marker([pos.lat, pos.lng], { icon, zIndexOffset: 1500 }).addTo(game.map);
         marker.on('click', () => {
           if (game.openMissionDetails) game.openMissionDetails(m.id);
+          else if (game.openMissionDrawer) game.openMissionDrawer(m.id);
         });
+
         marker.bindTooltip(`
-          <div class="text-xs space-y-1">
-            <strong class="text-pc-blue block">${m.title}</strong>
-            <div class="text-[10px] text-slate-700 font-bold">${pos.status}</div>
-            <div class="text-[9px] text-slate-500">Étape ${pos.phase}/6 • Progression : ${pos.progressPercent}%</div>
+          <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${pos.phase === 3 ? '#ef4444' : '#0284c7'};"></span>
+              <strong style="color: #0f172a; font-size: 12px;">${m.title}</strong>
+            </div>
+            <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName}</div>
+            <div style="color: #475569; font-size: 10px;">Statut : <strong>${pos.status}</strong></div>
+            <div style="color: #0284c7; font-size: 10px;">Étape ${pos.phase}/6 • Progression : ${pos.progressPercent}%</div>
+            <div style="margin-top: 5px; padding: 3px 6px; background: #eff6ff; color: #1d4ed8; border-radius: 6px; font-weight: 800; font-size: 9px; text-align: center; border: 1px solid #bfdbfe;">
+              👉 Cliquer pour ouvrir la mission
+            </div>
           </div>
-        `, { direction: 'top', offset: [0, -18], className: 'glass-panel text-xs p-2' });
+        `, { direction: 'top', offset: [0, -20], className: 'glass-panel p-2 shadow-xl border border-white/80' });
 
         m._timelineMarker = marker;
       } else {
@@ -859,10 +980,17 @@ window.ProtecSystems = {
           iconEl.innerHTML = pos.iconHtml;
         }
         m._timelineMarker.setTooltipContent(`
-          <div class="text-xs space-y-1">
-            <strong class="text-pc-blue block">${m.title}</strong>
-            <div class="text-[10px] text-slate-700 font-bold">${pos.status}</div>
-            <div class="text-[9px] text-slate-500">Étape ${pos.phase}/6 • Étape : ${pos.progressPercent}% • Total : ${Math.round(pos.totalProgress * 100)}%</div>
+          <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${pos.phase === 3 ? '#ef4444' : '#0284c7'};"></span>
+              <strong style="color: #0f172a; font-size: 12px;">${m.title}</strong>
+            </div>
+            <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName}</div>
+            <div style="color: #475569; font-size: 10px;">Statut : <strong>${pos.status}</strong></div>
+            <div style="color: #0284c7; font-size: 10px;">Étape ${pos.phase}/6 • Étape : ${pos.progressPercent}% • Total : ${Math.round(pos.totalProgress * 100)}%</div>
+            <div style="margin-top: 5px; padding: 3px 6px; background: #eff6ff; color: #1d4ed8; border-radius: 6px; font-weight: 800; font-size: 9px; text-align: center; border: 1px solid #bfdbfe;">
+              👉 Cliquer pour ouvrir la mission
+            </div>
           </div>
         `);
       }

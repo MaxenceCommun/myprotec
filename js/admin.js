@@ -852,7 +852,7 @@ window.ProtecAdmin = {
 
       if (activePlayerId || activePlayerName) {
         const primaryStation = (game?.stations && game.stations[0]) || null;
-        const currentMoney = (game?.resources?.money !== undefined) ? game.resources.money : ((game?.resources?.budget !== undefined) ? game.resources.budget : 15000);
+        const currentMoney = (game?.resources?.money !== undefined) ? game.resources.money : ((game?.resources?.budget !== undefined) ? game.resources.budget : 40000);
         const currentVolunteers = game?.volunteers?.length || 4;
         const currentVehicles = game?.vehicles?.length || 1;
         const currentMissions = game?.missions?.length || 0;
