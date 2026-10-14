@@ -133,6 +133,7 @@ window.ProtecAuth = {
 
   async checkSession(game) {
     try {
+      window.ProtecLoader?.setProgress(85, 'Authentification & Synchronisation Cloud...', 'Cloud Supabase');
       // 1. Validation prioritaire via Supabase Cloud (si compte déjà connecté ou client Supabase actif)
       if (window.ProtecSupabase && window.ProtecSupabase.client && this.currentUser) {
         try {
@@ -739,6 +740,7 @@ window.ProtecAuth = {
   },
 
   openAuthModal(isMandatory = false) {
+    window.ProtecLoader?.finish();
     const modal = document.getElementById('auth-modal');
     const closeBtn = document.getElementById('auth-modal-close-btn');
     if (!modal) return;
@@ -1709,9 +1711,11 @@ window.ProtecAuth = {
       try {
         const supaSave = await window.ProtecSupabase.loadGameState(this.currentUser.id, this.currentUser.username);
         if (supaSave && supaSave.save_data && supaSave.save_data.stations && supaSave.save_data.stations.length > 0) {
+          window.ProtecLoader?.setProgress(95, 'Synchronisation de votre antenne...', 'Synchronisation');
           this.applyCloudSave(game, supaSave.save_data);
           this.lastSyncTime = new Date(supaSave.updated_at || Date.now());
           this.updateHeaderUI();
+          setTimeout(() => window.ProtecLoader?.finish('Antenne synchronisée ! Bon service.'), 300);
           return;
         }
       } catch (supaErr) {
@@ -1729,9 +1733,11 @@ window.ProtecAuth = {
         const result = await res.json();
         if (result.save && result.save.stations && result.save.stations.length > 0) {
           // Une sauvegarde officielle avec antenne existe en BDD : l'appliquer à 100%
+          window.ProtecLoader?.setProgress(95, 'Synchronisation de votre antenne...', 'Synchronisation');
           this.applyCloudSave(game, result.save);
           this.lastSyncTime = new Date(result.savedAt || Date.now());
           this.updateHeaderUI();
+          setTimeout(() => window.ProtecLoader?.finish('Antenne synchronisée ! Bon service.'), 300);
         } else {
           // L'antenne a été supprimée ou n'existe pas en BDD : PURGE TOTALE DE TOUTE PERSISTANCE LOCALE
           game.stations = [];
@@ -1757,6 +1763,7 @@ window.ProtecAuth = {
     // Si aucune antenne n'existe en BDD, lancer impérativement le wizard officiel d'implantation
     if (!game.stations || game.stations.length === 0) {
       setTimeout(() => {
+        window.ProtecLoader?.finish();
         if (window.ProtecOnboarding) {
           window.ProtecOnboarding.showWizard(game);
         } else if (game.showOnboardingModal) {
@@ -1934,6 +1941,7 @@ window.ProtecAuth = {
       game.candidatures = Array.isArray(savedData.candidatures) ? savedData.candidatures : [];
       game.formations = Array.isArray(savedData.formations) ? savedData.formations : [];
       game.annualContracts = Array.isArray(savedData.annualContracts) ? savedData.annualContracts : [];
+      if (Array.isArray(savedData.alertTriggerLogs)) game.alertTriggerLogs = savedData.alertTriggerLogs;
       if (Array.isArray(savedData.messagesHistory)) game.messagesHistory = savedData.messagesHistory;
       if (savedData.monthlyEventsGenerated && typeof savedData.monthlyEventsGenerated === 'object') game.monthlyEventsGenerated = savedData.monthlyEventsGenerated;
       if (savedData.reputation_samu !== undefined) game.reputation_samu = savedData.reputation_samu;

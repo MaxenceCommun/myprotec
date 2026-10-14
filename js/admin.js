@@ -3001,13 +3001,33 @@ window.ProtecAdmin = {
     }
 
     const catalog = (window.ProtecEcussons?.catalog?.length ? window.ProtecEcussons.catalog : (window.ProtecEcussons?.FALLBACK_CATALOG || []));
-    const badge = catalog.find(b => b.code === badgeCode) || {
-      code: badgeCode,
-      nom: badgeCode,
-      rarete: badgeCode === 'badge_admin' ? 'historique' : 'epique'
-    };
+    let badge = catalog.find(b => b.code === badgeCode);
+    if (!badge && this.badgesCache) {
+      const bFromCache = this.badgesCache.find(b => b.code === badgeCode);
+      if (bFromCache) {
+        badge = {
+          id: bFromCache.id,
+          code: bFromCache.code,
+          nom: bFromCache.name || bFromCache.nom || badgeCode,
+          name: bFromCache.name || bFromCache.nom || badgeCode,
+          rarete: bFromCache.rarity || bFromCache.rarete || 'epique',
+          imageUrl: bFromCache.image_url || bFromCache.imageUrl
+        };
+      }
+    }
+    if (!badge) {
+      badge = {
+        code: badgeCode,
+        nom: badgeCode,
+        name: badgeCode,
+        rarete: badgeCode === 'badge_admin' ? 'historique' : 'epique'
+      };
+    }
 
+    const qty = Number(quantity || 1);
     let success = false;
+
+    // 1. Tenter l'appel au backend local sans jamais bloquer s'il est hors-ligne
     try {
       const res = await fetch('/api/admin/badges/award', {
         method: 'POST',
@@ -3015,7 +3035,7 @@ window.ProtecAdmin = {
         body: JSON.stringify({
           userId,
           badge,
-          quantity: Number(quantity || 1),
+          quantity: qty,
           notify: !!notify
         })
       });
@@ -3024,17 +3044,27 @@ window.ProtecAdmin = {
         if (data.success) success = true;
       }
     } catch (e) {
-      console.warn('Erreur /api/admin/badges/award:', e);
+      // Ignorer silencieusement en mode Cloud Supabase
     }
 
-    // Répercussion locale & cache
+    // 2. Persistance directe dans Supabase Cloud (table game_saves & antenne_ecussons)
+    if (window.ProtecSupabase && window.ProtecSupabase.client) {
+      try {
+        const supaOk = await window.ProtecSupabase.awardBadge(userId, badge, qty, notify);
+        if (supaOk) success = true;
+      } catch (errSupa) {
+        console.warn('Persistance Supabase Cloud écusson:', errSupa);
+      }
+    }
+
+    // 3. Répercussion locale & cache administrateur
     const users = this.usersCache || [];
     const applyToUser = (u) => {
       if (!u.saveData) u.saveData = {};
       if (!u.saveData.localEcussons) u.saveData.localEcussons = [];
       const ex = u.saveData.localEcussons.find(l => l.code === badgeCode);
-      if (ex) ex.quantite = (ex.quantite || 1) + Number(quantity || 1);
-      else u.saveData.localEcussons.push({ code: badgeCode, quantite: Number(quantity || 1) });
+      if (ex) ex.quantite = (ex.quantite || 1) + qty;
+      else u.saveData.localEcussons.push({ code: badgeCode, quantite: qty });
     };
 
     if (userId === 'all') {
@@ -3048,20 +3078,42 @@ window.ProtecAdmin = {
       }
     }
 
-    // Si le joueur modifié est le joueur en cours, attribuer directement dans ProtecEcussons
+    // 4. Si le joueur modifié est le joueur en cours (ou 'all')
     if (window.game) {
       const g = window.game;
       const isCur = (userId === 'all') || (g.player && g.player.id === userId) || (window.ProtecAuth?.currentUser && window.ProtecAuth.currentUser.id === userId);
       if (isCur) {
         if (window.ProtecEcussons && typeof window.ProtecEcussons.attribuerEcusson === 'function') {
-          await window.ProtecEcussons.attribuerEcusson(badgeCode, null, notify);
+          for (let i = 0; i < qty; i++) {
+            await window.ProtecEcussons.attribuerEcusson(badgeCode, null, (i === 0 && notify));
+          }
+        } else {
+          if (!g.localEcussons) g.localEcussons = [];
+          const loc = g.localEcussons.find(l => l.code === badgeCode);
+          if (loc) loc.quantite = (loc.quantite || 1) + qty;
+          else g.localEcussons.push({ code: badgeCode, quantite: qty });
+          if (typeof g.saveGame === 'function') g.saveGame();
         }
+        success = true;
       }
     }
 
+    // 5. Diffusion broadcast Realtime si pas déjà fait par ProtecSupabase
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.broadcastBadgeAwarded === 'function') {
+      window.ProtecSupabase.broadcastBadgeAwarded({
+        userId,
+        badge,
+        quantity: qty,
+        notify: !!notify
+      });
+    }
+
     if (success) {
+      const targetUser = (this.usersCache || []).find(u => u.id === userId);
+      const targetName = userId === 'all' ? 'tous les directeurs' : (targetUser?.username || 'le joueur');
+      const badgeTitle = badge.nom || badge.name || badgeCode;
       if (window.game) {
-        window.game.showToast('Écusson Distribué', `L'écusson « ${badge.nom || badgeCode} » (x${quantity}) a été décerné avec succès !`, 'green');
+        window.game.showToast('Écusson Distribué !', `L'écusson « ${badgeTitle} » (x${qty}) a été remis à ${targetName}.`, 'green');
       }
       this.renderBadgeManagerModalContent();
     } else {
@@ -3088,6 +3140,16 @@ window.ProtecAdmin = {
       }
     } catch (e) {
       console.warn('Erreur /api/admin/badges/revoke:', e);
+    }
+
+    // Persistance directe dans Supabase Cloud
+    if (window.ProtecSupabase && window.ProtecSupabase.client) {
+      try {
+        await window.ProtecSupabase.revokeBadge(userId, badgeCode, removeAll);
+        success = true;
+      } catch (errSupa) {
+        console.warn('Erreur Supabase revokeBadge:', errSupa);
+      }
     }
 
     // Mise à jour cache local
@@ -3118,7 +3180,17 @@ window.ProtecAdmin = {
           }
         }
         if (window.ProtecEcussons?.refreshPlayerEcussons) window.ProtecEcussons.refreshPlayerEcussons(g);
+        success = true;
       }
+    }
+
+    // Broadcast Supabase Realtime
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.broadcastBadgeRevoked === 'function') {
+      window.ProtecSupabase.broadcastBadgeRevoked({
+        userId,
+        badgeCode,
+        removeAll: !!removeAll
+      });
     }
 
     if (window.game) window.game.showToast('Écusson Modifié', `L'écusson a été mis à jour pour ce directeur.`, 'blue');
@@ -5825,6 +5897,7 @@ window.ProtecAdmin = {
             <label class="block font-bold text-slate-700 mb-1">Sélectionner le Directeur bénéficiaire :</label>
             <select id="adm-award-user" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required>
               <option value="">-- Choisir un directeur dans la base --</option>
+              <option value="all">🌟 TOUS LES DIRECTEURS (Distribution Fédérale Globale)</option>
               ${players.map(p => `
                 <option value="${p.id}">${p.username} (${p.stationName || 'Antenne'} - ${p.city || 'Ville'})</option>
               `).join('')}
@@ -5848,29 +5921,23 @@ window.ProtecAdmin = {
   },
 
   async submitAwardBadge(badgeCode) {
-    const userId = document.getElementById('adm-award-user')?.value;
-    const qty = parseInt(document.getElementById('adm-award-qty')?.value || '1', 10);
-    if (!userId) return;
-
-    const user = (this.usersCache || []).find(u => u.id === userId);
-    const badge = (this.badgesCache || []).find(b => b.code === badgeCode);
-
-    try {
-      const res = await fetch('/api/admin/badges/award', {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify({ userId, badgeCode, quantity: qty })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        document.getElementById('admin-award-badge-modal')?.classList.add('hidden');
-        if (window.game) window.game.showToast('Écusson Décerné !', `L'écusson « ${badge.name} » a été remis à ${user?.username || 'le joueur'}.`, 'green');
+    const userSelect = document.getElementById('adm-award-user');
+    const userId = userSelect?.value;
+    const qty = parseInt(document.getElementById('adm-award-qty')?.value || '1', 10) || 1;
+    if (!userId) {
+      if (window.ProtecDialog) {
+        await window.ProtecDialog.alert("Veuillez sélectionner un directeur destinataire.", "Destinataire Requis");
       } else {
-        alert(data.error || "Erreur lors de l'attribution.");
+        alert("Veuillez sélectionner un directeur destinataire.");
       }
-    } catch (e) {
-      alert("Erreur réseau lors de l'attribution de l'écusson.");
+      return;
     }
+
+    // Fermer la modale
+    document.getElementById('admin-award-badge-modal')?.classList.add('hidden');
+
+    // Déléguer au système officiel (persistance Supabase, Realtime, Cache, Backend local)
+    await this.awardBadgeToPlayer(userId, badgeCode, qty, true);
   },
 
   // =========================================================================

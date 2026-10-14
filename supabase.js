@@ -368,6 +368,8 @@ window.ProtecSupabase = {
           missionsCount: (sData?.missions?.length !== undefined) ? sData.missions.length : 0,
           reputationScore: (sData?.resources?.reputationScore !== undefined) ? sData.resources.reputationScore : 50,
           timeTracking: sData?.timeTracking || p.time_tracking || null,
+          platformStats: sData?.platformStats || p.platform_stats || null,
+          lastDevice: sData?.lastDevice || p.last_device || null,
           lastSaved: s?.updated_at || null,
           saveData: sData
         };
@@ -473,7 +475,34 @@ window.ProtecSupabase = {
     return 'h_' + Math.abs(h).toString(16);
   },
 
-  // 1. Inscription d'un nouveau Directeur d'Antenne dans Supabase
+  // Récupération de l'IP publique du client (avec fallback rapide)
+  async getClientIp() {
+    try {
+      const res = await fetch('/api/client-ip', { signal: AbortSignal.timeout(1200) }).catch(() => null);
+      if (res && res.ok) {
+        const d = await res.json().catch(() => null);
+        if (d && d.ip) return d.ip;
+      }
+    } catch (e) {}
+
+    try {
+      const res2 = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(1500) }).catch(() => null);
+      if (res2 && res2.ok) {
+        const d2 = await res2.json().catch(() => null);
+        if (d2 && d2.ip) return d2.ip;
+      }
+    } catch (e) {}
+
+    return '127.0.0.1';
+  },
+
+  generateReferralCode(username) {
+    const prefix = (username || 'PC').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'PROT';
+    const rand = Math.random().toString(36).substring(2, 7).toUpperCase();
+    return `${prefix}-${rand}`;
+  },
+
+  // 1. Inscription d'un nouveau Directeur d'Antenne dans Supabase avec parrainage et sécurité anti-fraude
   async registerPlayer(username, password, extraData = {}) {
     if (!this.client) return { error: 'Client BDD non initialisé' };
 
@@ -489,7 +518,10 @@ window.ProtecSupabase = {
         return { error: 'Ce nom de directeur est déjà utilisé. Veuillez en choisir un autre.' };
       }
 
-      // La ville correspond strictement à l'implantation réelle du bâtiment
+      const clientIp = await this.getClientIp();
+      const myReferralCode = this.generateReferralCode(username.trim());
+
+      // La ville correspond à l'implantation réelle du bâtiment
       let detectedCity = extraData.city || null;
       if (!detectedCity && extraData.stationName) {
         const cleanSt = extraData.stationName.replace(/^antenne\s+(de\s+)?/i, '').trim();
@@ -499,12 +531,97 @@ window.ProtecSupabase = {
       // Hachage du mot de passe
       const pwdHash = await this.hashPassword(password);
 
+      // Traitement du code parrain
+      let referredBy = null;
+      let referralStatus = null;
+      let refereeBonusGranted = false;
+      const refCodeInput = (extraData.referralCode || extraData.referral_code || '').trim();
+
+      if (refCodeInput) {
+        // Trouver le parrain
+        const { data: referrer } = await this.client
+          .from('players')
+          .select('*')
+          .or(`referral_code.ilike.${refCodeInput},username.ilike.${refCodeInput}`)
+          .maybeSingle();
+
+        if (!referrer) {
+          referralStatus = {
+            success: false,
+            code: 'CODE_NOT_FOUND',
+            message: 'Code de parrainage introuvable. Inscription poursuivie sans parrain.'
+          };
+        } else if (referrer.username.toLowerCase() === username.trim().toLowerCase()) {
+          // Auto-parrainage
+          await this.logFraudAttemptSupabase(referrer.id, username.trim(), clientIp, extraData.deviceFingerprint, 'SELF_REFERRAL');
+          referralStatus = {
+            success: false,
+            code: 'SELF_REFERRAL',
+            message: 'Auto-parrainage interdit.'
+          };
+        } else if (referrer.referral_suspended) {
+          // Parrain suspendu
+          await this.logFraudAttemptSupabase(referrer.id, username.trim(), clientIp, extraData.deviceFingerprint, 'REFERRAL_SUSPENDED');
+          referralStatus = {
+            success: false,
+            code: 'REFERRAL_SUSPENDED',
+            message: 'Ce parrain est temporairement inéligible au parrainage.'
+          };
+        } else {
+          // Contrôle anti-fraude strict IP
+          let fraudReason = null;
+          const referrerIps = [referrer.registration_ip, ...(Array.isArray(referrer.last_known_ips) ? referrer.last_known_ips : [])].filter(Boolean);
+
+          if (clientIp && referrerIps.includes(clientIp)) {
+            fraudReason = 'SAME_IP_AS_REFERRER';
+          }
+
+          if (!fraudReason && clientIp) {
+            // Contrôle 2 : IP déjà utilisée par un autre filleul
+            const { data: existingReferees } = await this.client
+              .from('players')
+              .select('id, registration_ip, last_known_ips')
+              .not('referred_by', 'is', null);
+
+            if (existingReferees && existingReferees.length > 0) {
+              for (const ref of existingReferees) {
+                const ips = [ref.registration_ip, ...(Array.isArray(ref.last_known_ips) ? ref.last_known_ips : [])].filter(Boolean);
+                if (ips.includes(clientIp)) {
+                  fraudReason = 'IP_ALREADY_USED_BY_ANOTHER_REFERRAL';
+                  break;
+                }
+              }
+            }
+          }
+
+          if (fraudReason) {
+            await this.logFraudAttemptSupabase(referrer.id, username.trim(), clientIp, extraData.deviceFingerprint, fraudReason);
+            referralStatus = {
+              success: false,
+              fraudDetected: true,
+              code: fraudReason,
+              message: 'Parrainage refusé : anomalie de sécurité réseau détectée (adresse IP doublon).'
+            };
+          } else {
+            // Parrainage certifié
+            referredBy = referrer.id;
+            refereeBonusGranted = true;
+            referralStatus = {
+              success: true,
+              referrerName: referrer.username,
+              bonus: 1500,
+              message: 'Parrainage validé ! Bonus de bienvenue de 1 500 € accordé.'
+            };
+          }
+        }
+      }
+
       // Nettoyage préventif de toute sauvegarde orpheline résiduelle pour ce pseudo
       try {
         await this.client.from('game_saves').delete().eq('username', username.trim());
       } catch (cleanErr) {}
 
-      // 2. Création de l'enregistrement avec mot de passe et ville exacte
+      // Création du compte joueur (uniquement les colonnes valides dans Supabase)
       const newPlayer = {
         username: username.trim(),
         password_hash: pwdHash,
@@ -512,10 +629,19 @@ window.ProtecSupabase = {
         city: detectedCity,
         department_code: extraData.departmentCode || '54',
         role: 'directeur',
-        is_admin: false, // Sécurité : jamais administrateur par défaut à l'inscription
+        is_admin: false,
         alliance_id: extraData.allianceId || null,
         created_at: new Date().toISOString(),
-        last_login: new Date().toISOString()
+        last_login: new Date().toISOString(),
+        time_tracking: {
+          lastSeen: 0,
+          idleSeconds: 0,
+          activeSeconds: 0,
+          referral_code: myReferralCode,
+          referred_by: referredBy,
+          registration_ip: clientIp,
+          last_known_ips: clientIp ? [clientIp] : []
+        }
       };
 
       const { data: inserted, error: insertErr } = await this.client
@@ -529,10 +655,58 @@ window.ProtecSupabase = {
         return { error: insertErr.message || 'Erreur lors de l’inscription BDD' };
       }
 
-      return { user: inserted };
+      // Si parrainage certifié, insérer le referral_log
+      if (referredBy && inserted && inserted.id) {
+        try {
+          await this.client.from('referral_logs').insert({
+            referrer_id: referredBy,
+            referee_id: inserted.id,
+            status: 'pending',
+            reward_referee_granted: true,
+            reward_referrer_granted: false,
+            created_at: new Date().toISOString()
+          });
+        } catch (logErr) {
+          console.warn('Erreur insertion referral_logs Supabase:', logErr);
+        }
+      }
+
+      return { user: inserted, referralStatus, refereeBonusGranted };
     } catch (e) {
       console.error('Exception inscription Supabase:', e);
       return { error: e.message || 'Erreur réseau BDD' };
+    }
+  },
+
+  // Enregistrement d'une tentative de fraude dans Supabase
+  async logFraudAttemptSupabase(referrerId, refereeUsername, ipDetected, deviceFingerprint, reason) {
+    if (!this.client || !referrerId) return;
+    try {
+      await this.client.from('fraud_logs').insert({
+        referrer_id: referrerId,
+        attempted_referee_username: refereeUsername || 'Inconnu',
+        ip_detected: ipDetected || 'Inconnue',
+        device_fingerprint: deviceFingerprint || null,
+        reason: reason || 'SUSPECTED_FRAUD',
+        reviewed: false,
+        timestamp: new Date().toISOString()
+      });
+
+      // Seuil de récidive : vérifier si >= 3 fraudes non résolues
+      const { data: unreviewedFrauds } = await this.client
+        .from('fraud_logs')
+        .select('id')
+        .eq('referrer_id', referrerId)
+        .eq('reviewed', false);
+
+      if (unreviewedFrauds && unreviewedFrauds.length >= 3) {
+        await this.client
+          .from('players')
+          .update({ referral_suspended: true })
+          .eq('id', referrerId);
+      }
+    } catch (e) {
+      console.warn('Erreur log fraud Supabase:', e);
     }
   },
 
@@ -551,6 +725,10 @@ window.ProtecSupabase = {
         return { error: 'Directeur introuvable. Veuillez vérifier vos identifiants.' };
       }
 
+      if (player.is_banned) {
+        return { error: 'Ce compte joueur a été suspendu par un administrateur.' };
+      }
+
       // Vérification sécurisée du mot de passe
       if (player.password_hash) {
         const inputHash = await this.hashPassword(password);
@@ -558,7 +736,6 @@ window.ProtecSupabase = {
           return { error: 'Mot de passe incorrect. Veuillez vérifier vos identifiants.' };
         }
       } else if (password) {
-        // Enregistrement transparent du mot de passe pour les comptes existants
         const newHash = await this.hashPassword(password);
         await this.client
           .from('players')
@@ -567,16 +744,169 @@ window.ProtecSupabase = {
         player.password_hash = newHash;
       }
 
-      // Mise à jour de la dernière connexion
-      await this.client
-        .from('players')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', player.id);
+      // Mise à jour de last_login (colonne native garantie dans Supabase)
+      try {
+        await this.client
+          .from('players')
+          .update({ last_login: new Date().toISOString() })
+          .eq('id', player.id);
+      } catch (updErr) {
+        console.warn('Update last_login différé:', updErr);
+      }
 
       return { user: player };
     } catch (e) {
       console.error('Exception connexion Supabase:', e);
       return { error: e.message || 'Erreur réseau BDD' };
+    }
+  },
+
+  // Valider le palier de première intervention pour le parrain dans Supabase (+2 500 €)
+  async claimReferralFirstMissionSupabase(playerId) {
+    if (!this.client || !playerId) return { error: 'PlayerId requis' };
+    try {
+      const { data: log } = await this.client
+        .from('referral_logs')
+        .select('*')
+        .eq('referee_id', playerId)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+      if (!log) return { success: false, message: 'Aucun parrainage en attente.' };
+
+      // Récupérer le parrain
+      const { data: referrer } = await this.client
+        .from('players')
+        .select('*')
+        .eq('id', log.referrer_id)
+        .single();
+
+      if (!referrer || referrer.referral_suspended) {
+        return { success: false, error: 'Parrain introuvable ou suspendu.' };
+      }
+
+      // Valider le log
+      await this.client
+        .from('referral_logs')
+        .update({
+          status: 'completed',
+          reward_referrer_granted: true,
+          validated_at: new Date().toISOString()
+        })
+        .eq('id', log.id);
+
+      // Créditer le parrain dans game_saves
+      const { data: saveRecord } = await this.client
+        .from('game_saves')
+        .select('*')
+        .eq('user_id', referrer.id)
+        .maybeSingle();
+
+      if (saveRecord && saveRecord.save_data) {
+        const sData = saveRecord.save_data;
+        if (!sData.resources) sData.resources = {};
+        sData.resources.money = (Number(sData.resources.money) || 15000) + 2500;
+        if (sData.resources.budget !== undefined) sData.resources.budget += 2500;
+        if (sData.resources.funds !== undefined) sData.resources.funds += 2500;
+
+        await this.client
+          .from('game_saves')
+          .update({
+            save_data: sData,
+            funds: sData.resources.money,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', saveRecord.id);
+      }
+
+      return {
+        success: true,
+        referrerName: referrer.username,
+        bonusGranted: 2500
+      };
+    } catch (e) {
+      console.warn('Erreur claimReferralFirstMission Supabase:', e);
+      return { error: e.message };
+    }
+  },
+
+  // Données admin des parrainages et incidents depuis Supabase
+  async getReferralAdminDataSupabase() {
+    if (!this.client) return null;
+    try {
+      const [fraudsRes, referralsRes, playersRes] = await Promise.all([
+        this.client.from('fraud_logs').select('*').order('timestamp', { ascending: false }),
+        this.client.from('referral_logs').select('*').order('created_at', { ascending: false }),
+        this.client.from('players').select('id, username, referral_code, referral_suspended, is_banned')
+      ]);
+
+      const playersMap = {};
+      (playersRes.data || []).forEach(p => { playersMap[p.id] = p; });
+
+      const fraudCountsByReferrer = {};
+      (fraudsRes.data || []).forEach(f => {
+        fraudCountsByReferrer[f.referrer_id] = (fraudCountsByReferrer[f.referrer_id] || 0) + 1;
+      });
+
+      const enrichedFrauds = (fraudsRes.data || []).map(f => {
+        const p = playersMap[f.referrer_id];
+        const count = fraudCountsByReferrer[f.referrer_id] || 1;
+        return {
+          ...f,
+          referrer_username: p ? p.username : 'Inconnu',
+          referrer_suspended: p ? !!p.referral_suspended : false,
+          referrer_is_banned: p ? !!p.is_banned : false,
+          total_fraud_attempts: count,
+          is_recidivist: count >= 2
+        };
+      });
+
+      const enrichedReferrals = (referralsRes.data || []).map(r => {
+        const referrer = playersMap[r.referrer_id];
+        const referee = playersMap[r.referee_id];
+        return {
+          ...r,
+          referrer_username: referrer ? referrer.username : 'Inconnu',
+          referee_username: referee ? referee.username : 'Inconnu'
+        };
+      });
+
+      return {
+        fraudLogs: enrichedFrauds,
+        referralLogs: enrichedReferrals,
+        summary: {
+          totalReferrals: enrichedReferrals.length,
+          completedReferrals: enrichedReferrals.filter(r => r.status === 'completed').length,
+          totalFrauds: enrichedFrauds.length,
+          unreviewedFrauds: enrichedFrauds.filter(f => !f.reviewed).length,
+          recidivistCount: Object.values(fraudCountsByReferrer).filter(c => c >= 2).length
+        }
+      };
+    } catch (e) {
+      console.warn('Erreur getReferralAdminDataSupabase:', e);
+      return null;
+    }
+  },
+
+  // Actions administratives sur la fraude ou les parrains dans Supabase
+  async processAdminReferralActionSupabase(action, targetId, extra = {}) {
+    if (!this.client || !targetId) return { error: 'Paramètres invalides' };
+    try {
+      if (action === 'review_fraud') {
+        await this.client.from('fraud_logs').update({ reviewed: true }).eq('id', targetId);
+        return { success: true };
+      }
+      if (action === 'reactivate_referrer') {
+        await this.client.from('players').update({ referral_suspended: false }).eq('id', targetId);
+        return { success: true };
+      }
+      if (action === 'ban_referrer') {
+        await this.client.from('players').update({ is_banned: true, referral_suspended: true }).eq('id', targetId);
+        return { success: true };
+      }
+      return { error: 'Action non gérée' };
+    } catch (e) {
+      return { error: e.message };
     }
   },
 
@@ -661,12 +991,16 @@ window.ProtecSupabase = {
         adRewards: game.adRewards,
         workplaceEquipment: game.workplaceEquipment,
         annualContracts: game.annualContracts || [],
+        alertTriggerLogs: game.alertTriggerLogs || [],
         messagesHistory: game.messagesHistory || {},
         monthlyEventsGenerated: game.monthlyEventsGenerated || {},
         reputation_samu: game.reputation_samu !== undefined ? game.reputation_samu : 50,
         reputation_sdis: game.reputation_sdis !== undefined ? game.reputation_sdis : 50,
         reputation_prefecture: game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50,
-        reputation_villes: game.reputation_villes || {}
+        reputation_villes: game.reputation_villes || {},
+        departmentInfrastructures: game.departmentInfrastructures || {},
+        platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(game.player, game)) || null,
+        lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null
       };
 
       const payload = {
@@ -793,7 +1127,15 @@ window.ProtecSupabase = {
     if (!this.client || !player || !station) return;
 
     try {
-      const isUUID = typeof player.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(player.id);
+      // Contrôle de conformité de l'alliance_id pour respecter la clé étrangère alliance_stations_alliance_id_fkey
+      let validAllianceId = null;
+      if (player.allianceId && player.allianceId !== 'alliance-fnpc') {
+        const isAllianceUUID = typeof player.allianceId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(player.allianceId);
+        if (isAllianceUUID) {
+          validAllianceId = player.allianceId;
+        }
+      }
+
       const payload = {
         id: String(station.id),
         player_id: isUUID ? player.id : null,
@@ -805,23 +1147,26 @@ window.ProtecSupabase = {
         level: station.level || 1,
         vehicles_count: (station.vehicles || []).length,
         volunteers_count: (station.volunteers || []).length,
-        alliance_id: player.allianceId || 'alliance-fnpc',
+        alliance_id: validAllianceId,
         last_sync: new Date().toISOString()
       };
 
-      const { error } = await this.client
+      // 1. Contrôle préalable d'existence pour éviter l'erreur HTTP 409 (Conflict)
+      const { data: existing } = await this.client
         .from('alliance_stations')
-        .upsert(payload, { onConflict: 'id' });
+        .select('id')
+        .eq('id', String(station.id))
+        .maybeSingle();
 
-      if (error) {
-        // En cas de conflit, mise à jour directe
-        const { error: updErr } = await this.client
+      if (existing && existing.id) {
+        await this.client
           .from('alliance_stations')
           .update(payload)
           .eq('id', String(station.id));
-        if (updErr) {
-          await this.client.from('alliance_stations').insert([payload]);
-        }
+      } else {
+        await this.client
+          .from('alliance_stations')
+          .insert(payload);
       }
     } catch (e) {
       // Ignorer silencieusement pour éviter de polluer la console
@@ -1299,6 +1644,14 @@ window.ProtecSupabase = {
 
         if (!stErr && stationCount !== null) {
           stations = Math.max(stations, stationCount);
+        }
+
+        // Nombre de directeurs / antennes enregistrées
+        const { count: playerCount, error: pErr } = await this.client
+          .from('players')
+          .select('*', { count: 'exact', head: true });
+        if (!pErr && playerCount !== null) {
+          stations = Math.max(stations, playerCount);
         }
       } catch (e) {
         console.warn('Erreur récupération télémétrie Supabase:', e);
