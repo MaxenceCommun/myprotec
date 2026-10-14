@@ -19,6 +19,11 @@ window.ProtecContratsAnnuels = {
       badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300',
       recurrenceDays: 14,
       recurrenceLabel: 'Toutes les 2 semaines (1 match / quinzaine)',
+      validityStart: '1er Septembre 2026',
+      validityEnd: '30 Juin 2027',
+      validityLabel: 'Du 1er Septembre 2026 au 30 Juin 2027 (Saison sportive 10 mois)',
+      missionDurationHours: 4.5,
+      missionDurationLabel: '4h30 par match (Arrivée H-2h avant coup d’envoi, fin H+1h30)',
       dpsScale: 'DPS-PE',
       volunteersPerEvent: 6,
       vehiclesPerEvent: ['VPSP'],
@@ -47,6 +52,11 @@ window.ProtecContratsAnnuels = {
       badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
       recurrenceDays: 7,
       recurrenceLabel: 'Toutes les semaines (vendredi / samedi soir)',
+      validityStart: '1er Septembre 2026',
+      validityEnd: '30 Juin 2027',
+      validityLabel: 'Du 1er Septembre 2026 au 30 Juin 2027 (Saison culturelle 10 mois)',
+      missionDurationHours: 5.0,
+      missionDurationLabel: '5h00 par spectacle (Ouverture des portes, concert et évacuation)',
       dpsScale: 'DPS-ME',
       volunteersPerEvent: 8,
       vehiclesPerEvent: ['VPSP', 'VTU'],
@@ -75,6 +85,11 @@ window.ProtecContratsAnnuels = {
       badgeColor: 'bg-sky-100 text-sky-900 border-sky-300',
       recurrenceDays: 15,
       recurrenceLabel: 'Tous les événements officiels de la Ville (~2 / mois)',
+      validityStart: '1er Janvier 2026',
+      validityEnd: '31 Décembre 2026',
+      validityLabel: 'Du 1er Janvier 2026 au 31 Décembre 2026 (Année civile, 1 an renouvelable)',
+      missionDurationHours: 6.0,
+      missionDurationLabel: '6h00 en moyenne par événement municipal (selon format officiel)',
       dpsScale: 'DPS-ME',
       volunteersPerEvent: 10,
       vehiclesPerEvent: ['VPSP', 'VTU'],
@@ -103,6 +118,11 @@ window.ProtecContratsAnnuels = {
       badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
       recurrenceDays: 30,
       recurrenceLabel: 'Chaque mois (Grands Salons Grand Public sur 3-4 jours)',
+      validityStart: '1er Septembre 2026',
+      validityEnd: '31 Août 2027',
+      validityLabel: 'Du 1er Septembre 2026 au 31 Août 2027 (1 an complet renouvelable)',
+      missionDurationHours: 8.0,
+      missionDurationLabel: '8h00 par journée de salon (Horaires d’ouverture publique)',
       dpsScale: 'DPS-GE',
       volunteersPerEvent: 12,
       vehiclesPerEvent: ['VPSP', 'VPSP', 'VTU'],
@@ -126,12 +146,47 @@ window.ProtecContratsAnnuels = {
   // Catalogue dynamique contextualisé avec l'ancrage territorial de l'antenne
   getContractsCatalog(game) {
     if (!game) game = window.game;
-    const station = (game?.stations && game.stations[0]) || { name: 'Antenne', city: 'Metz', departmentCode: '57' };
-    const deptCode = String(station.departmentCode || game?.currentDepartmentCode || game?.player?.departmentCode || '75').trim().toUpperCase();
+    const station = (game?.stations && game.stations[0]) || { name: 'Antenne', city: 'Nancy', departmentCode: '54' };
+
+    // Détection robuste du département réel
+    const sCity = String(station.city || '').toLowerCase();
+    const sName = String(station.name || '').toLowerCase();
+    const pName = String(game?.player?.stationName || '').toLowerCase();
+    const allText = `${sCity} ${sName} ${pName}`.toLowerCase();
+
+    let deptCode = station.departmentCode || game?.currentDepartmentCode || game?.player?.departmentCode;
+
+    // Détection par nom de commune ou antenne
+    if (allText.includes('nancy') || allText.includes('lunéville') || allText.includes('luneville') || allText.includes('toul') || allText.includes('pont-à-mousson')) {
+      deptCode = '54';
+    } else if (allText.includes('metz') || allText.includes('thionville')) {
+      deptCode = '57';
+    } else if (allText.includes('strasbourg') || allText.includes('sélestat')) {
+      deptCode = '67';
+    } else if (station.lat && station.lng && window.ProtecDepartements && typeof window.ProtecDepartements.getDepartmentByCoordinates === 'function') {
+      const d = window.ProtecDepartements.getDepartmentByCoordinates(station.lat, station.lng);
+      if (d && d.code) deptCode = d.code;
+    }
+
+    // Si indéterminé ou 75 par erreur historique (sauf si l'antenne est réellement à Paris)
+    if (!deptCode || (deptCode === '75' && !allText.includes('paris'))) {
+      deptCode = '54';
+    }
+    deptCode = String(deptCode).trim().toUpperCase();
+
+    // Rétro-synchroniser le département sur la station si vide ou corrompu
+    if (!station.departmentCode || (station.departmentCode === '75' && deptCode === '54')) {
+      station.departmentCode = deptCode;
+    }
+
     const deptInfo = (window.ProtecDepartements && typeof window.ProtecDepartements.getByCode === 'function')
-      ? (window.ProtecDepartements.getByCode(deptCode) || { code: deptCode, name: 'France', chefLieu: station.city || 'Chef-Lieu', region: 'France' })
-      : { code: deptCode, name: 'France', chefLieu: station.city || 'Chef-Lieu', region: 'France' };
-    const city = station.city || deptInfo.chefLieu || 'Métropole';
+      ? (window.ProtecDepartements.getByCode(deptCode) || { code: deptCode, name: 'France', chefLieu: station.city || 'Nancy', region: 'Grand Est' })
+      : { code: deptCode, name: 'France', chefLieu: station.city || 'Nancy', region: 'Grand Est' };
+
+    let city = station.city;
+    if (!city || (city.toLowerCase() === 'paris' && deptCode === '54') || city === 'Chef-Lieu') {
+      city = (allText.includes('lunéville') || allText.includes('luneville')) ? 'Lunéville' : (deptInfo.chefLieu || 'Nancy');
+    }
 
     // 1. Club Sportif Résident du Territoire (ASNL, FC Metz, OM, OL, PSG, MHSC, etc.)
     let realClub = null;
@@ -519,9 +574,9 @@ window.ProtecContratsAnnuels = {
         hour: item.id === 'zenith_spectacles' ? 19 : (item.id === 'foot_club' ? 15 : 14),
         startHour: item.id === 'zenith_spectacles' ? 19 : 14
       },
-      durationHours: item.id === 'zenith_spectacles' ? 5 : (item.id === 'parc_expos' ? 8 : 4),
-      duration: (item.id === 'zenith_spectacles' ? 5 : 4) * 10,
-      durationSeconds: (item.id === 'zenith_spectacles' ? 5 : 4) * 3600,
+      durationHours: item.missionDurationHours || (item.id === 'zenith_spectacles' ? 5 : (item.id === 'parc_expos' ? 8 : 4)),
+      duration: (item.missionDurationHours || 4) * 10,
+      durationSeconds: (item.missionDurationHours || 4) * 3600,
       requiredVolunteers: item.volunteersPerEvent,
       requiredVehicles: [...item.vehiclesPerEvent],
       requiredRanks: ['PSE1', 'PSE2'],
@@ -663,6 +718,14 @@ window.ProtecContratsAnnuels = {
                       <span class="font-bold text-pc-blue">${item.recurrenceLabel}</span>
                     </div>
                     <div class="flex items-center justify-between">
+                      <span class="font-semibold text-slate-500">Période du contrat :</span>
+                      <span class="font-extrabold text-slate-800">${item.validityLabel || '1 an renouvelable'}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span class="font-semibold text-slate-500">Durée par mission :</span>
+                      <span class="font-black text-indigo-700">${item.missionDurationLabel || '4h00'}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
                       <span class="font-semibold text-slate-500">Rémunération par poste :</span>
                       <span class="font-black text-emerald-700">${item.revenuePerEvent} € / événement</span>
                     </div>
@@ -677,9 +740,15 @@ window.ProtecContratsAnnuels = {
                   </div>
 
                   ${isSigned ? `
-                    <div class="p-2.5 rounded-xl bg-emerald-100/60 border border-emerald-300 text-emerald-950 text-[11px] font-semibold flex items-center justify-between">
-                      <span>✓ Postes assurés cette saison : <strong>${contractData?.eventsCompleted || 0}</strong></span>
-                      <span>Total perçu : <strong>${(contractData?.totalEarned || 0).toLocaleString('fr-FR')} €</strong></span>
+                    <div class="p-2.5 rounded-xl bg-emerald-100/60 border border-emerald-300 text-emerald-950 text-[11px] font-semibold space-y-1">
+                      <div class="flex items-center justify-between">
+                        <span>✓ Postes assurés cette saison : <strong>${contractData?.eventsCompleted || 0}</strong></span>
+                        <span>Total perçu : <strong>${(contractData?.totalEarned || 0).toLocaleString('fr-FR')} €</strong></span>
+                      </div>
+                      <div class="flex items-center justify-between text-[10px] text-emerald-800 border-t border-emerald-200/60 pt-1">
+                        <span>Signature : <strong>${new Date(contractData.signedAt).toLocaleDateString('fr-FR')}</strong></span>
+                        <span>Échéance : <strong>${new Date(contractData.expiresAt).toLocaleDateString('fr-FR')}</strong></span>
+                      </div>
                     </div>
                   ` : (game.annualContractReviews?.[item.id]?.status === 'rejected') ? `
                     <div class="p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-[10px] space-y-0.5">

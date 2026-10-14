@@ -15,9 +15,116 @@ window.ProtecNotifications = {
   history: [],
   activeTab: 'history',
   lastUserInteraction: Date.now(),
+  pushSubscription: null,
+  vapidPublicKey: null,
 
   // Identifiant unique de cette fenêtre de jeu
   instanceId: `inst_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+
+  urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  },
+
+  async syncPushSubscription(game) {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      return null;
+    }
+
+    try {
+      if (!this.swRegistration) {
+        this.swRegistration = await navigator.serviceWorker.ready;
+      }
+      if (!this.swRegistration || !this.swRegistration.pushManager) return null;
+
+      // 1. Récupération de la clé VAPID publique depuis le serveur Node.js ou clé permanente intégrée
+      if (!this.vapidPublicKey) {
+        try {
+          const res = await fetch('/api/push/vapid-public-key');
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.publicKey) {
+              this.vapidPublicKey = data.publicKey;
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Clé VAPID permanente officielle (garantit le fonctionnement sur GitHub Pages / Hébergement statique)
+      if (!this.vapidPublicKey) {
+        this.vapidPublicKey = 'BLQwylrKZbl-hkqtTwe2S7UdMLWtzH-_TgedTCQ99UW7ydaZhxdcMVhC231UOKsDWrlEj38DsvFy26tA6nfHY3o';
+      }
+
+      // 2. Souscription auprès du pushManager du navigateur
+      let sub = await this.swRegistration.pushManager.getSubscription();
+      if (!sub) {
+        sub = await this.swRegistration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: this.urlBase64ToUint8Array(this.vapidPublicKey)
+        });
+      }
+
+      this.pushSubscription = sub;
+
+      // 3. Résolution exacte du profil joueur (depuis window.game, ProtecAuth ou localStorage)
+      let cachedUser = null;
+      try {
+        cachedUser = JSON.parse(localStorage.getItem('protec_user_profile') || '{}');
+      } catch (e) {}
+
+      const playerId = game?.player?.id || window.ProtecAuth?.currentUser?.id || cachedUser?.id || 'local';
+      const username = game?.player?.name || window.ProtecAuth?.currentUser?.username || cachedUser?.username || 'Directeur';
+
+      // Transmettre le joueur actif au Service Worker pour les réveils en arrière-plan
+      if (this.swRegistration && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SET_CURRENT_USER',
+          user: { id: playerId, username }
+        });
+      }
+
+      // 4. Enregistrement auprès du serveur Node.js si actif
+      try {
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subscription: sub.toJSON(),
+            playerId,
+            username,
+            userAgent: navigator.userAgent
+          })
+        });
+      } catch (e) {}
+
+      // 5. Synchronisation persistante auprès de Supabase (game_saves & players)
+      if (window.ProtecSupabase?.client && playerId && playerId !== 'local') {
+        try {
+          // A. Sauvegarde dans game_saves pour le Service Worker
+          window.ProtecSupabase.client.from('game_saves').select('save_data').eq('user_id', playerId).maybeSingle().then(({ data }) => {
+            if (data) {
+              const sd = data.save_data || {};
+              sd.push_subscription = sub.toJSON();
+              sd.push_updated_at = new Date().toISOString();
+              window.ProtecSupabase.client.from('game_saves').update({ save_data: sd }).eq('user_id', playerId).then(() => {});
+            }
+          });
+        } catch (e) {}
+      }
+
+      console.log(`📲 [Push] Abonnement prêt pour ${username} (Clé VAPID active).`);
+      return sub;
+    } catch (err) {
+      console.warn('Erreur abonnement PushManager:', err);
+      return null;
+    }
+  },
 
   isDeviceMobile() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth < 768 && ('ontouchstart' in window));
@@ -110,11 +217,29 @@ window.ProtecNotifications = {
       this.permission = Notification.permission;
     }
 
-    // 2. Enregistrement du Service Worker
+    // 2. Enregistrement du Service Worker et synchronisation Web Push
     if ('serviceWorker' in navigator) {
       try {
         const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         this.swRegistration = reg;
+
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (event.data?.type === 'PUSH_NOTIFICATION_RECEIVED') {
+            const d = event.data.data || {};
+            if (window.game && typeof window.game.showToast === 'function') {
+              window.game.showToast(d.title || '🚨 Alerte Reçue', d.body || d.message || '', d.type || 'orange');
+            }
+            this.playAlertSound(d.title, d.body);
+            this.triggerVibration();
+          }
+        });
+
+        if (this.permission === 'granted') {
+          this.syncPushSubscription(game);
+        }
+
+        // Vérification des notifications en attente dans Supabase
+        this.checkPendingSupabaseNotifications();
       } catch (err) {
         console.warn('Erreur enregistrement Service Worker:', err);
       }
@@ -208,12 +333,13 @@ window.ProtecNotifications = {
       if (perm === 'granted') {
         this.config.enabled = true;
         this.saveConfig();
+        await this.syncPushSubscription(window.game);
         this.sendPushNotification(
           'Notifications MyProtec Activées',
-          'Parfait ! Vous recevrez désormais les alertes SAMU 15, SDIS, devis DPS et rappels d’intervention en direct sur votre appareil.',
+          'Parfait ! Vous recevrez désormais les alertes SAMU 15, SDIS, devis DPS et rappels d’intervention en direct sur votre appareil, même lorsque l’application est fermée.',
           { tag: 'welcome-notification' }
         );
-        if (window.game) window.game.showToast('Notifications Activées', 'Alertes opérationnelles prêtes !', 'green');
+        if (window.game) window.game.showToast('Notifications Activées', 'Alertes prêtes (y compris avec application fermée) !', 'green');
         return true;
       } else {
         if (window.game) window.game.showToast('Autorisation Refusée', 'Les notifications ont été bloquées par votre navigateur.', 'orange');
@@ -480,8 +606,8 @@ window.ProtecNotifications = {
 
     const notifOptions = Object.assign({
       body: body,
-      icon: 'logo_myprotec_icon.png',
-      badge: 'logo_myprotec_icon.png',
+      icon: options.icon || 'badge-monochrome.png',
+      badge: options.badge || 'badge-monochrome.png',
       tag: options.tag || `protec-${Date.now()}`,
       vibrate: [300, 150, 300, 150, 450],
       renotify: true,
@@ -535,12 +661,13 @@ window.ProtecNotifications = {
     this.sendPushNotification(title, body, { tag: `${category}-${tag}`, category: category });
   },
 
-  // --- MOTEUR D'INCITATION À LA RECONNEXION ---
+  // --- MOTEUR D'INCITATION À LA RECONNEXION & APP FERMÉE ---
   onPageHidden() {
     if (!this.config.inactivityEngagement || !this.config.enabled || this.permission !== 'granted') return;
 
     this.clearInactivityTimer();
 
+    // 1. Minuteur local si l'onglet reste en veille en arrière-plan
     this.inactivityTimer = setTimeout(() => {
       const game = window.game;
       const eligible = this.reengagementScenarios.filter(s => {
@@ -558,10 +685,64 @@ window.ProtecNotifications = {
         this.sendPushNotification(pick.title, pick.body, { tag: pick.tag });
       }
     }, this.inactivityIntervalSec * 1000);
+
+    // 2. Programmation Service Worker au niveau de l'OS (si l'application est TOTALEMENT FERMÉE)
+    if (this.swRegistration && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SCHEDULE_BACKGROUND_ALERT',
+        delayMs: this.inactivityIntervalSec * 1000,
+        data: {
+          title: '🚨 Alerte SAMU 15 : VPSP Requis',
+          body: 'Le SAMU 15 demande une ambulance de votre antenne. Touchez pour reprendre votre service !',
+          url: '/jeu.html'
+        }
+      });
+    }
   },
 
   onPageVisible() {
     this.clearInactivityTimer();
+    // Annulation des alertes de réengagement puisque le joueur est revenu
+    if (this.swRegistration && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'CANCEL_BACKGROUND_ALERTS'
+      });
+    }
+    this.checkPendingSupabaseNotifications();
+  },
+
+  // Récupération des notifications en attente stockées en BDD Supabase (réception dès l'ouverture du site ou reconnexion)
+  async checkPendingSupabaseNotifications() {
+    if (!window.ProtecSupabase?.client) return;
+    let cachedUser = null;
+    try {
+      cachedUser = window.ProtecAuth?.currentUser || JSON.parse(localStorage.getItem('protec_user_profile') || '{}');
+    } catch (e) {}
+    if (!cachedUser || !cachedUser.id) return;
+
+    try {
+      const { data, error } = await window.ProtecSupabase.client
+        .from('game_saves')
+        .select('save_data')
+        .eq('user_id', cachedUser.id)
+        .maybeSingle();
+
+      if (!error && data?.save_data?.pending_notifications) {
+        const pending = data.save_data.pending_notifications;
+        const lastSeen = Number(localStorage.getItem('protec_last_seen_notif') || 0);
+        const unread = pending.filter(n => new Date(n.created_at).getTime() > lastSeen);
+
+        if (unread.length > 0) {
+          unread.forEach(n => {
+            this.sendPushNotification(n.title || '🔔 Alerte MyProtec', n.message || n.body || '', {
+              category: n.category || 'admin-test',
+              color: n.type || 'orange'
+            });
+          });
+          localStorage.setItem('protec_last_seen_notif', Date.now().toString());
+        }
+      }
+    } catch (e) {}
   },
 
   clearInactivityTimer() {
@@ -580,6 +761,28 @@ window.ProtecNotifications = {
     );
     if (window.game) {
       window.game.showToast('Test Envoyé', 'Vérifiez la bannière et le son d’alerte sur votre écran !', 'green');
+    }
+  },
+
+  // Test avec application fermée ou mise en veille (compte à rebours)
+  testOfflinePush(seconds = 5) {
+    if (this.permission !== 'granted') {
+      this.requestPermission();
+      return;
+    }
+    if (window.game && typeof window.game.showToast === 'function') {
+      window.game.showToast('Test App Fermée', `Fermez ou réduisez maintenant l'application. La notification arrivera dans ${seconds}s !`, 'orange');
+    }
+    if (this.swRegistration && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SCHEDULE_BACKGROUND_ALERT',
+        delayMs: seconds * 1000,
+        data: {
+          title: '🚨 Test Réussi : Application Fermée',
+          body: 'Le Service Worker MyProtec a bien délivré cette alerte en arrière-plan avec sonnerie et vibreur !',
+          url: '/jeu.html'
+        }
+      });
     }
   },
 
@@ -775,16 +978,30 @@ window.ProtecNotifications = {
               ` : ''}
             </div>
 
-            <!-- Bouton Test Direct -->
+            <!-- Bouton Test Direct & Test App Fermée -->
             ${isPermGranted ? `
               <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
                 <div>
-                  <span class="font-bold text-slate-800 block">Vérifier le fonctionnement</span>
-                  <span class="text-[11px] text-slate-500">Déclenche une notification test avec sonnerie d'urgence</span>
+                  <span class="font-bold text-slate-800 block">Vérifier le fonctionnement immédiat</span>
+                  <span class="text-[11px] text-slate-500">Déclenche une notification test avec sonnerie d'urgence sur cet écran</span>
                 </div>
                 <button onclick="window.ProtecNotifications.testNotification()" class="px-3.5 py-1.5 rounded-xl bg-pc-orange hover:brightness-110 text-white font-extrabold shadow transition flex items-center gap-1.5">
                   <i data-lucide="bell-ring" class="w-3.5 h-3.5"></i>
                   Tester
+                </button>
+              </div>
+
+              <div class="flex items-center justify-between p-3.5 rounded-2xl bg-amber-50/80 border border-amber-300/80">
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-black text-amber-950 block">Test Réception Mobile (App Fermée)</span>
+                    <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">Push OS</span>
+                  </div>
+                  <span class="text-[11px] text-amber-800 leading-snug">Lance un délai de 5s : fermez le navigateur ou verrouillez l'écran pour tester l'alerte native</span>
+                </div>
+                <button onclick="window.ProtecNotifications.testOfflinePush(5)" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold shadow transition flex items-center gap-1.5 flex-shrink-0">
+                  <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+                  Fermer & Tester (5s)
                 </button>
               </div>
             ` : ''}

@@ -1085,8 +1085,9 @@ window.ProtecAdmin = {
           <td class="py-3 px-3 text-right">
             <div class="flex items-center justify-end gap-1">
               <!-- Tester Notifications Joueur -->
-              <button onclick="window.ProtecAdmin.openNotificationTester('${u.id}')" title="Tester les Notifications du Joueur (Push OS, Toast, Son, Vibreur)" class="p-1 rounded-lg text-amber-600 hover:bg-amber-100 transition cursor-pointer font-bold">
+              <button onclick="window.ProtecAdmin.openNotificationTester('${u.id}')" title="Envoyer une Notification Test (Push Mobile OS - Fonctionne même application fermée !)" class="p-1 rounded-lg text-amber-600 hover:bg-amber-100 transition cursor-pointer font-bold relative">
                 🔔
+                ${u.hasPushSubscription ? '<span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white animate-pulse" title="Push Mobile Actif (App Fermée)"></span>' : ''}
               </button>
               <!-- Gérer & Attribuer Écussons (Admin, Zones de Défense...) -->
               <button onclick="window.ProtecAdmin.openBadgeManagerForPlayer('${u.id}')" title="Gérer & Attribuer les Écussons (Admin, Zones de Défense...)" class="p-1 rounded-lg text-pc-blue hover:bg-blue-100 transition cursor-pointer font-bold">
@@ -2388,8 +2389,9 @@ window.ProtecAdmin = {
           (window.game?.player && window.game.player.id === u.id) ||
           (window.ProtecAuth?.currentUser && window.ProtecAuth.currentUser.id === u.id)
         );
+        const pushTag = u.hasPushSubscription ? ' [📲 Push Mobile Actif]' : '';
         return `<option value="${u.id}" ${u.id === currentId ? 'selected' : ''}>
-          ${isCurrent ? '⭐ (Moi-même) ' : '👤 '}${u.username || 'Directeur'} — ${u.stationName || 'Antenne'} (${u.city || 'Ville'})
+          ${isCurrent ? '⭐ (Moi-même) ' : '👤 '}${u.username || 'Directeur'}${pushTag} — ${u.stationName || 'Antenne'} (${u.city || 'Ville'})
         </option>`;
       })
     ].join('');
@@ -2405,7 +2407,7 @@ window.ProtecAdmin = {
             </div>
             <div>
               <h3 class="text-base font-black text-slate-900 leading-tight">Testeur de Notifications Joueur</h3>
-              <p class="text-xs text-amber-600 font-bold">Vérification de réception en direct (Push OS, Sons, Toasts, Vibreur)</p>
+              <p class="text-xs text-amber-600 font-bold">Vérification de réception en direct (Push OS même app fermée, Sons, Toasts, Vibreur)</p>
             </div>
           </div>
           <button onclick="window.ProtecAdmin.closeNotificationTester()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-black text-xs cursor-pointer transition">
@@ -2423,9 +2425,20 @@ window.ProtecAdmin = {
                 <span>🎯 Joueur / Cible du test opérationnel :</span>
               </label>
               ${targetUser ? `
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-white border border-amber-300 text-amber-900 shadow-2xs">
-                  ${targetUser.city || 'Secteur'} • ${targetUser.volunteersCount || 0} bénévoles
-                </span>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-white border border-amber-300 text-amber-900 shadow-2xs">
+                    ${targetUser.city || 'Secteur'} • ${targetUser.volunteersCount || 0} bénév.
+                  </span>
+                  ${targetUser.hasPushSubscription ? `
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> 📲 Push Mobile Actif (App Fermée)
+                    </span>
+                  ` : `
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                      🌐 Réception En Ligne
+                    </span>
+                  `}
+                </div>
               ` : `
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 shadow-2xs">
                   Diffusion Générale Multi
@@ -2656,23 +2669,33 @@ window.ProtecAdmin = {
       timestamp: Date.now()
     };
 
-    // 1. Appel du backend API SSE
+    // 1. Appel du backend API SSE & Web Push OS (Même application fermée)
+    let pushDispatched = 0;
     try {
-      await fetch('/api/admin/notify-player', {
+      const res = await fetch('/api/admin/notify-player', {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(defaultPayload)
       });
+      if (res.ok) {
+        const json = await res.json();
+        pushDispatched = Number(json.pushDispatchedCount || 0);
+      }
     } catch (e) {
       console.warn('Erreur envoi notification via backend /api/admin/notify-player:', e);
     }
 
-    // 2. Broadcast temps réel Supabase si actif
-    if (window.ProtecSupabase && typeof window.ProtecSupabase.broadcastAdminPlayerNotification === 'function') {
+    // 2. Broadcast temps réel Supabase & Enregistrement en base de données
+    if (window.ProtecSupabase) {
       try {
-        window.ProtecSupabase.broadcastAdminPlayerNotification(defaultPayload);
+        if (typeof window.ProtecSupabase.broadcastAdminPlayerNotification === 'function') {
+          window.ProtecSupabase.broadcastAdminPlayerNotification(defaultPayload);
+        }
+        if (typeof window.ProtecSupabase.queuePlayerNotification === 'function') {
+          window.ProtecSupabase.queuePlayerNotification(targetUserId, defaultPayload);
+        }
       } catch (e) {
-        console.warn('Erreur broadcast Supabase:', e);
+        console.warn('Erreur broadcast/file Supabase:', e);
       }
     }
 
@@ -2685,11 +2708,15 @@ window.ProtecAdmin = {
     }
 
     const targetName = targetUserId === 'all' 
-      ? 'tous les joueurs' 
-      : ((this.usersCache || []).find(u => u.id === targetUserId)?.username || 'ce joueur');
+      ? 'tous les directeurs' 
+      : ((this.usersCache || []).find(u => u.id === targetUserId)?.username || 'ce directeur');
 
     if (window.game && typeof window.game.showToast === 'function') {
-      window.game.showToast('Notification Émise', `Test envoyé à ${targetName}.`, 'green');
+      if (pushDispatched > 0) {
+        window.game.showToast('Push Délivré', `Alerte transmise à ${targetName} (${pushDispatched} push OS délivré même app fermée).`, 'green');
+      } else {
+        window.game.showToast('Notification Émise', `Test envoyé à ${targetName} (flux en direct).`, 'green');
+      }
     }
   },
 

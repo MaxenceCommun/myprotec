@@ -741,23 +741,7 @@ html, body {
     left: 0.75rem !important;
   }
 
-  /* Toasts de notifications - toujours positionnés à gauche pour ne jamais masquer le menu latéral droit */
-  #toast-container {
-    top: 5rem !important;
-    left: 1.25rem !important;
-    right: auto !important;
-    max-width: min(400px, calc(100vw - 2.5rem)) !important;
-    z-index: 95 !important;
-  }
 
-  @media (max-width: 640px) {
-    #toast-container {
-      top: 4.5rem !important;
-      left: 0.75rem !important;
-      right: 0.75rem !important;
-      max-width: calc(100vw - 1.5rem) !important;
-    }
-  }
 
   .dock-container {
     max-width: calc(100vw - 1rem) !important;
@@ -792,6 +776,27 @@ html, body {
   .mobile-scroll-x > * {
     scroll-snap-align: start;
     flex-shrink: 0;
+  }
+}
+
+/* Toasts de notifications - TOUJOURS ancrés à gauche pour une stabilité totale sans aucun chevauchement du panneau latéral droit */
+#toast-container {
+  position: fixed !important;
+  top: 5rem !important;
+  left: 1.25rem !important;
+  right: auto !important;
+  max-width: min(390px, calc(100vw - 2.5rem)) !important;
+  z-index: 100 !important;
+  pointer-events: none !important;
+  transition: transform 0.25s ease, opacity 0.25s ease !important;
+}
+
+@media (max-width: 640px) {
+  #toast-container {
+    top: 4.75rem !important;
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    max-width: calc(100vw - 1.5rem) !important;
   }
 }
 

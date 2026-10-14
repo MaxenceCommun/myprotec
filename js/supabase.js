@@ -28,6 +28,7 @@ window.ProtecSupabase = {
         });
         this.isInitialized = true;
         this.checkConnection();
+        this.initMultiplayerRealtime(window.game || null);
         console.log('✅ Client Supabase PostgreSQL initialisé avec succès.');
       } else {
         // En attente du chargement du script CDN
@@ -210,6 +211,12 @@ window.ProtecSupabase = {
       const g = game || window.game;
       if (g && g.handleMultiplayerEvent && data) {
         g.handleMultiplayerEvent('admin_broadcast', data);
+      } else if (data && window.ProtecNotifications) {
+        window.ProtecNotifications.sendPushNotification(
+          data.title || '📢 Annonce Fédérale',
+          data.message || '',
+          { category: 'admin_broadcast', color: data.type || 'blue' }
+        );
       }
     });
 
@@ -228,6 +235,26 @@ window.ProtecSupabase = {
       const g = game || window.game;
       if (g && g.handleMultiplayerEvent && data) {
         g.handleMultiplayerEvent('admin_player_notification', data);
+      } else if (data && window.ProtecNotifications) {
+        // HORS CARTE (ex: sur index.html ou écran d'accueil avec session sauvegardée)
+        let currentUser = null;
+        try {
+          currentUser = window.ProtecAuth?.currentUser || JSON.parse(localStorage.getItem('protec_user_profile') || '{}');
+        } catch (e) {}
+
+        const isForMe = !data.targetUserId || data.targetUserId === 'all' ||
+                        (currentUser && (currentUser.id === data.targetUserId || currentUser.username === data.targetUserId));
+        if (isForMe) {
+          const title = data.title || '🔔 Notification Administrateur';
+          const msg = data.message || '';
+          window.ProtecNotifications.sendPushNotification(title, msg, {
+            category: data.category || 'admin-test',
+            color: data.type || 'orange'
+          });
+          if (window.ProtecNotifications.playAlertSound) {
+            window.ProtecNotifications.playAlertSound(title, msg, { color: data.type });
+          }
+        }
       }
     });
 
@@ -409,6 +436,35 @@ window.ProtecSupabase = {
     } catch (e) {
       console.warn('Erreur broadcast admin_player_notification:', e);
     }
+  },
+
+  // File d'attente Supabase pour les notifications des joueurs (réception différée)
+  async queuePlayerNotification(targetUserId, notifData) {
+    if (!this.client) return false;
+    try {
+      let query = this.client.from('game_saves').select('user_id, username, save_data');
+      if (targetUserId && targetUserId !== 'all') {
+        query = query.or(`user_id.eq.${targetUserId},username.eq.${targetUserId}`);
+      }
+      const { data: saves, error } = await query;
+      if (!error && saves && saves.length > 0) {
+        for (const save of saves) {
+          const sd = save.save_data || {};
+          const pending = Array.isArray(sd.pending_notifications) ? sd.pending_notifications : [];
+          pending.unshift({
+            ...notifData,
+            id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            created_at: new Date().toISOString()
+          });
+          sd.pending_notifications = pending.slice(0, 20);
+          await this.client.from('game_saves').update({ save_data: sd }).eq('user_id', save.user_id);
+        }
+        return true;
+      }
+    } catch (e) {
+      console.warn('Erreur file d\'attente notification Supabase:', e);
+    }
+    return false;
   },
 
   // Diffusion d'une attribution d'écusson en direct

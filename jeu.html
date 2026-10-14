@@ -471,6 +471,12 @@
             <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Missions & Dispositifs</span>
             <span class="text-[9px] font-bold text-pc-blue">Menu</span>
           </div>
+          <button onclick="window.game.openModule('conventions'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="award" class="w-4 h-4 text-emerald-600"></i>
+              <span>Conventions</span>
+            </div>
+          </button>
           <button onclick="window.game.openModule('planning'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
@@ -505,12 +511,6 @@
               <span>Action Sociale</span>
             </div>
             <span id="badge-submenu-social" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
-          </button>
-          <button onclick="window.game.openModule('conventions'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
-            <div class="flex items-center gap-2">
-              <i data-lucide="award" class="w-4 h-4 text-emerald-600"></i>
-              <span>Conventions Officielles</span>
-            </div>
           </button>
           <button data-feature-key="crise" onclick="window.game.openModule('crise'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">

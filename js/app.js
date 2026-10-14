@@ -3366,6 +3366,26 @@ class ProtecGame {
     this.openModule('planning', true);
   }
 
+  setPlanningListDateFilter(filter) {
+    this.planningListDateFilter = filter;
+    this.openModule('planning', true);
+  }
+
+  changePlanningSelectedDay(delta) {
+    const curYear = this.calendarViewingYear || this.clock.year || 2026;
+    const curMonth = (this.calendarViewingMonth !== undefined && this.calendarViewingMonth !== null) ? this.calendarViewingMonth : this.clock.month;
+    const daysInMonth = new Date(curYear, curMonth + 1, 0).getDate();
+    let d = (this.selectedPlanningDay || this.clock.day || 1) + delta;
+    if (d < 1) d = daysInMonth;
+    if (d > daysInMonth) d = 1;
+    this.selectedPlanningDay = d;
+    this.openModule('planning', true);
+  }
+
+  resetPlanningToToday() {
+    this.resetPlanningMonthToCurrent();
+  }
+
   changePlanningMonth(delta) {
     if (this.calendarViewingMonth === undefined || this.calendarViewingMonth === null) {
       this.calendarViewingMonth = this.clock.month;
@@ -3528,7 +3548,7 @@ class ProtecGame {
         registeredCount: (s.registeredCandidates?.length || 0) + (s.externalAttendeesCount || 0),
         requiredCount: s.maxCandidates || 8,
         scale: s.category || 'Formation',
-        address: s.locationLabel || (s.locationType === 'antenne' ? 'Salle Pédagogique (Antenne)' : 'Délocalisée'),
+        address: s.locationLabel || (s.locationType === 'antenne' ? `${(this.stations?.[0]?.name || 'Antenne')} - Salle n°${s.roomNumber || 1}` : 'Délocalisée (Entreprise Partenaire)'),
         trainerName: trainer ? trainer.name : null,
         raw: s
       });
@@ -3553,9 +3573,9 @@ class ProtecGame {
         pole: 'formations',
         poleLabel: 'Formations',
         poleColor: 'bg-teal-600',
-        type: `B2B : ${p.training_type}`,
+        type: `Entreprise • ${p.training_type}`,
         badgeBg: 'bg-teal-600 text-white',
-        title: `Formation Entreprise ${p.training_type} (${p.client_name || 'Client'})`,
+        title: `Formation Entreprise : ${p.training_type} (${p.client_name || 'Client'})`,
         eventDate: bDate,
         startHour: 9,
         durationHours: 7,
@@ -3563,7 +3583,7 @@ class ProtecGame {
         registeredCount: p.attendees_count || 10,
         requiredCount: p.attendees_count || 10,
         scale: 'Formation Entreprise',
-        address: p.mode === 'intra' ? `Site client : ${p.client_name}` : 'Salle Pédagogique (Antenne)',
+        address: p.mode === 'intra' ? `Site client : ${p.client_name}` : `${(this.stations?.[0]?.name || 'Antenne')} - Salle n°${p.roomNumber || 1}`,
         raw: p
       });
     });
@@ -10174,6 +10194,7 @@ class ProtecGame {
     const dLat = (destLat - station.lat) * 111;
     const dLng = (destLng - station.lng) * 111 * Math.cos(station.lat * Math.PI / 180);
     const rawDist = Math.hypot(dLat, dLng);
+    const distKm = Math.max(1, Math.round(rawDist * 10) / 10);
     const isUrgency = ['samu', 'pompiers', 'crise'].includes(mission.type) || ['critique', 'haute'].includes(mission.urgency) || mission.status === 'declenche';
     const assignedVehicles = (mission.registeredVehicles || []).map(vId => (this.vehicles || []).find(v => v.id === vId)).filter(Boolean);
     const hasBeacon = assignedVehicles.length > 0
@@ -14098,12 +14119,13 @@ class ProtecGame {
 
     const categoryDefs = {
       missions: [
+        { key: 'conventions', label: 'Conventions', icon: 'award' },
         { key: 'planning', label: 'Postes DPS & Planning', icon: 'calendar', count: planCount },
         { key: 'devis', label: 'Devis DPS (Demandes)', icon: 'file-check', count: devisCount },
         { key: 'samu', label: 'SAMU 15', icon: 'activity', count: samuCount },
         { key: 'pompiers', label: 'Garde SDIS', icon: 'flame', count: sdisCount },
         { key: 'social', label: 'Action Sociale', icon: 'heart-handshake', count: socialCount },
-        { key: 'conventions', label: 'Conventions', icon: 'award' },
+
         { key: 'crise', label: 'Crise NOVI', icon: 'siren', count: criseCount }
       ],
       antenne: [
@@ -14134,7 +14156,7 @@ class ProtecGame {
       finances: [
         { key: 'finances', label: 'Trésorerie & Bilan', icon: 'wallet' },
         { key: 'subventions', label: 'Subventions Publiques', icon: 'landmark' },
-        { key: 'conventions', label: 'Conventions Officielles', icon: 'file-text' }
+        { key: 'conventions', label: 'Conventions', icon: 'file-text' }
       ]
     };
 
@@ -14207,7 +14229,8 @@ class ProtecGame {
       'bourse': 'marche_occasion',
       'marche': 'marche_occasion',
       'occasion': 'marche_occasion',
-      'marche_occasion': 'marche_occasion'
+      'marche_occasion': 'marche_occasion',
+      'formations': 'formation'
     };
 
     if (moduleKey === 'evenements') {
@@ -14693,7 +14716,7 @@ class ProtecGame {
       }
     } else if (moduleKey === 'planning') {
       title.textContent = 'Planning Opérationnel Multi-Pôles';
-      subtitle.textContent = 'Dispositifs prévisionnels (DPS), Formations (Grand public & B2B), Maraudes sociales et Devis';
+      subtitle.textContent = 'Dispositifs prévisionnels (DPS), Formations, Maraudes sociales et Devis';
       icon.setAttribute('data-lucide', 'calendar');
 
       // Régulariser immédiatement tout devis dont la date serait passée
@@ -14738,6 +14761,13 @@ class ProtecGame {
       };
 
       const activeEvents = allEvents.filter(e => filters[e.pole]);
+      const planningListFilter = this.planningListDateFilter || 'all';
+      let listEvents = [...activeEvents];
+      if (planningListFilter === 'today') {
+        listEvents = listEvents.filter(e => e.eventDate && e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month);
+      } else if (planningListFilter === 'day') {
+        listEvents = listEvents.filter(e => e.eventDate && e.eventDate.day === selectedDay && e.eventDate.month === curViewingMonth);
+      }
 
       // Événements pour le jour sélectionné
       const selectedDayEvents = activeEvents.filter(e => e.eventDate && e.eventDate.day === selectedDay && e.eventDate.month === curViewingMonth && (e.eventDate.year == null || e.eventDate.year === curYear));
@@ -14760,11 +14790,12 @@ class ProtecGame {
                 <i data-lucide="list" class="w-4 h-4"></i>
                 Vue Liste (${activeEvents.length})
               </button>
+              <div class="h-5 w-px bg-slate-300 mx-1.5 self-center"></div>
               <button onclick="window.game.openModule('devis')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Gestion des Devis DPS">
                 <i data-lucide="file-check" class="w-4 h-4 text-amber-500"></i>
                 Devis (${poleCounts.devis})
               </button>
-              <button onclick="window.game.openModule('formations')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Formations">
+              <button onclick="window.game.openModule('formation')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Formations">
                 <i data-lucide="graduation-cap" class="w-4 h-4 text-emerald-600"></i>
                 Formations (${poleCounts.formations})
               </button>
@@ -15316,22 +15347,84 @@ class ProtecGame {
           ` : `
             <!-- VUE LISTE CHRONOLOGIQUE TOUS PÔLES -->
             <div class="space-y-4">
-              <div class="p-4 rounded-2xl glass-card-blue flex items-center justify-between text-xs text-pc-blue">
-                <div>
-                  <span class="font-bold block">Calendrier Transversal des Activités :</span>
-                  Vue continue de tous les événements planifiés dans le département selon les pôles sélectionnés (Secours, Devis, Formations, Action Sociale).
+              <!-- Barre de Navigation Temporelle (Vue Liste) -->
+              <div class="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+                <!-- Navigation Mois & Année -->
+                <div class="flex items-center gap-1.5">
+                  <button 
+                    onclick="window.game.changePlanningMonth(-1)" 
+                    class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs transition cursor-pointer" 
+                    title="Mois précédent"
+                  >
+                    ◀
+                  </button>
+                  <span class="text-xs font-black text-slate-900 uppercase px-2 tracking-wide">
+                    📅 ${curMonthName} ${curYear}
+                  </span>
+                  <button 
+                    onclick="window.game.changePlanningMonth(1)" 
+                    class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs transition cursor-pointer" 
+                    title="Mois suivant"
+                  >
+                    ▶
+                  </button>
+                  ${!isViewingCurrentMonth ? `
+                    <button onclick="window.game.resetPlanningToToday()" class="px-2 py-1 rounded-xl text-[10px] font-bold bg-pc-blue/10 text-pc-blue hover:bg-pc-blue/20 transition cursor-pointer">
+                      Mois actuel
+                    </button>
+                  ` : ''}
                 </div>
-                <div class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-white/80 border border-pc-blue/30 text-pc-blue whitespace-nowrap ml-3">
-                  ${activeEvents.length} Événement(s)
+
+                <!-- Filtres Période : Tout le mois / Aujourd'hui / Jour Précis -->
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <button 
+                    onclick="window.game.setPlanningListDateFilter('all')" 
+                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${planningListFilter === 'all' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
+                  >
+                    Tout le mois (${activeEvents.length})
+                  </button>
+                  <button 
+                    onclick="window.game.setPlanningListDateFilter('today')" 
+                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${planningListFilter === 'today' ? 'bg-amber-500 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
+                  >
+                    Aujourd'hui (${activeEvents.filter(e => e.eventDate && e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month).length})
+                  </button>
+                  <button 
+                    onclick="window.game.setPlanningListDateFilter('day')" 
+                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${planningListFilter === 'day' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
+                  >
+                    Jour précis (${selectedDay})
+                  </button>
                 </div>
               </div>
+
+              ${planningListFilter === 'day' ? `
+                <!-- Sélecteur de Jour interactif -->
+                <div class="flex items-center justify-between p-2.5 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs text-indigo-900">
+                  <button onclick="window.game.changePlanningSelectedDay(-1)" class="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-100 text-[11px] font-black cursor-pointer shadow-2xs">
+                    ◀ Jour précédent
+                  </button>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold">Affichage du :</span>
+                    <select onchange="window.game.selectPlanningDay(Number(this.value))" class="px-2 py-1 rounded-lg bg-white border border-indigo-300 font-black text-xs text-indigo-900 cursor-pointer">
+                      ${Array.from({ length: daysInMonth }, (_, i) => {
+                        const d = i + 1;
+                        return `<option value="${d}" ${d === selectedDay ? 'selected' : ''}>${d} ${curMonthName} ${curYear}</option>`;
+                      }).join('')}
+                    </select>
+                  </div>
+                  <button onclick="window.game.changePlanningSelectedDay(1)" class="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-100 text-[11px] font-black cursor-pointer shadow-2xs">
+                    Jour suivant ▶
+                  </button>
+                </div>
+              ` : ''}
 
               <!-- Barre de Recherche des Événements Planifiés -->
               <div class="relative">
                 <input 
                   type="text" 
                   id="planning-search-input" 
-                  placeholder="🔍 Rechercher un événement (ex: nom, adresse, ville, DPS, Formation, Maraude, B2B...)" 
+                  placeholder="🔍 Rechercher un événement (ex: nom, adresse, ville, DPS, Formation, Maraude...)" 
                   oninput="window.game.filterPlanningList(this.value)"
                   class="w-full pl-4 pr-10 py-2 rounded-2xl bg-white border border-slate-300 shadow-sm font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
                 />
@@ -15343,8 +15436,8 @@ class ProtecGame {
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                ${activeEvents.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour les pôles sélectionnés. Activez plus de filtres pour élargir l\'affichage.</p>' : ''}
-                ${activeEvents.map(e => {
+                ${listEvents.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour cette période ou ces filtres.</p>' : ''}
+                ${listEvents.map(e => {
                   const dateStr = e.eventDate ? this.formatFullDate(e.eventDate) + ' à ' + (e.startHour || 14) + 'h00' : 'Date à confirmer';
                   const isToday = e.eventDate ? (e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month) : false;
                   const searchText = `${e.title || ''} ${e.type || ''} ${e.scale || ''} ${e.address || ''} ${e.poleLabel || ''}`.toLowerCase();
@@ -15948,15 +16041,15 @@ class ProtecGame {
                         </p>
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-1">
                           ${[
-                            { type: 'VPSP', name: 'Ambulance VPSP', emoji: '🚑' },
-                            { type: 'VTU', name: 'Logistique VTU', emoji: '🚚' },
-                            { type: 'VL', name: 'Véhicule Liaison VL', emoji: '🚗' },
-                            { type: 'VTP', name: 'Transport VTP', emoji: '🚐' },
-                            { type: 'VPS', name: 'Premiers Secours VPS', emoji: '🚐' },
-                            { type: 'MOTO', name: 'Moto Secours', emoji: '🏍️' },
-                            { type: 'VELO', name: 'Patrouille Vélo / VTT', emoji: '🚲' },
-                            { type: 'QUAD', name: 'Quad Tout-Terrain', emoji: '🚜' },
-                            { type: 'DRONE', name: 'Télépilote Drone', emoji: '🛸' }
+                            { type: 'VPSP', name: 'Ambulance VPSP', funcBadge: 'PS', emoji: '🚑' },
+                            { type: 'VTU', name: 'Logistique VTU', funcBadge: 'TU / LOG', emoji: '🚚' },
+                            { type: 'VL', name: 'Véhicule Liaison VL', funcBadge: 'LIAISON / CMD', emoji: '🚗' },
+                            { type: 'VTP', name: 'Transport VTP', funcBadge: 'TP', emoji: '🚐' },
+                            { type: 'VLHR', name: 'Véhicule Hors Route VLHR', funcBadge: 'HR / 4x4', emoji: '🚙' },
+                            { type: 'MOTO', name: 'Moto Secours MPS', funcBadge: 'PS', emoji: '🏍️' },
+                            { type: 'VELO', name: 'Patrouille Vélo / VTT', funcBadge: 'PS', emoji: '🚲' },
+                            { type: 'QUAD', name: 'Quad Tout-Terrain', funcBadge: 'HR / PS', emoji: '🚜' },
+                            { type: 'DRONE', name: 'Télépilote Drone', funcBadge: 'RECO', emoji: '🛸' }
                           ].map(vItem => {
                             const counts = this.ensureDevisVehicleCounts(d);
                             const count = counts[vItem.type] || 0;
@@ -15971,6 +16064,7 @@ class ProtecGame {
                                     class="w-4 h-4 rounded text-pc-blue accent-pc-blue cursor-pointer shrink-0"
                                   />
                                   <span class="text-xs font-extrabold text-slate-800 truncate">${vItem.emoji} ${vItem.name}</span>
+                                  ${vItem.funcBadge ? `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-mono font-black bg-slate-200/90 text-slate-700 border border-slate-300 shrink-0">${vItem.funcBadge}</span>` : ''}
                                 </label>
                                 ${isChecked ? `
                                   <div class="flex items-center gap-1 shrink-0 bg-white px-1 py-0.5 rounded-lg border border-indigo-200 shadow-2xs">
@@ -17394,6 +17488,9 @@ class ProtecGame {
                           <span class="px-2 py-0.5 rounded text-[10px] font-bold ${cond.badgeClass}">${cond.label}</span>
                           <button onclick="window.game.openRenameVehicleModal('${v.id}')" class="text-slate-400 hover:text-pc-blue text-xs p-0.5 rounded transition cursor-pointer" title="Renommer l'indicatif">✏️</button>
                         </div>
+                        <div class="my-1">
+                          ${this.getVehicleFunctionsBadgesHTML(v, true)}
+                        </div>
                         <p class="text-xs font-semibold text-slate-600 mt-0.5">
                           ${v.model || v.label || v.type}
                         </p>
@@ -17849,6 +17946,111 @@ class ProtecGame {
   }
 
   // --- SYSTÈME FLOTTE : INDICATIFS, CONDITION, CONTRÔLE TECHNIQUE & ASSURANCE ---
+  // --- FONCTIONS OPÉRATIONNELLES DES VÉHICULES (PS, TP, TU, LOG, HR, CMD, POP, etc.) ---
+  getVehicleFunctions(v) {
+    if (!v) return [];
+    let codes = Array.isArray(v.functions) ? [...v.functions] : [];
+
+    if (codes.length === 0 && window.ProtecAdvanced) {
+      if (v.variantId || v.modelId) {
+        for (const ch of (window.ProtecAdvanced.chassisModels || [])) {
+          const found = (ch.variants || []).find(vr => vr.id === v.variantId || vr.id === v.modelId);
+          if (found && Array.isArray(found.functions)) {
+            codes = [...found.functions];
+            break;
+          }
+        }
+      }
+      if (codes.length === 0 && Array.isArray(window.ProtecAdvanced.vehicleCatalog)) {
+        const cat = window.ProtecAdvanced.vehicleCatalog.find(c => c.type === v.type);
+        if (cat && Array.isArray(cat.functions)) {
+          codes = [...cat.functions];
+        }
+      }
+    }
+
+    if (codes.length === 0) {
+      const type = (v.type || '').toUpperCase();
+      const model = (v.model || v.name || '').toLowerCase();
+      const serigraphie = (v.serigraphieKey || '').toLowerCase();
+
+      if (type === 'VPSP') {
+        codes.push('PS');
+      } else if (type === 'VTP') {
+        codes.push('TP');
+      } else if (type === 'VTU') {
+        codes.push('TU');
+        if (serigraphie.includes('pop') || model.includes('pop') || model.includes('population')) {
+          codes.push('LOG', 'POP');
+        } else {
+          codes.push('LOG');
+        }
+      } else if (type === 'VLHR') {
+        codes.push('HR');
+        if (model.includes('trm')) {
+          codes.push('LOG', 'POP');
+        } else {
+          codes.push('LIAISON', 'CMD');
+        }
+      } else if (type === 'VL') {
+        codes.push('LIAISON', 'CMD');
+      } else if (type === 'PCM') {
+        codes.push('CMD', 'LIAISON');
+      } else if (type === 'FLIT') {
+        codes.push('LOG', 'POP', 'TECH');
+      } else if (type === 'VAHU') {
+        codes.push('SOC', 'POP');
+      } else if (type === 'VCYN') {
+        codes.push('CYNO', 'TECH');
+      } else if (type === 'ERS') {
+        codes.push('SSA');
+      } else if (type === 'MPS') {
+        codes.push('PS', 'LIAISON');
+      } else if (type === 'QUAD') {
+        codes.push('HR', 'PS');
+      } else if (type === 'VTD') {
+        codes.push('TECH');
+      } else if (type === 'VELO') {
+        codes.push('PS');
+      } else if (type === 'VST' || type === 'REM') {
+        codes.push('LOG', 'TECH');
+      } else {
+        codes.push('TU');
+      }
+    }
+
+    const dict = window.ProtecAdvanced?.vehicleFunctions || {
+      PS: { code: 'PS', label: 'Premiers Secours', shortDesc: 'Secours d’urgence aux personnes & soins', badgeClass: 'bg-red-100 text-red-800 border-red-300' },
+      TP: { code: 'TP', label: 'Transport de Personnels', shortDesc: 'Acheminement et relève d’équipes', badgeClass: 'bg-sky-100 text-sky-800 border-sky-300' },
+      TU: { code: 'TU', label: 'Tout Usage', shortDesc: 'Véhicule utilitaire polyvalent', badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
+      LOG: { code: 'LOG', label: 'Logistique', shortDesc: 'Transport de matériel, tentes et lots PMA', badgeClass: 'bg-amber-100 text-amber-800 border-amber-300' },
+      HR: { code: 'HR', label: 'Hors Route (4x4)', shortDesc: 'Franchissement tout-terrain et zones isolées', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+      CMD: { code: 'CMD', label: 'Commandement', shortDesc: 'Poste de commandement & coordination', badgeClass: 'bg-purple-100 text-purple-800 border-purple-300' },
+      LIAISON: { code: 'LIAISON', label: 'Liaison', shortDesc: 'Reconnaissance rapide et déplacements cadres', badgeClass: 'bg-blue-100 text-blue-800 border-blue-300' },
+      POP: { code: 'POP', label: 'Soutien aux Populations', shortDesc: 'Assistance sinistrés, hébergement et ravitaillement', badgeClass: 'bg-rose-100 text-rose-800 border-rose-300' },
+      SOC: { code: 'SOC', label: 'Action Sociale', shortDesc: 'Maraudes, accueil d’urgence et écoute', badgeClass: 'bg-orange-100 text-orange-800 border-orange-300' },
+      TECH: { code: 'TECH', label: 'Technique', shortDesc: 'Énergie, éclairage, pompage & outillage', badgeClass: 'bg-slate-100 text-slate-800 border-slate-300' },
+      CYNO: { code: 'CYNO', label: 'Cynotechnique', shortDesc: 'Recherche et sauvetage canin', badgeClass: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
+      SSA: { code: 'SSA', label: 'Sauvetage Aquatique', shortDesc: 'Sauvetage et surveillance nautique', badgeClass: 'bg-cyan-100 text-cyan-800 border-cyan-300' }
+    };
+
+    return codes.map(c => dict[c] || { code: c, label: c, shortDesc: '', badgeClass: 'bg-slate-100 text-slate-800 border-slate-300' });
+  }
+
+  getVehicleFunctionsBadgesHTML(v, showLabel = true) {
+    const funcs = this.getVehicleFunctions(v);
+    if (!funcs || funcs.length === 0) return '';
+    return `
+      <div class="flex items-center gap-1 flex-wrap">
+        ${funcs.map(f => `
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border shadow-2xs ${f.badgeClass}" title="${f.code} : ${f.label}${f.shortDesc ? ` (${f.shortDesc})` : ''}">
+            <span class="font-mono font-black">${f.code}</span>${showLabel ? `<span class="hidden sm:inline font-bold ml-1 opacity-90">• ${f.label}</span>` : ''}
+          </span>
+        `).join('')}
+      </div>
+    `;
+  }
+
   generateVehicleCallsign(type, stationId, stationObj = null) {
     const station = stationObj || this.stations.find(s => s.id === stationId) || this.stations[0];
     const cleanType = (type || 'VPSP').toUpperCase().trim();
@@ -18427,6 +18629,10 @@ class ProtecGame {
                 <button type="button" onclick="window.game.openRenameVehicleModal('${v.id}'); document.getElementById('${modalId}').remove();" class="text-slate-400 hover:text-pc-blue text-xs p-0.5 rounded transition cursor-pointer" title="Renommer l'indicatif">✏️</button>
               </div>
               <p class="text-xs text-slate-500 font-semibold mt-0.5">${v.model || v.label || v.type} • Antenne : <strong class="text-slate-700">${station.name}</strong></p>
+              <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                <span class="text-[10px] font-extrabold uppercase text-slate-400">Fonctions :</span>
+                ${this.getVehicleFunctionsBadgesHTML(v, true)}
+              </div>
             </div>
           </div>
           <button type="button" onclick="document.getElementById('${modalId}').remove()" class="p-1.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition cursor-pointer">
@@ -20625,21 +20831,10 @@ class ProtecGame {
   updateToastContainerPosition() {
     const container = document.getElementById('toast-container');
     if (!container) return;
-    const drawer = document.getElementById('context-drawer');
-    const isDrawerOpen = drawer && !drawer.classList.contains('hidden');
-
-    if (isDrawerOpen) {
-      if (window.innerWidth >= 640) {
-        container.style.right = '465px';
-        container.style.left = 'auto';
-      } else {
-        container.style.right = '1rem';
-        container.style.left = '1rem';
-      }
-    } else {
-      container.style.right = '';
-      container.style.left = '';
-    }
+    // Les notifications restent toujours rigoureusement fixées à gauche de l'écran
+    // pour éviter tout basculement intempestif et ne jamais mordre sur le tiroir contextuel droit.
+    container.style.right = 'auto';
+    container.style.left = '';
   }
 
   showToast(title, message, color = 'blue', target = null) {

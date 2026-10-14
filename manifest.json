@@ -16,6 +16,12 @@
   "categories": ["games", "simulation", "education"],
   "icons": [
     {
+      "src": "badge-monochrome.png",
+      "sizes": "500x500",
+      "type": "image/png",
+      "purpose": "monochrome"
+    },
+    {
       "src": "icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",

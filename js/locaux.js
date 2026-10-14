@@ -1548,6 +1548,31 @@ window.ProtecLocaux = {
     return 10;
   },
 
+  getStationTrainingRoomsCount(station) {
+    if (!station) return 1;
+    if (station.trainingRoomsCount) return Math.max(1, Number(station.trainingRoomsCount));
+    const prem = station.premises;
+    if (!prem) return 1;
+
+    // Si grille 2D personnalisée
+    if (prem.grid && Array.isArray(prem.grid)) {
+      const formationCells = prem.grid.filter(c => c && (c.type === 'formation' || c.zone === 'formation' || (c.roomId && c.roomId.includes('formation'))));
+      if (formationCells.length >= 8) {
+        return Math.min(4, Math.floor(formationCells.length / 4));
+      }
+    }
+
+    const room = prem.rooms?.salle_formation_psc1 || prem.rooms?.salle_formation;
+    const lvl = room?.level || 1;
+    if (prem.archetype === 'centre_pedagogique') {
+      return Math.max(2, lvl);
+    }
+    if (lvl >= 2) {
+      return Math.min(3, lvl);
+    }
+    return 1;
+  },
+
   hasStorageRoom(game, stationId) {
     const prem = this.getStationPremises(game, stationId);
     if (!prem) return false;

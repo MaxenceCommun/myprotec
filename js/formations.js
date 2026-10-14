@@ -1088,15 +1088,31 @@ window.ProtecFormations = {
   },
 
   // Créer une nouvelle session de formation planifiée à l'antenne ou chez un partenaire
-  createSession(game, courseId, discountType, isInternal, targetAudience, locationType = 'antenne', externalAttendeesCount = 0) {
+  createSession(game, courseId, discountType, isInternal, targetAudience, locationType = 'antenne', externalAttendeesCount = 0, roomNumber = null) {
     const course = this.catalog.find(c => c.id === courseId);
     if (!course) return;
 
-    // 1. Vérification de la salle de formation si hébergée à l'antenne
-    // Les locaux de l'antenne sont toujours autorisés à accueillir des sessions de formation
-    if (locationType === 'antenne') {
-      // Pas de blocage : les locaux disposent d'un espace pédagogique
+    // 1. Résolution de l'antenne et de la salle de formation
+    const station = (game.stations && game.stations[0]) || { name: 'Antenne', city: 'Nancy' };
+    const stationName = station.name || `Antenne de ${station.city || 'Nancy'}`;
+    const roomsCount = window.ProtecLocaux?.getStationTrainingRoomsCount ? window.ProtecLocaux.getStationTrainingRoomsCount(station) : 1;
+    let assignedRoom = Number(roomNumber) || 1;
+    if (!roomNumber && locationType === 'antenne' && roomsCount > 1) {
+      const curDay = (game.clock?.day || 1);
+      const occupied = (game.sessionsFormation || [])
+        .filter(s => s.locationType === 'antenne' && s.eventDate?.day === curDay && s.roomNumber)
+        .map(s => Number(s.roomNumber));
+      for (let r = 1; r <= roomsCount; r++) {
+        if (!occupied.includes(r)) {
+          assignedRoom = r;
+          break;
+        }
+      }
     }
+
+    const locationLabel = locationType === 'antenne'
+      ? `${stationName} - Salle n°${assignedRoom}`
+      : 'Délocalisée (Entreprise Partenaire)';
 
     // 2. Rappel sur le kit pédagogique si dispensé par l'antenne (non bloquant à la programmation)
     if (course.kitRequired && !this.hasTrainingKit(game, course.kitRequired)) {
@@ -1138,7 +1154,8 @@ window.ProtecFormations = {
       category: course.category,
       isInternal: !!isInternal,
       locationType: locationType,
-      locationLabel: locationType === 'antenne' ? 'À l’Antenne (Salle Pédagogique)' : 'Délocalisée (Entreprise Partenaire)',
+      roomNumber: assignedRoom,
+      locationLabel: locationLabel,
       targetAudience: isInternal ? 'Bénévoles de l’Antenne' : (targetAudience || 'Grand Public'),
       finalPrice: finalPrice,
       publicPriceForExternals: course.basePricePublic,
@@ -2127,7 +2144,7 @@ window.ProtecFormations = {
     if (!body || !title) return;
 
     title.textContent = 'Pôle Formations & Pédagogie de Sécurité Civile';
-    subtitle.textContent = 'Cursus Entreprises (B2B), Grand Public, Secourisme Opérationnel, Recyclages FC et Filière Formateurs';
+    subtitle.textContent = 'Cursus Entreprises, Grand Public, Secourisme Opérationnel, Recyclages FC et Filière Formateurs';
     icon.setAttribute('data-lucide', 'graduation-cap');
 
     const pendingB2BCount = (game.formationB2BProposals || []).filter(p => p.status === 'pending_quote').length;
@@ -2163,7 +2180,7 @@ window.ProtecFormations = {
         <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl">
           <button onclick="window.ProtecFormations.setMainTab('entreprises')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.mainTab === 'entreprises' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:text-slate-900 cursor-pointer'}">
             <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
-            <span>Structures & Entreprises (B2B)</span>
+            <span>Structures & Entreprises</span>
             ${pendingB2BCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-black ${this.mainTab === 'entreprises' ? 'bg-white text-pc-blue' : 'bg-pc-blue text-white'}">${pendingB2BCount}</span>` : ''}
           </button>
           <button onclick="window.ProtecFormations.setMainTab('grand_public')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.mainTab === 'grand_public' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:text-slate-900 cursor-pointer'}">
@@ -2200,6 +2217,10 @@ window.ProtecFormations = {
     }
 
     // Sinon, onglet historique Grand Public & Internes
+    const primaryStation = (game.stations && game.stations[0]) || { name: 'Antenne', city: 'Nancy' };
+    const stationName = primaryStation.name || `Antenne de ${primaryStation.city || 'Nancy'}`;
+    const totalTrainingRooms = window.ProtecLocaux?.getStationTrainingRoomsCount ? window.ProtecLocaux.getStationTrainingRoomsCount(primaryStation) : 1;
+
     body.innerHTML = `
       <div class="space-y-6">
         ${navTabsHTML}
@@ -2322,11 +2343,23 @@ window.ProtecFormations = {
 
             <div>
               <label class="text-[10px] font-bold uppercase text-slate-400">Lieu d'accueil :</label>
-              <select id="new-course-loc" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-pc-blue">
-                <option value="antenne">🏛️ À l’Antenne (Salle requise)</option>
+              <select id="new-course-loc" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-pc-blue" onchange="
+                const roomWrap = document.getElementById('new-course-room-wrap');
+                if (roomWrap) roomWrap.style.display = (this.value === 'antenne' && ${totalTrainingRooms} > 1) ? 'block' : 'none';
+              ">
+                <option value="antenne">🏛️ À l’Antenne (${stationName})</option>
                 <option value="entreprise">🏢 Chez le Partenaire / Entreprise</option>
               </select>
             </div>
+
+            ${totalTrainingRooms > 1 ? `
+              <div id="new-course-room-wrap">
+                <label class="text-[10px] font-bold uppercase text-slate-400">N° de Salle de Formation :</label>
+                <select id="new-course-room" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-indigo-700">
+                  ${Array.from({ length: totalTrainingRooms }, (_, i) => `<option value="${i + 1}">Salle n°${i + 1}</option>`).join('')}
+                </select>
+              </div>
+            ` : `<input type="hidden" id="new-course-room" value="1" />`}
 
             <div id="external-attendees-wrap">
               <label class="text-[10px] font-bold uppercase text-slate-400">Extérieurs payants accueillis :</label>
@@ -2344,8 +2377,9 @@ window.ProtecFormations = {
                 const cLoc = document.getElementById('new-course-loc').value;
                 const tTar = document.getElementById('new-course-tariff').value;
                 const extCnt = document.getElementById('new-external-count').value;
+                const cRoom = document.getElementById('new-course-room') ? document.getElementById('new-course-room').value : 1;
                 const isInt = tTar.startsWith('internal');
-                window.ProtecFormations.createSession(window.game, cId, tTar, isInt, isInt ? 'Bénévoles de l’Antenne' : (cLoc === 'entreprise' ? 'Salariés Entreprise' : 'Grand Public'), cLoc, extCnt);
+                window.ProtecFormations.createSession(window.game, cId, tTar, isInt, isInt ? 'Bénévoles de l’Antenne' : (cLoc === 'entreprise' ? 'Salariés Entreprise' : 'Grand Public'), cLoc, extCnt, cRoom);
               " class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
                 <i data-lucide="plus-circle" class="w-4 h-4"></i>
                 Programmer la Session
@@ -2403,6 +2437,10 @@ window.ProtecFormations = {
                     </div>
 
                     <h5 class="text-xs font-black text-slate-900">${sess.title}</h5>
+                    <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1.5 mt-0.5">
+                      <i data-lucide="map-pin" class="w-3.5 h-3.5 text-emerald-600 flex-shrink-0"></i>
+                      <span>${sess.locationLabel || (sess.locationType === 'antenne' ? `${stationName} - Salle n°${sess.roomNumber || 1}` : 'Délocalisée (Entreprise Partenaire)')}</span>
+                    </p>
                     <p class="text-[11px] text-slate-500">
                       ${sess.targetAudience} • Jauge : <strong>${sess.registeredCandidates.length} bénévoles + ${extCount} ext. / ${sess.maxCandidates}</strong> stagiaires
                     </p>

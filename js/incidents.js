@@ -531,8 +531,8 @@ window.ProtecIncidents = {
       try {
         const notif = new Notification(title, {
           body: body,
-          icon: 'logo_myprotec_icon.png',
-          badge: 'logo_myprotec_icon.png',
+          icon: 'badge-monochrome.png',
+          badge: 'badge-monochrome.png',
           tag: tag,
           renotify: true,
           requireInteraction: true

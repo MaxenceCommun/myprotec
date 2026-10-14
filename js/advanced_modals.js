@@ -554,10 +554,14 @@ window.ProtecAdvancedModals = {
                     />
 
                     <!-- Badge Type Opérationnel en haut à gauche -->
-                    <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                    <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap max-w-[80%]">
                       <span class="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-pc-blue text-white shadow-xs">
                         ${currentVariant.type}
                       </span>
+                      ${(currentVariant.functions || []).map(fCode => {
+                        const f = window.ProtecAdvanced?.vehicleFunctions?.[fCode];
+                        return `<span class="px-1.5 py-0.5 rounded-md text-[9px] font-black border shadow-2xs ${f?.badgeClass || 'bg-slate-100 text-slate-800'}" title="${f?.code} : ${f?.label}">🏷️ ${fCode}</span>`;
+                      }).join('')}
                       <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white/90 text-slate-700 backdrop-blur-xs border border-slate-200/70">
                         ${currentVariant.category}
                       </span>
@@ -604,7 +608,7 @@ window.ProtecAdvancedModals = {
                               </span>
                             </div>
                             <span class="text-[9.5px] block font-semibold ${isSelected ? 'text-pc-blue/80' : 'text-slate-400'} mt-0.5">
-                              ${v.type} • ${v.capacity} pl.
+                              ${v.type} ${(v.functions || []).map(f => `[${f}]`).join(' ')} • ${v.capacity} pl.
                             </span>
                           </button>
                         `;
@@ -1277,10 +1281,14 @@ window.ProtecAdvancedModals = {
 
                   <!-- Badge catégorie et prix -->
                   <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-1.5">
+                    <div class="flex items-center gap-1.5 flex-wrap">
                       <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-pc-blue/10 text-pc-blue">
                         ${card.type}
                       </span>
+                      ${(() => {
+                        const funcs = game.getVehicleFunctions ? game.getVehicleFunctions(card) : [];
+                        return funcs.map(f => `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-black border shadow-2xs ${f.badgeClass}" title="${f.code} : ${f.label}">🏷️ ${f.code}</span>`).join('');
+                      })()}
                       <span class="text-[10px] font-bold text-slate-500">
                         ${card.category}
                       </span>

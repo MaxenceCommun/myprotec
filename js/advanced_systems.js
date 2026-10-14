@@ -8,6 +8,94 @@
  */
 
 window.ProtecAdvanced = {
+  // --- FONCTIONS OPÉRATIONNELLES DES VÉHICULES (PS, TP, TU, LOG, HR, CMD, POP, etc.) ---
+  vehicleFunctions: {
+    PS: {
+      code: 'PS',
+      label: 'Premiers Secours',
+      shortDesc: 'Secours d’urgence aux personnes & évacuation sanitaire',
+      icon: 'heart-pulse',
+      badgeClass: 'bg-red-100 text-red-800 border-red-300'
+    },
+    TP: {
+      code: 'TP',
+      label: 'Transport de Personnels',
+      shortDesc: 'Acheminement et relève d’équipes',
+      icon: 'users',
+      badgeClass: 'bg-sky-100 text-sky-800 border-sky-300'
+    },
+    TU: {
+      code: 'TU',
+      label: 'Tout Usage',
+      shortDesc: 'Véhicule utilitaire polyvalent',
+      icon: 'truck',
+      badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-300'
+    },
+    LOG: {
+      code: 'LOG',
+      label: 'Logistique',
+      shortDesc: 'Transport de matériel, tentes et lots PMA',
+      icon: 'package',
+      badgeClass: 'bg-amber-100 text-amber-800 border-amber-300'
+    },
+    HR: {
+      code: 'HR',
+      label: 'Hors Route (4x4)',
+      shortDesc: 'Franchissement tout-terrain et zones isolées',
+      icon: 'mountain',
+      badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300'
+    },
+    CMD: {
+      code: 'CMD',
+      label: 'Commandement',
+      shortDesc: 'Poste de commandement, transmissions & coordination',
+      icon: 'radio',
+      badgeClass: 'bg-purple-100 text-purple-800 border-purple-300'
+    },
+    LIAISON: {
+      code: 'LIAISON',
+      label: 'Liaison',
+      shortDesc: 'Reconnaissance rapide et déplacements cadres',
+      icon: 'navigation',
+      badgeClass: 'bg-blue-100 text-blue-800 border-blue-300'
+    },
+    POP: {
+      code: 'POP',
+      label: 'Soutien aux Populations',
+      shortDesc: 'Assistance sinistrés, hébergement et ravitaillement',
+      icon: 'home',
+      badgeClass: 'bg-rose-100 text-rose-800 border-rose-300'
+    },
+    SOC: {
+      code: 'SOC',
+      label: 'Action Sociale',
+      shortDesc: 'Maraudes, accueil d’urgence et écoute',
+      icon: 'coffee',
+      badgeClass: 'bg-orange-100 text-orange-800 border-orange-300'
+    },
+    TECH: {
+      code: 'TECH',
+      label: 'Technique',
+      shortDesc: 'Énergie, éclairage, pompage & outillage spécialisé',
+      icon: 'wrench',
+      badgeClass: 'bg-slate-100 text-slate-800 border-slate-300'
+    },
+    CYNO: {
+      code: 'CYNO',
+      label: 'Cynotechnique',
+      shortDesc: 'Recherche et sauvetage avec équipes canines',
+      icon: 'paw-print',
+      badgeClass: 'bg-yellow-100 text-yellow-800 border-yellow-300'
+    },
+    SSA: {
+      code: 'SSA',
+      label: 'Sauvetage Aquatique',
+      shortDesc: 'Sauvetage et surveillance nautique',
+      icon: 'life-buoy',
+      badgeClass: 'bg-cyan-100 text-cyan-800 border-cyan-300'
+    }
+  },
+
   // --- CATALOGUE DES VÉHICULES ÉTENDU ---
   // --- CATALOGUE DES MODÈLES & CHÂSSIS (PARTIE 1 DU MAGASIN : RECHERCHE PAR MODÈLE & CONFIGURATION) ---
   chassisModels: [
@@ -21,6 +109,7 @@ window.ProtecAdvanced = {
       variants: [
         {
           id: 'master3_vpsp',
+          functions: ["PS"],
           type: 'VPSP',
           name: 'Renault Master III - VPSP Cellule Standard Profilée',
           shortName: 'Ambulance VPSP Profilée',
@@ -38,6 +127,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'master3_vpsp_cube',
+          functions: ["PS"],
           type: 'VPSP',
           name: 'Renault Master III - VPSP Grande Cellule Cube Sanitaire',
           shortName: 'Ambulance VPSP Grande Cellule Cube',
@@ -55,6 +145,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'master3_vtp',
+          functions: ["TP"],
           type: 'VTP',
           name: 'Renault Master III - VTP Transport de Personnel (9 places)',
           shortName: 'Minibus VTP 9 places',
@@ -72,6 +163,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'master3_vtu_log',
+          functions: ["TU","LOG"],
           type: 'VTU',
           name: 'Renault Master III - VTU Fourgon Logistique',
           shortName: 'VTU Tôlé Logistique',
@@ -91,6 +183,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'master3_vtu_pop',
+          functions: ["TU","LOG","POP"],
           type: 'VTU',
           name: 'Renault Master III - VTU Soutien aux Populations',
           shortName: 'VTU Soutien Populations',
@@ -120,6 +213,7 @@ window.ProtecAdvanced = {
       variants: [
         {
           id: 'master4_vpsp',
+          functions: ["PS"],
           type: 'VPSP',
           name: 'Renault Master IV - VPSP Nouvelle Génération',
           shortName: 'Ambulance Master IV VPSP',
@@ -147,6 +241,7 @@ window.ProtecAdvanced = {
       variants: [
         {
           id: 'trafic3_vtp',
+          functions: ["TP"],
           type: 'VTP',
           name: 'Renault Trafic III - VTP Minibus d’Intervention (9 places)',
           shortName: 'Minibus VTP 9 places',
@@ -164,6 +259,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'trafic3_vtu',
+          functions: ["TU","LOG"],
           type: 'VTU',
           name: 'Renault Trafic III - VTU Fourgon Moyen Logistique',
           shortName: 'Fourgon VTU Polyvalent',
@@ -191,6 +287,7 @@ window.ProtecAdvanced = {
       variants: [
         {
           id: 'ducato_vpsp',
+          functions: ["PS"],
           type: 'VPSP',
           name: 'Fiat Ducato - VPSP Secours Sanitaire',
           shortName: 'Ambulance VPSP Grand Volume',
@@ -208,6 +305,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'ducato_vtu',
+          functions: ["TU","LOG"],
           type: 'VTU',
           name: 'Fiat Ducato - VTU Grand Volume Fret',
           shortName: 'Fourgon VTU Fret L3H2',
@@ -235,6 +333,7 @@ window.ProtecAdvanced = {
       variants: [
         {
           id: 'duster_vl',
+          functions: ["LIAISON","CMD"],
           type: 'VL',
           name: 'Dacia Duster II - Véhicule de Liaison (VL)',
           shortName: 'VL Liaison Rapide',
@@ -252,6 +351,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'hilux_vlhr',
+          functions: ["HR","LIAISON","CMD"],
           type: 'VLHR',
           name: 'Toyota Hilux 4x4 - Véhicule Léger Hors Route (VLHR)',
           shortName: 'VLHR Franchissement 4x4',
@@ -279,6 +379,7 @@ window.ProtecAdvanced = {
       variants: [
         {
           id: 'flit_heavy',
+          functions: ["LOG","POP","TECH"],
           type: 'FLIT',
           name: 'FLIT - Fourgon Lourd d’Intervention Technique & Soutien Pop',
           shortName: 'FLIT Fourgon Lourd Soutien Pop (> 12t)',
@@ -296,6 +397,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'midliners135_flit_pop',
+          functions: ["LOG","POP"],
           type: 'FLIT',
           name: 'Renault Midliner S135 - FLIT Soutien aux Populations & Catastrophe',
           shortName: 'Camion Midliner S135 Soutien Pop',
@@ -313,6 +415,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'pcm_heavy',
+          functions: ["CMD","LIAISON"],
           type: 'PCM',
           name: 'Renault Midlum - PCM Poste de Commandement Mobile',
           shortName: 'Poste de Commandement Mobile Midlum',
@@ -330,6 +433,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'pl_pop',
+          functions: ["LOG","POP"],
           type: 'VTU',
           name: 'Renault Trucks PL - Poids Lourd Soutien aux Populations',
           shortName: 'Camion PL Soutien Populations',
@@ -347,6 +451,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'trm_pop',
+          functions: ["HR","LOG","POP"],
           type: 'VLHR',
           name: 'Renault TRM 2000 4x4 - Soutien aux Populations Tout-Terrain',
           shortName: 'Camion TRM 2000 4x4 Tout-Terrain',
@@ -374,6 +479,7 @@ window.ProtecAdvanced = {
       variants: [
         {
           id: 'ers_boat',
+          functions: ["SSA"],
           type: 'ERS',
           name: 'ERS - Embarcation de Reconnaissance et de Sauvetage',
           shortName: 'Bateau ERS + Remorque',
@@ -393,6 +499,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'mps_moto',
+          functions: ["PS","LIAISON"],
           type: 'MPS',
           name: 'MPS - Moto de Premiers Secours',
           shortName: 'Moto MPS 2 places',
@@ -409,6 +516,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'quad_interv',
+          functions: ["HR","PS"],
           type: 'QUAD',
           name: 'Quad Tout-Terrain d’Intervention',
           shortName: 'Quad Tout-Terrain + Remorque',
@@ -427,6 +535,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'velo_patrouille',
+          functions: ["PS"],
           type: 'VELO',
           name: 'Binôme Vélo / VTT Premiers Secours',
           shortName: 'Binôme VTT d’Urgence',
@@ -443,6 +552,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'vahu_social',
+          functions: ["SOC","POP"],
           type: 'VAHU',
           name: 'VAHU - Véhicule d’Accueil & Hébergement d’Urgence',
           shortName: 'Fourgon VAHU Social',
@@ -459,6 +569,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'vcyn_chien',
+          functions: ["CYNO","TECH"],
           type: 'VCYN',
           name: 'VCYN - Véhicule Cynotechnique USAR',
           shortName: 'Fourgon VCYN Maître-Chien',
@@ -476,6 +587,7 @@ window.ProtecAdvanced = {
         },
         {
           id: 'rem_eclairage',
+          functions: ["LOG","TECH"],
           type: 'REM',
           name: 'Remorque Lot PMA & Éclairage',
           shortName: 'Remorque PMA & Mât Éclairage',
@@ -500,6 +612,7 @@ window.ProtecAdvanced = {
   vehicleCatalog: [
     {
       type: 'VPSP',
+      functions: ["PS"],
       name: 'Véhicule de Premiers Secours à Personnes (VPSP)',
       category: 'Secours d’Urgence',
       missionFilter: ['secours'],
@@ -515,6 +628,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'VL',
+      functions: ["LIAISON","CMD"],
       name: 'Véhicule de Liaison (VL)',
       category: 'Reconnaissance Rapide',
       missionFilter: ['liaison'],
@@ -531,6 +645,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'VLHR',
+      functions: ["HR","LIAISON","CMD"],
       name: 'Véhicule Léger Hors Route (VLHR 4x4)',
       category: 'Tout-Terrain',
       missionFilter: ['liaison', 'tout_terrain'],
@@ -547,6 +662,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'VTU',
+      functions: ["TU","LOG"],
       name: 'VTU - Fourgon Tout Usage (Logistique)',
       category: 'Logistique & Soutien',
       missionFilter: ['logistique'],
@@ -563,6 +679,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'VTP',
+      functions: ["TP"],
       name: 'Transport de Personnel (VTP)',
       category: 'Transport d’Équipes',
       missionFilter: ['logistique'],
@@ -578,6 +695,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'PCM',
+      functions: ["CMD","LIAISON"],
       name: 'Poste de Commandement Mobile (PCM Renault Midlum)',
       category: 'Commandement Lourd',
       missionFilter: ['liaison'],
@@ -593,6 +711,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'VAHU',
+      functions: ["SOC","POP"],
       name: 'VAHU - Véhicule d\'Accueil et d\'Hébergement d\'Urgence',
       category: 'Action Sociale & Accueil',
       missionFilter: ['social'],
@@ -608,6 +727,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'FLIT',
+      functions: ["LOG","POP","TECH"],
       name: 'FLIT - Fourgon Lourd d\'Intervention Technique & Soutien Pop',
       category: 'Technique & Soutien Lourd',
       missionFilter: ['logistique', 'usar', 'crise'],
@@ -623,6 +743,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'VCYN',
+      functions: ["CYNO","TECH"],
       name: 'Véhicule Cynotechnique (VCYN)',
       category: 'USAR / Cyno',
       missionFilter: ['usar'],
@@ -639,6 +760,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'ERS',
+      functions: ["SSA"],
       name: 'ERS - Embarcation de Reconnaissance et de Sauvetage',
       category: 'Sauvetage Aquatique (SSA)',
       missionFilter: ['nautique'],
@@ -657,6 +779,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'MPS',
+      functions: ["PS","LIAISON"],
       name: 'MPS - Moto de Premiers Secours',
       category: 'Vecteur Rapide',
       missionFilter: ['secours', 'tout_terrain'],
@@ -672,6 +795,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'QUAD',
+      functions: ["HR","PS"],
       name: 'Quad Tout-Terrain d’Intervention',
       category: 'Tout-Terrain Agile',
       missionFilter: ['tout_terrain'],
@@ -689,6 +813,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'VTD',
+      functions: ["TECH"],
       name: 'Véhicule Technique Déblaiement (USAR)',
       category: 'Sauvetage Déblaiement (USAR)',
       missionFilter: ['usar'],
@@ -704,6 +829,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'VELO',
+      functions: ["PS"],
       name: 'Binôme Vélo / VTT Premiers Secours',
       category: 'Dispositif Mobile',
       missionFilter: ['secours', 'tout_terrain'],
@@ -719,6 +845,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'VST',
+      functions: ["LOG","TECH"],
       name: 'Véhicule de Soutien Technique (VST)',
       category: 'Soutien & Énergie',
       missionFilter: ['logistique'],
@@ -734,6 +861,7 @@ window.ProtecAdvanced = {
     },
     {
       type: 'REM',
+      functions: ["LOG","TECH"],
       name: 'Remorque Lot PMA & Éclairage',
       category: 'Remorque Spécialisée',
       missionFilter: ['logistique', 'tout_terrain'],

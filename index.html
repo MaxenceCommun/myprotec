@@ -643,13 +643,15 @@
   <script src="js/departements.js"></script>
   <script src="js/qrcode.min.js"></script>
   <script src="js/pwa.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/notifications.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/privacy.js"></script>
   <script src="js/help.js"></script>
   <script src="js/landing.js?v=2.0.9"></script>
 
   <script>
-    // Initialisation immédiate des icônes Lucide et de la landing page
+    // Initialisation immédiate des icônes Lucide, de la landing page et des notifications
     document.addEventListener('DOMContentLoaded', () => {
       if (window.lucide) window.lucide.createIcons();
       if (window.ProtecPWA && typeof window.ProtecPWA.init === 'function') {
@@ -657,6 +659,9 @@
       }
       if (window.ProtecAuth && typeof window.ProtecAuth.init === 'function') {
         window.ProtecAuth.init();
+      }
+      if (window.ProtecNotifications && typeof window.ProtecNotifications.init === 'function') {
+        window.ProtecNotifications.init();
       }
       if (window.MyProtecLanding && typeof window.MyProtecLanding.init === 'function') {
         window.MyProtecLanding.init();

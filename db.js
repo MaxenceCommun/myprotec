@@ -33,7 +33,9 @@ const defaultDb = {
   customEquipmentCatalog: null,
   customBadgesCatalog: null,
   referralLogs: [],  // [{ id, referrer_id, referee_id, status, reward_referee_granted, reward_referrer_granted, created_at, validated_at }]
-  fraudLogs: []      // [{ id, timestamp, referrer_id, attempted_referee_username, ip_detected, device_fingerprint, reason, reviewed }]
+  fraudLogs: [],      // [{ id, timestamp, referrer_id, attempted_referee_username, ip_detected, device_fingerprint, reason, reviewed }]
+  pushSubscriptions: {}, // endpoint -> { endpoint, keys, userId, username, userAgent, createdAt, lastUsed }
+  vapidKeys: null
 };
 
 class Database {
@@ -69,7 +71,9 @@ class Database {
           communityEvents: parsed.communityEvents || [],
           badgesCollection: parsed.badgesCollection || [],
           referralLogs: parsed.referralLogs || [],
-          fraudLogs: parsed.fraudLogs || []
+          fraudLogs: parsed.fraudLogs || [],
+          pushSubscriptions: parsed.pushSubscriptions || {},
+          vapidKeys: parsed.vapidKeys || null
         };
       } catch (e) {
         console.error('Erreur lecture BDD, utilisation état par défaut:', e);

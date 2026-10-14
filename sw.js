@@ -10,7 +10,7 @@
  * - En cas de coupure réseau, le client bloque immédiatement l'accès au jeu.
  */
 
-const CACHE_VERSION = 'myprotec-online-v2.2.7';
+const CACHE_VERSION = 'myprotec-online-v2.3.2';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 
 // Assets statiques essentiels mis en cache pour la rapidité de chargement
@@ -19,6 +19,8 @@ const STATIC_ASSETS = [
   'index.html',
   'jeu',
   'jeu.html',
+  'badge-monochrome.png',
+  'icons/badge-monochrome.png',
   'ecussons.html',
   'discord_callback.html',
   'landing.css',
@@ -183,57 +185,217 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// 4. NOTIFICATIONS PUSH (Optionnelles si le jeu est actif au premier plan)
+// 4. NOTIFICATIONS PUSH NATIVES (MOBILITÉ & ARRIÈRE-PLAN APP FERMÉE)
+let backgroundAlertTimers = [];
+
+// Résolution absolue et sécurisée des URLs d'assets (compatible GitHub Pages en sous-dossier et localhost)
+const getAssetUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  return new URL(path.replace(/^\//, ''), self.registration.scope).href;
+};
+
+const DEFAULT_BADGE = getAssetUrl('badge-monochrome.png');
+const DEFAULT_ICON = getAssetUrl('badge-monochrome.png');
+
 self.addEventListener('push', (event) => {
+  let data = {
+    title: '🚨 Alerte Protection Civile',
+    body: 'Nouvelle sollicitation opérationnelle en attente de validation.',
+    icon: DEFAULT_ICON,
+    badge: DEFAULT_BADGE,
+    tag: `protec-push-${Date.now()}`,
+    data: { url: 'jeu.html' }
+  };
+
+  if (event.data) {
+    try {
+      data = Object.assign(data, event.data.json());
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       const isForeground = clientList && clientList.some(c => c.visibilityState === 'visible' && c.focused);
-      if (isForeground) return; // Jeu visible et au premier plan : les toasts in-app suffisent
-
-      let data = {
-        title: '🚨 Alerte Protection Civile',
-        body: 'Nouvelle sollicitation opérationnelle en attente de validation.',
-        icon: 'logo_myprotec_icon.png',
-        badge: 'logo_myprotec_icon.png',
-        tag: 'protec-push-alert',
-        data: { url: '/' }
-      };
-
-      if (event.data) {
-        try {
-          data = Object.assign(data, event.data.json());
-        } catch (e) {
-          data.body = event.data.text();
-        }
+      if (isForeground) {
+        // Le jeu est déjà actif au premier plan : diffuser un message interne
+        clientList.forEach(c => {
+          c.postMessage({ type: 'PUSH_NOTIFICATION_RECEIVED', data });
+        });
+        return;
       }
 
-      return self.registration.showNotification(data.title, {
-        body: data.body,
-        icon: data.icon || 'logo_myprotec_icon.png',
-        badge: data.badge || 'logo_myprotec_icon.png',
-        tag: data.tag || 'protec-alert',
-        vibrate: [300, 150, 300, 150, 400],
+      // L'application est en arrière-plan ou TOTALEMENT FERMÉE sur mobile / PC :
+      // Affichage de la notification native au niveau de l'OS avec vibreur et son
+      return self.registration.showNotification(data.title || '🚨 Alerte Protection Civile', {
+        body: data.body || data.message || 'Intervention ou devis en attente.',
+        icon: data.icon ? getAssetUrl(data.icon) : DEFAULT_ICON,
+        badge: data.badge ? getAssetUrl(data.badge) : DEFAULT_BADGE,
+        tag: data.tag || `protec-alert-${Date.now()}`,
+        vibrate: [300, 150, 300, 150, 450],
         renotify: true,
-        data: data.data || { url: '/' }
+        requireInteraction: true,
+        data: data.data || { url: 'jeu.html' }
       });
     })
   );
 });
 
+// Clic sur une notification push sur l'écran verrouillé ou dans le centre de notifications
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const urlToOpen = event.notification.data?.url || '/';
+  const rawUrl = event.notification.data?.url || 'jeu.html';
+  const targetUrl = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
+    ? rawUrl
+    : new URL(rawUrl.replace(/^\//, ''), self.registration.scope).href;
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if (client.url.includes(self.registration.scope) && 'focus' in client) {
+        if (client.url && (client.url.includes('jeu') || client.url.includes(self.registration.scope)) && 'focus' in client) {
           return client.focus();
         }
       }
-      if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
       }
     })
   );
 });
+
+// 5. GESTION DES MESSAGES DEPUIS L'APPLICATION & SYNC ARRIÈRE-PLAN
+const SUPABASE_URL = 'https://yrayehhbqcnuiuejqsjz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs';
+
+let currentUserId = null;
+let currentUsername = 'Directeur';
+
+async function checkPendingSupabaseAlerts() {
+  if (!currentUserId || currentUserId === 'local') return;
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(currentUserId)}&select=save_data`, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!res.ok) return;
+    const records = await res.json();
+    if (!Array.isArray(records) || records.length === 0) return;
+
+    const saveData = records[0].save_data || {};
+    const pending = saveData.pending_notifications || [];
+
+    if (pending.length === 0) return;
+
+    // Vérifier si une fenêtre est ouverte et visible
+    const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const isForeground = clientList && clientList.some(c => c.visibilityState === 'visible' && c.focused);
+
+    for (const notif of pending) {
+      if (isForeground) {
+        clientList.forEach(c => {
+          c.postMessage({ type: 'PUSH_NOTIFICATION_RECEIVED', data: notif });
+        });
+      } else {
+        await self.registration.showNotification(notif.title || '🚨 Alerte Protection Civile', {
+          body: notif.body || notif.message || 'Nouvelle notification opérationnelle.',
+          icon: notif.icon ? getAssetUrl(notif.icon) : DEFAULT_ICON,
+          badge: notif.badge ? getAssetUrl(notif.badge) : DEFAULT_BADGE,
+          tag: notif.tag || `protec-pending-${Date.now()}`,
+          vibrate: [300, 150, 300, 150, 450],
+          renotify: true,
+          requireInteraction: true,
+          data: notif.data || { url: 'jeu.html' }
+        });
+      }
+    }
+
+    // Purger les notifications traitées dans Supabase
+    saveData.pending_notifications = [];
+    await fetch(`${SUPABASE_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(currentUserId)}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ save_data: saveData })
+    });
+  } catch (err) {
+    console.warn('[SW] Erreur vérification alertes Supabase:', err);
+  }
+}
+
+self.addEventListener('message', (event) => {
+  if (!event.data) return;
+
+  // Enregistrement de l'utilisateur actif
+  if (event.data.type === 'SET_CURRENT_USER' && event.data.user) {
+    currentUserId = event.data.user.id;
+    currentUsername = event.data.user.username;
+    checkPendingSupabaseAlerts();
+  }
+
+  // Planification d'une alerte si l'utilisateur quitte ou ferme l'application
+  if (event.data.type === 'SCHEDULE_BACKGROUND_ALERT') {
+    const delayMs = Number(event.data.delayMs) || 180000;
+    const alertData = event.data.data || {
+      title: '🚨 Alerte 15 : VPSP Requis',
+      body: 'Le SAMU demande une ambulance de votre antenne. Reprenez votre service !',
+      url: 'jeu.html'
+    };
+
+    // Vérifier également immédiatement la file d'attente
+    checkPendingSupabaseAlerts();
+
+    const timerId = setTimeout(() => {
+      // Vérifier les notifications en attente Supabase en priorité
+      checkPendingSupabaseAlerts().finally(() => {
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+          const isForeground = clientList && clientList.some(c => c.visibilityState === 'visible' && c.focused);
+          if (isForeground) return;
+
+          self.registration.showNotification(alertData.title, {
+            body: alertData.body,
+            icon: alertData.icon ? getAssetUrl(alertData.icon) : DEFAULT_ICON,
+            badge: alertData.badge ? getAssetUrl(alertData.badge) : DEFAULT_BADGE,
+            tag: `protec-bg-${Date.now()}`,
+            vibrate: [300, 150, 300, 150, 450],
+            renotify: true,
+            requireInteraction: true,
+            data: { url: alertData.url || 'jeu.html' }
+          });
+        });
+      });
+    }, delayMs);
+
+    backgroundAlertTimers.push(timerId);
+  }
+
+  // Annulation si l'utilisateur est revenu sur le jeu
+  if (event.data.type === 'CANCEL_BACKGROUND_ALERTS') {
+    backgroundAlertTimers.forEach(id => clearTimeout(id));
+    backgroundAlertTimers = [];
+  }
+});
+
+// Écouteurs de synchronisation en arrière-plan (PWA mobile installée)
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'protec-sync-alerts') {
+    event.waitUntil(checkPendingSupabaseAlerts());
+  }
+});
+
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'protec-alerts-sync') {
+    event.waitUntil(checkPendingSupabaseAlerts());
+  }
+});
+
