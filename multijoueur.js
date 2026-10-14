@@ -522,10 +522,19 @@ window.ProtecMultiplayer = {
       
       const newMsg = {
         id: `renf-msg-${Date.now()}`,
+        type: 'renfort_request',
         senderId: game.player?.id || 'local',
         senderName: game.stations?.[0]?.name || 'Antenne Locale',
         deptCode: game.stations?.[0]?.departmentCode || '75',
         channel: zone === 'national' ? 'national' : zone === 'regional' ? 'regional' : 'departemental',
+        zone: zone,
+        zoneLabel: zoneLabels[zone].toUpperCase(),
+        missionId: mission.id,
+        missionTitle: mission.title,
+        unitRequested: renfortData.unitRequested,
+        requestedVolunteersCount: renfortData.requestedVolunteersCount,
+        requestedVehicles: renfortData.requestedVehicles,
+        indemnite: renfortData.indemnite,
         text: msgText,
         time: timeStr
       };
@@ -1484,7 +1493,11 @@ window.ProtecMultiplayer = {
     ];
   },
 
-  getInitialCommunityEvents() {
+  getInitialCommunityEvents(game = null) {
+    const curYear = game?.clock?.year || 2026;
+    const curMonth = (game?.clock?.month !== undefined) ? (game.clock.month + 1) : (new Date().getMonth() + 1);
+    const curDay = game?.clock?.day || new Date().getDate();
+
     return [
       {
         id: 'evt-comm-1',
@@ -1496,7 +1509,7 @@ window.ProtecMultiplayer = {
         locationName: 'Base de Loisirs & Berges du Lac',
         city: 'Lyon',
         departmentCode: '69',
-        eventDate: { day: 18, month: 5, year: 2026, hour: 8 },
+        eventDate: { day: curDay + 3, month: curMonth, year: curYear, hour: 8 },
         durationHours: 8,
         publicCount: 6500,
         requiredVolunteers: 10,
@@ -1529,7 +1542,7 @@ window.ProtecMultiplayer = {
         locationName: 'Quais de Garonne',
         city: 'Bordeaux',
         departmentCode: '33',
-        eventDate: { day: 22, month: 5, year: 2026, hour: 18 },
+        eventDate: { day: curDay + 6, month: curMonth, year: curYear, hour: 18 },
         durationHours: 7,
         publicCount: 14000,
         requiredVolunteers: 14,
@@ -1562,7 +1575,7 @@ window.ProtecMultiplayer = {
         locationName: 'Gare de Triage & Zone Industrielle',
         city: 'Lille',
         departmentCode: '59',
-        eventDate: { day: 30, month: 5, year: 2026, hour: 10 },
+        eventDate: { day: curDay + 10, month: curMonth, year: curYear, hour: 10 },
         durationHours: 10,
         publicCount: 1500,
         requiredVolunteers: 18,
@@ -2478,13 +2491,46 @@ window.ProtecMultiplayer = {
   },
 
   // Rendu de l'onglet Événements Communautaires dans le module Alliance
+  isCommunityEventPast(e, game) {
+    if (!e) return true;
+    if (['finished', 'completed', 'past', 'closed', 'cloture', 'termine'].includes(e.status)) return true;
+    const curClockMs = game?.clock ? new Date(game.clock.year, game.clock.month, game.clock.day, game.clock.hour || 0, game.clock.minute || 0).getTime() : Date.now();
+    const eventDate = e.eventDate || e.date;
+    if (eventDate) {
+      if (typeof eventDate === 'object') {
+        const y = eventDate.year || game?.clock?.year || 2026;
+        let m = eventDate.month;
+        if (m > 0 && m <= 12) m = m - 1;
+        else m = m || 0;
+        const d = eventDate.day || 1;
+        const h = (eventDate.hour !== undefined) ? eventDate.hour : 8;
+        const dur = e.durationHours || 8;
+        const endMs = new Date(y, m, d, h + dur, 0, 0).getTime();
+        return curClockMs > endMs;
+      } else if (typeof eventDate === 'string') {
+        const parsed = new Date(eventDate).getTime();
+        if (!isNaN(parsed)) {
+          const durMs = (e.durationHours || 8) * 3600 * 1000;
+          return curClockMs > (parsed + durMs);
+        }
+      }
+    }
+    return false;
+  },
+
   renderCommunityEventsTabHTML(game) {
     this.injectState(game);
     const allEvents = game.communityEvents || [];
     const myPlayerId = game.player?.id || 'directeur-local';
     const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
 
-    const openEvents = allEvents.filter(e => e.status === 'open' || !e.status);
+    const openEvents = allEvents.filter(e => {
+      if (this.isCommunityEventPast(e, game)) {
+        if (e.status === 'open') e.status = 'finished';
+        return false;
+      }
+      return e.status === 'open' || !e.status;
+    });
     const myPendingEvents = allEvents.filter(e => e.organizerPlayerId === myPlayerId && e.status === 'pending_approval');
     const myRejectedEvents = allEvents.filter(e => e.organizerPlayerId === myPlayerId && e.status === 'rejected');
 

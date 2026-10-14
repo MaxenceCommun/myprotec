@@ -1199,10 +1199,8 @@ class ProtecGame {
     // Chargement et affichage immédiat des antennes des autres directeurs
     this.loadAllianceStations();
 
-    // Démarrage du trafic opérationnel réaliste des antennes des confrères
-    if (window.ProtecSystems && typeof window.ProtecSystems.startMultiplayerTraffic === 'function') {
-      window.ProtecSystems.startMultiplayerTraffic(this);
-    }
+    // Synchronisation des crises départementales réelles et simulation de vie du monde
+    this.syncDepartmentCrises();
 
     this.updateStatsUI();
     this.updateDockAndFiltersVisibility();
@@ -1889,12 +1887,53 @@ class ProtecGame {
     Object.values(this.markers.missions).forEach(m => this.map.removeLayer(m));
     this.markers.missions = {};
 
+    const curClockMs = new Date(
+      this.clock.year,
+      this.clock.month,
+      this.clock.day,
+      this.clock.hour || 0,
+      this.clock.minute || 0
+    ).getTime();
+
+    // Helper de détection stricte des événements ou dispositifs passés
+    const isDatePassed = (eventDate, durationHours = 4) => {
+      if (!eventDate) return false;
+      try {
+        if (typeof eventDate === 'object') {
+          const y = eventDate.year || this.clock.year;
+          let m = eventDate.month;
+          if (m > 0 && m <= 12) m = m - 1;
+          else m = m || 0;
+          const d = eventDate.day || 1;
+          const h = (eventDate.hour !== undefined) ? eventDate.hour : 8;
+          const dur = durationHours || 4;
+          const endMs = new Date(y, m, d, h + dur, 0, 0).getTime();
+          return curClockMs > endMs;
+        } else if (typeof eventDate === 'string') {
+          const parsed = new Date(eventDate).getTime();
+          if (!isNaN(parsed)) {
+            const durMs = (durationHours || 4) * 3600 * 1000;
+            return curClockMs > (parsed + durMs);
+          }
+        }
+      } catch (e) {
+        return false;
+      }
+      return false;
+    };
+
     this.missions.forEach(mission => {
+      // Exclure formellement les missions et DPS terminés, clôturés, archivés ou annulés
+      if (['completed', 'termine', 'cloture', 'archive', 'cancelled', 'annule', 'carence'].includes(mission.status)) return;
+
       // Les alertes actives et préalertes urgentes restent visibles en direct sur la carte même avec un filtre sélectionné
       if (this.currentFilter !== 'all' && mission.type !== this.currentFilter && mission.status !== 'prealerte' && mission.status !== 'declenche') return;
 
       // Règle DPS : selon le mode actif ('today' = uniquement jour même ou en cours, 'all' = tous les DPS à venir)
       if (mission.type === 'dps' && mission.status === 'planifie') {
+        // Retirer les événements DPS passés de la carte
+        if (mission.eventDate && isDatePassed(mission.eventDate, mission.durationHours || 4)) return;
+
         const isToday = mission.eventDate ? (mission.eventDate.day === this.clock.day && mission.eventDate.month === this.clock.month) : true;
         if (this.dpsFilterMode === 'today' && !isToday) return;
       }
@@ -1977,7 +2016,18 @@ class ProtecGame {
     });
 
     // Rendu des Événements Officiels & Communautaires (communityEvents) sur la carte
-    const openCommunityEvents = (this.communityEvents || []).filter(e => e.status === 'open' && (e.lat || e.latitude) && (e.lng || e.longitude));
+    // Mise à jour de statut et filtrage strict pour ne jamais afficher d'événement passé
+    const openCommunityEvents = (this.communityEvents || []).filter(e => {
+      if (e.status !== 'open') return false;
+      if (!((e.lat || e.latitude) && (e.lng || e.longitude))) return false;
+      const isPast = isDatePassed(e.eventDate || e.date, e.durationHours || 8);
+      if (isPast) {
+        e.status = 'finished'; // Clôture automatique de l'événement dépassé
+        return false;
+      }
+      return true;
+    });
+
     openCommunityEvents.forEach(evt => {
       const eLat = evt.lat || evt.latitude;
       const eLng = evt.lng || evt.longitude;
@@ -2025,8 +2075,14 @@ class ProtecGame {
       this.markers.missions['evt-' + evt.id] = evtMarker;
     });
 
-    // Rendu des Demandes de Renfort Actives sur la carte
-    const openRenforts = (this.renforts || []).filter(r => r.status === 'open' && (r.lat || r.latitude) && (r.lng || r.longitude));
+    // Rendu des Demandes de Renfort Actives sur la carte (excluant tout renfort passé ou expiré)
+    const openRenforts = (this.renforts || []).filter(r => {
+      if (r.status !== 'open') return false;
+      if (!((r.lat || r.latitude) && (r.lng || r.longitude))) return false;
+      if (r.expiresAt && Date.now() > new Date(r.expiresAt).getTime()) return false;
+      if (r.eventDate && isDatePassed(r.eventDate, r.durationHours || 6)) return false;
+      return true;
+    });
     openRenforts.forEach(renf => {
       const rLat = renf.lat || renf.latitude;
       const rLng = renf.lng || renf.longitude;
@@ -6353,7 +6409,8 @@ class ProtecGame {
       registeredVolunteers: [],
       assignedCrew: { volunteers: [], vehicles: [] },
       address: this.generateRealisticStreetAddress(pick.title, coords.lat, coords.lng),
-      isSector: false
+      isSector: false,
+      departmentCode: this.currentDepartmentCode || this.stations?.[0]?.departmentCode || this.player?.departmentCode || '54'
     };
 
     this.enrichMissionLocationWithCity(newMission);
@@ -6361,6 +6418,20 @@ class ProtecGame {
     this.renderMissions();
     this.updateStatsUI();
     this.saveGame();
+
+    // Diffusion et persistance départementale en temps réel (tous les directeurs du département reçoivent la crise)
+    if (window.ProtecSupabase) {
+      if (typeof window.ProtecSupabase.saveDepartmentCrisis === 'function') {
+        window.ProtecSupabase.saveDepartmentCrisis(newMission, newMission.departmentCode);
+      }
+      if (typeof window.ProtecSupabase.broadcastDepartmentCrisis === 'function') {
+        window.ProtecSupabase.broadcastDepartmentCrisis({
+          departmentCode: newMission.departmentCode,
+          crisisData: newMission,
+          senderId: this.player?.id || 'DIRECTEUR'
+        });
+      }
+    }
 
     // Centrage et zoom direct sur la préalerte
     this.centerMapOnMission(newMission.id);
@@ -6393,6 +6464,203 @@ class ProtecGame {
     const activeSncf = this.missions.find(m => m.alertOrigin === 'sncf' && ['prealerte', 'declenche', 'ongoing'].includes(m.status));
     if (activeSncf) return;
     this.triggerAascPrealert('sncf');
+  }
+
+  // --- SYNCHRONISATION DÉPARTEMENTALE DES CRISES & SIMULATION DU MONDE HORS LIGNE ---
+
+  // Réception en direct d'une alerte de crise départementale partagée
+  handleDepartmentCrisisAlert(payload) {
+    if (!payload || !payload.crisisData) return;
+    const myDept = this.currentDepartmentCode || this.stations?.[0]?.departmentCode || this.player?.departmentCode || '54';
+    const crisisDept = payload.departmentCode || payload.crisisData.departmentCode;
+
+    // Ne traiter que si la crise concerne notre département
+    if (crisisDept && String(crisisDept) !== String(myDept)) return;
+
+    // Si nous sommes l'émetteur de l'alerte, nous l'avons déjà intégrée
+    if (payload.senderId && this.player?.id && String(payload.senderId) === String(this.player.id)) return;
+
+    const crisis = payload.crisisData;
+    const existing = (this.missions || []).find(m => m.id === crisis.id || (m.scenarioId && m.scenarioId === crisis.scenarioId && ['prealerte', 'declenche'].includes(m.status)));
+    if (existing) return;
+
+    // Ajout direct de la crise partagée sur la carte et le tableau de bord
+    this.missions.unshift(crisis);
+    this.renderMissions();
+    this.updateStatsUI();
+
+    if (window.ProtecAudio && typeof window.ProtecAudio.playCrisisAlertSound === 'function') {
+      window.ProtecAudio.playCrisisAlertSound();
+    }
+
+    const authName = crisis.authorityLabel || 'Préfecture';
+    this.showToast(
+      `🚨 CRISE DÉPARTEMENTALE [Dpt ${crisisDept}]`,
+      `Alerte partagée reçue de ${authName} : « ${crisis.title} ». Tous les directeurs du département sont mobilisés !`,
+      'red',
+      { type: 'crise', id: crisis.id }
+    );
+  }
+
+  // Réception en direct d'une mise à jour de crise départementale (aggravation, renforts, levée)
+  handleDepartmentCrisisUpdate(payload) {
+    if (!payload) return;
+    const myDept = this.currentDepartmentCode || this.stations?.[0]?.departmentCode || this.player?.departmentCode || '54';
+    if (payload.departmentCode && String(payload.departmentCode) !== String(myDept)) return;
+
+    const targetId = payload.id || payload.crisisData?.id;
+    if (!targetId) return;
+
+    if (payload.status === 'resolved') {
+      // Clôture départementale de la crise
+      const idx = (this.missions || []).findIndex(m => m.id === targetId);
+      if (idx !== -1) {
+        this.missions.splice(idx, 1);
+        this.renderMissions();
+        this.updateStatsUI();
+      }
+      return;
+    }
+
+    const mission = (this.missions || []).find(m => m.id === targetId);
+    if (!mission) return;
+
+    if (payload.status) {
+      mission.status = payload.status;
+      if (payload.status === 'declenche' && !mission.title.includes('[ALERTE ACTIVE]')) {
+        mission.title = mission.title.replace('[Préalerte] ', '[ALERTE ACTIVE] ');
+      }
+    }
+    if (payload.crisisData) {
+      Object.assign(mission, payload.crisisData);
+    }
+    this.renderMissions();
+    this.updateStatsUI();
+  }
+
+  // Synchronisation des crises départementales et simulation de continuité du monde hors-ligne
+  async syncDepartmentCrises() {
+    if (!window.ProtecSupabase || typeof window.ProtecSupabase.fetchActiveDepartmentCrises !== 'function') return;
+
+    const myDept = this.currentDepartmentCode || this.stations?.[0]?.departmentCode || this.player?.departmentCode || '54';
+
+    try {
+      const activeCrises = await window.ProtecSupabase.fetchActiveDepartmentCrises(myDept);
+      const now = Date.now();
+
+      if (Array.isArray(activeCrises) && activeCrises.length > 0) {
+        // Des crises sont déjà actives dans la base départementale
+        activeCrises.forEach(cr => {
+          const existing = (this.missions || []).find(m => m.id === cr.id);
+          if (!existing) {
+            // Ajustement dynamique du statut en fonction du temps écoulé
+            if (cr.status === 'prealerte') {
+              const elapsedSec = Math.floor((now - (cr.spawnedAt || now)) / 1000);
+              const remaining = Math.max(0, (cr.prealertTotalSec || 65) - elapsedSec);
+              cr.prealertSecondsLeft = remaining;
+              if (remaining <= 0) {
+                cr.status = 'declenche';
+                cr.title = (cr.title || '').replace('[Préalerte] ', '[ALERTE ACTIVE] ');
+              }
+            }
+            this.missions.unshift(cr);
+          } else {
+            if (cr.status && cr.status !== existing.status) {
+              existing.status = cr.status;
+            }
+          }
+        });
+        this.renderMissions();
+        this.updateStatsUI();
+      } else {
+        // Aucune crise active n'est en cours sur le département.
+        // Simulation de vie du monde hors ligne : les événements continuent d'arriver même si aucun joueur n'est connecté !
+        const lastCheckKey = 'protec_last_dept_sim_' + myDept;
+        const lastCheckRaw = localStorage.getItem(lastCheckKey);
+        const lastCheck = lastCheckRaw ? Number(lastCheckRaw) : now;
+        const offlineHours = Math.max(0, (now - lastCheck) / (1000 * 3600));
+
+        localStorage.setItem(lastCheckKey, String(now));
+
+        // Déclenchement probabiliste après absence (simulation temps réel hors ligne)
+        if (offlineHours >= 0.75 && this.stations && this.stations.length > 0) {
+          const spawnProb = Math.min(0.85, Math.max(0.30, offlineHours * 0.20));
+          if (Math.random() < spawnProb) {
+            console.log(`Simulation hors-ligne [Dpt ${myDept}] : création de l'événement survenu durant l'absence (${offlineHours.toFixed(1)}h).`);
+
+            const scenarios = this.getAascPrealertScenarios(null);
+            const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
+            const base = this.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne' };
+            const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf');
+
+            const minutesAgo = Math.min(Math.floor(offlineHours * 30), Math.floor(Math.random() * 25) + 10);
+            const spawnedTime = now - (minutesAgo * 60 * 1000);
+
+            const offlineCrisis = {
+              id: `m-prealert-${spawnedTime}`,
+              type: 'crise',
+              crisisType: pick.id,
+              scenarioId: pick.id,
+              categoryLabel: `Veille Opérationnelle AASC - ${pick.authorityLabel}`,
+              title: `[ALERTE ACTIVE] ${pick.title}`,
+              desc: pick.scenarioText,
+              scenarioText: pick.scenarioText,
+              assignedMissions: pick.assignedMissions,
+              requiredAssets: pick.requiredAssets,
+              lat: coords.lat,
+              lng: coords.lng,
+              scale: `${pick.authorityLabel} (${pick.requiredVolunteers} secouristes requis)`,
+              eventDate: { ...this.clock },
+              durationSeconds: 45 * 60,
+              durationHours: 0.8,
+              isEvolutive: true,
+              spawnedAt: spawnedTime,
+              maxResponseMinutes: 20,
+              requiredVolunteers: pick.requiredVolunteers,
+              requiredRanks: ['CE', 'PSE2', 'PSE1'],
+              requiredVehicles: pick.requiredVehicles,
+              rewardMoney: pick.rewardMoney,
+              rewardReputation: pick.rewardReputation || 35,
+              progress: 0,
+              status: 'declenche',
+              alertOrigin: pick.origin,
+              authority: pick.authority,
+              authorityLabel: pick.authorityLabel,
+              authorityBadgeBg: pick.authorityBadgeBg,
+              prealertDecisionMode: 'premobilisation',
+              preMobilisationActive: true,
+              registeredVolunteers: [],
+              assignedCrew: { volunteers: [], vehicles: [] },
+              address: this.generateRealisticStreetAddress(pick.title, coords.lat, coords.lng),
+              isSector: false,
+              departmentCode: myDept
+            };
+
+            this.enrichMissionLocationWithCity(offlineCrisis);
+            this.missions.unshift(offlineCrisis);
+            this.renderMissions();
+            this.updateStatsUI();
+
+            // Persistance Supabase pour tout le département (les autres directeurs la trouveront également)
+            window.ProtecSupabase.saveDepartmentCrisis(offlineCrisis, myDept);
+            window.ProtecSupabase.broadcastDepartmentCrisis({
+              departmentCode: myDept,
+              crisisData: offlineCrisis,
+              senderId: 'SYSTEM_OFFLINE_SIMULATION'
+            });
+
+            this.showToast(
+              `⚠️ DISPOSITIF ACTIF À VOTRE RETOUR [Dpt ${myDept}]`,
+              `Pendant votre absence (${offlineHours.toFixed(1)}h), une alerte a été déclenchée par ${pick.authorityLabel} : « ${pick.title} ». Vos équipes doivent intervenir immédiatement !`,
+              'amber',
+              { type: 'crise', id: offlineCrisis.id }
+            );
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur synchronisation crises départementales:', e);
+    }
   }
 
   // Prise de décision tactique par le Directeur d'Antenne pendant la préalerte
@@ -6477,6 +6745,14 @@ class ProtecGame {
     this.recordAlertTriggerLog(mission, 'levee_favorable', `Préalerte levée par ${originName} (situation maîtrisée par les secours publics ou risque écarté). Effectifs démobilisés. Indemnité de veille républicaine (+120 €) perçue.`, { repImpact: 10, moneyImpact: 120 });
     this.showToast('🟢 Préalerte Levée !', `Situation maîtrisée par les secours publics ! ${originName} lève le dispositif de veille. Bénévoles démobilisés (+120 € indemnité de veille, +10 réputation). Consigné au registre.`, 'green');
 
+    // Clôture départementale sur Supabase pour tous les joueurs
+    if (window.ProtecSupabase) {
+      const deptCode = mission.departmentCode || this.currentDepartmentCode || this.stations?.[0]?.departmentCode || '54';
+      if (typeof window.ProtecSupabase.closeDepartmentCrisis === 'function') {
+        window.ProtecSupabase.closeDepartmentCrisis(mission.id, deptCode);
+      }
+    }
+
     // Retrait de la mission active de la carte après un délai pour laisser lire
     setTimeout(() => {
       const idx = this.missions.findIndex(m => m.id === mission.id);
@@ -6514,6 +6790,22 @@ class ProtecGame {
           : ` Dispositif en veille simple : rassemblez vos secouristes sous 20 minutes.`);
 
     this.recordAlertTriggerLog(mission, 'declenchement_confirme', `Préalerte confirmée par ${originName} : réquisition opérationnelle active.${readyNote}`);
+
+    // Propagation de l'alerte confirmée à tout le département sur Supabase
+    if (window.ProtecSupabase) {
+      const deptCode = mission.departmentCode || this.currentDepartmentCode || this.stations?.[0]?.departmentCode || '54';
+      if (typeof window.ProtecSupabase.saveDepartmentCrisis === 'function') {
+        window.ProtecSupabase.saveDepartmentCrisis(mission, deptCode);
+      }
+      if (typeof window.ProtecSupabase.broadcastDepartmentCrisisUpdate === 'function') {
+        window.ProtecSupabase.broadcastDepartmentCrisisUpdate({
+          id: mission.id,
+          departmentCode: deptCode,
+          status: 'declenche',
+          crisisData: mission
+        });
+      }
+    }
 
     if (window.ProtecIncidents) {
       window.ProtecIncidents.sendSystemNotification(
@@ -8874,6 +9166,12 @@ class ProtecGame {
       if (idx >= 0) { poolForCheck.splice(idx, 1); return false; }
       return true;
     });
+
+    // Liste des identifiants des véhicules déjà assignés
+    const assignedVehIds = (mission.assignedCrew?.vehicles || [])
+      .map(v => (typeof v === 'object' && v !== null) ? v.id : v)
+      .concat(mission.assignedVehicleIds || [])
+      .filter(Boolean);
 
     // Calcul des durées et 3 horaires clés
     let missionSec = mission.durationSeconds;
@@ -15039,7 +15337,7 @@ class ProtecGame {
                 Aucun secouriste ne correspond à cette recherche.
               </div>
 
-              <div id="volunteers-cards-container" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
+              <div id="volunteers-cards-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3 min-h-[360px] max-h-[640px] md:max-h-[720px] overflow-y-auto pr-1.5 pb-6">
                 ${this.volunteers.map(v => {
                   const energy = v.energy !== undefined ? v.energy : 85;
                   const motivation = v.motivation !== undefined ? v.motivation : 80;
@@ -15126,6 +15424,7 @@ class ProtecGame {
               </div>
             </div>
           </div>
+          <div class="h-10"></div>
         </div>
       `;
     } else if (moduleKey === 'samu') {

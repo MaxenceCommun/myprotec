@@ -506,94 +506,18 @@ window.ProtecSystems = {
     this.ensureTransitLoop(game);
   },
 
-  // --- TRAFIC MULTIJOUEUR AMBIANT RÉALISTE DES ANTENNES DE FRANCE ---
+  // --- TRAFIC MULTIJOUEUR RÉEL (SEULS LES VRAIS VÉHICULES EN DÉPLACEMENT SONT AFFICHÉS) ---
+  // Désactivation absolue des déplacements simulés / inventés.
+  // Seuls les VRAIS véhicules envoyés en intervention par les autres joueurs (diffusés via Supabase player_vehicle_transit)
+  // sont dessinés et visibles sur la carte.
   startMultiplayerTraffic(game) {
-    if (this._multiplayerTrafficStarted) return;
-    this._multiplayerTrafficStarted = true;
-
-    const scheduleNext = () => {
-      const delay = Math.floor(Math.random() * 15000) + 20000; // Toutes les 20-35 secondes
-      setTimeout(async () => {
-        try {
-          await this.dispatchAmbientAllianceVehicle(game);
-        } catch (e) {
-          console.warn('Erreur traffic multijoueur ambiant:', e);
-        }
-        scheduleNext();
-      }, delay);
-    };
-
-    // Premier départ après 5 secondes d'initialisation de la carte
-    setTimeout(scheduleNext, 5000);
+    // Aucun faux départ simulé
+    return;
   },
 
   async dispatchAmbientAllianceVehicle(game) {
-    if (!game || !game.map) return;
-    const stations = (game.allianceStations || []).filter(st => {
-      if (!st || !st.lat || !st.lng) return false;
-      const lat = parseFloat(st.lat);
-      const lng = parseFloat(st.lng);
-      return !isNaN(lat) && !isNaN(lng);
-    });
-
-    if (stations.length === 0) return;
-
-    // Ne pas saturer la carte s'il y a déjà 3 véhicules distants qui roulent simultanément
-    const currentRemoteTransits = (game.transits || []).filter(t => t.isRemote);
-    if (currentRemoteTransits.length >= 3) return;
-
-    // Sélection aléatoire d'une antenne confrère
-    const station = stations[Math.floor(Math.random() * stations.length)];
-    const lat = parseFloat(station.lat);
-    const lng = parseFloat(station.lng);
-
-    // Éviter de doubler un départ sur la même antenne
-    if (currentRemoteTransits.some(t => t.remoteStationName === station.name)) return;
-
-    // Générer une destination opérationnelle dans le secteur de l'antenne (1.5 à 3.8 km)
-    const angle = Math.random() * Math.PI * 2;
-    const distanceDeg = 0.015 + Math.random() * 0.022;
-    const destLat = lat + Math.sin(angle) * distanceDeg;
-    const destLng = lng + Math.cos(angle) * (distanceDeg / Math.cos(lat * Math.PI / 180));
-
-    const isEmergency = Math.random() > 0.35;
-    const vehType = (station.vehicles && station.vehicles > 1 && Math.random() > 0.6) ? 'VTU' : 'VPSP';
-    const cityUpper = (station.city || 'SECTEUR').toUpperCase();
-    const vehName = `${vehType} 01 ${cityUpper}`;
-
-    // Aller : vers le lieu de mission / DPS
-    await this.startRemoteVehicleTransit(game, {
-      playerId: station.playerId || 'remote-alliance',
-      playerName: station.playerName || 'Directeur d’Antenne',
-      stationName: station.name || `Antenne Protection Civile ${station.city}`,
-      city: station.city || '',
-      vehicleName: vehName,
-      vehicleType: vehType,
-      origin: { lat, lng },
-      dest: { lat: destLat, lng: destLng },
-      isEmergency: isEmergency,
-      speedKmh: isEmergency ? 48 : 35,
-      missionTitle: isEmergency ? 'Intervention Urgence 15' : 'Dispositif Prévisionnel de Secours',
-      onArrival: () => {
-        // Pause sur les lieux (12s), puis retour à la base
-        setTimeout(() => {
-          if (!game || !game.map) return;
-          this.startRemoteVehicleTransit(game, {
-            playerId: station.playerId || 'remote-alliance',
-            playerName: station.playerName || 'Directeur d’Antenne',
-            stationName: station.name || `Antenne Protection Civile ${station.city}`,
-            city: station.city || '',
-            vehicleName: vehName,
-            vehicleType: vehType,
-            origin: { lat: destLat, lng: destLng },
-            dest: { lat, lng },
-            isEmergency: false,
-            speedKmh: 35,
-            missionTitle: 'Retour Antenne'
-          });
-        }, 12000);
-      }
-    });
+    // Aucun véhicule factice injecté
+    return;
   },
 
   // =========================================================================

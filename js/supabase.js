@@ -274,11 +274,57 @@ window.ProtecSupabase = {
       }
     });
 
+    // Écoute 11 : Alertes de crise départementale partagées (synchronisation entre antennes d'un même département)
+    this.realtimeChannel.on('broadcast', { event: 'department_crisis_alert' }, (evt) => {
+      const data = evt.payload;
+      const g = game || window.game;
+      if (g && data && typeof g.handleDepartmentCrisisAlert === 'function') {
+        g.handleDepartmentCrisisAlert(data);
+      }
+    });
+
+    // Écoute 12 : Mises à jour d'évolution de crise départementale (aggravation, renforts, levée)
+    this.realtimeChannel.on('broadcast', { event: 'department_crisis_update' }, (evt) => {
+      const data = evt.payload;
+      const g = game || window.game;
+      if (g && data && typeof g.handleDepartmentCrisisUpdate === 'function') {
+        g.handleDepartmentCrisisUpdate(data);
+      }
+    });
+
     this.realtimeChannel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         console.log('⚡ Canal Supabase Realtime actif : synchronisation en direct (< 50ms) connectée.');
       }
     });
+  },
+
+  // Diffusion d'une alerte de crise départementale en direct
+  broadcastDepartmentCrisis(payload) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'department_crisis_alert',
+        payload: payload
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast crise départementale:', e);
+    }
+  },
+
+  // Diffusion de la mise à jour d'une crise départementale
+  broadcastDepartmentCrisisUpdate(payload) {
+    if (!this.realtimeChannel) return;
+    try {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'department_crisis_update',
+        payload: payload
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast mise à jour crise départementale:', e);
+    }
   },
 
   // Diffusion d'un engagement de renfort en temps réel à tous les directeurs connectés
@@ -1626,6 +1672,114 @@ window.ProtecSupabase = {
       });
     } catch (e) {
       console.warn('Erreur enregistrement mission serveur:', e);
+    }
+  },
+
+  // Sauvegarde d'une crise départementale partagée dans Supabase (visible par tous les directeurs du département)
+  async saveDepartmentCrisis(crisisData, departmentCode) {
+    if (!this.client || !crisisData) return;
+    try {
+      const dept = departmentCode || crisisData.departmentCode || '54';
+      const now = new Date();
+      const startsAt = crisisData.spawnedAt ? new Date(crisisData.spawnedAt).toISOString() : (crisisData.startedAt ? new Date(crisisData.startedAt).toISOString() : now.toISOString());
+      const durationSec = crisisData.durationSeconds || (crisisData.durationHours ? Math.round(crisisData.durationHours * 3600) : 7200);
+      const endsAt = crisisData.targetTime && crisisData.targetTime > Date.now() + 600000
+        ? new Date(crisisData.targetTime).toISOString()
+        : new Date(new Date(startsAt).getTime() + durationSec * 1000).toISOString();
+
+      await this.client
+        .from('active_missions')
+        .upsert({
+          id: String(crisisData.id),
+          player_id: `DEPT_${dept}`,
+          mission_type: 'crise',
+          title: crisisData.title || crisisData.titre || 'Crise Opérationnelle',
+          status: crisisData.status || 'prealerte',
+          starts_at: startsAt,
+          ends_at: endsAt,
+          duration_seconds: durationSec,
+          reward_money: crisisData.rewardMoney || 0,
+          reward_xp: crisisData.rewardReputation || 35,
+          assigned_volunteers: crisisData.assignedCrew?.volunteers || [],
+          assigned_vehicles: crisisData.assignedCrew?.vehicles || [],
+          details: {
+            ...crisisData,
+            departmentCode: dept,
+            updatedAt: Date.now()
+          },
+          created_at: startsAt
+        }, { onConflict: 'id' });
+
+      // Inscription automatique dans le journal opérationnel départemental
+      this.logOperationalEvent({
+        playerId: `DEPT_${dept}`,
+        stationName: `Centre Opérationnel ${dept}`,
+        city: crisisData.city || crisisData.commune || `Département ${dept}`,
+        departmentCode: dept,
+        type: 'crise',
+        indicatif: 'PRÉFECTURE / COZ',
+        statusCode: 1,
+        message: `🚨 VEILLE / CRISE DÉPARTEMENTALE [${dept}] : « ${crisisData.title || crisisData.titre} » engagée.`,
+        severity: 'danger'
+      });
+    } catch (e) {
+      console.warn('Erreur sauvegarde crise départementale serveur:', e);
+    }
+  },
+
+  // Récupération des crises actives d'un département (pour les joueurs en ligne et ceux qui se reconnectent)
+  async fetchActiveDepartmentCrises(departmentCode) {
+    if (!this.client || !departmentCode) return [];
+    try {
+      const nowIso = new Date().toISOString();
+      const { data, error } = await this.client
+        .from('active_missions')
+        .select('*')
+        .eq('player_id', `DEPT_${departmentCode}`)
+        .eq('mission_type', 'crise')
+        .gt('ends_at', nowIso)
+        .neq('status', 'resolved');
+
+      if (error || !data) return [];
+
+      return data.map(row => {
+        const details = row.details || {};
+        return {
+          ...details,
+          id: row.id,
+          title: row.title || details.title,
+          status: row.status || details.status,
+          departmentCode: departmentCode,
+          spawnedAt: row.starts_at ? new Date(row.starts_at).getTime() : details.spawnedAt,
+          durationSeconds: row.duration_seconds || details.durationSeconds || 7200,
+          endsAt: row.ends_at
+        };
+      });
+    } catch (e) {
+      console.warn('Erreur récupération crises départementales:', e);
+      return [];
+    }
+  },
+
+  // Clôture d'une crise départementale dans la base
+  async closeDepartmentCrisis(crisisId, departmentCode) {
+    if (!this.client || !crisisId) return;
+    try {
+      await this.client
+        .from('active_missions')
+        .update({
+          status: 'resolved',
+          resolved_at: new Date().toISOString()
+        })
+        .eq('id', String(crisisId));
+
+      this.broadcastDepartmentCrisisUpdate({
+        id: String(crisisId),
+        departmentCode: departmentCode,
+        status: 'resolved'
+      });
+    } catch (e) {
+      console.warn('Erreur clôture crise départementale:', e);
     }
   },
 

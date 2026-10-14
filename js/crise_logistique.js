@@ -1352,7 +1352,24 @@ window.ProtecCriseLogistique = {
 
     // Auto-enregistrement dans game.activeCrises
     if (!game.activeCrises) game.activeCrises = [];
+    const deptCode = game.currentDepartmentCode || game.stations?.[0]?.departmentCode || game.player?.departmentCode || '54';
+    newCrisis.departmentCode = deptCode;
+    newCrisis.title = newCrisis.titre;
     game.activeCrises.unshift(newCrisis);
+
+    // Synchronisation et persistance départementale sur Supabase
+    if (window.ProtecSupabase) {
+      if (typeof window.ProtecSupabase.saveDepartmentCrisis === 'function') {
+        window.ProtecSupabase.saveDepartmentCrisis(newCrisis, deptCode);
+      }
+      if (typeof window.ProtecSupabase.broadcastDepartmentCrisis === 'function') {
+        window.ProtecSupabase.broadcastDepartmentCrisis({
+          departmentCode: deptCode,
+          crisisData: newCrisis,
+          senderId: game.player?.id || 'DIRECTEUR'
+        });
+      }
+    }
 
     if (window.ProtecAudio) {
       window.ProtecAudio.playCrisisAlertSound();
