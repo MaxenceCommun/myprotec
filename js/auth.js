@@ -16,7 +16,7 @@ window.ProtecAuth = {
     this.updateHeaderUI();
 
     // Écoute des retours OAuth2 Discord via fenêtre Popup
-    window.addEventListener('message', (event) => {
+    window.addEventListener('message', async (event) => {
       if (event.data && event.data.type === 'DISCORD_AUTH_SUCCESS') {
         const { token, user, action } = event.data;
         if (token && user) {
@@ -42,6 +42,28 @@ window.ProtecAuth = {
               targetGame.showToast('Connexion Discord Réussie !', msg, 'green');
             }
           }
+
+          // Persistance dans Supabase Cloud si connecté
+          if (window.ProtecSupabase && window.ProtecSupabase.client && user.discord) {
+            try {
+              const isUUID = typeof user.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+              let q = window.ProtecSupabase.client.from('players').update({
+                discord: user.discord,
+                discord_id: user.discord.id || null
+              });
+              if (isUUID) q = q.eq('id', user.id);
+              else q = q.eq('username', user.username);
+              const { error } = await q;
+              if (error) {
+                console.warn('Erreur persistance Discord sur Supabase:', error);
+              } else {
+                console.log('✅ Compte Discord synchronisé avec succès sur Supabase.');
+              }
+            } catch (supaErr) {
+              console.warn('Erreur maj Discord Supabase:', supaErr);
+            }
+          }
+
           const modal = document.getElementById('auth-modal');
           if (modal && !modal.classList.contains('hidden')) {
             this.renderModalContent('profile');
@@ -137,22 +159,33 @@ window.ProtecAuth = {
 
           if (supaUser) {
             const isUserAdmin = !!(supaUser.is_admin === true || supaUser.role === 'admin');
+            const discordProfile = supaUser.discord || (this.currentUser && this.currentUser.discord) || null;
             this.currentUser = {
               id: supaUser.id,
               username: supaUser.username,
               role: supaUser.role || (isUserAdmin ? 'admin' : 'directeur'),
               isAdmin: isUserAdmin,
               stationName: supaUser.station_name,
-              city: supaUser.city
+              city: supaUser.city,
+              discord: discordProfile
             };
             this.token = this.token || `supa-${supaUser.id}`;
             localStorage.setItem('protec_auth_token', this.token);
             localStorage.setItem('protec_user', JSON.stringify(this.currentUser));
 
+            // Si Discord était connu localement mais pas encore en base, synchronisation automatique
+            if (!supaUser.discord && discordProfile && window.ProtecSupabase?.client) {
+              window.ProtecSupabase.client.from('players').update({
+                discord: discordProfile,
+                discord_id: discordProfile.id || null
+              }).eq('id', supaUser.id).then(() => {}).catch(() => {});
+            }
+
             game.player.id = supaUser.id;
             game.player.name = supaUser.username;
             game.player.role = this.currentUser.role;
             game.player.isAdmin = isUserAdmin;
+            game.player.discord = discordProfile;
 
             this.updateHeaderUI(false);
             this.closeAuthModal();
@@ -264,19 +297,16 @@ window.ProtecAuth = {
     const dbStatus = document.getElementById('auth-db-status');
     const statusIcon = document.getElementById('auth-status-icon');
 
-    if (!userLabel || !dbStatus) return;
+    if (!userLabel) return;
+
+    if (dbStatus) {
+      dbStatus.classList.add('hidden');
+      dbStatus.innerHTML = '';
+    }
 
     if (this.currentUser && this.token) {
       userLabel.textContent = this.currentUser.username;
       userLabel.className = 'text-xs font-bold text-pc-blue truncate max-w-[90px] sm:max-w-[120px]';
-
-      if (offline) {
-        dbStatus.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Hors-ligne';
-        dbStatus.className = 'text-[8px] sm:text-[9px] font-semibold text-amber-600 flex items-center gap-1';
-      } else {
-        dbStatus.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> En ligne Multi';
-        dbStatus.className = 'text-[8px] sm:text-[9px] font-semibold text-emerald-600 flex items-center gap-1';
-      }
 
       if (statusIcon) {
         statusIcon.className = 'w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center transition';
@@ -284,8 +314,6 @@ window.ProtecAuth = {
     } else {
       userLabel.textContent = 'Connexion';
       userLabel.className = 'text-xs font-bold text-slate-700 truncate max-w-[90px] sm:max-w-[120px]';
-      dbStatus.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span> Non connecté';
-      dbStatus.className = 'text-[8px] sm:text-[9px] font-semibold text-red-500 flex items-center gap-1';
 
       if (statusIcon) {
         statusIcon.className = 'w-6 h-6 rounded-lg bg-pc-blue/10 text-pc-blue flex items-center justify-center transition';
@@ -585,15 +613,20 @@ window.ProtecAuth = {
     this.renderModalContent('profile');
   },
 
+  // Calcul dynamique de l'URI de redirection Discord OAuth2
+  getDiscordRedirectUri() {
+    if (window.location.protocol === 'file:') {
+      return 'http://localhost:8080/discord_callback.html';
+    }
+    const path = window.location.pathname;
+    const basePath = path.substring(0, path.lastIndexOf('/') + 1);
+    return `${window.location.origin}${basePath}discord_callback.html`;
+  },
+
   // Lancer l'authentification OAuth2 Discord (popup ou redirection)
   loginWithDiscord(mode = 'login') {
     const clientId = (this.discordConfig && this.discordConfig.clientId) || '1559698958966857788';
-    
-    // Déterminer la redirection vers discord_callback.html (page statique réelle sans 404)
-    let redirectUri = `${window.location.origin}/discord_callback.html`;
-    if (window.location.protocol === 'file:') {
-      redirectUri = 'http://localhost:8080/discord_callback.html';
-    }
+    const redirectUri = this.getDiscordRedirectUri();
 
     let state = `mode=${mode}&time=${Date.now()}`;
     if (mode === 'link' && this.currentUser && this.currentUser.id) {
@@ -646,6 +679,22 @@ window.ProtecAuth = {
             targetGame.showToast('Connexion Discord Réussie !', `Bienvenue, ${name} ! Connecté via Discord avec succès.`, 'green');
           }
         }
+
+        // Persistance Supabase
+        if (window.ProtecSupabase && window.ProtecSupabase.client && data.user.discord) {
+          try {
+            const isUUID = typeof data.user.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.user.id);
+            let q = window.ProtecSupabase.client.from('players').update({
+              discord: data.user.discord,
+              discord_id: data.user.discord.id || null
+            });
+            if (isUUID) q = q.eq('id', data.user.id);
+            else q = q.eq('username', data.user.username);
+            await q;
+          } catch (supaErr) {
+            console.warn('Erreur update discord Supabase via exchange:', supaErr);
+          }
+        }
       } else if (data.error) {
         const targetGame = game || window.game;
         if (targetGame && typeof targetGame.showToast === 'function') {
@@ -661,32 +710,32 @@ window.ProtecAuth = {
   async unlinkDiscord(game = null) {
     if (!confirm('Voulez-vous vraiment dissocier votre compte Discord de votre antenne ?')) return;
     try {
-      const res = await fetch('/api/auth/discord/unlink', {
+      if (window.ProtecSupabase && window.ProtecSupabase.client && this.currentUser) {
+        const isUUID = typeof this.currentUser.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(this.currentUser.id);
+        let q = window.ProtecSupabase.client.from('players').update({ discord: null, discord_id: null });
+        if (isUUID) q = q.eq('id', this.currentUser.id);
+        else q = q.eq('username', this.currentUser.username);
+        await q;
+      }
+      await fetch('/api/auth/discord/unlink', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.token}`
         }
-      });
-      const data = await res.json();
-      if (data.success) {
-        if (this.currentUser) delete this.currentUser.discord;
-        localStorage.setItem('protec_user', JSON.stringify(this.currentUser));
-        const targetGame = game || window.game;
-        if (targetGame && targetGame.player) delete targetGame.player.discord;
-        if (targetGame && typeof targetGame.showToast === 'function') {
-          targetGame.showToast('Discord Dissocié', 'Votre compte Discord a été dissocié de cette antenne.', 'blue');
-        }
-        this.renderModalContent('profile');
-      } else if (data.error) {
-        alert(data.error);
-      }
+      }).catch(() => null);
     } catch (e) {
-      console.error('Erreur unlink Discord:', e);
-      if (this.currentUser) delete this.currentUser.discord;
-      localStorage.setItem('protec_user', JSON.stringify(this.currentUser));
-      this.renderModalContent('profile');
+      console.warn('Erreur unlink Discord:', e);
     }
+
+    if (this.currentUser) delete this.currentUser.discord;
+    localStorage.setItem('protec_user', JSON.stringify(this.currentUser));
+    const targetGame = game || window.game;
+    if (targetGame && targetGame.player) delete targetGame.player.discord;
+    if (targetGame && typeof targetGame.showToast === 'function') {
+      targetGame.showToast('Discord Dissocié', 'Votre compte Discord a été dissocié de cette antenne.', 'blue');
+    }
+    this.renderModalContent('profile');
   },
 
   openAuthModal(isMandatory = false) {
@@ -802,10 +851,6 @@ window.ProtecAuth = {
                   </div>
                   <div class="text-xs text-slate-600 mt-0.5 truncate">
                     ${actualStationName} • Ville : <strong class="capitalize">${actualCity}</strong>
-                  </div>
-                  <div class="text-[10px] text-emerald-700 font-semibold mt-1 flex items-center gap-1">
-                    <i data-lucide="cloud" class="w-3 h-3"></i>
-                    <span>Cloud : ${syncDate}</span>
                   </div>
                 </div>
               </div>
@@ -1206,7 +1251,8 @@ window.ProtecAuth = {
               role: supaRes.user.role || (isUserAdmin ? 'admin' : 'directeur'),
               isAdmin: isUserAdmin,
               stationName: supaRes.user.station_name,
-              city: supaRes.user.city
+              city: supaRes.user.city,
+              discord: supaRes.user.discord || null
             }
           };
         } else if (supaRes && supaRes.error) {
@@ -1263,6 +1309,7 @@ window.ProtecAuth = {
       game.player.name = data.user.username;
       game.player.role = data.user.role || 'user';
       game.player.isAdmin = !!data.user.isAdmin;
+      game.player.discord = data.user.discord || null;
 
       game.showToast('Connexion Réussie !', `Bienvenue Commandant ${data.user.username} ! Connexion au serveur multijoueur active.`, 'green');
       this.updateHeaderUI();

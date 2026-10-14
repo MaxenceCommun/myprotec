@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS players (
   is_banned BOOLEAN DEFAULT FALSE,
   ban_reason TEXT,
   time_tracking JSONB DEFAULT '{"activeSeconds":0,"idleSeconds":0,"lastSeen":0}'::jsonb,
-  last_active_at TIMESTAMPTZ DEFAULT NOW()
+  last_active_at TIMESTAMPTZ DEFAULT NOW(),
+  discord JSONB,
+  discord_id TEXT
 );
 
 -- Mises à niveau idempotentes pour players existante
@@ -35,6 +37,9 @@ ALTER TABLE players ADD COLUMN IF NOT EXISTS referred_by TEXT;
 ALTER TABLE players ADD COLUMN IF NOT EXISTS referral_suspended BOOLEAN DEFAULT FALSE;
 ALTER TABLE players ADD COLUMN IF NOT EXISTS registration_ip TEXT;
 ALTER TABLE players ADD COLUMN IF NOT EXISTS last_known_ips JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS discord JSONB;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS discord_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_players_discord_id ON players(discord_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_players_referral_code ON players(referral_code) WHERE referral_code IS NOT NULL;
 
 -- 2.1 TABLE DES SUIVIS DE PARRAINAGES (REFERRAL LOGS)
