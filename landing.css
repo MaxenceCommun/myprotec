@@ -433,3 +433,35 @@
   opacity: 1;
   transform: scale(1) translateY(0);
 }
+
+/* ==============================================================================
+   MODALE DÉTAILLÉE DE TOUTE LA COLLECTION D'ÉCUSSONS D'ANTENNE (100+ ÉCUSSONS)
+   ============================================================================== */
+#lp-antenne-collection-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: fadeInModal 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#lp-antenne-collection-modal.hidden {
+  display: none;
+}
+
+@keyframes fadeInModal {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

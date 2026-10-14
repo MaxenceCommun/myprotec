@@ -102,7 +102,7 @@
             </div>
           </div>
           <button onclick="window.MyProtecLanding.openAuth('register')" class="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shrink-0 transition shadow-sm cursor-pointer flex items-center gap-1.5 active:scale-95">
-            <span>Ouvrir mon antenne affiliée</span>
+            <span>Rejoindre le jeu</span>
             <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
           </button>
         </div>
@@ -122,24 +122,25 @@
           </div>
 
           <!-- Boutons d'action -->
-          <div id="landing-nav-actions" class="flex items-center gap-2.5">
+          <div class="flex items-center gap-2.5">
             <a href="ecussons.html" class="px-3.5 py-2 rounded-xl text-xs font-extrabold text-slate-700 hover:text-slate-950 bg-white/80 hover:bg-white border border-slate-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
               <i data-lucide="shield" class="w-3.5 h-3.5 text-amber-500"></i>
               <span>Écussons</span>
             </a>
-            <button onclick="window.ProtecPWA?.promptInstall ? window.ProtecPWA.promptInstall() : window.MyProtecLanding.openAuth('register')" title="Télécharger l'application MyProtec (PWA)" class="px-3 py-2 rounded-xl text-xs font-extrabold text-pc-blue hover:text-blue-700 bg-blue-50/80 hover:bg-blue-100 border border-blue-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+            <button onclick="window.ProtecPWA?.promptInstall ? window.ProtecPWA.promptInstall() : window.MyProtecLanding.openAuth('register')" title="Télécharger l'application MyProtec" class="px-3.5 py-2 rounded-xl text-xs font-extrabold text-pc-blue hover:text-blue-700 bg-blue-50/80 hover:bg-blue-100 border border-blue-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
               <i data-lucide="download" class="w-3.5 h-3.5"></i>
-              <span class="hidden sm:inline">Télécharger</span>
-              <span class="sm:hidden">App</span>
+              <span>Télécharger le jeu</span>
             </button>
-            <button onclick="window.MyProtecLanding.openAuth('login')" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-700 hover:text-slate-950 bg-white/80 hover:bg-white border border-slate-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
-              <i data-lucide="log-in" class="w-3.5 h-3.5 text-[#0055b8]"></i>
-              <span>Se connecter</span>
-            </button>
-            <button onclick="window.MyProtecLanding.openAuth('register')" class="px-4.5 py-2 rounded-xl text-xs font-black text-white bg-[#ff6600] hover:bg-[#e65c00] shadow-md transition flex items-center gap-1.5 cursor-pointer">
-              <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
-              <span>Ouvrir mon antenne</span>
-            </button>
+            <div id="landing-nav-actions" class="flex items-center gap-2">
+              <button onclick="window.MyProtecLanding.openAuth('login')" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-700 hover:text-slate-950 bg-white/80 hover:bg-white border border-slate-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="log-in" class="w-3.5 h-3.5 text-[#0055b8]"></i>
+                <span>Se connecter</span>
+              </button>
+              <button onclick="window.MyProtecLanding.openAuth('register')" class="px-4.5 py-2 rounded-xl text-xs font-black text-white bg-[#ff6600] hover:bg-[#e65c00] shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+                <span>Jouer</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -159,15 +160,12 @@
 
         <!-- Double CTA bien visible -->
         <div id="landing-hero-actions" class="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-2">
-          <button onclick="window.MyProtecLanding.openAuth('register')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-[#ff6600] hover:bg-[#e65c00] text-white font-black text-sm shadow-xl hover:shadow-2xl transition flex items-center justify-center gap-2 cursor-pointer group">
-            <span id="landing-hero-register-text">Ouvrir mon antenne</span>
+          <button onclick="window.MyProtecLanding.openAuth('register')" class="w-full sm:w-auto px-8 py-4 rounded-2xl bg-[#ff6600] hover:bg-[#e65c00] text-white font-black text-sm shadow-xl hover:shadow-2xl transition flex items-center justify-center gap-2 cursor-pointer group">
+            <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+            <span id="landing-hero-register-text">Jouer gratuitement</span>
             <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
           </button>
-          <button onclick="window.ProtecPWA?.promptInstall ? window.ProtecPWA.promptInstall() : window.MyProtecLanding.openAuth('register')" title="Télécharger et installer MyProtec sur votre appareil (PWA)" class="w-full sm:w-auto px-6 py-4 rounded-2xl bg-white/95 hover:bg-white text-pc-blue font-extrabold text-sm border-2 border-blue-200/90 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
-            <i data-lucide="download" class="w-4 h-4 text-pc-blue"></i>
-            <span>Télécharger le jeu (PWA)</span>
-          </button>
-          <button onclick="window.MyProtecLanding.openAuth('login')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/85 hover:bg-white text-slate-800 font-extrabold text-sm border border-slate-200/90 shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+          <button onclick="window.MyProtecLanding.openAuth('login')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/90 hover:bg-white text-slate-800 font-extrabold text-sm border border-slate-200/90 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
             <i data-lucide="log-in" class="w-4 h-4 text-[#0055b8]"></i>
             <span>Se connecter</span>
           </button>
