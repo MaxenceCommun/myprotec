@@ -8981,7 +8981,7 @@ class ProtecGame {
       // Orange (#f78d20), Bande blanche (#ffffff), Bleu marine (#024589)
       if (isFemale) {
         return `
-          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 border border-slate-200/90 shadow-2xs transition overflow-hidden" title="${cleanName} (Protection Civile)">
+          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 shadow-2xs transition overflow-hidden" title="${cleanName} (Protection Civile)">
             <svg viewBox="0 0 24 24" class="w-full h-full p-0.5" fill="none">
               <defs>
                 <clipPath id="${clipId}">
@@ -8995,18 +8995,18 @@ class ProtecGame {
                 <rect x="2" y="19.4" width="20" height="3.6" fill="#024589" />
               </g>
               <!-- Col V blanc -->
-              <path d="M 9.6 14.5 L 12 17.5 L 14.4 14.5" stroke="#334155" stroke-width="1.8" fill="#ffffff" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M 9.6 14.5 L 12 17.5 L 14.4 14.5" class="stroke-slate-700 dark:stroke-slate-200 fill-slate-100 dark:fill-slate-800" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
               <!-- Épaules -->
-              <path d="M 9.5 12.5 C 7.2 14 4 15.5 4 18 V 22" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
-              <path d="M 14.5 12.5 C 16.8 14 20 15.5 20 18 V 22" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
-              <!-- Chevelure & visage -->
-              <path d="M 9.5 12.5 H 6.5 V 7.5 C 6.5 3.4 17.5 3.4 17.5 7.5 V 12.5 H 14.5" fill="#ffffff" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M 9.5 12.5 C 7.2 14 4 15.5 4 18 V 22" class="stroke-slate-700 dark:stroke-slate-200" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M 14.5 12.5 C 16.8 14 20 15.5 20 18 V 22" class="stroke-slate-700 dark:stroke-slate-200" stroke-width="1.8" stroke-linecap="round" />
+              <!-- Chevelure & visage adapté au fond -->
+              <path d="M 9.5 12.5 H 6.5 V 7.5 C 6.5 3.4 17.5 3.4 17.5 7.5 V 12.5 H 14.5" class="fill-slate-100 dark:fill-slate-800 stroke-slate-700 dark:stroke-slate-200" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </div>
         `;
       } else {
         return `
-          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 border border-slate-200/90 shadow-2xs transition overflow-hidden" title="${cleanName} (Protection Civile)">
+          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 shadow-2xs transition overflow-hidden" title="${cleanName} (Protection Civile)">
             <svg viewBox="0 0 24 24" class="w-full h-full p-0.5" fill="none">
               <defs>
                 <clipPath id="${clipId}">
@@ -9020,12 +9020,12 @@ class ProtecGame {
                 <rect x="2" y="19.4" width="20" height="3.6" fill="#024589" />
               </g>
               <!-- Col rond U blanc -->
-              <path d="M 9.8 14.2 C 9.8 16.4 14.2 16.4 14.2 14.2" stroke="#334155" stroke-width="1.8" fill="#ffffff" stroke-linecap="round" />
+              <path d="M 9.8 14.2 C 9.8 16.4 14.2 16.4 14.2 14.2" class="stroke-slate-700 dark:stroke-slate-200 fill-slate-100 dark:fill-slate-800" stroke-width="1.8" stroke-linecap="round" />
               <!-- Épaules -->
-              <path d="M 4 22 V 18 C 4 15.5 7.2 14.5 9.2 14.2" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
-              <path d="M 14.8 14.2 C 16.8 14.5 20 15.5 20 18 V 22" stroke="#334155" stroke-width="1.8" stroke-linecap="round" />
-              <!-- Tête stylisée (décroché à gauche) -->
-              <path d="M 5.8 3.2 H 14.5 C 16.2 3.2 17.2 4.4 17.2 6.2 V 11 C 17.2 14.8 6.8 14.8 6.8 11 V 6.2 H 5.8 Z" fill="#ffffff" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M 4 22 V 18 C 4 15.5 7.2 14.5 9.2 14.2" class="stroke-slate-700 dark:stroke-slate-200" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M 14.8 14.2 C 16.8 14.5 20 15.5 20 18 V 22" class="stroke-slate-700 dark:stroke-slate-200" stroke-width="1.8" stroke-linecap="round" />
+              <!-- Tête stylisée adaptée au fond -->
+              <path d="M 5.8 3.2 H 14.5 C 16.2 3.2 17.2 4.4 17.2 6.2 V 11 C 17.2 14.8 6.8 14.8 6.8 11 V 6.2 H 5.8 Z" class="fill-slate-100 dark:fill-slate-800 stroke-slate-700 dark:stroke-slate-200" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </div>
         `;
@@ -9034,9 +9034,9 @@ class ProtecGame {
       // --- CANDIDAT AVANT RECRUTEMENT : TENUE CIVILE / NEUTRE ---
       if (isFemale) {
         return `
-          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 text-slate-500 border border-slate-200/90 shadow-2xs transition" title="${cleanName} (Candidat)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
-              <path d="M 9.5 12.5 H 6.5 V 7.5 C 6.5 3.4 17.5 3.4 17.5 7.5 V 12.5 H 14.5" fill="#ffffff" />
+          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/90 dark:border-slate-700 shadow-2xs transition" title="${cleanName} (Candidat)">
+            <svg viewBox="0 0 24 24" fill="none" class="w-full h-full p-0.5 stroke-slate-500 dark:stroke-slate-400" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M 9.5 12.5 H 6.5 V 7.5 C 6.5 3.4 17.5 3.4 17.5 7.5 V 12.5 H 14.5" class="fill-slate-100 dark:fill-slate-800" />
               <path d="M 9.6 14.5 L 12 17.5 L 14.4 14.5" />
               <path d="M 9.5 12.5 C 7.2 14 4 15.5 4 18 V 21.5" />
               <path d="M 14.5 12.5 C 16.8 14 20 15.5 20 18 V 21.5" />
@@ -9045,9 +9045,9 @@ class ProtecGame {
         `;
       } else {
         return `
-          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 text-slate-500 border border-slate-200/90 shadow-2xs transition" title="${cleanName} (Candidat)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full p-0.5">
-              <path d="M 5.8 3.2 H 14.5 C 16.2 3.2 17.2 4.4 17.2 6.2 V 11 C 17.2 14.8 6.8 14.8 6.8 11 V 6.2 H 5.8 Z" fill="#ffffff" />
+          <div class="${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/90 dark:border-slate-700 shadow-2xs transition" title="${cleanName} (Candidat)">
+            <svg viewBox="0 0 24 24" fill="none" class="w-full h-full p-0.5 stroke-slate-500 dark:stroke-slate-400" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M 5.8 3.2 H 14.5 C 16.2 3.2 17.2 4.4 17.2 6.2 V 11 C 17.2 14.8 6.8 14.8 6.8 11 V 6.2 H 5.8 Z" class="fill-slate-100 dark:fill-slate-800" />
               <path d="M 9.8 14.2 C 9.8 16.8 14.2 16.8 14.2 14.2" />
               <path d="M 4 21.5 V 18 C 4 15.5 7.2 14.5 9.2 14.2" />
               <path d="M 14.8 14.2 C 16.8 14.5 20 15.5 20 18 V 21.5" />
@@ -15577,9 +15577,9 @@ class ProtecGame {
           </div>
 
           <!-- BARRE DE FILTRES INTERACTIFS PAR PÔLE (VISIBILITÉ DYNAMIQUE & COULEURS STRICTEMENT ALIGNÉES) -->
-          <div class="flex flex-wrap items-center justify-between gap-2.5 p-3 bg-gradient-to-r from-slate-50 to-slate-100/80 border border-slate-200/90 rounded-2xl shadow-xs">
-            <div class="flex items-center gap-1.5 text-xs font-black text-slate-800 mr-1">
-              <i data-lucide="filter" class="w-4 h-4 text-pc-blue"></i>
+          <div class="flex flex-wrap items-center justify-between gap-2.5 p-3 bg-gradient-to-r from-slate-50 to-slate-100/80 dark:from-slate-800 dark:to-slate-800/90 border border-slate-200/90 dark:border-slate-700 rounded-2xl shadow-xs">
+            <div class="flex items-center gap-1.5 text-xs font-black text-slate-800 dark:text-slate-200 mr-1">
+              <i data-lucide="filter" class="w-4 h-4 text-pc-blue dark:text-sky-400"></i>
               <span>Filtres par Pôle :</span>
             </div>
             
@@ -15587,17 +15587,17 @@ class ProtecGame {
               <!-- Filtre Pôle Secours & DPS (Bleu marine) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('dps')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.dps ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-white text-pc-blue border-pc-blue/40 hover:bg-blue-50/50'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.dps ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-white dark:bg-slate-700 text-pc-blue dark:text-sky-300 border-pc-blue/40 dark:border-slate-600 hover:bg-blue-50/50'}"
                 title="${filters.dps ? 'Cliquer pour masquer Secours & DPS' : 'Cliquer pour afficher Secours & DPS'}"
               >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.dps ? 'bg-white' : 'bg-pc-blue'}"></span>
+                <span class="w-2.5 h-2.5 rounded-full ${filters.dps ? 'bg-white' : 'bg-pc-blue dark:bg-sky-400'}"></span>
                 <span>🔵 Secours DPS (${poleCounts.dps})</span>
               </button>
 
               <!-- Filtre Pôle Postes Prévisionnels (Ambre / Jaune-orange) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('previ')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.previ ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-white text-amber-700 border-amber-400 hover:bg-amber-50/50'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.previ ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-white dark:bg-slate-700 text-amber-700 dark:text-amber-300 border-amber-400 dark:border-slate-600 hover:bg-amber-50/50'}"
                 title="${filters.previ ? 'Cliquer pour masquer Postes Prévisionnels' : 'Cliquer pour afficher Postes Prévisionnels'}"
               >
                 <span class="w-2.5 h-2.5 rounded-full ${filters.previ ? 'bg-white' : 'bg-amber-500'}"></span>
@@ -15607,7 +15607,7 @@ class ProtecGame {
               <!-- Filtre Pôle Demandes de Devis (Bleu ciel / Sky) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('devis')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.devis ? 'bg-sky-500 text-white border-sky-600 shadow-sm' : 'bg-white text-sky-700 border-sky-400 hover:bg-sky-50/50'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.devis ? 'bg-sky-500 text-white border-sky-600 shadow-sm' : 'bg-white dark:bg-slate-700 text-sky-700 dark:text-sky-300 border-sky-400 dark:border-slate-600 hover:bg-sky-50/50'}"
                 title="${filters.devis ? 'Cliquer pour masquer Demandes de Devis' : 'Cliquer pour afficher Demandes de Devis'}"
               >
                 <span class="w-2.5 h-2.5 rounded-full ${filters.devis ? 'bg-white' : 'bg-sky-500'}"></span>
@@ -15617,7 +15617,7 @@ class ProtecGame {
               <!-- Filtre Pôle Formations (Vert émeraude) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('formations')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.formations ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white text-emerald-700 border-emerald-400 hover:bg-emerald-50/50'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.formations ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-slate-600 hover:bg-emerald-50/50'}"
                 title="${filters.formations ? 'Cliquer pour masquer Formations' : 'Cliquer pour afficher Formations'}"
               >
                 <span class="w-2.5 h-2.5 rounded-full ${filters.formations ? 'bg-white' : 'bg-emerald-600'}"></span>
@@ -15627,7 +15627,7 @@ class ProtecGame {
               <!-- Filtre Pôle Action Sociale (Violet) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('social')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.social ? 'bg-purple-600 text-white border-purple-700 shadow-sm' : 'bg-white text-purple-700 border-purple-400 hover:bg-purple-50/50'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.social ? 'bg-purple-600 text-white border-purple-700 shadow-sm' : 'bg-white dark:bg-slate-700 text-purple-700 dark:text-purple-300 border-purple-400 dark:border-slate-600 hover:bg-purple-50/50'}"
                 title="${filters.social ? 'Cliquer pour masquer Action Sociale' : 'Cliquer pour afficher Action Sociale'}"
               >
                 <span class="w-2.5 h-2.5 rounded-full ${filters.social ? 'bg-white' : 'bg-purple-600'}"></span>
@@ -15636,7 +15636,7 @@ class ProtecGame {
             </div>
 
             <!-- Toggles rapides Tout Activer / Tout Masquer -->
-            <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+            <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
               <button onclick="window.game.toggleAllPlanningPoleFilters(true)" class="hover:text-pc-blue cursor-pointer underline decoration-dotted">Tout afficher</button>
               <span>•</span>
               <button onclick="window.game.toggleAllPlanningPoleFilters(false)" class="hover:text-rose-600 cursor-pointer underline decoration-dotted">Tout masquer</button>
@@ -15654,17 +15654,17 @@ class ProtecGame {
                 <!-- Colonne Gauche : Navigation Mois + Grille du calendrier -->
                 <div class="lg:col-span-7 xl:col-span-7 space-y-3">
                   <!-- Navigation Mois -->
-                  <div class="w-full flex items-center justify-between bg-white border border-slate-200/90 rounded-2xl p-1.5 sm:p-2 shadow-xs">
+                  <div class="w-full flex items-center justify-between bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 rounded-2xl p-1.5 sm:p-2 shadow-xs">
                     <button 
                       onclick="window.game.changePlanningMonth(-1)" 
-                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer flex-shrink-0"
+                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 dark:text-slate-200 hover:text-pc-blue dark:hover:text-sky-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 transition cursor-pointer flex-shrink-0"
                       title="Mois précédent"
                     >
                       <i data-lucide="chevron-left" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
                     <div class="flex-1 text-center px-2 sm:px-4">
                       <div class="flex items-center justify-center gap-2">
-                        <span class="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-tight">${curMonthName} ${curYear}</span>
+                        <span class="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-tight leading-tight">${curMonthName} ${curYear}</span>
                         ${!isViewingCurrentMonth ? `
                           <button 
                             onclick="window.game.resetPlanningMonthToCurrent()" 
@@ -15677,14 +15677,14 @@ class ProtecGame {
                         ` : ''}
                       </div>
                       ${!isViewingCurrentMonth ? `
-                        <span class="text-[9px] sm:text-[10px] font-extrabold text-amber-600 uppercase tracking-wider block mt-0.5">${(curYear < this.clock.year || (curYear === this.clock.year && curViewingMonth < this.clock.month)) ? 'Mois précédent' : 'Mois suivant'}</span>
+                        <span class="text-[9px] sm:text-[10px] font-extrabold text-amber-600 dark:text-amber-400 uppercase tracking-wider block mt-0.5">${(curYear < this.clock.year || (curYear === this.clock.year && curViewingMonth < this.clock.month)) ? 'Mois précédent' : 'Mois suivant'}</span>
                       ` : `
-                        <span class="text-[9px] sm:text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider block mt-0.5">Mois en cours</span>
+                        <span class="text-[9px] sm:text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block mt-0.5">Mois en cours</span>
                       `}
                     </div>
                     <button 
                       onclick="window.game.changePlanningMonth(1)" 
-                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 hover:text-pc-blue hover:bg-slate-100 active:scale-95 transition cursor-pointer flex-shrink-0"
+                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 dark:text-slate-200 hover:text-pc-blue dark:hover:text-sky-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 transition cursor-pointer flex-shrink-0"
                       title="Mois suivant"
                     >
                       <i data-lucide="chevron-right" class="w-4 h-4 sm:w-5 sm:h-5"></i>
@@ -15692,7 +15692,7 @@ class ProtecGame {
                   </div>
 
                   <!-- Grille du calendrier -->
-                  <div class="glass-card rounded-2xl p-3.5 sm:p-4 shadow-sm">
+                  <div class="rounded-2xl p-3.5 sm:p-4 shadow-sm bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700">
                     <!-- En-têtes des jours de la semaine -->
                     <div class="grid grid-cols-7 gap-1 text-center text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
                       <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
@@ -15788,22 +15788,22 @@ class ProtecGame {
                 <!-- Colonne Droite : Détail de la journée sélectionnée (légende intégrée aux filtres) -->
                 <div class="lg:col-span-5 xl:col-span-5 space-y-3 lg:sticky lg:top-2">
                   <!-- Carte Détail de la journée sélectionnée -->
-                  <div class="p-4 rounded-2xl glass-card space-y-4 shadow-sm max-h-[75vh] overflow-y-auto">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div class="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-4 shadow-sm max-h-[75vh] overflow-y-auto">
+                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/80 pb-2.5">
                       <div>
-                        <h4 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                          <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue"></i>
+                        <h4 class="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                          <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue dark:text-sky-400"></i>
                           Planning du ${selectedDay} ${curMonthName} ${curYear}
                         </h4>
-                        ${isViewingCurrentMonth && selectedDay === todayDay ? `<span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">Aujourd'hui</span>` : ''}
+                        ${isViewingCurrentMonth && selectedDay === todayDay ? `<span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">Aujourd'hui</span>` : ''}
                       </div>
-                      <span class="text-[11px] font-bold text-slate-500 text-right">
+                      <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 text-right">
                         ${selectedDayEvents.length} événement(s) au total
                       </span>
                     </div>
 
                     ${selectedDayEvents.length === 0 ? `
-                      <p class="text-xs text-slate-500 py-6 text-center italic">
+                      <p class="text-xs text-slate-500 dark:text-slate-400 py-6 text-center italic">
                         Aucun événement pour cette date sur les pôles sélectionnés. Activez plus de filtres ci-dessus ou établissez des propositions pour remplir votre planning.
                       </p>
                     ` : `
@@ -15820,30 +15820,30 @@ class ProtecGame {
                                 const f = e.raw;
                                 const isB2B = e.type.startsWith('B2B');
                                 return `
-                                  <div class="p-3.5 rounded-2xl border-2 border-emerald-300 bg-emerald-50/40 flex flex-col justify-between space-y-2.5">
+                                  <div class="p-3.5 rounded-2xl border-2 border-emerald-300 dark:border-emerald-700/60 bg-emerald-50/40 dark:bg-emerald-950/30 flex flex-col justify-between space-y-2.5">
                                     <div>
                                       <div class="flex items-center justify-between gap-2">
                                         <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white uppercase">
                                           ${e.type}
                                         </span>
-                                        ${e.rewardMoney ? `<span class="text-xs font-mono font-bold text-emerald-700">+${e.rewardMoney} €</span>` : ''}
+                                        ${e.rewardMoney ? `<span class="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400">+${e.rewardMoney} €</span>` : ''}
                                       </div>
-                                      <h5 class="text-xs font-black text-slate-900 mt-1.5">${e.title}</h5>
-                                      <p class="text-[11px] text-slate-600 mt-0.5">
+                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${e.title}</h5>
+                                      <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
                                         Lieu : <strong>${e.address}</strong> • Inscrits : <strong>${e.registeredCount} / ${e.requiredCount}</strong>
                                       </p>
                                       ${e.trainerName ? `
-                                        <p class="text-[11px] text-emerald-800 font-semibold mt-0.5">
+                                        <p class="text-[11px] text-emerald-800 dark:text-emerald-300 font-semibold mt-0.5">
                                           Formateur : <strong>${e.trainerName}</strong>
                                         </p>
                                       ` : `
-                                        <p class="text-[11px] text-amber-700 font-bold mt-0.5">
+                                        <p class="text-[11px] text-amber-700 dark:text-amber-400 font-bold mt-0.5">
                                           ⚠️ Aucun formateur affecté
                                         </p>
                                       `}
                                     </div>
 
-                                    <div class="pt-2 border-t border-emerald-200/60 flex items-center justify-end">
+                                    <div class="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-end">
                                       <button onclick="window.game.openModule('formations')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition flex items-center gap-1 cursor-pointer">
                                         <span>Gérer la Formation</span>
                                         <i data-lucide="arrow-right" class="w-3 h-3"></i>
@@ -15859,8 +15859,8 @@ class ProtecGame {
                         <!-- SECTION 2 : ACTION SOCIALE & MARAUDES -->
                         ${filters.social && selectedDaySocial.length > 0 ? `
                           <div class="space-y-2.5">
-                            <div class="text-[11px] font-black uppercase text-purple-800 tracking-wider flex items-center gap-1.5">
-                              <i data-lucide="heart-handshake" class="w-3.5 h-3.5 text-purple-600"></i>
+                            <div class="text-[11px] font-black uppercase text-purple-800 dark:text-purple-300 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="heart-handshake" class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400"></i>
                               <span>Pôle Action Sociale & Maraudes (${selectedDaySocial.length})</span>
                             </div>
                             <div class="flex flex-col space-y-3">
@@ -15869,28 +15869,28 @@ class ProtecGame {
                                 const regCount = m.registeredVolunteers?.length || 0;
                                 const isFull = regCount >= m.requiredVolunteers;
                                 return `
-                                  <div class="p-3.5 rounded-2xl border-2 border-purple-300 bg-purple-50/40 flex flex-col justify-between space-y-2.5">
+                                  <div class="p-3.5 rounded-2xl border-2 border-purple-300 dark:border-purple-700/60 bg-purple-50/40 dark:bg-purple-950/30 flex flex-col justify-between space-y-2.5">
                                     <div>
                                       <div class="flex items-center justify-between gap-2">
                                         <span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-600 text-white uppercase">
                                           🥫 Maraude
                                         </span>
-                                        <span class="text-xs font-mono font-bold text-purple-800">+${m.rewardMoney} €</span>
+                                        <span class="text-xs font-mono font-bold text-purple-800 dark:text-purple-300">+${m.rewardMoney} €</span>
                                       </div>
-                                      <h5 class="text-xs font-black text-slate-900 mt-1.5">${m.title}</h5>
-                                      <p class="text-[11px] text-slate-600 mt-0.5 flex items-center gap-1">
-                                        <i data-lucide="map-pin" class="w-3 h-3 text-purple-600"></i>
+                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${m.title}</h5>
+                                      <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-1">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-purple-600 dark:text-purple-400"></i>
                                         <span>${m.sector || m.address || 'Secteur de Maraude'}</span>
                                       </p>
                                     </div>
 
-                                    <div class="pt-2 border-t border-purple-200/60 space-y-1.5">
+                                    <div class="pt-2 border-t border-purple-200/60 dark:border-purple-800/40 space-y-1.5">
                                       <div class="flex items-center justify-between text-xs font-bold">
-                                        <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
+                                        <span class="${isFull ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}">
                                           ${isFull ? '✓ Équipage complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
                                         </span>
                                       </div>
-                                      <div class="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
+                                      <div class="w-full bg-slate-200/80 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
                                         <div class="h-full bg-purple-600 rounded-full" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
                                       </div>
                                       <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-black transition cursor-pointer">
@@ -15907,8 +15907,8 @@ class ProtecGame {
                         <!-- SECTION : POSTES EN PRÉVISIONNEL (SONDAGE & VALIDATION) -->
                         ${filters.previ && selectedDayPrevi.length > 0 ? `
                           <div class="space-y-2.5">
-                            <div class="text-[11px] font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5">
-                              <i data-lucide="hourglass" class="w-3.5 h-3.5 text-amber-600"></i>
+                            <div class="text-[11px] font-black uppercase text-amber-800 dark:text-amber-300 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="hourglass" class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400"></i>
                               <span>Postes en Prévisionnel (${selectedDayPrevi.length})</span>
                             </div>
                             <div class="flex flex-col space-y-3">
@@ -15919,56 +15919,56 @@ class ProtecGame {
                                 const prevVolsCount = d.previsionnelVolunteers?.length || 0;
 
                                 return `
-                                  <div class="p-3.5 rounded-2xl border-2 border-amber-400 bg-amber-50/50 flex flex-col justify-between space-y-3">
+                                  <div class="p-3.5 rounded-2xl border-2 border-amber-400 dark:border-amber-600/60 bg-amber-50/50 dark:bg-amber-950/30 flex flex-col justify-between space-y-3">
                                     <div>
                                       <div class="flex items-center justify-between gap-2">
                                         <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white uppercase">
                                           ⏳ En Prévisionnel
                                         </span>
                                         ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
-                                        <span class="text-xs font-mono font-bold text-slate-700">${d.proposedPrice || dynBareme.totalBareme} €</span>
+                                        <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">${d.proposedPrice || dynBareme.totalBareme} €</span>
                                       </div>
-                                      <h5 class="text-xs font-black text-slate-900 mt-1.5">${d.eventName}</h5>
-                                      <p class="text-[11px] text-slate-500">
+                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${d.eventName}</h5>
+                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">
                                         ${d.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
                                       </p>
-                                      <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
+                                      <p class="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1 mt-0.5">
                                         <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
                                         <span>${d.address || 'Adresse sur site'}</span>
                                       </p>
                                     </div>
 
                                     <!-- Bloc statut bénévoles prévisionnel -->
-                                    <div class="p-2.5 rounded-xl bg-white/80 border border-amber-200 text-xs space-y-1.5">
+                                    <div class="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/90 border border-amber-200 dark:border-amber-700/60 text-xs space-y-1.5">
                                       <div class="flex items-center justify-between">
-                                        <span class="font-bold text-slate-700">Disponibilités bénévoles :</span>
-                                        <span class="font-black ${prevVolsCount >= reqVols ? 'text-emerald-700' : 'text-amber-800'}">${prevVolsCount} / ${reqVols} confirmés</span>
+                                        <span class="font-bold text-slate-700 dark:text-slate-300">Disponibilités bénévoles :</span>
+                                        <span class="font-black ${prevVolsCount >= reqVols ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-800 dark:text-amber-300'}">${prevVolsCount} / ${reqVols} confirmés</span>
                                       </div>
-                                      <div class="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
+                                      <div class="w-full bg-slate-200/80 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
                                         <div class="h-full bg-amber-500 rounded-full transition-all" style="width: ${Math.min(100, (prevVolsCount / reqVols) * 100)}%"></div>
                                       </div>
-                                      <div class="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+                                      <div class="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
                                         <span>Statut : <strong>${d.sollicitationSent ? `Sollicité (${d.relancesCount || 0} relance${(d.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
                                       </div>
                                       <div class="flex items-center justify-between text-[10px] pt-0.5">
-                                        <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="text-pc-blue font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
+                                        <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="text-pc-blue dark:text-sky-400 font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
                                           <i data-lucide="phone-call" class="w-3 h-3"></i> Sonder
                                         </button>
-                                        <button onclick="window.game.manualRelancePrevisionnel('${d.id}')" class="text-amber-800 font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
+                                        <button onclick="window.game.manualRelancePrevisionnel('${d.id}')" class="text-amber-800 dark:text-amber-400 font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
                                           <i data-lucide="bell" class="w-3 h-3"></i> Relancer (${d.relancesCount || 0})
                                         </button>
-                                        <button onclick="window.game.openModule('devis')" class="text-slate-600 font-bold hover:underline cursor-pointer">
+                                        <button onclick="window.game.openModule('devis')" class="text-slate-600 dark:text-slate-400 font-bold hover:underline cursor-pointer">
                                           Devis →
                                         </button>
                                       </div>
                                     </div>
 
                                     <!-- Actions rapides -->
-                                    <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-1.5">
+                                    <div class="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-1.5">
                                       <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-pc-blue to-pc-blue-light text-white text-[11px] font-black shadow-xs hover:brightness-110 transition cursor-pointer">
                                         Valider avec l'Orga
                                       </button>
-                                      <button onclick="window.game.refuseDevis('${d.id}')" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition cursor-pointer">
+                                      <button onclick="window.game.refuseDevis('${d.id}')" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 text-slate-700 dark:text-slate-300 hover:text-rose-700 text-[11px] font-bold border border-slate-200 dark:border-slate-600 transition cursor-pointer">
                                         Refuser
                                       </button>
                                     </div>
@@ -15982,8 +15982,8 @@ class ProtecGame {
                         <!-- SECTION : DEMANDES DE DEVIS DPS REÇUES & EN DÉLIBÉRATION -->
                         ${filters.devis && selectedDayDevis.length > 0 ? `
                           <div class="space-y-2.5">
-                            <div class="text-[11px] font-black uppercase text-sky-800 tracking-wider flex items-center gap-1.5">
-                              <i data-lucide="file-text" class="w-3.5 h-3.5 text-sky-600"></i>
+                            <div class="text-[11px] font-black uppercase text-sky-800 dark:text-sky-300 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="file-text" class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400"></i>
                               <span>Demandes de Devis DPS (${selectedDayDevis.length})</span>
                             </div>
                             <div class="flex flex-col space-y-3">
@@ -15993,27 +15993,27 @@ class ProtecGame {
                                 const dynBareme = this.calculateDynamicBareme(d);
 
                                 return `
-                                  <div class="p-3.5 rounded-2xl border-2 ${isSent ? 'border-indigo-300 bg-indigo-50/40' : 'border-dashed border-sky-300 bg-sky-50/40'} flex flex-col justify-between space-y-3">
+                                  <div class="p-3.5 rounded-2xl border-2 ${isSent ? 'border-indigo-300 dark:border-indigo-700/60 bg-indigo-50/40 dark:bg-indigo-950/30' : 'border-dashed border-sky-300 dark:border-sky-700/60 bg-sky-50/40 dark:bg-sky-950/30'} flex flex-col justify-between space-y-3">
                                     <div>
                                       <div class="flex items-center justify-between gap-2">
                                         <span class="px-2 py-0.5 rounded text-[10px] font-black ${isSent ? 'bg-indigo-600 text-white' : 'bg-sky-600 text-white'} uppercase">
                                           ${isSent ? '⚖️ En Délibération' : '📋 Devis Reçu'}
                                         </span>
                                         ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
-                                        <span class="text-xs font-mono font-bold text-slate-700">${d.proposedPrice || dynBareme.totalBareme} €</span>
+                                        <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">${d.proposedPrice || dynBareme.totalBareme} €</span>
                                       </div>
-                                      <h5 class="text-xs font-black text-slate-900 mt-1.5">${d.eventName}</h5>
-                                      <p class="text-[11px] text-slate-500">
+                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${d.eventName}</h5>
+                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">
                                         ${d.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
                                       </p>
-                                      <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
+                                      <p class="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1 mt-0.5">
                                         <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
                                         <span>${d.address || 'Adresse sur site'}</span>
                                       </p>
                                     </div>
 
                                     <!-- Actions rapides -->
-                                    <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-1.5">
+                                    <div class="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-1.5">
                                       ${isSent ? `
                                         <button onclick="window.game.openModule('devis')" class="w-full py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black transition cursor-pointer">
                                           Consulter l'arbitrage en cours
@@ -16025,7 +16025,7 @@ class ProtecGame {
                                         <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white text-[11px] font-black transition cursor-pointer">
                                           Chiffrer
                                         </button>
-                                        <button onclick="window.game.refuseDevis('${d.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-[11px] font-bold border border-slate-200 transition cursor-pointer" title="Décliner la demande">
+                                        <button onclick="window.game.refuseDevis('${d.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 text-slate-600 dark:text-slate-300 hover:text-rose-700 text-[11px] font-bold border border-slate-200 dark:border-slate-600 transition cursor-pointer" title="Décliner la demande">
                                           ✕
                                         </button>
                                       `}
@@ -16040,7 +16040,7 @@ class ProtecGame {
                         <!-- SECTION 4 : DISPOSITIFS CONFIRMÉS AU PLANNING -->
                         ${filters.dps && selectedDayMissions.length > 0 ? `
                           <div class="space-y-2.5">
-                            <div class="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                            <div class="text-[11px] font-black uppercase text-slate-700 dark:text-slate-300 tracking-wider flex items-center gap-1.5">
                               <i data-lucide="shield-check" class="w-3.5 h-3.5 text-pc-blue"></i>
                               <span>Dispositifs Confirmés & Validés (${selectedDayMissions.length})</span>
                             </div>
@@ -16052,21 +16052,21 @@ class ProtecGame {
                                 const timeStr = `${m.startHour || m.eventDate?.hour || 14}h00 à ${(m.endHour || ((m.eventDate?.hour || 14) + (m.durationHours || 4)) % 24)}h00`;
 
                                 return `
-                                  <div class="p-3.5 rounded-xl glass-card border border-slate-200/80 flex flex-col justify-between space-y-2.5">
+                                  <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 flex flex-col justify-between space-y-2.5 shadow-xs">
                                     <div>
                                       <div class="flex items-center justify-between">
                                         <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${timeStr}</span>
-                                        <span class="text-xs font-bold text-emerald-700 mono-num">+${m.rewardMoney} €</span>
+                                        <span class="text-xs font-bold text-emerald-700 dark:text-emerald-400 mono-num">+${m.rewardMoney} €</span>
                                       </div>
-                                      <h5 class="text-xs font-extrabold text-slate-900 mt-1">${m.title}</h5>
-                                      <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 mt-0.5">
+                                      <h5 class="text-xs font-extrabold text-slate-900 dark:text-white mt-1">${m.title}</h5>
+                                      <p class="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1 mt-0.5">
                                         <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
                                         <span>${m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site')}</span>
                                       </p>
-                                      <p class="text-[11px] text-slate-500">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
                                     </div>
 
-                                    <div class="pt-2 border-t border-slate-100 space-y-1.5">
+                                    <div class="pt-2 border-t border-slate-100 dark:border-slate-700/80 space-y-1.5">
                                       <div class="flex items-center justify-between text-xs font-bold">
                                         <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
                                           ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
@@ -16800,16 +16800,16 @@ class ProtecGame {
                     <!-- Moyens matériels & vecteurs : Véhicules et Lots -->
                     <div class="space-y-3 pt-1">
                       <!-- Véhicules proposés au client (Compteurs par type) -->
-                      <div class="p-3 rounded-2xl bg-white border border-slate-200 space-y-2">
+                      <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                          <label class="block text-[11px] font-black text-slate-800 uppercase tracking-wide">
+                          <label class="block text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
                             Véhicules proposés au devis (Cochez les types puis réglez le nombre) :
                           </label>
-                          <span class="text-[10px] font-black text-pc-blue bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200 self-start sm:self-auto">
+                          <span class="text-[10px] font-black text-pc-blue dark:text-sky-300 bg-blue-50 dark:bg-sky-950/60 px-2.5 py-0.5 rounded-lg border border-blue-200 dark:border-sky-500/40 self-start sm:self-auto">
                             Moyens : <strong>${this.formatDevisVehiclesSummary(d)}</strong>
                           </span>
                         </div>
-                        <p class="text-[10px] text-slate-500">
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400">
                           Cochez les catégories de véhicules souhaitées pour le dispositif puis ajustez le nombre exact avec les compteurs <strong>-</strong> et <strong>+</strong> ou saisissez-le directement au clavier.
                         </p>
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-1">
@@ -16828,7 +16828,7 @@ class ProtecGame {
                             const count = counts[vItem.type] || 0;
                             const isChecked = count > 0;
                             return `
-                              <div class="p-2 rounded-xl border transition flex items-center justify-between gap-1.5 ${isChecked ? 'bg-indigo-50/80 border-pc-blue shadow-2xs ring-1 ring-pc-blue/30' : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'}">
+                              <div class="p-2 rounded-xl border transition flex items-center justify-between gap-1.5 ${isChecked ? 'bg-indigo-50/80 dark:bg-indigo-950/60 border-pc-blue dark:border-indigo-500 shadow-2xs ring-1 ring-pc-blue/30' : 'bg-slate-50/70 dark:bg-slate-700/60 border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'}">
                                 <label class="flex items-center gap-2 cursor-pointer select-none flex-1 min-w-0">
                                   <input 
                                     type="checkbox" 
@@ -16836,15 +16836,15 @@ class ProtecGame {
                                     onchange="window.game.toggleDevisVehicleType('${d.id}', '${vItem.type}')" 
                                     class="w-4 h-4 rounded text-pc-blue accent-pc-blue cursor-pointer shrink-0"
                                   />
-                                  <span class="text-xs font-extrabold text-slate-800 truncate">${vItem.emoji} ${vItem.name}</span>
-                                  ${vItem.funcBadge ? `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-mono font-black bg-slate-200/90 text-slate-700 border border-slate-300 shrink-0">${vItem.funcBadge}</span>` : ''}
+                                  <span class="text-xs font-extrabold text-slate-800 dark:text-slate-100 truncate">${vItem.emoji} ${vItem.name}</span>
+                                  ${vItem.funcBadge ? `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-mono font-black bg-slate-200/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 shrink-0">${vItem.funcBadge}</span>` : ''}
                                 </label>
                                 ${isChecked ? `
-                                  <div class="flex items-center gap-1 shrink-0 bg-white px-1 py-0.5 rounded-lg border border-indigo-200 shadow-2xs">
+                                  <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-slate-800 px-1 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-700 shadow-2xs">
                                     <button 
                                       type="button" 
                                       onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', -1)" 
-                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">-</button>
+                                      class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">-</button>
                                     <input 
                                       type="number" 
                                       min="0" 
@@ -16852,12 +16852,12 @@ class ProtecGame {
                                       value="${count}" 
                                       onchange="window.game.setDevisVehicleCount('${d.id}', '${vItem.type}', this.value)" 
                                       onkeydown="if(event.key==='Enter')this.blur()" 
-                                      class="w-9 text-center font-black text-xs text-pc-blue mono-num bg-slate-50 border border-slate-200 rounded py-0.5 px-0.5 focus:bg-white focus:outline-none" 
+                                      class="w-9 text-center font-black text-xs text-pc-blue dark:text-sky-300 mono-num bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded py-0.5 px-0.5 focus:bg-white dark:focus:bg-slate-800 focus:outline-none" 
                                     />
                                     <button 
                                       type="button" 
                                       onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', 1)" 
-                                      class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">+</button>
+                                      class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">+</button>
                                   </div>
                                 ` : ''}
                               </div>
@@ -16867,8 +16867,8 @@ class ProtecGame {
                       </div>
 
                       <!-- Lots matériels engagés -->
-                      <div class="p-3 rounded-2xl bg-white border border-slate-200 space-y-2">
-                        <label class="block text-[11px] font-black text-slate-800 uppercase tracking-wide">Lots matériels engagés :</label>
+                      <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2">
+                        <label class="block text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">Lots matériels engagés :</label>
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
                           ${[
                             { id: 'lot_a', name: 'Lot A (Secours/PMA)' },
@@ -16878,7 +16878,7 @@ class ProtecGame {
                           ].map(lot => {
                             const isSelected = (d.configuredLots || []).includes(lot.id);
                             return `
-                              <button type="button" onclick="window.game.toggleDevisLot('${d.id}', '${lot.id}')" class="p-2 rounded-xl text-xs font-bold transition text-center cursor-pointer border ${isSelected ? 'bg-amber-600 text-white border-amber-600 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}">
+                              <button type="button" onclick="window.game.toggleDevisLot('${d.id}', '${lot.id}')" class="p-2 rounded-xl text-xs font-bold transition text-center cursor-pointer border ${isSelected ? 'bg-amber-600 text-white border-amber-600 shadow-xs' : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'}">
                                 ${isSelected ? '✓ ' : ''}${lot.name}
                               </button>
                             `;

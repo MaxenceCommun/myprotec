@@ -788,14 +788,14 @@ window.ProtecRNMSC = {
       minVolunteers = 0; // Pas d'obligation légale de DPS associatif
       requiredVehicles = [];
       requiredRanks = [];
-      badgeColor = 'bg-slate-100 text-slate-700 border-slate-300';
+      badgeColor = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600';
     } else if (ris <= 1.125) {
       type = 'PAPS';
       label = 'Point d’Alerte et de Premiers Secours (0,25 < RIS ≤ 1,125)';
       minVolunteers = 2; // Strictement 2 secouristes (1 binôme)
       requiredVehicles = [];
       requiredRanks = ['PSE2', 'PSE1'];
-      badgeColor = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+      badgeColor = 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700/60';
     } else if (ris <= 12) {
       type = 'DPS-PE';
       label = 'DPS de Petite Envergure (1,125 < RIS ≤ 12)';
@@ -805,7 +805,7 @@ window.ProtecRNMSC = {
       minVolunteers = Math.max(4, Math.min(12, needed));
       requiredVehicles = ['VPSP'];
       requiredRanks = ['CE', 'Driver', 'PSE2', 'PSE1'];
-      badgeColor = 'bg-sky-100 text-sky-800 border-sky-300';
+      badgeColor = 'bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-700/60';
     } else if (ris <= 36) {
       type = 'DPS-ME';
       label = 'DPS de Moyenne Envergure (12 < RIS ≤ 36)';
@@ -814,7 +814,7 @@ window.ProtecRNMSC = {
       minVolunteers = Math.max(14, Math.min(36, needed));
       requiredVehicles = ['VPSP', 'VTU'];
       requiredRanks = ['CD', 'CE', 'Driver', 'PSE2', 'PSE1'];
-      badgeColor = 'bg-amber-100 text-amber-800 border-amber-300';
+      badgeColor = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700/60';
     } else {
       type = 'DPS-GE';
       label = 'DPS de Grande Envergure (RIS > 36)';
@@ -823,7 +823,7 @@ window.ProtecRNMSC = {
       minVolunteers = Math.max(38, needed);
       requiredVehicles = ['VPSP', 'VPSP', 'VTU', 'PMA'];
       requiredRanks = ['CD', 'CE', 'Driver', 'PSE2', 'PSE1'];
-      badgeColor = 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse';
+      badgeColor = 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-700/60 animate-pulse';
     }
 
     return {
@@ -872,17 +872,17 @@ window.ProtecRNMSC = {
     const calc = this.calculateRIS({ p1: nVal, p2: p2Val, e1: e1Val, e2: e2Val });
 
     return `
-      <div class="p-4 sm:p-5 rounded-3xl glass-card border border-slate-200/90 shadow-sm space-y-4">
+      <div class="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
         <!-- En-tête officiel -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700/80 pb-3">
           <div class="flex items-center gap-2.5">
             <span class="text-xl">📐</span>
             <div>
-              <h4 class="text-sm font-black text-slate-900">Grille Officielle RNMSC • Dimensionnement des DPS</h4>
-              <p class="text-xs text-slate-500">Référentiel National des Missions de Sécurité Civile : Calcul du ratio d'intervenants (RIS)</p>
+              <h4 class="text-sm font-black text-slate-900 dark:text-white">Grille Officielle RNMSC • Dimensionnement des DPS</h4>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Référentiel National des Missions de Sécurité Civile : Calcul du ratio d'intervenants (RIS)</p>
             </div>
           </div>
-          <span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-pc-blue/10 text-pc-blue border border-pc-blue/20 flex-shrink-0 self-start sm:self-auto">
+          <span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-pc-blue/10 dark:bg-sky-950/70 text-pc-blue dark:text-sky-300 border border-pc-blue/20 dark:border-sky-500/40 flex-shrink-0 self-start sm:self-auto">
             Norme Ministère de l'Intérieur
           </span>
         </div>
@@ -890,12 +890,12 @@ window.ProtecRNMSC = {
         <!-- 3 Sélecteurs d'indicateurs P2, E1, E2 conformes au référentiel d'État -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
           <!-- P2 : Activité du rassemblement -->
-          <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5 flex flex-col justify-between">
+          <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 space-y-1.5 flex flex-col justify-between">
             <div>
-              <label class="font-extrabold text-slate-800 block text-[11px]">Indicateur P2 • Activité du rassemblement</label>
-              <span class="text-[10px] text-slate-500 block">Comportement, posture et public</span>
+              <label class="font-extrabold text-slate-800 dark:text-slate-200 block text-[11px]">Indicateur P2 • Activité du rassemblement</label>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400 block">Comportement, posture et public</span>
             </div>
-            <select id="${prefix}-p2" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 bg-white">
+            <select id="${prefix}-p2" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
               <option value="0.25" ${p2Val === 0.25 ? 'selected' : ''}>0,25 - Public assis (spectacle, cérémonie, réunion, sport)</option>
               <option value="0.30" ${p2Val === 0.30 ? 'selected' : ''}>0,30 - Public debout (exposition, foire, salon, comice)</option>
               <option value="0.35" ${p2Val === 0.35 ? 'selected' : ''}>0,35 - Public debout statique (fête foraine, fête avec protection)</option>
@@ -904,12 +904,12 @@ window.ProtecRNMSC = {
           </div>
 
           <!-- E1 : Caractéristiques de l'environnement ou accessibilité du site -->
-          <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5 flex flex-col justify-between">
+          <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 space-y-1.5 flex flex-col justify-between">
             <div>
-              <label class="font-extrabold text-slate-800 block text-[11px]">Indicateur E1 • Environnement & Accessibilité</label>
-              <span class="text-[10px] text-slate-500 block">Structure, superficie et relief</span>
+              <label class="font-extrabold text-slate-800 dark:text-slate-200 block text-[11px]">Indicateur E1 • Environnement & Accessibilité</label>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400 block">Structure, superficie et relief</span>
             </div>
-            <select id="${prefix}-e1" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 bg-white">
+            <select id="${prefix}-e1" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
               <option value="0.25" ${e1Val === 0.25 ? 'selected' : ''}>0,25 - Bâtiment en dur, rues avec accès dégagés</option>
               <option value="0.30" ${e1Val === 0.30 ? 'selected' : ''}>0,30 - Gradins/chapiteaux, terrain ≤ 2 ha, brancardage ≤ 300m</option>
               <option value="0.35" ${e1Val === 0.35 ? 'selected' : ''}>0,35 - Espace 2 à 5 ha, brancardage 300 à 600m, pente > 150m</option>
@@ -918,12 +918,12 @@ window.ProtecRNMSC = {
           </div>
 
           <!-- E2 : Délai d'intervention des secours publics -->
-          <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5 flex flex-col justify-between">
+          <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 space-y-1.5 flex flex-col justify-between">
             <div>
-              <label class="font-extrabold text-slate-800 block text-[11px]">Indicateur E2 • Délai Secours Publics (15 / 18)</label>
-              <span class="text-[10px] text-slate-500 block">Délai d'accès pompiers et SAMU</span>
+              <label class="font-extrabold text-slate-800 dark:text-slate-200 block text-[11px]">Indicateur E2 • Délai Secours Publics (15 / 18)</label>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400 block">Délai d'accès pompiers et SAMU</span>
             </div>
-            <select id="${prefix}-e2" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 bg-white">
+            <select id="${prefix}-e2" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
               <option value="0.25" ${e2Val === 0.25 ? 'selected' : ''}>0,25 - Délais ≤ 10 minutes</option>
               <option value="0.30" ${e2Val === 0.30 ? 'selected' : ''}>0,30 - Délais de 10 à 20 minutes</option>
               <option value="0.35" ${e2Val === 0.35 ? 'selected' : ''}>0,35 - Délais de 20 à 30 minutes</option>
@@ -933,18 +933,18 @@ window.ProtecRNMSC = {
         </div>
 
         <!-- Effectif prévisible déclaré (P1) et Synthèse de la formule -->
-        <div class="p-3.5 rounded-2xl bg-slate-100/90 border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="p-3.5 rounded-2xl bg-slate-100/90 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div class="flex items-center gap-3">
             <div>
-              <span class="text-xs font-extrabold text-slate-800 block">Effectif déclaré du public (P₁) :</span>
-              <span class="text-[10px] text-slate-500">Public simultané maximal attendu</span>
+              <span class="text-xs font-extrabold text-slate-800 dark:text-slate-200 block">Effectif déclaré du public (P₁) :</span>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400">Public simultané maximal attendu</span>
             </div>
-            <input type="number" id="${prefix}-n" value="${nVal}" min="50" max="250000" step="50" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" oninput="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-28 text-xs font-black p-2 rounded-xl border border-slate-300 bg-white font-mono text-center">
+            <input type="number" id="${prefix}-n" value="${nVal}" min="50" max="250000" step="50" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" oninput="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-28 text-xs font-black p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono text-center">
           </div>
 
           <div id="${prefix}-result-box" class="flex items-center gap-3 text-xs">
             <div class="text-right">
-              <span class="text-[10px] text-slate-500 font-bold block">i = ${calc.i} • RIS = ${calc.ris}</span>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400 font-bold block">i = ${calc.i} • RIS = ${calc.ris}</span>
               <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${calc.badgeColor}">
                 ${calc.label}
               </span>

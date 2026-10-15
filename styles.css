@@ -1818,7 +1818,8 @@ html.dark #main-modal .glass-card-purple,
 html.dark .glass-card {
   background: #1e293b !important;
   background-color: #1e293b !important;
-  border-color: #334155 !important;
+  border: 1px solid #334155 !important;
+  border-radius: 1rem !important;
   color: #f1f5f9 !important;
   box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.3) !important;
 }

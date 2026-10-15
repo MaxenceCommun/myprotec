@@ -21,7 +21,7 @@
       label: 'Urgences Générales & SAU',
       icon: 'stethoscope',
       shortLabel: 'SAU Général',
-      badgeClass: 'bg-blue-100 text-blue-900 border-blue-300',
+      badgeClass: 'bg-blue-100 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 border-blue-300 dark:border-blue-700/60',
       badgeColor: '#1d4ed8',
       desc: 'Accueil polyvalent des urgences médico-chirurgicales adultes 24h/24.'
     },
@@ -30,7 +30,7 @@
       label: 'Urgences Pédiatriques',
       icon: 'baby',
       shortLabel: 'Pédiatrie',
-      badgeClass: 'bg-pink-100 text-pink-900 border-pink-300',
+      badgeClass: 'bg-pink-100 dark:bg-pink-950/60 text-pink-900 dark:text-pink-300 border-pink-300 dark:border-pink-700/60',
       badgeColor: '#be185d',
       desc: 'Prise en charge spécialisée pour nourrissons, enfants et adolescents (< 16 ans).'
     },
@@ -39,7 +39,7 @@
       label: 'Cardiologie & USIC (Infarctus)',
       icon: 'heart-pulse',
       shortLabel: 'Cardiologie / USIC',
-      badgeClass: 'bg-red-100 text-red-900 border-red-300',
+      badgeClass: 'bg-red-100 dark:bg-red-950/60 text-red-900 dark:text-red-300 border-red-300 dark:border-red-700/60',
       badgeColor: '#b91c1c',
       desc: 'Unité de Soins Intensifs Cardiologiques, angioplastie et prise en charge SCA / ACR.'
     },
@@ -48,7 +48,7 @@
       label: 'Neurologie & UNV (AVC)',
       icon: 'brain',
       shortLabel: 'UNV (AVC)',
-      badgeClass: 'bg-purple-100 text-purple-900 border-purple-300',
+      badgeClass: 'bg-purple-100 dark:bg-purple-950/60 text-purple-900 dark:text-purple-300 border-purple-300 dark:border-purple-700/60',
       badgeColor: '#7e22ce',
       desc: 'Unité Neuro-Vasculaire de recours régional, thrombolyse et thrombectomie mécanique.'
     },
@@ -57,7 +57,7 @@
       label: 'Trauma Center & Déchocage',
       icon: 'shield-alert',
       shortLabel: 'Trauma Center',
-      badgeClass: 'bg-orange-100 text-orange-900 border-orange-300',
+      badgeClass: 'bg-orange-100 dark:bg-orange-950/60 text-orange-900 dark:text-orange-300 border-orange-300 dark:border-orange-700/60',
       badgeColor: '#c2410c',
       desc: 'Prise en charge polytraumatisés graves, déchocage lourd et chirurgie d’urgence.'
     },
@@ -66,7 +66,7 @@
       label: 'SOS Main & Microchirurgie',
       icon: 'hand',
       shortLabel: 'SOS Main FESUM',
-      badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
+      badgeClass: 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-700/60',
       badgeColor: '#b45309',
       desc: 'Centre agréé FESUM pour traumatismes de la main, réimplantations et sections digitales.'
     },
@@ -75,7 +75,7 @@
       label: 'Centre Grands Brûlés (CTB)',
       icon: 'flame',
       shortLabel: 'Grands Brûlés',
-      badgeClass: 'bg-rose-100 text-rose-900 border-rose-300',
+      badgeClass: 'bg-rose-100 dark:bg-rose-950/60 text-rose-900 dark:text-rose-300 border-rose-300 dark:border-rose-700/60',
       badgeColor: '#be123c',
       desc: 'Traitement hautement spécialisé des brûlures thermiques, chimiques et étendues.'
     },
@@ -84,7 +84,7 @@
       label: 'Réanimation & Soins Critiques',
       icon: 'activity',
       shortLabel: 'Réanimation',
-      badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+      badgeClass: 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700/60',
       badgeColor: '#047857',
       desc: 'Lits de réanimation polyvalente avec assistance respiratoire et hémodynamique lourde.'
     },
@@ -93,7 +93,7 @@
       label: 'Urgences Psychiatriques & CUMP',
       icon: 'smile',
       shortLabel: 'Psychiatrie / CUMP',
-      badgeClass: 'bg-violet-100 text-violet-900 border-violet-300',
+      badgeClass: 'bg-violet-100 dark:bg-violet-950/60 text-violet-900 dark:text-violet-300 border-violet-300 dark:border-violet-700/60',
       badgeColor: '#6d28d9',
       desc: 'Prise en charge de crises psychiques aiguës et soutien médico-psychologique d’urgence.'
     },
@@ -102,7 +102,7 @@
       label: 'Maternité & Néonatalogie (Type 3)',
       icon: 'heart',
       shortLabel: 'Maternité Type 3',
-      badgeClass: 'bg-rose-100 text-rose-900 border-rose-300',
+      badgeClass: 'bg-rose-100 dark:bg-rose-950/60 text-rose-900 dark:text-rose-300 border-rose-300 dark:border-rose-700/60',
       badgeColor: '#9d174d',
       desc: 'Urgences obstétricales, accouchements inopinés et réanimation néonatale.'
     }
@@ -1290,7 +1290,7 @@
 
     if (hospital.specialites.length > maxItems) {
       html += `
-        <span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+        <span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
           +${hospital.specialites.length - maxItems} autres
         </span>
       `;
@@ -1311,32 +1311,32 @@
     const isSpecialized = evacData.isSpecialized;
 
     return `
-      <div class="p-3.5 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/50 border border-indigo-200/80 shadow-xs space-y-2.5">
+      <div class="p-3.5 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/50 dark:from-slate-800/90 dark:to-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 shadow-xs space-y-2.5">
         <div class="flex items-start justify-between gap-3">
           <div class="flex items-start gap-2.5">
-            <div class="w-9 h-9 rounded-xl ${isSpecialized ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-white'} flex items-center justify-center shrink-0 shadow-xs">
+            <div class="w-9 h-9 rounded-xl ${isSpecialized ? 'bg-indigo-600 text-white' : 'bg-slate-700 dark:bg-slate-600 text-white'} flex items-center justify-center shrink-0 shadow-xs">
               <i data-lucide="${isSpecialized ? spec.icon : 'hospital'}" class="w-5 h-5"></i>
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <h5 class="text-xs font-black text-slate-900 leading-tight">${hosp.name}</h5>
-                <span class="px-2 py-0.2 rounded-full text-[9px] font-black uppercase ${hosp.type === 'chu' ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-200 text-slate-700'}">
+                <h5 class="text-xs font-black text-slate-900 dark:text-white leading-tight">${hosp.name}</h5>
+                <span class="px-2 py-0.2 rounded-full text-[9px] font-black uppercase ${hosp.type === 'chu' ? 'bg-indigo-100 dark:bg-indigo-900/70 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700/60' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">
                   ${hosp.type === 'chu' ? 'CHU / Référence' : 'Centre Hospitalier'}
                 </span>
               </div>
-              <p class="text-[10px] text-slate-500 mt-0.5">${hosp.address || hosp.city || 'Secteur départemental'}</p>
+              <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">${hosp.address || hosp.city || 'Secteur départemental'}</p>
             </div>
           </div>
           <div class="text-right shrink-0">
-            <span class="text-xs font-black text-indigo-900">${(evacData.distanceKm || 0).toFixed(1)} km</span>
-            <span class="block text-[9px] font-semibold text-slate-500">Distance transport</span>
+            <span class="text-xs font-black text-indigo-900 dark:text-indigo-300">${(evacData.distanceKm || 0).toFixed(1)} km</span>
+            <span class="block text-[9px] font-semibold text-slate-500 dark:text-slate-400">Distance transport</span>
           </div>
         </div>
 
         <!-- Motif d'orientation médicale SAMU -->
-        <div class="p-2.5 rounded-xl bg-white/90 border border-indigo-100 text-[11px] space-y-1">
+        <div class="p-2.5 rounded-xl bg-white/90 dark:bg-slate-800/80 border border-indigo-100 dark:border-indigo-900/40 text-[11px] space-y-1">
           <div class="flex items-center justify-between">
-            <strong class="font-extrabold text-indigo-950 flex items-center gap-1.5">
+            <strong class="font-extrabold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
               <span>🩺</span> Orientation Régulation SAMU 15
             </strong>
             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-black border ${spec.badgeClass}">
@@ -1344,19 +1344,19 @@
               ${spec.label}
             </span>
           </div>
-          <p class="text-slate-600 text-[10.5px] leading-relaxed">
+          <p class="text-slate-600 dark:text-slate-300 text-[10.5px] leading-relaxed">
             ${evacData.reason}
           </p>
         </div>
 
         <!-- Plateaux techniques & spécialités de l'établissement -->
         <div class="space-y-1">
-          <span class="text-[9.5px] font-black uppercase text-slate-500 tracking-wider">Plateaux techniques & Spécialités disponibles :</span>
+          <span class="text-[9.5px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Plateaux techniques & Spécialités disponibles :</span>
           ${renderHospitalSpecialtiesBadges(hosp, { highlightSpecialty: evacData.requiredSpecialty, maxItems: 6 })}
         </div>
 
         <!-- Indicateur SMUR & Capacités -->
-        <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200/60">
+        <div class="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
           <span>Capacité SAU : <strong>${hosp.capacity || 25} lits</strong></span>
           <span>Base SMUR : <strong>${hosp.hasSmur ? `Oui (${hosp.smurVehiclesCount || 1} UMH)` : 'Non (SMUR extérieur)'}</strong></span>
         </div>
