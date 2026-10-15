@@ -631,8 +631,9 @@ window.ProtecQuickDispatch = {
     if (!game) game = window.game;
     const ongoingMissions = (game.missions || []).filter(m => m.status === 'ongoing');
     const pendingSamu = (game.missions || []).filter(m => m.type === 'samu' && m.status !== 'completed');
-    const availableVehicles = (game.vehicles || []).filter(v => v.status === 'disponible');
-    const availableVolunteers = (game.volunteers || []).filter(v => v.status === 'disponible' && (!v.isBurnout));
+    const isVehicleAvailable = v => (v.status === 'disponible' || v.status === 'dispo' || (!v.status && v.inService)) && !v.isBrokenDown;
+    const availableVehicles = (game.vehicles || []).filter(isVehicleAvailable);
+    const availableVolunteers = (game.volunteers || []).filter(v => (v.status === 'disponible' || v.status === 'dispo') && (!v.isBurnout));
     const vpspList = (game.vehicles || []).filter(v => v.type === 'VPSP');
     const hasActiveSamuGarde = game.samuGarde?.active;
 
@@ -717,7 +718,7 @@ window.ProtecQuickDispatch = {
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-56 overflow-y-auto pr-1">
             ${(game.vehicles || []).map(veh => {
-              const isDispo = veh.status === 'disponible';
+              const isDispo = isVehicleAvailable(veh);
               const isVpsp = veh.type === 'VPSP';
               const fuel = veh.fuel || 100;
               const hasCrew = veh.assignedCrew && veh.assignedCrew.length > 0;
@@ -730,7 +731,7 @@ window.ProtecQuickDispatch = {
                       <div class="flex items-center gap-1.5">
                         <span class="text-xs font-black text-slate-900">${veh.name}</span>
                         <span class="px-1.5 py-0.2 rounded text-[9px] font-extrabold ${isDispo ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
-                          ${isDispo ? 'Dispo' : veh.status}
+                          ${isDispo ? 'Dispo' : (veh.status || 'En mission')}
                         </span>
                       </div>
                       <div class="flex items-center gap-2 text-[10px] text-slate-500 font-semibold mt-0.5">
@@ -805,14 +806,14 @@ window.ProtecQuickDispatch = {
   // Départ réflexe VPSP en 1 clic avec composition conforme RNMSC
   dispatchEmergencyVpsp(game) {
     if (!game) game = window.game;
-    const vpsp = (game.vehicles || []).find(v => v.type === 'VPSP' && v.status === 'disponible');
+    const vpsp = (game.vehicles || []).find(v => v.type === 'VPSP' && (v.status === 'disponible' || v.status === 'dispo' || (!v.status && v.inService)) && !v.isBrokenDown);
     if (!vpsp) {
       game.showToast('Aucun VPSP Disponible', 'Toutes les ambulances sont actuellement engagées ou indisponibles.', 'orange');
       return;
     }
 
     // Trouver 4 secouristes conformes RNMSC : 1 CE, 1 Conducteur, 1 PSE2, 1 PSE1 (tous à jour)
-    const dispo = (game.volunteers || []).filter(v => v.status === 'disponible' && !v.isBurnout && v.energy >= 25);
+    const dispo = (game.volunteers || []).filter(v => (v.status === 'disponible' || v.status === 'dispo') && !v.isBurnout && v.energy >= 25);
     
     // Vérifier les compétences à jour
     const hasValidCert = (vol, skill) => {

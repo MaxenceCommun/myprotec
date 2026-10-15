@@ -2116,17 +2116,41 @@ window.ProtecAdmin = {
       VELO: "Vélo Tout Terrain Secours"
     };
 
+    const targetStation = (Array.isArray(sData.stations) && sData.stations.length > 0) ? sData.stations[0] : null;
+    const stationId = targetStation?.id || 'st-default';
+    const stationCity = (targetStation?.city || targetStation?.name || 'ANTENNE').toUpperCase();
+    const existingCount = (sData.vehicles || []).filter(v => v.stationId === stationId && v.type === vehicleType).length + 1;
+    const numStr = existingCount < 10 ? `0${existingCount}` : `${existingCount}`;
+    const callsign = `${vehicleType} ${numStr} ${stationCity}`;
+
     const newVeh = {
       id: `veh-admin-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       type: vehicleType,
-      name: `${names[vehicleType] || vehicleType} Antenne`,
+      name: callsign,
+      label: vehicleType === 'VPSP' ? 'Véhicule de Premiers Secours à Personnes' : (names[vehicleType] || vehicleType),
+      model: vehicleType === 'VPSP' ? 'Renault Master III Phase 3 2.3 dCi 150 L2H2' : (vehicleType === 'VTU' ? 'Renault Trafic III 2.0 Blue dCi 130' : 'Véhicule Opérationnel'),
       immat: `PC-${Math.floor(100 + Math.random() * 900)}-${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`,
       condition: 100,
+      mechanical: 100,
+      fuel: 100,
+      status: 'dispo',
       inService: true,
-      stationId: sData.stations?.[0]?.id || 'st-default'
+      capacity: vehicleType === 'VPSP' ? 5 : (vehicleType === 'VTP' ? 9 : 4),
+      seatsCount: vehicleType === 'VPSP' ? 5 : (vehicleType === 'VTP' ? 9 : 4),
+      ctStatus: 'valide',
+      insuranceStatus: 'assure',
+      stationId: stationId,
+      image: `images/vehicles/${vehicleType}.png`
     };
 
     sData.vehicles.push(newVeh);
+    if (targetStation) {
+      if (!Array.isArray(targetStation.vehicles)) targetStation.vehicles = [];
+      if (!targetStation.vehicles.includes(newVeh.id)) {
+        targetStation.vehicles.push(newVeh.id);
+      }
+    }
+
     await this.updateUser(userId, { saveData: sData }, `Véhicule ${newVeh.name} (${newVeh.immat}) attribué à ${user.username}`);
     this.refreshSupportPlayerView();
   },
@@ -2139,6 +2163,13 @@ window.ProtecAdmin = {
     if (!sData.vehicles) return;
 
     sData.vehicles = sData.vehicles.filter(v => v.id !== vehicleId);
+    if (Array.isArray(sData.stations)) {
+      sData.stations.forEach(st => {
+        if (Array.isArray(st.vehicles)) {
+          st.vehicles = st.vehicles.filter(id => id !== vehicleId);
+        }
+      });
+    }
     await this.updateUser(userId, { saveData: sData }, `Véhicule retiré de la flotte de ${user.username}`);
     this.refreshSupportPlayerView();
   },

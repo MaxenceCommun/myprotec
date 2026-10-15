@@ -1478,6 +1478,61 @@ class ProtecGame {
       });
     }
 
+    // Réconciliation et cohérence absolue de la flotte et des antennes
+    if (Array.isArray(this.vehicles) && Array.isArray(this.stations) && this.stations.length > 0) {
+      const primaryStation = this.stations[0];
+      this.vehicles.forEach(veh => {
+        if (!veh) return;
+        // 1. Assurer une station d'attache valide
+        if (!veh.stationId || !this.stations.some(s => s.id === veh.stationId)) {
+          veh.stationId = primaryStation.id;
+        }
+        const st = this.stations.find(s => s.id === veh.stationId) || primaryStation;
+        if (!Array.isArray(st.vehicles)) st.vehicles = [];
+        if (!st.vehicles.includes(veh.id)) {
+          st.vehicles.push(veh.id);
+        }
+
+        // 2. Normalisation du statut opérationnel
+        if (!veh.status || veh.status === 'undefined' || veh.status === 'null') {
+          veh.status = 'dispo';
+        }
+
+        // 3. Compléter les attributs indispensables (ex: injection via panel admin)
+        if (veh.fuel === undefined || veh.fuel === null) veh.fuel = 100;
+        if (veh.condition === undefined || veh.condition === null) veh.condition = 100;
+        if (veh.mechanical === undefined || veh.mechanical === null) veh.mechanical = 100;
+        if (veh.inService === undefined) veh.inService = true;
+        if (!veh.ctStatus) veh.ctStatus = 'valide';
+        if (!veh.insuranceStatus) veh.insuranceStatus = 'assure';
+        if (!veh.capacity) veh.capacity = (veh.type === 'VPSP' ? 5 : (veh.type === 'VTP' ? 9 : 4));
+        if (!veh.seatsCount) veh.seatsCount = veh.capacity;
+        if (!veh.image && typeof this.getVehicleImage === 'function') veh.image = this.getVehicleImage(veh.type);
+        if (!veh.label) {
+          veh.label = veh.type === 'VPSP' ? 'Véhicule de Premiers Secours à Personnes' : (veh.type === 'VTU' ? 'Véhicule Tout Usage' : (veh.type === 'VL' ? 'Véhicule Léger' : veh.type));
+        }
+
+        // 4. Harmonisation de l'indicatif officiel si placeholder admin (ex: "Ambulance VPSP Antenne")
+        if (veh.name === 'Ambulance VPSP Antenne' || veh.name === 'Ambulance VPSP' || !veh.name) {
+          const cityName = (st.city || st.name || 'ANTENNE').toUpperCase();
+          const sameType = this.vehicles.filter(other => other.type === veh.type && (other.stationId === st.id || st.vehicles.includes(other.id)));
+          const idx = Math.max(1, sameType.indexOf(veh) + 1);
+          const numStr = idx < 10 ? `0${idx}` : `${idx}`;
+          veh.name = `${veh.type} ${numStr} ${cityName}`;
+        }
+      });
+
+      // Synchronisation bidirectionnelle : rattacher tout véhicule à sa station
+      this.stations.forEach(st => {
+        if (!Array.isArray(st.vehicles)) st.vehicles = [];
+        this.vehicles.forEach(veh => {
+          if (veh.stationId === st.id && !st.vehicles.includes(veh.id)) {
+            st.vehicles.push(veh.id);
+          }
+        });
+      });
+    }
+
     const validVehicleIds = new Set((this.vehicles || []).map(v => v.id));
 
     if (Array.isArray(this.stations)) {
@@ -1901,7 +1956,7 @@ class ProtecGame {
       el.innerHTML = `
         <div class="marker-inner bg-white border-2 border-pc-blue p-0.5 shadow-lg">
           <img src="logo_protection_civile.png" alt="PC" class="w-full h-full object-contain rounded-full" />
-          <span class="badge-counter bg-pc-orange">${station.vehicles.length}</span>
+          <span class="badge-counter bg-pc-orange">${Array.isArray(station.vehicles) ? station.vehicles.length : (this.vehicles || []).filter(v => v.stationId === station.id).length}</span>
         </div>
       `;
 
@@ -13316,9 +13371,13 @@ class ProtecGame {
 
     catBadge.textContent = 'ANTENNE OPÉRATIONNELLE';
     title.textContent = station.name;
-    headerIcon.setAttribute('data-lucide', 'building-2');
-
-    const stationVehicles = this.vehicles.filter(v => station.vehicles.includes(v.id));
+    if (!Array.isArray(station.vehicles)) station.vehicles = [];
+    this.vehicles.forEach(v => {
+      if (v.stationId === station.id && !station.vehicles.includes(v.id)) {
+        station.vehicles.push(v.id);
+      }
+    });
+    const stationVehicles = this.vehicles.filter(v => (station.vehicles && station.vehicles.includes(v.id)) || v.stationId === station.id);
     const stationVolunteers = this.volunteers.filter(v => v.stationId === station.id);
     if (window.ProtecLogistique) {
       window.ProtecLogistique.ensureStationStock(station, this);
