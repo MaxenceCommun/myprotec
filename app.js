@@ -8172,6 +8172,18 @@ class ProtecGame {
             });
           }
         }
+
+        // Enregistrement d'un avis négatif public dans le module Communication
+        if (window.ProtecCommunication && typeof window.ProtecCommunication.recordReview === 'function') {
+          window.ProtecCommunication.recordReview(this, {
+            author: `Comité d’Organisation • ${failCity}`,
+            role: `Organisateur de « ${mission.title} »`,
+            rating: 1,
+            date: 'Aujourd’hui',
+            text: `Très insatisfait : effectif insuffisant (${crew.length}/${minReq} prévus) sur « ${mission.title} ». Le public a dû attendre et nos bénévoles ont été mis en difficulté.`,
+            source: 'dps'
+          });
+        }
       } else {
         // Succès éclatant : Gain de réputation progressif et dégressif (plus la réputation est haute, moins elle monte vite)
         const currentRep = this.resources.reputationScore || 0;
@@ -8253,6 +8265,18 @@ class ProtecGame {
           `L’organisateur de « ${mission.title} » est comblé par le professionnalisme de vos secouristes (-${consumableCost} € consommables).${photoToastMsg}`,
           'green'
         );
+
+        // Enregistrement d'un avis élogieux 5 étoiles dans le module Communication
+        if (window.ProtecCommunication && typeof window.ProtecCommunication.recordReview === 'function') {
+          window.ProtecCommunication.recordReview(this, {
+            author: `Organisation • ${successCity}`,
+            role: `Organisateur de « ${mission.title} »`,
+            rating: 5,
+            date: 'Aujourd’hui',
+            text: `Dispositif parfait sur « ${mission.title} » ! Secouristes ponctuels, rigoureux et très bienveillants. Nous retravaillerons avec vous sans hésiter !`,
+            source: 'dps'
+          });
+        }
 
         // Bon retour occasionnel des partenaires (~40% de chance, "de temps en temps")
         if (Math.random() < 0.40 && window.ProtecMessaging?.logInstitutionalFeedback) {

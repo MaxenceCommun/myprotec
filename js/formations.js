@@ -1798,6 +1798,18 @@ window.ProtecFormations = {
       }
     }
 
+    // Enregistrement d'un avis public 5 étoiles dans le module Communication
+    if (window.ProtecCommunication && typeof window.ProtecCommunication.recordReview === 'function') {
+      window.ProtecCommunication.recordReview(game, {
+        author: 'Stagiaire Formation',
+        role: `Participant « ${course?.title || session.courseId} »`,
+        rating: 5,
+        date: 'Aujourd’hui',
+        text: `Excellente session « ${course?.title || session.courseId} » dispensée à l’antenne. Formateurs passionnés, matériel moderne et ambiance très pédagogique !`,
+        source: 'formation'
+      });
+    }
+
     game.saveGame();
     game.updateStatsUI();
 
