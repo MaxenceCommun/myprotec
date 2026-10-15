@@ -695,18 +695,21 @@ html, body {
     border-bottom-right-radius: 0 !important;
     border-top-left-radius: 1.5rem !important;
     border-top-right-radius: 1.5rem !important;
+  }
+
+  html:not(.dark) #main-modal .modal-fade-in {
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #0f172a !important;
   }
 
-  #main-modal #modal-body {
+  html:not(.dark) #main-modal #modal-body {
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #0f172a !important;
   }
 
-  #main-modal .border-b.border-slate-100 {
+  html:not(.dark) #main-modal .border-b.border-slate-100 {
     background: #ffffff !important;
     background-color: #ffffff !important;
   }
@@ -721,14 +724,14 @@ html, body {
     -webkit-backdrop-filter: none !important;
   }
 
-  #main-modal .glass-card {
+  html:not(.dark) #main-modal .glass-card {
     background-color: #ffffff !important;
     border-color: #cbd5e1 !important;
   }
 
-  #main-modal input:not([type="checkbox"]):not([type="radio"]),
-  #main-modal select,
-  #main-modal textarea {
+  html:not(.dark) #main-modal input:not([type="checkbox"]):not([type="radio"]),
+  html:not(.dark) #main-modal select,
+  html:not(.dark) #main-modal textarea {
     background-color: #ffffff !important;
     color: #0f172a !important;
   }
@@ -1728,4 +1731,198 @@ html:not(.dark) .text-blue-400 {
 
 html:not(.dark) .border-slate-100 {
   border-color: #cbd5e1 !important; /* Delineation nette des cartes */
+}
+
+/* ==========================================================================
+   MODALES, PAGES & BOTTOM SHEETS EN MODE SOMBRE (MOBILE & DESKTOP)
+   ========================================================================== */
+html.dark #main-modal .modal-fade-in,
+html.dark #main-modal .glass-panel-heavy,
+html.dark #context-drawer,
+html.dark #reset-confirm-modal .glass-panel-heavy,
+html.dark #placement-validation-modal .glass-panel-heavy,
+html.dark #onboarding-modal .glass-panel-heavy,
+html.dark #auth-modal .glass-panel-heavy,
+html.dark #ad-modal .glass-panel-heavy,
+html.dark .bottom-sheet-container {
+  background: #0f172a !important;
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark #main-modal #modal-body,
+html.dark #main-modal .modal-body,
+html.dark #context-drawer #drawer-body,
+html.dark #auth-modal #auth-modal-body {
+  background: #0f172a !important;
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+html.dark #main-modal .border-b.border-slate-100,
+html.dark #main-modal .bg-white\/50,
+html.dark #context-drawer #drawer-footer,
+html.dark .border-b.border-slate-100 {
+  background: #0f172a !important;
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+html.dark #main-modal #modal-category-subnav,
+html.dark .bg-slate-100\/80,
+html.dark .bg-slate-50\/90 {
+  background: #0b1120 !important;
+  background-color: #0b1120 !important;
+  border-color: #334155 !important;
+}
+
+html.dark .bottom-sheet-handle {
+  background: #475569 !important;
+}
+
+/* Cartes à l'intérieur des modales et pages */
+html.dark #main-modal .glass-card,
+html.dark #main-modal .glass-card-amber,
+html.dark #main-modal .glass-card-blue,
+html.dark #main-modal .glass-card-orange,
+html.dark #main-modal .glass-card-emerald,
+html.dark #main-modal .glass-card-purple,
+html.dark .glass-card {
+  background: #1e293b !important;
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.3) !important;
+}
+
+html.dark #main-modal .glass-card:hover,
+html.dark #main-modal .glass-card:focus-within {
+  background: #273549 !important;
+  background-color: #273549 !important;
+  border-color: #475569 !important;
+}
+
+/* Boutons secondaires et pilules dans les modales */
+html.dark .glass-button {
+  background: #1e293b !important;
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+html.dark .glass-button:hover {
+  background: #334155 !important;
+  background-color: #334155 !important;
+  border-color: #475569 !important;
+  color: #ffffff !important;
+}
+
+/* Champs de formulaires dans les modales */
+html.dark #main-modal input:not([type="checkbox"]):not([type="radio"]),
+html.dark #main-modal select,
+html.dark #main-modal textarea,
+html.dark .glass-input {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark #main-modal input:focus,
+html.dark #main-modal select:focus,
+html.dark #main-modal textarea:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
+}
+
+/* Gradients et fonds translucides dans les cartes de modales */
+html.dark .from-indigo-50\/50,
+html.dark .from-indigo-50 {
+  --tw-gradient-from: rgba(99, 102, 241, 0.15) !important;
+}
+html.dark .to-blue-50\/50,
+html.dark .to-blue-50 {
+  --tw-gradient-to: rgba(59, 130, 246, 0.15) !important;
+}
+html.dark .via-white {
+  --tw-gradient-stops: var(--tw-gradient-from), #1e293b, var(--tw-gradient-to) !important;
+}
+html.dark .from-white {
+  --tw-gradient-from: #1e293b !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+html.dark .to-white {
+  --tw-gradient-to: #1e293b !important;
+}
+
+/* Titres et textes foncés dans les cartes (les convertir en clair en mode sombre) */
+html.dark .text-sky-900,
+html.dark .text-sky-950 {
+  color: #7dd3fc !important; /* sky-300 */
+}
+html.dark .text-sky-700,
+html.dark .text-sky-800 {
+  color: #38bdf8 !important; /* sky-400 */
+}
+html.dark .text-amber-900,
+html.dark .text-amber-950 {
+  color: #fde68a !important; /* amber-200 */
+}
+html.dark .text-amber-700,
+html.dark .text-amber-800 {
+  color: #fbbf24 !important; /* amber-400 */
+}
+html.dark .text-indigo-900,
+html.dark .text-indigo-950 {
+  color: #c7d2fe !important; /* indigo-200 */
+}
+html.dark .text-blue-900,
+html.dark .text-blue-950 {
+  color: #bfdbfe !important; /* blue-200 */
+}
+html.dark .text-emerald-900,
+html.dark .text-emerald-950 {
+  color: #a7f3d0 !important; /* emerald-200 */
+}
+html.dark .text-rose-900,
+html.dark .text-rose-950 {
+  color: #fecdd3 !important; /* rose-200 */
+}
+html.dark .text-red-900,
+html.dark .text-red-950 {
+  color: #fca5a5 !important; /* red-200 */
+}
+html.dark .text-purple-900,
+html.dark .text-purple-950 {
+  color: #e9d5ff !important; /* purple-200 */
+}
+
+/* Écran de chargement */
+html.dark #app-loading-screen {
+  background-color: #0b1120 !important;
+  color: #f8fafc !important;
+}
+
+/* Tailwind opacity variants for dark mode */
+html.dark .bg-white\/5,
+html.dark .bg-white\/10,
+html.dark .bg-white\/20,
+html.dark .bg-white\/30,
+html.dark .bg-white\/40,
+html.dark .bg-white\/50,
+html.dark .bg-white\/60,
+html.dark .bg-white\/70,
+html.dark .bg-white\/80,
+html.dark .bg-white\/90 {
+  background-color: rgba(30, 41, 59, 0.8) !important;
+}
+
+html.dark .bg-slate-50\/50,
+html.dark .bg-slate-50\/80,
+html.dark .bg-slate-50\/90,
+html.dark .bg-slate-100\/50,
+html.dark .bg-slate-100\/80,
+html.dark .bg-slate-100\/90 {
+  background-color: rgba(15, 23, 42, 0.85) !important;
 }
