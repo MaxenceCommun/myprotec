@@ -667,10 +667,12 @@ class ProtecGame {
   handleMultiplayerEvent(type, data) {
     if (type === 'renfort_requested') {
       if (data.requesterPlayerId !== this.player.id) {
-        this.renforts.unshift(data);
-        this.showToast('Appel à Renfort d’Alliance', `[${data.allianceTag || 'Allié'}] ${data.title} a besoin de renforts !`, 'orange');
-        this.updateStatsUI();
+        this.handleRemoteRenfortCreated(data);
       }
+    } else if (type === 'department_crisis_alert') {
+      this.handleDepartmentCrisisAlert(data);
+    } else if (type === 'department_crisis_update') {
+      this.handleDepartmentCrisisUpdate(data);
     } else if (type === 'renfort_fulfilled') {
       const r = this.renforts.find(renf => renf.id === data.id);
       if (r) r.status = 'fulfilled';
@@ -7244,16 +7246,58 @@ class ProtecGame {
   }
 
   // Déclencheur officiel d'une Préalerte AASC (Veille Opérationnelle)
-  triggerAascPrealert(origin = null) {
+  async triggerAascPrealert(origin = null) {
     if (!this.stations || this.stations.length === 0) return;
 
-    // Éviter l'empilement multiple de préalertes actives simultanées
-    const activePrealert = (this.missions || []).find(m => m.status === 'prealerte');
-    if (activePrealert) return;
+    const deptCode = String(this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '54');
+
+    // RÈGLE STRICTE MULTIJOUEUR : Une seule crise/préalerte active par département à la fois !
+    const activeDeptCrisis = (this.missions || []).find(m => 
+      String(m.departmentCode || '') === deptCode && 
+      ['prealerte', 'declenche', 'ongoing'].includes(m.status) && 
+      (m.type === 'crise' || m.isCrisis || ['sncf', 'aasc', 'samu', 'pompiers', 'prefecture'].includes(m.alertOrigin))
+    );
+    if (activeDeptCrisis) return;
+
+    // 1. Vérifier si une crise a déjà été ouverte dans ce département par un confrère sur Supabase
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.fetchActiveDepartmentCrises === 'function') {
+      try {
+        const crises = await window.ProtecSupabase.fetchActiveDepartmentCrises(deptCode);
+        if (Array.isArray(crises) && crises.length > 0) {
+          const cr = crises[0];
+          const existing = (this.missions || []).find(m => m.id === cr.id);
+          if (!existing) {
+            this.handleDepartmentCrisisAlert({ departmentCode: deptCode, crisisData: cr, senderId: 'SUPABASE_SYNC' });
+            return;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 2. Vérification auprès du serveur local Node si actif
+    try {
+      const resp = await fetch(`/api/crises/department/${deptCode}`);
+      if (resp.ok) {
+        const resData = await resp.json();
+        if (resData && resData.crisis) {
+          const existing = (this.missions || []).find(m => m.id === resData.crisis.id);
+          if (!existing) {
+            this.handleDepartmentCrisisAlert({ departmentCode: deptCode, crisisData: resData.crisis, senderId: 'SERVER_SYNC' });
+            return;
+          }
+        }
+      }
+    } catch (e) {}
+
+    // Double vérification après les checks asynchrones
+    const stillActive = (this.missions || []).find(m => 
+      String(m.departmentCode || '') === deptCode && 
+      ['prealerte', 'declenche', 'ongoing'].includes(m.status)
+    );
+    if (stillActive) return;
 
     const scenarios = this.getAascPrealertScenarios(origin);
     const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
-    const deptCode = this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '54';
     const base = this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', departmentCode: deptCode };
     const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf');
 
@@ -7329,6 +7373,17 @@ class ProtecGame {
       }
     }
 
+    // Diffusion également sur le serveur local
+    fetch('/api/crises/department/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        departmentCode: newMission.departmentCode,
+        crisisData: newMission,
+        senderId: this.player?.id || 'DIRECTEUR'
+      })
+    }).catch(() => {});
+
     // Centrage et zoom direct sur la préalerte
     this.centerMapOnMission(newMission.id);
 
@@ -7389,7 +7444,19 @@ class ProtecGame {
 
     const crisis = payload.crisisData;
     const existing = (this.missions || []).find(m => m.id === crisis.id || (m.scenarioId && m.scenarioId === crisis.scenarioId && ['prealerte', 'declenche'].includes(m.status)));
-    if (existing) return;
+    if (existing) {
+      existing.lat = crisis.lat;
+      existing.lng = crisis.lng;
+      existing.address = crisis.address;
+      this.renderMissions();
+      return;
+    }
+
+    // Si le joueur avait généré une préalerte locale concurrente dans les 60 dernières secondes, la remplacer par l'alerte partagée officielle
+    const localPrealertIdx = (this.missions || []).findIndex(m => m.status === 'prealerte' && String(m.departmentCode) === crisisDept && m.id !== crisis.id);
+    if (localPrealertIdx !== -1) {
+      this.missions.splice(localPrealertIdx, 1);
+    }
 
     // Ajout direct de la crise partagée sur la carte et le tableau de bord
     this.missions.unshift(crisis);
@@ -14464,6 +14531,25 @@ class ProtecGame {
       });
     }
 
+    // Transmission au serveur local si actif
+    fetch('/api/alliances/renfort/fulfill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        renfortId: renfort.id,
+        missionId: renfort.missionId,
+        providerPlayerId: this.player.id,
+        providerName: this.player.name,
+        contributorId: this.player.id,
+        contributorName: this.player.name,
+        stationName: myStation.name || 'Antenne Locale',
+        volunteersCount: actualVolIds.length,
+        vehicleName: veh.name,
+        vehicleType: veh.type,
+        status: renfort.status
+      })
+    }).catch(() => {});
+
     // 5. Départ physique en transit routier vers la zone de renfort
     if (window.ProtecSystems && typeof window.ProtecSystems.startTransit === 'function') {
       window.ProtecSystems.startTransit(this, veh, originCoords, destCoords, { title: renfort.title || 'Mission en Renfort' }, 2, () => {
@@ -14622,17 +14708,49 @@ class ProtecGame {
   // Traitement d'un nouveau renfort créé à distance en temps réel
   handleRemoteRenfortCreated(newRenfort) {
     if (!newRenfort || !newRenfort.id) return;
+    if (newRenfort.requesterPlayerId && this.player?.id && String(newRenfort.requesterPlayerId) === String(this.player.id)) return;
     if (!this.renforts) this.renforts = [];
-    if (!this.renforts.some(r => r.id === newRenfort.id)) {
-      this.renforts.unshift(newRenfort);
-      this.showToast(
-        '🌐 Nouvelle Demande de Renfort',
-        `Un nouvel appel à renfort vient d'être ouvert : « ${newRenfort.typeTitle || newRenfort.title} » (${newRenfort.requiredVolsCount || 6} places) !`,
-        'orange'
-      );
+
+    const existingIdx = this.renforts.findIndex(r => r.id === newRenfort.id);
+    if (existingIdx !== -1) {
+      Object.assign(this.renforts[existingIdx], newRenfort);
       this.updateStatsUI();
-      if (this.currentModalKey === 'alliance') this.openModule('alliance');
+      return;
     }
+
+    this.renforts.unshift(newRenfort);
+
+    const playerStationDepts = (this.stations || []).map(s => String(s.departmentCode || '')).filter(Boolean);
+    const myDepts = playerStationDepts.length > 0
+      ? [...new Set(playerStationDepts)]
+      : [String(this.stations?.[0]?.departmentCode || this.player?.departmentCode || this.currentDepartmentCode || '54')];
+    const renfDept = String(newRenfort.departmentCode || '');
+    const isMyDept = myDepts.includes(renfDept);
+    const isDeptZone = newRenfort.zone === 'departemental';
+
+    if (window.ProtecAudio && typeof window.ProtecAudio.playAlertSound === 'function') {
+      window.ProtecAudio.playAlertSound();
+    }
+
+    const alertTitle = isDeptZone && isMyDept
+      ? `🚨 APPEL RENFORT DÉPARTEMENTAL [Dpt ${renfDept || '54'}]`
+      : `🤝 Appel à Renfort : ${newRenfort.zoneLabel || 'Réseau FNPC'}`;
+
+    const alertBody = `${newRenfort.stationName || 'Une antenne'} sollicite ${newRenfort.unitRequested || 'des renforts'} pour « ${newRenfort.missionTitle || newRenfort.title} ». Indemnité : +${newRenfort.indemnite || 200} € !`;
+
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.notifyCategory('alert', alertTitle, alertBody, `renf-${newRenfort.id}`);
+    }
+
+    this.showToast(
+      alertTitle,
+      `${alertBody} Cliquez pour apporter votre aide.`,
+      'orange',
+      { type: 'renfort', id: newRenfort.id }
+    );
+
+    this.updateStatsUI();
+    if (this.currentModalKey === 'alliance') this.openModule('alliance');
   }
 
   registerVolunteerToSpecialFormation(formationId) {
@@ -22156,6 +22274,8 @@ class ProtecGame {
         toast.remove();
         if (resolvedTarget.type === 'mission' && resolvedTarget.id) {
           this.openMissionDetails(resolvedTarget.id);
+        } else if (resolvedTarget.type === 'renfort' && resolvedTarget.id) {
+          this.openEngageRenfortModal(resolvedTarget.id);
         } else if (resolvedTarget.type === 'module' && resolvedTarget.id) {
           this.openModule(resolvedTarget.id);
         } else if (resolvedTarget.type === 'station' && resolvedTarget.id) {

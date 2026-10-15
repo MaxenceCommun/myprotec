@@ -1305,14 +1305,22 @@ const server = http.createServer((req, res) => {
           allianceId: data.allianceId || 'alliance-fnpc',
           allianceTag: data.allianceTag || 'UFSC',
           missionId: data.missionId || null,
+          missionTitle: data.missionTitle || data.title || '',
+          missionLat: data.missionLat || null,
+          missionLng: data.missionLng || null,
+          missionAddress: data.missionAddress || '',
           requesterPlayerId: data.requesterPlayerId || data.playerId || 'directeur-local',
           requesterName: data.requesterName || data.playerName || data.requestingPlayerName || data.stationName || 'Directeur d’Antenne',
           stationName: data.stationName || 'Antenne Locale',
+          departmentCode: String(data.departmentCode || '54'),
           title: data.title || `Renfort pour ${data.missionType || 'Dispositif de Secours'}`,
           desc: data.desc || `Demande de renforts pour couverture opérationnelle.`,
           unitRequested: data.unitRequested || (data.neededCount ? `${data.neededCount} ${data.neededType || 'VPSP'}` : '1 VPSP ou Binôme PSE'),
           requestedVolunteersCount: data.requestedVolunteersCount || data.neededCount || 2,
+          requiredVolsCount: data.requiredVolsCount || data.requestedVolunteersCount || data.neededCount || 2,
           requestedVehicles: data.requestedVehicles || [],
+          needLabel: data.needLabel || (data.requestedVehicles && data.requestedVehicles.length > 0 ? data.requestedVehicles.join(', ') : 'Renforts'),
+          slotsCommitted: 0,
           indemnite: data.indemnite || 180,
           zone: data.zone || 'departemental',
           zoneLabel: data.zoneLabel || 'Départementale',
@@ -1320,7 +1328,7 @@ const server = http.createServer((req, res) => {
           createdAt: data.createdAt || new Date().toISOString()
         };
         db.data.renforts.unshift(renfortReq);
-        if (db.data.renforts.length > 30) db.data.renforts.pop();
+        if (db.data.renforts.length > 50) db.data.renforts.pop();
         db.save();
         broadcastSSE('renfort_requested', renfortReq);
         sendJson(res, 200, { success: true, renfort: renfortReq });
@@ -1331,19 +1339,61 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 6b. Diffusion et Synchronisation des Crises Départementales Partagées
+  if (url === '/api/crises/department/broadcast' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body);
+        const deptCode = String(payload.departmentCode || payload.crisisData?.departmentCode || '54');
+        if (!db.data.department_crises) db.data.department_crises = {};
+        db.data.department_crises[deptCode] = payload.crisisData;
+        db.save();
+        broadcastSSE('department_crisis_alert', payload);
+        sendJson(res, 200, { success: true, departmentCode: deptCode });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  if (url.startsWith('/api/crises/department/') && req.method === 'GET') {
+    const deptCode = String(url.split('/').pop() || '54');
+    const crisis = (db.data.department_crises || {})[deptCode] || null;
+    sendJson(res, 200, { success: true, crisis });
+    return;
+  }
+
   // 7. Fournir un Renfort à un Allié
   if (url === '/api/alliances/renfort/fulfill' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       try {
-        const { renfortId, providerPlayerId, providerName, unitDetails } = JSON.parse(body);
+        const payload = JSON.parse(body);
+        const renfortId = payload.renfortId;
         const renfort = db.data.renforts.find(r => r.id === renfortId);
         if (renfort) {
-          renfort.status = 'fulfilled';
-          renfort.fulfilledBy = { providerPlayerId, providerName, unitDetails };
+          renfort.status = payload.status || 'fulfilled';
+          renfort.slotsCommitted = (renfort.slotsCommitted || 0) + (payload.volunteersCount || 1);
+          if (!renfort.contributions) renfort.contributions = [];
+          renfort.contributions.push({
+            contributorId: payload.providerPlayerId || payload.contributorId,
+            contributorName: payload.providerName || payload.contributorName,
+            stationName: payload.stationName,
+            volunteersCount: payload.volunteersCount || 1,
+            vehicleName: payload.vehicleName || payload.unitDetails,
+            timestamp: Date.now()
+          });
+          renfort.fulfilledBy = {
+            providerPlayerId: payload.providerPlayerId,
+            providerName: payload.providerName,
+            unitDetails: payload.unitDetails || payload.vehicleName
+          };
           db.save();
-          broadcastSSE('renfort_fulfilled', renfort);
+          broadcastSSE('renfort_fulfilled', Object.assign({}, renfort, payload));
         }
         sendJson(res, 200, { success: true, renfort });
       } catch (err) {
