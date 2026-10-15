@@ -910,37 +910,37 @@ window.ProtecIncidents = {
           Arbitrage du Directeur des Secours :
         </div>
 
-        <!-- Choix 1 : Renforts Internes -->
+        <!-- Choix 1 : Détachement d'astreinte interne -->
         <button onclick="window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'interne')"
           class="w-full text-left p-4 rounded-2xl border-2 border-indigo-200 bg-indigo-50/40 hover:bg-indigo-100/60 hover:border-indigo-400 transition cursor-pointer group space-y-1.5 shadow-xs">
           <div class="flex items-center justify-between">
             <span class="text-xs font-black text-indigo-950 group-hover:text-indigo-800 flex items-center gap-2">
               <span class="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">1</span>
-              <span>Trouver et déployer des renforts internes</span>
+              <span>Détacher mes secouristes locaux d'astreinte</span>
             </span>
             <i data-lucide="chevron-right" class="w-4 h-4 text-indigo-400 group-hover:translate-x-1 transition flex-shrink-0"></i>
           </div>
           <div class="text-[11px] text-indigo-900/90 pl-8 space-y-0.5">
-            <p>• Mobilise des secouristes disponibles ou d'astreinte de l'antenne sur le dispositif.</p>
-            <p class="font-bold text-indigo-700">📋 Mobilisation interne : sollicitation urgente de l'astreinte pour combler le sous-effectif.</p>
+            <p>• Mobilise des secouristes disponibles ou d'astreinte de votre propre antenne sur le dispositif.</p>
+            <p class="font-bold text-indigo-700">📋 Mobilisation interne : sollicitation de vos effectifs locaux pour combler le sous-effectif.</p>
             <p class="font-bold text-emerald-700">🛡️ Continuité opérationnelle : l'antenne maintient son autonomie et assure le dispositif.</p>
           </div>
         </button>
 
-        <!-- Choix 2 : Renforts SDIS -->
-        <button onclick="window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'sdis')"
-          class="w-full text-left p-4 rounded-2xl border-2 border-rose-200 bg-rose-50/40 hover:bg-rose-100/60 hover:border-rose-400 transition cursor-pointer group space-y-1.5 shadow-xs">
+        <!-- Choix 2 : Demande de Renforts aux autres directeurs réels (FNPC) -->
+        <button onclick="window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'alliance')"
+          class="w-full text-left p-4 rounded-2xl border-2 border-blue-200 bg-blue-50/40 hover:bg-blue-100/60 hover:border-blue-400 transition cursor-pointer group space-y-1.5 shadow-xs">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black text-rose-950 group-hover:text-rose-800 flex items-center gap-2">
-              <span class="w-6 h-6 rounded-lg bg-rose-600 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">2</span>
-              <span>Passer par les renforts SDIS (Sapeurs-Pompiers)</span>
+            <span class="text-xs font-black text-blue-950 group-hover:text-blue-800 flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">2</span>
+              <span>Demander des renforts aux antennes alliées (Réseau FNPC)</span>
             </span>
-            <i data-lucide="chevron-right" class="w-4 h-4 text-rose-400 group-hover:translate-x-1 transition flex-shrink-0"></i>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-blue-400 group-hover:translate-x-1 transition flex-shrink-0"></i>
           </div>
-          <div class="text-[11px] text-rose-900/90 pl-8 space-y-0.5">
-            <p>• Demande au CTA-CODIS (18/112) l'envoi d'un engin de sapeurs-pompiers en renfort.</p>
-            <p class="font-bold text-rose-700">⚠️ Sollicitation extérieure : les sapeurs-pompiers assurent le renfort d'urgence.</p>
-            <p class="font-bold text-rose-800">❌ Constat de carence : signalement officiel auprès des autorités et de l'organisateur.</p>
+          <div class="text-[11px] text-blue-900/90 pl-8 space-y-0.5">
+            <p>• Diffuse un appel en direct à tous les directeurs réels connectés (département / zone de défense).</p>
+            <p class="font-bold text-blue-700">🤝 Solidarité inter-antennes : seuls de vrais véhicules et confrères sont envoyés.</p>
+            <p class="font-bold text-emerald-700">🌐 Aucun renfort fictif : mobilisation transparente du réseau fédéral.</p>
           </div>
         </button>
       </div>
@@ -1006,41 +1006,12 @@ window.ProtecIncidents = {
           type: 'success'
         });
       }
-    } else if (choice === 'sdis') {
-      // Baisse de l'humeur et de la motivation des bénévoles sur place
-      crewVols.forEach(v => {
-        v.motivation = Math.max(10, (v.motivation || 70) - 20);
-        v.humeur = Math.max(10, (v.humeur || 70) - 22);
-      });
-
-      // Baisse marquée de réputation
-      const repLoss = 15;
-      game.resources.reputationScore = Math.max(0, (game.resources.reputationScore || 50) - repLoss);
-
-      if (game.prefectureState) {
-        game.prefectureState.trustScore = Math.max(10, (game.prefectureState.trustScore || 85) - 8);
+    } else if (choice === 'alliance' || choice === 'sdis') {
+      document.getElementById('understaff-modal')?.remove();
+      if (typeof game.requestAllianceRenfortForMission === 'function') {
+        game.requestAllianceRenfortForMission(mission.id);
       }
-      if (window.ProtecConventions) {
-        window.ProtecConventions.adjustInstitutionalReputation(game, 'sdis', -8, 'Appel renfort SDIS pour sous-dimensionnement associatif');
-      }
-
-      mission.understaffChoice = 'sdis';
-      mission.understaffResolved = true;
-
-      game.showToast(
-        'Renforts SDIS Engagés 🚒',
-        `Sapeurs-pompiers déployés sur « ${mission.title} ». Prise de relais opérationnelle effectuée par le SDIS.`,
-        'red'
-      );
-
-      if (game.radioLogs) {
-        game.radioLogs.unshift({
-          time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-          channel: 'TACTIQUE-1',
-          text: `[RENFORTS SDIS] ${mission.title} : Prise de relais par les sapeurs-pompiers suite au sous-dimensionnement associatif.`,
-          type: 'warning'
-        });
-      }
+      return;
     }
 
     document.getElementById('understaff-modal')?.remove();

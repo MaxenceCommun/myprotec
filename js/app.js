@@ -8407,15 +8407,18 @@ class ProtecGame {
       const assignedVolIds = new Set();
 
       engagedVehicles.forEach((veh, vIdx) => {
-        // Localisation exacte de départ : position du véhicule à l'intervention (accrochée à la route la plus proche)
-        const origin = (veh.lat && veh.lng) 
-          ? { lat: Number(veh.lat), lng: Number(veh.lng) }
-          : ((veh.status === 'urgences_chu' && mission.evacHospitalData?.hospital)
-              ? { lat: Number(mission.evacHospitalData.hospital.lat), lng: Number(mission.evacHospitalData.hospital.lng) }
-              : { lat: Number(mission.lat || this.stations?.[0]?.lat || 48.8566), lng: Number(mission.lng || this.stations?.[0]?.lng || 2.3522) });
+        // Localisation exacte de départ : position du véhicule à l'intervention (ou hôpital si évacuation), accrochée au réseau routier
+        const isEvacChu = (veh.status === 'urgences_chu' || !!(mission && mission.evacHospitalData?.hospital));
+        const origin = (isEvacChu && mission.evacHospitalData?.hospital)
+          ? { lat: Number(mission.evacHospitalData.hospital.lat), lng: Number(mission.evacHospitalData.hospital.lng) }
+          : { lat: Number(mission.lat || this.stations?.[0]?.lat || 48.8566), lng: Number(mission.lng || this.stations?.[0]?.lng || 2.3522) };
 
         const baseStation = (this.stations || []).find(s => s.id === veh.stationId) || this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne' };
         const dest = { lat: Number(baseStation.lat), lng: Number(baseStation.lng) };
+
+        // Placement formel du véhicule à l'endroit de l'intervention avant d'entamer son trajet routier de retour
+        veh.lat = origin.lat;
+        veh.lng = origin.lng;
 
         // Équipage affecté à ce véhicule pour le trajet retour
         let vehCrew = [];
@@ -12531,17 +12534,16 @@ class ProtecGame {
       this.showToast(toastTitle, toastDesc, 'orange');
 
       window.ProtecSystems.startTransit(this, vehicle, origin, dest, mission, 4, () => {
-        // Arrivée aux Urgences : dépôt de la victime puis retour disponible
+        // Arrivée aux Urgences : dépôt de la victime puis retour ordonné vers la base
         const arrivalHospName = hospital.name || 'le centre hospitalier';
-        this.showToast('Admission Urgences Réussie', `Victime transmise aux équipes médicales de ${arrivalHospName} (${specLabel}). Nettoyage et retour antenne.`, 'green');
+        this.showToast('Admission Urgences Réussie', `Victime transmise aux équipes médicales de ${arrivalHospName} (${specLabel}). Début du retour antenne.`, 'green');
+        if (vehicle) {
+          vehicle.status = 'urgences_chu';
+          vehicle.lat = dest.lat;
+          vehicle.lng = dest.lng;
+        }
+        mission.evacHospitalData = evacData;
         this.completeMission(mission);
-
-        // Retour vers l'antenne (Statut 6 -> 1)
-        const baseStation = this.stations[0] || { lat: 48.8566, lng: 2.3522 };
-        window.ProtecSystems.startTransit(this, vehicle, dest, { lat: baseStation.lat, lng: baseStation.lng }, mission, 6, () => {
-          if (vehicle) vehicle.status = 'dispo';
-          this.showToast('Véhicule Disponible', `${vehicle?.name || 'VPSP'} est de retour à l'antenne. Prêt pour un nouveau départ.`, 'blue');
-        });
       });
     } else {
       this.completeMission(mission);
@@ -12898,38 +12900,36 @@ class ProtecGame {
           `}
         </div>
 
-        <!-- Section 3 : Renforts Extérieurs (SDIS / Alliances) -->
-        <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
-          <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
-            <i data-lucide="shield" class="w-4 h-4 text-rose-600"></i>
-            <span>Moyens Extérieurs & Partenaires</span>
-          </span>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
-            <button 
-              onclick="window.game.closeModal(); if (window.ProtecIncidents) window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'sdis');"
-              class="p-2.5 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-left transition cursor-pointer space-y-1">
-              <div class="font-black text-xs text-rose-950 flex items-center gap-1.5">
-                <span>🚒</span>
-                <span>Renforts SDIS (Pompiers)</span>
-              </div>
-              <p class="text-[10px] text-rose-800 leading-tight">
-                Appel au CTA-CODIS. Décharge l'équipe mais dégrade la réputation associative auprès du SDIS.
-              </p>
-            </button>
-
-            <button 
-              onclick="window.game.closeModal(); window.game.requestAllianceRenfortForMission('${mission.id}');"
-              class="p-2.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-left transition cursor-pointer space-y-1">
-              <div class="font-black text-xs text-blue-950 flex items-center gap-1.5">
-                <span>🤝</span>
-                <span>Antennes Alliées (Fédération)</span>
-              </div>
-              <p class="text-[10px] text-blue-800 leading-tight">
-                Diffusion d'une demande de mutualisation aux sections voisines du réseau.
-              </p>
-            </button>
+        <!-- Section 3 : Renforts Inter-Antennes Réels (Réseau FNPC / Confrères Connectés) -->
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+              <i data-lucide="handshake" class="w-4 h-4 text-indigo-600"></i>
+              <span>Renforts Inter-Antennes Réels (Réseau FNPC)</span>
+            </span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+              Multijoueur En Direct
+            </span>
           </div>
+
+          <p class="text-[11px] text-slate-600 leading-relaxed">
+            Seuls les <strong>vrais directeurs d'antennes connectés</strong> peuvent détacher et faire rouler leurs véhicules et secouristes en renfort sur votre mission. <em>Aucun renfort fictif ni moyen inventé n'est généré.</em>
+          </p>
+
+          <button 
+            onclick="window.game.closeModal(); window.game.requestAllianceRenfortForMission('${mission.id}');"
+            class="w-full p-3 rounded-xl border border-indigo-200 bg-indigo-50/80 hover:bg-indigo-100 text-left transition cursor-pointer flex items-center justify-between group shadow-xs">
+            <div class="space-y-0.5">
+              <div class="font-black text-xs text-indigo-950 flex items-center gap-1.5 group-hover:text-indigo-800">
+                <span>🤝</span>
+                <span>Diffuser un Appel à Renfort Réel sur la Fréquence Fédérale</span>
+              </div>
+              <p class="text-[10px] text-indigo-800 leading-tight">
+                Diffusion instantanée aux antennes du département et de la zone de défense via le serveur opérationnel.
+              </p>
+            </div>
+            <i data-lucide="send" class="w-4 h-4 text-indigo-600 group-hover:translate-x-1 transition shrink-0"></i>
+          </button>
         </div>
 
         <div class="flex justify-end pt-2">
@@ -12950,6 +12950,13 @@ class ProtecGame {
     const vol = this.volunteers.find(v => v.id === volId);
     if (!mission || !vol) return;
 
+    // Règle opérationnelle : le personnel déployé depuis la base fait route véhiculé (VL, VTU, VTP, VPSP)
+    const dispoVeh = (this.vehicles || []).find(v => (v.status === 'dispo' || v.status === 'sdis_caserne') && !v.requiresTrailer);
+    if (dispoVeh) {
+      this.deployReinforcementVehicleWithCrew(missionId, dispoVeh.id, [vol.id]);
+      return;
+    }
+
     if (!mission.assignedCrew) mission.assignedCrew = { volunteers: [], vehicles: [] };
     if (!Array.isArray(mission.assignedCrew.volunteers)) mission.assignedCrew.volunteers = [];
     if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
@@ -12959,7 +12966,69 @@ class ProtecGame {
     vol.status = 'mission';
     vol.energy = Math.max(10, (vol.energy || 90) - 15);
 
-    this.showToast('Renfort Engagé ! 🏃‍♂️', `${vol.name} rejoint l'intervention en cours sur « ${mission.title} ».`, 'green');
+    this.showToast('Secouriste Engagé ! 🏃‍♂️', `${vol.name} rejoint le dispositif sur « ${mission.title} ».`, 'green');
+
+    this.saveGame();
+    this.updateStatsUI();
+    this.renderMissions();
+    this.openMissionReinforcementsModal(missionId);
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
+  }
+
+  deployReinforcementVehicleWithCrew(missionId, vehId, volIds = []) {
+    const mission = this.missions.find(m => m.id === missionId);
+    const veh = this.vehicles.find(v => v.id === vehId);
+    if (!mission || !veh) return;
+
+    if (!mission.assignedCrew) mission.assignedCrew = { volunteers: [], vehicles: [] };
+    if (!Array.isArray(mission.assignedCrew.vehicles)) mission.assignedCrew.vehicles = [];
+    if (!Array.isArray(mission.assignedCrew.volunteers)) mission.assignedCrew.volunteers = [];
+    if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
+
+    mission.assignedCrew.vehicles.push(veh);
+    veh.status = 'transit';
+
+    const vols = (volIds || []).map(id => this.volunteers.find(v => v.id === id)).filter(Boolean);
+    vols.forEach(v => {
+      if (!mission.assignedCrew.volunteers.includes(v.id)) mission.assignedCrew.volunteers.push(v.id);
+      if (!mission.registeredVolunteers.includes(v.id)) mission.registeredVolunteers.push(v.id);
+      v.status = 'transit';
+      v.transitVehicleId = veh.id;
+    });
+
+    const station = (this.stations || []).find(s => s.id === veh.stationId) || this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne' };
+    const origin = { lat: Number(station.lat), lng: Number(station.lng) };
+    const dest = { lat: Number(mission.lat), lng: Number(mission.lng) };
+
+    if (window.ProtecSystems && typeof window.ProtecSystems.startTransit === 'function') {
+      window.ProtecSystems.startTransit(this, veh, origin, dest, mission, 2, () => {
+        veh.status = 'mission';
+        vols.forEach(v => {
+          v.status = 'mission';
+          delete v.transitVehicleId;
+        });
+        if (mission.vehicleMismatch && Array.isArray(mission.requiredVehicles)) {
+          const hasRequired = mission.requiredVehicles.some(req => veh.type === req);
+          if (hasRequired) {
+            mission.vehicleMismatch = false;
+            mission.isSlowedDown = false;
+            mission.mismatchReasons = [];
+            this.showToast('Dispositif Régularisé ! ✅', `L'arrivée du ${veh.type} (${veh.name}) rétablit l'efficacité complète sur « ${mission.title} » !`, 'blue');
+          }
+        }
+      });
+    } else {
+      veh.status = 'mission';
+      vols.forEach(v => {
+        v.status = 'mission';
+        delete v.transitVehicleId;
+      });
+    }
+
+    const crewNames = vols.length > 0 ? ` avec ${vols.map(v => v.name).join(', ')}` : '';
+    this.showToast('Véhicule en Route 🚑', `${veh.name} (${veh.type})${crewNames} fait route vers « ${mission.title} ».`, 'green');
 
     this.saveGame();
     this.updateStatsUI();
@@ -14088,15 +14157,26 @@ class ProtecGame {
       );
     }
 
-    // 3. DIFFUSION EN TEMPS RÉEL (< 50ms) À TOUS LES AUTRES DIRECTEURS CONNECTÉS
+    // 3. Trajet physique routier et diffusion multijoueur
+    const myStation = (this.stations || []).find(s => s.id === veh.stationId) || this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne' };
+    const originCoords = { lat: Number(myStation.lat), lng: Number(myStation.lng) };
+    const destCoords = (renfort.lat && renfort.lng)
+      ? { lat: Number(renfort.lat), lng: Number(renfort.lng) }
+      : { lat: Number(originCoords.lat + 0.05), lng: Number(originCoords.lng + 0.04) };
+
+    // 4. DIFFUSION EN TEMPS RÉEL (< 50ms) À TOUS LES AUTRES DIRECTEURS CONNECTÉS
     if (window.ProtecSupabase && window.ProtecSupabase.broadcastRenfortContribution) {
       window.ProtecSupabase.broadcastRenfortContribution({
         renfortId: renfort.id,
+        missionId: renfort.missionId,
         contributorId: this.player.id,
         contributorName: this.player.name,
-        stationName: this.stations?.[0]?.name || 'Antenne Locale',
+        stationName: myStation.name || 'Antenne Locale',
+        stationCoords: originCoords,
         volunteersCount: actualVolIds.length,
         vehicleName: veh.name,
+        vehicleType: veh.type,
+        destCoords: destCoords,
         slotsCommitted: renfort.slotsCommitted,
         totalRequired: totalRequired,
         remainingSlots: Math.max(0, totalRequired - renfort.slotsCommitted),
@@ -14105,24 +14185,46 @@ class ProtecGame {
       });
     }
 
-    // Retour automatique de la colonne
-    setTimeout(() => {
-      if (veh.status === 'renfort') {
-        veh.status = 'dispo';
-      }
-      actualVolIds.forEach(volId => {
-        const vol = this.volunteers.find(v => v.id === volId);
-        if (vol && vol.status === 'renfort') {
-          vol.status = 'dispo';
-          vol.exp = (vol.exp || 0) + 40; // Expérience terrain accrue
-          vol.motivation = Math.min(100, (vol.motivation || 70) + 10); // Fierté d'avoir renforcé une antenne
-          vol.missionsCount = (vol.missionsCount || 0) + 1;
-        }
+    // 5. Départ physique en transit routier vers la zone de renfort
+    if (window.ProtecSystems && typeof window.ProtecSystems.startTransit === 'function') {
+      window.ProtecSystems.startTransit(this, veh, originCoords, destCoords, { title: renfort.title || 'Mission en Renfort' }, 2, () => {
+        veh.status = 'sur_les_lieux_renfort';
+        this.showToast('Renfort sur Place !', `${veh.name} est arrivé sur le dispositif de ${renfort.requesterName || 'l’antenne allié'}.`, 'green');
+
+        // Maintien sur le dispositif puis retour routier complet vers la base (Statut 6)
+        setTimeout(() => {
+          veh.status = 'transit';
+          window.ProtecSystems.startTransit(this, veh, destCoords, originCoords, { title: 'Retour Renfort Antenne' }, 6, () => {
+            veh.status = 'a_rearme';
+            veh.needsRearming = true;
+            actualVolIds.forEach(volId => {
+              const vol = this.volunteers.find(v => v.id === volId);
+              if (vol) {
+                vol.status = 'dispo';
+                vol.exp = (vol.exp || 0) + 40;
+                vol.motivation = Math.min(100, (vol.motivation || 70) + 10);
+                vol.missionsCount = (vol.missionsCount || 0) + 1;
+              }
+            });
+            this.showToast('Retour de Colonne 🏠', `${veh.name} et les secouristes sont rentrés à la base après leur mission en renfort !`, 'blue');
+            this.updateStatsUI();
+            this.saveGame();
+          });
+        }, 120000);
       });
-      this.showToast('Retour de Colonne', `${veh.name} et les secouristes sont rentrés à la base après leur mission en renfort !`, 'blue');
-      this.updateStatsUI();
-      this.saveGame();
-    }, 180000);
+    } else {
+      // Repli si ProtecSystems indisponible
+      setTimeout(() => {
+        veh.status = 'a_rearme';
+        veh.needsRearming = true;
+        actualVolIds.forEach(volId => {
+          const vol = this.volunteers.find(v => v.id === volId);
+          if (vol) vol.status = 'dispo';
+        });
+        this.updateStatsUI();
+        this.saveGame();
+      }, 120000);
+    }
 
     this.updateStatsUI();
     this.saveGame();
@@ -14138,23 +14240,73 @@ class ProtecGame {
     if (data.contributorId === this.player?.id) return;
 
     const renfort = (this.renforts || []).find(r => r.id === data.renfortId);
-    if (!renfort) return;
+    if (renfort) {
+      renfort.slotsCommitted = data.slotsCommitted;
+      renfort.status = data.status || renfort.status;
+      if (!renfort.contributions) renfort.contributions = [];
+      renfort.contributions.push({
+        playerId: data.contributorId,
+        playerName: data.contributorName,
+        stationName: data.stationName,
+        volunteersCount: data.volunteersCount,
+        vehicleName: data.vehicleName,
+        timestamp: data.timestamp || Date.now()
+      });
+    }
 
-    renfort.slotsCommitted = data.slotsCommitted;
-    renfort.status = data.status || renfort.status;
-    if (!renfort.contributions) renfort.contributions = [];
-    renfort.contributions.push({
-      playerId: data.contributorId,
-      playerName: data.contributorName,
-      stationName: data.stationName,
-      volunteersCount: data.volunteersCount,
-      vehicleName: data.vehicleName,
-      timestamp: data.timestamp || Date.now()
-    });
+    // Si cette contribution concerne une de nos missions actives
+    const targetMissionId = data.missionId || renfort?.missionId;
+    const mission = targetMissionId ? (this.missions || []).find(m => m.id === targetMissionId) : null;
+
+    if (mission) {
+      const myStation = this.stations?.[0] || { lat: 48.6921, lng: 6.1844 };
+      const originCoords = data.stationCoords || {
+        lat: Number(mission.lat || myStation.lat) + (Math.random() > 0.5 ? 0.05 : -0.05),
+        lng: Number(mission.lng || myStation.lng) + (Math.random() > 0.5 ? 0.04 : -0.04)
+      };
+      const destCoords = { lat: Number(mission.lat), lng: Number(mission.lng) };
+
+      // Faire rouler le vrai véhicule de l'autre joueur sur notre carte Leaflet
+      if (window.ProtecSystems && typeof window.ProtecSystems.startRemoteVehicleTransit === 'function') {
+        window.ProtecSystems.startRemoteVehicleTransit(this, {
+          playerId: data.contributorId,
+          playerName: data.contributorName,
+          stationName: data.stationName,
+          vehicleName: data.vehicleName,
+          vehicleType: data.vehicleType || 'VPSP',
+          origin: originCoords,
+          dest: destCoords,
+          isEmergency: true,
+          missionTitle: mission.title,
+          missionId: mission.id,
+          onArrival: () => {
+            if (!mission.externalReinforcements) mission.externalReinforcements = [];
+            mission.externalReinforcements.push({
+              contributorId: data.contributorId,
+              contributorName: data.contributorName,
+              stationName: data.stationName,
+              vehicleName: data.vehicleName,
+              volunteersCount: data.volunteersCount
+            });
+            // Comblement du déficit éventuel sur la mission
+            mission.vehicleMismatch = false;
+            mission.isSlowedDown = false;
+            mission.mismatchReasons = [];
+            this.showToast(
+              '🤝 Renfort Allié Arrivé sur Place !',
+              `${data.vehicleName} (${data.contributorName} - ${data.stationName}) est arrivé sur « ${mission.title} » avec ${data.volunteersCount} secouriste(s) !`,
+              'green'
+            );
+            this.renderMissions();
+            this.updateStatsUI();
+          }
+        });
+      }
+    }
 
     // Si la modal d'engagement est actuellement ouverte sur cet écran pour ce renfort précis
     const modal = document.getElementById('engage-renfort-modal');
-    if (modal && modal.getAttribute('data-current-renfort-id') === renfort.id) {
+    if (modal && renfort && modal.getAttribute('data-current-renfort-id') === renfort.id) {
       const badge = document.getElementById('engage-renfort-remaining-badge');
       if (badge) {
         badge.textContent = `${data.remainingSlots} place(s) libre(s) (${data.slotsCommitted}/${data.totalRequired} pourvus)`;

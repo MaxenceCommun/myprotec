@@ -1934,6 +1934,18 @@ window.ProtecCriseLogistique = {
     const mission = (game.missions || []).find(m => m.id === missionId);
     if (!mission) return;
 
+    // Délégation impérative au gestionnaire global pour assurer le retour routier physique des véhicules et équipages
+    if (typeof game.completeMission === 'function') {
+      game.completeMission(mission);
+      if (typeof game.closeDrawer === 'function') game.closeDrawer();
+      const modal = document.getElementById('mission-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+      return;
+    }
+
     mission.status = 'termine';
     mission.crisisCanClose = false;
     mission.endedAt = Date.now();
@@ -1952,7 +1964,7 @@ window.ProtecCriseLogistique = {
       v.missionId === mission.id
     );
     engagedVols.forEach(v => {
-      v.status = 'disponible';
+      v.status = 'dispo';
       v.currentMissionId = null;
       v.missionId = null;
       v.experience = Math.min(100, (v.experience || 30) + 10);
@@ -1968,7 +1980,8 @@ window.ProtecCriseLogistique = {
       (mission.assignedCrew?.vehicles || []).some(av => (typeof av === 'object' && av !== null ? av.id : av) === v.id)
     );
     engagedVehicles.forEach(v => {
-      v.status = 'disponible';
+      v.status = 'a_rearme';
+      v.needsRearming = true;
       v.currentMissionId = null;
       v.missionId = null;
       if (v.type === 'VPSP' || (v.name && v.name.includes('VPSP'))) {

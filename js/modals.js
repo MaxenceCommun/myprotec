@@ -472,16 +472,14 @@ window.ProtecModals = {
       const dest = { lat: nearestChu.lat, lng: nearestChu.lng };
 
       window.ProtecSystems.startTransit(game, vehicle, origin, dest, mission, 4, () => {
-        // Retour antenne après dépôt urgences
-        const station = game.stations.find(s => s.id === vehicle.stationId) || game.stations[0];
-        const returnOrigin = { lat: nearestChu.lat, lng: nearestChu.lng };
-        const returnDest = { lat: station.lat, lng: station.lng };
-        
-        setTimeout(() => {
-          window.ProtecSystems.startTransit(game, vehicle, returnOrigin, returnDest, mission, 6, () => {
-            game.completeMission(mission);
-          });
-        }, 3000);
+        // Victime admise aux urgences : passage en statut urgences_chu et retour base
+        if (vehicle) {
+          vehicle.status = 'urgences_chu';
+          vehicle.lat = dest.lat;
+          vehicle.lng = dest.lng;
+        }
+        mission.evacHospitalData = { hospital: nearestChu };
+        game.completeMission(mission);
       });
     }
   }
