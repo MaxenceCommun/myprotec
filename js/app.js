@@ -7504,8 +7504,8 @@ class ProtecGame {
 
       const authorityName = mission.authorityLabel || 'l’autorité opérationnelle';
       this.showToast(
-        '⚡ Pré-Mobilisation Ciblée Enclenchée',
-        `Appel d’astreinte diffusé aux secouristes. Mobilisation progressive en cours...`,
+        '⚡ Effectifs Mis en Préalerte',
+        `Appel de disponibilité diffusé aux secouristes de l’antenne. Recensement des effectifs mobilisables en cours...`,
         'amber'
       );
     } else {
@@ -10975,14 +10975,14 @@ class ProtecGame {
                   <span class="text-xs font-black uppercase tracking-wider text-amber-400">4. Décision & Anticipation Opérationnelle</span>
                 </div>
                 <span class="text-[10px] font-bold px-2 py-0.5 rounded-md ${mission.preMobilisationActive ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-300 border border-slate-700'}">
-                  ${mission.preMobilisationActive ? '⚡ Pré-mobilisation active' : '👁️ Veille simple (Au repos)'}
+                  ${mission.preMobilisationActive ? '⚡ Effectifs en préalerte' : '👁️ Veille simple (Au repos)'}
                 </span>
               </div>
 
               <!-- JAUGE DE PRÉ-ARMEMENT -->
               <div class="space-y-1.5 bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
                 <div class="flex items-center justify-between text-xs">
-                  <span class="text-slate-300 font-bold">Effectifs pré-alertés d'astreinte :</span>
+                  <span class="text-slate-300 font-bold">Disponibilités confirmées (préalerte) :</span>
                   <strong id="prealert-vols-count" class="font-black text-amber-300">${registeredVols.length} / ${mission.requiredVolunteers} secouristes prêts</strong>
                 </div>
                 <div class="h-2 w-full bg-slate-700 rounded-full overflow-hidden">
@@ -10990,8 +10990,8 @@ class ProtecGame {
                 </div>
                 <p class="text-[10px] text-slate-400">
                   ${mission.preMobilisationActive 
-                    ? `Les secouristes d'astreinte consultent leurs messages et confirment progressivement leur disponibilité.` 
-                    : 'En veille simple, aucun bénévole n\'est mobilisé d\'avance. Si l\'alerte se confirme, le rassemblement à la base prendra le délai standard.'}
+                    ? `En préalerte, les secouristes consultent leurs messages et confirment progressivement leur disponibilité pour l'intervention.` 
+                    : 'En veille simple, aucun bénévole n\'est sondé d\'avance. Si l\'alerte se confirme, le rassemblement à la base prendra le délai standard.'}
                 </p>
               </div>
 
@@ -11001,7 +11001,7 @@ class ProtecGame {
                   onclick="window.game.setPrealertMobilisationMode('${mission.id}', 'premobilisation')" 
                   class="px-3 py-2.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${mission.preMobilisationActive ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400' : 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30'}">
                   <i data-lucide="bell" class="w-3.5 h-3.5"></i>
-                  <span>Lancer la pré-mobilisation ciblée</span>
+                  <span>Mettre les effectifs en préalerte</span>
                 </button>
                 <button type="button" 
                   onclick="window.game.setPrealertMobilisationMode('${mission.id}', 'veille_simple')" 
@@ -12442,17 +12442,17 @@ class ProtecGame {
           </div>
           <div class="flex items-center gap-2 flex-wrap ml-auto">
             ${mission.preMobilisationActive ? `
-              <div class="px-3 py-2 rounded-xl text-xs font-black bg-emerald-50 text-emerald-900 border border-emerald-300 flex items-center gap-1.5 shadow-2xs">
-                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 animate-pulse"></i>
-                <span>Astreinte Armée (${registeredVols.length}/${mission.requiredVolunteers})</span>
+              <div class="px-3 py-2 rounded-xl text-xs font-black bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-500/40 flex items-center gap-1.5 shadow-2xs">
+                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-pulse"></i>
+                <span>Effectifs en préalerte (${registeredVols.length}/${mission.requiredVolunteers})</span>
               </div>
-              <button onclick="window.game.setPrealertMobilisationMode('${mission.id}', 'veille_simple')" class="px-2.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition" title="Repasser en veille simple sans mobilisation">
+              <button onclick="window.game.setPrealertMobilisationMode('${mission.id}', 'veille_simple')" class="px-2.5 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer" title="Repasser en veille simple sans mobilisation">
                 Repasser en veille
               </button>
             ` : `
               <button onclick="window.game.setPrealertMobilisationMode('${mission.id}', 'premobilisation')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer">
                 <i data-lucide="bell" class="w-3.5 h-3.5"></i>
-                <span>Pré-Mobiliser l'Astreinte</span>
+                <span>Mettre les effectifs en préalerte</span>
               </button>
             `}
             <div class="px-3 py-2 rounded-xl text-xs font-extrabold bg-amber-100 text-amber-950 border border-amber-300 flex items-center gap-1.5">
