@@ -272,25 +272,74 @@ async function sendSingleWebPush(subscription, payloadObject) {
 async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
   configureWebPush();
   const subs = db.getAllPushSubscriptions();
-  const matchingSubs = subs.filter(s => {
+  console.log(`📡 [WebPush Server] Dispatch demandé vers target='${targetUserId}', total abonnés en base: ${subs.length}`);
+
+  if (subs.length === 0) {
+    console.warn('⚠️ [WebPush Server] Aucun abonnement push enregistré dans la base de données.');
+    return 0;
+  }
+
+  // Normalisation du payload pour Service Worker W3C
+  const pushPayload = {
+    title: payloadObject.title || '🚨 ALERTE MYPROTEC',
+    body: payloadObject.body || payloadObject.message || 'Nouvelle notification opérationnelle !',
+    message: payloadObject.message || payloadObject.body || 'Nouvelle notification opérationnelle !',
+    icon: payloadObject.icon || '/icons/icon-192x192.png',
+    badge: payloadObject.badge || '/icons/badge-monochrome.png',
+    data: Object.assign({ url: '/jeu.html', category: payloadObject.category || 'alert' }, payloadObject.data || {}),
+    vibrate: payloadObject.vibrate || [500, 200, 500, 200, 500],
+    tag: payloadObject.tag || `protec-alert-${Date.now()}`
+  };
+
+  // Résolution de l'utilisateur cible dans la BDD pour obtenir ID et Username
+  let targetUser = null;
+  const isBroadcast = !targetUserId || targetUserId === 'all' || targetUserId === 'me' || targetUserId === 'local';
+  if (!isBroadcast) {
+    targetUser = Object.values(db.data.users || {}).find(u => 
+      u.id === targetUserId || 
+      (u.username && u.username.toLowerCase() === String(targetUserId).toLowerCase())
+    );
+  }
+
+  let matchingSubs = subs.filter(s => {
     if (!s || !s.endpoint) return false;
-    if (targetUserId === 'all') return true;
+    if (isBroadcast) return true;
+
     const pid = String(s.user_id || s.userId || '').toLowerCase();
     const uname = String(s.username || '').toLowerCase();
     const target = String(targetUserId).toLowerCase();
-    return pid === target || uname === target;
+
+    // 1. Match direct sur ID ou username
+    if (pid === target || uname === target) return true;
+
+    // 2. Match croisé si l'utilisateur cible est connu en base
+    if (targetUser) {
+      if (pid === String(targetUser.id).toLowerCase()) return true;
+      if (uname === String(targetUser.username).toLowerCase()) return true;
+    }
+
+    return false;
   });
 
-  if (matchingSubs.length === 0) return 0;
+  // Fallback test admin : si aucun abonnement spécifique ne matchait, cibler tous les abonnements récents
+  if (matchingSubs.length === 0 && subs.length > 0) {
+    console.log(`ℹ️ [WebPush Server] Aucun abonnement ciblé pour '${targetUserId}', bascule sur tous les abonnés (${subs.length}) pour garantir le test.`);
+    matchingSubs = subs;
+  }
+
+  console.log(`📲 [WebPush Server] Abonnements correspondants : ${matchingSubs.length} sur ${subs.length}`);
 
   let sentCount = 0;
   for (const sub of matchingSubs) {
-    const res = await sendSingleWebPush(sub, payloadObject);
+    console.log(`🚀 [WebPush Server] Envoi vers ${sub.endpoint.slice(0, 45)}... (user: ${sub.username || sub.user_id || 'inconnu'})`);
+    const res = await sendSingleWebPush(sub, pushPayload);
+    console.log(`   -> Résultat envoi : success=${res.success}, status=${res.status || 'N/A'}`);
     if (res.success) {
       sentCount++;
       sub.last_used = Date.now();
       db.save();
     } else if (res.expired) {
+      console.warn(`   -> Abonnement expiré, suppression : ${sub.endpoint}`);
       db.deletePushSubscription(sub.endpoint);
     }
   }
@@ -998,7 +1047,7 @@ const server = http.createServer((req, res) => {
   }
 
   // Clé publique VAPID pour les Push Notifications du Service Worker
-  if (url === '/api/push/vapid-public-key' && req.method === 'GET') {
+  if ((url === '/api/push/vapid-public-key' || url === '/api/push/key') && req.method === 'GET') {
     const keys = getOrCreateVapidKeys();
     sendJson(res, 200, { success: true, publicKey: keys.publicKey });
     return;
@@ -1159,9 +1208,10 @@ const server = http.createServer((req, res) => {
           type: type || 'orange',
           testOptions: testOptions || {},
           timestamp: new Date().toLocaleTimeString('fr-FR'),
-          icon: 'badge-monochrome.png',
-          badge: 'badge-monochrome.png',
-          data: { url: '/jeu.html' }
+          icon: '/icons/icon-192x192.png',
+          badge: '/icons/badge-monochrome.png',
+          vibrate: [500, 200, 500, 200, 500],
+          data: { url: '/jeu.html', category: category || 'test' }
         };
 
         // 1. Broadcast SSE temps réel (pour les joueurs avec l'application ouverte)

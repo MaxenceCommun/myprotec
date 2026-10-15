@@ -94,8 +94,8 @@ window.ProtecNotifications = {
       }
       this.swRegistration = registration;
 
-      // 3. Clé VAPID officielle W3C (identique à Site Protec)
-      let vapidPublicKey = 'BHB8wWHGzna7sB2I7J17-BWXzyfcQFlqDoOxL27ZrVewvMHP6P7vl7YFvOhVV3wB4ZvHQNbYs7m7xB_Rj2tZa0Y';
+      // 3. Clé VAPID officielle W3C (synchronisée avec le serveur Protec)
+      let vapidPublicKey = 'BKLdj5RykkIOWRhAriMzfKsYON-juKOqSvFCclSz6zgr0CRZdLlQOhfd9nAwmXZZjsNMJU-pl5Csy4Yg-c6mHe0';
       try {
         const keyRes = await fetch('/api/push/key');
         if (keyRes.ok) {

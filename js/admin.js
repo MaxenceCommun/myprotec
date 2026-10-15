@@ -2596,9 +2596,10 @@ window.ProtecAdmin = {
     });
   },
 
-  previewScenarioNotification(key) {
+  async previewScenarioNotification(key) {
     const scen = this.notificationScenarios[key];
     if (!scen) return;
+    // 1. Aperçu local immédiat dans la fenêtre active si présente
     this.previewTestNotificationLocally({
       title: scen.title,
       message: scen.message,
@@ -2607,6 +2608,17 @@ window.ProtecAdmin = {
       sound: scen.sound,
       vibrate: scen.vibrate,
       push: scen.push
+    });
+
+    // 2. Déclenchement RÉEL du Web Push OS W3C pour réveiller le terminal même si l'application est fermée !
+    await this.triggerTestNotification(this.currentTesterUserId || 'all', {
+      title: scen.title,
+      message: scen.message,
+      type: scen.type,
+      category: scen.category,
+      sound: scen.sound,
+      vibrate: scen.vibrate,
+      push: scen.push !== false
     });
   },
 
@@ -2639,7 +2651,7 @@ window.ProtecAdmin = {
     });
   },
 
-  previewCustomNotification() {
+  async previewCustomNotification() {
     const titleInput = document.getElementById('adm-test-custom-title');
     const msgInput = document.getElementById('adm-test-custom-message');
     const typeSelect = document.getElementById('adm-test-custom-type');
@@ -2651,7 +2663,19 @@ window.ProtecAdmin = {
     const title = titleInput ? titleInput.value.trim() : '🔔 Alerte Administrateur';
     const message = msgInput ? msgInput.value.trim() : 'Ceci est un test de notification officiel.';
 
+    // 1. Aperçu visuel immédiat dans la fenêtre active si présente
     this.previewTestNotificationLocally({
+      title: title,
+      message: message,
+      type: typeSelect ? typeSelect.value : 'orange',
+      category: catSelect ? catSelect.value : 'admin-test',
+      sound: chkSound ? chkSound.checked : true,
+      vibrate: chkVibrate ? chkVibrate.checked : true,
+      push: chkPush ? chkPush.checked : true
+    });
+
+    // 2. Déclenchement RÉEL du Web Push OS W3C pour réveiller le terminal même si l'application est fermée !
+    await this.triggerTestNotification(this.currentTesterUserId || 'all', {
       title: title,
       message: message,
       type: typeSelect ? typeSelect.value : 'orange',
@@ -2667,11 +2691,15 @@ window.ProtecAdmin = {
       targetUserId: targetUserId || 'all',
       title: payload.title || '🔔 Notification de test Protec Live',
       message: payload.message || 'Ceci est un test de notification administrateur.',
+      body: payload.message || payload.body || 'Ceci est un test de notification administrateur.',
       type: payload.type || 'orange',
       category: payload.category || 'admin-test',
       sound: payload.sound !== false,
       vibrate: payload.vibrate !== false,
       push: payload.push !== false,
+      icon: '/icons/icon-192x192.png',
+      badge: '/icons/badge-monochrome.png',
+      data: { url: '/jeu.html', category: payload.category || 'admin-test' },
       timestamp: Date.now()
     };
 
@@ -2691,7 +2719,35 @@ window.ProtecAdmin = {
       // Backend local non joint (ex: hébergement statique GitHub Pages)
     }
 
-    // 1b. Tentative via l'Edge Function Supabase officielle send-push si disponible
+    // 1b. Si aucun push n'a été distribué via /api/admin/notify-player, tentative directe via /api/push/test
+    if (pushDispatched === 0 && defaultPayload.push !== false) {
+      try {
+        let subData = null;
+        try {
+          const rawSub = localStorage.getItem('protec_push_sub');
+          if (rawSub) subData = JSON.parse(rawSub);
+        } catch (e) {}
+
+        const testRes = await fetch('/api/push/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: subData?.endpoint || undefined,
+            user_id: targetUserId && targetUserId !== 'all' ? targetUserId : undefined,
+            title: defaultPayload.title,
+            body: defaultPayload.message,
+            icon: '/icons/icon-192x192.png',
+            badge: '/icons/badge-monochrome.png',
+            data: { url: '/jeu.html' }
+          })
+        });
+        if (testRes.ok) {
+          pushDispatched = 1;
+        }
+      } catch (ePushTest) {}
+    }
+
+    // 1c. Tentative via l'Edge Function Supabase officielle send-push si disponible
     if (window.ProtecSupabase?.client?.functions) {
       try {
         const edgeRes = await window.ProtecSupabase.client.functions.invoke('send-push', {
@@ -2717,19 +2773,13 @@ window.ProtecAdmin = {
       }
     }
 
-    // 3. Déclenchement local si la cible est soi-même ou "all"
+    // 3. Déclenchement local si la cible est soi-même ou "all" (pour retour immédiat si l'app est active)
     const isMe = !targetUserId || targetUserId === 'all' || 
                  (window.game?.player?.id && window.game.player.id === targetUserId) ||
                  (window.ProtecAuth?.currentUser?.id && window.ProtecAuth.currentUser.id === targetUserId);
     if (isMe) {
       if (window.game && typeof window.game.handleMultiplayerEvent === 'function') {
         window.game.handleMultiplayerEvent('admin_player_notification', defaultPayload);
-      }
-      if (defaultPayload.push !== false && window.ProtecNotifications && typeof window.ProtecNotifications.sendPushNotification === 'function') {
-        window.ProtecNotifications.sendPushNotification(defaultPayload.title, defaultPayload.message, {
-          category: defaultPayload.category,
-          color: defaultPayload.type
-        });
       }
     }
 
@@ -2739,7 +2789,7 @@ window.ProtecAdmin = {
 
     if (window.game && typeof window.game.showToast === 'function') {
       if (pushDispatched > 0) {
-        window.game.showToast('Push W3C Délivré', `Alerte transmise à ${targetName} (${pushDispatched} push W3C envoyé même app fermée).`, 'green');
+        window.game.showToast('Push W3C Délivré 📲', `Alerte transmise à ${targetName} (${pushDispatched} push W3C envoyé même app fermée).`, 'green');
       } else {
         window.game.showToast('Notification Émise', `Alerte envoyée à ${targetName} (flux en direct).`, 'green');
       }
