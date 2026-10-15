@@ -2132,7 +2132,7 @@ class ProtecGame {
         if (mission.eventDate && isDatePassed(mission.eventDate, mission.durationHours || 4)) return;
 
         const isToday = mission.eventDate ? (mission.eventDate.day === this.clock.day && mission.eventDate.month === this.clock.month) : true;
-        if (this.dpsFilterMode === 'today' && !isToday) return;
+        if (this.currentFilter === 'dps' && this.dpsFilterMode === 'today' && !isToday) return;
       }
 
       if (!mission.lat || !mission.lng || isNaN(mission.lat) || isNaN(mission.lng)) {
@@ -19787,14 +19787,14 @@ class ProtecGame {
         // Clic répété sur DPS : basculer entre 'today' (DPS du jour) et 'all' (Tous les DPS à venir)
         this.dpsFilterMode = (this.dpsFilterMode === 'today') ? 'all' : 'today';
         const label = this.dpsFilterMode === 'today' ? "DPS du Jour uniquement" : "Tous les DPS à venir";
-        this.showToast('Filtre DPS', `Affichage carte : ${label}`, 'blue');
+        this.showToast('Filtre DPS', `Affichage carte : ${label}`, 'blue', null, { silent: true, skipRecord: true });
       } else {
         this.currentFilter = 'dps';
-        this.dpsFilterMode = 'today';
+        this.dpsFilterMode = 'all';
       }
     } else {
       this.currentFilter = filterKey;
-      this.dpsFilterMode = 'today';
+      this.dpsFilterMode = 'all';
     }
 
     ['all', 'dps', 'samu', 'meteo', 'pompiers', 'social', 'crise'].forEach(f => {
@@ -19810,6 +19810,7 @@ class ProtecGame {
     });
 
     this.renderMissions();
+    this.updateMissionCounts();
   }
 
   // --- GESTION DES REPAS EN MISSION & NOTES DE FRAIS (12h00 & 19h00) ---
@@ -21954,34 +21955,34 @@ class ProtecGame {
   }
 
   updateMissionCounts() {
-    const todayDay = this.clock ? this.clock.day : new Date().getDate();
-    const todayMonth = this.clock ? this.clock.month : new Date().getMonth();
+    const activeMissions = (this.missions || []).filter(m => m && !['termine', 'archive', 'annule'].includes(m.status));
 
-    // 1. Décompte rigoureux des DPS : du jour (ou en cours/urgents) vs tous les DPS à venir
-    const dpsTodayList = this.missions.filter(m => {
-      if (m.type !== 'dps') return false;
-      if (m.status !== 'planifie') return true; // en cours, déclenché, etc.
-      return m.eventDate ? (m.eventDate.day === todayDay && m.eventDate.month === todayMonth) : true;
-    });
-    const dpsAllList = this.missions.filter(m => m.type === 'dps');
+    // 1. Décompte pour chaque filtre affiché dans la barre de filtres
+    const dpsCount = activeMissions.filter(m => m.type === 'dps' || (!m.type && !m.isCrisis && m.category !== 'crise')).length;
+    const samuCount = activeMissions.filter(m => m.type === 'samu').length;
+    const pompiersCount = activeMissions.filter(m => m.type === 'pompiers').length;
+    const meteoCount = activeMissions.filter(m => m.type === 'meteo').length;
+    const socialCount = activeMissions.filter(m => m.type === 'social').length;
 
-    const dpsTodayCount = dpsTodayList.length;
-    const dpsAllCount = dpsAllList.length;
-    const activeDpsCount = (this.dpsFilterMode === 'all') ? dpsAllCount : dpsTodayCount;
+    // Si le module de crise NOVI est débloqué et affiché
+    const isCriseUnlocked = (this.isFeatureUnlocked && this.isFeatureUnlocked('crise'));
+    const criseCount = isCriseUnlocked ? activeMissions.filter(m => m.type === 'crise').length : 0;
+
+    // RÈGLE MÉTIER STRICTE : "Toutes" doit être STRICTEMENT le total de tous les autres filtres affichés
+    const totalCount = dpsCount + samuCount + pompiersCount + meteoCount + socialCount + criseCount;
 
     const counts = {
-      samu: this.missions.filter(m => m.type === 'samu').length,
-      pompiers: this.missions.filter(m => m.type === 'pompiers').length,
-      meteo: this.missions.filter(m => m.type === 'meteo').length,
-      social: this.missions.filter(m => m.type === 'social').length,
-      crise: this.missions.filter(m => m.type === 'crise').length,
-      dps: activeDpsCount
+      all: totalCount,
+      dps: dpsCount,
+      samu: samuCount,
+      pompiers: pompiersCount,
+      meteo: meteoCount,
+      social: socialCount,
+      crise: criseCount
     };
 
-    // Le compteur "Toutes" reflète fidèlement le nombre de missions actuellement affichables sur la carte
-    counts.all = counts.samu + counts.pompiers + counts.meteo + counts.social + counts.crise + activeDpsCount;
-
-    ['all', 'samu', 'pompiers', 'meteo', 'social', 'crise'].forEach(c => {
+    // Mise à jour de tous les compteurs dans le DOM
+    ['all', 'dps', 'samu', 'pompiers', 'meteo', 'social', 'crise'].forEach(c => {
       const el = document.getElementById(`count-${c}`);
       if (el) el.textContent = counts[c];
     });
@@ -21989,29 +21990,11 @@ class ProtecGame {
     // 2. Mise à jour dynamique du libellé et du compteur du bouton DPS
     const dpsBtn = document.getElementById('filter-btn-dps');
     if (dpsBtn) {
-      if (this.currentFilter === 'dps') {
-        if (this.dpsFilterMode === 'today') {
-          dpsBtn.innerHTML = `
-            <span class="w-2 h-2 rounded-full bg-pc-blue animate-pulse"></span>
-            <span>DPS Jour (<span id="count-dps">${dpsTodayCount}</span>)</span>
-            <span class="text-[9px] bg-blue-100 text-pc-blue px-1 py-0.2 rounded font-extrabold ml-0.5" title="Cliquez à nouveau pour afficher TOUS les DPS à venir">1/2</span>
-          `;
-          dpsBtn.title = `Filtre DPS Jour actif (${dpsTodayCount} dispositifs). Cliquez à nouveau pour afficher TOUS les DPS à venir (${dpsAllCount}).`;
-        } else {
-          dpsBtn.innerHTML = `
-            <span class="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
-            <span>Tous les DPS (<span id="count-dps">${dpsAllCount}</span>)</span>
-            <span class="text-[9px] bg-indigo-100 text-indigo-700 px-1 py-0.2 rounded font-extrabold ml-0.5" title="Cliquez pour revenir aux DPS du jour">2/2</span>
-          `;
-          dpsBtn.title = `Filtre Tous les DPS actif (${dpsAllCount} dispositifs). Cliquez pour revenir aux DPS du jour (${dpsTodayCount}).`;
-        }
-      } else {
-        dpsBtn.innerHTML = `
-          <span class="w-2 h-2 rounded-full bg-pc-blue"></span>
-          <span>DPS (<span id="count-dps">${dpsTodayCount}</span>)</span>
-        `;
-        dpsBtn.title = `Filtrer les DPS (1er clic = Jour: ${dpsTodayCount}, 2ème clic = Tous: ${dpsAllCount})`;
-      }
+      dpsBtn.innerHTML = `
+        <span class="w-2 h-2 rounded-full bg-pc-blue"></span>
+        <span>DPS (<span id="count-dps">${dpsCount}</span>)</span>
+      `;
+      dpsBtn.title = `Filtrer les DPS (${dpsCount} dispositif(s) au total)`;
     }
   }
 
@@ -22024,7 +22007,7 @@ class ProtecGame {
     container.style.left = '';
   }
 
-  showToast(title, message, color = 'blue', target = null) {
+  showToast(title, message, color = 'blue', target = null, options = {}) {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
@@ -22040,13 +22023,17 @@ class ProtecGame {
         .trim();
     }
 
-    // Enregistrement systématique dans l'historique des notifications
-    if (window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
+    const isFilterNotif = (typeof title === 'string' && (title.includes('Filtre DPS') || title.includes('Filtre')));
+    const skipRecord = !!(options?.skipRecord || isFilterNotif);
+    const silent = !!(options?.silent || isFilterNotif);
+
+    // Enregistrement dans l'historique des notifications (sauf si skipRecord ou notification de filtre)
+    if (!skipRecord && window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
       window.ProtecNotifications.recordNotification({ title, message, color, target });
     }
 
-    // Déclenchement du son approprié (notif, info, expire, erreur, attention)
-    if (window.ProtecAudio && typeof window.ProtecAudio.handleToastAudio === 'function') {
+    // Déclenchement du son approprié (sauf si silent ou notification de filtre)
+    if (!silent && window.ProtecAudio && typeof window.ProtecAudio.handleToastAudio === 'function') {
       window.ProtecAudio.handleToastAudio(title, message, color, target);
     }
 

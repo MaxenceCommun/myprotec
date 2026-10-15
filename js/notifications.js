@@ -310,10 +310,13 @@ window.ProtecNotifications = {
     this.loadConfig();
     try {
       this.history = JSON.parse(localStorage.getItem('protec_notif_history') || '[]');
-      // Dédoublonnage d'assainissement : ne conserver qu'une seule notification Trésorerie & Bilan par jour au maximum
+      // Dédoublonnage d'assainissement et purge des notifications de filtres
       const seenBilanDays = new Set();
       this.history = this.history.filter(item => {
-        if (item && item.title && item.title.includes('Trésorerie & Bilan')) {
+        if (!item || !item.title) return false;
+        // Purger les notifications système de filtres
+        if (item.title.includes('Filtre DPS') || item.title.includes('Filtre')) return false;
+        if (item.title.includes('Trésorerie & Bilan')) {
           const dayKey = item.date || item.time || 'day';
           if (seenBilanDays.has(dayKey)) return false;
           seenBilanDays.add(dayKey);
@@ -812,6 +815,10 @@ window.ProtecNotifications = {
 
   recordNotification(data) {
     if (!data) return;
+    // RÈGLE MÉTIER : Ne jamais enregistrer les changements d'affichage de filtres (ex: Filtre DPS) dans le journal d'alertes
+    if (data.skipRecord || (data.title && (data.title.includes('Filtre DPS') || data.title.includes('Filtre')))) {
+      return;
+    }
     const item = {
       id: Date.now() + Math.random(),
       title: data.title || 'Notification',

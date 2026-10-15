@@ -256,6 +256,9 @@ window.ProtecAudio = {
     const t = (title || '').toLowerCase();
     const m = (message || '').toLowerCase();
 
+    // EXCLUSION STRICTE : Ne jamais émettre de son lors du changement de filtre de la carte (ex: Filtre DPS)
+    if (t.includes('filtre') || t.includes('filtre dps')) return;
+
     // RÈGLE STRICTE 1 : Exclure impérativement les simples demandes de renfort !
     const isRenfort = t.includes('renfort') || m.includes('renfort') || t.includes('alliance');
 
