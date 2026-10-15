@@ -856,7 +856,7 @@ window.ProtecAuth = {
 
               <!-- Encart Liaison Discord Officielle -->
               ${this.currentUser.discord ? `
-                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-blue-50/40 to-slate-50 border border-indigo-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-blue-50/40 to-slate-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-800 border border-indigo-200/80 dark:border-slate-700 flex items-center justify-between gap-3 shadow-2xs">
                   <div class="flex items-center gap-3 min-w-0">
                     <img src="${this.currentUser.discord.avatarUrl}" alt="Avatar Discord" class="w-9 h-9 rounded-full border-2 border-[#5865F2] object-cover shadow-xs shrink-0" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'" />
                     <div class="min-w-0">
@@ -872,7 +872,7 @@ window.ProtecAuth = {
                   </button>
                 </div>
               ` : `
-                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/70 via-blue-50/50 to-slate-50 border border-indigo-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/70 via-blue-50/50 to-slate-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-800 border border-indigo-200/80 dark:border-slate-700 flex items-center justify-between gap-3 shadow-2xs">
                   <div class="flex items-center gap-2.5 min-w-0">
                     <div class="w-8 h-8 rounded-xl bg-[#5865F2] text-white flex items-center justify-center shrink-0 shadow-xs">
                       <svg class="w-4 h-4 fill-current" viewBox="0 0 127.14 96.36">

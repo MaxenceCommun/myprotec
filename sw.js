@@ -10,7 +10,7 @@
  * - En cas de coupure réseau, le client bloque immédiatement l'accès au jeu.
  */
 
-const CACHE_VERSION = 'myprotec-online-v2.4.0';
+const CACHE_VERSION = 'myprotec-online-v2.5.0';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 
 
@@ -140,8 +140,8 @@ self.addEventListener('fetch', (event) => {
   }
 
   // B. Navigation HTML principale & Scripts JS : Network-First obligatoire pour garantir le code à jour
-  const isScript = request.destination === 'script' || url.pathname.endsWith('.js');
-  if (request.mode === 'navigate' || isScript) {
+  const isCodeAsset = request.destination === 'script' || request.destination === 'style' || url.pathname.endsWith('.js') || url.pathname.endsWith('.css');
+  if (request.mode === 'navigate' || isCodeAsset) {
     event.respondWith(
       fetch(request)
         .then((networkResponse) => {

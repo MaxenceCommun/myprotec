@@ -56,6 +56,7 @@ window.ProtecPWA = {
         navigator.serviceWorker.register('/sw.js', { scope: '/' })
           .then((registration) => {
             console.log('📱 [PWA] Service Worker opérationnel sur le scope :', registration.scope);
+            try { registration.update(); } catch(e) {}
 
             // Détection de mise à jour du Service Worker
             registration.addEventListener('updatefound', () => {

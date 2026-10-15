@@ -2563,7 +2563,7 @@ window.ProtecLocaux = {
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           
           <!-- Capacité Stockage -->
-          <div class="p-3 rounded-2xl ${stats.hasStorage ? 'glass-card border-amber-200/80 bg-amber-50/30' : 'bg-red-50 border border-red-200'} space-y-1">
+          <div class="p-3 rounded-2xl ${stats.hasStorage ? 'glass-card border-amber-200/80 bg-amber-50/30 dark:bg-amber-950/20 dark:border-amber-900/40' : 'bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60'} space-y-1">
             <div class="flex items-center justify-between text-xs font-extrabold text-slate-700">
               <span class="flex items-center gap-1">📦 Stockage</span>
               <span class="${stats.hasStorage ? 'text-amber-600' : 'text-red-600'} font-black">${storageUsed} / ${stats.storageCapacity}</span>
@@ -2577,7 +2577,7 @@ window.ProtecLocaux = {
           </div>
 
           <!-- Salle de Formation -->
-          <div class="p-3 rounded-2xl ${stats.hasFormation ? 'glass-card border-blue-200/80 bg-blue-50/30' : 'bg-slate-50 border border-slate-200'} space-y-1">
+          <div class="p-3 rounded-2xl ${stats.hasFormation ? 'glass-card border-blue-200/80 bg-blue-50/30 dark:bg-blue-950/20 dark:border-blue-900/40' : 'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700'} space-y-1">
             <div class="flex items-center justify-between text-xs font-extrabold text-slate-700">
               <span class="flex items-center gap-1">🎓 Formations</span>
               <span class="text-pc-blue font-black">${stats.studentCapacity} places</span>

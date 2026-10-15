@@ -15215,15 +15215,15 @@ class ProtecGame {
                         const formationCount = dayEvents.filter(e => e.pole === 'formations').length;
                         const socialCount = dayEvents.filter(e => e.pole === 'social').length;
 
-                        let bgClass = 'bg-white hover:bg-slate-50 border-slate-200/80';
+                        let bgClass = 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700';
                         if (isSelected) {
                           bgClass = isPast 
-                            ? 'bg-slate-200 border-pc-blue ring-2 ring-pc-blue/40' 
-                            : 'bg-pc-blue/10 border-pc-blue ring-2 ring-pc-blue/30';
+                            ? 'bg-slate-200 dark:bg-slate-700 border-pc-blue ring-2 ring-pc-blue/40' 
+                            : 'bg-pc-blue/10 dark:bg-sky-950/40 border-pc-blue ring-2 ring-pc-blue/30';
                         } else if (isToday) {
-                          bgClass = 'bg-amber-50/90 border-amber-300 ring-1 ring-amber-300';
+                          bgClass = 'bg-amber-50/90 dark:bg-amber-950/50 border-amber-300 dark:border-amber-600 ring-1 ring-amber-300';
                         } else if (isPast) {
-                          bgClass = 'bg-slate-100/90 hover:bg-slate-200/70 border-slate-200/90';
+                          bgClass = 'bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-700 border-slate-200/90 dark:border-slate-700/80';
                         }
 
                         return `
@@ -15232,7 +15232,7 @@ class ProtecGame {
                             class="min-h-16 rounded-xl p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
                           >
                             <div class="flex items-center justify-between w-full">
-                              <span class="text-xs ${isToday ? 'text-amber-800 font-black' : isSelected ? 'text-pc-blue font-black' : isPast ? 'text-slate-400 font-bold' : 'text-slate-800 font-extrabold'}">
+                              <span class="text-xs ${isToday ? 'text-amber-800 dark:text-amber-300 font-black' : isSelected ? 'text-pc-blue dark:text-sky-300 font-black' : isPast ? 'text-slate-400 dark:text-slate-400 font-bold' : 'text-slate-800 dark:text-slate-200 font-extrabold'}">
                                 ${day}
                               </span>
                               ${isToday ? `<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-amber-950 uppercase">Auj.</span>` : ''}

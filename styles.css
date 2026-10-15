@@ -1926,3 +1926,114 @@ html.dark .bg-slate-100\/80,
 html.dark .bg-slate-100\/90 {
   background-color: rgba(15, 23, 42, 0.85) !important;
 }
+
+/* ==========================================================================
+   CORRECTIONS CRITIQUES MENU MOBILE ET CARTES MODALES EN MODE SOMBRE
+   ========================================================================== */
+html.dark .mobile-grid-btn {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.dark .mobile-grid-btn:hover,
+html.dark .mobile-grid-btn:active {
+  background: #273549 !important;
+  border-color: #475569 !important;
+}
+
+html.dark .mobile-grid-btn span.text-slate-700 {
+  color: #f1f5f9 !important;
+}
+
+html.dark .mobile-grid-btn span.text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+html.dark #mobile-modules-sheet .glass-panel-heavy {
+  background: #0f172a !important;
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark #mobile-modules-sheet .bg-slate-300 {
+  background-color: #475569 !important;
+}
+
+html.dark #mobile-modules-sheet .border-b.border-slate-200\/60,
+html.dark #mobile-modules-sheet .border-slate-200\/60 {
+  border-color: #334155 !important;
+}
+
+/* Gradients de cartes clairs convertis en fond sombre */
+html.dark .bg-gradient-to-r.from-indigo-50\/70,
+html.dark .bg-gradient-to-r.from-indigo-50\/80,
+html.dark .bg-gradient-to-r.from-indigo-50,
+html.dark .bg-gradient-to-r.from-slate-50 {
+  background: #1e293b !important;
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+html.dark .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+html.dark .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+html.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+html.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+html.dark .bg-purple-50 {
+  background-color: rgba(168, 85, 247, 0.15) !important;
+  border-color: rgba(168, 85, 247, 0.3) !important;
+}
+
+html.dark .bg-teal-50 {
+  background-color: rgba(20, 184, 166, 0.15) !important;
+  border-color: rgba(20, 184, 166, 0.3) !important;
+}
+
+html.dark .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+  color: #93c5fd !important;
+}
+
+html.dark .bg-slate-100\/90 {
+  background-color: rgba(30, 41, 59, 0.75) !important;
+}
+
+html.dark .bg-slate-200 {
+  background-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+html.dark .border-slate-200\/90,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-200\/60,
+html.dark .border-slate-200 {
+  border-color: #334155 !important;
+}
+
+/* Cellules et cartes Calendrier Planning */
+html.dark #main-modal .bg-white {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark #main-modal .hover\:bg-slate-50:hover {
+  background-color: #273549 !important;
+}
