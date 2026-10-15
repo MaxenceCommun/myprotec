@@ -8255,13 +8255,26 @@ class ProtecGame {
           if (mission.type === 'pompiers') window.ProtecConventions.adjustInstitutionalReputation(this, 'sdis', Math.round(6 * repGainMult), 'Garde pompiers');
           if (mission.isEmergencyPlan && typeof mission.onCompleteSuccess === 'function') mission.onCompleteSuccess();
         }
+        // Impact de la qualité de travail des salariés encadrants (CDD/CDI)
+        const salarieMembers = crew.filter(v => v.contractType === 'salarie' || v.contractType === 'CDD' || v.contractType === 'CDI');
+        let salarieQualityBonus = 0;
+        if (salarieMembers.length > 0) {
+          const avgQuality = salarieMembers.reduce((sum, s) => sum + (s.workQualityMultiplier || 1.0), 0) / salarieMembers.length;
+          if (avgQuality > 1.0) {
+            salarieQualityBonus = Math.round((avgQuality - 1.0) * 8);
+            repGain += Math.round((avgQuality - 1.0) * 4);
+          } else if (avgQuality < 0.95) {
+            salarieQualityBonus = Math.round((avgQuality - 1.0) * 5); // malus léger si sous-payé/démotivé
+          }
+        }
+
         this.resources.reputationScore = currentRep + repGain;
 
         // Évaluation de la dotation en Moniteurs Multiparamétriques (confort et qualité de travail des secouristes)
         const paramTier = (this.equipmentTiers && this.equipmentTiers.prise_parametres) || 1;
         const paramDef = window.ProtecEquipements?.TIERED_EQUIPMENT_CATALOG?.prise_parametres?.tiers?.find(t => t.level === paramTier);
         const moraleGainMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('moraleGainMultiplier', 1.0) : 1.0;
-        const secouristeMoralBonus = Math.round((6 + (paramDef?.stats?.crewMoralBonus ? Math.round(paramDef.stats.crewMoralBonus * 0.7) : 0)) * moraleGainMult);
+        const secouristeMoralBonus = Math.max(1, Math.round((6 + (paramDef?.stats?.crewMoralBonus ? Math.round(paramDef.stats.crewMoralBonus * 0.7) : 0) + salarieQualityBonus) * moraleGainMult));
 
         // Distinction opérationnels vs photographes
         const photographes = crew.filter(v => mission.volunteerRoles?.[v.id] === 'photographe');
@@ -17450,7 +17463,9 @@ class ProtecGame {
                   const motivation = v.motivation !== undefined ? v.motivation : 80;
                   const humeurScore = v.humeur !== undefined ? v.humeur : 80;
                   const humeur = window.ProtecPersonnel ? window.ProtecPersonnel.getHumeurLabel(humeurScore) : { label: 'Neutre', icon: '🙂' };
-                  const contractLabel = v.contractType === 'salarie' ? 'Salarié Permanent' : (v.contractType === 'service_civique' ? 'Service Civique' : 'Bénévole');
+                  const isSalarie = v.contractType === 'salarie' || v.contractType === 'CDD' || v.contractType === 'CDI';
+                  const isServiceCivique = v.contractType === 'service_civique' || v.contractType === 'Service Civique';
+                  const contractLabel = isSalarie ? (v.contractType === 'CDD' ? 'Salarié CDD' : (v.contractType === 'CDI' ? 'Salarié CDI' : 'Salarié')) : (isServiceCivique ? 'Service Civique' : 'Bénévole');
                   const trait = window.ProtecPersonnel?.traits[v.trait] || { name: 'Secouriste standard' };
                   const searchText = `${v.name} ${v.rank || ''} ${v.role || ''} ${contractLabel} ${v.dispoType || ''} ${trait.name || ''} ${(v.skills || []).join(' ')}`.toLowerCase();
 
@@ -17493,6 +17508,60 @@ class ProtecGame {
                           </div>
                         </div>
                       </div>
+
+                      <!-- Bloc Spécifique Contrat : Service Civique & PSC 1 OU Salarié & Charges Patronales -->
+                      ${isServiceCivique ? `
+                        <div class="p-2 rounded-xl bg-amber-50/90 border border-amber-200 text-[10px] space-y-1.5">
+                          <div class="flex items-center justify-between">
+                            <span class="font-bold text-amber-900">🎗️ Service Civique</span>
+                            <span class="font-mono font-extrabold text-amber-950">114,85 € / mois</span>
+                          </div>
+                          ${(v.psc1Status === 'valide' || (v.skills && v.skills.includes('psc1'))) ? `
+                            <div class="p-1 rounded-lg bg-emerald-100/90 border border-emerald-300 text-[9px] text-emerald-900 flex items-center justify-between font-bold">
+                              <span>🎓 PSC 1 Validé (${v.psc1Origin || 'Session Réseau'})</span>
+                              <span>✓</span>
+                            </div>
+                          ` : `
+                            <div class="p-1.5 rounded-lg bg-white/95 border border-amber-300 space-y-1 text-slate-700">
+                              <div class="flex items-center justify-between font-extrabold text-amber-900 text-[9px]">
+                                <span>⚠️ Formation PSC 1 Obligatoire</span>
+                                <span class="px-1 py-0.2 rounded bg-amber-200 text-amber-900">À passer</span>
+                              </div>
+                              <div class="flex items-center gap-1 pt-0.5">
+                                <button type="button" onclick="window.ProtecPersonnel.passServiceCiviquePSC1(window.game, '${v.id}', 'interne')" class="flex-1 py-1 px-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] transition flex items-center justify-center gap-0.5 shadow-sm" title="Passer le PSC 1 au sein de notre antenne (Gratuit)">
+                                  🏫 Interne (0 €)
+                                </button>
+                                <button type="button" onclick="window.ProtecPersonnel.passServiceCiviquePSC1(window.game, '${v.id}', 'externe')" class="flex-1 py-1 px-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9px] transition flex items-center justify-center gap-0.5 shadow-sm" title="Inscription dans une antenne partenaire du réseau (60 €)">
+                                  🤝 Antenne (60 €)
+                                </button>
+                              </div>
+                            </div>
+                          `}
+                        </div>
+                      ` : ''}
+
+                      ${isSalarie ? `
+                        <div class="p-2 rounded-xl bg-indigo-50/90 border border-indigo-200 text-[10px] space-y-1">
+                          <div class="flex items-center justify-between">
+                            <span class="font-bold text-indigo-900">💼 Brut Mensuel :</span>
+                            <span class="font-mono font-bold text-slate-800">${(v.grossSalary || v.salary || 2200).toLocaleString()} €</span>
+                          </div>
+                          <div class="flex items-center justify-between text-slate-500">
+                            <span>Charges Patronales (+42%) :</span>
+                            <span class="font-mono text-amber-700 font-bold">+${(v.employerCharges || Math.round((v.grossSalary || v.salary || 2200) * 0.42)).toLocaleString()} €</span>
+                          </div>
+                          <div class="flex items-center justify-between pt-0.5 border-t border-indigo-200/70 font-bold">
+                            <span class="text-slate-800">Coût Total Antenne :</span>
+                            <span class="font-mono text-rose-700 font-black">${(v.totalEmployerCost || Math.round((v.grossSalary || v.salary || 2200) * 1.42)).toLocaleString()} € / mois</span>
+                          </div>
+                          <div class="pt-0.5 text-[9px] flex items-center justify-between">
+                            <span class="text-slate-500">Qualité du Travail :</span>
+                            <span class="font-extrabold ${(v.workQualityMultiplier || 1.0) >= 1.15 ? 'text-emerald-700' : ((v.workQualityMultiplier || 1.0) < 1.0 ? 'text-amber-700' : 'text-slate-700')}">
+                              ${(v.workQualityMultiplier || 1.0) >= 1.25 ? '⭐ Cadre d’Excellence (+25%)' : ((v.workQualityMultiplier || 1.0) >= 1.15 ? '✨ Très Performant (+15%)' : ((v.workQualityMultiplier || 1.0) >= 1.05 ? '👍 Bon (+5%)' : ((v.workQualityMultiplier || 1.0) < 1.0 ? '⚠️ Sous-payé (-10%)' : 'Standard')))}
+                            </span>
+                          </div>
+                        </div>
+                      ` : ''}
 
                       <div class="grid grid-cols-3 gap-2 text-[10px] pt-1 border-t border-slate-100">
                         <div>

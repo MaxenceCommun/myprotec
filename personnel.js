@@ -69,7 +69,7 @@ window.ProtecPersonnel = {
       label: 'Volontaire Service Civique',
       icon: '🎖️',
       baseDispoRate: 0.88,
-      desc: 'Contrat jeune (24h-35h/semaine). Indemnisé par l’État (coût antenne 115 €/mois).',
+      desc: 'Contrat jeune (24h-35h/semaine). Indemnisé par l’État (coût antenne légal fixe : 114,85 €/mois). Doit obligatoirement valider le PSC 1 durant sa mission.',
       favDays: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
       energyDrainRatio: 0.90
     },
@@ -609,21 +609,35 @@ window.ProtecPersonnel = {
     game.volunteers.forEach(v => {
       if (v.contractType === 'service_civique') {
         serviceCiviqueCount++;
-        totalMonthlyCharges += 115;
+        totalMonthlyCharges += 114.85;
+
+        // Rappel administratif de formation PSC 1 si non validé
+        if (v.psc1Status !== 'valide' && !v.skills?.includes('psc1') && !v.skills?.includes('pse1')) {
+          if (Math.random() < 0.25 && game.showToast) {
+            game.showToast(
+              '⚠️ PSC 1 Service Civique Requis',
+              `Rappel légal : ${v.name} doit suivre et valider sa formation PSC 1 durant son Service Civique (dans votre antenne ou antenne partenaire).`,
+              'orange'
+            );
+          }
+        }
       } else if (v.contractType === 'salarie') {
         salarieCount++;
-        totalMonthlyCharges += 2200;
+        const cost = v.totalEmployerCost || (v.monthlyGrossSalary ? Math.round(v.monthlyGrossSalary * 1.42) : (v.monthlySalary ? Math.round(v.monthlySalary * 1.42) : 3124));
+        totalMonthlyCharges += cost;
       }
     });
 
+    totalMonthlyCharges = Math.round(totalMonthlyCharges * 100) / 100;
+
     if (totalMonthlyCharges > 0 && game.clock.day === 1 && game.clock.hour === 9 && game.clock.minute === 0) {
       if (game.resources.money >= totalMonthlyCharges) {
-        game.resources.money -= totalMonthlyCharges;
+        game.resources.money = Math.round((game.resources.money - totalMonthlyCharges) * 100) / 100;
         if (window.ProtecFinances) {
           window.ProtecFinances.recordTransaction(
             game,
             -totalMonthlyCharges,
-            `Virement Salaires & Indemnités Mensuelles (${salarieCount} salarié(s), ${serviceCiviqueCount} service(s) civique(s))`,
+            `Virement Salaires & Indemnités Mensuelles (${salarieCount} salarié(s) [charges inc.], ${serviceCiviqueCount} service(s) civique(s) [114,85 €])`,
             'salaires',
             'SAL-' + (game.clock ? `${game.clock.year || 2026}-${game.clock.month || 1}` : Date.now()),
             'Personnel & URSSAF'
@@ -631,13 +645,13 @@ window.ProtecPersonnel = {
         }
         game.showToast(
           'Paiement des Salaires & Indemnités',
-          `Virement mensuel : ${totalMonthlyCharges} € (${salarieCount} salarié(s), ${serviceCiviqueCount} service(s) civique(s)).`,
+          `Virement mensuel : ${totalMonthlyCharges.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} € (${salarieCount} salarié(s) avec charges, ${serviceCiviqueCount} service(s) civique(s) à 114,85 €).`,
           'blue'
         );
       } else {
         game.showToast(
           'Trésorerie Critique : Salaires Impayés !',
-          `Fonds insuffisants pour régler ${totalMonthlyCharges} € d’indemnités salariales ! Baisse de moral.`,
+          `Fonds insuffisants pour régler ${totalMonthlyCharges.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} € d’indemnités salariales et charges ! Baisse de moral.`,
           'red'
         );
         game.volunteers.forEach(v => {
@@ -1453,7 +1467,7 @@ window.ProtecPersonnel = {
     modal.classList.remove('hidden');
     const isSC = defaultContractType === 'service_civique';
     title.textContent = isSC ? 'Ouverture de Mission de Service Civique' : 'Création & Publication d’Offre de Recrutement';
-    subtitle.textContent = isSC ? 'Définissez la mission d’intérêt général (18-25 ans, 24-35h/semaine, 115 €/mois antenne)' : 'Définissez le contrat (CDD/CDI/Service Civique), les missions et la rémunération';
+    subtitle.textContent = isSC ? 'Définissez la mission d’intérêt général (18-25 ans, 24-35h/semaine, 114,85 €/mois antenne • PSC 1 obligatoire)' : 'Définissez le contrat (CDD/CDI/Service Civique), les missions et la rémunération';
     icon.setAttribute('data-lucide', isSC ? 'award' : 'briefcase');
 
     body.innerHTML = `
@@ -1466,8 +1480,8 @@ window.ProtecPersonnel = {
           </span>
           <p id="job-banner-desc" class="text-[11px] text-slate-600 leading-relaxed">
             ${isSC 
-              ? 'Dès l’ouverture de la mission, des candidatures de jeunes motivés (18-25 ans) tomberont dans les heures suivantes. Vous pourrez leur faire passer un entretien de sélection avant signature du contrat d’engagement (115 €/mois pris en charge par l’antenne).' 
-              : 'Dès l\'ouverture du poste, des candidatures ciblées de professionnels de l\'urgence tomberont dans les heures suivantes. Vous pourrez leur faire passer un entretien d\'embauche individuel avant d\'engager votre antenne.'}
+              ? 'Dès l’ouverture de la mission, des candidatures de jeunes motivés (18-25 ans) tomberont dans les heures suivantes. L’antenne verse la prestation légale obligatoire de 114,85 €/mois (prix fixe non modifiable). Le jeune doit obligatoirement valider le PSC 1 durant sa mission.' 
+              : 'Dès l\'ouverture du poste, des candidatures ciblées de professionnels de l\'urgence tomberont. Le niveau de salaire établi détermine le nombre de postulants, leur niveau d\'expérience et leur qualité de travail.'}
           </p>
         </div>
 
@@ -1476,9 +1490,9 @@ window.ProtecPersonnel = {
           <div class="space-y-1.5">
             <label class="block text-xs font-black text-slate-800 uppercase tracking-wide">Type de Recrutement :</label>
             <select id="job-contract-type" onchange="window.ProtecPersonnel.handleContractTypeChange(this.value)" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs font-bold text-slate-900 border border-slate-300">
-              <option value="service_civique" ${isSC ? 'selected' : ''}>🎖️ Service Civique (18-25 ans • 115 €/mois antenne)</option>
-              <option value="CDI" ${defaultContractType === 'CDI' ? 'selected' : ''}>👔 CDI - Salarié Permanent (151h • 2 200 €/mois)</option>
-              <option value="CDD" ${defaultContractType === 'CDD' ? 'selected' : ''}>💼 CDD - Renfort Saisonnier (151h • 2 200 €/mois)</option>
+              <option value="service_civique" ${isSC ? 'selected' : ''}>🎖️ Service Civique (18-25 ans • 114,85 €/mois fixe • PSC 1 requis)</option>
+              <option value="CDI" ${defaultContractType === 'CDI' ? 'selected' : ''}>👔 CDI - Salarié Permanent (151h • Salaire libre)</option>
+              <option value="CDD" ${defaultContractType === 'CDD' ? 'selected' : ''}>💼 CDD - Renfort Temporaire (151h • Salaire libre)</option>
             </select>
           </div>
 
@@ -1515,14 +1529,21 @@ window.ProtecPersonnel = {
           </div>
         </div>
 
-        <!-- Rémunération proposée / Indemnité -->
+        <!-- Rémunération proposée & Calcul des Charges Patronales -->
         <div class="space-y-1.5">
-          <label class="block text-xs font-black text-slate-800 uppercase tracking-wide">Indemnité ou Salaire Mensuel (€) :</label>
-          <div class="relative">
-            <input type="number" id="job-salary-input" min="${isSC ? '115' : '1900'}" max="${isSC ? '115' : '3200'}" step="50" value="${isSC ? '115' : '2200'}" ${isSC ? 'readonly' : ''} required class="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs font-mono font-black text-slate-900 border border-slate-300 ${isSC ? 'bg-slate-100' : ''}" />
-            <span id="job-salary-suffix" class="absolute right-3.5 top-2.5 text-xs text-slate-500 font-bold">${isSC ? '€ / mois (charge antenne légale • 504 € État)' : '€ / mois (forfait 151h)'}</span>
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-black text-slate-800 uppercase tracking-wide">
+              ${isSC ? 'Indemnité Légale Antenne (Fixe non modifiable) :' : 'Salaire Brut Mensuel Proposé (€) :'}
+            </label>
+            <span class="text-[10px] text-slate-400 font-medium">Forfait 151h mensuelles</span>
           </div>
-          <p id="job-salary-hint" class="text-[10px] text-slate-500">${isSC ? 'L’indemnité principale (504,98 €) est versée directement par l’État via l’ASP. L’antenne verse uniquement la prestation légale de subsistance (114,85 €).' : 'Un salaire attractif attire des candidats plus expérimentés avec des notes d’adéquation plus élevées.'}</p>
+          <div class="relative">
+            <input type="number" id="job-salary-input" min="${isSC ? '114.85' : '1802'}" max="${isSC ? '114.85' : '5000'}" step="${isSC ? '0.01' : '50'}" value="${isSC ? '114.85' : '2200'}" ${isSC ? 'readonly' : ''} oninput="window.ProtecPersonnel.updateSalaryCalculations(this.value)" required class="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs font-mono font-black text-slate-900 border border-slate-300 ${isSC ? 'bg-slate-100 cursor-not-allowed' : 'bg-white'}" />
+            <span id="job-salary-suffix" class="absolute right-3.5 top-2.5 text-xs text-slate-500 font-bold">${isSC ? '€ / mois fixe (prestation légale • 504,98 € État)' : '€ brut / mois'}</span>
+          </div>
+
+          <!-- Bloc dynamique des charges patronales et coût réel employeur -->
+          <div id="job-salary-charges-breakdown" class="mt-2"></div>
         </div>
 
         <!-- Missions confiées au poste -->
@@ -1580,6 +1601,99 @@ window.ProtecPersonnel = {
     `;
 
     if (window.lucide) window.lucide.createIcons();
+
+    // Calcul immédiat des charges patronales au rendu
+    this.updateSalaryCalculations(isSC ? 114.85 : 2200);
+  },
+
+  // Calcul dynamique et transparent des charges patronales et du coût réel employeur
+  updateSalaryCalculations(brutVal) {
+    const isSC = document.getElementById('job-contract-type')?.value === 'service_civique';
+    const chargesContainer = document.getElementById('job-salary-charges-breakdown');
+    if (!chargesContainer) return;
+
+    if (isSC) {
+      chargesContainer.innerHTML = `
+        <div class="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-950 text-xs space-y-1.5 shadow-xs">
+          <div class="flex items-center justify-between font-bold">
+            <span class="flex items-center gap-1.5">
+              <span>🏛️ Coût mensuel légal antenne :</span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-200 text-amber-900 font-black">PRIX FIXE NON MODIFIABLE</span>
+            </span>
+            <span class="text-sm font-black mono-num text-amber-900">114,85 € / mois</span>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-600">
+            <span>Indemnité principale versée directement par l'État (ASP) :</span>
+            <span class="font-bold mono-num text-slate-800">504,98 € / mois</span>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-700 pt-1 border-t border-amber-200/60 font-semibold">
+            <span>Total net perçu chaque mois par le jeune volontaire :</span>
+            <span class="font-black mono-num text-emerald-700">619,83 € / mois</span>
+          </div>
+          <div class="p-2 rounded-lg bg-amber-100/70 border border-amber-300/60 text-[10px] text-amber-900 space-y-0.5">
+            <strong class="block text-amber-950">📜 Obligation Légale de Formation Civique & PSC 1 :</strong>
+            <span>Le volontaire en Service Civique doit obligatoirement passer et valider son <strong>PSC 1</strong> durant sa mission (dispensé au sein de votre antenne ou dans une antenne partenaire du réseau).</span>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const brut = Math.max(1500, parseFloat(brutVal) || 2200);
+    // Barème charges patronales associatives et sociales (~42%)
+    const charges = Math.round(brut * 0.42 * 100) / 100;
+    const totalCost = Math.round((brut + charges) * 100) / 100;
+    const netEst = Math.round(brut * 0.78 * 100) / 100;
+
+    let baroColor = 'amber';
+    let baroLabel = '🟡 Salaire Équilibré (Standard du secteur)';
+    let baroDesc = 'Attire environ 2 candidatures qualifiées (PSE2, Chefs d’équipe). Profils fiables, motivation stable.';
+
+    if (brut < 2000) {
+      baroColor = 'rose';
+      baroLabel = '🔴 Rémunération Basse (Proche SMIC)';
+      baroDesc = 'Attractivité faible : 1 seule candidature attendue, profil débutant ou junior (PSE1), motivation modérée (risque de fatigue rapide).';
+    } else if (brut >= 2900) {
+      baroColor = 'purple';
+      baroLabel = '🟣 Rémunération Cadre Supérieur / Direction';
+      baroDesc = 'Excellente attractivité : 4 candidatures d’élite (Chefs de Dispositif CD, Formateurs de Formateurs FdF, ambulanciers confirmés). Travail d’excellence (+25% d’efficacité opérationnelle) et fidélité absolue !';
+    } else if (brut >= 2450) {
+      baroColor = 'emerald';
+      baroLabel = '🟢 Salaire Très Attractif (Cadre Confirmé)';
+      baroDesc = 'Forte attractivité : 3 candidatures expérimentées (Chefs d’équipe confirmés, Formateurs agréés). Travail de haute qualité (+15% d’efficacité).';
+    }
+
+    chargesContainer.innerHTML = `
+      <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2 shadow-xs">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+          <div class="p-2 rounded-lg bg-white border border-slate-200/70">
+            <span class="text-[9px] font-bold uppercase text-slate-400 block">Salaire Brut</span>
+            <strong class="text-xs font-black mono-num text-slate-800">${brut.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</strong>
+          </div>
+          <div class="p-2 rounded-lg bg-white border border-slate-200/70">
+            <span class="text-[9px] font-bold uppercase text-slate-400 block">Net Estimé (~78%)</span>
+            <strong class="text-xs font-black mono-num text-indigo-700">${netEst.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</strong>
+          </div>
+          <div class="p-2 rounded-lg bg-white border border-slate-200/70">
+            <span class="text-[9px] font-bold uppercase text-rose-500 block">Charges Patronales (+42%)</span>
+            <strong class="text-xs font-black mono-num text-rose-600">+ ${charges.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</strong>
+          </div>
+          <div class="p-2 rounded-lg bg-indigo-50 border border-indigo-200">
+            <span class="text-[9px] font-black uppercase text-indigo-900 block">Coût Réel Antenne</span>
+            <strong class="text-sm font-black mono-num text-indigo-950">${totalCost.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</strong>
+          </div>
+        </div>
+
+        <!-- Baromètre attractivité RH et impact sur les candidatures et la qualité de travail -->
+        <div class="pt-2 border-t border-slate-200/70 text-[11px] space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-black text-slate-900">${baroLabel}</span>
+            <span class="text-[10px] text-indigo-600 font-bold uppercase">Impact RH & Qualité du Travail</span>
+          </div>
+          <p class="text-[10px] text-slate-600 leading-snug">${baroDesc}</p>
+        </div>
+      </div>
+    `;
   },
 
   handleContractTypeChange(type) {
@@ -1596,7 +1710,6 @@ window.ProtecPersonnel = {
     const presetSelect = document.getElementById('job-preset-titles');
     const salaryInput = document.getElementById('job-salary-input');
     const salarySuffix = document.getElementById('job-salary-suffix');
-    const salaryHint = document.getElementById('job-salary-hint');
     const costDisp = document.getElementById('job-cost-display');
     const costDesc = document.getElementById('job-cost-desc');
     const submitBtn = document.getElementById('job-submit-btn');
@@ -1606,7 +1719,7 @@ window.ProtecPersonnel = {
         bannerBox.className = 'p-3.5 rounded-2xl glass-card bg-amber-50/80 border border-amber-200 text-amber-950 text-xs space-y-1';
       }
       if (bannerTitle) bannerTitle.textContent = 'Plateforme Nationale du Service Civique (18-25 ans)';
-      if (bannerDesc) bannerDesc.textContent = 'Dès l’ouverture de la mission, des candidatures de jeunes motivés (18-25 ans) tomberont dans les heures suivantes. Vous pourrez leur faire passer un entretien de sélection avant signature du contrat d’engagement (115 €/mois pris en charge par l’antenne).';
+      if (bannerDesc) bannerDesc.textContent = 'Dès l’ouverture de la mission, des candidatures de jeunes motivés (18-25 ans) tomberont dans les heures suivantes. L’antenne verse la prestation légale obligatoire de 114,85 €/mois (prix fixe non modifiable). Le jeune doit obligatoirement valider le PSC 1 durant sa mission.';
       if (titleInput) titleInput.value = 'Volontaire - Ambassadeur Secours & Prévention';
       if (presetSelect) {
         presetSelect.innerHTML = `
@@ -1618,12 +1731,14 @@ window.ProtecPersonnel = {
         `;
       }
       if (salaryInput) {
-        salaryInput.value = 115;
+        salaryInput.value = 114.85;
+        salaryInput.min = 114.85;
+        salaryInput.max = 114.85;
         salaryInput.readOnly = true;
-        salaryInput.classList.add('bg-slate-100');
+        salaryInput.classList.add('bg-slate-100', 'cursor-not-allowed');
+        salaryInput.classList.remove('bg-white');
       }
-      if (salarySuffix) salarySuffix.textContent = '€ / mois (charge antenne légale • 504 € État)';
-      if (salaryHint) salaryHint.textContent = 'L’indemnité principale (504,98 €) est versée directement par l’État via l’ASP. L’antenne verse uniquement la prestation légale de subsistance (114,85 €).';
+      if (salarySuffix) salarySuffix.textContent = '€ / mois fixe (prestation légale • 504,98 € État)';
       if (costDisp) costDisp.textContent = '50 €';
       if (costDesc) costDesc.textContent = '(dossier agrément Agence Service Civique)';
       if (submitBtn) {
@@ -1635,7 +1750,7 @@ window.ProtecPersonnel = {
         bannerBox.className = 'p-3.5 rounded-2xl glass-card bg-indigo-50/70 border border-indigo-200 text-indigo-950 text-xs space-y-1';
       }
       if (bannerTitle) bannerTitle.textContent = 'Diffusion Réseau Sécurité Civile, APEC & France Travail';
-      if (bannerDesc) bannerDesc.textContent = 'Dès l\'ouverture du poste, des candidatures ciblées de professionnels de l\'urgence tomberont dans les heures suivantes. Vous pourrez leur faire passer un entretien d\'embauche individuel avant d\'engager votre antenne.';
+      if (bannerDesc) bannerDesc.textContent = 'Dès l\'ouverture du poste, des candidatures ciblées de professionnels de l\'urgence tomberont. Le salaire brut établi détermine le nombre de postulants, leur niveau d\'expérience et leur qualité de travail.';
       if (titleInput) titleInput.value = 'Coordinateur des Opérations & Formateur';
       if (presetSelect) {
         presetSelect.innerHTML = `
@@ -1648,11 +1763,13 @@ window.ProtecPersonnel = {
       }
       if (salaryInput) {
         salaryInput.value = 2200;
+        salaryInput.min = 1802;
+        salaryInput.max = 5000;
         salaryInput.readOnly = false;
-        salaryInput.classList.remove('bg-slate-100');
+        salaryInput.classList.remove('bg-slate-100', 'cursor-not-allowed');
+        salaryInput.classList.add('bg-white');
       }
-      if (salarySuffix) salarySuffix.textContent = '€ / mois (forfait 151h)';
-      if (salaryHint) salaryHint.textContent = 'Un salaire attractif attire des candidats plus expérimentés avec des notes d’adéquation plus élevées.';
+      if (salarySuffix) salarySuffix.textContent = '€ brut / mois';
       if (costDisp) costDisp.textContent = '180 €';
       if (costDesc) costDesc.textContent = '(diffusion nationale)';
       if (submitBtn) {
@@ -1660,6 +1777,8 @@ window.ProtecPersonnel = {
         submitBtn.querySelector('span').textContent = 'Publier l’Offre de Poste (180 €)';
       }
     }
+
+    this.updateSalaryCalculations(salaryInput ? salaryInput.value : (isSC ? 114.85 : 2200));
   },
 
   // Soumission de l'offre et planification de la réception des candidatures
@@ -1679,7 +1798,11 @@ window.ProtecPersonnel = {
 
     const title = (titleInput?.value || (isSC ? 'Volontaire Service Civique' : 'Cadre Opérationnel')).trim();
     const durationMonths = isSC ? 8 : (contractType === 'CDD' ? (parseInt(durationSelect?.value) || 6) : null);
-    const salary = isSC ? 115 : (parseInt(salaryInput?.value) || 2200);
+    
+    // Le salaire brut et calcul précis des charges patronales (+42%)
+    const grossSalary = isSC ? 114.85 : (parseFloat(salaryInput?.value) || 2200);
+    const employerCharges = isSC ? 0 : Math.round(grossSalary * 0.42 * 100) / 100;
+    const totalEmployerCost = isSC ? 114.85 : Math.round((grossSalary + employerCharges) * 100) / 100;
 
     const checkedMissions = Array.from(document.querySelectorAll('input[name="job-mission"]:checked')).map(cb => cb.value);
     if (checkedMissions.length === 0) checkedMissions.push('operationnel');
@@ -1702,7 +1825,10 @@ window.ProtecPersonnel = {
       title,
       contractType,
       durationMonths,
-      salary,
+      salary: grossSalary,
+      grossSalary: grossSalary,
+      employerCharges: employerCharges,
+      totalEmployerCost: totalEmployerCost,
       missions: checkedMissions,
       publishedAt: Date.now(),
       status: 'ouvert',
@@ -1713,12 +1839,12 @@ window.ProtecPersonnel = {
     game.showToast(
       isSC ? 'Mission Publiée !' : 'Offre Publiée !',
       isSC 
-        ? `La mission « ${title} » est en ligne sur l’Agence du Service Civique. Les candidatures vont tomber dans les prochaines minutes !`
-        : `L’offre « ${title} » (${contractType}) est en ligne. Les candidatures vont tomber dans les heures suivantes !`,
+        ? `La mission « ${title} » est en ligne sur l’Agence du Service Civique. Coût antenne légal : 114,85 €/mois. PSC 1 à programmer.`
+        : `L’offre « ${title} » (${contractType}) est en ligne avec un salaire brut de ${grossSalary} € (coût réel antenne : ${totalEmployerCost} €/mois).`,
       'green'
     );
 
-    // Programmation de l'arrivée progressive des candidatures dans les heures suivantes (simulation accélérée)
+    // Programmation de l'arrivée progressive des candidatures dans les heures suivantes selon l'attractivité du salaire
     this.scheduleIncomingApplicants(game, newOffer);
 
     game.saveGame();
@@ -1729,28 +1855,37 @@ window.ProtecPersonnel = {
   // Programmation de candidatures (Service Civique ou Salariées) arrivant au fil du temps
   scheduleIncomingApplicants(game, offer) {
     const isSC = offer.contractType === 'service_civique';
+    const salary = offer.salary || 2200;
 
-    // Première candidature après 10 à 20 secondes
-    const delay1 = (10 + Math.random() * 10) * 1000;
-    setTimeout(() => {
-      if (!game.jobOffers.some(o => o.id === offer.id && o.status === 'ouvert')) return;
-      if (isSC) {
-        this.generateServiceCiviqueCandidate(game, offer);
-      } else {
-        this.generateSalarieCandidate(game, offer);
-      }
-    }, delay1);
+    let applicantsTarget = 2;
+    if (isSC) {
+      applicantsTarget = 2; // Les services civiques reçoivent 2 candidatures de jeunes
+    } else {
+      // Le salaire brut détermine le nombre de candidatures reçues
+      if (salary < 2000) applicantsTarget = 1;
+      else if (salary >= 2900) applicantsTarget = 4;
+      else if (salary >= 2450) applicantsTarget = 3;
+      else applicantsTarget = 2;
+    }
 
-    // Seconde candidature après 35 à 60 secondes
-    const delay2 = (35 + Math.random() * 25) * 1000;
-    setTimeout(() => {
-      if (!game.jobOffers.some(o => o.id === offer.id && o.status === 'ouvert')) return;
-      if (isSC) {
-        this.generateServiceCiviqueCandidate(game, offer);
-      } else {
-        this.generateSalarieCandidate(game, offer);
-      }
-    }, delay2);
+    const delays = [
+      (6 + Math.random() * 6) * 1000,
+      (18 + Math.random() * 12) * 1000,
+      (35 + Math.random() * 15) * 1000,
+      (55 + Math.random() * 20) * 1000
+    ];
+
+    for (let i = 0; i < applicantsTarget; i++) {
+      const delay = delays[i] || (15 * (i + 1) * 1000);
+      setTimeout(() => {
+        if (!game.jobOffers.some(o => o.id === offer.id && o.status === 'ouvert')) return;
+        if (isSC) {
+          this.generateServiceCiviqueCandidate(game, offer);
+        } else {
+          this.generateSalarieCandidate(game, offer);
+        }
+      }, delay);
+    }
   },
 
   // Génération d'une candidature de Service Civique liée à la mission
@@ -1815,12 +1950,16 @@ window.ProtecPersonnel = {
       jobOfferId: offer.id,
       jobOfferTitle: offer.title,
       durationMonths: 8,
-      monthlySalary: 115,
+      monthlySalary: 114.85,
+      monthlyStipend: 114.85,
+      totalEmployerCost: 114.85,
+      psc1Status: pick.rank === 'PSE1' ? 'valide' : 'a_programmer',
+      psc1Required: true,
       targetMissions: offer.missions,
       avatar: pick.avatar,
       rank: pick.rank,
       role: offer.title,
-      skills: ['pse1', 'permis_b'],
+      skills: pick.rank === 'PSE1' ? ['pse1', 'permis_b'] : ['permis_b'],
       isTrainer: false,
       background: pick.background,
       motivation: pick.motivation,
@@ -1912,9 +2051,37 @@ window.ProtecPersonnel = {
       }
     ];
 
-    // Choisir un candidat qui a des atouts sur les missions demandées
-    const suited = candidatesPool.filter(c => c.strongMissions.some(m => offer.missions.includes(m)));
-    const pick = suited.length > 0 ? suited[Math.floor(Math.random() * suited.length)] : candidatesPool[Math.floor(Math.random() * candidatesPool.length)];
+    const salary = offer.salary || 2200;
+
+    // Détermination de la qualité du profil généré selon le niveau de rémunération brute
+    let targetRank = pick.rank;
+    let targetExp = pick.baseExp;
+    let targetIsTrainer = pick.isTrainer;
+    let suitabilityBonus = 0;
+    let qualitySkillTag = 'Secouriste Expérimenté';
+
+    if (salary < 2000) {
+      // Salaire bas : profil junior / débutant
+      targetRank = 'PSE1';
+      targetExp = Math.round(pick.baseExp * 0.6);
+      targetIsTrainer = false;
+      suitabilityBonus = -16;
+      qualitySkillTag = 'Secouriste Débutant (Faible Rémunération)';
+    } else if (salary >= 2900) {
+      // Salaire supérieur : profil cadre de direction / expert
+      targetRank = 'CD';
+      targetExp = Math.round(pick.baseExp * 1.5);
+      targetIsTrainer = true;
+      suitabilityBonus = +15;
+      qualitySkillTag = 'Cadre d’Urgence Supérieur (Élite)';
+    } else if (salary >= 2450) {
+      // Salaire très attractif : cadre confirmé
+      targetRank = (pick.rank === 'PSE2' || pick.rank === 'PSE1') ? 'CE' : pick.rank;
+      targetExp = Math.round(pick.baseExp * 1.25);
+      targetIsTrainer = true;
+      suitabilityBonus = +8;
+      qualitySkillTag = 'Chef d’Équipe Confirmé & Formateur';
+    }
 
     const candId = `cand-sal-${Date.now()}-${Math.floor(Math.random()*1000)}`;
     const newCand = {
@@ -1926,17 +2093,20 @@ window.ProtecPersonnel = {
       jobOfferTitle: offer.title,
       contractType: offer.contractType,
       durationMonths: offer.durationMonths,
-      monthlySalary: offer.salary,
+      monthlySalary: salary,
+      monthlyGrossSalary: salary,
+      employerCharges: Math.round(salary * 0.42 * 100) / 100,
+      totalEmployerCost: Math.round(salary * 1.42 * 100) / 100,
       targetMissions: offer.missions,
       avatar: pick.avatar,
-      rank: pick.rank,
+      rank: targetRank,
       role: offer.title,
-      skills: [pick.rank, ...(pick.isTrainer ? ['Formateur Agréé'] : []), 'Permis VPSP', 'Gestion Crise'],
-      isTrainer: pick.isTrainer,
+      skills: [targetRank, ...(targetIsTrainer ? ['Formateur Agréé', 'Pédagogie'] : []), 'Permis VPSP', 'Gestion Crise', qualitySkillTag],
+      isTrainer: targetIsTrainer,
       background: pick.background,
       motivation: pick.motivation,
-      exp: pick.baseExp,
-      suitabilityScore: Math.round(78 + Math.random() * 18),
+      exp: targetExp,
+      suitabilityScore: Math.min(99, Math.max(55, Math.round(78 + (Math.random() * 12) + suitabilityBonus))),
       interviewPassed: false,
       interviewReport: null
     };
@@ -1992,7 +2162,7 @@ window.ProtecPersonnel = {
     const isSC = cand.type === 'service_civique' || cand.contractType === 'service_civique';
 
     title.textContent = isSC ? 'Entretien de Sélection • Service Civique' : (isSalarie ? 'Entretien d’Embauche Salarié' : 'Entretien d’Intégration Bénévole');
-    subtitle.textContent = `Évaluation individuelle de ${cand.name} (${cand.age} ans) • ${isSC ? `Mission : ${cand.jobOfferTitle} (115 €/mois)` : (isSalarie ? `Candidat au poste : ${cand.jobOfferTitle}` : 'Engagement associatif')}`;
+    subtitle.textContent = `Évaluation individuelle de ${cand.name} (${cand.age} ans) • ${isSC ? `Mission : ${cand.jobOfferTitle} (114,85 €/mois fixe • PSC 1 requis)` : (isSalarie ? `Candidat au poste : ${cand.jobOfferTitle}` : 'Engagement associatif')}`;
     icon.setAttribute('data-lucide', isSC ? 'award' : 'user-check');
 
     const q1Answer = isSC
@@ -2019,14 +2189,18 @@ window.ProtecPersonnel = {
         <div class="p-4 rounded-2xl glass-card flex items-start gap-4 border ${isSC ? 'border-amber-200' : 'border-indigo-100'}">
           ${game.getVolunteerAvatarHTML ? game.getVolunteerAvatarHTML(cand, 'w-12 h-12', false) : `<span class="text-4xl">${cand.avatar || '🙋'}</span>`}
           <div class="flex-1 space-y-1">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between flex-wrap gap-1">
               <h4 class="text-sm font-black text-slate-900">${cand.name} (${cand.age} ans)</h4>
               <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black ${isSC ? 'bg-amber-100 text-amber-800' : (isSalarie ? 'bg-indigo-100 text-indigo-800' : 'bg-pc-blue/15 text-pc-blue')}">
-                ${isSC ? 'SERVICE CIVIQUE • 115 €/MOIS' : (isSalarie ? `SALARIÉ • ${cand.contractType}` : 'BÉNÉVOLE')}
+                ${isSC ? 'SERVICE CIVIQUE • 114,85 €/MOIS FIXE' : (isSalarie ? `SALARIÉ • ${cand.contractType}` : 'BÉNÉVOLE')}
               </span>
             </div>
-            <p class="text-xs text-slate-500 font-semibold">
-              ${isSC ? `Mission visée : <strong>${cand.jobOfferTitle}</strong> (Indemnité antenne 115 €/mois)` : (isSalarie ? `Poste visé : <strong>${cand.jobOfferTitle}</strong> (${cand.monthlySalary} €/mois)` : `Activité civile : <strong>${cand.job || 'Étudiant'}</strong>`)}
+            <p class="text-xs text-slate-600 font-semibold">
+              ${isSC 
+                ? `Mission visée : <strong>${cand.jobOfferTitle}</strong> (Indemnité antenne légale fixe 114,85 €/mois • 504,98 € État • ${cand.psc1Status === 'valide' ? '✅ PSC 1 Validé' : '⚠️ PSC 1 à programmer durant la mission'})` 
+                : (isSalarie 
+                  ? `Poste : <strong>${cand.jobOfferTitle}</strong> • Salaire brut : <strong>${cand.monthlyGrossSalary || cand.monthlySalary || 2200} €</strong> • Charges patronales (+42%) : <strong>${cand.employerCharges || Math.round((cand.monthlySalary || 2200) * 0.42)} €</strong> • Coût total antenne : <strong class="text-indigo-900">${cand.totalEmployerCost || Math.round((cand.monthlySalary || 2200) * 1.42)} € / mois</strong>` 
+                  : `Activité civile : <strong>${cand.job || 'Étudiant'}</strong>`)}
             </p>
             ${cand.adresse ? `
               <div class="p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-700 flex flex-wrap items-center justify-between gap-1 mt-1">
@@ -2102,9 +2276,10 @@ window.ProtecPersonnel = {
 
     cand.interviewPassed = true;
     const isSalarie = cand.type === 'salarie';
+    const isServiceCivique = cand.type === 'service_civique' || cand.contractType === 'service_civique' || cand.contractType === 'Service Civique';
 
     // Calcul de la note de motivation
-    let noteBase = isSalarie ? 15 : 14;
+    let noteBase = isSalarie ? 15 : (isServiceCivique ? 15 : 14);
     if (cand.rank === 'CE' || cand.rank === 'CD') noteBase += 3;
     else if (cand.rank === 'PSE2' || cand.rank === 'PSE1') noteBase += 2;
     if (cand.isTrainer) noteBase += 2;
@@ -2128,6 +2303,12 @@ window.ProtecPersonnel = {
     title.textContent = 'Compte-Rendu RH d’Entretien de Recrutement';
     subtitle.textContent = `Synthèse d'évaluation de ${cand.name} • Décision finale d'intégration`;
     icon.setAttribute('data-lucide', 'award');
+
+    // Calculs financiers pour l'affichage
+    const gross = cand.grossSalary || cand.monthlySalary || (isServiceCivique ? 114.85 : 0);
+    const charges = isSalarie ? Math.round(gross * 0.42) : 0;
+    const totalCost = isSalarie ? Math.round(gross * 1.42) : (isServiceCivique ? 114.85 : 0);
+    const qualityMult = cand.workQualityMultiplier || (isSalarie ? (gross >= 2900 ? 1.25 : gross >= 2450 ? 1.15 : gross >= 2000 ? 1.05 : 0.90) : 1.0);
 
     body.innerHTML = `
       <div class="space-y-6">
@@ -2158,40 +2339,71 @@ window.ProtecPersonnel = {
             <div class="text-[11px] text-slate-500 pt-2 border-t border-slate-100">
               ${isSalarie 
                 ? 'Volonté forte d’encadrement professionnel, de rigueur et d’animation opérationnelle de la base.' 
-                : 'Désir d’utilité citoyenne, générosité, contact humain et apprentissage des gestes qui sauvent.'}
+                : isServiceCivique 
+                  ? 'Engagement civique et citoyen, volonté d’apprentissage et de dévouement pour la collectivité.' 
+                  : 'Désir d’utilité citoyenne, générosité, contact humain et apprentissage des gestes qui sauvent.'}
             </div>
           </div>
 
-          <!-- Bloc Disponibilités OU Fiche de Poste Salarié -->
+          <!-- Bloc Disponibilités OU Fiche de Poste / Engagement -->
           <div class="p-4 rounded-2xl glass-card space-y-2 border border-slate-200">
             ${isSalarie ? `
-              <!-- POUR LES SALARIÉS : PAS DE DISPONIBILITÉS PERSONNELLES CAR C'EST LE POSTE QUI JOUE -->
+              <!-- POUR LES SALARIÉS -->
               <h5 class="text-xs font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
                 <i data-lucide="briefcase" class="w-4 h-4 text-indigo-600"></i>
                 Adéquation au Poste & Contrat de Travail
               </h5>
               <div class="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-950 space-y-1">
-                <span class="font-bold block">ℹ️ Disponibilités Personnelles : Non applicables</span>
-                <p class="text-[11px] text-slate-600 leading-snug">
-                  C’est la fiche de poste et le contrat qui déterminent les vacations (forfait légal de 151h mensuelles, 35h/semaine sous le Code du Travail).
+                <div class="flex justify-between items-center">
+                  <span class="font-bold">Poste : ${cand.jobOfferTitle || 'Secouriste Référent'}</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-200 text-indigo-900">${cand.contractType}</span>
+                </div>
+                <p class="text-[11px] text-slate-600">Vacations régies par le contrat (35h/semaine - forfait 151h mensuelles).</p>
+              </div>
+              <div class="space-y-1.5 pt-1 text-xs">
+                <div class="flex justify-between">
+                  <span class="text-slate-500">Salaire Brut Mensuel :</span>
+                  <strong class="text-slate-800 font-mono">${gross.toLocaleString()} €</strong>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-500">Charges Patronales (+42%) :</span>
+                  <span class="text-amber-700 font-mono font-bold">+${charges.toLocaleString()} €</span>
+                </div>
+                <div class="flex justify-between pt-1 border-t border-slate-200">
+                  <span class="font-bold text-slate-800">Coût Total Antenne :</span>
+                  <strong class="text-rose-700 font-mono font-black text-sm">${totalCost.toLocaleString()} € / mois</strong>
+                </div>
+                <div class="mt-2 p-2 rounded-lg ${qualityMult >= 1.15 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-slate-50 text-slate-700 border border-slate-200'} text-[11px] flex items-center justify-between">
+                  <span>Qualité & Impact du Travail :</span>
+                  <span class="font-black">${qualityMult >= 1.25 ? '⭐ Exceptionnelle (+25% efficacité)' : qualityMult >= 1.15 ? '✨ Très Élevée (+15% efficacité)' : qualityMult >= 1.05 ? '👍 Bonne (+5% efficacité)' : '⚠️ Standard (-10% motivation)'}</span>
+                </div>
+              </div>
+            ` : isServiceCivique ? `
+              <!-- POUR LES SERVICES CIVIQUES -->
+              <h5 class="text-xs font-black uppercase text-amber-900 tracking-wider flex items-center gap-1.5">
+                <i data-lucide="handshake" class="w-4 h-4 text-amber-600"></i>
+                Mission de Service Civique (Engagement Volontaire)
+              </h5>
+              <div class="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <span class="font-bold">Indemnité Mensuelle Antenne :</span>
+                  <strong class="text-amber-900 font-mono text-sm">114,85 € / mois</strong>
+                </div>
+                <p class="text-[11px] text-amber-800">
+                  ⚠️ Prestation légale de subsistance fixée par l'État (non modifiable). Le complément (504,98 €) est directement versé par l'État via l'ASP.
                 </p>
               </div>
-              <div class="space-y-1 pt-1 text-xs">
-                <div class="flex justify-between">
-                  <span class="text-slate-500">Poste :</span>
-                  <strong class="text-slate-800">${cand.jobOfferTitle}</strong>
+              <div class="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-950 space-y-1">
+                <div class="flex items-center gap-1.5 font-bold text-pc-blue">
+                  <i data-lucide="graduation-cap" class="w-4 h-4"></i>
+                  Obligation de Formation PSC 1 :
                 </div>
-                <div class="flex justify-between">
-                  <span class="text-slate-500">Contrat proposé :</span>
-                  <strong class="text-indigo-700">${cand.contractType} ${cand.durationMonths ? `(${cand.durationMonths} mois)` : 'Permanent'}</strong>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-slate-500">Salaire convenu :</span>
-                  <strong class="text-emerald-700 font-mono">${cand.monthlySalary} € / mois</strong>
-                </div>
+                <p class="text-[11px] text-slate-600">
+                  Le volontaire devra obligatoirement suivre et valider sa formation <strong>PSC 1</strong> durant sa mission (soit au sein de votre antenne si formateur présent, soit dans une autre antenne partenaire).
+                </p>
               </div>
             ` : `
-              <!-- POUR LES BÉNÉVOLES : DISPONIBILITÉS DÉTAILLÉES OBLIGATOIRES -->
+              <!-- POUR LES BÉNÉVOLES : DISPONIBILITÉS DÉTAILLÉES -->
               <h5 class="text-xs font-black uppercase text-pc-blue tracking-wider flex items-center gap-1.5">
                 <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
                 Disponibilités Déclarées du Bénévole
@@ -2235,9 +2447,13 @@ window.ProtecPersonnel = {
             Décliner la Candidature
           </button>
           
-          <button onclick="window.ProtecPersonnel.hireCandidateFromInterview(window.game, '${cand.id}')" class="px-6 py-2.5 rounded-xl text-xs font-black ${isSalarie ? 'bg-gradient-to-r from-indigo-600 to-blue-600' : 'bg-gradient-to-r from-emerald-600 to-teal-600'} hover:brightness-110 text-white shadow-lg transition flex items-center gap-2">
+          <button onclick="window.ProtecPersonnel.hireCandidateFromInterview(window.game, '${cand.id}')" class="px-6 py-2.5 rounded-xl text-xs font-black ${isSalarie ? 'bg-gradient-to-r from-indigo-600 to-blue-600' : isServiceCivique ? 'bg-gradient-to-r from-amber-600 to-orange-600' : 'bg-gradient-to-r from-emerald-600 to-teal-600'} hover:brightness-110 text-white shadow-lg transition flex items-center gap-2">
             <i data-lucide="check" class="w-4 h-4"></i>
-            ${isSalarie ? `Signer le Contrat de Travail (${cand.contractType})` : 'Valider l’Intégration & Signer la Charte'}
+            ${isSalarie 
+              ? `Signer le Contrat de Travail (${cand.contractType})` 
+              : isServiceCivique 
+                ? 'Signer l’Engagement de Service Civique (114,85 €/mois)' 
+                : 'Valider l’Intégration & Signer la Charte'}
           </button>
         </div>
       </div>
@@ -2253,11 +2469,12 @@ window.ProtecPersonnel = {
 
     if (cand.type === 'service_civique' || cand.contractType === 'service_civique') {
       // Signature Engagement Service Civique
+      const hasInitPSC1 = cand.skills && (cand.skills.includes('psc1') || cand.skills.includes('pse1') || cand.skills.includes('pse2'));
       const newVol = {
         id: `sc-${Date.now()}`,
         name: cand.name,
         role: cand.jobOfferTitle || 'Volontaire Service Civique',
-        rank: cand.rank || 'PSE1',
+        rank: cand.rank || (hasInitPSC1 ? 'PSE1' : 'Stagiaire'),
         contractType: 'service_civique',
         profilSocial: 'service_civique',
         exp: cand.exp || 30,
@@ -2271,7 +2488,7 @@ window.ProtecPersonnel = {
         avatar: cand.avatar || '🎖️',
         dispoType: 'service_civique',
         dispoJours: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
-        skills: cand.skills || ['pse1', 'permis_b'],
+        skills: cand.skills || (hasInitPSC1 ? ['pse1', 'permis_b'] : ['permis_b']),
         commune: cand.commune,
         code_postal: cand.code_postal,
         adresse: cand.adresse,
@@ -2282,6 +2499,12 @@ window.ProtecPersonnel = {
         permis_b: cand.permis_b,
         permis_c: cand.permis_c,
         permis_moto: cand.permis_moto,
+        monthlySalary: 114.85,
+        monthlyStipend: 114.85,
+        totalEmployerCost: 114.85,
+        psc1Status: hasInitPSC1 ? 'valide' : 'a_programmer',
+        psc1Origin: hasInitPSC1 ? 'Diplôme Initiale' : null,
+        psc1Required: true,
         missionsCount: 0,
         consecutiveMissions: 0,
         isBurnout: false
@@ -2298,12 +2521,30 @@ window.ProtecPersonnel = {
       }
 
       game.showToast(
-        'Contrat Signé !',
-        `Félicitations ! ${newVol.name} a signé son engagement en Service Civique (${newVol.role} • 115 €/mois).`,
+        'Engagement Service Civique Signé ! 🎖️',
+        `Félicitations ! ${newVol.name} a signé son engagement (coût fixe antenne : 114,85 €/mois). ${newVol.psc1Status === 'valide' ? 'PSC 1 déjà validé.' : 'Pensez à programmer sa formation PSC 1 durant sa mission !'}`,
         'green'
       );
     } else if (cand.type === 'salarie') {
       // Embauche Salarié
+      const gross = cand.monthlySalary || 2200;
+      const charges = Math.round(gross * 0.42 * 100) / 100;
+      const totalCost = Math.round((gross + charges) * 100) / 100;
+
+      // Qualité du travail et motivation indexées sur le niveau de rémunération
+      let workQuality = 1.0;
+      let initialMotivation = 88;
+      if (gross >= 2900) {
+        workQuality = 1.25; // +25% d'efficacité opérationnelle
+        initialMotivation = 100;
+      } else if (gross >= 2450) {
+        workQuality = 1.15; // +15% d'efficacité
+        initialMotivation = 95;
+      } else if (gross < 2000) {
+        workQuality = 0.85; // Baisse d'efficacité si sous-payé
+        initialMotivation = 75;
+      }
+
       const newSalarie = {
         id: `sal-${Date.now()}`,
         name: cand.name,
@@ -2315,8 +2556,8 @@ window.ProtecPersonnel = {
         profilSocial: 'salarie_asso',
         exp: cand.exp || 150,
         energy: 100,
-        motivation: 95,
-        humeur: 90,
+        motivation: initialMotivation,
+        humeur: initialMotivation,
         trait: 'leader',
         status: 'dispo',
         stationId: game.stations[0]?.id,
@@ -2335,6 +2576,11 @@ window.ProtecPersonnel = {
         permis_b: cand.permis_b,
         permis_c: cand.permis_c,
         permis_moto: cand.permis_moto,
+        monthlySalary: gross,
+        monthlyGrossSalary: gross,
+        employerCharges: charges,
+        totalEmployerCost: totalCost,
+        workQualityMultiplier: workQuality,
         contractMonthlyHours: 151,
         monthlyHoursWorked: 0,
         monthlyOvertimeHours: 0,
@@ -2355,8 +2601,8 @@ window.ProtecPersonnel = {
       }
 
       game.showToast(
-        'Contrat Signé !',
-        `Félicitations ! ${newSalarie.name} a signé son contrat ${cand.contractType} (${cand.jobOfferTitle} • 151h mensuelles).`,
+        'Contrat Salarié Signé ! 💼',
+        `Félicitations ! ${newSalarie.name} a signé son contrat ${cand.contractType} (${cand.jobOfferTitle} • Salaire brut : ${gross} € • Coût total antenne avec charges patronales 42% : ${totalCost} €/mois).`,
         'green'
       );
     } else {
@@ -2369,6 +2615,82 @@ window.ProtecPersonnel = {
     game.saveGame();
     game.updateStatsUI();
     game.openModule('recrutement');
+  },
+
+  // 4b. Validation de la formation PSC 1 pour un volontaire en Service Civique
+  passServiceCiviquePSC1(game, volunteerId, mode = 'interne') {
+    if (!game || !game.volunteers) return;
+    const vol = game.volunteers.find(v => v.id === volunteerId);
+    if (!vol) return;
+
+    if (vol.psc1Status === 'valide') {
+      game.showToast('PSC 1 Déjà Validé', `${vol.name} est déjà titulaire de sa certification PSC 1.`, 'blue');
+      return;
+    }
+
+    if (mode === 'interne') {
+      // Vérifier si un formateur est présent à l'antenne
+      const hasTrainer = game.volunteers.some(v => v.id !== vol.id && (v.isTrainer || v.rank === 'Formateur' || (v.skills && v.skills.some(s => s.toLowerCase().includes('formateur')))));
+      if (!hasTrainer) {
+        game.showToast(
+          'Aucun Formateur à l’Antenne',
+          'Vous n’avez aucun formateur agréé dans vos effectifs pour assurer la session. Envoyez le volontaire en formation auprès d’une antenne partenaire du réseau (60 €).',
+          'orange'
+        );
+        return;
+      }
+
+      vol.psc1Status = 'valide';
+      vol.psc1Origin = 'Antenne Locale (Session Interne)';
+      vol.skills = Array.from(new Set([...(vol.skills || []), 'psc1']));
+      if (!vol.rank || vol.rank === 'Stagiaire') vol.rank = 'PSC1';
+      vol.exp = (vol.exp || 20) + 15;
+      vol.motivation = Math.min(100, (vol.motivation || 80) + 10);
+
+      game.showToast(
+        '🎓 PSC 1 Validé en Interne !',
+        `${vol.name} a suivi et validé avec succès sa formation PSC 1 auprès d'un formateur de votre antenne. Obligation légale de Service Civique validée !`,
+        'green'
+      );
+    } else {
+      // Formation auprès d'une autre antenne partenaire du réseau (coût 60 €)
+      const cost = 60;
+      if ((game.resources.money || 0) < cost) {
+        game.showToast('Trésorerie Insuffisante', `L'inscription à la session PSC 1 réseau partenaire requiert ${cost} €.`, 'orange');
+        return;
+      }
+
+      game.resources.money = Math.max(0, (game.resources.money || 0) - cost);
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(
+          game,
+          -cost,
+          `Formation PSC 1 Service Civique (Antenne Partenaire Fédérale) - ${vol.name}`,
+          'formations',
+          'PSC1-SC-' + Date.now(),
+          'Antenne Partenaire Protection Civile'
+        );
+      }
+
+      vol.psc1Status = 'valide';
+      vol.psc1Origin = 'Antenne Partenaire (Réseau Fédéral)';
+      vol.skills = Array.from(new Set([...(vol.skills || []), 'psc1']));
+      if (!vol.rank || vol.rank === 'Stagiaire') vol.rank = 'PSC1';
+      vol.exp = (vol.exp || 20) + 15;
+      vol.motivation = Math.min(100, (vol.motivation || 80) + 10);
+
+      game.showToast(
+        '🎓 PSC 1 Validé (Antenne Partenaire) !',
+        `${vol.name} a validé sa certification PSC 1 auprès d’une antenne partenaire du réseau (${cost} €). Obligation légale de Service Civique validée !`,
+        'green'
+      );
+    }
+
+    game.saveGame();
+    game.updateStatsUI();
+    if (game.currentModalKey === 'recrutement') {
+      game.openModule('recrutement', true);
+    }
   },
 
   // ==============================================================================
@@ -2736,6 +3058,185 @@ window.ProtecPersonnel = {
     if (volunteer.permis_moto && !volunteer.skills.includes('permis_moto')) {
       volunteer.skills.push('permis_moto');
     }
+  },
+
+  // 6. Générateur d'effectifs constitutifs variés lors de la création d'antenne
+  generateStarterVolunteers(count = 5, stationId = null, game = null) {
+    const maleFirstNames = [
+      'Alexandre', 'Thomas', 'Lucas', 'Julien', 'Maxime', 'Nicolas', 'Antoine', 'Hugo', 'Gabriel', 'Clément',
+      'Mathis', 'Romain', 'Quentin', 'Enzo', 'Valentin', 'Florian', 'Louis', 'Léo', 'Arthur', 'Nathan',
+      'Baptiste', 'Kévin', 'Damien', 'Sébastien', 'Pierre', 'Guillaume', 'Alexis', 'Théo', 'Adrien', 'Mathieu',
+      'Benjamin', 'Vincent', 'Fabien', 'Thibault', 'Mickaël', 'Cédric', 'Arnaud'
+    ];
+
+    const femaleFirstNames = [
+      'Sarah', 'Élodie', 'Camille', 'Inès', 'Chloé', 'Léa', 'Manon', 'Jade', 'Clara', 'Emma',
+      'Charlotte', 'Juliette', 'Pauline', 'Marion', 'Laura', 'Sophie', 'Lucie', 'Mathilde', 'Océane', 'Audrey',
+      'Céline', 'Amélie', 'Mélanie', 'Marine', 'Alice', 'Noémie', 'Julie', 'Margaux', 'Anaïs', 'Justine',
+      'Émilie', 'Morgane', 'Estelle', 'Romane', 'Laure', 'Sabrina', 'Éléonore'
+    ];
+
+    const lastNames = [
+      'Roux', 'Girard', 'Martin', 'Leroy', 'Bernard', 'Dubois', 'Thomas', 'Robert', 'Richard', 'Petit',
+      'Durand', 'Moreau', 'Laurent', 'Simon', 'Michel', 'Lefebvre', 'Garcia', 'David', 'Bertrand', 'Morel',
+      'Fournier', 'Benali', 'Fontaine', 'Chevalier', 'Robin', 'Masson', 'Sanchez', 'Gérard', 'Mercier', 'Blanc',
+      'Guérin', 'Boyer', 'Garnier', 'Legrand', 'Gauthier', 'Perrin', 'Faure', 'Lemoine', 'Caron', 'Renard',
+      'Dumont', 'Gros', 'Picard', 'Colin', 'Vidal', 'Aubry', 'Marchand', 'Meunier', 'Lemaire', 'Gaillard'
+    ];
+
+    const maleAvatars = ['👨‍💼', '🧑‍🚒', '🙋‍♂️', '👨‍🦱', '🧔', '👱‍♂️', '👨‍🦰', '👨‍⚕️', '🧑'];
+    const femaleAvatars = ['👩‍🚒', '👩', '👩‍🦰', '🧕', '👩‍🦱', '👱‍♀️', '👩‍⚕️', '🧑'];
+
+    const pickUnique = (arr, usedSet) => {
+      const available = arr.filter(item => !usedSet.has(item));
+      const pool = available.length > 0 ? available : arr;
+      const chosen = pool[Math.floor(Math.random() * pool.length)];
+      usedSet.add(chosen);
+      return chosen;
+    };
+
+    const usedFirstNames = new Set();
+    const usedLastNames = new Set();
+
+    // Parité équilibrée (2 à 3 femmes, 2 à 3 hommes)
+    const femaleCount = Math.random() < 0.5 ? 2 : 3;
+    const genders = [];
+    for (let i = 0; i < count; i++) {
+      genders.push(i < femaleCount ? 'f' : 'h');
+    }
+    genders.sort(() => Math.random() - 0.5);
+
+    const dispoSchedules = [
+      ['Vendredi', 'Samedi', 'Dimanche'],
+      ['Samedi', 'Dimanche'],
+      ['Mardi', 'Samedi', 'Dimanche'],
+      ['Mercredi', 'Vendredi', 'Samedi'],
+      ['Lundi', 'Vendredi', 'Samedi'],
+      ['Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+      ['Mercredi', 'Samedi', 'Dimanche'],
+      ['Mardi', 'Jeudi', 'Samedi'],
+      ['Vendredi', 'Samedi']
+    ];
+
+    const traits = ['devoue', 'rigoureux', 'calme', 'dynamique', 'pedagogue', 'enthousiaste', 'ponctuel', 'equilibre'];
+
+    // Profils équilibrés pour une antenne immédiatement opérationnelle
+    const slotTemplates = [
+      // 1. Cadre d'antenne / Chef d'équipe expérimenté (CE)
+      {
+        role: 'Chef d’Équipe',
+        rank: 'CE',
+        baseExp: 30 + Math.floor(Math.random() * 12),
+        mandatorySkills: ['ce', 'pse2', 'pse1', 'permis_b'],
+        bonusSkillPool: ['permis_vpsp', 'commandement', 'communication_1'],
+        socialTypes: ['salarie', 'actif', 'fonctionnaire'],
+        preferredTrait: ['rigoureux', 'calme', 'pedagogue', 'devoue']
+      },
+      // 2. Équipier secouriste confirmé (PSE2)
+      {
+        role: 'Équipier Secouriste',
+        rank: 'PSE2',
+        baseExp: 22 + Math.floor(Math.random() * 10),
+        mandatorySkills: ['pse2', 'pse1'],
+        bonusSkillPool: ['permis_b', 'permis_vpsp', 'pma'],
+        socialTypes: ['etudiant', 'salarie', 'independant'],
+        preferredTrait: ['dynamique', 'devoue', 'enthousiaste']
+      },
+      // 3. Second Équipier secouriste (PSE2 ou Chauffeur)
+      {
+        role: Math.random() < 0.4 ? 'Secouriste Chauffeur' : 'Équipier Secouriste',
+        rank: 'PSE2',
+        baseExp: 18 + Math.floor(Math.random() * 10),
+        mandatorySkills: ['pse2', 'pse1'],
+        bonusSkillPool: ['permis_b', 'permis_vpsp', 'logistique', 'qcpr'],
+        socialTypes: ['salarie', 'parent', 'actif'],
+        preferredTrait: ['calme', 'ponctuel', 'equilibre']
+      },
+      // 4. Secouriste opérationnel (PSE1)
+      {
+        role: 'Secouriste',
+        rank: 'PSE1',
+        baseExp: 12 + Math.floor(Math.random() * 8),
+        mandatorySkills: ['pse1'],
+        bonusSkillPool: ['permis_b', 'communication_1', 'qcpr'],
+        socialTypes: ['etudiant', 'salarie', 'parent'],
+        preferredTrait: ['enthousiaste', 'dynamique', 'devoue']
+      },
+      // 5. Secouriste ou nouvel engagé (PSE1 à 80% ou Stagiaire à 20%)
+      {
+        role: Math.random() < 0.2 ? 'Bénévole Stagiaire' : 'Secouriste',
+        rank: Math.random() < 0.2 ? 'Stagiaire' : 'PSE1',
+        baseExp: 6 + Math.floor(Math.random() * 8),
+        mandatorySkills: ['pse1'],
+        bonusSkillPool: ['permis_b', 'communication_1'],
+        socialTypes: ['etudiant', 'salarie'],
+        preferredTrait: ['enthousiaste', 'curieux', 'devoue']
+      }
+    ];
+
+    const volunteers = [];
+
+    for (let i = 0; i < count; i++) {
+      const template = slotTemplates[i] || slotTemplates[slotTemplates.length - 1];
+      const isFemale = genders[i] === 'f';
+      const fn = isFemale ? pickUnique(femaleFirstNames, usedFirstNames) : pickUnique(maleFirstNames, usedFirstNames);
+      const ln = pickUnique(lastNames, usedLastNames);
+      const avatar = isFemale 
+        ? femaleAvatars[Math.floor(Math.random() * femaleAvatars.length)] 
+        : maleAvatars[Math.floor(Math.random() * maleAvatars.length)];
+
+      const socialChoice = template.socialTypes[Math.floor(Math.random() * template.socialTypes.length)];
+      const dispoType = isFemale && socialChoice === 'etudiant' ? 'étudiante' : socialChoice;
+      const dispoJours = dispoSchedules[Math.floor(Math.random() * dispoSchedules.length)];
+
+      const skills = [...template.mandatorySkills];
+      if (template.rank === 'Stagiaire') {
+        skills.length = 0;
+        skills.push('psc1');
+      }
+
+      // Ajout de 1 à 2 compétences bonus adaptées
+      const bonusCandidate = template.bonusSkillPool[Math.floor(Math.random() * template.bonusSkillPool.length)];
+      if (bonusCandidate && !skills.includes(bonusCandidate)) {
+        skills.push(bonusCandidate);
+      }
+      if (Math.random() < 0.6 && !skills.includes('permis_b') && template.rank !== 'Stagiaire') {
+        skills.push('permis_b');
+      }
+
+      const trait = template.preferredTrait[Math.floor(Math.random() * template.preferredTrait.length)] || traits[Math.floor(Math.random() * traits.length)];
+      const motivation = Math.round(78 + Math.random() * 18); // 78% à 96%
+
+      const vol = {
+        id: `vol-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 6)}`,
+        name: `${fn} ${ln}`,
+        role: template.role,
+        rank: template.rank,
+        gender: isFemale ? 'f' : 'h',
+        avatar: avatar,
+        exp: template.baseExp,
+        energy: 100,
+        motivation: motivation,
+        humeur: 85,
+        trait: trait,
+        contractType: 'benevole',
+        profilSocial: socialChoice === 'etudiant' ? 'etudiant' : 'salarie',
+        status: 'dispo',
+        stationId: stationId,
+        isTrainer: skills.includes('ce') && Math.random() < 0.25,
+        dispoType: dispoType,
+        dispoJours: dispoJours,
+        skills: skills
+      };
+
+      if (game && this.ensureVolunteerResidence) {
+        this.ensureVolunteerResidence(vol, game);
+      }
+
+      volunteers.push(vol);
+    }
+
+    return volunteers;
   }
 };
 
