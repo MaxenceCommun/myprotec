@@ -68,6 +68,7 @@ window.ProtecAdmin = {
     const tabMissionsBtn = document.getElementById('admin-tab-missions-btn');
     const tabEventsBtn = document.getElementById('admin-tab-events-btn');
     const tabReferralsBtn = document.getElementById('admin-tab-referrals-btn');
+    const tabBalancingBtn = document.getElementById('admin-tab-balancing-btn');
 
     const viewPlayers = document.getElementById('admin-view-players');
     const viewAnnouncements = document.getElementById('admin-view-announcements');
@@ -79,6 +80,7 @@ window.ProtecAdmin = {
     const viewMissions = document.getElementById('admin-view-missions');
     const viewEvents = document.getElementById('admin-view-events');
     const viewReferrals = document.getElementById('admin-view-referrals');
+    const viewBalancing = document.getElementById('admin-view-balancing');
 
     const defaultClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer';
     const activeClass = 'px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer';
@@ -93,6 +95,7 @@ window.ProtecAdmin = {
     if (tabMissionsBtn) tabMissionsBtn.className = (tab === 'missions' ? activeClass : defaultClass);
     if (tabEventsBtn) tabEventsBtn.className = (tab === 'events' ? activeClass : defaultClass);
     if (tabReferralsBtn) tabReferralsBtn.className = (tab === 'parrainages' ? activeClass : defaultClass);
+    if (tabBalancingBtn) tabBalancingBtn.className = (tab === 'balancing' ? activeClass : defaultClass);
 
     if (viewPlayers) viewPlayers.classList.toggle('hidden', tab !== 'joueurs');
     if (viewAnnouncements) viewAnnouncements.classList.toggle('hidden', tab !== 'annonces');
@@ -104,6 +107,7 @@ window.ProtecAdmin = {
     if (viewMissions) viewMissions.classList.toggle('hidden', tab !== 'missions');
     if (viewEvents) viewEvents.classList.toggle('hidden', tab !== 'events');
     if (viewReferrals) viewReferrals.classList.toggle('hidden', tab !== 'parrainages');
+    if (viewBalancing) viewBalancing.classList.toggle('hidden', tab !== 'balancing');
 
     if (tab === 'archives') {
       this.loadResetArchives();
@@ -120,6 +124,8 @@ window.ProtecAdmin = {
       this.renderSupportPlayerSelect();
     } else if (tab === 'parrainages') {
       this.loadReferralsData();
+    } else if (tab === 'balancing') {
+      this.renderBalancingView();
     }
   },
 
@@ -3342,6 +3348,9 @@ window.ProtecAdmin = {
           <button id="admin-tab-missions-btn" onclick="window.ProtecAdmin.switchTab('missions')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
             🚀 Recette & Tests
           </button>
+          <button id="admin-tab-balancing-btn" onclick="window.ProtecAdmin.switchTab('balancing')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer" title="Gestion des probabilités et variables d'équilibrage du jeu">
+            ⚙️ Équilibrage Gameplay
+          </button>
         </div>
 
         <!-- Vue 1 : Directeurs & Comptes -->
@@ -4211,6 +4220,9 @@ window.ProtecAdmin = {
             </div>
           </div>
         </div>
+
+        <!-- Vue : Équilibrage Gameplay (Tuning Live & Déclencheurs de Test) -->
+        <div id="admin-view-balancing" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4 pr-1"></div>
 
       </div>
     `;
@@ -6344,6 +6356,338 @@ window.ProtecAdmin = {
         }
       }
     } catch (e) {}
+  },
+
+  // ============================================================
+  // MODULE GESTION & ÉQUILIBRAGE GAMEPLAY (TUNING LIVE ADMIN)
+  // ============================================================
+  balancingCategoryFilter: 'all',
+  balancingSearchQuery: '',
+
+  setBalancingCategory(cat) {
+    this.balancingCategoryFilter = cat;
+    this.renderBalancingView();
+  },
+
+  onBalancingSearch(val) {
+    this.balancingSearchQuery = (val || '').toLowerCase().trim();
+    this.renderBalancingView();
+  },
+
+  updateBalancingValue(key, val) {
+    if (!window.ProtecGameplayConfig) return;
+    const num = parseFloat(val);
+    if (!isNaN(num)) {
+      window.ProtecGameplayConfig.set(key, num);
+      const rangeEl = document.getElementById(`balancing-range-${key}`);
+      const numEl = document.getElementById(`balancing-num-${key}`);
+      const valBadge = document.getElementById(`balancing-val-${key}`);
+      if (rangeEl && rangeEl.value != num) rangeEl.value = num;
+      if (numEl && numEl.value != num) numEl.value = num;
+      if (valBadge) {
+        const schema = window.ProtecGameplayConfig.SCHEMA[key] || {};
+        valBadge.textContent = `${num} ${schema.unit || ''}`;
+      }
+      if (window.game) {
+        window.ProtecGameplayConfig.applyLive(window.game);
+      }
+    }
+  },
+
+  resetSingleBalancingValue(key) {
+    if (!window.ProtecGameplayConfig) return;
+    const schema = window.ProtecGameplayConfig.SCHEMA[key];
+    if (schema) {
+      this.updateBalancingValue(key, schema.default);
+      this.renderBalancingView();
+      if (window.game?.showToast) {
+        window.game.showToast('Paramètre Réinitialisé', `« ${schema.label} » remis à sa valeur par défaut (${schema.default}).`, 'blue');
+      }
+    }
+  },
+
+  resetBalancingToDefaults() {
+    if (!window.ProtecGameplayConfig) return;
+    if (confirm('Voulez-vous rétablir TOUS les paramètres de jeu et probabilités à leurs valeurs officielles par défaut ?')) {
+      window.ProtecGameplayConfig.resetToDefaults();
+      if (window.game) window.ProtecGameplayConfig.applyLive(window.game);
+      this.renderBalancingView();
+      if (window.game?.showToast) {
+        window.game.showToast('⚙️ Valeurs Rétablies', 'Tous les paramètres de jeu ont été réinitialisés aux valeurs par défaut.', 'green');
+      }
+    }
+  },
+
+  applyAllBalancing() {
+    if (!window.ProtecGameplayConfig) return;
+    window.ProtecGameplayConfig.applyLive(window.game);
+    if (window.game?.showToast) {
+      window.game.showToast('✅ Paramètres Sauvegardés', 'Toutes les modifications d\'équilibrage sont enregistrées et actives en jeu.', 'green');
+    }
+  },
+
+  exportBalancingConfig() {
+    if (!window.ProtecGameplayConfig) return;
+    const jsonStr = window.ProtecGameplayConfig.exportJSON();
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `protec_balancing_tuning_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    if (window.game?.showToast) {
+      window.game.showToast('📥 Export Réussi', 'Fichier JSON d\'équilibrage téléchargé.', 'blue');
+    }
+  },
+
+  triggerImportBalancingFile() {
+    const input = document.getElementById('admin-balancing-import-file');
+    if (input) input.click();
+  },
+
+  handleBalancingFileImport(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target.result;
+      if (window.ProtecGameplayConfig && window.ProtecGameplayConfig.importJSON(content)) {
+        if (window.game) window.ProtecGameplayConfig.applyLive(window.game);
+        this.renderBalancingView();
+        if (window.game?.showToast) {
+          window.game.showToast('📤 Import Réussi', 'Tous les paramètres d\'équilibrage ont été importés et appliqués !', 'green');
+        }
+      } else {
+        alert('Erreur lors de l\'import : format JSON non valide.');
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  },
+
+  renderBalancingView() {
+    const container = document.getElementById('admin-view-balancing');
+    if (!container) return;
+    if (!window.ProtecGameplayConfig) {
+      container.innerHTML = `<div class="p-8 text-center text-rose-500 font-bold">Module d'équilibrage non disponible.</div>`;
+      return;
+    }
+
+    const cfg = window.ProtecGameplayConfig;
+    const schema = cfg.SCHEMA;
+    const currentValues = cfg.getAll();
+    const categories = cfg.CATEGORIES;
+
+    const activeCategory = this.balancingCategoryFilter || 'all';
+    const query = this.balancingSearchQuery || '';
+
+    const entries = Object.entries(schema).filter(([key, def]) => {
+      if (activeCategory !== 'all' && def.category !== activeCategory) return false;
+      if (query) {
+        const text = `${def.label} ${def.desc} ${def.category} ${key}`.toLowerCase();
+        if (!text.includes(query)) return false;
+      }
+      return true;
+    });
+
+    container.innerHTML = `
+      <!-- En-tête avec Actions Globales -->
+      <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 text-white flex items-center justify-between flex-wrap gap-3 shadow-md">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-500 text-white uppercase tracking-wider">ADMINISTRATION SYSTÈME</span>
+            <span class="text-xs font-black text-indigo-300">Ajustement Live & Équilibrage Réel</span>
+          </div>
+          <h3 class="text-base font-black text-white flex items-center gap-2">
+            <span>⚙️ Centre de Gestion de l'Équilibrage Gameplay</span>
+          </h3>
+          <p class="text-[11px] text-slate-300 max-w-2xl">
+            Modifiez en direct les probabilités d'alertes, ratios économiques, flux de candidats et délais de réponse sans recharger le jeu. Vos tests prennent effet immédiatement.
+          </p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <input type="file" id="admin-balancing-import-file" class="hidden" accept=".json" onchange="window.ProtecAdmin.handleBalancingFileImport(event)" />
+          <button onclick="window.ProtecAdmin.triggerImportBalancingFile()" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition border border-white/20 cursor-pointer flex items-center gap-1.5" title="Importer un fichier JSON de configuration">
+            <span>📤 Importer</span>
+          </button>
+          <button onclick="window.ProtecAdmin.exportBalancingConfig()" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition border border-white/20 cursor-pointer flex items-center gap-1.5" title="Télécharger la configuration en JSON">
+            <span>📥 Exporter</span>
+          </button>
+          <button onclick="window.ProtecAdmin.resetBalancingToDefaults()" class="px-3 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-sm" title="Rétablir toutes les valeurs par défaut du jeu">
+            <span>🔄 Par Défaut</span>
+          </button>
+          <button onclick="window.ProtecAdmin.applyAllBalancing()" class="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition cursor-pointer flex items-center gap-1.5 shadow-md" title="Appliquer et sauvegarder immédiatement">
+            <span>💾 Sauvegarder Live</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- BOÎTE À OUTILS : TESTS & DÉCLENCHEMENTS FORCÉS IMMÉDIATS -->
+      <div class="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-2.5">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+            <h4 class="text-xs font-black text-slate-800 uppercase tracking-wide">⚡ Déclencheurs de Test Forcé Immédiat</h4>
+          </div>
+          <span class="text-[10px] text-slate-500 font-medium">Bypass les minuteurs et déclenche les scénarios instantanément pour vérifier vos réglages</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 text-xs">
+          <button onclick="window.ProtecGameplayConfig.forceSamuEmergency(window.game)" class="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">🚨</span>
+            <span class="text-[11px] leading-tight">Urgence SAMU 15</span>
+          </button>
+          <button onclick="window.ProtecGameplayConfig.forceSdisEmergency(window.game)" class="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-900 border border-red-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">🚒</span>
+            <span class="text-[11px] leading-tight">Départ SDIS Pompiers</span>
+          </button>
+          <button onclick="window.ProtecGameplayConfig.forceSncfAlert(window.game)" class="p-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">🚆</span>
+            <span class="text-[11px] leading-tight">Alerte SNCF Gares</span>
+          </button>
+          <button onclick="window.ProtecGameplayConfig.forceAascPrealert(window.game)" class="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">🏛️</span>
+            <span class="text-[11px] leading-tight">Préalerte AASC</span>
+          </button>
+          <button onclick="window.ProtecGameplayConfig.forceCrisis(window.game)" class="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-900 border border-rose-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">⚠️</span>
+            <span class="text-[11px] leading-tight">Crise Plan NOVI</span>
+          </button>
+          <button onclick="window.ProtecGameplayConfig.forceCandidature(window.game)" class="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">🙋‍♂️</span>
+            <span class="text-[11px] leading-tight">Candidature Bénévole</span>
+          </button>
+          <button onclick="window.ProtecGameplayConfig.forceDevis(window.game, 'PAPS')" class="p-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">📋</span>
+            <span class="text-[11px] leading-tight">Devis PAPS</span>
+          </button>
+          <button onclick="window.ProtecGameplayConfig.forceDevis(window.game, 'DPS-PE')" class="p-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">📋</span>
+            <span class="text-[11px] leading-tight">Devis DPS-PE</span>
+          </button>
+          <button onclick="window.ProtecGameplayConfig.forceDevis(window.game, 'DPS-ME')" class="p-2 rounded-xl bg-cyan-50 hover:bg-cyan-100 text-cyan-900 border border-cyan-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">📋</span>
+            <span class="text-[11px] leading-tight">Devis DPS-ME</span>
+          </button>
+          <button onclick="window.ProtecGameplayConfig.forceDevis(window.game, 'DPS-GE')" class="p-2 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-900 border border-violet-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">📋</span>
+            <span class="text-[11px] leading-tight">Devis DPS-GE</span>
+          </button>
+          <button onclick="window.ProtecGameplayConfig.forceFormationDemand(window.game, 'PSC')" class="p-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">🎓</span>
+            <span class="text-[11px] leading-tight">Demande PSC</span>
+          </button>
+          <button onclick="window.ProtecGameplayConfig.forceFormationDemand(window.game, 'SST')" class="p-2 rounded-xl bg-fuchsia-50 hover:bg-fuchsia-100 text-fuchsia-900 border border-fuchsia-200 font-bold transition flex flex-col items-center text-center gap-1 cursor-pointer">
+            <span class="text-base">🎓</span>
+            <span class="text-[11px] leading-tight">Demande SST B2B</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Barre de recherche & Filtres de Catégories -->
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+        <div class="relative flex-1">
+          <input type="text" placeholder="🔍 Rechercher une variable (ex: samu, sncf, dps, moral, rep, délai)..."
+            value="${this.balancingSearchQuery || ''}"
+            oninput="window.ProtecAdmin.onBalancingSearch(this.value)"
+            class="w-full pl-3 pr-8 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+          ${this.balancingSearchQuery ? `
+            <button onclick="window.ProtecAdmin.onBalancingSearch('')" class="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-xs">✕</button>
+          ` : ''}
+        </div>
+        <div class="text-[11px] font-bold text-slate-500 self-center">
+          ${entries.length} paramètre(s) affiché(s)
+        </div>
+      </div>
+
+      <!-- Filtres par pilules de catégorie -->
+      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 flex-nowrap text-xs">
+        <button onclick="window.ProtecAdmin.setBalancingCategory('all')"
+          class="px-3 py-1 rounded-xl font-bold cursor-pointer transition whitespace-nowrap ${activeCategory === 'all' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}">
+          Toutes (${Object.keys(schema).length})
+        </button>
+        ${Object.entries(categories).map(([catKey, catDef]) => {
+          const count = Object.values(schema).filter(s => s.category === catKey).length;
+          const isActive = activeCategory === catKey;
+          return `
+            <button onclick="window.ProtecAdmin.setBalancingCategory('${catKey}')"
+              class="px-3 py-1 rounded-xl font-bold cursor-pointer transition whitespace-nowrap ${isActive ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}">
+              ${catDef.label} (${count})
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      <!-- Grille des Cartes de Réglages -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        ${entries.length === 0 ? `
+          <div class="col-span-2 p-8 text-center text-slate-400 text-xs font-semibold bg-white rounded-2xl border border-slate-200">
+            Aucun paramètre ne correspond à votre recherche « ${this.balancingSearchQuery} ».
+          </div>
+        ` : entries.map(([key, def]) => {
+          const curVal = currentValues[key] !== undefined ? currentValues[key] : def.default;
+          const isModified = Math.abs(curVal - def.default) > 0.0001;
+          const catInfo = categories[def.category] || { label: def.category };
+
+          return `
+            <div class="p-3.5 rounded-2xl bg-white border ${isModified ? 'border-indigo-400 shadow-indigo-100' : 'border-slate-200'} shadow-xs flex flex-col justify-between space-y-2.5 transition">
+              <div>
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${isModified ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}">
+                        ${catInfo.label}
+                      </span>
+                      ${isModified ? '<span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-500 text-white">Modifié</span>' : ''}
+                    </div>
+                    <h5 class="text-xs font-black text-slate-900 mt-1">${def.label}</h5>
+                  </div>
+                  <button onclick="window.ProtecAdmin.resetSingleBalancingValue('${key}')"
+                    class="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer text-xs"
+                    title="Rétablir la valeur par défaut (${def.default})">
+                    🔄
+                  </button>
+                </div>
+                <p class="text-[10px] text-slate-500 mt-1 leading-snug">${def.desc}</p>
+              </div>
+
+              <!-- Ligne de contrôle : Slider + Input numérique + Badge de valeur -->
+              <div class="pt-2 border-t border-slate-100 space-y-1.5">
+                <div class="flex items-center justify-between text-[11px]">
+                  <span class="text-slate-400 font-mono text-[10px]">${key}</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-slate-400 text-[10px]">Défaut: <strong>${def.default} ${def.unit || ''}</strong></span>
+                    <span id="balancing-val-${key}" class="px-2 py-0.5 rounded-md font-black mono-num text-xs ${isModified ? 'bg-indigo-100 text-indigo-900' : 'bg-slate-100 text-slate-800'}">
+                      ${curVal} ${def.unit || ''}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <input type="range" id="balancing-range-${key}"
+                    min="${def.min !== undefined ? def.min : 0}"
+                    max="${def.max !== undefined ? def.max : 100}"
+                    step="${def.step || 1}"
+                    value="${curVal}"
+                    oninput="window.ProtecAdmin.updateBalancingValue('${key}', this.value)"
+                    class="flex-1 accent-indigo-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg" />
+
+                  <input type="number" id="balancing-num-${key}"
+                    min="${def.min !== undefined ? def.min : 0}"
+                    max="${def.max !== undefined ? def.max : 100}"
+                    step="${def.step || 1}"
+                    value="${curVal}"
+                    onchange="window.ProtecAdmin.updateBalancingValue('${key}', this.value)"
+                    class="w-20 px-2 py-1 rounded-lg border border-slate-200 text-xs font-black mono-num text-right focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
   }
 };
 

@@ -806,7 +806,7 @@ window.ProtecCriseLogistique = {
       shortName: 'Kit DPS (Secours)',
       badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       icon: 'briefcase-medical',
-      capacitySize: 100, // 100% de la benne du VTU
+      capacitySize: 100, // 100% de la capacité de stockage du VTU
       buildingStorageSize: 8, // Encombrement économisé dans le bâtiment
       loadTimeSec: 180, // 3 minutes en temps de jeu
       unloadTimeSec: 120, // 2 minutes

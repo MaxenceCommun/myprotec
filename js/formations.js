@@ -1015,7 +1015,8 @@ window.ProtecFormations = {
       if (repScore >= 60) baseChance += 0.15;
       if (repScore >= 120) baseChance += 0.20;
 
-      const effectiveChance = Math.min(0.85, baseChance * pubMultiplier);
+      const speedMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('formationCitizenRegistrationSpeed', 1.0) : 1.0;
+      const effectiveChance = Math.min(0.95, baseChance * pubMultiplier * speedMult);
 
       if (Math.random() < effectiveChance) {
         s.publicSeatsBooked = bookedPublic + 1;
@@ -1122,11 +1123,18 @@ window.ProtecFormations = {
     const station = game.stations?.[0] || { city: 'Nancy', id: 'station-1' };
     const deptCode = game.currentDepartmentCode || game.player?.departmentCode || '54';
 
-    const roll = Math.random();
+    // Pondérations de tirage modulées par ProtecGameplayConfig
+    const wSST = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('formationDemandSST', 1.0) * 0.40 : 0.40;
+    const wMAC = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('formationDemandSST', 1.0) * 0.25 : 0.25;
+    const wPSC = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('formationDemandPSC', 1.0) * 0.20 : 0.20;
+    const wGQS = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('formationDemandGQS', 1.0) * 0.15 : 0.15;
+    const totalW = wSST + wMAC + wPSC + wGQS;
+
+    const roll = Math.random() * (totalW > 0 ? totalW : 1.0);
     let trainingType = 'SST';
-    if (roll < 0.40) trainingType = 'SST';
-    else if (roll < 0.65) trainingType = 'MAC_SST';
-    else if (roll < 0.85) trainingType = 'PSC';
+    if (roll < wSST) trainingType = 'SST';
+    else if (roll < (wSST + wMAC)) trainingType = 'MAC_SST';
+    else if (roll < (wSST + wMAC + wPSC)) trainingType = 'PSC';
     else trainingType = 'GQS';
 
     const cfg = this.TRAINING_B2B_CONFIG[trainingType] || this.TRAINING_B2B_CONFIG['SST'];

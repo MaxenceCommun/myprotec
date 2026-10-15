@@ -31,6 +31,8 @@ const STATIC_ASSETS = [
   'styles.css',
   'app.js',
   'js/app.js',
+  'gameplay_config.js',
+  'js/gameplay_config.js',
   'manifest.json',
   'favicon.ico',
   'logo_myprotec.png',

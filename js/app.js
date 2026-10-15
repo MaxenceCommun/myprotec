@@ -1447,26 +1447,66 @@ class ProtecGame {
       }
     }
 
-    // Purge absolue de sécurité : aucun véhicule ni bénévole fictif/généré artificiellement comme renfort
+    // Purge absolue de sécurité : aucun véhicule ni bénévole fictif/généré artificiellement comme renfort d'alliance
     if (Array.isArray(this.vehicles)) {
       this.vehicles = this.vehicles.filter(v => {
-        if (v && v.id && (v.id.startsWith("veh-renf-") || v.isExternalReinforcement)) return false;
+        if (!v) return false;
+        const vName = (v.name || '').toLowerCase();
+        const vId = String(v.id || '').toLowerCase();
+        const vStation = String(v.stationId || '').toLowerCase();
+
+        // 1. Marqueurs explicites de renfort ou alliance
+        if (v.isExternalReinforcement || v.isAlliedRenfort || v.isRenfort || v.isAllie) return false;
+        if (vStation.startsWith('station-allie') || vStation.includes('allie')) return false;
+        if (vId.startsWith('veh-renf-') || vId.startsWith('vol-renf-') || vId.startsWith('veh-allie-') || vId.startsWith('v-allie-') || vId.includes('renf-')) return false;
+
+        // 2. Détection par nom (ex: "VTU Renfort [Allié 75]", "VPSP Renfort [Allié 75]", "VTP Renfort 9pl [Allié 75]")
+        if (vName.includes('[allié') || vName.includes('[allie') || vName.includes('renfort [') || vName.includes('renfort alli')) return false;
+
+        // 3. Si le véhicule est marqué comme renfort générique sans antenne locale
+        if (Array.isArray(this.stations) && this.stations.length > 0) {
+          const hasStation = this.stations.some(s => s.id === v.stationId);
+          if (!hasStation && (vName.includes('renfort') || vName.includes('alli'))) return false;
+        }
+
         return true;
       });
     }
+
+    const validVehicleIds = new Set((this.vehicles || []).map(v => v.id));
+
+    if (Array.isArray(this.stations)) {
+      this.stations.forEach(st => {
+        if (Array.isArray(st.vehicles)) {
+          st.vehicles = st.vehicles.filter(id => validVehicleIds.has(id));
+        }
+      });
+    }
+
     if (Array.isArray(this.volunteers)) {
       this.volunteers = this.volunteers.filter(v => {
-        if (v && v.id && (v.id.startsWith("vol-renf-") || v.isExternalReinforcement || (v.isRenfort && v.isAlliedRenfort))) return false;
+        if (!v) return false;
+        const vName = (v.name || '').toLowerCase();
+        const vId = String(v.id || '').toLowerCase();
+        if (v.isExternalReinforcement || v.isAlliedRenfort || (v.isRenfort && v.isAlliedRenfort)) return false;
+        if (vId.startsWith('vol-renf-') || vId.startsWith('vol-allie-') || vId.includes('renf-')) return false;
+        if (vName.includes('[allié') || vName.includes('[allie') || vName.includes('renfort [')) return false;
         return true;
       });
     }
+
+    const validVolIds = new Set((this.volunteers || []).map(v => v.id));
+
     if (Array.isArray(this.missions)) {
       this.missions.forEach(m => {
         if (Array.isArray(m.assignedVehicleIds)) {
-          m.assignedVehicleIds = m.assignedVehicleIds.filter(id => typeof id === "string" && !id.startsWith("veh-renf-"));
+          m.assignedVehicleIds = m.assignedVehicleIds.filter(id => validVehicleIds.has(id));
+        }
+        if (Array.isArray(m.extraTransportVehicles)) {
+          m.extraTransportVehicles = m.extraTransportVehicles.filter(id => validVehicleIds.has(id));
         }
         if (Array.isArray(m.registeredVolunteers)) {
-          m.registeredVolunteers = m.registeredVolunteers.filter(id => typeof id === "string" && !id.startsWith("vol-renf-"));
+          m.registeredVolunteers = m.registeredVolunteers.filter(id => validVolIds.has(id));
         }
       });
     }
@@ -5996,16 +6036,26 @@ class ProtecGame {
     sortedVols.forEach((vol, idx) => {
       const evalResult = this.evaluateVolunteerAvailability(vol, mission.eventDate, mission);
 
-      // Calcul d'un délai variable échelonné :
-      // - 1er bénévole : entre 3s et 6s
-      // - Bénévoles suivants : espacés chacun de 4s à 9s supplémentaires
-      // - Délais modulés par la motivation individuelle
+      // Détermination du multiplicateur de délai selon le profil de la mission
+      const isUrgent = ['urgence', 'samu', 'pompiers', 'prealerte', 'declenche', 'crise', 'plan_novi'].includes(mission.type) || ['prealerte', 'declenche'].includes(mission.status);
+      const isMaraude = mission.type === 'maraude' || (mission.scale && mission.scale.toLowerCase().includes('maraude'));
+      const isAstreinte = mission.type === 'astreinte' || (mission.title && mission.title.toLowerCase().includes('astreinte'));
+
+      let typeDelayMult = 1.0;
+      if (window.ProtecGameplayConfig) {
+        if (isUrgent) typeDelayMult = window.ProtecGameplayConfig.get('volunteerResponseTimeUrgent', 1.0);
+        else if (isMaraude) typeDelayMult = window.ProtecGameplayConfig.get('volunteerResponseTimeMaraude', 1.0);
+        else if (isAstreinte) typeDelayMult = window.ProtecGameplayConfig.get('volunteerResponseTimeAstreinte', 1.0);
+        else typeDelayMult = window.ProtecGameplayConfig.get('volunteerResponseTimeDPS', 1.0);
+      }
+
+      // Calcul d'un délai variable échelonné modulé par la motivation et les paramètres admin
       const motiv = vol.motivation || 70;
       const speedMod = Math.max(0.6, 1.4 - (motiv / 100));
-      const stepMs = Math.round((3500 + Math.random() * 4500) * speedMod);
+      const stepMs = Math.round((3500 + Math.random() * 4500) * speedMod * Math.max(0.05, typeDelayMult));
 
       if (idx === 0) {
-        cumulativeDelayMs = Math.round(2500 + Math.random() * 3000);
+        cumulativeDelayMs = Math.round((2500 + Math.random() * 3000) * Math.max(0.05, typeDelayMult));
       } else {
         cumulativeDelayMs += stepMs;
       }
@@ -8115,19 +8165,21 @@ class ProtecGame {
         }
       } else if (isUnderstaffed || isUnderqualified) {
         // Catastrophe opérationnelle !
-        const repLoss = 18;
+        const repLossMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('reputationLossMultiplier', 1.0) : 1.0;
+        const repLoss = Math.round(18 * repLossMult);
         // Dégradation de la réputation de la commune hôte et de la Préfecture
         const failCity = mission.commune || mission.city || this.stations[0]?.city || 'Nancy';
         if (window.ProtecConventions) {
-          window.ProtecConventions.adjustLocalReputation(this, failCity, -16, 'Dispositif sous-dimensionné');
-          window.ProtecConventions.adjustInstitutionalReputation(this, 'prefecture', -15, 'Non conformité prévisionnel');
+          window.ProtecConventions.adjustLocalReputation(this, failCity, Math.round(-16 * repLossMult), 'Dispositif sous-dimensionné');
+          window.ProtecConventions.adjustInstitutionalReputation(this, 'prefecture', Math.round(-15 * repLossMult), 'Non conformité prévisionnel');
         }
         this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 50) - repLoss);
 
         // Baisse sévère de motivation des secouristes présents
+        const moraleLossMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('moraleLossMultiplier', 1.0) : 1.0;
         crew.forEach(v => {
-          v.motivation = Math.max(10, (v.motivation || 70) - 30);
-          v.humeur = Math.max(10, (v.humeur || 70) - 32);
+          v.motivation = Math.max(10, (v.motivation || 70) - Math.round(30 * moraleLossMult));
+          v.humeur = Math.max(10, (v.humeur || 70) - Math.round(32 * moraleLossMult));
         });
 
         // Risque de démission d'un bénévole dégoûté par le sous-effectif
@@ -8188,6 +8240,9 @@ class ProtecGame {
         // Succès éclatant : Gain de réputation progressif et dégressif (plus la réputation est haute, moins elle monte vite)
         const currentRep = this.resources.reputationScore || 0;
         let repGain = Math.max(2, Math.round(18 * (1 - (currentRep / 2200))));
+        const repGainMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('reputationGainMultiplier', 1.0) : 1.0;
+        repGain = Math.max(1, Math.round(repGain * repGainMult));
+
         if (window.ProtecAPC && typeof window.ProtecAPC.getEffectiveMultiplier === 'function') {
           const apcMult = window.ProtecAPC.getEffectiveMultiplier(this);
           if (apcMult > 1) repGain = Math.round(repGain * apcMult);
@@ -8195,9 +8250,9 @@ class ProtecGame {
         // Amélioration de la réputation sur la commune hôte
         const successCity = mission.commune || mission.city || this.stations[0]?.city || 'Nancy';
         if (window.ProtecConventions) {
-          window.ProtecConventions.adjustLocalReputation(this, successCity, 8, 'Succès mission');
-          if (mission.type === 'samu') window.ProtecConventions.adjustInstitutionalReputation(this, 'samu', 6, 'Renfort SAMU');
-          if (mission.type === 'pompiers') window.ProtecConventions.adjustInstitutionalReputation(this, 'sdis', 6, 'Garde pompiers');
+          window.ProtecConventions.adjustLocalReputation(this, successCity, Math.round(8 * repGainMult), 'Succès mission');
+          if (mission.type === 'samu') window.ProtecConventions.adjustInstitutionalReputation(this, 'samu', Math.round(6 * repGainMult), 'Renfort SAMU');
+          if (mission.type === 'pompiers') window.ProtecConventions.adjustInstitutionalReputation(this, 'sdis', Math.round(6 * repGainMult), 'Garde pompiers');
           if (mission.isEmergencyPlan && typeof mission.onCompleteSuccess === 'function') mission.onCompleteSuccess();
         }
         this.resources.reputationScore = currentRep + repGain;
@@ -8205,7 +8260,8 @@ class ProtecGame {
         // Évaluation de la dotation en Moniteurs Multiparamétriques (confort et qualité de travail des secouristes)
         const paramTier = (this.equipmentTiers && this.equipmentTiers.prise_parametres) || 1;
         const paramDef = window.ProtecEquipements?.TIERED_EQUIPMENT_CATALOG?.prise_parametres?.tiers?.find(t => t.level === paramTier);
-        const secouristeMoralBonus = 6 + (paramDef?.stats?.crewMoralBonus ? Math.round(paramDef.stats.crewMoralBonus * 0.7) : 0);
+        const moraleGainMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('moraleGainMultiplier', 1.0) : 1.0;
+        const secouristeMoralBonus = Math.round((6 + (paramDef?.stats?.crewMoralBonus ? Math.round(paramDef.stats.crewMoralBonus * 0.7) : 0)) * moraleGainMult);
 
         // Distinction opérationnels vs photographes
         const photographes = crew.filter(v => mission.volunteerRoles?.[v.id] === 'photographe');
@@ -12045,7 +12101,18 @@ class ProtecGame {
 
                         const assignedIds = new Set(mission.assignedVehicleIds || []);
 
-                        if (!this.vehicles || this.vehicles.length === 0) {
+                        const ownVehicles = (this.vehicles || []).filter(v => {
+                          if (!v) return false;
+                          if (v.isExternalReinforcement || v.isAlliedRenfort || v.isRenfort || v.isAllie) return false;
+                          const vn = (v.name || '').toLowerCase();
+                          const vid = String(v.id || '').toLowerCase();
+                          if (vn.includes('[allié') || vn.includes('[allie') || vn.includes('renfort [') || vn.includes('renfort alli')) return false;
+                          if (vid.startsWith('veh-renf-') || vid.startsWith('veh-allie-') || vid.startsWith('v-allie-')) return false;
+                          if (v.stationId && String(v.stationId).startsWith('station-allie')) return false;
+                          return true;
+                        });
+
+                        if (ownVehicles.length === 0) {
                           return `
                             <div class="col-span-full p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs text-center italic">
                               Aucun véhicule dans le garage de l'antenne. Demandez un renfort d'équipage ci-dessous.
@@ -12053,7 +12120,7 @@ class ProtecGame {
                           `;
                         }
 
-                        return this.vehicles.map(veh => {
+                        return ownVehicles.map(veh => {
                           const isAssigned = assignedIds.has(veh.id);
                           const isBusyOther = busyVehicleIds.has(veh.id);
                           const fuelPct = veh.fuel !== undefined ? veh.fuel : 90;
@@ -12088,8 +12155,8 @@ class ProtecGame {
                               armementBadgeHTML = '<span class="px-2 py-0.5 rounded text-[9px] font-black ' + kit.badgeColor + '">📦 ' + kit.shortName + '</span>';
                               armementText = '📦 Armé : ' + kit.name;
                             } else {
-                              armementBadgeHTML = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">⚠️ Benne Vide (Non armé)</span>';
-                              armementText = '⚠️ Benne Vide (Aucun kit armé)';
+                              armementBadgeHTML = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">⚠️ Stockage Vide (Non armé)</span>';
+                              armementText = '⚠️ Stockage Vide (Aucun kit armé)';
                             }
                           } else {
                             armementText = 'Véhicule opérationnel';
@@ -18263,7 +18330,7 @@ class ProtecGame {
                             ⏳ ${v.logOperation.label}
                           </span>
                         ` : v.logKit ? `
-                          <button onclick="window.ProtecCriseLogistique.startUnloadingVehicleKit(window.game, '${v.id}')" class="px-3 py-1.5 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-900 text-xs font-bold transition flex items-center gap-1 cursor-pointer border border-orange-300" title="Vider le véhicule pour libérer la benne ou changer de kit">
+                          <button onclick="window.ProtecCriseLogistique.startUnloadingVehicleKit(window.game, '${v.id}')" class="px-3 py-1.5 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-900 text-xs font-bold transition flex items-center gap-1 cursor-pointer border border-orange-300" title="Vider le véhicule pour libérer le stockage ou changer de kit">
                             <span>🧹</span>
                             <span>Décharger (${window.ProtecCriseLogistique?.LOG_KITS?.[v.logKit]?.shortName || 'Kit'})</span>
                           </button>
@@ -19674,7 +19741,7 @@ class ProtecGame {
   // --- GESTION DES REPAS EN MISSION & NOTES DE FRAIS (12h00 & 19h00) ---
   processMissionMeals(mealHour) {
     if (![12, 19].includes(mealHour)) return;
-    this.mealAllowancePerVolunteer = this.mealAllowancePerVolunteer || 15;
+    this.mealAllowancePerVolunteer = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('mealAllowancePerVolunteer', 15) : (this.mealAllowancePerVolunteer || 15);
     const nowKey = `${this.clock.year}_${this.clock.month}_${this.clock.day}_${mealHour}`;
 
     const ongoingMissions = (this.missions || []).filter(m => m.status === 'ongoing' || m.crisisTeamDeployments);
@@ -20404,7 +20471,8 @@ class ProtecGame {
       // 3. Dispatch dynamique d'urgences SAMU 15 (uniquement si une Garde SAMU 15 est activée par convention)
       if (this.clock.second === 15 || this.clock.second === 45) {
         if (this.stations.length > 0 && this.samuGarde && this.samuGarde.active) {
-          if (Math.random() < 0.28) {
+          const samuChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('samuEmergencyChance', 0.28) : 0.28;
+          if (Math.random() < samuChance) {
             this.triggerRandomSamuEmergency();
           }
         }
@@ -20413,8 +20481,9 @@ class ProtecGame {
       // 3b. Dispatch d'interventions SDIS Pompiers (uniquement si une Garde Caserne Pompiers est armée)
       if (this.clock.second === 5 || this.clock.second === 35) {
         if (this.stations.length > 0 && this.sdisGarde && this.sdisGarde.active) {
-          // Si violences urbaines ou 14 juillet, intensité plus soutenue
-          const chance = (this.sdisGarde.eventSeverity === 'critique' || this.sdisGarde.eventSeverity === 'eleve') ? 0.35 : 0.20;
+          const sdisNormal = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('sdisEmergencyChanceNormal', 0.20) : 0.20;
+          const sdisHigh = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('sdisEmergencyChanceHigh', 0.35) : 0.35;
+          const chance = (this.sdisGarde.eventSeverity === 'critique' || this.sdisGarde.eventSeverity === 'eleve') ? sdisHigh : sdisNormal;
           if (Math.random() < chance) {
             this.triggerRandomSdisEmergency();
           }
@@ -20437,8 +20506,10 @@ class ProtecGame {
 
       // 3d. Déclenchement périodique de Préalertes AASC (Veille Opérationnelle Préfecture, CODIS, SAMU, SNCF)
       if (this.clock.second === 20 && this.clock.minute % 8 === 0) {
-        if (this.stations.length > 0 && Math.random() < 0.35) {
-          if (this.sncfConvention && this.sncfConvention.signed && Math.random() < 0.4) {
+        const aascChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('aascPrealertChance', 0.35) : 0.35;
+        const sncfChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('sncfPrealertChance', 0.40) : 0.40;
+        if (this.stations.length > 0 && Math.random() < aascChance) {
+          if (this.sncfConvention && this.sncfConvention.signed && Math.random() < sncfChance) {
             this.triggerSncfPrealert();
           } else {
             this.triggerAascPrealert();
@@ -20448,8 +20519,9 @@ class ProtecGame {
 
       // 3e. Déclenchement d'Ordre de Mission CUMP / CAI (si Convention AASC-CUMP signée)
       if (this.clock.second === 40 && this.clock.minute % 12 === 0) {
+        const cumpChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('cumpAlertChance', 0.35) : 0.35;
         if (this.stations.length > 0 && this.cumpConvention && this.cumpConvention.signed) {
-          if (Math.random() < 0.35 && window.ProtecCump && typeof window.ProtecCump.triggerCumpAlert === 'function') {
+          if (Math.random() < cumpChance && window.ProtecCump && typeof window.ProtecCump.triggerCumpAlert === 'function') {
             window.ProtecCump.triggerCumpAlert(this);
           }
         }
@@ -20485,8 +20557,12 @@ class ProtecGame {
             else if (socialVis >= 50) devisChance += 0.04;
             else if (socialVis < 30) devisChance = Math.max(0.01, devisChance - 0.05); // Silence radio : baisse d'activité
 
+            const dpsMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('dpsRequestBaseChanceMultiplier', 1.0) : 1.0;
+            devisChance *= dpsMult;
+
             const pendingDevisCount = (this.devis || []).filter(d => d.status === 'pending').length;
-            const maxSimultaneous = this.getSimultaneousDevisLimit();
+            const cfgMaxDevis = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('maxSimultaneousPendingDevis', 6) : null;
+            const maxSimultaneous = cfgMaxDevis !== null ? cfgMaxDevis : this.getSimultaneousDevisLimit();
             if (pendingDevisCount < maxSimultaneous && Math.random() < devisChance) {
               this.generateRandomDevisOpportunity();
             }
@@ -20515,8 +20591,8 @@ class ProtecGame {
           const repScore = this.resources.reputationScore || 0;
           const pendingCount = (this.candidatures || []).filter(c => c.status !== 'rejected').length;
 
-          // Maximum 3 candidatures en attente simultanées
-          if (pendingCount < 3) {
+          const maxPendingCand = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('candidaturesMaxPending', 3) : 3;
+          if (pendingCount < maxPendingCand) {
             let candChance = 0;
             if (this.resources.campaigns?.social) candChance += 0.20;
             if (this.resources.campaigns?.posters) candChance += 0.12;
@@ -20526,6 +20602,9 @@ class ProtecGame {
             const socialVis = this.socialMedia?.visibilityScore ?? 75;
             if (socialVis >= 80) candChance += 0.15;
             else if (socialVis >= 50) candChance += 0.06;
+
+            const candMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('candidatureChanceMultiplier', 1.0) : 1.0;
+            candChance *= candMult;
 
             if (candChance > 0 && Math.random() < candChance) {
               this.generateRandomCandidature();
