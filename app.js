@@ -1592,29 +1592,52 @@ class ProtecGame {
 
     L.control.zoom({ position: 'bottomright' }).addTo(this.map);
 
+    const isEffectiveDark = window.ProtecTheme ? window.ProtecTheme.isEffectiveDark() : false;
+
     this.baseLayers = {
       light: L.layerGroup([
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
           attribution: 'Tiles &copy; Esri',
-          maxZoom: 16
+          maxNativeZoom: 16,
+          maxZoom: 19
         }),
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
           attribution: '',
-          maxZoom: 16
+          maxNativeZoom: 16,
+          maxZoom: 19
         })
       ]),
+      dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
+      }),
       osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19
       })
     };
 
-    this.baseLayers.light.addTo(this.map);
+    if (isEffectiveDark) {
+      this.baseLayers.dark.addTo(this.map);
+    } else {
+      this.baseLayers.light.addTo(this.map);
+    }
 
-    L.control.layers({
-      'Épuré (Gris clair)': this.baseLayers.light,
+    this.layerControl = L.control.layers({
+      'Mode Sombre (Dark Matter)': this.baseLayers.dark,
+      'Mode Clair (Épuré)': this.baseLayers.light,
       'Rues (OpenStreetMap)': this.baseLayers.osm
     }, null, { position: 'bottomright' }).addTo(this.map);
+
+    this.map.on('baselayerchange', (e) => {
+      this.userCustomLayerLocked = (e.layer === this.baseLayers.osm);
+    });
+
+    // Écouteur réactif pour basculer automatiquement la carte selon le thème (Clair / Sombre)
+    window.addEventListener('protec-theme-changed', (e) => {
+      this.updateMapTheme(e.detail ? e.detail.isDark : false);
+    });
 
     // Initialisation du sélecteur départemental desktop
     this.populateDepartmentSelector();
@@ -1648,6 +1671,30 @@ class ProtecGame {
     this.map.on('zoomend moveend', () => {
       if (window.lucide) window.lucide.createIcons();
     });
+  }
+  updateMapTheme(isDark) {
+    if (!this.map || !this.baseLayers) return;
+
+    // Si le joueur a volontairement activé la vue OpenStreetMap, respecter son choix
+    if (this.userCustomLayerLocked && this.map.hasLayer(this.baseLayers.osm)) {
+      return;
+    }
+
+    if (isDark) {
+      if (this.map.hasLayer(this.baseLayers.light)) {
+        this.map.removeLayer(this.baseLayers.light);
+      }
+      if (!this.map.hasLayer(this.baseLayers.dark)) {
+        this.baseLayers.dark.addTo(this.map);
+      }
+    } else {
+      if (this.map.hasLayer(this.baseLayers.dark)) {
+        this.map.removeLayer(this.baseLayers.dark);
+      }
+      if (!this.map.hasLayer(this.baseLayers.light)) {
+        this.baseLayers.light.addTo(this.map);
+      }
+    }
   }
 
   populateDepartmentSelector() {

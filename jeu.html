@@ -318,18 +318,18 @@
         </button>
 
         <!-- Admin Panel Button (masqué par défaut, affiché uniquement après validation sécurisée BDD) -->
-        <button id="admin-header-btn" onclick="window.ProtecAdmin.openAdminModal(window.game)" class="hidden glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-1.5 text-indigo-700 hover:bg-indigo-50/80 transition shadow-sm group" title="Panel Administrateur">
+        <button id="admin-header-btn" onclick="window.ProtecAdmin.openAdminModal(window.game)" class="hidden glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-1.5 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50/80 dark:hover:bg-indigo-950/40 transition shadow-sm group" title="Panel Administrateur">
           <span class="text-sm">👑</span>
           <span class="text-xs font-extrabold hidden lg:inline">Admin</span>
         </button>
 
         <!-- Auth / Account Widget -->
-        <div id="auth-header-widget" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-2 shadow-sm cursor-pointer hover:bg-white/90 transition group" onclick="window.ProtecAuth.openAuthModal()" title="Compte Directeur & Sauvegarde">
-          <div id="auth-status-icon" class="w-6 h-6 rounded-lg bg-pc-blue/10 text-pc-blue flex items-center justify-center group-hover:bg-pc-blue group-hover:text-white transition">
+        <div id="auth-header-widget" class="glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-2 shadow-sm cursor-pointer hover:bg-white/90 dark:hover:bg-slate-800/80 transition group" onclick="window.ProtecAuth.openAuthModal()" title="Compte Directeur & Sauvegarde">
+          <div id="auth-status-icon" class="w-6 h-6 rounded-lg bg-pc-blue/10 text-pc-blue dark:bg-sky-950/40 dark:text-sky-300 flex items-center justify-center group-hover:bg-pc-blue group-hover:text-white transition">
             <i data-lucide="user" class="w-3.5 h-3.5"></i>
           </div>
           <div class="flex flex-col text-left justify-center">
-            <span id="auth-user-label" class="text-xs font-bold text-slate-700 truncate max-w-[85px] sm:max-w-[110px]">Connexion</span>
+            <span id="auth-user-label" class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate max-w-[85px] sm:max-w-[110px]">Connexion</span>
             <span id="auth-db-status" class="hidden"></span>
           </div>
         </div>

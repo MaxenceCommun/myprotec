@@ -307,17 +307,17 @@ window.ProtecAuth = {
 
     if (this.currentUser && this.token) {
       userLabel.textContent = this.currentUser.username;
-      userLabel.className = 'text-xs font-bold text-pc-blue truncate max-w-[90px] sm:max-w-[120px]';
+      userLabel.className = 'text-xs font-bold text-pc-blue dark:text-sky-300 truncate max-w-[90px] sm:max-w-[120px]';
 
       if (statusIcon) {
-        statusIcon.className = 'w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center transition';
+        statusIcon.className = 'w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center transition';
       }
     } else {
       userLabel.textContent = 'Connexion';
-      userLabel.className = 'text-xs font-bold text-slate-700 truncate max-w-[90px] sm:max-w-[120px]';
+      userLabel.className = 'text-xs font-bold text-slate-700 dark:text-slate-200 truncate max-w-[90px] sm:max-w-[120px]';
 
       if (statusIcon) {
-        statusIcon.className = 'w-6 h-6 rounded-lg bg-pc-blue/10 text-pc-blue flex items-center justify-center transition';
+        statusIcon.className = 'w-6 h-6 rounded-lg bg-pc-blue/10 dark:bg-sky-950/40 text-pc-blue dark:text-sky-300 flex items-center justify-center transition';
       }
     }
 
