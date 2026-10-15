@@ -10545,7 +10545,50 @@ class ProtecGame {
       }
     }
 
-    const activeTab = this.missionDetailActiveTab || 'info';
+    const isCrisisMission = Boolean(
+      mission.type === 'crise' ||
+      mission.isCrisis === true ||
+      mission.isEmergencyPlan === true ||
+      mission.category === 'crise'
+    );
+    const isPlanNovi = Boolean(
+      mission.isPlanNovi ||
+      mission.planNovi ||
+      mission.type === 'novi' ||
+      (mission.title && (mission.title.includes('NOVI') || mission.title.includes('Plan NOVI')))
+    );
+    const isUrgentIntervention = Boolean(
+      mission.type === 'samu' ||
+      mission.type === 'pompiers' ||
+      mission.category === 'samu' ||
+      mission.category === 'pompiers' ||
+      mission.isCumpCai ||
+      mission.type === 'social' ||
+      mission.category === 'social' ||
+      mission.type === 'formation' ||
+      mission.category === 'formation'
+    );
+    const isDPS = Boolean(
+      (mission.type === 'dps' || mission.category === 'dps' || (!mission.type && !mission.category)) &&
+      !isCrisisMission &&
+      !isPlanNovi &&
+      !isUrgentIntervention &&
+      mission.status !== 'prealerte' &&
+      !(mission.title && (
+        mission.title.includes('[ALERTE ACTIVE]') ||
+        mission.title.includes('[Préalerte]') ||
+        mission.title.includes('SAMU') ||
+        mission.title.includes('Garde SDIS') ||
+        mission.title.includes('Maraude') ||
+        mission.title.includes('Urgence Médico-Psychologique')
+      ))
+    );
+
+    let activeTab = this.missionDetailActiveTab || 'info';
+    if (!isDPS && activeTab === 'dps') {
+      activeTab = 'info';
+      this.missionDetailActiveTab = 'info';
+    }
 
     // Indicateur s'il manque des véhicules
     const assignedVehsForCheck = (mission.assignedVehicleIds || []).map(id => this.vehicles.find(v => v.id === id)).filter(Boolean);
@@ -10682,12 +10725,7 @@ class ProtecGame {
       return `${l1}${l2}-${digits}-${l3}${l4}`;
     };
 
-    const isCrisisMission = Boolean(
-      mission.type === 'crise' ||
-      mission.isCrisis === true ||
-      mission.isEmergencyPlan === true ||
-      mission.category === 'crise'
-    );
+    // isCrisisMission et isDPS sont déclarés et évalués en amont de la modale
     const hasTeamManagement = isCrisisMission || (mission.requiredVolunteers && mission.requiredVolunteers >= 2) || (registeredVols.length >= 2) || (Array.isArray(mission.teams) && mission.teams.length > 0);
     const crisisTeamsList = this.getMissionTeamsList(mission);
 
@@ -11029,10 +11067,12 @@ class ProtecGame {
             <span>Logistique</span>
             ${hasMissingVehicles ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>' : ''}
           </button>
-          <button type="button" onclick="window.game.setMissionDetailTab('dps')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'dps' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
-            <i data-lucide="calculator" class="w-3.5 h-3.5"></i>
-            <span>DPS</span>
-          </button>
+          ${isDPS ? `
+            <button type="button" onclick="window.game.setMissionDetailTab('dps')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'dps' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+              <i data-lucide="calculator" class="w-3.5 h-3.5"></i>
+              <span>DPS</span>
+            </button>
+          ` : ''}
         </div>
 
         <!-- CONTENU DE L'ONGLET SÉLECTIONNÉ -->
@@ -12402,7 +12442,7 @@ class ProtecGame {
               </div>
             `}
           </div>
-        ` : `
+        ` : (isDPS && activeTab === 'dps') ? `
           <!-- ONGLET 4 : DPS • GRILLE RNMSC OFFICIELLE (eProtec) -->
           <div class="space-y-3 animate-in fade-in duration-150">
             <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between">
@@ -12424,7 +12464,7 @@ class ProtecGame {
               </div>
             `}
           </div>
-        `}
+        ` : ''}
       </div>
     `;
 
@@ -14873,6 +14913,11 @@ class ProtecGame {
 
     // Sauvegarde du scroll lors des rafraîchissements doux sans perte de position
     const savedScrollTop = (isBackNavigation && body) ? body.scrollTop : 0;
+    const volContainer = document.getElementById('volunteers-cards-container');
+    const savedVolScrollTop = (isBackNavigation && volContainer) ? volContainer.scrollTop : 0;
+    const searchInp = document.getElementById('volunteer-search-input');
+    const savedSearchVal = (isBackNavigation && searchInp) ? searchInp.value : '';
+    const isSearchFocused = searchInp && document.activeElement === searchInp;
 
     if (!isBackNavigation && this.currentModalKey && this.currentModalKey !== moduleKey) {
       if (!this.modalHistory) this.modalHistory = [];
@@ -18454,6 +18499,22 @@ class ProtecGame {
       body.scrollTop = savedScrollTop;
     }
 
+    if (savedVolScrollTop > 0) {
+      requestAnimationFrame(() => {
+        const newVolContainer = document.getElementById('volunteers-cards-container');
+        if (newVolContainer) newVolContainer.scrollTop = savedVolScrollTop;
+      });
+    }
+
+    if (savedSearchVal) {
+      const newSearchInp = document.getElementById('volunteer-search-input');
+      if (newSearchInp) {
+        newSearchInp.value = savedSearchVal;
+        this.filterVolunteersList(savedSearchVal);
+        if (isSearchFocused) newSearchInp.focus();
+      }
+    }
+
     if (window.lucide) window.lucide.createIcons();
   }
 
@@ -19508,9 +19569,9 @@ class ProtecGame {
         this.openModule('pompiers', true);
       } else if (this.currentModalKey === 'samu') {
         this.openModule('samu', true);
-      } else if (this.currentModalKey === 'recrutement') {
-        this.openModule('recrutement', true);
       }
+      // Note : 'recrutement' n'est volontairement pas réécrasé toutes les 2 secondes
+      // afin de préserver la lecture, la navigation et le défilement fluide des effectifs.
     } catch (e) {
       console.warn('Erreur refreshCurrentModalIfSafe:', e);
     }
