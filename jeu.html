@@ -531,7 +531,16 @@
         </div>
       </div>
 
-      <!-- 2. MENU PRINCIPAL : EFFECTIFS & RH -->
+      <!-- 2. MENU PRINCIPAL : FORMATIONS (Directement à côté de Missions) -->
+      <button onclick="window.game.openModule('formation')" id="dock-btn-formations" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-emerald-50 transition-all duration-200 flex-shrink-0" title="Formations Premiers Secours (Structures, Grand Public & Équipe)">
+        <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+          <i data-lucide="graduation-cap" class="w-4.5 sm:w-5 h-4.5 sm:h-5"></i>
+        </div>
+        <span class="text-[9px] sm:text-[10px] font-bold text-slate-700 group-hover:text-emerald-600 tracking-tight">Formations</span>
+        <span id="badge-formations-main-dock" class="hidden absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-emerald-600 text-white shadow-sm">0</span>
+      </button>
+
+      <!-- 3. MENU PRINCIPAL : EFFECTIFS & RH -->
       <div class="dock-menu-wrapper relative">
         <button onclick="window.game.toggleDockSubmenu('rh', event)" id="dock-btn-rh" class="dock-btn group relative flex flex-col items-center justify-center w-14 sm:w-16 h-14 rounded-2xl hover:bg-indigo-50 transition-all duration-200 flex-shrink-0" title="Gestion des bénévoles et formations">
           <div class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
@@ -564,7 +573,7 @@
           <button onclick="window.game.openModule('formation'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="graduation-cap" class="w-4 h-4 text-emerald-600"></i>
-              <span>Formations & Devis B2B</span>
+              <span>Formations Premiers Secours</span>
             </div>
             <span id="badge-submenu-formations" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-700 font-bold">0</span>
           </button>
@@ -727,15 +736,24 @@
 
     </div>
 
-    <!-- MOBILE BOTTOM BAR (< 768px) : Dock 5 onglets fluide au pouce -->
-    <div class="flex md:hidden glass-panel-heavy dock-container safe-bottom px-1.5 py-1.5 rounded-2xl items-center justify-around gap-0.5 shadow-2xl border border-white/80 w-[calc(100vw-1rem)] max-w-sm">
+    <!-- MOBILE BOTTOM BAR (< 768px) : Dock 6 onglets fluide au pouce -->
+    <div class="flex md:hidden glass-panel-heavy dock-container safe-bottom px-1.5 py-1.5 rounded-2xl items-center justify-around gap-0.5 shadow-2xl border border-white/80 w-[calc(100vw-0.75rem)] max-w-md">
       <!-- 1. Missions -->
       <button onclick="window.game.openModule('planning')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-pc-blue/10 min-w-0" title="Planning & Missions">
         <div class="relative">
           <i data-lucide="calendar" class="w-5 h-5 text-pc-blue"></i>
           <span id="badge-missions-mobile" class="absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-pc-blue text-white min-w-[14px] text-center leading-tight">0</span>
         </div>
-        <span class="text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Missions</span>
+        <span class="text-[8px] sm:text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Missions</span>
+      </button>
+
+      <!-- 2. Formations (Directement à côté de Missions) -->
+      <button onclick="window.game.openModule('formation')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-emerald-50 min-w-0" title="Formations Premiers Secours">
+        <div class="relative">
+          <i data-lucide="graduation-cap" class="w-5 h-5 text-emerald-600"></i>
+          <span id="badge-formations-mobile" class="hidden absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-emerald-600 text-white min-w-[14px] text-center leading-tight">0</span>
+        </div>
+        <span class="text-[8px] sm:text-[9px] font-bold text-slate-700 mt-0.5 truncate max-w-full">Formations</span>
       </button>
 
       <!-- 2. Effectifs & RH -->
@@ -1296,7 +1314,7 @@
   <script src="js/incidents.js?v=2.5.2"></script>
   <script src="js/personnel.js?v=2.0.8"></script>
   <script src="js/poles.js"></script>
-  <script src="js/formations.js?v=2.1.5"></script>
+  <script src="js/formations.js?v=2.5.4"></script>
   <script src="js/social.js"></script>
   <script src="js/conventions.js"></script>
   <script src="js/contrats_annuels.js"></script>
@@ -1325,7 +1343,7 @@
   <script src="js/apc.js?v=2.1.4"></script>
   <script src="js/marche_occasion.js"></script>
   <script src="js/evenements_reels.js"></script>
-  <script src="js/antenne_messages.js?v=2.5.3"></script>
-  <script src="js/app.js?v=2.5.3"></script>
+  <script src="js/antenne_messages.js?v=2.5.4"></script>
+  <script src="js/app.js?v=2.5.4"></script>
 </body>
 </html>

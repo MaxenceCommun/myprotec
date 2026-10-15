@@ -476,10 +476,12 @@ window.ProtecFormations = {
         const attendeesCount = Math.floor(Math.random() * (cfg.maxAttendees - cfg.minAttendees + 1)) + cfg.minAttendees;
 
         // Modalité : 65% Intra-entreprise (chez le client) vs 35% Inter-entreprise (à l'antenne)
+        // Les entreprises paient plus cher (+30%) pour faire venir le formateur dans leurs locaux plutôt que de déplacer leurs salariés
         const mode = Math.random() < 0.65 ? 'intra' : 'inter';
+        const intraSurplus = mode === 'intra' ? 1.30 : 1.0;
 
-        // Budget indicatif du client avec légère variation locale
-        const variation = 0.88 + Math.random() * 0.28; // 88% à 116% du budget de base
+        // Budget indicatif du client avec majoration sur site client
+        const variation = (0.88 + Math.random() * 0.28) * intraSurplus; // Majoration de ~30% si intra
         const targetBudget = Math.round((cfg.baseBudget * variation) / 10) * 10;
 
         // Délai de réponse accordé à l'antenne (de 24h à 72h réelles / simulées)
@@ -583,10 +585,38 @@ window.ProtecFormations = {
     };
   },
 
-  // 3. GESTION DE LA MODALE D'ÉMISSION DU DEVIS
+  // 3. POLITIQUE TARIFAIRE PAR DÉFAUT FIXÉE PAR LE JOUEUR & GESTION DU DEVIS
+  getDefaultQuotePrice(game, proposal) {
+    if (!proposal) return 1000;
+    const target = Number(proposal.client_target_budget || proposal.clientTargetBudget || 1200);
+    const markup = (game && game.formationDefaultMarkup !== undefined) ? Number(game.formationDefaultMarkup) : 1.0;
+    return Math.max(50, Math.round((target * markup) / 10) * 10);
+  },
+
+  setDefaultPricingMarkup(game, markup) {
+    if (!game) return;
+    game.formationDefaultMarkup = Number(markup) || 1.0;
+    game.saveGame();
+    if (this.activeQuoteModalProposalId) {
+      const proposal = (game.formationB2BProposals || []).find(p => p.id === this.activeQuoteModalProposalId);
+      if (proposal) {
+        const defPr = this.getDefaultQuotePrice(game, proposal);
+        this.updateQuoteModalLive(proposal.id, defPr);
+      }
+    }
+    this.renderModal(game);
+  },
+
   openQuoteModal(proposalId) {
     this.activeQuoteModalProposalId = proposalId;
-    if (window.game) this.renderModal(window.game);
+    if (window.game) {
+      const proposal = (window.game.formationB2BProposals || []).find(p => p.id === proposalId);
+      if (proposal && !proposal.proposed_price) {
+        proposal.proposed_price = this.getDefaultQuotePrice(window.game, proposal);
+        proposal.proposedPrice = proposal.proposed_price;
+      }
+      this.renderModal(window.game);
+    }
   },
 
   closeQuoteModal() {
@@ -901,22 +931,24 @@ window.ProtecFormations = {
     this.syncB2BWithSupabase(game, reminderProposal);
   },
 
-  // 9. SURVEILLANCE PÉRIODIQUE D'HORLOGE (DÉLIBÉRATIONS & RECYCLAGES & DEMANDES AUTOMATIQUES)
+  // 9. SURVEILLANCE PÉRIODIQUE D'HORLOGE (DÉLIBÉRATIONS, DEMANDES ENTRANTES & REMPLISSAGE GRAND PUBLIC)
   processClockTick(game) {
-    if (!game || !game.formationB2BProposals) return;
+    if (!game) return;
 
     const now = Date.now();
     let hasChanges = false;
 
-    game.formationB2BProposals.forEach(p => {
-      // Délibération terminée -> résolution automatique
-      if (p.status === 'evaluating' && p.evaluationEndsAt && now >= p.evaluationEndsAt) {
-        this.resolveQuote(game, p.id, true);
-        hasChanges = true;
-      }
-    });
+    // Délibérations des devis entreprises
+    if (game.formationB2BProposals) {
+      game.formationB2BProposals.forEach(p => {
+        if (p.status === 'evaluating' && p.evaluationEndsAt && now >= p.evaluationEndsAt) {
+          this.resolveQuote(game, p.id, true);
+          hasChanges = true;
+        }
+      });
+    }
 
-    // Génération automatique des demandes entrantes B2B au fil de l'eau
+    // Génération automatique des demandes entrantes au fil de l'eau
     if (!game._lastB2BAutoCheck) game._lastB2BAutoCheck = 0;
     if (now - game._lastB2BAutoCheck >= 30000) {
       game._lastB2BAutoCheck = now;
@@ -924,12 +956,129 @@ window.ProtecFormations = {
       if (spawned) hasChanges = true;
     }
 
-    if (hasChanges && this.mainTab === 'entreprises') {
+    // Inscriptions citoyennes dynamiques aux formations Grand Public
+    if (!game._lastPublicRegistrationCheck) game._lastPublicRegistrationCheck = 0;
+    if (now - game._lastPublicRegistrationCheck >= 15000) {
+      game._lastPublicRegistrationCheck = now;
+      const registered = this.checkPublicRegistrations(game);
+      if (registered) hasChanges = true;
+    }
+
+    if (hasChanges) {
       const modal = document.getElementById('main-modal');
-      if (modal && !modal.classList.contains('hidden')) {
+      if (modal && !modal.classList.contains('hidden') && (this.mainTab === 'entreprises' || this.mainTab === 'grand_public')) {
         this.renderModal(game);
       }
     }
+  },
+
+  // Remplissage dynamique des places Grand Public selon la publicité et la réputation
+  checkPublicRegistrations(game) {
+    if (!game || !game.sessionsFormation || game.sessionsFormation.length === 0) return false;
+
+    let hasRegistered = false;
+    const repScore = game.resources?.reputationScore || 0;
+
+    // Détection de la publicité / communication active menée par l'antenne
+    // 1. Campagnes de communication payantes actives
+    const activeCampaigns = game.communicationCampaigns || game.activeCampaigns || [];
+    const hasFormationCampaign = activeCampaigns.some(c => c.subjectId === 'formation' || c.subject === 'formation' || c.id === 'formation');
+    const hasAnyActiveCampaign = activeCampaigns.length > 0;
+
+    // 2. Notoriété et visibilité sur les réseaux sociaux
+    const socialVis = game.socialMediaState?.visibilityScore || game.socialMedia?.visibilityScore || 0;
+    const socialFollowers = game.socialMediaState?.followers || game.resources?.followers || 0;
+
+    // 3. Calcul du multiplicateur d'attractivité publicitaire
+    let pubMultiplier = 1.0;
+    if (hasFormationCampaign) {
+      pubMultiplier += 2.5; // Campagne spécifique "Sensibilisation Gestes qui Sauvent & PSC1"
+    } else if (hasAnyActiveCampaign) {
+      pubMultiplier += 1.2;
+    }
+    if (socialVis > 50) pubMultiplier += 0.5;
+    if (socialFollowers > 1000) pubMultiplier += 0.3;
+
+    // Parcours des sessions ouvertes ayant des places grand public disponibles
+    game.sessionsFormation.forEach(s => {
+      if (s.status !== 'open') return;
+      if (!s.openToPublic) return;
+
+      const maxPublic = Number(s.publicSeatsMax) || 0;
+      const bookedPublic = Number(s.publicSeatsBooked) || 0;
+      if (maxPublic <= 0 || bookedPublic >= maxPublic) return;
+
+      // Probabilité d'inscription d'un citoyen à ce cycle :
+      // Si réputation < 15 et aucune pub faite : probabilité très faible (< 4%)
+      let baseChance = 0.05;
+      if (repScore >= 30) baseChance += 0.15;
+      if (repScore >= 60) baseChance += 0.15;
+      if (repScore >= 120) baseChance += 0.20;
+
+      const effectiveChance = Math.min(0.85, baseChance * pubMultiplier);
+
+      if (Math.random() < effectiveChance) {
+        s.publicSeatsBooked = bookedPublic + 1;
+        const citizenName = this.generateRandomCitizenName();
+        const pricePerSeat = Number(s.publicPrice) || 60;
+
+        if (!s.publicAttendees) s.publicAttendees = [];
+        s.publicAttendees.push({
+          name: citizenName,
+          registeredAt: Date.now(),
+          price: pricePerSeat
+        });
+
+        // Encaissement immédiat des recettes en trésorerie
+        if (pricePerSeat > 0 && game.resources) {
+          game.resources.money = (game.resources.money || 0) + pricePerSeat;
+          if (window.ProtecFinances && typeof window.ProtecFinances.recordTransaction === 'function') {
+            window.ProtecFinances.recordTransaction(
+              game,
+              pricePerSeat,
+              `Inscription Grand Public : ${s.title} (${citizenName})`,
+              'formation_grand_public'
+            );
+          }
+        }
+
+        hasRegistered = true;
+
+        if (typeof game.showToast === 'function') {
+          if (s.publicSeatsBooked >= maxPublic) {
+            game.showToast(
+              'Session Grand Public Complète ! 🎉',
+              `Toutes les ${maxPublic} places grand public de « ${s.title} » sont réservées ! (+${pricePerSeat} € encaissés pour ${citizenName}).`,
+              'green',
+              { type: 'module', id: 'formations' }
+            );
+          } else {
+            game.showToast(
+              'Nouvelle Inscription Grand Public ! 🎓',
+              `${citizenName} s'est inscrit(e) à la session « ${s.title} » (+${pricePerSeat} € en trésorerie). ${s.publicSeatsBooked}/${maxPublic} places réservées.`,
+              'blue',
+              { type: 'module', id: 'formations' }
+            );
+          }
+        }
+      }
+    });
+
+    if (hasRegistered) {
+      game.saveGame();
+      if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+    }
+
+    return hasRegistered;
+  },
+
+  // Générateur de patronymes citoyens réalistes pour les inscriptions Grand Public
+  generateRandomCitizenName() {
+    const firstNames = ['Lucas', 'Emma', 'Thomas', 'Léa', 'Alexandre', 'Chloé', 'Maxime', 'Manon', 'Julien', 'Camille', 'Antoine', 'Sarah', 'Nicolas', 'Inès', 'Hugo', 'Clara', 'Arthur', 'Julie', 'Gabriel', 'Louise', 'Mathis', 'Jade', 'Théo', 'Zoé', 'Louis', 'Lola', 'Raphaël', 'Pauline', 'Clément', 'Lucie', 'Romain', 'Marie'];
+    const lastNames = ['Martin', 'Bernard', 'Dubois', 'Thomas', 'Robert', 'Richard', 'Petit', 'Durand', 'Leroy', 'Moreau', 'Simon', 'Laurent', 'Lefebvre', 'Michel', 'Garcia', 'David', 'Bertrand', 'Roux', 'Vincent', 'Fournier', 'Morel', 'Girard', 'André', 'Mercier', 'Dupont', 'Lambert', 'Bonnet', 'François', 'Martinez', 'Legrand'];
+    const fn = firstNames[Math.floor(Math.random() * firstNames.length)];
+    const ln = lastNames[Math.floor(Math.random() * lastNames.length)];
+    return `${fn} ${ln}`;
   },
 
   // Arrivée automatique des opportunités B2B selon Notoriété, Communication et Locaux
@@ -983,9 +1132,13 @@ window.ProtecFormations = {
     const cfg = this.TRAINING_B2B_CONFIG[trainingType] || this.TRAINING_B2B_CONFIG['SST'];
     const clientPreset = this.CLIENT_PRESETS[Math.floor(Math.random() * this.CLIENT_PRESETS.length)];
     const attendeesCount = Math.floor(Math.random() * (cfg.maxAttendees - cfg.minAttendees + 1)) + cfg.minAttendees;
+    
+    // Modalité : 65% Intra-entreprise (chez le client) vs 35% Inter-entreprise (à l'antenne)
+    // Les structures paient plus cher (+30%) pour faire venir le formateur dans leurs locaux plutôt que de déplacer leurs salariés
     const mode = Math.random() < 0.65 ? 'intra' : 'inter';
+    const intraSurplus = mode === 'intra' ? 1.30 : 1.0;
 
-    const variation = 0.88 + Math.random() * 0.28;
+    const variation = (0.88 + Math.random() * 0.28) * intraSurplus;
     const targetBudget = Math.round((cfg.baseBudget * variation) / 10) * 10;
     const deadlineHours = 24 + Math.floor(Math.random() * 48);
     const deadline = now + (deadlineHours * 3600 * 1000);
@@ -1029,8 +1182,8 @@ window.ProtecFormations = {
 
     if (typeof game.showToast === 'function') {
       game.showToast(
-        'Nouvelle Demande B2B 🏢',
-        `« ${newProposal.client_name} » sollicite un devis pour une formation ${newProposal.training_type} (${newProposal.attendees_count} salariés).`,
+        'Nouvelle Demande de Formation 🏢',
+        `« ${newProposal.client_name} » sollicite un devis : ${newProposal.training_type} (${newProposal.attendees_count} salariés, ${mode === 'intra' ? 'sur site client' : 'à l’antenne'}).`,
         'blue',
         { type: 'module', id: 'formations' }
       );
@@ -1087,17 +1240,24 @@ window.ProtecFormations = {
     return false;
   },
 
-  // Créer une nouvelle session de formation planifiée à l'antenne ou chez un partenaire
-  createSession(game, courseId, discountType, isInternal, targetAudience, locationType = 'antenne', externalAttendeesCount = 0, roomNumber = null) {
+  // Créer et organiser une nouvelle session de formation planifiée à l'antenne ou délocalisée
+  createSession(game, courseId, paramsOrDiscount, isInternal, targetAudience, locationType = 'antenne', externalAttendeesCount = 0, roomNumber = null) {
     const course = this.catalog.find(c => c.id === courseId);
     if (!course) return;
+
+    const isObjectConfig = typeof paramsOrDiscount === 'object' && paramsOrDiscount !== null;
+    const cfg = isObjectConfig ? paramsOrDiscount : {};
 
     // 1. Résolution de l'antenne et de la salle de formation
     const station = (game.stations && game.stations[0]) || { name: 'Antenne', city: 'Nancy' };
     const stationName = station.name || `Antenne de ${station.city || 'Nancy'}`;
     const roomsCount = window.ProtecLocaux?.getStationTrainingRoomsCount ? window.ProtecLocaux.getStationTrainingRoomsCount(station) : 1;
-    let assignedRoom = Number(roomNumber) || 1;
-    if (!roomNumber && locationType === 'antenne' && roomsCount > 1) {
+    
+    let locType = cfg.locationType || locationType || 'antenne';
+    let assignedRoom = Number(cfg.roomNumber || roomNumber) || 1;
+    let customLocation = (cfg.locationCustom || '').trim();
+
+    if (!roomNumber && !cfg.roomNumber && locType === 'antenne' && roomsCount > 1) {
       const curDay = (game.clock?.day || 1);
       const occupied = (game.sessionsFormation || [])
         .filter(s => s.locationType === 'antenne' && s.eventDate?.day === curDay && s.roomNumber)
@@ -1110,11 +1270,40 @@ window.ProtecFormations = {
       }
     }
 
-    const locationLabel = locationType === 'antenne'
-      ? `${stationName} - Salle n°${assignedRoom}`
-      : 'Délocalisée (Entreprise Partenaire)';
+    let locationLabel = customLocation;
+    if (!locationLabel) {
+      locationLabel = locType === 'antenne'
+        ? `${stationName} - Salle n°${assignedRoom}`
+        : 'Salle Délocalisée / Extérieure';
+    }
 
-    // 2. Rappel sur le kit pédagogique si dispensé par l'antenne (non bloquant à la programmation)
+    // 2. Dates et horaires
+    const curClock = game.clock || {};
+    const evDate = cfg.eventDate || {
+      day: Number(cfg.day) || (curClock.day || 1) + 2,
+      month: Number(cfg.month) !== undefined ? Number(cfg.month) : (curClock.month || 0),
+      year: Number(cfg.year) || (curClock.year || 2026),
+      hour: Number(cfg.hour) || 9,
+      minute: Number(cfg.minute) || 0
+    };
+
+    // 3. Répartition des places (Total, Interne Antenne, Interne Protection Civile, Grand Public)
+    const defaultCapacity = course.capacity || 10;
+    const totalSeats = Math.max(2, Math.min(25, Number(cfg.totalSeats || course.capacity)));
+    let internalAntenneSeats = Number(cfg.internalAntenneSeats);
+    if (isNaN(internalAntenneSeats)) {
+      internalAntenneSeats = isObjectConfig ? 0 : (isInternal ? (totalSeats - (Number(externalAttendeesCount) || 0)) : 0);
+    }
+    internalAntenneSeats = Math.max(0, Math.min(totalSeats, internalAntenneSeats));
+
+    let internalProtecSeats = Math.max(0, Math.min(totalSeats - internalAntenneSeats, Number(cfg.internalProtecSeats) || 0));
+
+    // Ouverture au Grand Public (places restantes attribuées aux citoyens)
+    const openToPublic = isObjectConfig ? !!cfg.openToPublic : (!isInternal || (Number(externalAttendeesCount) || 0) > 0);
+    const publicSeatsMax = openToPublic ? Math.max(0, totalSeats - internalAntenneSeats - internalProtecSeats) : 0;
+    const publicPrice = Number(cfg.publicPrice) !== undefined ? Number(cfg.publicPrice) : course.basePricePublic;
+
+    // 4. Kit pédagogique requis
     if (course.kitRequired && !this.hasTrainingKit(game, course.kitRequired)) {
       game.showToast(
         'Information Matériel',
@@ -1123,65 +1312,72 @@ window.ProtecFormations = {
       );
     }
 
-    // 3. Calcul du tarif public appliqué
-    let finalPrice = course.basePricePublic;
-    let relationshipBonus = 0;
-    if (discountType === 'free_mairie') {
-      finalPrice = 0;
-      relationshipBonus = 35;
-    } else if (discountType === 'discount_25') {
-      finalPrice = Math.round(course.basePricePublic * 0.75);
-      relationshipBonus = 15;
-    } else if (discountType === 'discount_50') {
-      finalPrice = Math.round(course.basePricePublic * 0.50);
-      relationshipBonus = 25;
-    }
-
-    // Formation interne : gratuite pour les bénévoles de l'antenne
-    let volunteerPayment = false;
-    if (isInternal) {
-      volunteerPayment = false; // Toujours gratuit en interne si animé par l'antenne
-      finalPrice = 0;
-    }
-
     const sessionId = `sess-${Date.now()}`;
-    const extCount = Math.max(0, Math.min(course.capacity - 1, Number(externalAttendeesCount) || 0));
 
     const newSession = {
       id: sessionId,
       courseId: course.id,
       title: course.title,
       category: course.category,
-      isInternal: !!isInternal,
-      locationType: locationType,
+      locationType: locType,
       roomNumber: assignedRoom,
+      locationCustom: customLocation,
       locationLabel: locationLabel,
-      targetAudience: isInternal ? 'Bénévoles de l’Antenne' : (targetAudience || 'Grand Public'),
-      finalPrice: finalPrice,
-      publicPriceForExternals: course.basePricePublic,
-      costOrganization: course.costOrganization,
-      discountType: discountType,
-      relationshipBonus: relationshipBonus,
-      volunteerPayment: volunteerPayment,
-      externalAttendeesCount: isInternal ? extCount : 0, // Personnes extérieures accueillies payantes
-      trainerId: null,
-      maxCandidates: course.capacity,
+      totalSeats: totalSeats,
+      maxCandidates: totalSeats,
+      internalAntenneSeats: internalAntenneSeats,
+      internalProtecSeats: internalProtecSeats,
+      openToPublic: openToPublic,
+      publicSeatsMax: publicSeatsMax,
+      publicSeatsBooked: 0,
+      publicPrice: publicPrice,
+      publicAttendees: [],
       registeredCandidates: [],
-      dateDesc: `Prévue au calendrier (Durée : ${course.durationHours}h)`,
-      eventDate: {
-        day: (game.clock?.day || 1),
-        month: (game.clock?.month || 0),
-        year: (game.clock?.year || 2026),
-        hour: 9,
-        minute: 0
-      },
+      registeredProtecReinforcements: [],
+      trainerId: cfg.trainerId || null,
+      assignedTrainer: null,
+      kitRequired: course.kitRequired,
+      kitName: course.kitName,
+      eventDate: evDate,
+      dateDesc: `${evDate.day}/${(evDate.month || 0) + 1}/${evDate.year} à ${evDate.hour}h00 (Durée : ${course.durationHours}h)`,
       status: 'open',
       createdAt: Date.now()
     };
 
     game.sessionsFormation.unshift(newSession);
     game.saveGame();
-    game.showToast('Session Programmée', `La session « ${course.id} » est ouverte au planning. Affectez un formateur habilité.`, 'green');
+    game.showToast('Session de Formation Programmée 🎓', `La session « ${course.title} » est ouverte au calendrier (${totalSeats} places).`, 'green');
+    this.renderModal(game);
+  },
+
+  // Accueillir un stagiaire Protection Civile d'une antenne voisine (Renfort Fédéral)
+  registerProtecReinforcementToSession(game, sessionId, originStationName) {
+    const session = game.sessionsFormation.find(s => s.id === sessionId);
+    if (!session) return;
+
+    if (!session.registeredProtecReinforcements) session.registeredProtecReinforcements = [];
+    const maxProtec = Number(session.internalProtecSeats) || 0;
+    if (session.registeredProtecReinforcements.length >= maxProtec) {
+      game.showToast('Jauge Fédérale Atteinte', `Le quota de ${maxProtec} stagiaires Protection Civile accueillis est complet.`, 'orange');
+      return;
+    }
+
+    const name = this.generateRandomCitizenName();
+    const station = originStationName || 'Antenne Voisine';
+
+    session.registeredProtecReinforcements.push({
+      name: name,
+      station: station,
+      registeredAt: Date.now()
+    });
+
+    // Bonus de solidarité fédérale
+    if (game.resources) {
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 6;
+    }
+
+    game.saveGame();
+    game.showToast('Stagiaire Protection Civile Accueilli(e) 🤝', `${name} (${station}) rejoint la session au titre de la solidarité du réseau fédéral (+6 réputation).`, 'blue');
     this.renderModal(game);
   },
 
@@ -1375,9 +1571,9 @@ window.ProtecFormations = {
     if (!session || !vol) return;
 
     if (session.registeredCandidates.includes(volunteerId)) return;
-    const currentTotal = session.registeredCandidates.length + (session.externalAttendeesCount || 0);
-    if (currentTotal >= session.maxCandidates) {
-      game.showToast('Session Complète', 'La jauge maximale de stagiaires est atteinte.', 'orange');
+    const maxAntenne = session.internalAntenneSeats !== undefined ? Number(session.internalAntenneSeats) : (Number(session.maxCandidates) || 8);
+    if (session.registeredCandidates.length >= maxAntenne) {
+      game.showToast('Quota Équipe Atteint', `Le quota de ${maxAntenne} places réservées aux bénévoles de l’antenne est déjà atteint.`, 'orange');
       return;
     }
 
@@ -1489,10 +1685,22 @@ window.ProtecFormations = {
       return;
     }
 
+    // Contrôle du kit pédagogique de la base obligatoire
+    if (session.kitRequired && !this.hasTrainingKit(game, session.kitRequired)) {
+      game.showToast('Matériel Pédagogique Manquant ⚠️', `Le kit de formation « ${session.kitName || session.kitRequired} » de la base est obligatoire pour dispenser et certifier cette session. Commandez-le dans la boutique Logistique.`, 'orange');
+      return;
+    }
+
     const course = this.catalog.find(c => c.id === session.courseId);
-    const internalCount = session.registeredCandidates.length;
-    const externalCount = session.externalAttendeesCount || 0;
-    const totalCount = session.isInternal ? (internalCount + externalCount) : (internalCount || Math.min(session.maxCandidates, 6));
+    const internalCount = (session.registeredCandidates || []).length;
+    const protecCount = (session.registeredProtecReinforcements || []).length;
+    const publicCount = session.publicSeatsBooked || (session.publicAttendees ? session.publicAttendees.length : (session.externalAttendeesCount || 0));
+    const totalCount = internalCount + protecCount + publicCount;
+
+    if (totalCount === 0 && !session.finalPrice) {
+      game.showToast('Session Sans Stagiaire', 'Aucun stagiaire n\'est inscrit à cette session (bénévole antenne, renfort Protection Civile ou grand public).', 'orange');
+      return;
+    }
 
     let totalRevenue = 0;
     let netGain = 0;
@@ -1503,55 +1711,54 @@ window.ProtecFormations = {
 
     let tierNotice = '';
 
-    if (session.isInternal) {
-      // Les externes accueillis paient le tarif public de la formation
-      const revFromExternals = externalCount * (session.publicPriceForExternals || course?.basePricePublic || 60);
-      totalRevenue = revFromExternals;
-
-      // Bonus matériel sur recettes externes
-      if (mannequinTier === 3) {
-        totalRevenue = Math.round(totalRevenue * 1.25); // +25% attractivité & tarifs
-        tierNotice += ' [QCPR Connecté : +25% recettes]';
-      } else if (mannequinTier === 1) {
-        totalRevenue = Math.round(totalRevenue * 0.90);
-      }
-
-      game.resources.money += totalRevenue;
-      netGain = totalRevenue;
-
-      // Attribution des compétences aux bénévoles internes certifiés
-      session.registeredCandidates.forEach(vid => {
-        const v = game.volunteers.find(vol => vol.id === vid);
-        if (v && course) {
-          this.grantCourseQualifications(v, course);
-          // Bonus de rapidité d'apprentissage QCPR
-          if (mannequinTier === 3) {
-            v.exp = (v.exp || 0) + 15;
-          }
-        }
-      });
-    } else {
-      // Formation Grand Public
-      let multiplier = 1.0;
-      if (mannequinTier === 3) {
-        multiplier = 1.25; // +25% satisfaction & valorisation tarifaire
-        tierNotice += ' [Mannequins QCPR Bluetooth : +25% satisfaction & tarif valorisé]';
-      } else if (mannequinTier === 1) {
-        multiplier = 0.90; // -10% attractivité
-      }
-
-      totalRevenue = Math.round((session.finalPrice * totalCount) * multiplier);
-      const totalCost = (session.costOrganization || 25) * totalCount;
-      netGain = totalRevenue - totalCost;
-      game.resources.money += netGain;
-
-      let repGain = 25 + (session.relationshipBonus || 0);
-      if (dsaTier === 2) {
-        repGain += 10;
-        tierNotice += ' [DSA Connecté HF : +10 réputation]';
-      }
-      game.resources.reputationScore += repGain;
+    // Si d'anciens externes payants n'avaient pas été encaissés au fil de l'eau
+    const unbilledExternals = session.externalAttendeesCount || 0;
+    if (unbilledExternals > 0 && (!session.publicAttendees || session.publicAttendees.length === 0)) {
+      const revFromExternals = unbilledExternals * (session.publicPriceForExternals || course?.basePricePublic || 60);
+      totalRevenue += revFromExternals;
     }
+
+    // Bonus matériel sur recettes
+    if (mannequinTier === 3) {
+      totalRevenue = Math.round(totalRevenue * 1.25);
+      tierNotice += ' [QCPR Connecté : +25% valorisation]';
+    } else if (mannequinTier === 1 && totalRevenue > 0) {
+      totalRevenue = Math.round(totalRevenue * 0.90);
+    }
+
+    if (totalRevenue > 0) {
+      game.resources.money = (game.resources.money || 0) + totalRevenue;
+      netGain += totalRevenue;
+      if (window.ProtecFinances && typeof window.ProtecFinances.recordTransaction === 'function') {
+        window.ProtecFinances.recordTransaction(game, totalRevenue, `Clôture Session : ${session.title}`, 'formation_grand_public');
+      }
+    }
+
+    // Réputation générée par la réussite de la session
+    let repGain = 15;
+    if (protecCount > 0) {
+      repGain += protecCount * 6; // Solidarité fédérale inter-antennes
+    }
+    if (publicCount > 0) {
+      repGain += publicCount * 4; // Notoriété et service rendu à la population
+    }
+    if (dsaTier === 2) {
+      repGain += 8;
+      tierNotice += ' [DSA Connecté HF : +8 réputation]';
+    }
+    game.resources.reputationScore = (game.resources.reputationScore || 0) + repGain;
+
+    // Attribution des compétences et qualifications aux bénévoles internes certifiés
+    (session.registeredCandidates || []).forEach(vid => {
+      const v = game.volunteers.find(vol => vol.id === vid);
+      if (v && course) {
+        this.grantCourseQualifications(v, course);
+        // Bonus de rapidité d'apprentissage QCPR
+        if (mannequinTier === 3) {
+          v.exp = (v.exp || 0) + 15;
+        }
+      }
+    });
 
     // Boost moral du formateur si matériel moderne QCPR
     const trainer = game.volunteers.find(v => v.id === session.trainerId);
@@ -1563,28 +1770,6 @@ window.ProtecFormations = {
       } else if (mannequinTier === 2) {
         trainer.moral = Math.min(100, (trainer.moral || 75) + 5);
         trainer.motivation = trainer.moral;
-      }
-    }
-
-    // Sollicitation spontanée d'entreprises locales si QCPR Niveau 3
-    if (mannequinTier === 3 && Math.random() < 0.35 && game.annualContracts) {
-      const existingCorp = game.annualContracts.find(c => c.id === 'contrat_corp_sst');
-      if (!existingCorp) {
-        game.annualContracts.push({
-          id: 'contrat_corp_sst',
-          title: 'Convention Annuelle SST & Prévention Entreprise (Groupe Régional)',
-          partner: 'Industrie & PME Partenaires',
-          category: 'formation',
-          signed: true,
-          yearlyBonus: 1200,
-          frequencyDesc: '1 session SST rémunérée par trimestre',
-          desc: 'Attirée par votre dotation pédagogique connectée QCPR haut de gamme, une fédération patronale conventionne votre antenne pour former tous ses salariés SST !'
-        });
-        game.showToast(
-          '🏛️ Nouvelle Convention Entreprise !',
-          'Impressionnée par la technologie QCPR connectée, une entreprise locale signe un contrat cadre annuel de formations SST (+1 200 € / an) !',
-          'purple'
-        );
       }
     }
 
@@ -1616,15 +1801,21 @@ window.ProtecFormations = {
     game.saveGame();
     game.updateStatsUI();
 
-    const msg = session.isInternal
-      ? `Session interne validée : ${internalCount} bénévole(s) certifié(s) « ${course?.title || session.courseId} » ! ${externalCount > 0 ? `+${totalRevenue} € encaissés via ${externalCount} stagiaire(s) extérieur(s).` : ''}${tierNotice}`
-      : `Formation grand public validée : +${netGain} € de solde net et +${session.relationshipBonus || 15} relation publique !${tierNotice}`;
+    // Message de clôture et bilan
+    let attendeeParts = [];
+    if (internalCount > 0) attendeeParts.push(`${internalCount} bénévole(s) antenne certifié(s)`);
+    if (protecCount > 0) attendeeParts.push(`${protecCount} stagiaire(s) Protection Civile accueilli(s)`);
+    if (publicCount > 0) attendeeParts.push(`${publicCount} citoyen(s) formé(s)`);
+    if (attendeeParts.length === 0) attendeeParts.push(`${totalCount} stagiaire(s) certifié(s)`);
 
-    game.showToast('Formation Validée ! 🎓', msg, 'green');
+    const summaryText = attendeeParts.join(', ');
+    const msg = `Formation validée avec succès : ${summaryText} ! (+${repGain} réputation)${totalRevenue > 0 ? ` (+${totalRevenue} €)` : ''}${tierNotice}`;
+
+    game.showToast('Session Validée & Certifiée ! 🎓', msg, 'green');
     this.renderModal(game);
   },
 
-  // 11. RENDU DE L'ONGLET STRUCTURES & ENTREPRISES B2B
+  // 11. RENDU DE L'ONGLET STRUCTURES & ENTREPRISES (FORMATIONS PREMIERS SECOURS)
   renderB2BTab(game) {
     const proposals = game.formationB2BProposals || [];
     const pendingQuotes = proposals.filter(p => p.status === 'pending_quote');
@@ -1634,7 +1825,7 @@ window.ProtecFormations = {
     const completedQuotes = proposals.filter(p => p.status === 'completed');
     const activeSignedCount = acceptedQuotes.length + inProgressQuotes.length;
 
-    // Calcul du CA B2B encaissé total
+    // Calcul du CA Formations encaissé total
     const totalRevenueB2B = completedQuotes.reduce((sum, p) => {
       const gross = Number(p.proposed_price || p.proposedPrice || p.client_target_budget || 0);
       const consumable = Number(p.consumable_cost || p.consumableCost || 0);
@@ -1650,6 +1841,7 @@ window.ProtecFormations = {
       return true;
     });
 
+    const currentMarkup = (game && game.formationDefaultMarkup !== undefined) ? Number(game.formationDefaultMarkup) : 1.0;
     const now = Date.now();
     const availableTrainers = (game.volunteers || []).filter(v => v.status === 'dispo');
     const availableVehicles = (game.vehicles || []).filter(v => v.status === 'dispo' && !v.requiresTrailer);
@@ -1658,10 +1850,10 @@ window.ProtecFormations = {
     return `
       <div class="space-y-6">
 
-        <!-- 1. CARTES STATISTIQUES KPI B2B -->
+        <!-- 1. CARTES STATISTIQUES KPI -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div class="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-700 block">Demandes Entrantes</span>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-700 block">Demandes Reçues</span>
             <div class="flex items-baseline gap-1.5 mt-0.5">
               <strong class="text-xl font-black text-blue-900 mono-num">${pendingQuotes.length}</strong>
               <span class="text-[10px] text-blue-600 font-medium">à chiffrer</span>
@@ -1685,7 +1877,7 @@ window.ProtecFormations = {
           </div>
 
           <div class="p-3.5 rounded-2xl bg-slate-900 text-white shadow-xs">
-            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">CA B2B Encaissé</span>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">CA Encaissé</span>
             <div class="flex items-baseline gap-1 mt-0.5">
               <strong class="text-lg sm:text-xl font-black text-emerald-400 mono-num">+${totalRevenueB2B.toLocaleString('fr-FR')} €</strong>
               <span class="text-[9px] text-slate-400 font-normal">net</span>
@@ -1693,7 +1885,36 @@ window.ProtecFormations = {
           </div>
         </div>
 
-        <!-- 2. BARRE D'ACTIONS ET DE FILTRES RAPIDES -->
+        <!-- 2. ENCADRÉ EXPLICATIF : MODALITÉS & POLITIQUE TARIFAIRE FIXÉE PAR LE JOUEUR -->
+        <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-50 via-blue-50/40 to-slate-50 border border-slate-200/90 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div>
+              <h5 class="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                <i data-lucide="info" class="w-4 h-4 text-pc-blue"></i>
+                Formations Premiers Secours en Entreprise (SST, PSC, GQS, Extincteurs)
+              </h5>
+              <p class="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                Les entreprises commandent des formations pour leurs salariés. <strong>Certaines entreprises paient un supplément (+30%) pour faire venir le formateur directement dans leurs locaux</strong> (Intra) plutôt que de déplacer leurs salariés dans les salles de formation de notre base (Inter).
+              </p>
+            </div>
+            
+            <!-- Réglage du devis par défaut fixé par le joueur -->
+            <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-xs flex-shrink-0">
+              <span class="text-[10px] font-bold uppercase text-slate-500 whitespace-nowrap">Tarif Devis par Défaut :</span>
+              <select 
+                class="text-xs font-black text-pc-blue bg-transparent focus:outline-none cursor-pointer"
+                onchange="window.ProtecFormations.setDefaultPricingMarkup(window.game, this.value)"
+              >
+                <option value="0.9" ${currentMarkup === 0.9 ? 'selected' : ''}>Compétitif (-10% chances max)</option>
+                <option value="1.0" ${currentMarkup === 1.0 ? 'selected' : ''}>Standard (100% budget)</option>
+                <option value="1.15" ${currentMarkup === 1.15 ? 'selected' : ''}>Recommandé (+15% marge)</option>
+                <option value="1.3" ${currentMarkup === 1.3 ? 'selected' : ''}>Prestige (+30% confort)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. BARRE D'ACTIONS ET DE FILTRES RAPIDES -->
         <div class="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-slate-100">
           <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
             <button onclick="window.ProtecFormations.setB2BFilter('tous')" class="px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${currentFilter === 'tous' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
@@ -1718,7 +1939,7 @@ window.ProtecFormations = {
           </span>
         </div>
 
-        <!-- 3. LISTE DES OPPORTUNITÉS ET SESSIONS B2B -->
+        <!-- 4. LISTE DES OPPORTUNITÉS ET SESSIONS (ENTREPRISES & STRUCTURES) -->
         ${filteredProposals.length === 0 ? `
           <div class="p-8 rounded-3xl bg-slate-50 border border-dashed border-slate-300 text-center space-y-3">
             <div class="w-12 h-12 rounded-2xl bg-white shadow-xs mx-auto flex items-center justify-center text-2xl text-slate-400">
@@ -1982,13 +2203,13 @@ window.ProtecFormations = {
     `;
   },
 
-  // 12. RENDU DE LA MODALE D'ÉLABORATION DU DEVIS B2B (MODALE INTERACTIVE AVEC JAUGE LIVE)
+  // 12. RENDU DE LA MODALE D'ÉLABORATION DU DEVIS DE FORMATION (INTERACTIVE AVEC JAUGE LIVE)
   renderQuoteModalHTML(game, proposal) {
     if (!proposal) return '';
 
     const cfg = this.TRAINING_B2B_CONFIG[proposal.training_type] || this.TRAINING_B2B_CONFIG['SST'];
     const targetBudget = Number(proposal.client_target_budget || proposal.clientTargetBudget || 1200);
-    const initialPrice = Number(proposal.proposed_price || proposal.proposedPrice || targetBudget);
+    const initialPrice = Number(proposal.proposed_price || proposal.proposedPrice || this.getDefaultQuotePrice(game, proposal));
     const oddsData = this.calculateQuoteOdds(game, proposal, initialPrice);
 
     const minSlider = Math.round(targetBudget * 0.5);
@@ -2011,7 +2232,7 @@ window.ProtecFormations = {
                 💼
               </div>
               <div>
-                <h4 class="text-sm font-black text-slate-900 leading-tight">Élaboration du Devis B2B</h4>
+                <h4 class="text-sm font-black text-slate-900 leading-tight">Élaboration du Devis de Formation</h4>
                 <p class="text-[11px] text-slate-500">${proposal.client_name} • ${proposal.client_city || 'Antenne'}</p>
               </div>
             </div>
@@ -2028,29 +2249,39 @@ window.ProtecFormations = {
             </div>
             <div>
               <span class="text-[10px] font-bold uppercase text-slate-400 block">Effectif</span>
-              <strong class="text-slate-800 text-xs">${proposal.attendees_count} stagiaires</strong>
+              <strong class="text-slate-800 text-xs">${proposal.attendees_count} salariés</strong>
             </div>
             <div>
               <span class="text-[10px] font-bold uppercase text-slate-400 block">Modalité</span>
-              <strong class="text-slate-800 text-xs">${isIntra ? 'Intra (Sur site)' : 'Inter (Antenne)'}</strong>
+              <strong class="text-xs ${isIntra ? 'text-purple-700 font-black' : 'text-slate-800'}">${isIntra ? 'Sur site client (Intra)' : 'À l’antenne (Inter)'}</strong>
             </div>
             <div>
-              <span class="text-[10px] font-bold uppercase text-slate-400 block">Budget Indicatif</span>
+              <span class="text-[10px] font-bold uppercase text-slate-400 block">Budget Cible Client</span>
               <strong class="text-pc-blue text-xs mono-num">~${targetBudget.toLocaleString('fr-FR')} €</strong>
             </div>
           </div>
 
-          <!-- Formulaire de prix dynamique avec slider interactif -->
+          ${isIntra ? `
+            <div class="p-3 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-[11px] flex items-center gap-2">
+              <i data-lucide="truck" class="w-4 h-4 text-purple-600 flex-shrink-0"></i>
+              <span><strong>Formation sur site client</strong> : L'entreprise paie plus cher car notre formateur se déplace dans ses locaux avec le matériel pédagogique (évite à l'entreprise de déplacer ses salariés).</span>
+            </div>
+          ` : ''}
+
+          <!-- Formulaire de prix dynamique avec slider interactif et saisie libre -->
           <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
             <div class="flex items-center justify-between">
-              <label class="text-xs font-black uppercase tracking-wider text-slate-700">Votre Proposition Tarifaire (€) :</label>
+              <div>
+                <label class="text-xs font-black uppercase tracking-wider text-slate-700 block">Montant du Devis Proposé (€) :</label>
+                <span class="text-[10px] text-slate-400 font-medium">Modifiable librement par le joueur</span>
+              </div>
               <div class="flex items-center gap-1.5">
                 <input 
                   type="number" 
                   id="b2b-quote-price-input" 
                   value="${initialPrice}" 
                   min="50" 
-                  max="5000" 
+                  max="10000" 
                   step="10"
                   oninput="window.ProtecFormations.updateQuoteModalLive('${proposal.id}', this.value)"
                   class="w-28 p-1.5 rounded-xl border border-slate-300 font-black text-right text-base text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue mono-num"
@@ -2071,10 +2302,36 @@ window.ProtecFormations = {
               class="w-full accent-pc-blue cursor-pointer"
             />
 
-            <div class="flex items-center justify-between text-[10px] text-slate-400">
-              <span>Attractif (${minSlider} €)</span>
-              <span class="font-bold text-slate-600">Cible client : ${targetBudget} €</span>
-              <span>Haut de gamme (${maxSlider} €)</span>
+            <!-- Raccourcis de tarification rapides -->
+            <div class="flex flex-wrap gap-1.5 pt-1">
+              <button 
+                type="button" 
+                onclick="window.ProtecFormations.updateQuoteModalLive('${proposal.id}', ${Math.round(targetBudget * 0.9)})" 
+                class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold cursor-pointer"
+              >
+                Compétitif (-10% : ${Math.round(targetBudget * 0.9)} €)
+              </button>
+              <button 
+                type="button" 
+                onclick="window.ProtecFormations.updateQuoteModalLive('${proposal.id}', ${targetBudget})" 
+                class="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-pc-blue text-[10px] font-bold cursor-pointer"
+              >
+                Cible Client (${targetBudget} €)
+              </button>
+              <button 
+                type="button" 
+                onclick="window.ProtecFormations.updateQuoteModalLive('${proposal.id}', ${Math.round(targetBudget * 1.15)})" 
+                class="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-bold cursor-pointer"
+              >
+                Recommandé (+15% : ${Math.round(targetBudget * 1.15)} €)
+              </button>
+              <button 
+                type="button" 
+                onclick="window.ProtecFormations.updateQuoteModalLive('${proposal.id}', ${Math.round(targetBudget * 1.30)})" 
+                class="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-800 text-[10px] font-bold cursor-pointer"
+              >
+                Prestige (+30% : ${Math.round(targetBudget * 1.30)} €)
+              </button>
             </div>
           </div>
 
@@ -2104,7 +2361,7 @@ window.ProtecFormations = {
               </div>
               <div class="flex items-center gap-1.5 ${hasVeh ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}">
                 <i data-lucide="${hasVeh ? 'check-circle' : 'alert-triangle'}" class="w-3.5 h-3.5"></i>
-                <span>${isIntra ? 'Véhicule de liaison VL/VTU' : 'Accueil sur place'}</span>
+                <span>${isIntra ? 'Véhicule de transport VL/VTU' : 'Accueil sur place'}</span>
               </div>
               <div class="flex items-center gap-1.5 ${hasRoom ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}">
                 <i data-lucide="${hasRoom ? 'check-circle' : 'alert-triangle'}" class="w-3.5 h-3.5"></i>
@@ -2285,115 +2542,221 @@ window.ProtecFormations = {
           `}
         </div>
 
-        <!-- Section 2 : Programmer une Session (Interne ou Grand Public) -->
-        <div class="p-4 rounded-2xl glass-card space-y-3 border border-slate-200">
-          <div class="flex items-center justify-between">
-            <h4 class="text-xs font-black uppercase text-slate-800">Ouvrir une nouvelle session au calendrier</h4>
-            <span class="text-[10px] text-slate-400">Interne (Gratuit bénévoles) ou Grand Public</span>
+        <!-- Section 2 : Organiser une Session de Formation (Antenne, Réseau & Grand Public) -->
+        <div class="p-5 rounded-3xl glass-card space-y-4 border border-slate-200/90 shadow-xs">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div>
+              <h4 class="text-xs font-black uppercase text-slate-900 tracking-wide flex items-center gap-2">
+                <i data-lucide="plus-circle" class="w-4 h-4 text-emerald-600"></i>
+                Organiser une Formation à la Base
+              </h4>
+              <span class="text-[11px] text-slate-500">Planification d'une session avec formateurs, matériel et salles de l'antenne</span>
+            </div>
+            <div id="new-course-kit-info">
+              <!-- Rempli dynamiquement avec le kit requis -->
+            </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-            <div>
-              <label class="text-[10px] font-bold uppercase text-slate-400">Cursus Référentiel :</label>
-              <select id="new-course-id" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800">
-                <optgroup label="Grand Public & Entreprises">
-                  <option value="GQS">GQS (2h - Sensibilisation)</option>
-                  <option value="PSC" selected>PSC (7h - Certifiant)</option>
-                  <option value="SST">SST (14h - Salariés Entreprises)</option>
-                  <option value="EXTINCTEUR">Manipulation Extincteurs (3h - EPI)</option>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <!-- 1. Type de Formation -->
+            <div class="sm:col-span-2">
+              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Type de Formation :</label>
+              <select id="new-course-id" onchange="window.ProtecFormations.updateNewSessionFormPreview(window.game)" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-black text-slate-800 bg-white">
+                <optgroup label="Grand Public & Citoyens">
+                  <option value="GQS">GQS (2h - Gestes Qui Sauvent • Sensibilisation)</option>
+                  <option value="PSC" selected>PSC (7h - Prévention et Secours Civiques • Diplôme de base)</option>
+                  <option value="SST">SST (14h - Sauveteur Secouriste du Travail)</option>
+                  <option value="EXTINCTEUR">Manipulation Extincteurs (3h - Équipier Prévention Incendie EPI)</option>
                 </optgroup>
                 <optgroup label="Secourisme Opérationnel">
-                  <option value="PSE1">PSE1 (35h - Rôle Secouriste)</option>
-                  <option value="PSE2">PSE2 (28h - Rôle Équipier Secouriste)</option>
-                  <option value="FC_PSE">Recyclage FC PSE (6h - Maintien PSE 1 & 2)</option>
-                  <option value="MAC_SST">Recyclage MAC SST (7h - Actualisation)</option>
-                  <option value="CE">Chef d’Équipe (21h - Rôle & Compétence CE)</option>
-                  <option value="CD">Chef de Dispositif (24h - Commandement CD)</option>
-                  <option value="SSA">SSA (28h - Sauvetage Aquatique)</option>
+                  <option value="PSE1">PSE1 (35h - Premiers Secours en Équipe 1 • Secouriste)</option>
+                  <option value="PSE2">PSE2 (28h - Premiers Secours en Équipe 2 • Équipier Secouriste)</option>
+                  <option value="FC_PSE">Recyclage FC PSE (6h - Formation Continue Annuelle PSE 1 & 2)</option>
+                  <option value="MAC_SST">Recyclage MAC SST (7h - Actualisation des compétences)</option>
+                  <option value="CE">Chef d’Équipe - CE (21h - Commandement Opérationnel)</option>
+                  <option value="CD">Chef de Dispositif - CD (24h - Direction de Poste)</option>
+                  <option value="SSA">SSA (28h - Surveillance et Sauvetage Aquatique)</option>
                 </optgroup>
-                <optgroup label="Soutien Psychologique (AEP)">
-                  <option value="AEP1">AEP1 - Sensibilisation Écoute (7h)</option>
-                  <option value="AEP2">AEP2 - Prise en charge & CAI (14h)</option>
+                <optgroup label="Soutien Psychologique">
+                  <option value="AEP1">AEP1 (7h - Aide & Écoute Psychologique Initiale)</option>
+                  <option value="AEP2">AEP2 (14h - Prise en charge traumatique & CAI)</option>
                 </optgroup>
                 <optgroup label="Filière Pédagogique (Formateurs)">
-                  <option value="PICF">PIC F - Pédagogie Initiale de Formateur (21h)</option>
-                  <option value="FORM_PSC">Formateur PSC (14h - Req: PIC F)</option>
-                  <option value="FORM_PS">Formateur PS - Premiers Secours (28h)</option>
-                  <option value="FORM_SST">Formateur SST Entreprises (21h)</option>
-                  <option value="FORM_AEP">Formateur AEP Psycho (21h)</option>
-                  <option value="CEF">CEF - Encadrant Formation (35h)</option>
-                  <option value="FDF">Formateur de Formateurs - FdF (42h)</option>
+                  <option value="PICF">PIC F (21h - Pédagogie Initiale de Formateur)</option>
+                  <option value="FORM_PSC">Formateur PSC (14h - Diplôme Formateur PSC)</option>
+                  <option value="FORM_PS">Formateur PS (28h - Formateur Premiers Secours)</option>
+                  <option value="FORM_SST">Formateur SST (21h - Formateur SST)</option>
+                  <option value="FORM_AEP">Formateur AEP (21h - Formateur Écoute Psycho)</option>
+                  <option value="CEF">CEF (35h - Concepteur Encadrant de Formation)</option>
+                  <option value="FDF">FdF (42h - Formateur de Formateurs Fédéral)</option>
                 </optgroup>
               </select>
             </div>
 
+            <!-- 2. Lieu de Formation -->
             <div>
-              <label class="text-[10px] font-bold uppercase text-slate-400">Modalité & Public :</label>
-              <select id="new-course-tariff" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800" onchange="
-                const isInt = this.value.startsWith('internal');
-                document.getElementById('external-attendees-wrap').style.display = isInt ? 'block' : 'none';
-              ">
-                <option value="internal_free" selected>Interne Antenne (Gratuit bénévoles)</option>
-                <option value="standard">Grand Public / Entreprises (Tarif normal)</option>
-                <option value="discount_25">Partenaire Associatif (-25%)</option>
-                <option value="discount_50">Mairie Partenaire (-50%)</option>
-                <option value="free_mairie">Gratuité Mairie (+35 Relation)</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="text-[10px] font-bold uppercase text-slate-400">Lieu d'accueil :</label>
-              <select id="new-course-loc" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-pc-blue" onchange="
+              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Lieu de la formation :</label>
+              <select id="new-course-loc" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-pc-blue bg-white" onchange="
                 const roomWrap = document.getElementById('new-course-room-wrap');
+                const customWrap = document.getElementById('new-course-custom-loc-wrap');
                 if (roomWrap) roomWrap.style.display = (this.value === 'antenne' && ${totalTrainingRooms} > 1) ? 'block' : 'none';
+                if (customWrap) customWrap.style.display = (this.value === 'externe') ? 'block' : 'none';
               ">
-                <option value="antenne">🏛️ À l’Antenne (${stationName})</option>
-                <option value="entreprise">🏢 Chez le Partenaire / Entreprise</option>
+                <option value="antenne" selected>🏛️ Salle de Formation de la Base</option>
+                <option value="externe">📍 Autre Salle / Lieu Externe</option>
               </select>
             </div>
 
+            <!-- N° Salle de base si plusieurs salles -->
             ${totalTrainingRooms > 1 ? `
               <div id="new-course-room-wrap">
-                <label class="text-[10px] font-bold uppercase text-slate-400">N° de Salle de Formation :</label>
-                <select id="new-course-room" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-indigo-700">
+                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Salle de la Base :</label>
+                <select id="new-course-room" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-indigo-700 bg-white">
                   ${Array.from({ length: totalTrainingRooms }, (_, i) => `<option value="${i + 1}">Salle n°${i + 1}</option>`).join('')}
                 </select>
               </div>
             ` : `<input type="hidden" id="new-course-room" value="1" />`}
 
-            <div id="external-attendees-wrap">
-              <label class="text-[10px] font-bold uppercase text-slate-400">Extérieurs payants accueillis :</label>
-              <select id="new-external-count" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-emerald-700">
-                <option value="0">0 externe (100% équipe)</option>
-                <option value="2">2 candidats extérieurs payants</option>
-                <option value="4">4 candidats extérieurs payants</option>
-                <option value="6">6 candidats extérieurs payants</option>
+            <div id="new-course-custom-loc-wrap" style="display:none;">
+              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Préciser le Lieu :</label>
+              <input type="text" id="new-course-custom-loc" placeholder="Ex: Salle Municipale Pasteur" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-medium bg-white" />
+            </div>
+
+            <!-- 3. Dates & Horaires -->
+            <div class="sm:col-span-2 grid grid-cols-4 gap-1.5">
+              <div>
+                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Jour :</label>
+                <input type="number" id="new-course-day" min="1" max="31" value="${Math.min(28, (game.clock?.day || 1) + 2)}" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-center bg-white" />
+              </div>
+              <div>
+                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Mois :</label>
+                <select id="new-course-month" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
+                  ${['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc'].map((m, idx) => `
+                    <option value="${idx}" ${idx === (game.clock?.month || 0) ? 'selected' : ''}>${m}</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div>
+                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Année :</label>
+                <input type="number" id="new-course-year" value="${game.clock?.year || 2026}" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-center bg-white" />
+              </div>
+              <div>
+                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Début :</label>
+                <select id="new-course-hour" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
+                  <option value="8">08:00</option>
+                  <option value="9" selected>09:00</option>
+                  <option value="10">10:00</option>
+                  <option value="13">13:30</option>
+                  <option value="14">14:00</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 4. Répartition des Places -->
+            <div>
+              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Places Totales :</label>
+              <input 
+                type="number" 
+                id="new-course-total-seats" 
+                min="4" 
+                max="20" 
+                value="10" 
+                oninput="window.ProtecFormations.updateNewSessionFormPreview(window.game)" 
+                class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-black text-slate-900 bg-white" 
+              />
+            </div>
+
+            <div>
+              <label class="text-[10px] font-bold uppercase text-indigo-700 block mb-1">Places Interne Antenne :</label>
+              <input 
+                type="number" 
+                id="new-course-antenne-seats" 
+                min="0" 
+                max="20" 
+                value="4" 
+                oninput="window.ProtecFormations.updateNewSessionFormPreview(window.game)" 
+                class="w-full text-xs p-2 rounded-xl border border-indigo-200 glass-input font-black text-indigo-800 bg-indigo-50/50" 
+              />
+            </div>
+
+            <div>
+              <label class="text-[10px] font-bold uppercase text-pc-blue block mb-1">Places Interne Protection Civile :</label>
+              <input 
+                type="number" 
+                id="new-course-protec-seats" 
+                min="0" 
+                max="20" 
+                value="2" 
+                oninput="window.ProtecFormations.updateNewSessionFormPreview(window.game)" 
+                class="w-full text-xs p-2 rounded-xl border border-blue-200 glass-input font-black text-pc-blue bg-blue-50/50" 
+              />
+            </div>
+
+            <!-- 5. Ouverture Grand Public -->
+            <div class="sm:col-span-2 p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="flex items-center gap-2 cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    id="new-course-open-public" 
+                    checked 
+                    onchange="window.ProtecFormations.updateNewSessionFormPreview(window.game)" 
+                    class="w-4 h-4 text-emerald-600 rounded cursor-pointer" 
+                  />
+                  <span class="text-xs font-black text-slate-800">Ouvrir les places restantes au Grand Public</span>
+                </label>
+                <div id="new-course-public-price-wrap" class="flex items-center gap-1.5">
+                  <span class="text-[10px] font-bold uppercase text-slate-400">Tarif / place :</span>
+                  <input 
+                    type="number" 
+                    id="new-course-public-price" 
+                    value="60" 
+                    min="10" 
+                    max="600" 
+                    step="5" 
+                    oninput="this.dataset.customized = 'true'" 
+                    class="w-20 p-1 rounded-lg border border-slate-300 font-black text-right text-xs mono-num bg-white" 
+                  />
+                  <span class="text-xs font-bold text-slate-600">€</span>
+                </div>
+              </div>
+
+              <!-- Jauge de prévisualisation des places -->
+              <div class="text-[11px] bg-white p-2 rounded-xl border border-slate-200" id="new-course-seats-preview">
+                <!-- Rempli dynamiquement -->
+              </div>
+            </div>
+
+            <!-- 6. Formateur de l'antenne -->
+            <div class="sm:col-span-2">
+              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Formateur de l’Antenne (ou Renfort) :</label>
+              <select id="new-course-trainer" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
+                <option value="">Affecter plus tard ou solliciter un renfort...</option>
+                ${trainers.map(t => {
+                  return `<option value="${t.id}">${t.name} (${t.role || t.rank})</option>`;
+                }).join('')}
               </select>
             </div>
 
-            <div class="sm:col-span-4 flex justify-end pt-1">
-              <button onclick="
-                const cId = document.getElementById('new-course-id').value;
-                const cLoc = document.getElementById('new-course-loc').value;
-                const tTar = document.getElementById('new-course-tariff').value;
-                const extCnt = document.getElementById('new-external-count').value;
-                const cRoom = document.getElementById('new-course-room') ? document.getElementById('new-course-room').value : 1;
-                const isInt = tTar.startsWith('internal');
-                window.ProtecFormations.createSession(window.game, cId, tTar, isInt, isInt ? 'Bénévoles de l’Antenne' : (cLoc === 'entreprise' ? 'Salariés Entreprise' : 'Grand Public'), cLoc, extCnt, cRoom);
-              " class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
-                <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                Programmer la Session
+            <!-- 7. Bouton de Programmation -->
+            <div class="sm:col-span-4 flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-100">
+              <p class="text-[11px] text-slate-500 italic">
+                📢 <strong>Remplissage Grand Public :</strong> Les places ouvertes se remplissent dynamiquement au fil de l'eau si vous faites de la publicité (campagnes réseaux sociaux / affichage mairie) et en fonction de la réputation de l'antenne.
+              </p>
+              <button onclick="window.ProtecFormations.createOrganizedSessionFromUI(window.game)" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap">
+                <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+                Valider & Ouvrir la Session
               </button>
             </div>
           </div>
         </div>
 
-        <!-- Section 3 : Sessions au Calendrier -->
+        <!-- Section 3 : Sessions Ouvertes au Calendrier -->
         <div class="space-y-3">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h4 class="text-xs font-black uppercase text-slate-800">Sessions Ouvertes (${activeSessions.length})</h4>
-              <span class="text-[10px] text-slate-400">Affectation du formateur et gestion des candidats</span>
+              <h4 class="text-xs font-black uppercase text-slate-800">Sessions de Formation Ouvertes (${activeSessions.length})</h4>
+              <span class="text-[10px] text-slate-400">Suivi des jauges, affectation des formateurs et inscriptions</span>
             </div>
             <div class="relative w-full sm:w-64">
               <input 
@@ -2411,107 +2774,190 @@ window.ProtecFormations = {
           </div>
 
           ${activeSessions.length === 0 ? `
-            <div class="p-6 rounded-2xl glass-card text-center text-xs text-slate-500">
-              Aucune session de formation n'est actuellement planifiée. Programmez une session ci-dessus.
+            <div class="p-8 rounded-3xl bg-slate-50 border border-dashed border-slate-300 text-center space-y-2">
+              <div class="w-12 h-12 rounded-2xl bg-white shadow-xs mx-auto flex items-center justify-center text-2xl text-slate-400">🎓</div>
+              <h5 class="text-sm font-black text-slate-800">Aucune session de formation en cours</h5>
+              <p class="text-xs text-slate-500 max-w-md mx-auto">Programmez une session ci-dessus pour former vos bénévoles internes ou accueillir des citoyens grand public.</p>
             </div>
-          ` : ''}
+          ` : `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              ${activeSessions.map(sess => {
+                const assignedTrainer = (game.volunteers || []).find(v => v.id === sess.trainerId) || sess.assignedTrainer || (sess.trainerId && String(sess.trainerId).startsWith('ext_') ? { name: 'Formateur Renfort (Antenne Partenaire)', role: 'Formateur Inter-Antennes', rank: 'Formateur', isExternal: true } : null);
+                const course = this.catalog.find(c => c.id === sess.courseId);
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            ${activeSessions.map(sess => {
-              const assignedTrainer = (game.volunteers || []).find(v => v.id === sess.trainerId) || sess.assignedTrainer || (sess.trainerId && String(sess.trainerId).startsWith('ext_') ? { name: 'Formateur Renfort (Antenne Partenaire)', role: 'Formateur Inter-Antennes', rank: 'Formateur', isExternal: true } : null);
-              const isInternal = sess.isInternal;
-              const course = this.catalog.find(c => c.id === sess.courseId);
-              const extCount = sess.externalAttendeesCount || 0;
-              const extRevenue = extCount * (sess.publicPriceForExternals || course?.basePricePublic || 60);
+                const internalSeats = Number(sess.internalAntenneSeats) || 0;
+                const internalBooked = (sess.registeredCandidates || []).length;
 
-              return `
-                <div class="p-4 rounded-2xl glass-card border border-white/80 shadow-sm space-y-3 flex flex-col justify-between">
-                  <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                      <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${isInternal ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'}">
-                        ${isInternal ? 'Session Interne (Gratuit Bénévoles)' : 'Grand Public / Partenaire'}
-                      </span>
-                      <span class="text-xs font-bold font-mono text-slate-700">
-                        ${isInternal ? (extCount > 0 ? `<span class="text-emerald-600 font-black">+${extRevenue} € (via ${extCount} ext.)</span>` : '<span class="text-indigo-600 font-bold">Gratuit antenne</span>') : `${sess.finalPrice} € / pers.`}
-                      </span>
+                const protecSeats = Number(sess.internalProtecSeats) || 0;
+                const protecBooked = (sess.registeredProtecReinforcements || []).length;
+
+                const publicMax = Number(sess.publicSeatsMax) || 0;
+                const publicBooked = Number(sess.publicSeatsBooked) || 0;
+                const priceSeat = Number(sess.publicPrice) || 60;
+                const publicRevenue = publicBooked * priceSeat;
+
+                const totalFilled = internalBooked + protecBooked + publicBooked;
+                const totalCapacity = Number(sess.totalSeats || sess.maxCandidates) || 10;
+
+                const hasKit = course?.kitRequired ? this.hasTrainingKit(game, course.kitRequired) : true;
+
+                return `
+                  <div class="p-4 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between hover:shadow-md transition">
+                    
+                    <div class="space-y-3">
+                      <!-- En-tête session -->
+                      <div class="flex items-center justify-between flex-wrap gap-1">
+                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-emerald-100 text-emerald-800">
+                          ${course?.title ? course.id : 'Session Formation'}
+                        </span>
+                        <span class="text-xs font-bold font-mono text-emerald-700">
+                          ${publicBooked > 0 ? `+${publicRevenue.toLocaleString('fr-FR')} € encaissés` : 'Trésorerie à venir'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <h5 class="text-xs sm:text-sm font-black text-slate-900 leading-snug">${sess.title}</h5>
+                        <div class="flex items-center gap-2 text-[11px] text-slate-500 font-medium mt-0.5">
+                          <span>📍 ${sess.locationLabel || 'Salle de la Base'}</span>
+                          <span>•</span>
+                          <span>🗓️ ${sess.dateDesc || 'Au calendrier'}</span>
+                        </div>
+                      </div>
+
+                      <!-- Kit requis de la base -->
+                      ${course?.kitRequired ? `
+                        <div class="p-2 rounded-xl text-[10px] font-bold flex items-center justify-between ${hasKit ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}">
+                          <span class="flex items-center gap-1">
+                            <i data-lucide="${hasKit ? 'check-circle' : 'alert-triangle'}" class="w-3.5 h-3.5"></i>
+                            ${hasKit ? 'Lot pédagogique disponible :' : 'Lot requis à la base :'} ${course.kitName || course.kitRequired}
+                          </span>
+                          <span class="text-[9px] uppercase font-black">${hasKit ? 'En stock' : 'Manquant'}</span>
+                        </div>
+                      ` : ''}
+
+                      <!-- JAUGE DES 3 CATÉGORIES DE PLACES -->
+                      <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-2 text-xs">
+                        <div class="flex items-center justify-between text-[11px]">
+                          <span class="font-bold text-slate-700">Remplissage global :</span>
+                          <strong class="font-black text-slate-900">${totalFilled} / ${totalCapacity} stagiaires</strong>
+                        </div>
+
+                        <!-- 1. Interne Antenne -->
+                        <div class="space-y-1">
+                          <div class="flex items-center justify-between text-[10px]">
+                            <span class="text-indigo-800 font-bold">1. Bénévoles Antenne (Gratuit) :</span>
+                            <strong class="text-indigo-900 mono-num">${internalBooked} / ${internalSeats}</strong>
+                          </div>
+                          <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-indigo-600 h-full rounded-full transition-all" style="width: ${internalSeats > 0 ? (internalBooked / internalSeats) * 100 : 0}%;"></div>
+                          </div>
+                        </div>
+
+                        <!-- 2. Interne Protection Civile -->
+                        <div class="space-y-1">
+                          <div class="flex items-center justify-between text-[10px]">
+                            <span class="text-pc-blue font-bold">2. Protection Civile (Solidarité Fédérale) :</span>
+                            <strong class="text-blue-900 mono-num">${protecBooked} / ${protecSeats}</strong>
+                          </div>
+                          <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-pc-blue h-full rounded-full transition-all" style="width: ${protecSeats > 0 ? (protecBooked / protecSeats) * 100 : 0}%;"></div>
+                          </div>
+                        </div>
+
+                        <!-- 3. Grand Public -->
+                        <div class="space-y-1">
+                          <div class="flex items-center justify-between text-[10px]">
+                            <span class="text-emerald-800 font-bold">3. Grand Public (${priceSeat} € / place) :</span>
+                            <strong class="text-emerald-900 mono-num">${publicBooked} / ${publicMax}</strong>
+                          </div>
+                          <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-emerald-600 h-full rounded-full transition-all" style="width: ${publicMax > 0 ? (publicBooked / publicMax) * 100 : 0}%;"></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Affectation du Formateur -->
+                      <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5 text-xs">
+                        <div class="flex items-center justify-between">
+                          <span class="text-[10px] font-bold uppercase text-slate-400">Formateur responsable :</span>
+                          ${assignedTrainer?.isExternal ? '<span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-indigo-100 text-indigo-800">Renfort Réseau</span>' : ''}
+                        </div>
+                        <div class="font-black text-slate-800 text-xs">
+                          ${assignedTrainer ? `${assignedTrainer.name} (${assignedTrainer.role || assignedTrainer.rank || 'Formateur'})` : '<span class="text-amber-600 font-bold">⚠️ Aucun formateur affecté</span>'}
+                        </div>
+                        <select onchange="window.ProtecFormations.assignTrainer(window.game, '${sess.id}', this.value)" class="w-full text-xs p-1.5 rounded-lg border border-slate-200 glass-input font-medium bg-white">
+                          <option value="">Sélectionner un formateur de l'antenne...</option>
+                          ${trainers.map(t => {
+                            const isEligible = course ? this.isEligibleTrainer(t, course) : { eligible: true };
+                            return `
+                              <option value="${t.id}" ${sess.trainerId === t.id ? 'selected' : ''} class="${isEligible.eligible ? 'text-slate-800 font-bold' : 'text-slate-400 italic'}">
+                                ${isEligible.eligible ? '[✓ Qualifié] ' : '[⚠️ Non qualifié] '} ${t.name} (${t.role || t.rank})
+                              </option>
+                            `;
+                          }).join('')}
+                        </select>
+                        <button onclick="window.ProtecFormations.requestTrainerReinforcement(window.game, '${sess.id}')" class="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-[11px] transition flex items-center justify-center gap-1.5 cursor-pointer">
+                          <i data-lucide="handshake" class="w-3.5 h-3.5 text-indigo-600"></i>
+                          <span>Demander un renfort Formateur (Inter-Antennes)</span>
+                        </button>
+                      </div>
+
+                      <!-- Inscriptions Interne & Réseau -->
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
+                        <!-- Inscription Interne Antenne -->
+                        <div>
+                          <label class="text-[9px] font-bold uppercase text-indigo-700 block mb-0.5">Inscrire un bénévole antenne :</label>
+                          <select onchange="if(this.value) { window.ProtecFormations.registerVolunteerToInternal(window.game, '${sess.id}', this.value); this.value=''; }" class="w-full text-[11px] p-1.5 rounded-lg border border-indigo-200 bg-white font-medium">
+                            <option value="">+ Bénévole équipe...</option>
+                            ${(game.volunteers || []).filter(v => !(sess.registeredCandidates || []).includes(v.id)).map(v => `
+                              <option value="${v.id}">${v.name} (${v.role || v.rank})</option>
+                            `).join('')}
+                          </select>
+                        </div>
+
+                        <!-- Accueil Renfort Protec Civile -->
+                        <div>
+                          <label class="text-[9px] font-bold uppercase text-pc-blue block mb-0.5">Accueillir renfort PC :</label>
+                          <button onclick="window.ProtecFormations.registerProtecReinforcementToSession(window.game, '${sess.id}')" class="w-full text-[11px] p-1.5 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 font-bold text-pc-blue transition flex items-center justify-center gap-1 cursor-pointer">
+                            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                            <span>+ Stagiaire Protec Civile</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- Badges des inscrits -->
+                      <div class="flex flex-wrap gap-1">
+                        ${(sess.registeredCandidates || []).map(vid => {
+                          const v = game.volunteers.find(vol => vol.id === vid);
+                          return `<span class="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-800 text-[10px] font-bold">👤 ${v?.name || 'Bénévole'}</span>`;
+                        }).join('')}
+                        ${(sess.registeredProtecReinforcements || []).map(r => {
+                          return `<span class="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-pc-blue text-[10px] font-bold">🤝 ${r.name} (${r.station})</span>`;
+                        }).join('')}
+                        ${(sess.publicAttendees || []).map(p => {
+                          return `<span class="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">🎟️ ${p.name} (+${p.price}€)</span>`;
+                        }).join('')}
+                      </div>
                     </div>
 
-                    <h5 class="text-xs font-black text-slate-900">${sess.title}</h5>
-                    <p class="text-[11px] text-slate-700 font-semibold flex items-center gap-1.5 mt-0.5">
-                      <i data-lucide="map-pin" class="w-3.5 h-3.5 text-emerald-600 flex-shrink-0"></i>
-                      <span>${sess.locationLabel || (sess.locationType === 'antenne' ? `${stationName} - Salle n°${sess.roomNumber || 1}` : 'Délocalisée (Entreprise Partenaire)')}</span>
-                    </p>
-                    <p class="text-[11px] text-slate-500">
-                      ${sess.targetAudience} • Jauge : <strong>${sess.registeredCandidates.length} bénévoles + ${extCount} ext. / ${sess.maxCandidates}</strong> stagiaires
-                    </p>
-
-                    ${course?.kitRequired ? `
-                      <div class="text-[10px] ${this.hasTrainingKit(game, course.kitRequired) ? 'text-emerald-700' : 'text-amber-700'} font-bold flex items-center gap-1">
-                        <span>${this.hasTrainingKit(game, course.kitRequired) ? '✓ Kit en stock :' : '⚠️ Kit requis :'}</span>
-                        <span>${course.kitName || course.kitRequired}</span>
-                      </div>
-                    ` : ''}
-
-                    <!-- Formateur affecté -->
-                    <div class="p-2.5 rounded-xl bg-slate-50 space-y-1.5">
-                      <span class="text-[9px] font-bold uppercase text-slate-400">Formateur responsable :</span>
-                      <div class="flex items-center justify-between text-xs">
-                        <span class="font-black text-slate-800">${assignedTrainer ? `${assignedTrainer.name} (${assignedTrainer.role || assignedTrainer.rank || 'Formateur'})` : '<span class="text-amber-600 font-bold">Aucun formateur affecté</span>'}</span>
-                        ${assignedTrainer?.isExternal ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200">Renfort Externe</span>' : ''}
-                      </div>
-                      <select onchange="window.ProtecFormations.assignTrainer(window.game, '${sess.id}', this.value)" class="w-full text-[11px] p-1.5 rounded-lg border border-slate-200 glass-input font-medium mt-1">
-                        <option value="">Affecter un formateur interne qualifié...</option>
-                        ${trainers.map(t => {
-                          const isEligible = course ? this.isEligibleTrainer(t, course) : { eligible: true };
-                          return `
-                            <option value="${t.id}" ${sess.trainerId === t.id ? 'selected' : ''} class="${isEligible.eligible ? 'text-slate-800 font-bold' : 'text-slate-400 italic'}">
-                              ${isEligible.eligible ? '[✓ Qualifié] ' : '[⚠️ Non qualifié] '} ${t.name} (${t.role || t.rank})
-                            </option>
-                          `;
-                        }).join('')}
-                      </select>
-                      <button onclick="window.ProtecFormations.requestTrainerReinforcement(window.game, '${sess.id}')" class="w-full mt-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-extrabold text-[11px] transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs">
-                        <i data-lucide="handshake" class="w-3.5 h-3.5 text-indigo-600"></i>
-                        <span>🤝 Demander un renfort Formateur (Inter-Antennes)</span>
+                    <!-- Clôture et Certification -->
+                    <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-slate-400">Attestations officielles Sécurité Civile</span>
+                      <button onclick="window.ProtecFormations.completeSession(window.game, '${sess.id}')" class="px-4 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white text-xs font-black shadow transition flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                        Valider & Certifier
                       </button>
                     </div>
 
-                    ${isInternal ? `
-                      <!-- Inscription des bénévoles internes (Gratuit) -->
-                      <div class="pt-2 border-t border-slate-100 space-y-1.5">
-                        <span class="text-[9px] font-bold uppercase text-slate-400 block">Inscrire un bénévole de l'antenne (Gratuit 0 €) :</span>
-                        <select onchange="if(this.value) window.ProtecFormations.registerVolunteerToInternal(window.game, '${sess.id}', this.value); this.value='';" class="w-full text-xs p-1.5 rounded-lg border border-slate-200 glass-input font-bold text-pc-blue">
-                          <option value="">+ Sélectionner un bénévole...</option>
-                          ${(game.volunteers || []).filter(v => !sess.registeredCandidates.includes(v.id)).map(v => `
-                            <option value="${v.id}">${v.name} (${v.role || v.rank} • Moral : ${v.motivation || 80}%)</option>
-                          `).join('')}
-                        </select>
-                        <div class="flex flex-wrap gap-1 pt-1">
-                          ${sess.registeredCandidates.map(vid => {
-                            const vol = game.volunteers.find(v => v.id === vid);
-                            return `<span class="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-800 text-[10px] font-bold">${vol?.name || 'Bénévole'}</span>`;
-                          }).join('')}
-                        </div>
-                      </div>
-                    ` : ''}
                   </div>
-
-                  <!-- Validation de la session -->
-                  <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                    <span class="text-[10px] text-slate-400">${sess.relationshipBonus ? `+${sess.relationshipBonus} Relation mairie` : 'Délivrance des attestations'}</span>
-                    <button onclick="window.ProtecFormations.completeSession(window.game, '${sess.id}')" class="px-3.5 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white text-xs font-black shadow transition flex items-center gap-1 cursor-pointer">
-                      <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
-                      Valider & Certifier
-                    </button>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
+                `;
+              }).join('')}
+            </div>
+          `}
         </div>
 
         <!-- Section 4 : Formations Individuelles en Stage Externe -->
-        <div class="p-4 rounded-2xl glass-card space-y-3 border border-indigo-100 bg-indigo-50/20">
+        <div class="p-4 rounded-3xl glass-card space-y-3 border border-indigo-100 bg-indigo-50/20">
           <div>
             <h4 class="text-xs font-black uppercase text-indigo-950">Inscrire un bénévole en stage externe</h4>
             <p class="text-[11px] text-slate-500">Si l'antenne ne dispose pas du formateur ou du kit requis, le bénévole peut être envoyé en organisme extérieur. L'antenne peut financer à 100% ou laisser le bénévole régler de sa poche.</p>
@@ -2520,13 +2966,13 @@ window.ProtecFormations = {
           <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
             <div>
               <label class="text-[10px] font-bold uppercase text-slate-400">Bénévole :</label>
-              <select id="ext-vol-id" class="w-full p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800">
+              <select id="ext-vol-id" class="w-full p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
                 ${(game.volunteers || []).map(v => `<option value="${v.id}">${v.name} (${v.role || v.rank})</option>`).join('')}
               </select>
             </div>
             <div>
               <label class="text-[10px] font-bold uppercase text-slate-400">Stage externe :</label>
-              <select id="ext-course-id" class="w-full p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800">
+              <select id="ext-course-id" class="w-full p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
                 <option value="PSC">PSC (60 €)</option>
                 <option value="SST">SST (180 €)</option>
                 <option value="PSE1">PSE1 (250 €)</option>
@@ -2539,7 +2985,7 @@ window.ProtecFormations = {
             </div>
             <div>
               <label class="text-[10px] font-bold uppercase text-slate-400">Prise en charge :</label>
-              <select id="ext-pay-mode" class="w-full p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800">
+              <select id="ext-pay-mode" class="w-full p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
                 <option value="asso">100% Antenne (Moral boosté)</option>
                 <option value="vol">Bénévole finance lui-même (Moral -25%)</option>
               </select>
@@ -2561,6 +3007,193 @@ window.ProtecFormations = {
     `;
 
     if (window.lucide) window.lucide.createIcons();
+    this.updateNewSessionFormPreview(game);
+  },
+
+  // Mise à jour dynamique de l'aperçu du formulaire de nouvelle session
+  updateNewSessionFormPreview(game) {
+    if (!game) game = window.game;
+    const courseSelect = document.getElementById('new-course-id');
+    if (!courseSelect) return;
+    const courseId = courseSelect.value;
+    const course = this.catalog.find(c => c.id === courseId);
+
+    // 1. Matériel requis
+    const kitWrap = document.getElementById('new-course-kit-info');
+    if (kitWrap) {
+      if (course && course.kitRequired) {
+        const hasKit = this.hasTrainingKit(game, course.kitRequired);
+        if (hasKit) {
+          kitWrap.innerHTML = `
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
+              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+              <span>Kit de formation en dotation : <strong>${course.kitName || course.kitRequired}</strong> (Prêt à l'emploi)</span>
+            </div>
+          `;
+        } else {
+          kitWrap.innerHTML = `
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold">
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0"></i>
+              <span>Kit manquant dans la base : <strong>${course.kitName || course.kitRequired}</strong> (À acheter en Logistique avant certification)</span>
+            </div>
+          `;
+        }
+      } else {
+        kitWrap.innerHTML = `
+          <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-[11px]">
+            <i data-lucide="info" class="w-4 h-4 text-slate-400 shrink-0"></i>
+            <span>Aucun matériel lourd spécifique requis pour ce cursus.</span>
+          </div>
+        `;
+      }
+    }
+
+    // 2. Gestion de l'affichage du tarif Grand Public
+    const openPublicBox = document.getElementById('new-course-open-public');
+    const priceWrap = document.getElementById('new-course-public-price-wrap');
+    const priceInput = document.getElementById('new-course-public-price');
+    const isOpenToPublic = openPublicBox ? openPublicBox.checked : true;
+
+    if (priceWrap) {
+      priceWrap.style.display = isOpenToPublic ? 'flex' : 'none';
+    }
+
+    if (priceInput && (!priceInput.dataset.customized || priceInput.dataset.customized === 'false')) {
+      if (course && course.basePricePublic !== undefined) {
+        priceInput.value = course.basePricePublic;
+      }
+    }
+
+    // 3. Calcul de la jauge des places
+    const totalInput = document.getElementById('new-course-total-seats');
+    const antenneInput = document.getElementById('new-course-antenne-seats');
+    const protecInput = document.getElementById('new-course-protec-seats');
+    const previewWrap = document.getElementById('new-course-seats-preview');
+
+    const totalSeats = parseInt(totalInput?.value || 10, 10);
+    const antenneSeats = parseInt(antenneInput?.value || 0, 10);
+    const protecSeats = parseInt(protecInput?.value || 0, 10);
+    const unitPrice = parseFloat(priceInput?.value) || (course?.basePricePublic || 60);
+
+    const reservedSum = antenneSeats + protecSeats;
+    const remainingSeats = Math.max(0, totalSeats - reservedSum);
+    const publicSeats = isOpenToPublic ? remainingSeats : 0;
+    const isExceeded = reservedSum > totalSeats;
+
+    if (previewWrap) {
+      if (isExceeded) {
+        previewWrap.innerHTML = `
+          <div class="text-rose-600 font-bold flex items-center gap-1.5">
+            <i data-lucide="alert-octagon" class="w-4 h-4 text-rose-500 shrink-0"></i>
+            <span>Attention : les places réservées (${reservedSum}) dépassent la capacité totale (${totalSeats}) !</span>
+          </div>
+        `;
+      } else {
+        const potentialRevenue = publicSeats * unitPrice;
+        previewWrap.innerHTML = `
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-black">
+                👥 Total : ${totalSeats} pl.
+              </span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 font-bold">
+                🏢 Bénévoles Antenne : ${antenneSeats} pl. (Gratuit)
+              </span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-100 text-pc-blue font-bold">
+                🤝 Renforts Protec : ${protecSeats} pl.
+              </span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md ${isOpenToPublic ? 'bg-emerald-100 text-emerald-800 font-black' : 'bg-slate-100 text-slate-400 line-through'}">
+                🌍 Grand Public : ${publicSeats} pl. ${isOpenToPublic ? `(${unitPrice} € / pl.)` : '(Fermé)'}
+              </span>
+            </div>
+            ${isOpenToPublic && publicSeats > 0 ? `
+              <span class="text-emerald-700 font-black text-xs">
+                💰 Recette max estimée : +${potentialRevenue} €
+              </span>
+            ` : ''}
+          </div>
+        `;
+      }
+    }
+
+    if (window.lucide) window.lucide.createIcons();
+  },
+
+  // Création et programmation d'une session depuis le formulaire UI
+  createOrganizedSessionFromUI(game) {
+    if (!game) game = window.game;
+    const courseSelect = document.getElementById('new-course-id');
+    if (!courseSelect) return;
+    const courseId = courseSelect.value;
+    const course = this.catalog.find(c => c.id === courseId);
+    if (!course) {
+      game.showToast('Erreur', 'Cursus de formation introuvable.', 'orange');
+      return;
+    }
+
+    const locType = document.getElementById('new-course-loc')?.value || 'antenne';
+    const roomNumber = parseInt(document.getElementById('new-course-room')?.value || 1, 10);
+    const customLoc = (document.getElementById('new-course-custom-loc')?.value || '').trim();
+
+    if (locType === 'externe' && !customLoc) {
+      game.showToast('Lieu Requis', 'Veuillez préciser le nom de la salle ou l’adresse du lieu extérieur.', 'orange');
+      return;
+    }
+
+    const day = parseInt(document.getElementById('new-course-day')?.value || 1, 10);
+    const month = parseInt(document.getElementById('new-course-month')?.value || 0, 10);
+    const year = parseInt(document.getElementById('new-course-year')?.value || 2026, 10);
+    const hour = parseInt(document.getElementById('new-course-hour')?.value || 9, 10);
+
+    const totalSeats = parseInt(document.getElementById('new-course-total-seats')?.value || 10, 10);
+    const antenneSeats = parseInt(document.getElementById('new-course-antenne-seats')?.value || 0, 10);
+    const protecSeats = parseInt(document.getElementById('new-course-protec-seats')?.value || 0, 10);
+    const openToPublic = document.getElementById('new-course-open-public')?.checked;
+    const publicPrice = parseFloat(document.getElementById('new-course-public-price')?.value) || (course.basePricePublic || 60);
+    const trainerId = document.getElementById('new-course-trainer')?.value || null;
+
+    if (totalSeats < 2) {
+      game.showToast('Capacité Insuffisante', 'Une session doit comporter au moins 2 places.', 'orange');
+      return;
+    }
+
+    if (antenneSeats + protecSeats > totalSeats) {
+      game.showToast('Répartition Invalide', 'La somme des places internes antenne et Protection Civile ne peut pas dépasser la capacité totale.', 'orange');
+      return;
+    }
+
+    this.createSession(game, courseId, {
+      locationType: locType,
+      roomNumber: roomNumber,
+      locationCustom: customLoc,
+      day: day,
+      month: month,
+      year: year,
+      hour: hour,
+      totalSeats: totalSeats,
+      internalAntenneSeats: antenneSeats,
+      internalProtecSeats: protecSeats,
+      openToPublic: openToPublic,
+      publicPrice: publicPrice,
+      trainerId: trainerId
+    });
+
+    // Si un formateur a été sélectionné dans le formulaire
+    if (trainerId && game.sessionsFormation && game.sessionsFormation.length > 0) {
+      const createdSession = game.sessionsFormation[0];
+      const trainer = game.volunteers.find(v => v.id === trainerId);
+      if (trainer) {
+        const check = this.isEligibleTrainer(trainer, course);
+        if (check.eligible) {
+          createdSession.trainerId = trainer.id;
+          createdSession.assignedTrainer = trainer;
+          game.saveGame();
+          this.renderModal(game);
+        } else {
+          game.showToast('Formateur Non Habilité', `${trainer.name} n'est pas qualifié pour ce cursus : ${check.reason}. Vous pourrez en affecter un autre ou solliciter un renfort.`, 'orange');
+        }
+      }
+    }
   },
 
   sessionSearchQuery: '',

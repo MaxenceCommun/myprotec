@@ -21481,14 +21481,34 @@ class ProtecGame {
     }
 
     const bSubForm = document.getElementById('badge-submenu-formations');
+    const b2bPending = (this.formationB2BProposals || []).filter(p => p.status === 'pending_quote').length;
+    const formSessionsOpen = (this.sessionsFormation || []).filter(s => s.status === 'open' && !s.trainerId).length;
+    const totalFormAlerts = b2bPending + formSessionsOpen;
+
     if (bSubForm) {
-      const b2bPending = (this.formationB2BProposals || []).filter(p => p.status === 'pending_quote').length;
       if (b2bPending > 0) {
         bSubForm.textContent = b2bPending;
         bSubForm.className = 'text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-black shadow-xs';
       } else {
         bSubForm.className = 'hidden';
       }
+    }
+
+    // Badge Principal Formations Dock (Desktop & Mobile)
+    const bFormMain = document.getElementById('badge-formations-main-dock');
+    if (bFormMain) {
+      bFormMain.textContent = totalFormAlerts > 0 ? totalFormAlerts : (b2bPending > 0 ? b2bPending : '');
+      bFormMain.className = totalFormAlerts > 0 
+        ? 'absolute top-1 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-emerald-600 text-white shadow-sm'
+        : 'hidden';
+    }
+
+    const bFormMob = document.getElementById('badge-formations-mobile');
+    if (bFormMob) {
+      bFormMob.textContent = totalFormAlerts;
+      bFormMob.className = totalFormAlerts > 0 
+        ? 'absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-emerald-600 text-white min-w-[14px] text-center leading-tight'
+        : 'hidden';
     }
 
     // Rétrocompatibilité anciens badges et badges finances / antenne
