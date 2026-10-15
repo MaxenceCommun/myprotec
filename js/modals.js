@@ -833,8 +833,8 @@ window.ProtecQuickDispatch = {
     }
 
     const crew = [ce, driver, pse2, pse1];
-    crew.forEach(v => { v.status = 'mission'; });
-    vpsp.status = 'mission';
+    crew.forEach(v => { v.status = 'transit'; });
+    vpsp.status = 'transit';
 
     // Créer une mission réflexe d'urgence si aucune mission SAMU en attente
     let targetMission = (game.missions || []).find(m => m.type === 'samu' && m.status === 'planifie');
@@ -864,8 +864,22 @@ window.ProtecQuickDispatch = {
       targetMission.assignedCrew = { volunteers: crew, vehicles: [vpsp] };
     }
 
+    const station = (game.stations || []).find(s => s.id === vpsp.stationId) || game.stations?.[0] || { lat: 48.8566, lng: 2.3522 };
+    const origin = { lat: Number(station.lat), lng: Number(station.lng) };
+    const dest = { lat: Number(targetMission.lat), lng: Number(targetMission.lng) };
+
+    if (window.ProtecSystems && typeof window.ProtecSystems.startTransit === 'function') {
+      window.ProtecSystems.startTransit(game, vpsp, origin, dest, targetMission, 2, () => {
+        vpsp.status = 'mission';
+        crew.forEach(v => { v.status = 'mission'; });
+      });
+    } else {
+      vpsp.status = 'mission';
+      crew.forEach(v => { v.status = 'mission'; });
+    }
+
     window.ProtecBottomSheet.close();
-    game.showToast('🚑 Départ VPSP Immédiat', `L’équipage complet (${ce.name}, ${driver.name}, ${pse2.name}, ${pse1.name}) décolle avec ${vpsp.name} !`, 'blue');
+    game.showToast('🚑 Départ VPSP Immédiat', `L’équipage complet (${ce.name}, ${driver.name}, ${pse2.name}, ${pse1.name}) fait route avec ${vpsp.name} !`, 'blue');
     game.saveGame();
     game.updateStatsUI();
   },

@@ -1449,6 +1449,31 @@ class ProtecGame {
     if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.sanitizeAndRecoverStuckCrises === 'function') {
       window.ProtecCriseLogistique.sanitizeAndRecoverStuckCrises(this);
     }
+
+    // Sécurité au rechargement : finaliser les véhicules et équipages dont le transit était achevé hors-ligne
+    if (Array.isArray(this.vehicles)) {
+      this.vehicles.forEach(veh => {
+        if (veh.status === 'transit') {
+          const isOngoing = (this.missions || []).some(m => m.status === 'ongoing' && (m.assignedCrew?.vehicles || []).some(v => (v.id || v) === veh.id));
+          if (!isOngoing) {
+            veh.status = 'a_rearme';
+            veh.needsRearming = true;
+            veh.a_rearme = true;
+          }
+        }
+      });
+    }
+    if (Array.isArray(this.volunteers)) {
+      this.volunteers.forEach(vol => {
+        if (vol.status === 'transit') {
+          const isOngoing = (this.missions || []).some(m => m.status === 'ongoing' && (m.assignedCrew?.volunteers || []).some(v => (v.id || v) === vol.id));
+          if (!isOngoing) {
+            vol.status = 'dispo';
+            vol.transitVehicleId = null;
+          }
+        }
+      });
+    }
   }
 
   openSettingsModal(tab = 'settings') {
@@ -8369,97 +8394,96 @@ class ProtecGame {
       window.ProtecEquipements.checkMissionLotBonus(this, mission);
     }
 
-    // 3. RETOUR DES PERSONNELS ET FATIGUE
-    crew.forEach(v => {
-      if (mission.type === 'pompiers' && this.sdisGarde && this.sdisGarde.active && this.sdisGarde.caserneCrew.includes(v.id)) {
-        v.status = 'sdis_caserne';
-      } else if (v.contractType === 'salarie' && window.ProtecPersonnel) {
-        // Enregistrement des heures au forfait mensuel et application du repos légal de 11h (Code du Travail)
-        window.ProtecPersonnel.recordMissionForSalarie(v, mission, this);
-      } else {
-        v.status = 'dispo';
-      }
-      v.exp += 15;
-      if (window.ProtecPersonnel) {
-        const result = window.ProtecPersonnel.applyMissionExertion(v, mission, !!aep2Specialist, this.weather);
-        if (result && result.resigned) {
-          this.volunteers = this.volunteers.filter(vol => vol.id !== v.id);
-          this.showToast('Démission d’un Bénévole ! 🚪', `${v.name} a démissionné de l’antenne suite à un surmenage excessif et un manque de repos.`, 'red');
-        } else if (result && result.burnout) {
-          this.showToast('Alerte Surmenage / Burnout', `${v.name} est épuisé(e) et placé(e) en repos obligatoire (30 min).`, 'red');
+    // 3 & 4. RETOUR ROUTIER PHYSIQUE DES VÉHICULES ET DE LEURS ÉQUIPAGES (AUCUNE TÉLÉPORTATION)
+    const crewVolunteers = (crew || [])
+      .map(v => typeof v === 'object' && v !== null ? v : (this.volunteers || []).find(x => x.id === v))
+      .filter(Boolean);
+
+    const engagedVehicles = (vehicles || [])
+      .map(v => typeof v === 'object' && v !== null ? v : (this.vehicles || []).find(x => x.id === v))
+      .filter(Boolean);
+
+    if (engagedVehicles.length > 0 && window.ProtecSystems && typeof window.ProtecSystems.startTransit === 'function') {
+      const assignedVolIds = new Set();
+
+      engagedVehicles.forEach((veh, vIdx) => {
+        // Localisation exacte de départ : position du véhicule à l'intervention (accrochée à la route la plus proche)
+        const origin = (veh.lat && veh.lng) 
+          ? { lat: Number(veh.lat), lng: Number(veh.lng) }
+          : ((veh.status === 'urgences_chu' && mission.evacHospitalData?.hospital)
+              ? { lat: Number(mission.evacHospitalData.hospital.lat), lng: Number(mission.evacHospitalData.hospital.lng) }
+              : { lat: Number(mission.lat || this.stations?.[0]?.lat || 48.8566), lng: Number(mission.lng || this.stations?.[0]?.lng || 2.3522) });
+
+        const baseStation = (this.stations || []).find(s => s.id === veh.stationId) || this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne' };
+        const dest = { lat: Number(baseStation.lat), lng: Number(baseStation.lng) };
+
+        // Équipage affecté à ce véhicule pour le trajet retour
+        let vehCrew = [];
+        if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.getVehicleAssignedCrew === 'function') {
+          vehCrew = window.ProtecCriseLogistique.getVehicleAssignedCrew(mission, veh, this);
         }
-      } else {
-        const baseDrain = aep2Specialist ? 8 : 15;
-        v.energy = Math.max(10, (v.energy || 80) - baseDrain);
-      }
-    });
+        if (!vehCrew || vehCrew.length === 0) {
+          if (engagedVehicles.length === 1) {
+            vehCrew = [...crewVolunteers];
+          } else {
+            const seats = veh.seatsCount || veh.capacity || (veh.type === 'VPSP' ? 3 : veh.type === 'VTP' ? 9 : 4);
+            const remaining = crewVolunteers.filter(v => !assignedVolIds.has(v.id));
+            vehCrew = remaining.slice(0, seats);
+          }
+        }
+        vehCrew.forEach(v => assignedVolIds.add(v.id));
 
-    // 4. RETOUR DES VÉHICULES, KILOMÉTRAGE, CONDITIONS DE TRAVAIL ET IMPACT SUR LE MORAL
-    const avgMoral = crew.length > 0 ? (crew.reduce((sum, v) => sum + (v.motivation || 70), 0) / crew.length) : 70;
-    vehicles.forEach(veh => {
-      if (mission.type === 'pompiers' && this.sdisGarde && this.sdisGarde.active && veh.id === this.sdisGarde.vehicleId) {
-        veh.status = 'sdis_caserne';
-      } else {
-        veh.status = 'a_rearme';
-      veh.a_rearme = true;
-      veh.needsRearming = true;
-      }
+        // Statut de transit retour (Statut 6)
+        veh.status = 'transit';
+        veh.currentMissionId = null;
+        veh.missionId = null;
 
-      // Nécessite un réarmement de matériel avant de repartir
-      veh.needsRearming = true;
-      veh.fuel = Math.max(10, (veh.fuel || 90) - 15);
-      // Consommation réaliste d'armement consommables (~30% par mission)
-      if (veh.type === 'VPSP' || (veh.type === 'VTU' && veh.logKit === 'dps')) {
-        const loss = Math.floor(Math.random() * 15 + 25); // 25% à 40% de consommables utilisés
-        veh.armementLevel = Math.max(10, (veh.armementLevel !== undefined ? veh.armementLevel : 100) - loss);
-        veh.isRearmed = false;
-        veh.needsRearming = true;
-      }
-
-      // Incrémentation réaliste du kilométrage compteur (trajet aller-retour et patrouille)
-      const missionKm = Math.floor(Math.random() * 25 + 15);
-      veh.mileage = (veh.mileage || veh.kilometrage || 115000) + missionKm;
-      veh.kilometrage = veh.mileage;
-
-      // Évaluation des conditions de travail et confort matériel du véhicule
-      const cond = this.getVehicleCondition(veh);
-
-      // Impact direct sur la motivation et la présence des bénévoles engagés :
-      // Matériel neuf / récent = fierté et boost de motivation.
-      // Vieux tacot (ex: 2006, bruyant, usé) = découragement et fatigue.
-      if (crew.length > 0) {
-        crew.forEach(v => {
-          v.motivation = Math.max(10, Math.min(100, (v.motivation || 75) + cond.moralBonus));
-          v.humeur = Math.max(10, Math.min(100, (v.humeur || 75) + (cond.moralBonus > 0 ? 3 : -3)));
+        vehCrew.forEach(v => {
+          v.status = 'transit';
+          v.transitVehicleId = veh.id;
+          v.currentMissionId = null;
+          v.missionId = null;
         });
 
-        if (cond.moralBonus > 0) {
-          this.showToast('Confort Matériel', `Véhicule moderne et agréable (${veh.model || veh.name}) : les équipages interviennent dans d'excellentes conditions !`, 'green');
-        } else if (cond.moralBonus < 0) {
-          this.showToast('Conditions Dégradées', `Véhicule ancien et bruyant (${veh.model || veh.name}, ${cond.age} ans) : l’équipage ressent une fatigue accrue.`, 'orange');
-        }
-      }
-
-      // Usure mécanique naturelle
-      const wearRate = avgMoral >= 80 ? 2 : (avgMoral < 50 ? 8 : 4);
-      veh.mechanical = Math.max(5, (veh.mechanical || 95) - wearRate);
-
-      // Risque d'avarie mécanique : Très faible sur véhicule récent (<2%), mais élevé sur vieux véhicule (>30%)
-      const finalBreakdownRisk = Math.max(cond.breakdownRisk, (avgMoral < 45 ? 0.20 : 0.02));
-      if (Math.random() < finalBreakdownRisk) {
-        veh.isBrokenDown = true;
-        veh.mechanical = Math.max(5, (veh.mechanical || 50) - 25);
-        this.showToast('Avarie / Panne Mécanique ! 🚨', `« ${veh.name} » (${veh.model || veh.type}, ${cond.age} ans) est tombé en panne pendant la mission ! Réparation au garage requise.`, 'red');
-        if (window.ProtecNotifications) {
-          window.ProtecNotifications.recordNotification({
-            title: '🚨 Panne Mécanique en Mission',
-            message: `Le véhicule ${veh.name} (${veh.model || veh.type}) a subi une avarie mécanique. Révision garage indispensable.`,
-            category: 'logistique',
-            level: 'danger'
+        // Décalage léger si plusieurs engins quittent les lieux simultanément
+        setTimeout(() => {
+          window.ProtecSystems.startTransit(this, veh, origin, dest, mission, 6, () => {
+            this.finalizeVehicleReturn(veh, vehCrew, mission, baseStation, aep2Specialist);
           });
-        }
+        }, vIdx * 600);
+      });
+
+      // Secouristes restants non véhiculés (ex: renfort piéton) : retour direct
+      const unassignedVols = crewVolunteers.filter(v => !assignedVolIds.has(v.id));
+      if (unassignedVols.length > 0) {
+        unassignedVols.forEach(v => {
+          v.status = 'dispo';
+          v.exp += 15;
+          if (window.ProtecPersonnel) {
+            window.ProtecPersonnel.applyMissionExertion(v, mission, !!aep2Specialist, this.weather);
+          } else {
+            v.energy = Math.max(10, (v.energy || 80) - (aep2Specialist ? 8 : 15));
+          }
+        });
       }
-    });
+    } else {
+      // Repli si pas de véhicule ou si ProtecSystems indisponible
+      engagedVehicles.forEach(veh => {
+        const baseStation = (this.stations || []).find(s => s.id === veh.stationId) || this.stations?.[0];
+        this.finalizeVehicleReturn(veh, crewVolunteers, mission, baseStation, aep2Specialist);
+      });
+      if (engagedVehicles.length === 0) {
+        crewVolunteers.forEach(v => {
+          v.status = 'dispo';
+          v.exp += 15;
+          if (window.ProtecPersonnel) {
+            window.ProtecPersonnel.applyMissionExertion(v, mission, !!aep2Specialist, this.weather);
+          } else {
+            v.energy = Math.max(10, (v.energy || 80) - (aep2Specialist ? 8 : 15));
+          }
+        });
+      }
+    }
 
     // Consommation de matériel de secours
     if (window.ProtecSystems) {
@@ -8512,6 +8536,106 @@ class ProtecGame {
     this.renderMissions();
     this.updateStatsUI();
     this.saveGame();
+  }
+
+  // Finalisation du retour d'un véhicule et de son équipage à la base après transit routier
+  finalizeVehicleReturn(veh, vehCrew, mission, station, aep2Specialist = null) {
+    if (!veh) return;
+
+    // Repositionnement géographique strict à l'antenne
+    veh.lat = Number(station?.lat || this.stations?.[0]?.lat || 48.6921);
+    veh.lng = Number(station?.lng || this.stations?.[0]?.lng || 6.1844);
+
+    if (mission?.type === 'pompiers' && this.sdisGarde && this.sdisGarde.active && veh.id === this.sdisGarde.vehicleId) {
+      veh.status = 'sdis_caserne';
+    } else {
+      veh.status = 'a_rearme';
+      veh.a_rearme = true;
+      veh.needsRearming = true;
+    }
+
+    veh.fuel = Math.max(10, (veh.fuel || 90) - 15);
+    if (veh.type === 'VPSP' || (veh.type === 'VTU' && veh.logKit === 'dps')) {
+      const loss = Math.floor(Math.random() * 15 + 25);
+      veh.armementLevel = Math.max(10, (veh.armementLevel !== undefined ? veh.armementLevel : 100) - loss);
+      veh.isRearmed = false;
+      veh.needsRearming = true;
+    }
+
+    const missionKm = Math.floor(Math.random() * 25 + 15);
+    veh.mileage = (veh.mileage || veh.kilometrage || 115000) + missionKm;
+    veh.kilometrage = veh.mileage;
+
+    const cond = this.getVehicleCondition(veh);
+    const avgMoral = (vehCrew && vehCrew.length > 0)
+      ? (vehCrew.reduce((sum, v) => sum + (v.motivation || 70), 0) / vehCrew.length)
+      : 70;
+
+    if (vehCrew && vehCrew.length > 0) {
+      vehCrew.forEach(v => {
+        v.motivation = Math.max(10, Math.min(100, (v.motivation || 75) + cond.moralBonus));
+        v.humeur = Math.max(10, Math.min(100, (v.humeur || 75) + (cond.moralBonus > 0 ? 3 : -3)));
+      });
+
+      if (cond.moralBonus > 0) {
+        this.showToast('Confort Matériel', `Véhicule moderne (${veh.model || veh.name}) : les équipages rentrent dans d'excellentes conditions !`, 'green');
+      } else if (cond.moralBonus < 0) {
+        this.showToast('Conditions Dégradées', `Véhicule ancien (${veh.model || veh.name}, ${cond.age} ans) : fatigue accrue de l'équipage.`, 'orange');
+      }
+    }
+
+    const wearRate = avgMoral >= 80 ? 2 : (avgMoral < 50 ? 8 : 4);
+    veh.mechanical = Math.max(5, (veh.mechanical || 95) - wearRate);
+
+    const finalBreakdownRisk = Math.max(cond.breakdownRisk, (avgMoral < 45 ? 0.20 : 0.02));
+    if (Math.random() < finalBreakdownRisk) {
+      veh.isBrokenDown = true;
+      veh.mechanical = Math.max(5, (veh.mechanical || 50) - 25);
+      this.showToast('Avarie / Panne Mécanique ! 🚨', `« ${veh.name} » (${veh.model || veh.type}, ${cond.age} ans) a subi une avarie au retour ! Réparation requise.`, 'red');
+      if (window.ProtecNotifications) {
+        window.ProtecNotifications.recordNotification({
+          title: '🚨 Panne Mécanique au Retour',
+          message: `Le véhicule ${veh.name} (${veh.model || veh.type}) a subi une avarie au retour d'intervention.`,
+          category: 'logistique',
+          level: 'danger'
+        });
+      }
+    }
+
+    // Libération et retour de l'équipage à l'antenne
+    if (Array.isArray(vehCrew) && vehCrew.length > 0) {
+      vehCrew.forEach(v => {
+        if (mission?.type === 'pompiers' && this.sdisGarde && this.sdisGarde.active && this.sdisGarde.caserneCrew?.includes(v.id)) {
+          v.status = 'sdis_caserne';
+        } else if (v.contractType === 'salarie' && window.ProtecPersonnel) {
+          window.ProtecPersonnel.recordMissionForSalarie(v, mission, this);
+        } else {
+          v.status = 'dispo';
+        }
+        v.transitVehicleId = null;
+        v.currentMissionId = null;
+        v.missionId = null;
+        v.exp = (v.exp || 0) + 15;
+
+        if (window.ProtecPersonnel) {
+          const result = window.ProtecPersonnel.applyMissionExertion(v, mission, !!aep2Specialist, this.weather);
+          if (result && result.resigned) {
+            this.volunteers = this.volunteers.filter(vol => vol.id !== v.id);
+            this.showToast('Démission d’un Bénévole ! 🚪', `${v.name} a démissionné de l’antenne suite à un surmenage excessif.`, 'red');
+          } else if (result && result.burnout) {
+            this.showToast('Alerte Surmenage / Burnout', `${v.name} est épuisé(e) et placé(e) en repos obligatoire (30 min).`, 'red');
+          }
+        } else {
+          const baseDrain = aep2Specialist ? 8 : 15;
+          v.energy = Math.max(10, (v.energy || 80) - baseDrain);
+        }
+      });
+    }
+
+    this.showToast('Arrivée à la Base 🏁', `${veh.name} et l’équipage ont regagné l’antenne (${station?.name || station?.city || 'Base'}). Véhicule à réarmer.`, 'green');
+    this.saveGame();
+    this.updateStatsUI();
+    this.renderStations();
   }
 
   // Déblocage de la prime de parrainage pour le parrain à la réalisation du premier palier (1ère mission)
@@ -12436,22 +12560,6 @@ class ProtecGame {
 
     this.showToast('Intervention Clôturée', `Soins réalisés sur place pour « ${mission.title} ». Victime laissée sur place après accord SAMU 15.`, 'green');
     this.completeMission(mission);
-
-    // Libérer les véhicules et bénévoles
-    if (mission.assignedCrew?.vehicles) {
-      mission.assignedCrew.vehicles.forEach(v => {
-        const veh = this.vehicles.find(x => x.id === v.id);
-        if (veh) veh.status = 'dispo';
-      });
-    }
-    if (mission.assignedCrew?.volunteers) {
-      mission.assignedCrew.volunteers.forEach(volId => {
-        const v = this.volunteers.find(x => x.id === volId);
-        if (v) v.status = 'dispo';
-      });
-    }
-    this.saveGame();
-    this.updateStatsUI();
   }
 
   // Modale de sélection et multi-affectation des salariés permanents de l'antenne
@@ -12871,20 +12979,30 @@ class ProtecGame {
     if (!Array.isArray(mission.assignedCrew.vehicles)) mission.assignedCrew.vehicles = [];
 
     mission.assignedCrew.vehicles.push(veh);
-    veh.status = 'mission';
+    veh.status = 'transit';
 
-    // Si le véhicule régularise le type requis
-    if (mission.vehicleMismatch && Array.isArray(mission.requiredVehicles)) {
-      const hasRequired = mission.requiredVehicles.some(req => veh.type === req);
-      if (hasRequired) {
-        mission.vehicleMismatch = false;
-        mission.isSlowedDown = false;
-        mission.mismatchReasons = [];
-        this.showToast('Dispositif Régularisé ! ✅', `L'arrivée du ${veh.type} (${veh.name}) rétablit l'efficacité complète sur « ${mission.title} » !`, 'blue');
-      }
+    const station = (this.stations || []).find(s => s.id === veh.stationId) || this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne' };
+    const origin = { lat: Number(station.lat), lng: Number(station.lng) };
+    const dest = { lat: Number(mission.lat), lng: Number(mission.lng) };
+
+    if (window.ProtecSystems && typeof window.ProtecSystems.startTransit === 'function') {
+      window.ProtecSystems.startTransit(this, veh, origin, dest, mission, 2, () => {
+        veh.status = 'mission';
+        if (mission.vehicleMismatch && Array.isArray(mission.requiredVehicles)) {
+          const hasRequired = mission.requiredVehicles.some(req => veh.type === req);
+          if (hasRequired) {
+            mission.vehicleMismatch = false;
+            mission.isSlowedDown = false;
+            mission.mismatchReasons = [];
+            this.showToast('Dispositif Régularisé ! ✅', `L'arrivée du ${veh.type} (${veh.name}) rétablit l'efficacité complète sur « ${mission.title} » !`, 'blue');
+          }
+        }
+      });
     } else {
-      this.showToast('Véhicule Déployé ! 🚑', `${veh.name} (${veh.type}) est parti renforcer « ${mission.title} ».`, 'green');
+      veh.status = 'mission';
     }
+
+    this.showToast('Renfort Véhicule en Route 🚑', `${veh.name} (${veh.type}) fait route vers « ${mission.title} ».`, 'green');
 
     this.saveGame();
     this.updateStatsUI();

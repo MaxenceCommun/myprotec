@@ -212,19 +212,23 @@ window.ProtecSystems = {
   },
 
   async startTransit(game, vehicle, originCoords, destCoords, mission, statusTarget, onArrivalCallback) {
+    if (!game || !vehicle || !originCoords || !destCoords) return;
+    if (!originCoords.lat || !originCoords.lng || !destCoords.lat || !destCoords.lng) return;
+
     const routeData = await this.fetchRouteDetails(originCoords, destCoords);
     const routeCoords = routeData.coords;
     const segments = routeData.segments;
     const transitId = `transit-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
-    // Détection d'un départ d'urgence (SAMU, transport CH, pompiers, crise CUMP/NOVI, préfecture)
+    // Règle métier : le Statut 6 (Retour Antenne) n'est jamais un départ d'urgence sous gyrophares
     const isEmergency = (
-      statusTarget === 4 ||
+      (statusTarget === 4 ||
       mission?.type === 'samu' ||
       mission?.type === 'pompiers' ||
       mission?.type === 'crise' ||
       mission?.isCumpCai === true ||
-      ['critique', 'haute'].includes(mission?.urgency)
+      ['critique', 'haute'].includes(mission?.urgency)) &&
+      statusTarget !== 6
     );
 
     // RÈGLE MÉTIER : Vérification de la présence de gyrophares / avertisseurs spéciaux sur le véhicule :
@@ -241,12 +245,20 @@ window.ProtecSystems = {
     // Vitesse d'urgence et priorité de franchissement autorisées UNIQUEMENT sous gyrophares
     const canUseEmergencySpeed = isEmergency && hasBeacon;
 
+    // Enregistrement des coordonnées de départ sur le réseau routier
+    if (vehicle && routeCoords && routeCoords.length > 0) {
+      vehicle.lat = routeCoords[0][0];
+      vehicle.lng = routeCoords[0][1];
+      vehicle.status = 'transit';
+    }
+
     // Polyline Leaflet sur la route
+    const isReturn = statusTarget === 6;
     const polyline = L.polyline(routeCoords, {
-      color: canUseEmergencySpeed ? (statusTarget === 4 ? '#ef4444' : '#f97316') : (isEmergency ? '#eab308' : '#0284c7'),
-      weight: canUseEmergencySpeed ? 5 : 3.5,
-      opacity: canUseEmergencySpeed ? 0.85 : 0.65,
-      dashArray: canUseEmergencySpeed ? null : '6, 6',
+      color: isReturn ? '#0284c7' : (canUseEmergencySpeed ? (statusTarget === 4 ? '#ef4444' : '#f97316') : (isEmergency ? '#eab308' : '#0284c7')),
+      weight: isReturn ? 3.5 : (canUseEmergencySpeed ? 5 : 3.5),
+      opacity: isReturn ? 0.75 : (canUseEmergencySpeed ? 0.85 : 0.65),
+      dashArray: isReturn ? '6, 6' : (canUseEmergencySpeed ? null : '6, 6'),
       className: canUseEmergencySpeed ? 'route-line-animated' : 'route-line-normal'
     }).addTo(game.map);
 
@@ -464,20 +476,24 @@ window.ProtecSystems = {
           : (statusTarget === 6 ? 'STATUT 6 : Retour Antenne' : 'STATUT 2 : En route'));
     const radioMsg = (statusTarget === 4)
       ? `STATUT 4 : Transport sanitaire en cours vers ${hospTargetName} [Pôle : ${specShort}] (${distKm.toFixed(1)} km).`
-      : (canUseEmergencySpeed
-          ? `${statusLabel} sous gyrophare vers ${mission ? mission.title : 'Destination'} (${distKm.toFixed(1)} km).`
-          : `${statusLabel} vers ${mission ? mission.title : 'Destination'} (vitesse normale, ${distKm.toFixed(1)} km).`);
+      : (isReturn
+          ? `STATUT 6 : Fin d'intervention. Quitte les lieux pour retour à l'antenne (${stationName}, ${distKm.toFixed(1)} km).`
+          : (canUseEmergencySpeed
+              ? `${statusLabel} sous gyrophare vers ${mission ? mission.title : 'Destination'} (${distKm.toFixed(1)} km).`
+              : `${statusLabel} vers ${mission ? mission.title : 'Destination'} (vitesse normale, ${distKm.toFixed(1)} km).`));
     this.addRadioLog(game, vehicle.name, statusTarget, radioMsg);
 
     const toastMsg = (statusTarget === 4) 
       ? `${vehicle.name} en route gyrophares vers ${hospTargetName} (~${distKm.toFixed(1)} km).` 
-      : (canUseEmergencySpeed
-          ? `${vehicle.name} en route sous gyrophare vers les lieux (~${distKm.toFixed(1)} km).`
-          : (isEmergency
-              ? `${vehicle.name} (sans gyrophare) : en route vers l'urgence à allure normale (~${distKm.toFixed(1)} km).`
-              : `${vehicle.name} est en route vers les lieux (~${distKm.toFixed(1)} km).`));
+      : (isReturn
+          ? `${vehicle.name} quitte les lieux et fait route vers sa base (~${distKm.toFixed(1)} km).`
+          : (canUseEmergencySpeed
+              ? `${vehicle.name} en route sous gyrophare vers les lieux (~${distKm.toFixed(1)} km).`
+              : (isEmergency
+                  ? `${vehicle.name} (sans gyrophare) : en route vers l'urgence à allure normale (~${distKm.toFixed(1)} km).`
+                  : `${vehicle.name} est en route vers les lieux (~${distKm.toFixed(1)} km).`)));
 
-    game.showToast(statusLabel, toastMsg, canUseEmergencySpeed ? 'orange' : (isEmergency ? 'yellow' : 'blue'));
+    game.showToast(statusLabel, toastMsg, isReturn ? 'blue' : (canUseEmergencySpeed ? 'orange' : (isEmergency ? 'yellow' : 'blue')));
   },
 
   ensureTransitLoop(game) {
@@ -555,6 +571,10 @@ window.ProtecSystems = {
 
         if (t.marker && currentPos) {
           t.marker.setLatLng(currentPos);
+          if (t.vehicle) {
+            t.vehicle.lat = currentPos[0];
+            t.vehicle.lng = currentPos[1];
+          }
           if (t.marker._icon) {
             t.marker._icon.classList.toggle('is-highway-speed', isHighwayCurrent);
           }
@@ -632,6 +652,11 @@ window.ProtecSystems = {
         if (t.marker && t.routeCoords.length > 0) {
           t.marker.setLatLng(t.routeCoords[t.routeCoords.length - 1]);
         }
+        if (t.vehicle && t.routeCoords && t.routeCoords.length > 0) {
+          const lastPoint = t.routeCoords[t.routeCoords.length - 1];
+          t.vehicle.lat = lastPoint[0];
+          t.vehicle.lng = lastPoint[1];
+        }
         if (t.polyline && game.map) game.map.removeLayer(t.polyline);
         if (t.marker && game.map) game.map.removeLayer(t.marker);
         game.transits.splice(i, 1);
@@ -654,13 +679,8 @@ window.ProtecSystems = {
           this.addRadioLog(game, t.vehicle.name, 5, `STATUT 5 : Arrivée à ${hospName}. Transmission de la victime aux équipes médicales.`);
           game.showToast('Arrivée Urgences', `${t.vehicle.name} est arrivé à ${hospName}. Relève effectuée.`, 'green');
         } else if (t.statusTarget === 6) {
-          if (t.vehicle) {
-            t.vehicle.status = 'dispo';
-            t.vehicle.needsRearming = false;
-            t.vehicle.a_rearme = false;
-          }
-          this.addRadioLog(game, t.vehicle.name, 1, `STATUT 1 : De retour à l’antenne. Véhicule disponible.`);
-          game.showToast('Retour Antenne', `${t.vehicle.name} a regagné sa base. Véhicule disponible.`, 'blue');
+          this.addRadioLog(game, t.vehicle.name, 1, `STATUT 1 : De retour à l’antenne. Véhicule et équipage rentrés.`);
+          game.showToast('Retour Antenne 🏠', `${t.vehicle.name} a regagné sa base (${t.stationName || 'Antenne'}).`, 'blue');
         }
 
         if (t.vehicle) {
@@ -1109,6 +1129,18 @@ window.ProtecSystems = {
     const g = game || window.game;
     if (!mission || mission.status === 'completed' || mission.status === 'termine') return;
 
+    // Retrait du marqueur Leaflet temporaire de timeline
+    if (mission._timelineMarker && g?.map) {
+      g.map.removeLayer(mission._timelineMarker);
+      delete mission._timelineMarker;
+    }
+
+    // Délégation impérative au gestionnaire global pour assurer le retour routier réel
+    if (g && typeof g.completeMission === 'function') {
+      g.completeMission(mission);
+      return;
+    }
+
     mission.status = 'completed';
     mission.resolved_at = new Date().toISOString();
     mission.progress = mission.durationSeconds || 1800;
@@ -1143,18 +1175,12 @@ window.ProtecSystems = {
       g.updateStatsUI?.();
       g.renderMissions?.();
       g.renderStations?.();
-      g.showToast?.('Mission Terminée 🏁', `Dispositif « ${mission.title} » clôturé avec succès après retour base. +${reward} € perçus !`, 'green');
-    }
-
-    // Retrait du marqueur Leaflet
-    if (mission._timelineMarker && g?.map) {
-      g.map.removeLayer(mission._timelineMarker);
-      delete mission._timelineMarker;
+      g.showToast?.('Mission Terminée 🏁', `Dispositif « ${mission.title} » clôturé avec succès. +${reward} € perçus !`, 'green');
     }
 
     // Main courante radio de fin
     const firstVeh = vehs[0] ? (typeof vehs[0] === 'object' ? vehs[0].name : 'VPSP') : 'VPSP';
-    this.addRadioLog(g, firstVeh, 1, `STATUT 1 : Mission « ${mission.title} » clôturée. Véhicule et équipage réarmés et disponibles.`);
+    this.addRadioLog(g, firstVeh, 1, `STATUT 1 : Mission « ${mission.title} » clôturée.`);
 
     // Synchronisation serveur Supabase
     if (window.ProtecSupabase && g?.player?.id) {
@@ -1173,6 +1199,16 @@ window.ProtecSystems = {
       if (!pos) return;
 
       if (pos.isCompleted) {
+        if (m._timelineMarker && game.map) {
+          game.map.removeLayer(m._timelineMarker);
+          delete m._timelineMarker;
+        }
+        return;
+      }
+
+      // Si un transit routier réel OSRM est déjà actif pour ce véhicule / mission, masquer le marqueur linéaire
+      const hasRoadTransit = (game.transits || []).some(t => t.mission?.id === m.id || (m.assignedCrew?.vehicles || []).some(v => (typeof v === 'object' ? v.id : v) === t.vehicleId));
+      if (hasRoadTransit && (pos.phase === 3 || pos.phase === 5)) {
         if (m._timelineMarker && game.map) {
           game.map.removeLayer(m._timelineMarker);
           delete m._timelineMarker;
