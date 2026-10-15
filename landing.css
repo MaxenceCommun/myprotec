@@ -19,6 +19,17 @@
   --lp-glass-shadow-hover: 0 25px 50px -12px rgba(0, 46, 109, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.95);
 }
 
+html.dark {
+  --lp-dark: #f8fafc;
+  --lp-slate: #cbd5e1;
+  --lp-slate-light: #94a3b8;
+  --lp-bg: #0b1120;
+  --lp-glass-bg: rgba(15, 23, 42, 0.85);
+  --lp-glass-border: rgba(255, 255, 255, 0.12);
+  --lp-glass-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --lp-glass-shadow-hover: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
 /* CONTENEUR GLOBAL PLEIN ÉCRAN LANDING PAGE */
 #myprotec-landing-page {
   position: fixed;
@@ -342,7 +353,18 @@
   filter: drop-shadow(0 15px 25px rgba(0, 46, 109, 0.18));
 }
 
-/* Couche Foil Holographique dynamique pour écussons rares & de prestige */
+/* Cadre visuel d'écusson isolé pour les reflets foil et masques */
+.ecusson-visual-frame {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+/* Couche Foil Holographique dynamique STRICTEMENT CONFINÉE à l'écusson */
 .foil-shiny-layer {
   position: absolute;
   inset: 0;
@@ -350,11 +372,14 @@
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.3s ease;
-  mix-blend-mode: color-dodge;
-  z-index: 5;
+  mix-blend-mode: screen;
+  z-index: 2;
 }
 
-.patch-badge-item:hover .foil-shiny-layer {
+.patch-badge-item:hover .foil-shiny-layer,
+.group\/patch:hover .foil-shiny-layer,
+.group\/item:hover .foil-shiny-layer,
+.ecusson-visual-frame:hover .foil-shiny-layer {
   opacity: 0.85;
 }
 
@@ -464,4 +489,97 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* ==============================================================================
+   THÈME SOMBRE EXHAUSTIF (html.dark) POUR TOUTE LA LANDING PAGE & VITRINES
+   ============================================================================== */
+html.dark #myprotec-landing-page {
+  background-color: #0b1120 !important;
+  color: #f8fafc !important;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(0, 85, 184, 0.18) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(255, 102, 0, 0.14) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(2, 132, 199, 0.12) 0px, transparent 60%) !important;
+}
+
+html.dark body {
+  background-color: #0b1120 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .gyro-beam-blue,
+html.dark .gyro-beam-orange {
+  mix-blend-mode: screen !important;
+  opacity: 0.55 !important;
+}
+
+html.dark .lp-glass-hero {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.92) 0%, rgba(30, 41, 59, 0.8) 100%) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  color: #f8fafc !important;
+}
+
+html.dark .lp-glass-card {
+  background: rgba(30, 41, 59, 0.85) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #f8fafc !important;
+}
+
+html.dark .lp-glass-card:hover {
+  background: rgba(30, 41, 59, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+html.dark .pole-accordion-item {
+  background: rgba(30, 41, 59, 0.8) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #f8fafc !important;
+}
+
+html.dark .pole-accordion-item:hover,
+html.dark .pole-accordion-item.is-expanded {
+  background: rgba(30, 41, 59, 0.98) !important;
+  border-color: rgba(0, 85, 184, 0.5) !important;
+}
+
+html.dark .showcase-inner-card {
+  background: rgba(30, 41, 59, 0.88) !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .showcase-inner-card:hover {
+  background: rgba(30, 41, 59, 0.98) !important;
+  border-color: #0055b8 !important;
+}
+
+html.dark .patch-badge-item {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .lp-ticker-item {
+  background: rgba(30, 41, 59, 0.9) !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .lp-filter-btn {
+  background: rgba(30, 41, 59, 0.8) !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+html.dark .lp-filter-btn:hover {
+  background: rgba(51, 65, 85, 0.9) !important;
+  color: #ffffff !important;
+}
+
+html.dark .lp-filter-btn.bg-slate-900 {
+  background: #0055b8 !important;
+  border-color: #0055b8 !important;
+  color: #ffffff !important;
 }

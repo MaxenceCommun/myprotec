@@ -10,25 +10,16 @@ window.MyProtecLanding = {
   counterTimer: null,
   activeFilter: 'all',
 
-  // Données de base de télémétrie opérationnelle
+  // Données de base de télémétrie opérationnelle (synchronisées avec Supabase en direct)
   telemetry: {
-    stations: 54,
-    volunteers: 1428,
-    fleet: 312,
-    dps: 84
+    stations: 0,
+    volunteers: 0,
+    fleet: 0,
+    dps: 0
   },
 
-  // Flux de dépêches pour le téléscripteur opérationnel
-  tickerLogPreset: [
-    { type: 'samu', icon: 'activity', color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-200', text: 'Régulation SAMU 15 • VPSP Antenne Nancy engagé sur urgence à domicile (Détresse respiratoire).' },
-    { type: 'dps', icon: 'shield-check', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', text: 'Dispositif DPS • Marathon Régional validé : 14 secouristes et 2 VPSP en place au km 21.' },
-    { type: 'formation', icon: 'graduation-cap', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'Pôle Formation • 8 nouveaux équipiers certifiés PSE2 (Reconnaissance officielle SUAP).' },
-    { type: 'logistique', icon: 'truck', color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'Logistique Opérationnelle • Réarmement d’urgence : 6 bouteilles O2 rechargées & révision VPSP-02 conforme.' },
-    { type: 'crise', icon: 'siren', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', text: 'Alerte Vigilance Crues • Pré-alerte COD Préfecture : Colonne motopompes en astreinte 30 min.' },
-    { type: 'samu', icon: 'heart-pulse', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', text: 'Bilan Transmis • Équipage VPSP évacue victime stable vers le Centre Hospitalier Universitaire.' },
-    { type: 'rh', icon: 'users', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200', text: 'Astreinte Opérationnelle • 12 secouristes volontaires positionnés en renfort de nuit.' },
-    { type: 'dps', icon: 'calendar', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', text: 'Convention Validée • Signature DPS Festival des Musiques Actuelles (3 500 spectateurs).' }
-  ],
+  // Flux de dépêches pour le téléscripteur opérationnel (alimenté par les opérations réelles)
+  tickerLogPreset: [],
 
   // Barème officiel des points selon le niveau de rareté
   rarityWeights: {
@@ -38,100 +29,8 @@ window.MyProtecLanding = {
     commun: 1
   },
 
-  // Données des vitrines d'antennes de secours classées par niveau de rareté cumulé
-  antennesShowcases: [
-    {
-      id: 'showcase-1',
-      name: 'Antenne Métropolitaine de Nancy',
-      director: 'Directeur Thomas',
-      department: 'Meurthe-et-Moselle (54)',
-      badges: [
-        { id: 'b1', code: 'renf_fondateur', name: 'Membre Fondateur', cat: 'renfort', rarity: 'historique', icon: 'crown', desc: 'Attribué aux directeurs membres fondateurs ayant ouvert leur premier centre de secours territorial.', imageUrl: 'images/badges/membre_fondateur.png' },
-        { id: 'b2', code: 'renf_colonne_crue', name: 'Colonne Nationale Crues & Inondations', cat: 'renfort', rarity: 'historique', icon: 'droplets', desc: 'Distinction officielle suite aux opérations majeures de pompage lourd et d’évacuation de population.' },
-        { id: 'b3', code: 'spec_pma', name: 'Poste Médical Avancé (PMA)', cat: 'specialite', rarity: 'epique', icon: 'plus-square', desc: 'Aptitude certifiée au déploiement rapide d’une chaîne médicale avancée de tri d’urgence.' },
-        { id: 'b4', code: 'dept_54', name: 'Protection Civile 54 • Meurthe-et-Moselle', cat: 'departement', rarity: 'commun', icon: 'map-pin', desc: 'Insigne officiel des unités de secours et d’action citoyenne de Meurthe-et-Moselle.', imageUrl: 'images/badges/badge_meurthe_et_moselle_54.png' }
-      ]
-    },
-    {
-      id: 'showcase-2',
-      name: 'Compagnie d’Intervention de Paris',
-      director: 'Commandant Leroy',
-      department: 'Paris (75)',
-      badges: [
-        { id: 'b5', code: 'miss_14_juillet', name: 'Dispositif Fête Nationale 14 Juillet', cat: 'mission', rarity: 'epique', icon: 'sparkles', desc: 'Délivré lors du commandement des dispositifs de grande ampleur lors des célébrations républicaines.' },
-        { id: 'b6', code: 'renf_dps_ge', name: 'Grande Envergure • Renfort Inter-Antennes', cat: 'renfort', rarity: 'epique', icon: 'users', desc: 'Décerné lors de l’envoi d’équipages complets VPSP en détachement d’appui hors département.' },
-        { id: 'b7', code: 'spec_aep', name: 'Soutien Psychologique d’Urgence (AEP)', cat: 'specialite', rarity: 'rare', icon: 'heart-pulse', desc: 'Cellule habilitée à la prise en charge immédiate du choc émotionnel post-catastrophe.' },
-        { id: 'b8', code: 'dept_75', name: 'Protection Civile de Paris', cat: 'departement', rarity: 'rare', icon: 'landmark', desc: 'Écusson territorial des brigades de secours engagées au cœur de la capitale.' }
-      ]
-    },
-    {
-      id: 'showcase-3',
-      name: 'Unité Littorale des Bouches-du-Rhône',
-      director: 'Capitaine Marchand',
-      department: 'Bouches-du-Rhône (13)',
-      badges: [
-        { id: 'b9', code: 'spec_aqua', name: 'Sauvetage Aquatique & Inondations', cat: 'specialite', rarity: 'rare', icon: 'waves', desc: 'Reconnaissance des équipages spécialisés en secours aquatique, fleuves et zones inondables.' },
-        { id: 'b10', code: 'spec_cyno', name: 'Unité Cynotechnique de Recherche', cat: 'specialite', rarity: 'rare', icon: 'paw-print', desc: 'Équipes de recherche de personnes égarées et victimes de décombres en zone difficile.' },
-        { id: 'b11', code: 'miss_marathon', name: 'Grands Événements Sportifs Nationaux', cat: 'mission', rarity: 'commun', icon: 'trophy', desc: 'Sécurisation et chaîne médicale continue sur marathons et courses d’endurance.' },
-        { id: 'b12', code: 'dept_13', name: 'Protection Civile 13 • Méditerranée', cat: 'departement', rarity: 'rare', icon: 'flame', desc: 'Insigne des équipages engagés sur le littoral provençal et en veille de massifs forestiers.' }
-      ]
-    },
-    {
-      id: 'showcase-4',
-      name: 'Délégation Territoriale de Gironde',
-      director: 'Lieutenant Moreau',
-      department: 'Gironde (33)',
-      badges: [
-        { id: 'b13', code: 'spec_formateur', name: 'Corps National des Formateurs', cat: 'specialite', rarity: 'rare', icon: 'graduation-cap', desc: 'Distinction des antennes disposant de formateurs certifiés (PICF / PAE).' },
-        { id: 'b14', code: 'miss_festival', name: 'Sécurité Festivals & Musique', cat: 'mission', rarity: 'rare', icon: 'music', desc: 'Encadrement préventif et secours d’urgence sur événements musicaux.' },
-        { id: 'b15', code: 'dept_33', name: 'Protection Civile de Gironde', cat: 'departement', rarity: 'commun', icon: 'map-pin', desc: 'Distinction territoriale des secouristes du littoral aquitain.' }
-      ]
-    },
-    {
-      id: 'showcase-5',
-      name: 'Groupement Opérationnel du Rhône',
-      director: 'Directrice Sophie',
-      department: 'Rhône (69)',
-      badges: [
-        { id: 'b16', code: 'spec_pma', name: 'Poste Médical Avancé (PMA)', cat: 'specialite', rarity: 'epique', icon: 'plus-square', desc: 'Capacité de déploiement d’une chaîne médicale complète de tri et d’urgence.' },
-        { id: 'b17', code: 'miss_marathon', name: 'Grands Événements Sportifs Nationaux', cat: 'mission', rarity: 'commun', icon: 'trophy', desc: 'Sécurisation et chaîne médicale continue sur marathons et courses d’endurance.' },
-        { id: 'b18', code: 'dept_69', name: 'Protection Civile du Rhône', cat: 'departement', rarity: 'rare', icon: 'activity', desc: 'Insigne officiel des unités de secours de la métropole lyonnaise.' }
-      ]
-    },
-    {
-      id: 'showcase-6',
-      name: 'Compagnie Territoriale des Flandres',
-      director: 'Capitaine Dubois',
-      department: 'Nord (59)',
-      badges: [
-        { id: 'b19', code: 'renf_colonne_crue', name: 'Colonne Nationale Crues & Inondations', cat: 'renfort', rarity: 'historique', icon: 'droplets', desc: 'Distinction officielle suite aux opérations majeures de pompage lourd et d’évacuation de population.' },
-        { id: 'b20', code: 'spec_cyno', name: 'Unité Cynotechnique de Recherche', cat: 'specialite', rarity: 'rare', icon: 'paw-print', desc: 'Équipes de recherche de personnes égarées et décombres.' },
-        { id: 'b21', code: 'dept_59', name: 'Protection Civile du Nord', cat: 'departement', rarity: 'commun', icon: 'shield', desc: 'Unité de secours et d’assistance civique des Hauts-de-France.' }
-      ]
-    },
-    {
-      id: 'showcase-7',
-      name: 'Antenne Métropolitaine de Toulouse',
-      director: 'Commandant Cazeneuve',
-      department: 'Haute-Garonne (31)',
-      badges: [
-        { id: 'b22', code: 'spec_aep', name: 'Soutien Psychologique d’Urgence (AEP)', cat: 'specialite', rarity: 'rare', icon: 'heart-pulse', desc: 'Cellule habilitée à la prise en charge immédiate du choc émotionnel post-catastrophe.' },
-        { id: 'b23', code: 'miss_14_juillet', name: 'Dispositif Fête Nationale 14 Juillet', cat: 'mission', rarity: 'epique', icon: 'sparkles', desc: 'Commandement de dispositifs républicains de grande envergure.' },
-        { id: 'b24', code: 'dept_31', name: 'Protection Civile 31 • Occitanie', cat: 'departement', rarity: 'commun', icon: 'compass', desc: 'Secouristes d’intervention du bassin toulousain.' }
-      ]
-    },
-    {
-      id: 'showcase-8',
-      name: 'Unité Océane Loire-Atlantique',
-      director: 'Lieutenant Guérin',
-      department: 'Loire-Atlantique (44)',
-      badges: [
-        { id: 'b25', code: 'spec_aqua', name: 'Sauvetage Aquatique & Inondations', cat: 'specialite', rarity: 'rare', icon: 'waves', desc: 'Secours nautique, estuaires et crues.' },
-        { id: 'b26', code: 'spec_formateur', name: 'Corps National des Formateurs', cat: 'specialite', rarity: 'rare', icon: 'graduation-cap', desc: 'Équipe agréée formations PSC / PSE.' },
-        { id: 'b27', code: 'dept_44', name: 'Protection Civile 44', cat: 'departement', rarity: 'commun', icon: 'anchor', desc: 'Insigne officiel des unités de secours nantaises et atlantiques.' }
-      ]
-    }
-  ],
+  // Données des vitrines d'antennes de secours (strictement réelles : Supabase & antenne locale du joueur)
+  antennesShowcases: [],
 
   // Initialisation au chargement de la page
   init() {
@@ -680,6 +579,57 @@ window.MyProtecLanding = {
     return null;
   },
 
+  // Rendu visuel d'un écusson avec effet holographique foil STRICTEMENT CONFINÉ au visuel de l'écusson
+  // et calque de masque officiel pour l'écusson Membre Fondateur
+  renderBadgeVisual(badge, sizeClass = 'w-14 h-16') {
+    const imgSrc = this.getBadgeImage(badge);
+    const code = badge.code || badge.id || '';
+    const name = badge.name || badge.nom || '';
+    const r = badge.rarity || badge.rarete || 'commun';
+    const isFondateur = code === 'renf_fondateur' || name.includes('Fondateur') || name.includes('Pionnier');
+
+    // 1. Écusson d'Honneur Suprême : Membre Fondateur avec masque et texture spéculaire officielle
+    if (isFondateur) {
+      return `
+        <div class="ecusson-fondateur-wrapper select-none ${sizeClass} filter drop-shadow-md transition-transform" title="${name}">
+          <img src="images/badges/membre_fondateur.png" alt="${name}" class="w-full h-full object-contain pointer-events-none relative z-0" onerror="this.onerror=null; this.parentElement.innerHTML='👑';" />
+          <div class="ecusson-fondateur-mask">
+            <div class="ecusson-fondateur-ambient"></div>
+            <div class="ecusson-fondateur-shimmer"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    const hasFoil = (r === 'historique' || r === 'epique' || r === 'rare');
+    const foilClass = r === 'historique' ? 'foil-historique' : (r === 'epique' ? 'foil-epique' : 'foil-rare');
+
+    // 2. Écusson avec image PNG réelle : cadre isolé recevant l'effet foil sans toucher la carte
+    if (imgSrc) {
+      return `
+        <div class="ecusson-visual-frame ${sizeClass} filter drop-shadow-md transition-transform">
+          <img src="${imgSrc}" alt="${name}" class="w-full h-full object-contain pointer-events-none relative z-0" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <div class="hidden w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 items-center justify-center shadow-2xs">
+            <i data-lucide="shield" class="w-5 h-5"></i>
+          </div>
+          ${hasFoil ? `<div class="foil-shiny-layer ${foilClass}"></div>` : ''}
+        </div>
+      `;
+    }
+
+    // 3. Écusson vectoriel avec icône
+    return `
+      <div class="ecusson-visual-frame w-11 h-11 rounded-xl ${
+        r === 'historique' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
+        (r === 'epique' ? 'bg-purple-50 text-purple-600 border border-purple-200' :
+        (r === 'rare' ? 'bg-cyan-50 text-cyan-600 border border-cyan-200' : 'bg-slate-100 text-slate-600 border border-slate-200'))
+      } shadow-2xs transition-transform">
+        <i data-lucide="${(badge.icon && !badge.icon.includes('/') && !badge.icon.includes('.')) ? badge.icon : 'shield'}" class="w-5 h-5 relative z-0"></i>
+        ${hasFoil ? `<div class="foil-shiny-layer ${foilClass}"></div>` : ''}
+      </div>
+    `;
+  },
+
   // Clé de persistance pour les écussons choisis par le joueur pour la vitrine d'accueil
   getFeaturedStorageKey(antenneId) {
     return `protec_showcase_badges_${antenneId || 'default'}`;
@@ -806,12 +756,34 @@ window.MyProtecLanding = {
     }
 
     if (listToRender.length === 0) {
+      const isSearchOrFilter = this.searchQuery || filter !== 'all';
       container.innerHTML = `
-        <div class="col-span-full py-12 text-center text-slate-400 bg-slate-50 border border-slate-200 rounded-3xl">
-          <p class="text-sm font-black text-slate-600">Aucune collection ne correspond à votre recherche</p>
-          <p class="text-xs text-slate-400 mt-1">Modifiez vos termes de recherche ou sélectionnez une autre catégorie.</p>
+        <div class="col-span-full py-12 px-6 text-center text-slate-400 bg-white/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm space-y-3">
+          <div class="w-12 h-12 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex items-center justify-center">
+            <i data-lucide="${isSearchOrFilter ? 'search-x' : 'shield-alert'}" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <p class="text-sm font-black text-slate-700 dark:text-slate-200">
+              ${isSearchOrFilter ? 'Aucune collection ne correspond à votre recherche' : 'Aucune antenne enregistrée actuellement'}
+            </p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+              ${isSearchOrFilter 
+                ? 'Modifiez vos termes de recherche ou sélectionnez une autre catégorie.' 
+                : 'Fondez votre antenne locale et accomplissez vos premières missions pour afficher vos écussons officiels sur la vitrine nationale.'
+              }
+            </p>
+          </div>
+          ${!isSearchOrFilter ? `
+            <div class="pt-2">
+              <a href="jeu.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black bg-[#ff6600] hover:bg-[#e65c00] text-white shadow-md transition">
+                <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+                <span>Prendre les Commandes</span>
+              </a>
+            </div>
+          ` : ''}
         </div>
       `;
+      if (window.lucide) window.lucide.createIcons();
       return;
     }
 
@@ -903,46 +875,23 @@ window.MyProtecLanding = {
             <div class="grid grid-cols-2 gap-3 my-5">
               ${displayBadges.length > 0 ? displayBadges.map(badge => {
                 const r = badge.rarity || badge.rarete || 'commun';
-                const imgSrc = this.getBadgeImage(badge);
                 return `
                   <div 
                     class="patch-badge-item group/patch relative p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col items-center text-center overflow-hidden transition hover:shadow-md hover:border-blue-300"
                     onmouseenter="window.MyProtecLanding.showBadgeTooltip(event, '${badge.name}', '${badge.desc || ''}', '${r.toUpperCase()}')"
                     onmouseleave="window.MyProtecLanding.hideBadgeTooltip()"
                   >
-                    <!-- Couche Foil Holographique -->
-                    <div class="foil-shiny-layer ${
-                      r === 'historique' ? 'foil-historique' :
-                      (r === 'epique' ? 'foil-epique' :
-                      (r === 'rare' ? 'foil-rare' : ''))
-                    }"></div>
+                    <!-- Visuel Écusson : Image PNG Réelle / Shimmer Fondateur / Foil Isolé -->
+                    ${this.renderBadgeVisual(badge, 'w-14 h-16 mb-2')}
 
-                    <!-- Visuel Écusson : Image PNG Réelle ou Icône vectorielle -->
-                    ${imgSrc ? `
-                      <div class="w-14 h-16 flex items-center justify-center mb-2 filter drop-shadow-md group-hover/patch:scale-105 transition-transform">
-                        <img src="${imgSrc}" alt="${badge.name}" class="w-full h-full object-contain pointer-events-none" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                        <div class="hidden w-11 h-11 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 items-center justify-center shadow-2xs">
-                          <i data-lucide="shield" class="w-5 h-5"></i>
-                        </div>
-                      </div>
-                    ` : `
-                      <div class="w-11 h-11 rounded-xl ${
-                        r === 'historique' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
-                        (r === 'epique' ? 'bg-purple-50 text-purple-600 border border-purple-200' :
-                        (r === 'rare' ? 'bg-cyan-50 text-cyan-600 border border-cyan-200' : 'bg-slate-100 text-slate-600 border border-slate-200'))
-                      } flex items-center justify-center mb-2 shadow-2xs group-hover/patch:scale-105 transition-transform">
-                        <i data-lucide="${(badge.icon && !badge.icon.includes('/') && !badge.icon.includes('.')) ? badge.icon : 'shield'}" class="w-5 h-5"></i>
-                      </div>
-                    `}
-
-                    <strong class="text-[11px] font-black text-slate-800 leading-tight block truncate max-w-full">
+                    <strong class="text-[11px] font-black text-slate-800 dark:text-slate-100 leading-tight block truncate max-w-full">
                       ${badge.name}
                     </strong>
                     
                     <span class="inline-block px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide mt-1.5 ${
-                      r === 'historique' ? 'bg-amber-100 text-amber-900' :
-                      (r === 'epique' ? 'bg-purple-100 text-purple-900' :
-                      (r === 'rare' ? 'bg-cyan-100 text-cyan-900' : 'bg-slate-100 text-slate-600'))
+                      r === 'historique' ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-300' :
+                      (r === 'epique' ? 'bg-purple-100 text-purple-900 dark:bg-purple-950/50 dark:text-purple-300' :
+                      (r === 'rare' ? 'bg-cyan-100 text-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'))
                     }">
                       ${r}
                     </span>
@@ -1257,21 +1206,13 @@ window.MyProtecLanding = {
 
           return `
             <div class="group/item relative p-4 rounded-2xl bg-white border ${isFeatured ? 'border-amber-400 ring-2 ring-amber-400/20 shadow-md' : 'border-slate-200/90 shadow-2xs'} flex flex-col justify-between transition hover:shadow-lg overflow-hidden">
-              
-              <!-- Couche Foil Holographique -->
-              <div class="foil-shiny-layer ${
-                r === 'historique' ? 'foil-historique' :
-                (r === 'epique' ? 'foil-epique' :
-                (r === 'rare' ? 'foil-rare' : ''))
-              }"></div>
-
               <div>
                 <!-- Bouton toggle en vitrine (Étoile) -->
                 <div class="flex items-center justify-between mb-2">
                   <span class="inline-block px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide ${
-                    r === 'historique' ? 'bg-amber-100 text-amber-900' :
-                    (r === 'epique' ? 'bg-purple-100 text-purple-900' :
-                    (r === 'rare' ? 'bg-cyan-100 text-cyan-900' : 'bg-slate-100 text-slate-600'))
+                    r === 'historique' ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-300' :
+                    (r === 'epique' ? 'bg-purple-100 text-purple-900 dark:bg-purple-950/50 dark:text-purple-300' :
+                    (r === 'rare' ? 'bg-cyan-100 text-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'))
                   }">
                     ${r}
                   </span>
@@ -1289,22 +1230,9 @@ window.MyProtecLanding = {
                   </button>
                 </div>
 
-                <!-- Visuel écusson -->
-                <div class="w-full h-20 flex items-center justify-center my-1 filter drop-shadow-md">
-                  ${imgSrc ? `
-                    <img src="${imgSrc}" alt="${badge.name}" class="h-full object-contain pointer-events-none group-hover/item:scale-105 transition-transform" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                    <div class="hidden w-12 h-12 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 items-center justify-center shadow-2xs">
-                      <i data-lucide="shield" class="w-6 h-6"></i>
-                    </div>
-                  ` : `
-                    <div class="w-12 h-12 rounded-xl ${
-                      r === 'historique' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
-                      (r === 'epique' ? 'bg-purple-50 text-purple-600 border border-purple-200' :
-                      (r === 'rare' ? 'bg-cyan-50 text-cyan-600 border border-cyan-200' : 'bg-slate-100 text-slate-600 border border-slate-200'))
-                    } flex items-center justify-center shadow-2xs group-hover/item:scale-105 transition-transform">
-                      <i data-lucide="${(badge.icon && !badge.icon.includes('/') && !badge.icon.includes('.')) ? badge.icon : 'shield'}" class="w-6 h-6"></i>
-                    </div>
-                  `}
+                <!-- Visuel écusson isolé recevant les textures et reflets -->
+                <div class="w-full flex items-center justify-center my-1">
+                  ${this.renderBadgeVisual(badge, 'w-16 h-20')}
                 </div>
 
                 <h5 class="text-xs font-black text-slate-900 mt-2 leading-snug line-clamp-2">

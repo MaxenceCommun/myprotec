@@ -1493,9 +1493,13 @@ class ProtecGame {
         if (!v) return false;
         const vName = (v.name || '').toLowerCase();
         const vId = String(v.id || '').toLowerCase();
-        if (v.isExternalReinforcement || v.isAlliedRenfort || (v.isRenfort && v.isAlliedRenfort)) return false;
-        if (vId.startsWith('vol-renf-') || vId.startsWith('vol-allie-') || vId.includes('renf-')) return false;
-        if (vName.includes('[allié') || vName.includes('[allie') || vName.includes('renfort [')) return false;
+        if (v.isExternalReinforcement || v.isAlliedRenfort || v.isRenfort) return false;
+        if (vId.startsWith('vol-renf-') || vId.startsWith('vol-allie-') || vId.includes('renf-') || vId.startsWith('renfort-')) return false;
+        if (vName.includes('[renfort') || vName.includes('renfort]') || vName.includes('[allié') || vName.includes('[allie') || vName.includes('renfort [')) return false;
+        // Si le nom contient encore une mention résiduelle [Renfort], la nettoyer
+        if (v.name) {
+          v.name = v.name.replace(/\[\s*renfort\s*\]/gi, '').replace(/\[\s*allié.*?\s*\]/gi, '').trim();
+        }
         return true;
       });
     }

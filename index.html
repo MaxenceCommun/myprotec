@@ -67,6 +67,10 @@
       overflow-y: auto !important;
       background-color: #f8fafc;
     }
+    html.dark body {
+      background-color: #0b1120 !important;
+      color: #f8fafc !important;
+    }
     #myprotec-landing-page,
     #myprotec-landing-page.is-hidden {
       position: relative !important;
@@ -82,7 +86,7 @@
     }
   </style>
 </head>
-<body class="h-full w-full bg-slate-50 font-sans text-slate-800 antialiased">
+<body class="h-full w-full bg-slate-50 dark:bg-[#0b1120] font-sans text-slate-800 dark:text-slate-100 antialiased">
 
   <!-- ==============================================================================
        PAGE D'ACCUEIL OFFICIELLE (LANDING PAGE MYPROTEC)
@@ -110,31 +114,31 @@
       </div>
 
       <!-- 1. BARRE DE NAVIGATION VITRÉE SUPÉRIEURE -->
-      <header class="sticky top-0 z-50 px-4 sm:px-8 py-3.5 backdrop-blur-md bg-white/75 border-b border-white/60 shadow-xs">
+      <header class="sticky top-0 z-50 px-4 sm:px-8 py-3.5 backdrop-blur-md bg-white/75 dark:bg-slate-900/80 border-b border-white/60 dark:border-slate-800/80 shadow-xs">
         <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
           
           <!-- Logo officiel MYPROTEC -->
           <div class="flex items-center gap-3 cursor-pointer" onclick="document.getElementById('myprotec-landing-page').scrollTo({top: 0, behavior: 'smooth'})">
-            <img src="logo_myprotec_icon.png" alt="MyProtec" class="w-10 h-10 rounded-2xl object-contain shadow-md bg-white p-0.5 border border-slate-100 flex-shrink-0" />
+            <img src="logo_myprotec_icon.png" alt="MyProtec" class="w-10 h-10 rounded-2xl object-contain shadow-md bg-white p-0.5 border border-slate-100 dark:border-slate-800 flex-shrink-0" />
             <div>
-              <span class="text-base sm:text-lg font-black tracking-tight text-slate-900 block leading-none">MYPROTEC</span>
-              <span class="text-[9px] uppercase tracking-wider font-extrabold text-[#0055b8] block mt-0.5">Simulation de Secours</span>
+              <span class="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white block leading-none">MYPROTEC</span>
+              <span class="text-[9px] uppercase tracking-wider font-extrabold text-[#0055b8] dark:text-blue-400 block mt-0.5">Simulation de Secours</span>
             </div>
           </div>
 
           <!-- Boutons d'action -->
           <div class="flex items-center gap-2.5">
-            <a href="ecussons.html" class="px-3.5 py-2 rounded-xl text-xs font-extrabold text-slate-700 hover:text-slate-950 bg-white/80 hover:bg-white border border-slate-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+            <a href="ecussons.html" class="px-3.5 py-2 rounded-xl text-xs font-extrabold text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
               <i data-lucide="shield" class="w-3.5 h-3.5 text-amber-500"></i>
               <span>Écussons</span>
             </a>
-            <button onclick="window.ProtecPWA?.promptInstall ? window.ProtecPWA.promptInstall() : window.MyProtecLanding.openAuth('register')" title="Télécharger l'application MyProtec" class="px-3.5 py-2 rounded-xl text-xs font-extrabold text-pc-blue hover:text-blue-700 bg-blue-50/80 hover:bg-blue-100 border border-blue-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+            <button onclick="window.ProtecPWA?.promptInstall ? window.ProtecPWA.promptInstall() : window.MyProtecLanding.openAuth('register')" title="Télécharger l'application MyProtec" class="px-3.5 py-2 rounded-xl text-xs font-extrabold text-pc-blue dark:text-blue-400 hover:text-blue-700 bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
               <i data-lucide="download" class="w-3.5 h-3.5"></i>
               <span>Télécharger le jeu</span>
             </button>
             <div id="landing-nav-actions" class="flex items-center gap-2">
-              <button onclick="window.MyProtecLanding.openAuth('login')" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-700 hover:text-slate-950 bg-white/80 hover:bg-white border border-slate-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
-                <i data-lucide="log-in" class="w-3.5 h-3.5 text-[#0055b8]"></i>
+              <button onclick="window.MyProtecLanding.openAuth('login')" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="log-in" class="w-3.5 h-3.5 text-[#0055b8] dark:text-blue-400"></i>
                 <span>Se connecter</span>
               </button>
               <button onclick="window.MyProtecLanding.openAuth('register')" class="px-4.5 py-2 rounded-xl text-xs font-black text-white bg-[#ff6600] hover:bg-[#e65c00] shadow-md transition flex items-center gap-1.5 cursor-pointer">
@@ -151,10 +155,10 @@
         
         <!-- Titre et sous-titre percutants -->
         <div class="space-y-4 max-w-4xl mx-auto">
-          <h1 class="text-3xl sm:text-5xl lg:text-6xl font-black text-[#0f172a] tracking-tight leading-[1.12]">
+          <h1 class="text-3xl sm:text-5xl lg:text-6xl font-black text-[#0f172a] dark:text-white tracking-tight leading-[1.12]">
             Prenez les commandes d'une antenne de <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#0055b8] to-[#0284c7]">premiers secours</span>.
           </h1>
-          <p class="text-base sm:text-lg text-[#475569] font-medium max-w-2xl mx-auto leading-relaxed">
+          <p class="text-base sm:text-lg text-[#475569] dark:text-slate-300 font-medium max-w-2xl mx-auto leading-relaxed">
             Recrutez et formez vos bénévoles PSE, gérez votre flotte de véhicules de premiers secours, couvrez les dispositifs prévisionnels et coordonnez les interventions d'urgence face aux crises.
           </p>
         </div>
@@ -166,8 +170,8 @@
             <span id="landing-hero-register-text">Jouer gratuitement</span>
             <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
           </button>
-          <button onclick="window.MyProtecLanding.openAuth('login')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/90 hover:bg-white text-slate-800 font-extrabold text-sm border border-slate-200/90 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
-            <i data-lucide="log-in" class="w-4 h-4 text-[#0055b8]"></i>
+          <button onclick="window.MyProtecLanding.openAuth('login')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white font-extrabold text-sm border border-slate-200/90 dark:border-slate-700 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
+            <i data-lucide="log-in" class="w-4 h-4 text-[#0055b8] dark:text-blue-400"></i>
             <span>Se connecter</span>
           </button>
         </div>
@@ -176,10 +180,10 @@
       <!-- 3. LE CENTRE OPÉRATIONNEL EN DIRECT (BLOC DOUBLE SYNCHRONE) -->
       <section class="py-12 px-4 sm:px-8 max-w-7xl mx-auto w-full">
         <div class="text-center max-w-2xl mx-auto mb-8 space-y-2">
-          <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+          <h2 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
             Le Centre Opérationnel en Direct
           </h2>
-          <p class="text-xs sm:text-sm text-slate-500 font-medium">
+          <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
             Télémétrie collective et téléscripteur de la main courante en temps réel.
           </p>
         </div>
@@ -189,8 +193,8 @@
           
           <!-- Colonne de gauche : Télémétrie & Stats (4 cartes vitrées interactives) -->
           <div class="space-y-4">
-            <div class="flex items-center justify-between pb-2 border-b border-slate-200/60">
-              <span class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-200/60 dark:border-slate-700/60">
+              <span class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-2">
                 <i data-lucide="activity" class="w-4 h-4 text-[#0055b8]"></i>
                 Télémétrie Opérationnelle
               </span>
@@ -249,9 +253,9 @@
 
           <!-- Colonne de droite : Main Courante Live (Console téléscripteur opérationnelle) -->
           <div class="space-y-4 flex flex-col justify-between">
-            <div class="flex items-center justify-between pb-2 border-b border-slate-200/60">
-              <span class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                <i data-lucide="terminal" class="w-4 h-4 text-slate-600"></i>
+            <div class="flex items-center justify-between pb-2 border-b border-slate-200/60 dark:border-slate-700/60">
+              <span class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                <i data-lucide="terminal" class="w-4 h-4 text-slate-600 dark:text-slate-400"></i>
                 Main Courante des Opérations
               </span>
             </div>
@@ -268,10 +272,10 @@
       <!-- 4. L'ACCORDÉON DES 6 PÔLES D'ANTENNE -->
       <section class="py-12 px-4 sm:px-8 max-w-7xl mx-auto w-full">
         <div class="text-center max-w-2xl mx-auto mb-8 space-y-2">
-          <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+          <h2 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
             Les 6 Pôles de Gestion d'Antenne
           </h2>
-          <p class="text-xs sm:text-sm text-slate-500 font-medium">
+          <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
             Survolez chaque colonne pour explorer les responsabilités concrètes de commandement.
           </p>
         </div>
@@ -533,13 +537,13 @@
       <!-- 5. LE CLASSEMENT & VITRINE DES ÉCUSSONS (PODIUM TOP 3) -->
       <section class="py-12 px-4 sm:px-8 max-w-7xl mx-auto w-full">
         <div class="text-center max-w-2xl mx-auto mb-8 space-y-2">
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-black uppercase tracking-wider mb-1">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/40 text-xs font-black uppercase tracking-wider mb-1">
             <span>🏆</span> Podium Officiel
           </div>
-          <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+          <h2 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
             Top 3 des Collections d'Écussons
           </h2>
-          <p class="text-xs sm:text-sm text-slate-500 font-medium">
+          <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
             Les 3 meilleures antennes de France selon la rareté cumulée de leurs distinctions.
           </p>
         </div>
@@ -550,19 +554,19 @@
             <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
             <span>Toutes les distinctions</span>
           </button>
-          <button onclick="window.MyProtecLanding.renderShowcaseGrid('specialite', 3)" data-filter="specialite" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <button onclick="window.MyProtecLanding.renderShowcaseGrid('specialite', 3)" data-filter="specialite" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
             <i data-lucide="crosshair" class="w-3.5 h-3.5 text-blue-600"></i>
             <span>Spécialités</span>
           </button>
-          <button onclick="window.MyProtecLanding.renderShowcaseGrid('mission', 3)" data-filter="mission" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <button onclick="window.MyProtecLanding.renderShowcaseGrid('mission', 3)" data-filter="mission" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
             <i data-lucide="award" class="w-3.5 h-3.5 text-amber-500"></i>
             <span>Missions & Événements</span>
           </button>
-          <button onclick="window.MyProtecLanding.renderShowcaseGrid('renfort', 3)" data-filter="renfort" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <button onclick="window.MyProtecLanding.renderShowcaseGrid('renfort', 3)" data-filter="renfort" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
             <i data-lucide="siren" class="w-3.5 h-3.5 text-red-600"></i>
             <span>Renforts & Crises</span>
           </button>
-          <button onclick="window.MyProtecLanding.renderShowcaseGrid('departement', 3)" data-filter="departement" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+          <button onclick="window.MyProtecLanding.renderShowcaseGrid('departement', 3)" data-filter="departement" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
             <i data-lucide="map-pin" class="w-3.5 h-3.5 text-indigo-600"></i>
             <span>Territoires</span>
           </button>
@@ -584,25 +588,25 @@
       </section>
 
       <!-- 6. FOOTER OPÉRATIONNEL -->
-      <footer class="mt-auto py-10 px-4 sm:px-8 border-t border-slate-200/80 bg-white/70 backdrop-blur-md">
-        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-500">
+      <footer class="mt-auto py-10 px-4 sm:px-8 border-t border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/80 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-500 dark:text-slate-400">
           
           <div class="flex items-center gap-3">
-            <img src="logo_myprotec_icon.png" alt="MyProtec" class="w-8 h-8 rounded-xl object-contain bg-white p-0.5 border border-slate-200 flex-shrink-0" />
+            <img src="logo_myprotec_icon.png" alt="MyProtec" class="w-8 h-8 rounded-xl object-contain bg-white p-0.5 border border-slate-200 dark:border-slate-700 flex-shrink-0" />
             <div>
-              <strong class="text-slate-800 text-xs block">MYPROTEC • Simulateur d'Antenne de Premiers Secours</strong>
-              <span class="text-[11px] text-slate-400">Jeu de simulation de gestion d'Association Agréée de Sécurité Civile.</span>
+              <strong class="text-slate-800 dark:text-slate-100 text-xs block">MYPROTEC • Simulateur d'Antenne de Premiers Secours</strong>
+              <span class="text-[11px] text-slate-400 dark:text-slate-500">Jeu de simulation de gestion d'Association Agréée de Sécurité Civile.</span>
             </div>
           </div>
 
-          <div class="flex flex-wrap items-center justify-center gap-6 font-bold text-slate-600 text-xs">
-            <button onclick="window.MyProtecLanding.openAuth('login')" class="hover:text-slate-900 transition cursor-pointer">
+          <div class="flex flex-wrap items-center justify-center gap-6 font-bold text-slate-600 dark:text-slate-300 text-xs">
+            <button onclick="window.MyProtecLanding.openAuth('login')" class="hover:text-slate-900 dark:hover:text-white transition cursor-pointer">
               Espace Directeur
             </button>
-            <button onclick="window.MyProtecLanding.openAuth('register')" class="hover:text-slate-900 transition cursor-pointer">
+            <button onclick="window.MyProtecLanding.openAuth('register')" class="hover:text-slate-900 dark:hover:text-white transition cursor-pointer">
               Créer une Antenne
             </button>
-            <a href="privacy.html" class="hover:text-slate-900 transition">
+            <a href="privacy.html" class="hover:text-slate-900 dark:hover:text-white transition">
               Confidentialité & Mentions
             </a>
           </div>

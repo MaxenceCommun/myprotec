@@ -52,28 +52,32 @@
       overflow-y: auto !important;
       background-color: #f8fafc;
     }
+    html.dark body {
+      background-color: #0b1120 !important;
+      color: #f8fafc !important;
+    }
   </style>
 </head>
-<body class="min-h-full flex flex-col font-sans antialiased text-slate-800 bg-[#f8fafc]">
+<body class="min-h-full flex flex-col font-sans antialiased text-slate-800 dark:text-slate-100 bg-[#f8fafc] dark:bg-[#0b1120]">
 
   <!-- BARRE DE NAVIGATION VITRÉE SUPÉRIEURE -->
-  <header class="sticky top-0 z-50 px-4 sm:px-8 py-3.5 backdrop-blur-md bg-white/80 border-b border-slate-200/80 shadow-xs">
+  <header class="sticky top-0 z-50 px-4 sm:px-8 py-3.5 backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border-b border-slate-200/80 dark:border-slate-800 shadow-xs">
     <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
       
       <!-- Logo et retour accueil -->
       <div class="flex items-center gap-3">
         <a href="index.html" class="flex items-center gap-2.5 text-slate-600 hover:text-pc-blue transition group">
-          <img src="logo_myprotec_icon.png" alt="MyProtec" class="w-10 h-10 rounded-2xl object-contain shadow-md bg-white p-0.5 border border-slate-100 flex-shrink-0" />
+          <img src="logo_myprotec_icon.png" alt="MyProtec" class="w-10 h-10 rounded-2xl object-contain shadow-md bg-white p-0.5 border border-slate-100 dark:border-slate-800 flex-shrink-0" />
           <div>
-            <span class="text-base sm:text-lg font-black tracking-tight text-slate-900 block leading-none">MYPROTEC</span>
-            <span class="text-[9px] uppercase tracking-wider font-extrabold text-[#0055b8] block mt-0.5">Collections d'Écussons</span>
+            <span class="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white block leading-none">MYPROTEC</span>
+            <span class="text-[9px] uppercase tracking-wider font-extrabold text-[#0055b8] dark:text-blue-400 block mt-0.5">Collections d'Écussons</span>
           </div>
         </a>
       </div>
 
       <!-- Navigation & Actions -->
       <div class="flex items-center gap-2.5">
-        <a href="index.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition flex items-center gap-1.5">
+        <a href="index.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1.5">
           <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
           <span class="hidden sm:inline">Accueil</span>
         </a>
@@ -90,20 +94,20 @@
 
     <!-- HERO SECTION DE LA VITRINE -->
     <div class="text-center max-w-3xl mx-auto space-y-4">
-      <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-100/80 text-pc-blue text-xs font-black uppercase tracking-wider">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-100/80 dark:bg-blue-950/60 text-pc-blue dark:text-blue-400 border border-blue-200/50 dark:border-blue-800/40 text-xs font-black uppercase tracking-wider">
         <i data-lucide="award" class="w-3.5 h-3.5 text-amber-500"></i>
         <span>Palmarès & Vitrine Nationale</span>
       </div>
-      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">
         Toutes les Collections d'Écussons
       </h1>
-      <p class="text-sm sm:text-base text-slate-600 font-medium leading-relaxed">
+      <p class="text-sm sm:text-base text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
         Découvrez l'intégralité des distinctions officielles acquises par les antennes de la Protection Civile.
       </p>
     </div>
 
     <!-- BARRE D'OUTILS : RECHERCHE ET FILTRES -->
-    <div class="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-sm space-y-4">
+    <div class="bg-white dark:bg-slate-900/90 rounded-3xl p-4 sm:p-6 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-4">
       
       <!-- Barre de recherche -->
       <div class="relative max-w-2xl mx-auto">
@@ -112,30 +116,30 @@
           id="ecussons-search-input"
           oninput="window.MyProtecLanding.filterShowcaseSearch(this.value)"
           placeholder="Rechercher par antenne, directeur, ville, département ou nom d'écusson..." 
-          class="w-full pl-11 pr-4 py-3 rounded-2xl text-xs sm:text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pc-blue font-semibold text-slate-800 placeholder-slate-400"
+          class="w-full pl-11 pr-4 py-3 rounded-2xl text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-pc-blue font-semibold text-slate-800 dark:text-slate-100 placeholder-slate-400"
         />
         <span class="absolute left-4 top-3.5 text-slate-400 text-sm">🔍</span>
       </div>
 
       <!-- Filtres par catégorie -->
-      <div class="flex flex-wrap items-center justify-center gap-2 pt-1 border-t border-slate-100">
+      <div class="flex flex-wrap items-center justify-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
         <button onclick="window.MyProtecLanding.renderShowcaseGrid('all', 0)" data-filter="all" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer bg-slate-900 text-white shadow-sm flex items-center gap-1.5">
           <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
           <span>Toutes les collections</span>
         </button>
-        <button onclick="window.MyProtecLanding.renderShowcaseGrid('specialite', 0)" data-filter="specialite" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+        <button onclick="window.MyProtecLanding.renderShowcaseGrid('specialite', 0)" data-filter="specialite" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
           <i data-lucide="crosshair" class="w-3.5 h-3.5 text-blue-600"></i>
           <span>Spécialités</span>
         </button>
-        <button onclick="window.MyProtecLanding.renderShowcaseGrid('mission', 0)" data-filter="mission" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+        <button onclick="window.MyProtecLanding.renderShowcaseGrid('mission', 0)" data-filter="mission" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
           <i data-lucide="award" class="w-3.5 h-3.5 text-amber-500"></i>
           <span>Missions & Événements</span>
         </button>
-        <button onclick="window.MyProtecLanding.renderShowcaseGrid('renfort', 0)" data-filter="renfort" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+        <button onclick="window.MyProtecLanding.renderShowcaseGrid('renfort', 0)" data-filter="renfort" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
           <i data-lucide="siren" class="w-3.5 h-3.5 text-red-600"></i>
           <span>Renforts & Crises</span>
         </button>
-        <button onclick="window.MyProtecLanding.renderShowcaseGrid('departement', 0)" data-filter="departement" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 text-slate-600 hover:bg-white border border-slate-200 flex items-center gap-1.5">
+        <button onclick="window.MyProtecLanding.renderShowcaseGrid('departement', 0)" data-filter="departement" class="lp-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
           <i data-lucide="map-pin" class="w-3.5 h-3.5 text-indigo-600"></i>
           <span>Territoires</span>
         </button>
@@ -150,16 +154,16 @@
   </main>
 
   <!-- FOOTER -->
-  <footer class="mt-auto py-8 px-4 sm:px-8 border-t border-slate-200/80 bg-white/70 backdrop-blur-md">
-    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+  <footer class="mt-auto py-8 px-4 sm:px-8 border-t border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/80 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
       <div class="flex items-center gap-2">
-        <img src="logo_myprotec_icon.png" alt="MyProtec" class="w-6 h-6 rounded-lg object-contain bg-white p-0.5 border border-slate-200" />
-        <span class="font-bold text-slate-700">MYPROTEC • Collections des Écussons</span>
+        <img src="logo_myprotec_icon.png" alt="MyProtec" class="w-6 h-6 rounded-lg object-contain bg-white p-0.5 border border-slate-200 dark:border-slate-700" />
+        <span class="font-bold text-slate-700 dark:text-slate-200">MYPROTEC • Collections des Écussons</span>
       </div>
-      <div class="flex items-center gap-4 font-bold text-slate-600">
-        <a href="index.html" class="hover:text-slate-900 transition">Accueil</a>
-        <a href="jeu.html" class="hover:text-slate-900 transition">Simulateur</a>
-        <a href="privacy.html" class="hover:text-slate-900 transition">Confidentialité</a>
+      <div class="flex items-center gap-4 font-bold text-slate-600 dark:text-slate-300">
+        <a href="index.html" class="hover:text-slate-900 dark:hover:text-white transition">Accueil</a>
+        <a href="jeu.html" class="hover:text-slate-900 dark:hover:text-white transition">Simulateur</a>
+        <a href="privacy.html" class="hover:text-slate-900 dark:hover:text-white transition">Confidentialité</a>
       </div>
     </div>
   </footer>
