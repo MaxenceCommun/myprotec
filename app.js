@@ -9617,9 +9617,6 @@ class ProtecGame {
     if (!Array.isArray(mission.engagedVolunteers)) mission.engagedVolunteers = [];
     if (roleId) {
       mission.volunteerRoles[volId] = roleId;
-      if (!mission.engagedVolunteers.includes(volId)) {
-        mission.engagedVolunteers.push(volId);
-      }
     } else {
       delete mission.volunteerRoles[volId];
     }
@@ -9633,16 +9630,20 @@ class ProtecGame {
   // Initialisation du temps de trajet individuel depuis le domicile du bénévole jusqu'à la base
   initVolunteerCrisisTransit(mission, volId) {
     if (!mission) return null;
-    const isCrisis = Boolean(
+    const isEligible = Boolean(
       mission.type === 'crise' ||
       mission.status === 'prealerte' ||
       mission.status === 'declenche' ||
       mission.isCrisis === true ||
       mission.isEmergencyPlan === true ||
       mission.category === 'crise' ||
-      mission.urgency === 'critique'
+      mission.urgency === 'critique' ||
+      mission.type === 'samu' ||
+      mission.type === 'pompiers' ||
+      (Array.isArray(mission.teams) && mission.teams.length > 0) ||
+      (mission.requiredVolunteers && mission.requiredVolunteers >= 2)
     );
-    if (!isCrisis) return null;
+    if (!isEligible) return null;
 
     if (!mission.volunteerTransit) mission.volunteerTransit = {};
     if (mission.volunteerTransit[volId]) return mission.volunteerTransit[volId];
@@ -9686,11 +9687,68 @@ class ProtecGame {
       mission.operationalLog.unshift({
         time: timeStr,
         text: `Départ domicile : ${vol.name} quitte son domicile (${homeAddress}) pour rallier la base d'antenne (trajet estimé : ${rallyMin} min).`,
-        author: 'Alerte Crise'
+        author: 'Ralliement Base'
       });
     }
 
     return mission.volunteerTransit[volId];
+  }
+
+  // Faire venir un secouriste depuis son domicile vers la base d'antenne
+  callVolunteerToBase(missionId, volId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const vol = this.volunteers.find(v => v.id === volId);
+    const volName = vol?.name || 'Le secouriste';
+    const nowTs = Date.now() + (this.serverTimeOffset || 0);
+
+    mission.volunteerTransit = mission.volunteerTransit || {};
+    const existing = mission.volunteerTransit[volId];
+    if (existing) {
+      if (nowTs >= existing.arrivalBaseAt) {
+        this.showToast('Déjà à la base', `${volName} est déjà arrivé(e) à la base d'antenne.`, 'blue');
+      } else {
+        const minsLeft = Math.max(1, Math.ceil((existing.arrivalBaseAt - nowTs) / 60000));
+        this.showToast('En route', `${volName} est en cours de trajet vers la base (~${minsLeft} min restante(s)).`, 'blue');
+      }
+      return;
+    }
+
+    const transit = this.initVolunteerCrisisTransit(mission, volId);
+    if (transit) {
+      this.showToast('Ralliement lancé 🏃', `${volName} part de son domicile (${transit.homeAddress}) pour rallier la base (~${transit.rallyMinutes} min).`, 'green');
+    }
+    this.saveGame();
+    this.renderMissions();
+    this.updateStatsUI();
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
+  }
+
+  // Faire venir tous les secouristes disponibles vers la base d'antenne
+  callAllVolunteersToBase(missionId) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const registered = mission.registeredVolunteers || [];
+    let count = 0;
+    registered.forEach(vid => {
+      if (!mission.volunteerTransit?.[vid]) {
+        this.initVolunteerCrisisTransit(mission, vid);
+        count++;
+      }
+    });
+    if (count > 0) {
+      this.showToast('Ralliement Général 🏃', `${count} secouriste(s) quitte(nt) leur domicile vers la base d'antenne.`, 'green');
+    } else {
+      this.showToast('Ralliement en cours', 'Tous les secouristes sont déjà en route vers la base ou sur place.', 'blue');
+    }
+    this.saveGame();
+    this.renderMissions();
+    this.updateStatsUI();
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
   }
 
   toggleVolunteerEngagement(missionId, volId) {
@@ -9727,27 +9785,7 @@ class ProtecGame {
   }
 
   engageAllRegisteredVolunteers(missionId) {
-    const mission = this.missions.find(m => m.id === missionId);
-    if (!mission) return;
-    if (!Array.isArray(mission.engagedVolunteers)) {
-      mission.engagedVolunteers = [];
-    }
-    const registered = mission.registeredVolunteers || [];
-    let count = 0;
-    registered.forEach(vid => {
-      if (!mission.engagedVolunteers.includes(vid)) {
-        mission.engagedVolunteers.push(vid);
-        this.initVolunteerCrisisTransit(mission, vid);
-        count++;
-      }
-    });
-    this.showToast('Bénévoles Engagés ⚡', `${count} secouriste(s) disponible(s) à domicile engagé(s) (ralliement en cours depuis leur domicile vers la base).`, 'green');
-    this.saveGame();
-    this.renderMissions();
-    this.updateStatsUI();
-    if (this.selectedMissionId === missionId) {
-      this.openMissionDetails(missionId);
-    }
+    return this.callAllVolunteersToBase(missionId);
   }
 
   // Liste des équipes opérationnelles d'une mission (gérées par le joueur, rien par défaut)
@@ -9773,10 +9811,28 @@ class ProtecGame {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
     mission.volunteerTeams = mission.volunteerTeams || {};
-    if (!teamId) {
-      delete mission.volunteerTeams[volId];
-    } else {
+    const nowTs = Date.now() + (this.serverTimeOffset || 0);
+
+    // 1. Si le bénévole est déjà dans une équipe dont le véhicule a déjà quitté la base : impossible de le changer ou retirer
+    const currentTeamId = mission.volunteerTeams[volId];
+    if (currentTeamId) {
+      const curDep = mission.crisisTeamDeployments?.[currentTeamId];
+      if (curDep && nowTs >= curDep.vehicleDepartureAt) {
+        this.showToast('Véhicule en intervention', "Impossible de modifier ou retirer ce secouriste : l'équipe et son véhicule ont déjà quitté la base !", 'orange');
+        return;
+      }
+    }
+
+    // 2. Si l'équipe cible a déjà quitté la base : impossible d'y affecter le bénévole
+    if (teamId) {
+      const targetDep = mission.crisisTeamDeployments?.[teamId];
+      if (targetDep && nowTs >= targetDep.vehicleDepartureAt) {
+        this.showToast('Véhicule déjà parti', "Impossible d'affecter un secouriste à cette équipe : son véhicule a déjà quitté la base !", 'orange');
+        return;
+      }
       mission.volunteerTeams[volId] = teamId;
+    } else {
+      delete mission.volunteerTeams[volId];
     }
     this.saveGame();
     if (this.selectedMissionId === missionId) {
@@ -10219,12 +10275,6 @@ class ProtecGame {
       res = window.ProtecConventions.autoAssignMissionRoles(this, missionId);
     }
     if (mission && mission.volunteerRoles) {
-      if (!Array.isArray(mission.engagedVolunteers)) mission.engagedVolunteers = [];
-      Object.keys(mission.volunteerRoles).forEach(vid => {
-        if (!mission.engagedVolunteers.includes(vid)) {
-          mission.engagedVolunteers.push(vid);
-        }
-      });
       this.saveGame();
       if (this.selectedMissionId === missionId) {
         this.openMissionDetails(missionId);
@@ -11512,12 +11562,18 @@ class ProtecGame {
                   <i data-lucide="wand-2" class="w-3.5 h-3.5"></i>
                   <span>Auto-Rôles</span>
                 </button>
-                ${dispoDomicileVols.length > 0 ? `
-                  <button onclick="window.game.engageAllRegisteredVolunteers('${mission.id}')" class="px-2.5 py-1.5 rounded-lg text-[10px] font-black bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 transition flex items-center gap-1 cursor-pointer" title="Engager tous les secouristes disponibles à domicile">
-                    <i data-lucide="zap" class="w-3.5 h-3.5"></i>
-                    <span>Tout Engager (${dispoDomicileVols.length})</span>
-                  </button>
-                ` : ''}
+                ${(() => {
+                  const uncalledCount = registeredVols.filter(v => !mission.volunteerTransit?.[v.id] && !(mission.deployedTeams || []).includes(mission.volunteerTeams?.[v.id])).length;
+                  if (uncalledCount > 0) {
+                    return `
+                      <button onclick="window.game.callAllVolunteersToBase('${mission.id}')" class="px-2.5 py-1.5 rounded-lg text-[10px] font-black bg-pc-blue/10 hover:bg-pc-blue hover:text-white text-pc-blue border border-pc-blue/30 transition flex items-center gap-1 cursor-pointer" title="Faire partir tous les secouristes disponibles de leur domicile vers la base">
+                        <i data-lucide="footprints" class="w-3.5 h-3.5"></i>
+                        <span>Tous à la base (${uncalledCount})</span>
+                      </button>
+                    `;
+                  }
+                  return '';
+                })()}
                 <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-2.5 py-1.5 rounded-lg text-[10px] font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition flex items-center gap-1 cursor-pointer" title="Demander renforts aux antennes alliées">
                   <i data-lucide="users" class="w-3.5 h-3.5"></i>
                   <span>Renforts</span>
@@ -11631,13 +11687,22 @@ class ProtecGame {
                           <div class="text-[10px] text-slate-300 flex items-center gap-1 flex-wrap min-h-[24px]">
                             ${members.length === 0 ? `
                               <span class="text-[9px] text-slate-400 italic">Aucun secouriste affecté. Sélectionnez cette équipe dans le tableau ci-dessous.</span>
-                            ` : members.map(m => `
-                              <span class="px-2 py-0.5 rounded-lg bg-white/10 border border-white/10 text-white font-semibold flex items-center gap-1">
-                                <span>${m.name}</span>
-                                <span class="text-[8px] text-slate-400">(${m.rank || 'Secouriste'})</span>
-                                <button type="button" onclick="window.game.setVolunteerCrisisTeam('${mission.id}', '${m.id}', '')" class="text-slate-400 hover:text-rose-300 ml-0.5 font-bold cursor-pointer" title="Retirer de l'équipe">×</button>
-                              </span>
-                            `).join('')}
+                            ` : members.map(m => {
+                              const dep = mission.crisisTeamDeployments?.[team.id];
+                              const nowTs = Date.now() + (this.serverTimeOffset || 0);
+                              const isDeparted = dep && nowTs >= dep.vehicleDepartureAt;
+                              return `
+                                <span class="px-2 py-0.5 rounded-lg bg-white/10 border border-white/10 text-white font-semibold flex items-center gap-1">
+                                  <span>${m.name}</span>
+                                  <span class="text-[8px] text-slate-400">(${m.rank || 'Secouriste'})</span>
+                                  ${!isDeparted ? `
+                                    <button type="button" onclick="window.game.setVolunteerCrisisTeam('${mission.id}', '${m.id}', '')" class="text-slate-400 hover:text-rose-300 ml-0.5 font-bold cursor-pointer" title="Retirer de l'équipe">×</button>
+                                  ` : `
+                                    <span class="text-[9px] text-amber-300" title="Véhicule déjà parti (en intervention)">🚗</span>
+                                  `}
+                                </span>
+                              `;
+                            }).join('')}
                           </div>
 
                           <!-- Statut et Action de Déploiement (si mission de crise) -->
@@ -11723,12 +11788,13 @@ class ProtecGame {
                                   </span>
                                 `;
                               })() : `
-                                <span class="text-[10px] text-amber-300 font-semibold">
-                                  ${allEngaged ? 'Prête au départ' : (members.length === 0 ? 'Équipe vide' : 'À engager')}
+                                <span class="text-[10px] ${members.length > 0 ? 'text-emerald-400 font-bold' : 'text-amber-300 font-semibold'}">
+                                  ${members.length > 0 ? 'Prête au départ' : 'Équipe vide'}
                                 </span>
                                 <button
                                   onclick="window.game.deployCrisisTeam('${mission.id}', '${team.id}')"
-                                  class="px-3 py-1.5 rounded-xl text-[10px] font-black bg-gradient-to-r from-red-600 to-pc-orange hover:brightness-110 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                                  ${members.length === 0 ? 'disabled' : ''}
+                                  class="px-3 py-1.5 rounded-xl text-[10px] font-black ${members.length > 0 ? 'bg-gradient-to-r from-red-600 to-pc-orange hover:brightness-110 text-white shadow-xs cursor-pointer' : 'bg-slate-700 text-slate-400 cursor-not-allowed'} transition flex items-center gap-1.5">
                                   <i data-lucide="send" class="w-3 h-3"></i>
                                   <span>Déployer l'Équipe</span>
                                 </button>
@@ -11767,9 +11833,16 @@ class ProtecGame {
                     const currentRole = mission.volunteerRoles?.[v.id] || '';
                     const rolesList = this.getMissionRoles();
                     const isRoleMissing = !currentRole;
-                    const isEngaged = (mission.engagedVolunteers || []).includes(v.id);
-                    const teamLabel = getTeamLabel(v, idx);
                     const assignedTeamId = mission.volunteerTeams?.[v.id] || '';
+                    const assignedTeam = assignedTeamId ? crisisTeamsList.find(t => t.id === assignedTeamId) : null;
+                    const assignedTeamDep = assignedTeamId ? mission.crisisTeamDeployments?.[assignedTeamId] : null;
+                    const nowTs = Date.now() + (this.serverTimeOffset || 0);
+                    const isAssignedTeamDeparted = assignedTeamDep && nowTs >= assignedTeamDep.vehicleDepartureAt;
+                    const isTeamDeployed = Boolean(assignedTeamId && (mission.deployedTeams || []).includes(assignedTeamId));
+                    const isEngaged = isCrisisMission ? isTeamDeployed : (mission.engagedVolunteers || []).includes(v.id);
+                    const transit = mission.volunteerTransit?.[v.id];
+                    const isAtBase = Boolean(transit && nowTs >= transit.arrivalBaseAt);
+                    const isTransitEnRoute = Boolean(transit && nowTs < transit.arrivalBaseAt);
 
                     return `
                       <tr class="hover:bg-slate-50/80 transition ${isRoleMissing && isEngaged ? 'bg-amber-50/20' : ''}">
@@ -11800,6 +11873,35 @@ class ProtecGame {
                           })()}
                           <div class="flex items-center gap-1 mt-0.5 flex-wrap">
                             ${(() => {
+                              if (isTeamDeployed && assignedTeamDep) {
+                                if (nowTs < assignedTeamDep.maxArrivalBaseAt) {
+                                  const minsLeft = Math.max(1, Math.ceil((assignedTeamDep.maxArrivalBaseAt - nowTs) / 60000));
+                                  return `
+                                    <span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-500 text-white uppercase tracking-wider flex items-center gap-1">
+                                      <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span> 🚗 Base (~${minsLeft} min)
+                                    </span>
+                                  `;
+                                }
+                                if (nowTs < assignedTeamDep.vehicleDepartureAt) {
+                                  return `
+                                    <span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-indigo-600 text-white uppercase tracking-wider flex items-center gap-1">
+                                      <span class="w-1.5 h-1.5 rounded-full bg-white animate-spin"></span> ⏱️ Armement engin
+                                    </span>
+                                  `;
+                                }
+                                if (nowTs < assignedTeamDep.crisisArrivalAt) {
+                                  return `
+                                    <span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-rose-600 text-white uppercase tracking-wider flex items-center gap-1">
+                                      <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span> 🚨 En route crise
+                                    </span>
+                                  `;
+                                }
+                                return `
+                                  <span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-600 text-white uppercase tracking-wider flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white"></span> 🟢 Sur site
+                                  </span>
+                                `;
+                              }
                               if (isEngaged) {
                                 return `
                                   <span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-red-600 text-white uppercase tracking-wider flex items-center gap-1">
@@ -11807,10 +11909,25 @@ class ProtecGame {
                                   </span>
                                 `;
                               }
+                              if (isAtBase) {
+                                return `
+                                  <span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-600 text-white uppercase tracking-wider flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white"></span> 🏢 À la base
+                                  </span>
+                                `;
+                              }
+                              if (isTransitEnRoute) {
+                                const minsLeft = Math.max(1, Math.ceil((transit.arrivalBaseAt - nowTs) / 60000));
+                                return `
+                                  <span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-500 text-white uppercase tracking-wider flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span> 🚗 En route (~${minsLeft} min)
+                                  </span>
+                                `;
+                              }
                               if (isUrgentOrPrealert || isCrisisMission || (mission.smsCampaignActive || (mission.smsResponses && mission.smsResponses.length > 0)) || dispoDomicileVols.some(x => x.id === v.id)) {
                                 return `
                                   <span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-blue-600 text-white uppercase tracking-wider flex items-center gap-1">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-white"></span> Dispo domicile
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white"></span> 🏠 Dispo domicile
                                   </span>
                                 `;
                               }
@@ -11832,28 +11949,57 @@ class ProtecGame {
                           <td class="py-2 px-3">
                             <select
                               onchange="window.game.setVolunteerCrisisTeam('${mission.id}', '${v.id}', this.value)"
-                              class="text-[10px] font-bold px-2 py-1 rounded-lg ${assignedTeamId ? 'bg-blue-50 text-pc-blue border-blue-200' : 'bg-slate-50 text-slate-500 border-slate-300'} border cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[140px]"
-                              title="Affecter ce secouriste à une équipe">
+                              ${isAssignedTeamDeparted ? 'disabled title="Véhicule déjà parti : l\'équipe ne peut plus être modifiée !"' : 'title="Affecter ce secouriste à une équipe"'}
+                              class="text-[10px] font-bold px-2 py-1 rounded-lg ${assignedTeamId ? (isAssignedTeamDeparted ? 'bg-slate-100 text-slate-500 border-slate-300 cursor-not-allowed' : 'bg-blue-50 text-pc-blue border-blue-200 cursor-pointer') : 'bg-slate-50 text-slate-500 border-slate-300 cursor-pointer'} border focus:ring-1 focus:ring-pc-blue max-w-[140px]">
                               <option value="" ${!assignedTeamId ? 'selected' : ''}>⚠️ Aucune équipe</option>
-                              ${crisisTeamsList.map(t => `
-                                <option value="${t.id}" ${t.id === assignedTeamId ? 'selected' : ''}>${t.name}</option>
-                              `).join('')}
+                              ${crisisTeamsList.map(t => {
+                                const tDep = mission.crisisTeamDeployments?.[t.id];
+                                const isTDeparted = tDep && nowTs >= tDep.vehicleDepartureAt;
+                                return `
+                                  <option value="${t.id}" ${t.id === assignedTeamId ? 'selected' : ''} ${isTDeparted && t.id !== assignedTeamId ? 'disabled' : ''}>
+                                    ${t.name} ${isTDeparted ? '(Déjà parti 🚫)' : ''}
+                                  </option>
+                                `;
+                              }).join('')}
                             </select>
                           </td>
                         ` : ''}
                         <td class="py-2 px-2 text-right">
                           <div class="flex items-center justify-end gap-1">
-                            ${!isEngaged ? `
-                              <button type="button" onclick="window.game.toggleVolunteerEngagement('${mission.id}', '${v.id}')" class="px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition flex items-center gap-1 cursor-pointer" title="Engager ce secouriste sur le dispositif">
-                                <i data-lucide="zap" class="w-3 h-3"></i>
-                                <span>Engager</span>
-                              </button>
-                            ` : `
-                              <button type="button" onclick="window.game.toggleVolunteerEngagement('${mission.id}', '${v.id}')" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition flex items-center gap-1 cursor-pointer" title="Remettre en disponibilité à domicile">
-                                <span>Désengager</span>
-                              </button>
-                            `}
-                            ${mission.status === 'planifie' || isUrgentOrPrealert ? `
+                            ${(() => {
+                              if (isTeamDeployed) {
+                                return `
+                                  <span class="px-2 py-1 rounded-lg text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1" title="Secouriste engagé sur l'équipe déployée">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse"></span>
+                                    <span>Déployé</span>
+                                  </span>
+                                `;
+                              }
+                              if (isAtBase) {
+                                return `
+                                  <span class="px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1" title="Secouriste présent à la base d'antenne, prêt pour le départ">
+                                    <i data-lucide="check-circle" class="w-3 h-3 text-emerald-600"></i>
+                                    <span>À la base</span>
+                                  </span>
+                                `;
+                              }
+                              if (isTransitEnRoute) {
+                                const minsLeft = Math.max(1, Math.ceil((transit.arrivalBaseAt - nowTs) / 60000));
+                                return `
+                                  <button type="button" onclick="window.game.callVolunteerToBase('${mission.id}', '${v.id}')" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition flex items-center gap-1 cursor-pointer" title="En transit depuis son domicile vers la base">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                                    <span>En route (~${minsLeft} min)</span>
+                                  </button>
+                                `;
+                              }
+                              return `
+                                <button type="button" onclick="window.game.callVolunteerToBase('${mission.id}', '${v.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue hover:bg-pc-blue-hover text-white shadow-2xs transition flex items-center gap-1 cursor-pointer" title="Faire partir ce bénévole de son domicile vers la base">
+                                  <i data-lucide="footprints" class="w-3 h-3"></i>
+                                  <span>Venir à la base</span>
+                                </button>
+                              `;
+                            })()}
+                            ${mission.status === 'planifie' || (isUrgentOrPrealert && !isTeamDeployed) ? `
                               <button onclick="window.game.unregisterVolunteerFromMission('${mission.id}', '${v.id}')" class="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600 hover:text-rose-700 font-bold transition cursor-pointer" title="Désinscrire ce bénévole">
                                 <i data-lucide="x" class="w-3.5 h-3.5"></i>
                               </button>
@@ -20155,33 +20301,33 @@ class ProtecGame {
 
       // 1. Progression des missions en cours (Vraie durée & Main Courante de Crise)
       this.missions.forEach(m => {
-        if (m.status === 'ongoing' || m.crisisTeamDeployments) {
+        if (m.status === 'ongoing' || m.crisisTeamDeployments || m.volunteerTransit) {
+          const timeStr = new Date(currentTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+          let hasCrisisChanges = false;
+
+          // Suivi de tous les ralliements individuels domicile -> base
+          if (m.volunteerTransit) {
+            Object.keys(m.volunteerTransit).forEach(vid => {
+              const vt = m.volunteerTransit[vid];
+              if (vt && !vt.loggedArrival && currentTime >= vt.arrivalBaseAt) {
+                vt.loggedArrival = true;
+                if (m.operationalLog) {
+                  m.operationalLog.unshift({
+                    time: timeStr,
+                    text: `Ralliement terminé : ${vt.volName} est arrivé(e) à la base d'antenne.`,
+                    author: 'Base Antenne'
+                  });
+                }
+                hasCrisisChanges = true;
+              }
+            });
+          }
+
           // Gestion des déploiements d'équipes de crise (Domicile -> Base -> 2 min armement véhicule -> Crise sous gyrophares)
           if (m.crisisTeamDeployments && typeof m.crisisTeamDeployments === 'object') {
-            const timeStr = new Date(currentTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-            let hasCrisisChanges = false;
-
             Object.keys(m.crisisTeamDeployments).forEach(tId => {
               const dep = m.crisisTeamDeployments[tId];
               if (!dep) return;
-
-              // Suivi des ralliements individuels domicile -> base
-              if (m.volunteerTransit) {
-                (dep.volunteerIds || []).forEach(vid => {
-                  const vt = m.volunteerTransit[vid];
-                  if (vt && !vt.loggedArrival && currentTime >= vt.arrivalBaseAt) {
-                    vt.loggedArrival = true;
-                    if (m.operationalLog) {
-                      m.operationalLog.unshift({
-                        time: timeStr,
-                        text: `Ralliement terminé : ${vt.volName} est arrivé(e) à la base d'antenne.`,
-                        author: 'Base Antenne'
-                      });
-                      hasCrisisChanges = true;
-                    }
-                  }
-                });
-              }
 
               // Phase 1 : Ralliement Domicile -> Base
               if (currentTime < dep.maxArrivalBaseAt) {
