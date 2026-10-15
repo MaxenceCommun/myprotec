@@ -1116,7 +1116,10 @@ class ProtecGame {
       const st = this.stations[0];
       if (st.lat && st.lng && window.ProtecDepartements && typeof window.ProtecDepartements.getDepartmentByCoordinates === 'function') {
         const found = window.ProtecDepartements.getDepartmentByCoordinates(st.lat, st.lng);
-        if (found) targetDept = found.code;
+        if (found) {
+          targetDept = found.code;
+          st.departmentCode = found.code;
+        }
       }
       if (!targetDept && st.departmentCode && st.departmentCode !== 'undefined') {
         targetDept = String(st.departmentCode).trim();
@@ -1134,7 +1137,7 @@ class ProtecGame {
     if (this.player) this.player.departmentCode = targetDept;
     if (this.stations && this.stations.length > 0) {
       this.stations.forEach(s => {
-        if (!s.departmentCode) s.departmentCode = targetDept;
+        s.departmentCode = targetDept;
       });
     }
     localStorage.setItem('protec_department_code', targetDept);

@@ -1094,9 +1094,14 @@ window.ProtecOnboarding = {
 
     const stationId = `station-${Date.now()}`;
     const stationName = this.teamName || 'Antenne Protection Civile';
-    const deptCode = this.deptCode || '75';
-    const lat = this.placementData.lat || 48.8566;
-    const lng = this.placementData.lng || 2.3522;
+    const lat = this.placementData.lat || 48.6921;
+    const lng = this.placementData.lng || 6.1844;
+    let deptCode = this.deptCode;
+    if (window.ProtecDepartements && typeof window.ProtecDepartements.getDepartmentByCoordinates === 'function') {
+      const found = window.ProtecDepartements.getDepartmentByCoordinates(lat, lng);
+      if (found) deptCode = found.code;
+    }
+    if (!deptCode) deptCode = '54';
     // La ville correspond impérativement à la commune où le bâtiment est implanté
     let city = (this.placementData && this.placementData.city) ? this.placementData.city.trim() : '';
     if (!city && stationName) {
@@ -1205,17 +1210,18 @@ window.ProtecOnboarding = {
         dispoJours: v.dispoJours,
         skills: v.skills || []
       };
-      if (window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
-        window.ProtecPersonnel.ensureVolunteerResidence(vol, game);
-      }
       return vol;
     });
+
+    game.stations = [newStation];
+
+    if (window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
+      game.volunteers.forEach(vol => window.ProtecPersonnel.ensureVolunteerResidence(vol, game));
+    }
 
     if (window.ProtecPersonnel && typeof window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences === 'function') {
       window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences(game);
     }
-
-    game.stations = [newStation];
 
     // Déduction des dépenses d'ameublement du trésor initial (40 000 €)
     const spentFurniture = this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
