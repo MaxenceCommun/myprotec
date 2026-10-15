@@ -1836,6 +1836,8 @@ window.ProtecAuth = {
           reputation_prefecture: game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50,
           reputation_villes: game.reputation_villes || {},
           departmentInfrastructures: game.departmentInfrastructures || {},
+          mealAllowancePerVolunteer: game.mealAllowancePerVolunteer || 15,
+          antenneMessagesData: game.antenneMessagesData || null,
           platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(this.currentUser, game)) || null,
           lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null
         };
@@ -1964,6 +1966,8 @@ window.ProtecAuth = {
       if (savedData.logistics) game.logistics = savedData.logistics;
       if (savedData.weather) game.weather = savedData.weather;
       if (savedData.prefectureState) game.prefectureState = savedData.prefectureState;
+      if (savedData.mealAllowancePerVolunteer !== undefined) game.mealAllowancePerVolunteer = savedData.mealAllowancePerVolunteer;
+      if (savedData.antenneMessagesData) game.antenneMessagesData = savedData.antenneMessagesData;
       if (savedData.adRewards) {
         game.adRewards = savedData.adRewards;
         if (window.ProtecAds) window.ProtecAds.updateUI(game);

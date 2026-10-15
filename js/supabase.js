@@ -1340,6 +1340,8 @@ window.ProtecSupabase = {
         reputation_prefecture: game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50,
         reputation_villes: game.reputation_villes || {},
         departmentInfrastructures: game.departmentInfrastructures || {},
+        mealAllowancePerVolunteer: game.mealAllowancePerVolunteer || 15,
+        antenneMessagesData: game.antenneMessagesData || null,
         platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(game.player, game)) || null,
         lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null,
         localEcussons: game.localEcussons || []

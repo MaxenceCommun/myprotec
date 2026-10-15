@@ -88,6 +88,7 @@ class ProtecGame {
 
     // Département d'affectation du joueur (101 départements français)
     this.currentDepartmentCode = this.player.departmentCode || '54';
+    this.mealAllowancePerVolunteer = 15; // Tarif forfait repas par défaut (15€/bénévole)
 
     // Garde SAMU 15 (AASC conventionné)
     this.samuGarde = {
@@ -1045,6 +1046,16 @@ class ProtecGame {
       const saved = Object.assign({}, renfortData, (data && data.renfort) || {});
       this.renforts.unshift(saved);
       this.sanitizeRenforts();
+      if (window.ProtecAntenneMessages) {
+        window.ProtecAntenneMessages.addOperationnelMessage(
+          this,
+          'Pôle Opérationnel',
+          `🚨 Demande de Renfort Réseau FNPC transmise : « ${renfortData.title} » vers ${targetStationName} (${renfortData.requiredVolsCount || 2} secouristes / ${renfortData.requiredVehicles?.join(', ') || 'VPSP'}).`,
+          'Coordination Réseau',
+          'radio',
+          { badgeColor: 'orange' }
+        );
+      }
       this.showToast('Appel à Renfort Transmis', `Demande envoyée à ${targetStationName}. En attente de détachement...`, 'green');
       this.updateStatsUI();
     }).catch(() => {
@@ -1052,6 +1063,16 @@ class ProtecGame {
       renfortData.id = `renf-${Date.now()}`;
       this.renforts.unshift(renfortData);
       this.sanitizeRenforts();
+      if (window.ProtecAntenneMessages) {
+        window.ProtecAntenneMessages.addOperationnelMessage(
+          this,
+          'Pôle Opérationnel',
+          `🚨 Demande de Renfort Réseau FNPC transmise : « ${renfortData.title} » (${renfortData.requiredVolsCount || 2} secouristes).`,
+          'Coordination Réseau',
+          'radio',
+          { badgeColor: 'orange' }
+        );
+      }
       this.showToast('Appel à Renfort Transmis', `Demande transmise sur la fréquence fédérale.`, 'green');
     });
   }
@@ -1316,6 +1337,8 @@ class ProtecGame {
             rewards: this.rewards,
             alertTriggerLogs: this.alertTriggerLogs || [],
             departmentInfrastructures: this.departmentInfrastructures || {},
+            mealAllowancePerVolunteer: this.mealAllowancePerVolunteer || 15,
+            antenneMessagesData: this.antenneMessagesData || null,
             savedAt: Date.now()
           };
           sessionStorage.setItem('myprotec_instant_cache', JSON.stringify(cacheData));
@@ -1383,6 +1406,8 @@ class ProtecGame {
             if (c.alertSubscription) this.alertSubscription = c.alertSubscription;
             if (c.rewards) this.rewards = c.rewards;
             if (c.departmentInfrastructures) this.departmentInfrastructures = c.departmentInfrastructures;
+            if (c.mealAllowancePerVolunteer !== undefined) this.mealAllowancePerVolunteer = c.mealAllowancePerVolunteer;
+            if (c.antenneMessagesData) this.antenneMessagesData = c.antenneMessagesData;
           }
         } catch (ce) {}
       }
@@ -3120,6 +3145,7 @@ class ProtecGame {
       requiredRanks: ['PSE2', 'PSE1'],
       requiredVehicles: [],
       status: 'pending',
+      mealsProvidedByOrganizer: Math.random() < 0.5,
       address: this.generateRealisticStreetAddress('Bourg', coords.lat, coords.lng),
       isSector: false
     };
@@ -3413,6 +3439,7 @@ class ProtecGame {
       hiddenRequiredSkills: pick.hiddenSkills || pick.ranks || [],
       consumableCost: pick.matCost || 30,
       status: 'pending',
+      mealsProvidedByOrganizer: Math.random() < 0.5,
       isLastMinute: isLastMinute,
       daysAhead: daysAhead,
       urgencyReason: isLastMinute ? 'Annulation de dernière minute d’une autre association agréée' : 'Planification anticipée d’événement',
@@ -5811,6 +5838,8 @@ class ProtecGame {
       progress: 0,
       status: 'planifie',
       registeredVolunteers: [...previDispoIds], // Inscription automatique directe des bénévoles disponibles
+      mealsProvidedByOrganizer: devis.mealsProvidedByOrganizer !== undefined ? devis.mealsProvidedByOrganizer : (Math.random() < 0.5),
+      servedMeals: {},
       sollicitationSent: true, // Statut sollicité
       relancesCount: devis.relancesCount || 0, // Compteur de relances initialisé
       assignedCrew: { volunteers: [], vehicles: [] },
@@ -9183,6 +9212,16 @@ class ProtecGame {
       mission.registeredVolunteers.push(vol.id);
       vol.motivation = Math.min(100, (vol.motivation || 70) + 4);
       this.showToast('Appel Réussi : DISPO !', `Accord direct de ${vol.name} (${vol.rank}) : « Reçu chef ! Je me prépare et j’arrive à l’antenne pour ${mission.title}. »`, 'green');
+      if (window.ProtecAntenneMessages) {
+        window.ProtecAntenneMessages.addOperationnelMessage(
+          this,
+          vol.name,
+          `✅ Réponse Appel Direct : « Reçu chef ! Je confirme ma disponibilité pour le dispositif « ${mission.title} ». J'arrive à la base ! »`,
+          vol.rank,
+          'phone-call',
+          { badgeColor: 'green' }
+        );
+      }
       this.checkEnginProgressNotification(mission);
     } else {
       const excuses = [
@@ -9193,6 +9232,16 @@ class ProtecGame {
       ];
       const r = excuses[Math.floor(Math.random() * excuses.length)];
       this.showToast('Appel : Indisponible', `${vol.name} (${vol.rank}) décline poliment : « Désolé chef, ${r}. »`, 'slate');
+      if (window.ProtecAntenneMessages) {
+        window.ProtecAntenneMessages.addOperationnelMessage(
+          this,
+          vol.name,
+          `❌ Indisponibilité Appel Direct : « Désolé chef, je suis ${r} et ne pourrai pas être présent(e) sur « ${mission.title} ». »`,
+          vol.rank,
+          'phone-off',
+          { badgeColor: 'slate' }
+        );
+      }
     }
 
     this.saveGame();
@@ -11132,6 +11181,24 @@ class ProtecGame {
                 <i data-lucide="truck" class="w-3.5 h-3.5"></i>
                 <span>Gérer les Véhicules, Matériels & Consommables →</span>
               </button>
+            </div>
+
+            <!-- Prise en charge des repas -->
+            <div class="p-3 rounded-2xl ${mission.mealsProvidedByOrganizer ? 'bg-emerald-50/80 border border-emerald-200' : 'bg-amber-50/80 border border-amber-200'} flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="text-base">${mission.mealsProvidedByOrganizer ? '🍽️' : '🥪'}</span>
+                <div>
+                  <span class="font-black ${mission.mealsProvidedByOrganizer ? 'text-emerald-950' : 'text-amber-950'} block">
+                    ${mission.mealsProvidedByOrganizer ? 'Repas pris en charge par l\'organisateur' : 'Repas à la charge de l\'antenne'}
+                  </span>
+                  <span class="text-[10px] ${mission.mealsProvidedByOrganizer ? 'text-emerald-800' : 'text-amber-800'}">
+                    ${mission.mealsProvidedByOrganizer ? 'Restauration offerte sur place (0€ NDF bénévoles)' : `Forfait NDF : ${this.mealAllowancePerVolunteer || 15}€ / secouriste (repas à 12h00 & 19h00)`}
+                  </span>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${mission.mealsProvidedByOrganizer ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                ${mission.mealsProvidedByOrganizer ? 'Inclus Orga' : 'NDF Antenne'}
+              </span>
             </div>
 
             <!-- Indemnisation conventionnée -->
@@ -14567,6 +14634,8 @@ class ProtecGame {
       'marche_occasion': 'antenne',
       'bourse': 'antenne',
       'occasion': 'antenne',
+      'antenne_messages': 'antenne',
+      'messages': 'antenne',
 
       'tchat': 'liaisons',
       'messagerie': 'liaisons',
@@ -14655,6 +14724,7 @@ class ProtecGame {
         { key: 'crise', label: 'Crise NOVI', icon: 'siren', count: criseCount }
       ],
       antenne: [
+        { key: 'antenne_messages', label: 'Messages', icon: 'message-square', count: window.ProtecAntenneMessages ? window.ProtecAntenneMessages.getUnreadCount(this) : 0 },
         { key: 'locaux', label: 'Bâtiment (Plan 2D)', icon: 'layout-grid' },
         { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
         { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
@@ -14662,6 +14732,7 @@ class ProtecGame {
         { key: 'marche_occasion', label: 'Marché Occasion', icon: 'tag' }
       ],
       materiel: [
+        { key: 'antenne_messages', label: 'Messages', icon: 'message-square', count: window.ProtecAntenneMessages ? window.ProtecAntenneMessages.getUnreadCount(this) : 0 },
         { key: 'locaux', label: 'Bâtiment (Plan 2D)', icon: 'layout-grid' },
         { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
         { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
@@ -14806,7 +14877,20 @@ class ProtecGame {
       }
     }
 
-    if (moduleKey === 'ecussons') {
+    if (moduleKey === 'antenne_messages' || moduleKey === 'messages') {
+      title.textContent = "Messagerie & Échanges d'Antenne";
+      subtitle.textContent = "Flux opérationnels, messages formateurs, alertes logistiques et doléances directes des bénévoles";
+      icon.setAttribute('data-lucide', 'message-square');
+      if (window.ProtecAntenneMessages && typeof window.ProtecAntenneMessages.renderModal === 'function') {
+        try {
+          window.ProtecAntenneMessages.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecAntenneMessages] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'ecussons') {
       title.textContent = "Collection & Troc d'Écussons";
       subtitle.textContent = "Tableau en liège d'antenne et bourse aux échanges inter-antennes en ligne";
       icon.setAttribute('data-lucide', 'shield');
@@ -16385,6 +16469,15 @@ class ProtecGame {
                       <div class="p-2 bg-white rounded-xl border border-sky-100">
                         <span class="text-slate-400 block text-[9px] uppercase font-bold">Durée du dispositif</span>
                         <strong class="text-slate-900">${this.formatHoursAndMinutes(d.durationHours)}</strong>
+                      </div>
+                      <div class="p-2 bg-white rounded-xl border border-sky-100 col-span-2 sm:col-span-4 flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                          <span class="text-sm">${d.mealsProvidedByOrganizer ? '🍽️' : '🥪'}</span>
+                          <span class="text-slate-700 font-bold text-[10px]">Restauration secouristes :</span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${d.mealsProvidedByOrganizer ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}">
+                          ${d.mealsProvidedByOrganizer ? 'Prise en charge par l’organisateur (0€ NDF)' : `À la charge antenne (Forfait NDF : ${this.mealAllowancePerVolunteer || 15}€/repas)`}
+                        </span>
                       </div>
                     </div>
                     <p class="text-[10px] text-sky-800 italic">
@@ -19477,6 +19570,151 @@ class ProtecGame {
     this.renderMissions();
   }
 
+  // --- GESTION DES REPAS EN MISSION & NOTES DE FRAIS (12h00 & 19h00) ---
+  processMissionMeals(mealHour) {
+    if (![12, 19].includes(mealHour)) return;
+    this.mealAllowancePerVolunteer = this.mealAllowancePerVolunteer || 15;
+    const nowKey = `${this.clock.year}_${this.clock.month}_${this.clock.day}_${mealHour}`;
+
+    const ongoingMissions = (this.missions || []).filter(m => m.status === 'ongoing' || m.crisisTeamDeployments);
+    if (ongoingMissions.length === 0) return;
+
+    ongoingMissions.forEach(m => {
+      m.servedMeals = m.servedMeals || {};
+      if (m.servedMeals[nowKey]) return; // Déjà servi pour ce créneau aujourd'hui
+      m.servedMeals[nowKey] = true;
+
+      // Récupération des bénévoles engagés sur le poste
+      const crewIds = [];
+      if (m.assignedCrew?.volunteers) {
+        m.assignedCrew.volunteers.forEach(id => {
+          const vId = typeof id === 'object' ? id.id : id;
+          if (vId && !crewIds.includes(vId)) crewIds.push(vId);
+        });
+      }
+      if (m.engagedVolunteers) {
+        m.engagedVolunteers.forEach(id => {
+          if (id && !crewIds.includes(id)) crewIds.push(id);
+        });
+      }
+      if (crewIds.length === 0 && m.registeredVolunteers) {
+        m.registeredVolunteers.forEach(id => {
+          const vol = (this.volunteers || []).find(v => v.id === id);
+          if (vol && (vol.status === 'mission' || vol.status === 'transit')) {
+            if (!crewIds.includes(id)) crewIds.push(id);
+          }
+        });
+      }
+
+      if (crewIds.length === 0) return;
+
+      const crewVols = crewIds.map(id => (this.volunteers || []).find(v => v.id === id)).filter(Boolean);
+      if (crewVols.length === 0) return;
+
+      const mealLabel = mealHour === 12 ? 'Déjeuner de midi' : 'Dîner du soir';
+
+      // 1. Si repas pris en charge par l'organisateur (environ 1/2) -> Aucune NDF
+      if (m.mealsProvidedByOrganizer) {
+        crewVols.forEach(v => {
+          v.humeur = Math.min(100, (v.humeur || 80) + 2);
+          v.moral = v.humeur;
+          v.energy = Math.min(100, (v.energy || 75) + 6);
+        });
+        this.showToast(
+          '🍽️ Repas Pris en Charge',
+          `L'organisateur de « ${m.title} » offre le ${mealLabel.toLowerCase()} à l'équipe (${crewVols.length} bénévoles). Aucune note de frais !`,
+          'green'
+        );
+        if (window.ProtecAntenneMessages) {
+          window.ProtecAntenneMessages.addOperationnelMessage(
+            this,
+            'Pôle Logistique DPS',
+            `🍽️ Restauration assurée par l'organisateur sur « ${m.title} » pour ${crewVols.length} secouriste(s) (0€ NDF). Équipage satisfait et revigoré.`,
+            'Coordination DPS',
+            'utensils',
+            { badgeColor: 'green' }
+          );
+        }
+        return;
+      }
+
+      // 2. Si repas non pris en charge -> Génération NDF entre 10€ et 15€ par bénévole plafonné à mealAllowancePerVolunteer
+      const allowance = this.mealAllowancePerVolunteer || 15;
+      let totalNdf = 0;
+
+      crewVols.forEach(v => {
+        // Coût réel constaté du repas entre 10€ et 15€
+        const actualCost = Math.round((10 + Math.random() * 5) * 10) / 10;
+        const reimbursed = Math.min(actualCost, allowance);
+
+        totalNdf += reimbursed;
+
+        // Impact sur l'humeur de tous les bénévoles présents sur le poste selon le tarif défini par le joueur
+        if (allowance >= 15) {
+          // Tarif optimal (remboursement intégral)
+          v.humeur = Math.min(100, (v.humeur || 80) + 2);
+          v.moral = v.humeur;
+        } else if (allowance >= 12) {
+          // Tarif convenable mais léger reste à charge (1 à 3€)
+          v.humeur = Math.max(10, (v.humeur || 80) - 3);
+          v.moral = v.humeur;
+        } else if (allowance >= 8) {
+          // Tarif insuffisant (reste à charge 4 à 7€) : dégradation sensible d'humeur
+          v.humeur = Math.max(5, (v.humeur || 80) - 8);
+          v.moral = v.humeur;
+          v.motivation = Math.max(10, (v.motivation || 80) - 4);
+        } else {
+          // Tarif scandaleusement bas (<8€) : dégradation sévère
+          v.humeur = Math.max(5, (v.humeur || 80) - 18);
+          v.moral = v.humeur;
+          v.motivation = Math.max(5, (v.motivation || 80) - 12);
+        }
+      });
+
+      totalNdf = Math.round(totalNdf * 10) / 10;
+
+      // Débit trésorerie antenne
+      this.resources.money = Math.round(((this.resources.money || 0) - totalNdf) * 100) / 100;
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(
+          this,
+          -totalNdf,
+          `Notes de Frais Repas : ${crewVols.length} secouriste(s) sur « ${m.title} » (${mealLabel})`,
+          'ndf_repas',
+          `NDF-REP-${Date.now()}`
+        );
+      }
+
+      // Notification au joueur
+      this.showToast(
+        '🥪 Notes de Frais Repas',
+        `${totalNdf} € de notes de frais avancées pour les ${crewVols.length} secouriste(s) sur « ${m.title} » (forfait antenne : ${allowance}€/pers).`,
+        allowance >= 12 ? 'blue' : 'orange'
+      );
+
+      // Si le montant défini est trop bas, génération automatique d'une doléance par message direct d'un secouriste
+      if (allowance < 12 && window.ProtecAntenneMessages && crewVols.length > 0) {
+        const complainer = crewVols[Math.floor(Math.random() * crewVols.length)];
+        let complaintText = '';
+        if (allowance < 8) {
+          complaintText = `C'est vraiment inadmissible ! Le forfait repas à ${allowance}€ sur le poste « ${m.title} » ne couvre même pas la moitié de mon repas de midi. On est engagés bénévolement toute la journée et on doit encore payer de notre poche pour manger ? Beaucoup de secouristes sur le poste sont écœurés...`;
+        } else {
+          complaintText = `Bonjour chef, je viens de faire la pause repas sur « ${m.title} ». Avec le forfait antenne à ${allowance}€, j'ai dû rajouter de ma poche pour un simple sandwich et une bouteille d'eau. Les collègues trouvent aussi que le forfait est un peu trop bas par rapport aux prix actuels.`;
+        }
+
+        window.ProtecAntenneMessages.addVolunteerMessage(this, complainer.id, complaintText, {
+          category: 'plainte_repas',
+          isComplaint: true,
+          moodImpact: allowance < 8 ? -10 : -4,
+          showToast: true
+        });
+      }
+    });
+
+    this.saveGame();
+    this.updateStatsUI();
+  }
+
   // --- GESTIONNAIRE DE TEMPS RÉEL (1 SECONDE = 1 SECONDE RÉELLE) ---
   startSimulationClock() {
     setInterval(() => {
@@ -20152,6 +20390,19 @@ class ProtecGame {
               this.generateRandomDevisOpportunity();
             }
           }
+        }
+      }
+
+      // 5b. Gestion des repas des bénévoles en mission (12h00 et 19h00)
+      if (this.clock.second === 0 && this.clock.minute === 0 && (this.clock.hour === 12 || this.clock.hour === 19)) {
+        this.processMissionMeals(this.clock.hour);
+      }
+
+      // 5c. Suivi de la messagerie d'antenne (doléances bénévoles et alertes logistiques)
+      if (this.clock.second === 0 && this.clock.minute % 15 === 0) {
+        if (window.ProtecAntenneMessages) {
+          window.ProtecAntenneMessages.checkVolunteerDoleances(this);
+          window.ProtecAntenneMessages.checkLogistiqueAlerts(this);
         }
       }
 

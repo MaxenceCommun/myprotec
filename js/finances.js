@@ -132,6 +132,14 @@ window.ProtecFinances = {
       icon: 'file-text',
       badgeClass: 'bg-stone-100 text-stone-800 border-stone-200'
     },
+    ndf_repas: {
+      id: 'ndf_repas',
+      label: 'Notes de Frais & Restauration Bénévoles',
+      shortLabel: 'Repas & NDF',
+      type: 'depense',
+      icon: 'utensils',
+      badgeClass: 'bg-amber-100 text-amber-800 border-amber-200'
+    },
     general: {
       id: 'general',
       label: 'Mouvements Divers',
@@ -188,6 +196,9 @@ window.ProtecFinances = {
       }
       if (lbl.includes('pse') || lbl.includes('chef') || lbl.includes('recyclage') || lbl.includes('stagiaire') || lbl.includes('permis') || lbl.includes('promotion')) {
         return 'formation_interne';
+      }
+      if (lbl.includes('repas') || lbl.includes('restauration') || lbl.includes('ndf') || lbl.includes('sandwich') || lbl.includes('déjeuner') || lbl.includes('dîner')) {
+        return 'ndf_repas';
       }
       if (lbl.includes('assurance') || lbl.includes('cotisation') || lbl.includes('agrément') || lbl.includes('frais') || lbl.includes('aasc') || lbl.includes('abonnement')) {
         return 'frais';
@@ -917,6 +928,12 @@ window.ProtecFinances = {
               onclick="window.ProtecFinances.setCategoryFilter('frais')"
               class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'frais' ? 'bg-stone-700 text-white border-stone-700 shadow-sm' : 'bg-stone-100 text-stone-800 border-stone-200 hover:border-stone-300'}">
               <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Frais & Assurances
+            </button>
+
+            <button
+              onclick="window.ProtecFinances.setCategoryFilter('ndf_repas')"
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'ndf_repas' ? 'bg-amber-600 text-white border-amber-600 shadow-sm' : 'bg-amber-50 text-amber-800 border-amber-200 hover:border-amber-300'}">
+              <i data-lucide="utensils" class="w-3.5 h-3.5"></i> Repas & NDF
             </button>
 
           </div>

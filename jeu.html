@@ -599,6 +599,13 @@
             <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Antenne</span>
             <span class="text-[9px] font-bold text-slate-600">Moyens</span>
           </div>
+          <button onclick="window.game.openModule('antenne_messages'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="message-square" class="w-4 h-4 text-pc-blue"></i>
+              <span>Messages</span>
+            </div>
+            <span id="badge-submenu-antenne-messages" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-blue-100 text-pc-blue font-bold">0</span>
+          </button>
           <button onclick="window.game.openModule('locaux'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="layout-grid" class="w-4 h-4 text-amber-600"></i>
@@ -1318,6 +1325,7 @@
   <script src="js/apc.js?v=2.1.4"></script>
   <script src="js/marche_occasion.js"></script>
   <script src="js/evenements_reels.js"></script>
-  <script src="js/app.js?v=2.5.2"></script>
+  <script src="js/antenne_messages.js?v=2.5.3"></script>
+  <script src="js/app.js?v=2.5.3"></script>
 </body>
 </html>

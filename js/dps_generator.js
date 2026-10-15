@@ -468,6 +468,7 @@
       environment: template.environment,
       riskLevel: template.riskLevel,
       status: 'pending',
+      mealsProvidedByOrganizer: Math.random() < 0.5,
       isLastMinute: isLastMinute,
       daysAhead: daysAhead,
       urgencyReason: isLastMinute ? 'Annulation de dernière minute d’une autre association agréée' : 'Planification anticipée d’événement',
