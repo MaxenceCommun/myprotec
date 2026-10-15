@@ -1144,6 +1144,32 @@ html, body {
   border-color: rgba(255, 255, 255, 0.88) transparent transparent transparent;
 }
 
+/* Style Dark Mode pour les sous-menus flottants du dock */
+html.dark .dock-submenu {
+  background: rgba(15, 23, 42, 0.96) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border-color: rgba(51, 65, 85, 0.9) !important;
+  box-shadow: 0 20px 48px -10px rgba(0, 0, 0, 0.75), 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 1.5px rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark .dock-submenu::after {
+  border-color: rgba(15, 23, 42, 0.96) transparent transparent transparent !important;
+}
+
+html.dark .dock-submenu-header {
+  border-bottom-color: rgba(51, 65, 85, 0.8) !important;
+}
+
+html.dark .dock-submenu-item {
+  color: #e2e8f0 !important;
+}
+
+html.dark .dock-submenu-item:hover {
+  background: rgba(56, 189, 248, 0.14) !important;
+  color: #38bdf8 !important;
+}
+
 /* Styles pour les abréviations & infobulles du glossaire */
 #global-abbr-tooltip {
   backdrop-filter: blur(20px) saturate(180%);
@@ -2037,3 +2063,185 @@ html.dark #main-modal .bg-white {
 html.dark #main-modal .hover\:bg-slate-50:hover {
   background-color: #273549 !important;
 }
+
+/* ==========================================================================
+   ONGLETS DE SOUS-NAVIGATION DES MODALES (CATEGORIES SUBNAV) EN MODE SOMBRE
+   ========================================================================== */
+html.dark #modal-category-subnav {
+  background: #0f172a !important;
+  border-bottom-color: #334155 !important;
+}
+
+html.dark #modal-category-subnav button:not(.bg-pc-blue) {
+  background-color: #1e293b !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+html.dark #modal-category-subnav button:not(.bg-pc-blue):hover {
+  background-color: #273549 !important;
+  color: #ffffff !important;
+}
+
+html.dark #modal-category-subnav button:not(.bg-pc-blue) span {
+  color: #cbd5e1 !important;
+}
+
+html.dark #modal-category-subnav button:not(.bg-pc-blue) .bg-slate-100 {
+  background-color: #334155 !important;
+  color: #cbd5e1 !important;
+  border-color: #475569 !important;
+}
+
+/* ==========================================================================
+   CONVERSION DES OPACITÉS PASTEL TAILWIND EN MODE SOMBRE (CONTRASTE PROPRE)
+   ========================================================================== */
+/* Émeraude / Vert (Agréments, Validations, Bilans) */
+html.dark .bg-emerald-50\/10,
+html.dark .bg-emerald-50\/20,
+html.dark .bg-emerald-50\/30,
+html.dark .bg-emerald-50\/40,
+html.dark .bg-emerald-50\/50,
+html.dark .bg-emerald-50\/60,
+html.dark .bg-emerald-50\/70,
+html.dark .bg-emerald-50\/80,
+html.dark .bg-emerald-50\/90 {
+  background-color: rgba(6, 78, 59, 0.35) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+html.dark .text-emerald-700,
+html.dark .text-emerald-800 {
+  color: #6ee7b7 !important;
+}
+html.dark .border-emerald-100,
+html.dark .border-emerald-200,
+html.dark .border-emerald-300 {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+/* Indigo (RH, Salariés, Missions confiées NOVI) */
+html.dark .bg-indigo-50\/10,
+html.dark .bg-indigo-50\/20,
+html.dark .bg-indigo-50\/30,
+html.dark .bg-indigo-50\/40,
+html.dark .bg-indigo-50\/50,
+html.dark .bg-indigo-50\/60,
+html.dark .bg-indigo-50\/70,
+html.dark .bg-indigo-50\/80,
+html.dark .bg-indigo-50\/90,
+html.dark .bg-indigo-100\/50,
+html.dark .bg-indigo-100\/80 {
+  background-color: rgba(49, 46, 129, 0.35) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark .text-indigo-700,
+html.dark .text-indigo-800 {
+  color: #a5b4fc !important;
+}
+html.dark .border-indigo-100,
+html.dark .border-indigo-200,
+html.dark .border-indigo-300,
+html.dark .border-indigo-300\/70 {
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+
+/* Ambre / Orange (Veille, Alertes, Pré-mobilisation) */
+html.dark .bg-amber-50\/10,
+html.dark .bg-amber-50\/20,
+html.dark .bg-amber-50\/30,
+html.dark .bg-amber-50\/40,
+html.dark .bg-amber-50\/50,
+html.dark .bg-amber-50\/60,
+html.dark .bg-amber-50\/70,
+html.dark .bg-amber-50\/80,
+html.dark .bg-amber-50\/90 {
+  background-color: rgba(120, 53, 15, 0.35) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+html.dark .border-amber-100,
+html.dark .border-amber-200,
+html.dark .border-amber-300 {
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+/* Rouge (VPSP requis, Urgences critiques) */
+html.dark .bg-red-50\/10,
+html.dark .bg-red-50\/20,
+html.dark .bg-red-50\/30,
+html.dark .bg-red-50\/40,
+html.dark .bg-red-50\/50,
+html.dark .bg-red-50\/60,
+html.dark .bg-red-50\/70,
+html.dark .bg-red-50\/80,
+html.dark .bg-red-50\/90 {
+  background-color: rgba(127, 29, 29, 0.35) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+html.dark .text-red-700,
+html.dark .text-red-800 {
+  color: #fca5a5 !important;
+}
+html.dark .border-red-100,
+html.dark .border-red-200,
+html.dark .border-red-300 {
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+
+/* Sky & Bleu (DPS, Communications, Drones) */
+html.dark .bg-sky-50\/10,
+html.dark .bg-sky-50\/20,
+html.dark .bg-sky-50\/30,
+html.dark .bg-sky-50\/40,
+html.dark .bg-sky-50\/50,
+html.dark .bg-sky-50\/60,
+html.dark .bg-sky-50\/70,
+html.dark .bg-sky-50\/80,
+html.dark .bg-sky-50\/90,
+html.dark .bg-blue-50\/10,
+html.dark .bg-blue-50\/20,
+html.dark .bg-blue-50\/30,
+html.dark .bg-blue-50\/40,
+html.dark .bg-blue-50\/50,
+html.dark .bg-blue-50\/60,
+html.dark .bg-blue-50\/70,
+html.dark .bg-blue-50\/80,
+html.dark .bg-blue-50\/90 {
+  background-color: rgba(30, 58, 138, 0.35) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+html.dark .text-blue-700,
+html.dark .text-blue-800 {
+  color: #93c5fd !important;
+}
+html.dark .border-blue-100,
+html.dark .border-blue-200,
+html.dark .border-blue-300,
+html.dark .border-sky-100,
+html.dark .border-sky-200,
+html.dark .border-sky-300 {
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+/* Purple (Communication, Habilitations) */
+html.dark .bg-purple-50\/10,
+html.dark .bg-purple-50\/20,
+html.dark .bg-purple-50\/30,
+html.dark .bg-purple-50\/40,
+html.dark .bg-purple-50\/50,
+html.dark .bg-purple-50\/60,
+html.dark .bg-purple-50\/70,
+html.dark .bg-purple-50\/80,
+html.dark .bg-purple-50\/90 {
+  background-color: rgba(88, 28, 135, 0.35) !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
+html.dark .text-purple-700,
+html.dark .text-purple-800 {
+  color: #d8b4fe !important;
+}
+html.dark .border-purple-100,
+html.dark .border-purple-200,
+html.dark .border-purple-300 {
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
+

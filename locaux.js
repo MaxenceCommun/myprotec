@@ -1527,14 +1527,50 @@ window.ProtecLocaux = {
   // Helpers pour les autres modules
   hasFormationRoom(game, stationId) {
     const prem = this.getStationPremises(game, stationId);
-    if (!prem) return false;
-    return this.calculatePremisesStats(prem).hasFormation;
+    if (!prem) return true;
+    if (prem.rooms?.salle_formation_psc1?.level > 0 || prem.rooms?.salle_formation?.level > 0) return true;
+    if (prem.rooms && Object.values(prem.rooms).some(r => (r.id?.includes('formation') || r.name?.toLowerCase().includes('formation')) && r.level > 0)) return true;
+    if (prem.grid) {
+      const stats = this.calculatePremisesStats(prem);
+      if (stats.hasFormation) return true;
+    }
+    return true; // Les antennes disposent toujours d'un espace pour accueillir des sessions
   },
 
   getFormationCapacity(game, stationId) {
     const prem = this.getStationPremises(game, stationId);
-    if (!prem) return 0;
-    return this.calculatePremisesStats(prem).studentCapacity;
+    if (!prem) return 10;
+    if (prem.rooms?.salle_formation_psc1?.capacity) return prem.rooms.salle_formation_psc1.capacity;
+    if (prem.grid) {
+      const stats = this.calculatePremisesStats(prem);
+      if (stats.studentCapacity > 0) return stats.studentCapacity;
+    }
+    return 10;
+  },
+
+  getStationTrainingRoomsCount(station) {
+    if (!station) return 1;
+    if (station.trainingRoomsCount) return Math.max(1, Number(station.trainingRoomsCount));
+    const prem = station.premises;
+    if (!prem) return 1;
+
+    // Si grille 2D personnalisée
+    if (prem.grid && Array.isArray(prem.grid)) {
+      const formationCells = prem.grid.filter(c => c && (c.type === 'formation' || c.zone === 'formation' || (c.roomId && c.roomId.includes('formation'))));
+      if (formationCells.length >= 8) {
+        return Math.min(4, Math.floor(formationCells.length / 4));
+      }
+    }
+
+    const room = prem.rooms?.salle_formation_psc1 || prem.rooms?.salle_formation;
+    const lvl = room?.level || 1;
+    if (prem.archetype === 'centre_pedagogique') {
+      return Math.max(2, lvl);
+    }
+    if (lvl >= 2) {
+      return Math.min(3, lvl);
+    }
+    return 1;
   },
 
   hasStorageRoom(game, stationId) {
@@ -1565,6 +1601,14 @@ window.ProtecLocaux = {
     if (window.ProtecEquipements && typeof window.ProtecEquipements.getLotsStorageUsed === 'function') {
       used += window.ProtecEquipements.getLotsStorageUsed(game);
     }
+    // Économie de stockage : le matériel armé à l'avance dans les véhicules LOG ne prend plus de place dans le bâtiment !
+    let vehicleStoredVolume = 0;
+    (game.vehicles || []).forEach(v => {
+      if (v.logKit && window.ProtecCriseLogistique?.LOG_KITS?.[v.logKit]) {
+        vehicleStoredVolume += window.ProtecCriseLogistique.LOG_KITS[v.logKit].buildingStorageSize || 10;
+      }
+    });
+    used = Math.max(0, used - vehicleStoredVolume);
     return used;
   },
 
@@ -2519,7 +2563,7 @@ window.ProtecLocaux = {
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           
           <!-- Capacité Stockage -->
-          <div class="p-3 rounded-2xl ${stats.hasStorage ? 'glass-card border-amber-200/80 bg-amber-50/30' : 'bg-red-50 border border-red-200'} space-y-1">
+          <div class="p-3 rounded-2xl ${stats.hasStorage ? 'glass-card border-amber-200/80 bg-amber-50/30 dark:bg-amber-950/20 dark:border-amber-900/40' : 'bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60'} space-y-1">
             <div class="flex items-center justify-between text-xs font-extrabold text-slate-700">
               <span class="flex items-center gap-1">📦 Stockage</span>
               <span class="${stats.hasStorage ? 'text-amber-600' : 'text-red-600'} font-black">${storageUsed} / ${stats.storageCapacity}</span>
@@ -2533,7 +2577,7 @@ window.ProtecLocaux = {
           </div>
 
           <!-- Salle de Formation -->
-          <div class="p-3 rounded-2xl ${stats.hasFormation ? 'glass-card border-blue-200/80 bg-blue-50/30' : 'bg-slate-50 border border-slate-200'} space-y-1">
+          <div class="p-3 rounded-2xl ${stats.hasFormation ? 'glass-card border-blue-200/80 bg-blue-50/30 dark:bg-blue-950/20 dark:border-blue-900/40' : 'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700'} space-y-1">
             <div class="flex items-center justify-between text-xs font-extrabold text-slate-700">
               <span class="flex items-center gap-1">🎓 Formations</span>
               <span class="text-pc-blue font-black">${stats.studentCapacity} places</span>

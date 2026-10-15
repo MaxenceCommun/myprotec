@@ -91,6 +91,13 @@
   "marketplace": [],
   "communityEvents": [],
   "badgesCollection": [],
+  "customVehicleCatalog": null,
+  "customEquipmentCatalog": null,
+  "customBadgesCatalog": null,
+  "referralLogs": [],
+  "fraudLogs": [],
+  "pushSubscriptions": {},
+  "vapidKeys": null,
   "equipmentTiersConfig": {
     "categories": [
       "formation",

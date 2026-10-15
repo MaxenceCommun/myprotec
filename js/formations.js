@@ -2445,26 +2445,26 @@ window.ProtecFormations = {
 
     const navTabsHTML = `
       <!-- Barre de navigation supérieure des deux canaux de formation -->
-      <div class="flex items-center justify-between border-b border-slate-200/80 pb-3 flex-wrap gap-2">
-        <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl">
-          <button onclick="window.ProtecFormations.setMainTab('entreprises')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.mainTab === 'entreprises' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:text-slate-900 cursor-pointer'}">
+      <div class="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-700 pb-3 flex-wrap gap-2">
+        <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
+          <button onclick="window.ProtecFormations.setMainTab('entreprises')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.mainTab === 'entreprises' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer'}">
             <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
             <span>Structures & Entreprises</span>
             ${pendingB2BCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-black ${this.mainTab === 'entreprises' ? 'bg-white text-pc-blue' : 'bg-pc-blue text-white'}">${pendingB2BCount}</span>` : ''}
           </button>
-          <button onclick="window.ProtecFormations.setMainTab('grand_public')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.mainTab === 'grand_public' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:text-slate-900 cursor-pointer'}">
+          <button onclick="window.ProtecFormations.setMainTab('grand_public')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.mainTab === 'grand_public' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer'}">
             <i data-lucide="users" class="w-3.5 h-3.5"></i>
             <span>Grand Public & Internes</span>
-            ${activeSessions.length > 0 ? `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-black ${this.mainTab === 'grand_public' ? 'bg-white text-pc-blue' : 'bg-slate-300 text-slate-800'}">${activeSessions.length}</span>` : ''}
+            ${activeSessions.length > 0 ? `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-black ${this.mainTab === 'grand_public' ? 'bg-white text-pc-blue' : 'bg-slate-300 dark:bg-slate-700 text-slate-800 dark:text-slate-200'}">${activeSessions.length}</span>` : ''}
           </button>
-          <button onclick="window.game.openPlanningFiltered('formations')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-950 cursor-pointer border border-transparent hover:border-emerald-300" title="Consulter le calendrier complet du pôle formations">
-            <i data-lucide="calendar" class="w-3.5 h-3.5 text-emerald-600"></i>
+          <button onclick="window.game.openPlanningFiltered('formations')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 hover:text-emerald-950 dark:hover:text-emerald-200 cursor-pointer border border-transparent hover:border-emerald-300 dark:hover:border-emerald-500/40" title="Consulter le calendrier complet du pôle formations">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400"></i>
             <span>📅 Planning des Formations</span>
           </button>
         </div>
         ${this.mainTab === 'entreprises' ? `
-          <div class="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[11px] flex items-center gap-1.5 shadow-xs">
-            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-pc-blue"></i>
+          <div class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-[11px] flex items-center gap-1.5 shadow-xs">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-pc-blue dark:text-sky-400"></i>
             <span>Demandes entrantes auto (Notoriété & Communication)</span>
           </div>
         ` : ''}

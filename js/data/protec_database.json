@@ -1,7 +1,94 @@
 {
+  "users": {
+    "admin": {
+      "id": "usr_admin_master",
+      "username": "Admin",
+      "passwordHash": "4e2e1f72eb296f62e3f93ecffc119a5a6e0d7d59c85167398da631c6496e56a3f89d0041d24d7e1961929cd707b1450d6698a63fee16a7c4f14a0d129c497437",
+      "salt": "c4c8152189eb08aead2468eafda66c75",
+      "role": "admin",
+      "isBanned": false,
+      "stationName": "Direction Nationale FNPC",
+      "city": "Paris",
+      "departmentCode": "75",
+      "createdAt": "2026-10-15T14:08:40.100Z",
+      "lastLogin": "2026-10-15T14:08:40.101Z"
+    }
+  },
+  "sessions": {},
+  "savedGames": {
+    "usr_admin_master": {
+      "savedAt": "2026-10-15T14:08:40.101Z",
+      "data": {
+        "player": {
+          "id": "usr_admin_master",
+          "name": "Direction Nationale FNPC",
+          "departmentCode": "75",
+          "allianceId": "alliance-fnpc"
+        },
+        "stations": [
+          {
+            "id": "station-fnpc-national-hq",
+            "name": "Direction Générale Nationale (FNPC)",
+            "city": "Paris",
+            "departmentCode": "75",
+            "lat": 48.8955,
+            "lng": 2.2905,
+            "level": 3,
+            "vehicles": [
+              {
+                "id": "v-nat-1",
+                "name": "PC Mobile FNPC",
+                "type": "PCM"
+              },
+              {
+                "id": "v-nat-2",
+                "name": "VPSP FNPC 01",
+                "type": "VPSP"
+              },
+              {
+                "id": "v-nat-3",
+                "name": "VL Commandement 01",
+                "type": "VLC"
+              }
+            ],
+            "volunteers": [
+              {
+                "id": "vol-nat-1",
+                "name": "Président FNPC",
+                "rank": "Cadre Fédéral"
+              },
+              {
+                "id": "vol-nat-2",
+                "name": "Directeur Opérationnel",
+                "rank": "Chef de Dispositif"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "resetArchives": [],
+  "departments": {},
+  "alliances": [],
+  "allianceStations": [],
+  "renforts": [],
+  "formationsSpeciales": [],
+  "chatMessages": [],
+  "marketplace": [],
+  "communityEvents": [],
+  "badgesCollection": [],
+  "customVehicleCatalog": null,
+  "customEquipmentCatalog": null,
+  "customBadgesCatalog": null,
   "equipmentTiersConfig": {
-    "categories": ["formation", "secours", "logistique", "tenues"],
-    "tradeInRate": 0.30
+    "categories": [
+      "formation",
+      "secours",
+      "logistique",
+      "tenues"
+    ],
+    "tradeInRate": 0.3
   },
   "crisisTemplates": {
     "novi_attentat": {
@@ -26,9 +113,17 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 3,
-                "ranks": ["CE", "PSE2", "PSE1"],
-                "vehicles": ["VPSP"],
-                "lots": ["lot_secours_a"]
+                "ranks": [
+                  "CE",
+                  "PSE2",
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VPSP"
+                ],
+                "lots": [
+                  "lot_secours_a"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 180
@@ -40,9 +135,17 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 3,
-                "ranks": ["PSE2", "PSE1", "PSE1"],
-                "vehicles": ["VPSP"],
-                "lots": ["lot_secours_b"]
+                "ranks": [
+                  "PSE2",
+                  "PSE1",
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VPSP"
+                ],
+                "lots": [
+                  "lot_secours_b"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 200
@@ -62,9 +165,18 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 4,
-                "ranks": ["CD", "PSE2", "PSE1"],
-                "vehicles": ["VTU"],
-                "lots": ["lot_soutien_psy", "lot_secours_c"],
+                "ranks": [
+                  "CD",
+                  "PSE2",
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VTU"
+                ],
+                "lots": [
+                  "lot_soutien_psy",
+                  "lot_secours_c"
+                ],
                 "specialite_requise": "aep"
               },
               "progression": 0,
@@ -77,8 +189,14 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 3,
-                "ranks": ["CE", "PSE2", "PSE1"],
-                "vehicles": ["VPSP"]
+                "ranks": [
+                  "CE",
+                  "PSE2",
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VPSP"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 190
@@ -98,9 +216,15 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 2,
-                "ranks": ["PSE1"],
-                "vehicles": ["VL"],
-                "lots": ["lot_ravitaillement"]
+                "ranks": [
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VL"
+                ],
+                "lots": [
+                  "lot_ravitaillement"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 150
@@ -142,9 +266,17 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 2,
-                "ranks": ["CD", "CE"],
-                "vehicles": ["PCM", "VL"],
-                "lots": ["tablettes"]
+                "ranks": [
+                  "CD",
+                  "CE"
+                ],
+                "vehicles": [
+                  "PCM",
+                  "VL"
+                ],
+                "lots": [
+                  "tablettes"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 160
@@ -156,9 +288,19 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 4,
-                "ranks": ["PSE2", "PSE1", "PSE1", "Secouriste"],
-                "vehicles": ["VLTT", "VTU"],
-                "lots": ["lot_eclairage"]
+                "ranks": [
+                  "PSE2",
+                  "PSE1",
+                  "PSE1",
+                  "Secouriste"
+                ],
+                "vehicles": [
+                  "VLTT",
+                  "VTU"
+                ],
+                "lots": [
+                  "lot_eclairage"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 210
@@ -178,8 +320,14 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 2,
-                "ranks": ["CE", "PSE2"],
-                "vehicles": ["VTD", "VL"],
+                "ranks": [
+                  "CE",
+                  "PSE2"
+                ],
+                "vehicles": [
+                  "VTD",
+                  "VL"
+                ],
                 "specialite_requise": "drone"
               },
               "progression": 0,
@@ -192,8 +340,14 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 2,
-                "ranks": ["PSE2", "PSE1"],
-                "vehicles": ["VCYN", "VLTT"],
+                "ranks": [
+                  "PSE2",
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VCYN",
+                  "VLTT"
+                ],
                 "specialite_requise": "cynotechnie"
               },
               "progression": 0,
@@ -214,9 +368,17 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 3,
-                "ranks": ["CE", "PSE2", "PSE1"],
-                "vehicles": ["VPSP"],
-                "lots": ["lot_secours_b"]
+                "ranks": [
+                  "CE",
+                  "PSE2",
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VPSP"
+                ],
+                "lots": [
+                  "lot_secours_b"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 170
@@ -258,9 +420,18 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 3,
-                "ranks": ["CE", "PSE2", "PSE1"],
-                "vehicles": ["VPSP"],
-                "lots": ["lot_secours_a", "prise_parametres"]
+                "ranks": [
+                  "CE",
+                  "PSE2",
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VPSP"
+                ],
+                "lots": [
+                  "lot_secours_a",
+                  "prise_parametres"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 220
@@ -280,9 +451,17 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 3,
-                "ranks": ["PSE2", "PSE2", "PSE1"],
-                "vehicles": ["VPSP"],
-                "lots": ["lot_secours_a"]
+                "ranks": [
+                  "PSE2",
+                  "PSE2",
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VPSP"
+                ],
+                "lots": [
+                  "lot_secours_a"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 240
@@ -302,8 +481,12 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 2,
-                "ranks": ["PSE1"],
-                "vehicles": ["VPSP"]
+                "ranks": [
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VPSP"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 140
@@ -345,9 +528,18 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 3,
-                "ranks": ["CE", "PSE2", "PSE1"],
-                "vehicles": ["VPSP"],
-                "lots": ["tenues_epi", "lot_secours_a"]
+                "ranks": [
+                  "CE",
+                  "PSE2",
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VPSP"
+                ],
+                "lots": [
+                  "tenues_epi",
+                  "lot_secours_a"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 200
@@ -367,9 +559,16 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 2,
-                "ranks": ["PSE2", "PSE1"],
-                "vehicles": ["VTU"],
-                "lots": ["lot_eclairage"]
+                "ranks": [
+                  "PSE2",
+                  "PSE1"
+                ],
+                "vehicles": [
+                  "VTU"
+                ],
+                "lots": [
+                  "lot_eclairage"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 190
@@ -389,8 +588,12 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 2,
-                "ranks": ["CE"],
-                "vehicles": ["VL"]
+                "ranks": [
+                  "CE"
+                ],
+                "vehicles": [
+                  "VL"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 120
@@ -432,9 +635,19 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 4,
-                "ranks": ["CE", "PSE2", "PSE1", "Secouriste"],
-                "vehicles": ["VTU"],
-                "lots": ["lot_hebergement", "lot_secours_c"]
+                "ranks": [
+                  "CE",
+                  "PSE2",
+                  "PSE1",
+                  "Secouriste"
+                ],
+                "vehicles": [
+                  "VTU"
+                ],
+                "lots": [
+                  "lot_hebergement",
+                  "lot_secours_c"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 200
@@ -454,9 +667,17 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 3,
-                "ranks": ["PSE2", "PSE1", "Secouriste"],
-                "vehicles": ["VTU"],
-                "lots": ["lot_pompage"]
+                "ranks": [
+                  "PSE2",
+                  "PSE1",
+                  "Secouriste"
+                ],
+                "vehicles": [
+                  "VTU"
+                ],
+                "lots": [
+                  "lot_pompage"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 220
@@ -468,9 +689,16 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 2,
-                "ranks": ["PSE1", "Secouriste"],
-                "vehicles": ["VL"],
-                "lots": ["lot_ravitaillement"]
+                "ranks": [
+                  "PSE1",
+                  "Secouriste"
+                ],
+                "vehicles": [
+                  "VL"
+                ],
+                "lots": [
+                  "lot_ravitaillement"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 180
@@ -490,8 +718,14 @@
               "statut": "en_attente",
               "moyens_requis": {
                 "vols_count": 3,
-                "ranks": ["PSE1", "Secouriste", "Secouriste"],
-                "vehicles": ["VTU"]
+                "ranks": [
+                  "PSE1",
+                  "Secouriste",
+                  "Secouriste"
+                ],
+                "vehicles": [
+                  "VTU"
+                ]
               },
               "progression": 0,
               "duree_estimee_sec": 150

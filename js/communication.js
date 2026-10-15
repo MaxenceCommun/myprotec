@@ -1029,20 +1029,20 @@ window.ProtecCommunication = {
         </div>
 
         <!-- Onglets de Navigation (3 onglets clairs) -->
-        <div class="flex border-b border-slate-200 gap-2 overflow-x-auto">
+        <div class="flex border-b border-slate-200 dark:border-slate-700 gap-2 overflow-x-auto">
           <button
             onclick="window.ProtecCommunication.currentTab = 'social_media'; window.ProtecCommunication.renderModal(window.game);"
-            class="pb-3 px-4 text-xs font-black transition border-b-2 flex items-center gap-2 whitespace-nowrap ${this.currentTab === 'social_media' ? 'border-purple-600 text-purple-700' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+            class="pb-3 px-4 text-xs font-black transition border-b-2 flex items-center gap-2 whitespace-nowrap cursor-pointer ${this.currentTab === 'social_media' ? 'border-purple-600 text-purple-700 dark:border-purple-400 dark:text-purple-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}">
             <span>📱</span> Publications Gratuites Réseaux Sociaux (0 €)
           </button>
           <button
             onclick="window.ProtecCommunication.currentTab = 'reviews'; window.ProtecCommunication.renderModal(window.game);"
-            class="pb-3 px-4 text-xs font-black transition border-b-2 flex items-center gap-2 whitespace-nowrap ${this.currentTab === 'reviews' ? 'border-purple-600 text-purple-700' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+            class="pb-3 px-4 text-xs font-black transition border-b-2 flex items-center gap-2 whitespace-nowrap cursor-pointer ${this.currentTab === 'reviews' ? 'border-purple-600 text-purple-700 dark:border-purple-400 dark:text-purple-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}">
             <span>⭐</span> Avis & Notoriété Publique (${reviewsStats.average}/5)
           </button>
           <button
             onclick="window.ProtecCommunication.currentTab = 'sponsored_campaigns'; window.ProtecCommunication.renderModal(window.game);"
-            class="pb-3 px-4 text-xs font-black transition border-b-2 flex items-center gap-2 whitespace-nowrap ${this.currentTab === 'sponsored_campaigns' ? 'border-purple-600 text-purple-700' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+            class="pb-3 px-4 text-xs font-black transition border-b-2 flex items-center gap-2 whitespace-nowrap cursor-pointer ${this.currentTab === 'sponsored_campaigns' ? 'border-purple-600 text-purple-700 dark:border-purple-400 dark:text-purple-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}">
             <span>📢</span> Campagnes Sponsorisées & Presse (Payant)
           </button>
         </div>

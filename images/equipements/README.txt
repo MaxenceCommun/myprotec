@@ -42,7 +42,7 @@ LISTE DES NOMS DE FICHIERS ATTENDUS :
 - lot_hebergement.png (Lot Hébergement d'Urgence CHU / Gymnase)
 - lot_ravitaillement.png (Lot Ravitaillement & Cuisine de Crise)
 - lot_soutien_psy.png (Lot Soutien Psychologique CAI)
-- lot_poste_commandement_mobile.png (Pack PC Embarqué VLC)
+- lot_poste_commandement_mobile.png (Poste de Commandement Mobile VLC)
 - groupe_electro.png (Groupe Électrogène Inverter)
 
 4. ÉQUIPEMENTS DE VIE D'ANTENNE & CONFORT RH :
