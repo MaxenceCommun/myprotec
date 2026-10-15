@@ -202,61 +202,51 @@ const getAssetUrl = (path) => {
   return new URL(path.replace(/^\//, ''), self.registration.scope).href;
 };
 
-const DEFAULT_BADGE = getAssetUrl('badge-monochrome.png');
-const DEFAULT_ICON = getAssetUrl('badge-monochrome.png');
+const DEFAULT_ICON = getAssetUrl('/icons/icon-192x192.png');
+const DEFAULT_BADGE = getAssetUrl('/icons/badge-monochrome.png');
 
 self.addEventListener('push', (event) => {
-  let payload = {
-    title: '🚨 ALERTE MYPROTEC',
-    body: 'Mobilisation opérationnelle demandée !',
-    icon: DEFAULT_ICON,
-    badge: DEFAULT_BADGE,
-    tag: `protec-alert-${Date.now()}`,
-    data: { url: 'jeu.html' },
-    actions: [
-      { action: 'action_open', title: '📍 Voir l\'Intervention' },
-      { action: 'action_dispo', title: '✅ Disponible' }
-    ]
-  };
+  let payload = {};
 
   if (event.data) {
     try {
-      const json = event.data.json();
-      payload = Object.assign(payload, json);
+      payload = event.data.json();
     } catch (e) {
-      payload.body = event.data.text();
+      payload = {
+        title: 'Alerte Opérationnelle MyProtec',
+        body: event.data.text()
+      };
     }
   }
 
+  const title = payload.title || '🚨 ALERTE MYPROTEC';
+  const body = payload.body || payload.message || 'Mobilisation opérationnelle demandée !';
+  const icon = payload.icon ? getAssetUrl(payload.icon) : DEFAULT_ICON;
+  const badge = payload.badge ? getAssetUrl(payload.badge) : DEFAULT_BADGE;
+  const targetUrl = payload.data?.url || payload.url || '/jeu.html';
+
   const notificationOptions = {
-    body: payload.body || payload.message || 'Intervention ou devis en attente.',
-    icon: payload.icon ? getAssetUrl(payload.icon) : DEFAULT_ICON,
-    badge: payload.badge ? getAssetUrl(payload.badge) : DEFAULT_BADGE,
-    vibrate: [500, 200, 500, 200, 1000, 300, 1000], // Séquence vibratoire d'urgence
-    sound: getAssetUrl('sons/alerte_crise.mp3'),
+    body: body,
+    icon: icon,
+    badge: badge,
+    vibrate: payload.vibrate || [500, 200, 500, 200, 500],
     tag: payload.tag || `protec-alert-${Date.now()}`,
     renotify: true,
     requireInteraction: true,
-    data: payload.data || { url: 'jeu.html' },
+    data: Object.assign({ url: targetUrl }, payload.data || {}),
     actions: payload.actions || [
-      { action: 'action_open', title: '📍 Voir l\'Intervention' },
-      { action: 'action_dispo', title: '✅ Disponible' }
+      { action: 'action_open', title: '📍 Voir l’Intervention' }
     ]
   };
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      const isForeground = clientList && clientList.some(c => c.visibilityState === 'visible' && c.focused);
-      if (isForeground) {
-        // Si l'application est déjà ouverte et au premier plan actif : propager au jeu
-        clientList.forEach(c => {
+    self.registration.showNotification(title, notificationOptions).then(() => {
+      // Si une fenêtre est active en avant-plan, lui propager également l'événement en direct
+      return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        clientList.forEach((c) => {
           c.postMessage({ type: 'PUSH_NOTIFICATION_RECEIVED', data: payload });
         });
-        return;
-      }
-
-      // Application FERMÉE ou écran verrouillé : réveil OS natif immédiat
-      return self.registration.showNotification(payload.title || '🚨 ALERTE MYPROTEC', notificationOptions);
+      });
     })
   );
 });
@@ -264,26 +254,27 @@ self.addEventListener('push', (event) => {
 // Clic sur une notification push sur l'écran verrouillé ou dans le centre de notifications
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const action = event.action;
-  const rawUrl = event.notification.data?.url || 'jeu.html';
+  const rawUrl = event.notification.data?.url || '/jeu.html';
   const targetUrl = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
     ? rawUrl
     : new URL(rawUrl.replace(/^\//, ''), self.registration.scope).href;
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // 1. Si une fenêtre du jeu est déjà ouverte, la focaliser
+      // 1. Chercher si une fenêtre existante de l'application est déjà ouverte
       for (const client of clientList) {
-        if (client.url && (client.url.includes('jeu') || client.url.includes(self.registration.scope))) {
+        if (client.url && (client.url === targetUrl || client.url.includes('jeu') || client.url.includes(self.registration.scope))) {
           if ('focus' in client) {
-            if (action) {
-              client.postMessage({ type: 'NOTIFICATION_ACTION_CLICKED', action, data: event.notification.data });
-            }
+            client.postMessage({
+              type: 'NOTIFICATION_ACTION_CLICKED',
+              action: event.action || 'click',
+              data: event.notification.data
+            });
             return client.focus();
           }
         }
       }
-      // 2. Sinon ouvrir la fenêtre
+      // 2. Sinon ouvrir l'URL ciblée dans une nouvelle fenêtre/onglet
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }

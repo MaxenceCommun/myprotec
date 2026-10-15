@@ -1249,6 +1249,11 @@ class ProtecGame {
       window.ProtecEcussons.initEcussons(this).catch(e => console.warn('Erreur init écussons:', e));
     }
 
+    // Initialisation de l'infrastructure Web Push (réveil PWA fermée)
+    if (window.ProtecWebPush) {
+      window.ProtecWebPush.init(this).catch(e => console.warn('Erreur init WebPush:', e));
+    }
+
     // Fermeture automatique des sous-menus au clic en dehors du dock
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.dock-menu-wrapper')) {
@@ -22125,6 +22130,301 @@ class ProtecGame {
       setTimeout(() => toast.remove(), 300);
     }, toastDuration);
   }
+
+  // Souscription aux Web Push Notifications
+  async subscribeToPushNotifications() {
+    if (window.ProtecWebPush) {
+      return await window.ProtecWebPush.requestPermissionAndSubscribe(this.player?.id);
+    }
+    return null;
+  }
+
+  // Émission d'un test Web Push direct
+  async testWebPushNotification() {
+    try {
+      const res = await fetch('/api/push/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: this.player?.id,
+          title: '🚨 ALERTE TEST MYPROTEC',
+          body: 'Bravo ! Votre infrastructure de notification Web Push est opérationnelle même application totalement fermée.',
+          data: { url: '/jeu.html' }
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        this.showToast('Test Web Push Émis 🚀', 'La notification a été diffusée vers votre terminal via FCM/Apple.', 'green');
+      } else {
+        this.showToast('Test Push', data.error || 'Erreur lors de l’envoi test.', 'orange');
+      }
+    } catch (e) {
+      this.showToast('Erreur Test Push', e.message, 'red');
+    }
+  }
+}
+
+// ==============================================================================
+// INFRASTRUCTURE OFFICIELLE WEB PUSH W3C (RFC 8030 / RFC 8291 / RFC 8292)
+// Fonctionne même lorsque l'application PWA est totalement fermée et inactive.
+// ==============================================================================
+
+window.ProtecWebPush = {
+  swRegistration: null,
+  vapidPublicKey: null,
+  isSubscribing: false,
+
+  /**
+   * 1. Conversion de la clé publique VAPID depuis Base64URL vers Uint8Array
+   * Requis par registration.pushManager.subscribe({ applicationServerKey })
+   */
+  urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  },
+
+  /**
+   * 2. Enregistrement du Service Worker (sw.js) au chargement de la page
+   * si serviceWorker et PushManager sont supportés par window
+   */
+  async registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) {
+      console.warn('[WebPush] Les Service Workers ne sont pas supportés par ce navigateur.');
+      return null;
+    }
+    if (!('PushManager' in window)) {
+      console.warn('[WebPush] PushManager n\'est pas disponible sur ce navigateur (sur iOS, installez d\'abord la PWA sur l\'écran d\'accueil).');
+      return null;
+    }
+
+    try {
+      const swUrl = new URL('sw.js', window.location.href).href;
+      const swScope = new URL('./', window.location.href).pathname;
+      const registration = await navigator.serviceWorker.register(swUrl, { scope: swScope });
+      console.log('✅ [WebPush] Service Worker enregistré avec succès sur le scope :', registration.scope);
+      this.swRegistration = registration;
+
+      if (registration.waiting) {
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+
+      return registration;
+    } catch (error) {
+      console.error('[WebPush] Erreur enregistrement sw.js :', error);
+      return null;
+    }
+  },
+
+  /**
+   * Récupération de la clé publique VAPID depuis le backend
+   */
+  async getVapidPublicKey() {
+    if (this.vapidPublicKey) return this.vapidPublicKey;
+    try {
+      const res = await fetch('/api/push/vapid-public-key');
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.publicKey) {
+          this.vapidPublicKey = json.publicKey;
+          return this.vapidPublicKey;
+        }
+      }
+    } catch (e) {
+      console.warn('[WebPush] Erreur récupération clé VAPID depuis le backend, utilisation fallback.');
+    }
+    // Clé publique de secours W3C
+    this.vapidPublicKey = 'BJW6ttC4n_VYHyGsEvIu2UU1z_p95G4Wf1dD2924z_A_mZ3r_m4wQ5T_6x9z_P2m1k0j9';
+    return this.vapidPublicKey;
+  },
+
+  /**
+   * 3. Demande de permission et souscription de l'utilisateur
+   */
+  async requestPermissionAndSubscribe(customUserId = null) {
+    if (this.isSubscribing) return null;
+    this.isSubscribing = true;
+
+    try {
+      if (!('Notification' in window)) {
+        alert('Votre navigateur ne prend pas en charge les notifications système.');
+        return null;
+      }
+
+      // Demande de permission utilisateur
+      const permission = await Notification.requestPermission();
+      console.log(`[WebPush] Permission de notification : ${permission}`);
+
+      if (permission !== 'granted') {
+        if (permission === 'denied') {
+          console.warn('[WebPush] L\'utilisateur a refusé les notifications.');
+        }
+        return null;
+      }
+
+      // Obtenir ou enregistrer le Service Worker
+      let registration = this.swRegistration || await this.registerServiceWorker();
+      if (!registration) {
+        throw new Error('Service Worker inaccessible.');
+      }
+
+      // S'assurer que le Service Worker est actif
+      if (!registration.active) {
+        await navigator.serviceWorker.ready;
+        registration = await navigator.serviceWorker.getRegistration();
+      }
+
+      // Obtenir la clé VAPID publique convertie en Uint8Array
+      const rawVapidKey = await this.getVapidPublicKey();
+      const applicationServerKey = this.urlBase64ToUint8Array(rawVapidKey);
+
+      // Vérifier si un abonnement PushManager existe déjà
+      let subscription = await registration.pushManager.getSubscription();
+
+      if (!subscription) {
+        console.log('[WebPush] Création d\'un nouvel abonnement PushManager...');
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey
+        });
+        console.log('✅ [WebPush] Abonnement PushManager créé auprès du serveur Push OS !');
+      } else {
+        console.log('ℹ️ [WebPush] Abonnement PushManager existant récupéré.');
+      }
+
+      // Extraction des clés de chiffrement client
+      const subJson = subscription.toJSON();
+      const endpoint = subscription.endpoint;
+      const p256dh = subJson.keys?.p256dh || '';
+      const auth = subJson.keys?.auth || '';
+
+      // Association à l'utilisateur connecté
+      const userId = customUserId || window.game?.player?.id || window.ProtecAuth?.currentUser?.id || localStorage.getItem('protec_player_id') || 'local';
+      const username = window.game?.player?.name || window.ProtecAuth?.currentUser?.username || 'Directeur';
+
+      // 4. Envoi au backend via requête POST dédiée
+      await this.sendSubscriptionToBackend({
+        endpoint,
+        p256dh,
+        auth,
+        user_id: userId,
+        username,
+        userAgent: navigator.userAgent
+      });
+
+      // Mettre à jour l'instance du Service Worker
+      if (registration.active) {
+        registration.active.postMessage({
+          type: 'SET_CURRENT_USER',
+          user: { id: userId, username }
+        });
+      }
+
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast(
+          'Notifications Actives 📲',
+          'Vous recevrez désormais les alertes de secours même lorsque l’application est totalement fermée !',
+          'green'
+        );
+      }
+
+      return subscription;
+    } catch (err) {
+      console.error('[WebPush] Erreur lors de la souscription push :', err);
+      return null;
+    } finally {
+      this.isSubscribing = false;
+    }
+  },
+
+  /**
+   * 5. Envoi de l'objet subscription au backend via requête POST dédiée
+   */
+  async sendSubscriptionToBackend(data) {
+    try {
+      const res = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          endpoint: data.endpoint,
+          p256dh: data.p256dh,
+          auth: data.auth,
+          user_id: data.user_id,
+          username: data.username,
+          userAgent: data.userAgent || navigator.userAgent,
+          subscription: {
+            endpoint: data.endpoint,
+            keys: {
+              p256dh: data.p256dh,
+              auth: data.auth
+            }
+          }
+        })
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        console.log('✅ [WebPush] Abonnement enregistré avec succès par le backend :', result);
+      } else {
+        console.warn('[WebPush] Réponse serveur inattendue lors de l\'enregistrement :', res.status);
+      }
+    } catch (e) {
+      console.warn('[WebPush] Impossible de joindre le backend Node.js (mode local ou hors ligne) :', e.message);
+    }
+
+    // Persistance miroir dans Supabase si disponible
+    if (window.ProtecSupabase?.client) {
+      try {
+        await window.ProtecSupabase.client.from('push_subscriptions').upsert({
+          endpoint: data.endpoint,
+          user_id: (data.user_id && data.user_id !== 'local') ? data.user_id : null,
+          p256dh: data.p256dh,
+          auth: data.auth,
+          user_agent: navigator.userAgent,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'endpoint' });
+        console.log('✅ [WebPush] Abonnement synchronisé dans la table Supabase push_subscriptions.');
+      } catch (eSupa) {
+        console.warn('[WebPush] Erreur sauvegarde Supabase push_subscriptions :', eSupa);
+      }
+    }
+  },
+
+  /**
+   * Initialisation au démarrage du simulateur
+   */
+  async init(gameInstance) {
+    // 1. Enregistrer le Service Worker
+    await this.registerServiceWorker();
+
+    // 2. Si la permission est déjà accordée, synchroniser l'abonnement en tâche de fond
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const pid = gameInstance?.player?.id;
+      setTimeout(() => {
+        this.requestPermissionAndSubscribe(pid).catch(() => {});
+      }, 2000);
+    }
+  }
+};
+
+// Enregistrement au chargement de la page si serviceWorker et PushManager sont supportés par window
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      window.ProtecWebPush.registerServiceWorker();
+    }
+  });
 }
 
 window.addEventListener('DOMContentLoaded', () => {

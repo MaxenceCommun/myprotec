@@ -1143,6 +1143,87 @@ class Database {
     this.save();
     return { success: true, department: dept };
   }
+
+  // --- GESTION DES ABONNEMENTS WEB PUSH & CLÉS VAPID ---
+
+  getOrCreateVapidKeys() {
+    if (this.data.vapidKeys && this.data.vapidKeys.publicKey && this.data.vapidKeys.privateKey) {
+      return this.data.vapidKeys;
+    }
+    try {
+      const webpush = require('web-push');
+      const keys = webpush.generateVAPIDKeys();
+      this.data.vapidKeys = {
+        publicKey: keys.publicKey,
+        privateKey: keys.privateKey,
+        subject: 'mailto:contact@myprotec.fr',
+        created_at: new Date().toISOString()
+      };
+      this.save();
+      console.log('🔑 [DB] Clés VAPID officielles initialisées et persistées.');
+      return this.data.vapidKeys;
+    } catch (e) {
+      console.error('Erreur génération VAPID avec web-push:', e);
+      return null;
+    }
+  }
+
+  savePushSubscription(subData) {
+    if (!subData || !subData.endpoint) return null;
+
+    const endpoint = String(subData.endpoint).trim();
+    this.data.pushSubscriptions = this.data.pushSubscriptions || {};
+
+    const existing = this.data.pushSubscriptions[endpoint] || {};
+
+    const id = existing.id || subData.id || `push_sub_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const userId = subData.user_id || subData.userId || subData.playerId || existing.user_id || null;
+    const p256dh = subData.p256dh || (subData.keys && subData.keys.p256dh) || existing.p256dh || '';
+    const auth = subData.auth || (subData.keys && subData.keys.auth) || existing.auth || '';
+    const username = subData.username || existing.username || 'Directeur';
+    const userAgent = subData.userAgent || subData.user_agent || existing.user_agent || '';
+    const now = new Date().toISOString();
+
+    const record = {
+      id,
+      user_id: userId,
+      endpoint,
+      p256dh,
+      auth,
+      keys: {
+        p256dh,
+        auth
+      },
+      username,
+      user_agent: userAgent,
+      created_at: existing.created_at || now,
+      updated_at: now,
+      last_used: Date.now()
+    };
+
+    this.data.pushSubscriptions[endpoint] = record;
+    this.save();
+    return record;
+  }
+
+  getPushSubscription(endpoint) {
+    if (!endpoint || !this.data.pushSubscriptions) return null;
+    return this.data.pushSubscriptions[endpoint] || null;
+  }
+
+  getAllPushSubscriptions() {
+    return Object.values(this.data.pushSubscriptions || {});
+  }
+
+  deletePushSubscription(endpoint) {
+    if (!endpoint || !this.data.pushSubscriptions) return false;
+    if (this.data.pushSubscriptions[endpoint]) {
+      delete this.data.pushSubscriptions[endpoint];
+      this.save();
+      return true;
+    }
+    return false;
+  }
 }
 
 module.exports = new Database();

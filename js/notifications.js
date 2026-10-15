@@ -1060,6 +1060,24 @@ window.ProtecNotifications = {
       'Votre appareil reçoit bien les alertes d’urgence et notifications de rappel MyProtec.',
       { tag: 'test-direct-notif' }
     );
+    // Déclencher également l'émission Web Push serveur si le joueur a une souscription
+    if (this.pushSubscription?.endpoint || localStorage.getItem('protec_push_sub')) {
+      let ep = this.pushSubscription?.endpoint;
+      if (!ep) {
+        try { ep = JSON.parse(localStorage.getItem('protec_push_sub') || '{}').endpoint; } catch (e) {}
+      }
+      if (ep) {
+        fetch('/api/push/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: ep,
+            title: '🚨 Test Web Push Réussi !',
+            body: 'Votre terminal reçoit les notifications même application totalement fermée.'
+          })
+        }).catch(() => {});
+      }
+    }
     if (window.game) {
       window.game.showToast('Test Envoyé', 'Vérifiez la bannière et le son d’alerte sur votre écran !', 'green');
     }

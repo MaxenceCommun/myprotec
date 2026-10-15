@@ -197,157 +197,85 @@ async function exchangeDiscordCode(code, redirectUri) {
 // MOTEUR WEB PUSH NORMÉ RFC 8291 / RFC 8292 (PUSH MOBILE APP FERMÉE)
 // =========================================================================
 
-function toBase64Url(buf) {
-  const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
-  return b.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function fromBase64Url(str) {
-  if (!str) return Buffer.alloc(0);
-  let s = String(str).replace(/-/g, '+').replace(/_/g, '/');
-  while (s.length % 4) s += '=';
-  return Buffer.from(s, 'base64');
+let webpush = null;
+try {
+  webpush = require('web-push');
+} catch (e) {
+  console.warn('Module web-push non disponible :', e.message);
 }
 
 function getOrCreateVapidKeys() {
-  if (db.data.vapidKeys && db.data.vapidKeys.publicKey && db.data.vapidKeys.privateKeyDer) {
-    return db.data.vapidKeys;
-  }
-  try {
-    const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', {
-      namedCurve: 'prime256v1',
-      publicKeyEncoding: { type: 'spki', format: 'der' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'der' }
-    });
-    const rawPublicKey = publicKey.subarray(publicKey.length - 65);
-    db.data.vapidKeys = {
-      publicKey: toBase64Url(rawPublicKey),
-      privateKeyDer: privateKey.toString('base64'),
-      subject: 'mailto:contact@myprotec.fr'
-    };
-    db.save();
-    console.log('🔑 Clés VAPID Web Push initialisées avec succès.');
-  } catch (err) {
-    console.error('Erreur génération clés VAPID:', err);
-  }
-  return db.data.vapidKeys;
+  return db.getOrCreateVapidKeys();
 }
 
-function createVapidJwt(audience, vapidKeys) {
-  const header = toBase64Url(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
-  const exp = Math.floor(Date.now() / 1000) + (12 * 3600);
-  const claims = toBase64Url(JSON.stringify({
-    aud: audience,
-    exp: exp,
-    sub: vapidKeys.subject || 'mailto:contact@myprotec.fr'
-  }));
-  const unsignedToken = `${header}.${claims}`;
-  const privKeyObj = crypto.createPrivateKey({
-    key: Buffer.from(vapidKeys.privateKeyDer, 'base64'),
-    format: 'der',
-    type: 'pkcs8'
-  });
-  const signature = crypto.sign('SHA256', Buffer.from(unsignedToken), {
-    key: privKeyObj,
-    dsaEncoding: 'ieee-p1363'
-  });
-  return `${unsignedToken}.${toBase64Url(signature)}`;
-}
-
-function encryptWebPushPayload(payloadString, subscriptionKeys) {
-  const clientPub = fromBase64Url(subscriptionKeys.p256dh);
-  const clientAuth = fromBase64Url(subscriptionKeys.auth);
-
-  const localEcdh = crypto.createECDH('prime256v1');
-  localEcdh.generateKeys();
-  const localPub = localEcdh.getPublicKey();
-
-  const sharedSecret = localEcdh.computeSecret(clientPub);
-  const salt = crypto.randomBytes(16);
-
-  const keyInfo = Buffer.concat([Buffer.from('WebPush: info\0', 'utf8'), clientPub, localPub]);
-  const prk = crypto.hkdfSync('sha256', sharedSecret, clientAuth, keyInfo, 32);
-
-  const cek = crypto.hkdfSync('sha256', prk, salt, Buffer.from('Content-Encoding: aes128gcm\0', 'utf8'), 16);
-  const nonce = crypto.hkdfSync('sha256', prk, salt, Buffer.from('Content-Encoding: nonce\0', 'utf8'), 12);
-
-  const plaintext = Buffer.concat([Buffer.from(payloadString, 'utf8'), Buffer.from([2])]);
-  const cipher = crypto.createCipheriv('aes-128-gcm', cek, nonce);
-  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
-
-  const rsBuf = Buffer.alloc(4);
-  rsBuf.writeUInt32BE(4096, 0);
-
-  return Buffer.concat([
-    salt,
-    rsBuf,
-    Buffer.from([0x41]),
-    localPub,
-    ciphertext
-  ]);
-}
-
-function sendSingleWebPush(subscription, payloadObject, vapidKeys) {
-  return new Promise((resolve) => {
+function configureWebPush() {
+  const keys = getOrCreateVapidKeys();
+  if (webpush && keys && keys.publicKey && keys.privateKey) {
     try {
-      if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
-        return resolve({ success: false, error: 'Abonnement incomplet' });
-      }
-
-      const endpointUrl = new URL(subscription.endpoint);
-      const audience = `${endpointUrl.protocol}//${endpointUrl.host}`;
-      const jwt = createVapidJwt(audience, vapidKeys);
-      const bodyBuffer = encryptWebPushPayload(JSON.stringify(payloadObject), subscription.keys);
-
-      const clientModule = endpointUrl.protocol === 'http:' ? http : https;
-      const req = clientModule.request({
-        method: 'POST',
-        hostname: endpointUrl.hostname,
-        port: endpointUrl.port || (endpointUrl.protocol === 'http:' ? 80 : 443),
-        path: endpointUrl.pathname + endpointUrl.search,
-        headers: {
-          'TTL': '86400',
-          'Urgency': 'high',
-          'Content-Encoding': 'aes128gcm',
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': bodyBuffer.length,
-          'Authorization': `vapid t=${jwt}, k=${vapidKeys.publicKey}`
-        }
-      }, (res) => {
-        let respData = '';
-        res.on('data', chunk => respData += chunk);
-        res.on('end', () => {
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve({ success: true, status: res.statusCode });
-          } else if (res.statusCode === 410 || res.statusCode === 404) {
-            resolve({ success: false, expired: true, status: res.statusCode });
-          } else {
-            resolve({ success: false, status: res.statusCode, error: respData });
-          }
-        });
-      });
-
-      req.on('error', (err) => {
-        resolve({ success: false, error: err.message });
-      });
-
-      req.write(bodyBuffer);
-      req.end();
-    } catch (e) {
-      resolve({ success: false, error: e.message });
+      webpush.setVapidDetails(
+        keys.subject || 'mailto:contact@myprotec.fr',
+        keys.publicKey,
+        keys.privateKey
+      );
+    } catch (err) {
+      console.warn('[WebPush] Configuration VAPID details :', err.message);
     }
-  });
+  }
+  return keys;
+}
+
+async function sendSingleWebPush(subscription, payloadObject) {
+  if (!subscription || !subscription.endpoint) {
+    return { success: false, error: 'Abonnement incomplet' };
+  }
+
+  const p256dh = subscription.p256dh || subscription.keys?.p256dh;
+  const auth = subscription.auth || subscription.keys?.auth;
+
+  if (!p256dh || !auth) {
+    return { success: false, error: 'Clés p256dh ou auth manquantes dans l’abonnement.' };
+  }
+
+  const pushSubscription = {
+    endpoint: subscription.endpoint,
+    keys: { p256dh, auth }
+  };
+
+  configureWebPush();
+
+  if (webpush) {
+    try {
+      const res = await webpush.sendNotification(
+        pushSubscription,
+        JSON.stringify(payloadObject),
+        {
+          TTL: 86400,
+          urgency: 'high'
+        }
+      );
+      return { success: true, status: res.statusCode };
+    } catch (err) {
+      const statusCode = err.statusCode || 500;
+      const isExpired = statusCode === 404 || statusCode === 410;
+      return {
+        success: false,
+        expired: isExpired,
+        status: statusCode,
+        error: err.message || (err.body ? String(err.body) : 'Erreur envoi notification')
+      };
+    }
+  }
+
+  return { success: false, error: 'Module web-push indisponible sur le serveur' };
 }
 
 async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
-  const vapidKeys = getOrCreateVapidKeys();
-  if (!vapidKeys || !vapidKeys.publicKey) return 0;
-
-  const subs = Object.values(db.data.pushSubscriptions || {});
+  configureWebPush();
+  const subs = db.getAllPushSubscriptions();
   const matchingSubs = subs.filter(s => {
     if (!s || !s.endpoint) return false;
     if (targetUserId === 'all') return true;
-    const pid = String(s.userId || '').toLowerCase();
+    const pid = String(s.user_id || s.userId || '').toLowerCase();
     const uname = String(s.username || '').toLowerCase();
     const target = String(targetUserId).toLowerCase();
     return pid === target || uname === target;
@@ -357,17 +285,18 @@ async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
 
   let sentCount = 0;
   for (const sub of matchingSubs) {
-    const res = await sendSingleWebPush(sub, payloadObject, vapidKeys);
+    const res = await sendSingleWebPush(sub, payloadObject);
     if (res.success) {
       sentCount++;
-      sub.lastUsed = Date.now();
-    } else if (res.expired) {
-      delete db.data.pushSubscriptions[sub.endpoint];
+      sub.last_used = Date.now();
       db.save();
+    } else if (res.expired) {
+      db.deletePushSubscription(sub.endpoint);
     }
   }
   return sentCount;
 }
+
 
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
@@ -1081,23 +1010,41 @@ const server = http.createServer((req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       try {
-        const { subscription, playerId, username, userAgent } = JSON.parse(body);
-        if (!subscription || !subscription.endpoint || !subscription.keys) {
-          sendJson(res, 400, { success: false, error: 'Abonnement incomplet' });
+        const payload = JSON.parse(body);
+        let endpoint = payload.endpoint;
+        let p256dh = payload.p256dh;
+        let auth = payload.auth;
+        let userId = payload.user_id || payload.userId || payload.playerId;
+        let username = payload.username;
+        let userAgent = payload.userAgent || payload.user_agent;
+
+        if (payload.subscription) {
+          endpoint = endpoint || payload.subscription.endpoint;
+          if (payload.subscription.keys) {
+            p256dh = p256dh || payload.subscription.keys.p256dh;
+            auth = auth || payload.subscription.keys.auth;
+          }
+        }
+
+        if (!endpoint || !p256dh || !auth) {
+          sendJson(res, 400, {
+            success: false,
+            error: 'Abonnement incomplet : endpoint, p256dh et auth sont requis.'
+          });
           return;
         }
-        db.data.pushSubscriptions[subscription.endpoint] = {
-          endpoint: subscription.endpoint,
-          keys: subscription.keys,
-          userId: playerId || null,
+
+        const subRecord = db.savePushSubscription({
+          endpoint,
+          p256dh,
+          auth,
+          user_id: userId || null,
           username: username || 'Directeur',
-          userAgent: userAgent || '',
-          createdAt: Date.now(),
-          lastUsed: Date.now()
-        };
-        db.save();
-        console.log(`📲 [WebPush] Abonnement enregistré pour ${username || playerId || 'Inconnu'}`);
-        sendJson(res, 200, { success: true, registered: true });
+          userAgent: userAgent || ''
+        });
+
+        console.log(`📲 [WebPush] Abonnement enregistré pour ${subRecord.username || subRecord.user_id || 'Inconnu'}`);
+        sendJson(res, 200, { success: true, registered: true, subscription: subRecord });
       } catch (e) {
         sendJson(res, 400, { success: false, error: e.message });
       }
@@ -1112,13 +1059,79 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const { endpoint } = JSON.parse(body);
-        if (endpoint && db.data.pushSubscriptions[endpoint]) {
-          delete db.data.pushSubscriptions[endpoint];
-          db.save();
+        if (endpoint) {
+          db.deletePushSubscription(endpoint);
         }
         sendJson(res, 200, { success: true, unregistered: true });
       } catch (e) {
         sendJson(res, 400, { success: false, error: e.message });
+      }
+    });
+    return;
+  }
+
+  // Émission d'une notification push de test vers un endpoint ou un user_id donné
+  if (url === '/api/push/test' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const reqData = JSON.parse(body || '{}');
+        const endpoint = reqData.endpoint;
+        const userId = reqData.user_id || reqData.userId || reqData.playerId;
+        const title = reqData.title || '🚨 TEST NOTIFICATION WEB PUSH';
+        const msgBody = reqData.body || reqData.message || 'Notification test reçue avec succès alors que l’application est fermée !';
+
+        let targetSub = null;
+        if (endpoint) {
+          targetSub = db.getPushSubscription(endpoint);
+          if (!targetSub && reqData.p256dh && reqData.auth) {
+            targetSub = { endpoint, keys: { p256dh: reqData.p256dh, auth: reqData.auth } };
+          }
+        } else if (userId) {
+          const subs = db.getAllPushSubscriptions();
+          targetSub = subs.find(s => (s.user_id === userId || s.userId === userId));
+        } else {
+          const subs = db.getAllPushSubscriptions();
+          targetSub = subs[subs.length - 1]; // Dernier abonné
+        }
+
+        if (!targetSub || !targetSub.endpoint) {
+          return sendJson(res, 404, {
+            success: false,
+            error: 'Aucun abonnement push trouvé pour envoyer le test. Veuillez d’abord vous abonner.'
+          });
+        }
+
+        const notificationPayload = {
+          title,
+          body: msgBody,
+          icon: reqData.icon || '/icons/icon-192x192.png',
+          badge: reqData.badge || '/icons/badge-monochrome.png',
+          data: Object.assign({ url: '/jeu.html' }, reqData.data || {})
+        };
+
+        const result = await sendSingleWebPush(targetSub, notificationPayload);
+        if (result.success) {
+          sendJson(res, 200, {
+            success: true,
+            delivered: true,
+            status: result.status,
+            endpoint: targetSub.endpoint,
+            recipient: targetSub.username || targetSub.user_id || 'Inconnu'
+          });
+        } else {
+          if (result.expired) {
+            db.deletePushSubscription(targetSub.endpoint);
+          }
+          sendJson(res, result.status || 500, {
+            success: false,
+            error: result.error,
+            expired: !!result.expired
+          });
+        }
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: err.message });
       }
     });
     return;
