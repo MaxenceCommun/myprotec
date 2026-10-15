@@ -209,85 +209,95 @@ function fromBase64Url(str) {
   return Buffer.from(s, 'base64');
 }
 
-// Initialisation officielle Web Push W3C (identique à Site Protec)
-let webpush = null;
-try {
-  webpush = require('web-push');
-} catch (e) {
-  console.warn('[WebPush] Module web-push non disponible, utilisation fallback crypto natif.');
-}
-
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BHB8wWHGzna7sB2I7J17-BWXzyfcQFlqDoOxL27ZrVewvMHP6P7vl7YFvOhVV3wB4ZvHQNbYs7m7xB_Rj2tZa0Y';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'bRSlsX-Ed4AYgDNq9DwBVT5KUq7_8Rf2bwSyoF6ovCk';
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:contact@protection-civile54.org';
-
-if (webpush) {
+function getOrCreateVapidKeys() {
+  if (db.data.vapidKeys && db.data.vapidKeys.publicKey && db.data.vapidKeys.privateKeyDer) {
+    return db.data.vapidKeys;
+  }
   try {
-    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-    console.log('✅ [WebPush] Moteur W3C configuré avec les clés VAPID officielles.');
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', {
+      namedCurve: 'prime256v1',
+      publicKeyEncoding: { type: 'spki', format: 'der' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'der' }
+    });
+    const rawPublicKey = publicKey.subarray(publicKey.length - 65);
+    db.data.vapidKeys = {
+      publicKey: toBase64Url(rawPublicKey),
+      privateKeyDer: privateKey.toString('base64'),
+      subject: 'mailto:contact@myprotec.fr'
+    };
+    db.save();
+    console.log('🔑 Clés VAPID Web Push initialisées avec succès.');
   } catch (err) {
-    console.warn('[WebPush] Erreur configuration VAPID webpush:', err);
+    console.error('Erreur génération clés VAPID:', err);
   }
+  return db.data.vapidKeys;
 }
 
-function getVapidPublicKey() {
-  return VAPID_PUBLIC_KEY;
+function createVapidJwt(audience, vapidKeys) {
+  const header = toBase64Url(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
+  const exp = Math.floor(Date.now() / 1000) + (12 * 3600);
+  const claims = toBase64Url(JSON.stringify({
+    aud: audience,
+    exp: exp,
+    sub: vapidKeys.subject || 'mailto:contact@myprotec.fr'
+  }));
+  const unsignedToken = `${header}.${claims}`;
+  const privKeyObj = crypto.createPrivateKey({
+    key: Buffer.from(vapidKeys.privateKeyDer, 'base64'),
+    format: 'der',
+    type: 'pkcs8'
+  });
+  const signature = crypto.sign('SHA256', Buffer.from(unsignedToken), {
+    key: privKeyObj,
+    dsaEncoding: 'ieee-p1363'
+  });
+  return `${unsignedToken}.${toBase64Url(signature)}`;
 }
 
-async function sendSingleWebPush(subscription, payloadObject) {
-  if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
-    return { success: false, error: 'Abonnement incomplet' };
-  }
+function encryptWebPushPayload(payloadString, subscriptionKeys) {
+  const clientPub = fromBase64Url(subscriptionKeys.p256dh);
+  const clientAuth = fromBase64Url(subscriptionKeys.auth);
 
-  const payloadStr = JSON.stringify(payloadObject);
+  const localEcdh = crypto.createECDH('prime256v1');
+  localEcdh.generateKeys();
+  const localPub = localEcdh.getPublicKey();
 
-  // 1. Utilisation prioritaire du module officiel web-push
-  if (webpush) {
-    try {
-      await webpush.sendNotification({
-        endpoint: subscription.endpoint,
-        keys: {
-          p256dh: subscription.keys.p256dh,
-          auth: subscription.keys.auth
-        }
-      }, payloadStr, {
-        urgency: 'high', // OBLIGATOIRE : réveil instantané du smartphone même écran éteint / verrouillé
-        TTL: 86400      // 24 heures de persistance
-      });
-      return { success: true, status: 200 };
-    } catch (err) {
-      const statusCode = err && (err.statusCode || err.status);
-      if (statusCode === 410 || statusCode === 404) {
-        return { success: false, expired: true, status: statusCode, error: err.message };
-      }
-      return { success: false, status: statusCode, error: err.message };
-    }
-  }
+  const sharedSecret = localEcdh.computeSecret(clientPub);
+  const salt = crypto.randomBytes(16);
 
-  // 2. Fallback crypto natif RFC 8291 / RFC 8292 si web-push absent
+  const keyInfo = Buffer.concat([Buffer.from('WebPush: info\0', 'utf8'), clientPub, localPub]);
+  const prk = crypto.hkdfSync('sha256', sharedSecret, clientAuth, keyInfo, 32);
+
+  const cek = crypto.hkdfSync('sha256', prk, salt, Buffer.from('Content-Encoding: aes128gcm\0', 'utf8'), 16);
+  const nonce = crypto.hkdfSync('sha256', prk, salt, Buffer.from('Content-Encoding: nonce\0', 'utf8'), 12);
+
+  const plaintext = Buffer.concat([Buffer.from(payloadString, 'utf8'), Buffer.from([2])]);
+  const cipher = crypto.createCipheriv('aes-128-gcm', cek, nonce);
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
+
+  const rsBuf = Buffer.alloc(4);
+  rsBuf.writeUInt32BE(4096, 0);
+
+  return Buffer.concat([
+    salt,
+    rsBuf,
+    Buffer.from([0x41]),
+    localPub,
+    ciphertext
+  ]);
+}
+
+function sendSingleWebPush(subscription, payloadObject, vapidKeys) {
   return new Promise((resolve) => {
     try {
+      if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
+        return resolve({ success: false, error: 'Abonnement incomplet' });
+      }
+
       const endpointUrl = new URL(subscription.endpoint);
       const audience = `${endpointUrl.protocol}//${endpointUrl.host}`;
-      const header = toBase64Url(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
-      const exp = Math.floor(Date.now() / 1000) + (12 * 3600);
-      const claims = toBase64Url(JSON.stringify({
-        aud: audience,
-        exp: exp,
-        sub: VAPID_SUBJECT
-      }));
-      const unsignedToken = `${header}.${claims}`;
-      const privKeyObj = crypto.createPrivateKey({
-        key: Buffer.from(VAPID_PRIVATE_KEY, 'base64'),
-        format: 'der',
-        type: 'pkcs8'
-      });
-      const signature = crypto.sign('SHA256', Buffer.from(unsignedToken), {
-        key: privKeyObj,
-        dsaEncoding: 'ieee-p1363'
-      });
-      const jwt = `${unsignedToken}.${toBase64Url(signature)}`;
-      const bodyBuffer = encryptWebPushPayload(payloadStr, subscription.keys);
+      const jwt = createVapidJwt(audience, vapidKeys);
+      const bodyBuffer = encryptWebPushPayload(JSON.stringify(payloadObject), subscription.keys);
 
       const clientModule = endpointUrl.protocol === 'http:' ? http : https;
       const req = clientModule.request({
@@ -301,7 +311,7 @@ async function sendSingleWebPush(subscription, payloadObject) {
           'Content-Encoding': 'aes128gcm',
           'Content-Type': 'application/octet-stream',
           'Content-Length': bodyBuffer.length,
-          'Authorization': `vapid t=${jwt}, k=${VAPID_PUBLIC_KEY}`
+          'Authorization': `vapid t=${jwt}, k=${vapidKeys.publicKey}`
         }
       }, (res) => {
         let respData = '';
@@ -317,7 +327,10 @@ async function sendSingleWebPush(subscription, payloadObject) {
         });
       });
 
-      req.on('error', (err) => resolve({ success: false, error: err.message }));
+      req.on('error', (err) => {
+        resolve({ success: false, error: err.message });
+      });
+
       req.write(bodyBuffer);
       req.end();
     } catch (e) {
@@ -327,6 +340,9 @@ async function sendSingleWebPush(subscription, payloadObject) {
 }
 
 async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
+  const vapidKeys = getOrCreateVapidKeys();
+  if (!vapidKeys || !vapidKeys.publicKey) return 0;
+
   const subs = Object.values(db.data.pushSubscriptions || {});
   const matchingSubs = subs.filter(s => {
     if (!s || !s.endpoint) return false;
@@ -341,7 +357,7 @@ async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
 
   let sentCount = 0;
   for (const sub of matchingSubs) {
-    const res = await sendSingleWebPush(sub, payloadObject);
+    const res = await sendSingleWebPush(sub, payloadObject, vapidKeys);
     if (res.success) {
       sentCount++;
       sub.lastUsed = Date.now();
@@ -352,7 +368,6 @@ async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
   }
   return sentCount;
 }
-
 
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
@@ -692,6 +707,32 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Statut du cron serveur 24h/24 (Moteur autonome hors-ligne)
+  if (url === '/api/cron/status' && req.method === 'GET') {
+    sendJson(res, 200, {
+      success: true,
+      cronActive: true,
+      intervalSeconds: 60,
+      lastTickAt: lastCronTickTime ? new Date(lastCronTickTime).toISOString() : null,
+      serverUptimeSec: Math.floor(process.uptime()),
+      totalSavedGames: Object.keys(db.data?.savedGames || {}).length,
+      activeOnlinePlayers: Object.keys(gameState.players).length
+    });
+    return;
+  }
+
+  // Déclenchement manuel de test du cron serveur
+  if (url === '/api/cron/tick' && req.method === 'POST') {
+    const changesCount = runServerMinuteTick();
+    sendJson(res, 200, {
+      success: true,
+      message: 'Tick cron serveur exécuté avec succès',
+      changesCount: changesCount,
+      executedAt: new Date().toISOString()
+    });
+    return;
+  }
+
   // Charger la partie du joueur depuis la BDD
   if (url === '/api/game/load' && req.method === 'GET') {
     const user = getAuthUser(req);
@@ -1027,55 +1068,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Clé publique VAPID pour les Push Notifications du Service Worker (compatible /api/push/key et /api/push/vapid-public-key)
-  if ((url === '/api/push/key' || url === '/api/push/vapid-public-key') && req.method === 'GET') {
-    sendJson(res, 200, { success: true, publicKey: getVapidPublicKey() });
+  // Clé publique VAPID pour les Push Notifications du Service Worker
+  if (url === '/api/push/vapid-public-key' && req.method === 'GET') {
+    const keys = getOrCreateVapidKeys();
+    sendJson(res, 200, { success: true, publicKey: keys.publicKey });
     return;
   }
-
-  // Route de test direct Push W3C (identique à Site Protec)
-  if (url === '/api/push/test' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const parsed = JSON.parse(body || '{}');
-        const targetSub = parsed.subscription || null;
-        const testPayload = {
-          title: parsed.title || '🚨 TEST PUSH RÉUSSI (MyProtec)',
-          body: parsed.body || parsed.message || 'Le canal de notification W3C est 100% opérationnel même application fermée !',
-          icon: 'badge-monochrome.png',
-          badge: 'badge-monochrome.png',
-          data: { url: 'jeu.html' },
-          actions: [
-            { action: 'action_open', title: '📍 Voir l\'Intervention' },
-            { action: 'action_dispo', title: '✅ Disponible' }
-          ]
-        };
-
-        if (targetSub && targetSub.endpoint) {
-          const directRes = await sendSingleWebPush(targetSub, testPayload);
-          sendJson(res, directRes.success ? 200 : 500, {
-            success: directRes.success,
-            count: directRes.success ? 1 : 0,
-            message: directRes.success ? 'Notification Push d\'urgence envoyée immédiatement à votre terminal mobile !' : directRes.error
-          });
-          return;
-        }
-
-        const count = await dispatchWebPushToPlayer(parsed.targetUserId || 'all', testPayload);
-        sendJson(res, 200, {
-          success: true,
-          count,
-          message: `Notification Push W3C envoyée à ${count} smartphone(s)`
-        });
-      } catch (err) {
-        sendJson(res, 500, { success: false, error: err.message });
-      }
-    });
-    return;
-  }
-
 
   // Enregistrement d'un abonnement Push (Web & Mobile, PWA)
   if (url === '/api/push/subscribe' && req.method === 'POST') {
@@ -1774,3 +1772,289 @@ server.on('error', (e) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Serveur Protec Live Multijoueur actif sur http://0.0.0.0:${PORT} (ou http://localhost:${PORT})`);
 });
+
+// =========================================================================
+// MOTEUR DE FOND CRON 24H/24 (Avancement Autonome des Parties Hors-Ligne)
+// =========================================================================
+
+let lastCronTickTime = null;
+
+function runServerMinuteTick() {
+  const now = Date.now();
+  lastCronTickTime = now;
+  let hasGlobalChanges = false;
+  let totalChangesProcessed = 0;
+
+  // 1. Gestion des parties des joueurs hors-ligne (inactifs depuis plus de 2 minutes)
+  if (db.data && db.data.savedGames) {
+    Object.entries(db.data.savedGames).forEach(([userId, saveEntry]) => {
+      const gameData = saveEntry?.data;
+      if (!gameData) return;
+
+      // Détection de l'activité du joueur : s'il est en ligne, son navigateur gère déjà le jeu
+      const lastSeen = gameState.players[userId]?.lastSeen || 0;
+      const isPlayerOnline = (now - lastSeen) < 120000;
+      if (isPlayerOnline) return;
+
+      let hasPlayerChanges = false;
+
+      // a. Avancement des opérations de chargement / déchargement logistique (Kits VTU)
+      if (Array.isArray(gameData.vehicles)) {
+        gameData.vehicles.forEach(veh => {
+          if (veh.logOperation) {
+            const elapsed = Math.floor((now - veh.logOperation.startTime) / 1000);
+            if (elapsed >= (veh.logOperation.durationSec || 120)) {
+              if (veh.logOperation.type === 'loading') {
+                veh.logKit = veh.logOperation.kitId;
+              } else if (veh.logOperation.type === 'unloading') {
+                veh.logKit = null;
+              }
+              veh.logOperation = null;
+              veh.status = 'dispo';
+              hasPlayerChanges = true;
+              totalChangesProcessed++;
+            }
+          }
+        });
+      }
+
+      // b. Gestion des ateliers de réarmement (missions de réarmement)
+      if (Array.isArray(gameData.missions)) {
+        gameData.missions.forEach(m => {
+          if ((m.isRearmentWorkshop || m.isRearmamentWorkshop) && (m.status === 'ongoing' || m.status === 'en_cours')) {
+            const regCount = Math.max(1, (m.registeredVolunteers || []).length);
+            const effectiveMinutes = Math.max(10, Math.round((m.baseWorkMinutes || 60) / regCount));
+            if (m.startTime && (now - m.startTime) >= effectiveMinutes * 60000) {
+              m.status = 'completed';
+              (m.targetVehicleIds || []).forEach(vId => {
+                const targetV = (gameData.vehicles || []).find(v => v.id === vId);
+                if (targetV) {
+                  targetV.armementLevel = 100;
+                  targetV.isRearmed = true;
+                  targetV.needsRearming = false;
+                  targetV.a_rearme = false;
+                }
+              });
+              // Libérer les bénévoles inscrits
+              (m.registeredVolunteers || []).forEach(volId => {
+                const vol = (gameData.volunteers || []).find(v => v.id === volId);
+                if (vol && vol.status === 'mission') {
+                  vol.status = 'disponible';
+                  vol.assignedMissionId = null;
+                }
+              });
+              hasPlayerChanges = true;
+              totalChangesProcessed++;
+            }
+          }
+        });
+      }
+
+      // c. Avancement et fin des missions classiques (DPS, SAMU, etc.)
+      if (Array.isArray(gameData.missions)) {
+        gameData.missions.forEach(m => {
+          if (m.status === 'ongoing' || m.status === 'en_cours' || m.status === 'dispatched') {
+            const isCrisis = Boolean(m.isCrisis || ['crise', 'pompiers', 'samu', 'meteo'].includes(m.type));
+            if (!isCrisis) {
+              const endsAt = m.endsAt || (m.startedAt ? m.startedAt + ((m.durationSeconds || 1800) * 1000) : null);
+              if (endsAt && now >= endsAt) {
+                m.status = 'completed';
+                // Libérer les véhicules engagés
+                (m.assignedVehicleIds || []).forEach(vehId => {
+                  const veh = (gameData.vehicles || []).find(v => v.id === vehId);
+                  if (veh && veh.status !== 'indispo') {
+                    veh.status = 'dispo';
+                    veh.assignedMissionId = null;
+                  }
+                });
+                // Libérer les bénévoles engagés
+                (m.registeredVolunteers || []).forEach(volId => {
+                  const vol = (gameData.volunteers || []).find(v => v.id === volId);
+                  if (vol && vol.status !== 'indisponible') {
+                    vol.status = 'disponible';
+                    vol.assignedMissionId = null;
+                  }
+                });
+                // Rémunération de la mission si devis/budget
+                const payout = m.budget || m.totalPrice || m.price || 0;
+                if (payout > 0 && gameData.resources) {
+                  gameData.resources.money = (gameData.resources.money || 0) + payout;
+                }
+                hasPlayerChanges = true;
+                totalChangesProcessed++;
+              }
+            } else if (m.crisisCanClose) {
+              // Si la crise a été déclarée prête à clore par le COS
+              m.status = 'completed';
+              (m.assignedVehicleIds || []).forEach(vehId => {
+                const veh = (gameData.vehicles || []).find(v => v.id === vehId);
+                if (veh) {
+                  veh.status = 'dispo';
+                  veh.assignedMissionId = null;
+                }
+              });
+              (m.registeredVolunteers || []).forEach(volId => {
+                const vol = (gameData.volunteers || []).find(v => v.id === volId);
+                if (vol) {
+                  vol.status = 'disponible';
+                  vol.assignedMissionId = null;
+                }
+              });
+              hasPlayerChanges = true;
+              totalChangesProcessed++;
+            }
+          }
+        });
+      }
+
+      // d. Résolution des véhicules en transit de retour vers la base
+      if (Array.isArray(gameData.vehicles)) {
+        gameData.vehicles.forEach(veh => {
+          if (veh.status === 'transit') {
+            const activeMiss = (gameData.missions || []).find(m => m.id === veh.assignedMissionId && (m.status === 'ongoing' || m.status === 'en_cours'));
+            if (!activeMiss) {
+              veh.status = 'dispo';
+              veh.assignedMissionId = null;
+              hasPlayerChanges = true;
+              totalChangesProcessed++;
+            }
+          }
+        });
+      }
+
+      // e. Résolution des secouristes en transit ou au repos
+      if (Array.isArray(gameData.volunteers)) {
+        gameData.volunteers.forEach(vol => {
+          if (vol.status === 'transit') {
+            const activeMiss = (gameData.missions || []).find(m => m.id === vol.assignedMissionId && (m.status === 'ongoing' || m.status === 'en_cours'));
+            if (!activeMiss) {
+              vol.status = 'disponible';
+              vol.assignedMissionId = null;
+              hasPlayerChanges = true;
+              totalChangesProcessed++;
+            }
+          }
+          // Récupération progressive de l'énergie au repos en base (+1% / min jusqu'à 100)
+          if ((vol.status === 'disponible' || vol.status === 'dispo') && (vol.energy !== undefined) && vol.energy < 100) {
+            vol.energy = Math.min(100, (vol.energy || 90) + 1);
+            hasPlayerChanges = true;
+          }
+        });
+      }
+
+      // f. Avancement de l'horloge interne de la partie
+      if (gameData.clock) {
+        let m = (gameData.clock.minute || 0) + 1;
+        let h = gameData.clock.hour || 8;
+        let d = gameData.clock.day || 1;
+        let mo = gameData.clock.month || 1;
+        let y = gameData.clock.year || 2026;
+
+        if (m >= 60) {
+          m = 0;
+          h += 1;
+          if (h >= 24) {
+            h = 0;
+            d += 1;
+            if (d > 30) {
+              d = 1;
+              mo += 1;
+              if (mo > 12) {
+                mo = 1;
+                y += 1;
+              }
+            }
+          }
+        }
+        gameData.clock.minute = m;
+        gameData.clock.hour = h;
+        gameData.clock.day = d;
+        gameData.clock.month = mo;
+        gameData.clock.year = y;
+        gameData.clock.second = 0;
+        hasPlayerChanges = true;
+      }
+
+      if (hasPlayerChanges) {
+        saveEntry.savedAt = new Date().toISOString();
+        hasGlobalChanges = true;
+      }
+    });
+  }
+
+  // 2. Nettoyage et maintenance du réseau d'Alliance (renforts expirés, joueurs déconnectés)
+  if (Array.isArray(db.data?.renforts)) {
+    const renfortsBefore = db.data.renforts.length;
+    // Les demandes ouvertes depuis plus de 72h réelles sans réponse sont archivées
+    db.data.renforts = db.data.renforts.filter(r => {
+      if (r.status === 'open' && r.createdAt) {
+        const ageHours = (now - new Date(r.createdAt).getTime()) / (1000 * 3600);
+        return ageHours < 72;
+      }
+      return true;
+    });
+    if (db.data.renforts.length !== renfortsBefore) hasGlobalChanges = true;
+  }
+
+  // Nettoyage des joueurs inactifs en mémoire vive (> 30 min)
+  Object.keys(gameState.players).forEach(pId => {
+    if (now - (gameState.players[pId].lastSeen || 0) > 1800000) {
+      delete gameState.players[pId];
+      hasGlobalChanges = true;
+    }
+  });
+
+  // 3. Bilan quotidien de Trésorerie & Activité à 00h00 heure française (une seule fois par jour)
+  try {
+    const frDateFormatter = new Intl.DateTimeFormat('fr-FR', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    const frParts = {};
+    frDateFormatter.formatToParts(new Date(now)).forEach(pt => frParts[pt.type] = pt.value);
+    const frHour = parseInt(frParts.hour, 10);
+    const frMinute = parseInt(frParts.minute, 10);
+    const frTodayKey = `${frParts.year}-${frParts.month}-${frParts.day}`;
+
+    if (frHour === 0 && frMinute === 0) {
+      if (db.data && db.data.savedGames) {
+        Object.entries(db.data.savedGames).forEach(([userId, saveEntry]) => {
+          const gameData = saveEntry?.data;
+          if (!gameData) return;
+          if (gameData.lastDailyFinanceReport !== frTodayKey) {
+            gameData.lastDailyFinanceReport = frTodayKey;
+            const moneyVal = Math.round(gameData.resources?.money || 0);
+            if (!Array.isArray(gameData.pending_notifications)) gameData.pending_notifications = [];
+            gameData.pending_notifications.push({
+              title: 'Trésorerie & Bilan d’Activité',
+              message: `Bilan quotidien de votre antenne à 00h00. Trésorerie disponible : ${moneyVal.toLocaleString('fr-FR')} €. Votre antenne est prête pour une nouvelle journée opérationnelle.`,
+              category: 'finances',
+              type: 'blue',
+              created_at: new Date().toISOString()
+            });
+            hasGlobalChanges = true;
+          }
+        });
+      }
+    }
+  } catch (errBilan) {
+    console.warn('Erreur cron bilan minuit:', errBilan);
+  }
+
+  if (hasGlobalChanges) {
+    db.save();
+    broadcastSSE('stations_updated', { allianceStations: gameState.allianceStations });
+  }
+
+  return totalChangesProcessed;
+}
+
+// Lancement automatique du cron toutes les 60 secondes (60 000 ms)
+const SERVER_CRON_INTERVAL_MS = 60000;
+setInterval(runServerMinuteTick, SERVER_CRON_INTERVAL_MS);
+console.log('[CRON SERVEUR 24H/24] Moteur autonome initialisé (cycle toutes les 60 secondes).');

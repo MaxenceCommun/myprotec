@@ -301,13 +301,8 @@ window.ProtecNotifications = {
       body: 'Météo-France place votre département en vigilance accrue. Les services de l’État pré-alertent votre antenne de Protection Civile !',
       tag: 'reengage-meteo',
       condition: (game) => Boolean(game && (typeof game.isFeatureUnlocked === 'function' ? game.isFeatureUnlocked('meteo') : true) && game.weather && ['jaune', 'orange', 'rouge'].includes((game.weather.vigilanceLevel || '').toLowerCase()))
-    },
-    {
-      title: 'Trésorerie & Bilan d’Activité',
-      body: 'Votre antenne est prête pour une nouvelle période opérationnelle. Consultez votre trésorerie et vos dotations !',
-      tag: 'reengage-reward',
-      condition: (game) => Boolean(game && game.resources && game.resources.money !== undefined)
     }
+
   ],
 
   // Initialisation du gestionnaire
@@ -315,6 +310,17 @@ window.ProtecNotifications = {
     this.loadConfig();
     try {
       this.history = JSON.parse(localStorage.getItem('protec_notif_history') || '[]');
+      // Dédoublonnage d'assainissement : ne conserver qu'une seule notification Trésorerie & Bilan par jour au maximum
+      const seenBilanDays = new Set();
+      this.history = this.history.filter(item => {
+        if (item && item.title && item.title.includes('Trésorerie & Bilan')) {
+          const dayKey = item.date || item.time || 'day';
+          if (seenBilanDays.has(dayKey)) return false;
+          seenBilanDays.add(dayKey);
+        }
+        return true;
+      });
+      localStorage.setItem('protec_notif_history', JSON.stringify(this.history));
     } catch (e) {
       this.history = [];
     }
@@ -383,12 +389,71 @@ window.ProtecNotifications = {
       window.addEventListener(evt, onUserActive, { passive: true });
     });
 
+    // Vérification du bilan de trésorerie quotidien à 00h00 heure française
+    setInterval(() => {
+      this.checkMidnightDailyFinanceReport(window.game);
+    }, 15000);
+
     // Heartbeat régulier
     setInterval(() => {
       if (!this.isDeviceMobile() && document.visibilityState === 'visible' && (Date.now() - this.lastUserInteraction < 45000)) {
         localStorage.setItem('protec_pc_heartbeat', Date.now().toString());
       }
     }, 10000);
+  },
+
+  // Bilan quotidien de trésorerie et d'activité envoyé à 00h00 heure française (une seule fois par jour)
+  checkMidnightDailyFinanceReport(game) {
+    if (!game) game = window.game;
+    try {
+      // Calcul sous le fuseau Europe/Paris (heure officielle française)
+      const formatter = new Intl.DateTimeFormat('fr-FR', {
+        timeZone: 'Europe/Paris',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      const parts = formatter.formatToParts(new Date());
+      const p = {};
+      parts.forEach(part => p[part.type] = part.value);
+
+      const hour = parseInt(p.hour, 10);
+      const minute = parseInt(p.minute, 10);
+      const todayDateKey = `${p.year}-${p.month}-${p.day}`;
+
+      // S'envoie UNIQUEMENT à 00h00 heure française (entre 00:00 et 00:01)
+      if (hour !== 0 || minute !== 0) return;
+
+      const lastSentDate = localStorage.getItem('protec_last_daily_finance_report');
+      if (lastSentDate === todayDateKey) return; // Déjà envoyé pour aujourd'hui
+
+      // Enregistrement strict de la date d'envoi pour zéro doublon
+      localStorage.setItem('protec_last_daily_finance_report', todayDateKey);
+
+      const moneyStr = (game && game.resources && game.resources.money !== undefined)
+        ? `Trésorerie disponible : ${Math.round(game.resources.money).toLocaleString('fr-FR')} €.`
+        : 'Consultez votre trésorerie et vos dotations !';
+
+      this.recordNotification({
+        title: 'Trésorerie & Bilan d’Activité',
+        message: `Bilan quotidien de votre antenne à 00h00. ${moneyStr} Votre antenne est prête pour une nouvelle journée opérationnelle.`,
+        category: 'finances',
+        color: 'blue'
+      });
+
+      if (this.shouldSendSystemNotification()) {
+        this.sendPushNotification(
+          'Trésorerie & Bilan d’Activité',
+          `Bilan quotidien à 00h00. ${moneyStr}`,
+          { tag: `daily-finance-${todayDateKey}`, category: 'finances' }
+        );
+      }
+    } catch (e) {
+      console.warn('Erreur vérification bilan minuit:', e);
+    }
   },
 
   // Bannière d'incitation à l'abonnement Push (conforme à PushSubscriptionBanner de Site Protec)

@@ -707,6 +707,32 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Statut du cron serveur 24h/24 (Moteur autonome hors-ligne)
+  if (url === '/api/cron/status' && req.method === 'GET') {
+    sendJson(res, 200, {
+      success: true,
+      cronActive: true,
+      intervalSeconds: 60,
+      lastTickAt: lastCronTickTime ? new Date(lastCronTickTime).toISOString() : null,
+      serverUptimeSec: Math.floor(process.uptime()),
+      totalSavedGames: Object.keys(db.data?.savedGames || {}).length,
+      activeOnlinePlayers: Object.keys(gameState.players).length
+    });
+    return;
+  }
+
+  // Déclenchement manuel de test du cron serveur
+  if (url === '/api/cron/tick' && req.method === 'POST') {
+    const changesCount = runServerMinuteTick();
+    sendJson(res, 200, {
+      success: true,
+      message: 'Tick cron serveur exécuté avec succès',
+      changesCount: changesCount,
+      executedAt: new Date().toISOString()
+    });
+    return;
+  }
+
   // Charger la partie du joueur depuis la BDD
   if (url === '/api/game/load' && req.method === 'GET') {
     const user = getAuthUser(req);
@@ -1746,3 +1772,289 @@ server.on('error', (e) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Serveur Protec Live Multijoueur actif sur http://0.0.0.0:${PORT} (ou http://localhost:${PORT})`);
 });
+
+// =========================================================================
+// MOTEUR DE FOND CRON 24H/24 (Avancement Autonome des Parties Hors-Ligne)
+// =========================================================================
+
+let lastCronTickTime = null;
+
+function runServerMinuteTick() {
+  const now = Date.now();
+  lastCronTickTime = now;
+  let hasGlobalChanges = false;
+  let totalChangesProcessed = 0;
+
+  // 1. Gestion des parties des joueurs hors-ligne (inactifs depuis plus de 2 minutes)
+  if (db.data && db.data.savedGames) {
+    Object.entries(db.data.savedGames).forEach(([userId, saveEntry]) => {
+      const gameData = saveEntry?.data;
+      if (!gameData) return;
+
+      // Détection de l'activité du joueur : s'il est en ligne, son navigateur gère déjà le jeu
+      const lastSeen = gameState.players[userId]?.lastSeen || 0;
+      const isPlayerOnline = (now - lastSeen) < 120000;
+      if (isPlayerOnline) return;
+
+      let hasPlayerChanges = false;
+
+      // a. Avancement des opérations de chargement / déchargement logistique (Kits VTU)
+      if (Array.isArray(gameData.vehicles)) {
+        gameData.vehicles.forEach(veh => {
+          if (veh.logOperation) {
+            const elapsed = Math.floor((now - veh.logOperation.startTime) / 1000);
+            if (elapsed >= (veh.logOperation.durationSec || 120)) {
+              if (veh.logOperation.type === 'loading') {
+                veh.logKit = veh.logOperation.kitId;
+              } else if (veh.logOperation.type === 'unloading') {
+                veh.logKit = null;
+              }
+              veh.logOperation = null;
+              veh.status = 'dispo';
+              hasPlayerChanges = true;
+              totalChangesProcessed++;
+            }
+          }
+        });
+      }
+
+      // b. Gestion des ateliers de réarmement (missions de réarmement)
+      if (Array.isArray(gameData.missions)) {
+        gameData.missions.forEach(m => {
+          if ((m.isRearmentWorkshop || m.isRearmamentWorkshop) && (m.status === 'ongoing' || m.status === 'en_cours')) {
+            const regCount = Math.max(1, (m.registeredVolunteers || []).length);
+            const effectiveMinutes = Math.max(10, Math.round((m.baseWorkMinutes || 60) / regCount));
+            if (m.startTime && (now - m.startTime) >= effectiveMinutes * 60000) {
+              m.status = 'completed';
+              (m.targetVehicleIds || []).forEach(vId => {
+                const targetV = (gameData.vehicles || []).find(v => v.id === vId);
+                if (targetV) {
+                  targetV.armementLevel = 100;
+                  targetV.isRearmed = true;
+                  targetV.needsRearming = false;
+                  targetV.a_rearme = false;
+                }
+              });
+              // Libérer les bénévoles inscrits
+              (m.registeredVolunteers || []).forEach(volId => {
+                const vol = (gameData.volunteers || []).find(v => v.id === volId);
+                if (vol && vol.status === 'mission') {
+                  vol.status = 'disponible';
+                  vol.assignedMissionId = null;
+                }
+              });
+              hasPlayerChanges = true;
+              totalChangesProcessed++;
+            }
+          }
+        });
+      }
+
+      // c. Avancement et fin des missions classiques (DPS, SAMU, etc.)
+      if (Array.isArray(gameData.missions)) {
+        gameData.missions.forEach(m => {
+          if (m.status === 'ongoing' || m.status === 'en_cours' || m.status === 'dispatched') {
+            const isCrisis = Boolean(m.isCrisis || ['crise', 'pompiers', 'samu', 'meteo'].includes(m.type));
+            if (!isCrisis) {
+              const endsAt = m.endsAt || (m.startedAt ? m.startedAt + ((m.durationSeconds || 1800) * 1000) : null);
+              if (endsAt && now >= endsAt) {
+                m.status = 'completed';
+                // Libérer les véhicules engagés
+                (m.assignedVehicleIds || []).forEach(vehId => {
+                  const veh = (gameData.vehicles || []).find(v => v.id === vehId);
+                  if (veh && veh.status !== 'indispo') {
+                    veh.status = 'dispo';
+                    veh.assignedMissionId = null;
+                  }
+                });
+                // Libérer les bénévoles engagés
+                (m.registeredVolunteers || []).forEach(volId => {
+                  const vol = (gameData.volunteers || []).find(v => v.id === volId);
+                  if (vol && vol.status !== 'indisponible') {
+                    vol.status = 'disponible';
+                    vol.assignedMissionId = null;
+                  }
+                });
+                // Rémunération de la mission si devis/budget
+                const payout = m.budget || m.totalPrice || m.price || 0;
+                if (payout > 0 && gameData.resources) {
+                  gameData.resources.money = (gameData.resources.money || 0) + payout;
+                }
+                hasPlayerChanges = true;
+                totalChangesProcessed++;
+              }
+            } else if (m.crisisCanClose) {
+              // Si la crise a été déclarée prête à clore par le COS
+              m.status = 'completed';
+              (m.assignedVehicleIds || []).forEach(vehId => {
+                const veh = (gameData.vehicles || []).find(v => v.id === vehId);
+                if (veh) {
+                  veh.status = 'dispo';
+                  veh.assignedMissionId = null;
+                }
+              });
+              (m.registeredVolunteers || []).forEach(volId => {
+                const vol = (gameData.volunteers || []).find(v => v.id === volId);
+                if (vol) {
+                  vol.status = 'disponible';
+                  vol.assignedMissionId = null;
+                }
+              });
+              hasPlayerChanges = true;
+              totalChangesProcessed++;
+            }
+          }
+        });
+      }
+
+      // d. Résolution des véhicules en transit de retour vers la base
+      if (Array.isArray(gameData.vehicles)) {
+        gameData.vehicles.forEach(veh => {
+          if (veh.status === 'transit') {
+            const activeMiss = (gameData.missions || []).find(m => m.id === veh.assignedMissionId && (m.status === 'ongoing' || m.status === 'en_cours'));
+            if (!activeMiss) {
+              veh.status = 'dispo';
+              veh.assignedMissionId = null;
+              hasPlayerChanges = true;
+              totalChangesProcessed++;
+            }
+          }
+        });
+      }
+
+      // e. Résolution des secouristes en transit ou au repos
+      if (Array.isArray(gameData.volunteers)) {
+        gameData.volunteers.forEach(vol => {
+          if (vol.status === 'transit') {
+            const activeMiss = (gameData.missions || []).find(m => m.id === vol.assignedMissionId && (m.status === 'ongoing' || m.status === 'en_cours'));
+            if (!activeMiss) {
+              vol.status = 'disponible';
+              vol.assignedMissionId = null;
+              hasPlayerChanges = true;
+              totalChangesProcessed++;
+            }
+          }
+          // Récupération progressive de l'énergie au repos en base (+1% / min jusqu'à 100)
+          if ((vol.status === 'disponible' || vol.status === 'dispo') && (vol.energy !== undefined) && vol.energy < 100) {
+            vol.energy = Math.min(100, (vol.energy || 90) + 1);
+            hasPlayerChanges = true;
+          }
+        });
+      }
+
+      // f. Avancement de l'horloge interne de la partie
+      if (gameData.clock) {
+        let m = (gameData.clock.minute || 0) + 1;
+        let h = gameData.clock.hour || 8;
+        let d = gameData.clock.day || 1;
+        let mo = gameData.clock.month || 1;
+        let y = gameData.clock.year || 2026;
+
+        if (m >= 60) {
+          m = 0;
+          h += 1;
+          if (h >= 24) {
+            h = 0;
+            d += 1;
+            if (d > 30) {
+              d = 1;
+              mo += 1;
+              if (mo > 12) {
+                mo = 1;
+                y += 1;
+              }
+            }
+          }
+        }
+        gameData.clock.minute = m;
+        gameData.clock.hour = h;
+        gameData.clock.day = d;
+        gameData.clock.month = mo;
+        gameData.clock.year = y;
+        gameData.clock.second = 0;
+        hasPlayerChanges = true;
+      }
+
+      if (hasPlayerChanges) {
+        saveEntry.savedAt = new Date().toISOString();
+        hasGlobalChanges = true;
+      }
+    });
+  }
+
+  // 2. Nettoyage et maintenance du réseau d'Alliance (renforts expirés, joueurs déconnectés)
+  if (Array.isArray(db.data?.renforts)) {
+    const renfortsBefore = db.data.renforts.length;
+    // Les demandes ouvertes depuis plus de 72h réelles sans réponse sont archivées
+    db.data.renforts = db.data.renforts.filter(r => {
+      if (r.status === 'open' && r.createdAt) {
+        const ageHours = (now - new Date(r.createdAt).getTime()) / (1000 * 3600);
+        return ageHours < 72;
+      }
+      return true;
+    });
+    if (db.data.renforts.length !== renfortsBefore) hasGlobalChanges = true;
+  }
+
+  // Nettoyage des joueurs inactifs en mémoire vive (> 30 min)
+  Object.keys(gameState.players).forEach(pId => {
+    if (now - (gameState.players[pId].lastSeen || 0) > 1800000) {
+      delete gameState.players[pId];
+      hasGlobalChanges = true;
+    }
+  });
+
+  // 3. Bilan quotidien de Trésorerie & Activité à 00h00 heure française (une seule fois par jour)
+  try {
+    const frDateFormatter = new Intl.DateTimeFormat('fr-FR', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    const frParts = {};
+    frDateFormatter.formatToParts(new Date(now)).forEach(pt => frParts[pt.type] = pt.value);
+    const frHour = parseInt(frParts.hour, 10);
+    const frMinute = parseInt(frParts.minute, 10);
+    const frTodayKey = `${frParts.year}-${frParts.month}-${frParts.day}`;
+
+    if (frHour === 0 && frMinute === 0) {
+      if (db.data && db.data.savedGames) {
+        Object.entries(db.data.savedGames).forEach(([userId, saveEntry]) => {
+          const gameData = saveEntry?.data;
+          if (!gameData) return;
+          if (gameData.lastDailyFinanceReport !== frTodayKey) {
+            gameData.lastDailyFinanceReport = frTodayKey;
+            const moneyVal = Math.round(gameData.resources?.money || 0);
+            if (!Array.isArray(gameData.pending_notifications)) gameData.pending_notifications = [];
+            gameData.pending_notifications.push({
+              title: 'Trésorerie & Bilan d’Activité',
+              message: `Bilan quotidien de votre antenne à 00h00. Trésorerie disponible : ${moneyVal.toLocaleString('fr-FR')} €. Votre antenne est prête pour une nouvelle journée opérationnelle.`,
+              category: 'finances',
+              type: 'blue',
+              created_at: new Date().toISOString()
+            });
+            hasGlobalChanges = true;
+          }
+        });
+      }
+    }
+  } catch (errBilan) {
+    console.warn('Erreur cron bilan minuit:', errBilan);
+  }
+
+  if (hasGlobalChanges) {
+    db.save();
+    broadcastSSE('stations_updated', { allianceStations: gameState.allianceStations });
+  }
+
+  return totalChangesProcessed;
+}
+
+// Lancement automatique du cron toutes les 60 secondes (60 000 ms)
+const SERVER_CRON_INTERVAL_MS = 60000;
+setInterval(runServerMinuteTick, SERVER_CRON_INTERVAL_MS);
+console.log('[CRON SERVEUR 24H/24] Moteur autonome initialisé (cycle toutes les 60 secondes).');
