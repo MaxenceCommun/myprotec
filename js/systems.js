@@ -109,38 +109,112 @@ window.ProtecSystems = {
     }
   },
 
-  // --- 2. TRAJET EN TEMPS RÉEL SUR ROUTE & GYROPHARES ---
-  async fetchRouteCoordinates(origin, dest) {
-    const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${dest.lng},${dest.lat}?overview=full&geometries=geojson`;
+  // --- 2. TRAJET EN TEMPS RÉEL SUR ROUTE, AUTOROUTES & GYROPHARES ---
+  haversineMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  },
+
+  async fetchRouteDetails(origin, dest) {
+    const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${dest.lng},${dest.lat}?overview=full&geometries=geojson&annotations=speed,distance,duration`;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
         if (data.routes && data.routes[0] && data.routes[0].geometry.coordinates) {
-          return data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+          const coords = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+          const leg = data.routes[0].legs?.[0];
+          const distances = leg?.annotation?.distance || [];
+          const speeds = leg?.annotation?.speed || []; // en m/s
+
+          const segments = [];
+          let totalDist = 0;
+          for (let i = 0; i < coords.length - 1; i++) {
+            const p0 = coords[i];
+            const p1 = coords[i + 1];
+            let d = distances[i];
+            if (typeof d !== 'number' || d <= 0) {
+              d = this.haversineMeters(p0[0], p0[1], p1[0], p1[1]);
+            }
+            totalDist += d;
+            const speedMs = speeds[i] || 0;
+            const speedKmh = speedMs * 3.6;
+            // Tronçon autoroute / voie rapide :
+            // Vitesse de référence OSRM >= 72 km/h (20 m/s) ou segment long (>350m) et rapide (>60 km/h)
+            const isHighway = speedKmh >= 72 || (d > 350 && speedKmh >= 60);
+            segments.push({
+              p0,
+              p1,
+              distanceMeters: d,
+              isHighway,
+              osrmSpeedKmh: speedKmh
+            });
+          }
+
+          return {
+            coords,
+            totalDistanceMeters: totalDist || data.routes[0].distance || 1000,
+            segments
+          };
         }
       }
     } catch (e) {
-      // Fallback
+      // Fallback si indisponible
     }
 
     // Fallback : interpolation réaliste avec légère courbure
-    const points = [];
-    const steps = 14;
+    const coords = [];
+    const steps = 18;
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const lat = origin.lat + (dest.lat - origin.lat) * t + Math.sin(t * Math.PI) * 0.002;
       const lng = origin.lng + (dest.lng - origin.lng) * t - Math.sin(t * Math.PI) * 0.0015;
-      points.push([lat, lng]);
+      coords.push([lat, lng]);
     }
-    return points;
+    const segments = [];
+    let totalDist = 0;
+    const directDist = this.haversineMeters(origin.lat, origin.lng, dest.lat, dest.lng);
+    for (let i = 0; i < coords.length - 1; i++) {
+      const p0 = coords[i];
+      const p1 = coords[i + 1];
+      const d = this.haversineMeters(p0[0], p0[1], p1[0], p1[1]);
+      totalDist += d;
+      const isMid = i >= 4 && i <= 13;
+      const isHighway = isMid && directDist > 4000;
+      segments.push({
+        p0,
+        p1,
+        distanceMeters: d,
+        isHighway,
+        osrmSpeedKmh: isHighway ? 95 : 35
+      });
+    }
+
+    return {
+      coords,
+      totalDistanceMeters: totalDist,
+      segments
+    };
+  },
+
+  async fetchRouteCoordinates(origin, dest) {
+    const details = await this.fetchRouteDetails(origin, dest);
+    return details.coords;
   },
 
   async startTransit(game, vehicle, originCoords, destCoords, mission, statusTarget, onArrivalCallback) {
-    const routeCoords = await this.fetchRouteCoordinates(originCoords, destCoords);
+    const routeData = await this.fetchRouteDetails(originCoords, destCoords);
+    const routeCoords = routeData.coords;
+    const segments = routeData.segments;
     const transitId = `transit-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
     // Détection d'un départ d'urgence (SAMU, transport CH, pompiers, crise CUMP/NOVI, préfecture)
@@ -203,7 +277,6 @@ window.ProtecSystems = {
 
     // Clic sur mon véhicule : zoomer/centrer sur le trajet et ouvrir la mission
     marker.on('click', () => {
-      // 1. Tracer et cadrer le trajet complet
       if (game.map && polyline) {
         try {
           const bounds = polyline.getBounds();
@@ -217,7 +290,6 @@ window.ProtecSystems = {
         }, 1800);
       }
 
-      // 2. Retrouver et ouvrir la fiche détaillée de la mission
       if (mission && mission.id) {
         if (typeof game.openMissionDetails === 'function') {
           game.openMissionDetails(mission.id);
@@ -234,25 +306,62 @@ window.ProtecSystems = {
       }
     });
 
-    // Calcul de la distance réelle en kilomètres
-    const distKm = Math.max(0.8, Math.hypot(
-      (destCoords.lat - originCoords.lat) * 111,
-      (destCoords.lng - originCoords.lng) * 111 * Math.cos(originCoords.lat * Math.PI / 180)
-    ));
+    // PARAMÈTRES DE VITESSE RÉALISTES & VARIABLE DÉDIÉE SUR AUTOROUTE :
+    // - Vitesse urbaine / secondaire ralentie pour éviter les trajets éclairs :
+    //     * 42 km/h sous gyrophare urgent, 30 km/h en conduite normale
+    // - Variable autoroute dédiée à vitesse augmentée :
+    //     * 105 km/h sous gyrophare urgent, 80 km/h en conduite normale
+    const speedUrbanKmh = canUseEmergencySpeed ? 42 : 30;
+    const speedHighwayKmh = canUseEmergencySpeed ? 105 : 80;
 
-    // Vitesse adaptée selon la présence de gyrophares et la doctrine opérationnelle :
-    // - Sous gyrophares (VPSP de série ou véhicule équipé d'une rampe LED) : ~48-52 km/h
-    // - Sans gyrophare (ou véhicule non équipé) : vitesse normale ~35 km/h respectant le code et le trafic urbain
-    const realisticSpeedKmh = canUseEmergencySpeed ? (statusTarget === 4 ? 52 : 48) : 35;
-    const baseDurationSec = Math.max(50, Math.min(300, Math.round((distKm / realisticSpeedKmh) * 3600 * 0.85)));
+    let totalTimeUrbanSec = 0;
+    let totalTimeHighwaySec = 0;
+    let totalDistUrbanMeters = 0;
+    let totalDistHighwayMeters = 0;
+
+    segments.forEach(seg => {
+      const vKmh = seg.isHighway ? speedHighwayKmh : speedUrbanKmh;
+      const vMs = vKmh / 3.6;
+      seg.speedKmh = vKmh;
+      seg.durationSec = seg.distanceMeters / vMs;
+
+      if (seg.isHighway) {
+        totalTimeHighwaySec += seg.durationSec;
+        totalDistHighwayMeters += seg.distanceMeters;
+      } else {
+        totalTimeUrbanSec += seg.durationSec;
+        totalDistUrbanMeters += seg.distanceMeters;
+      }
+    });
+
+    const totalDistanceMeters = totalDistUrbanMeters + totalDistHighwayMeters;
+    const distKm = Math.max(0.8, totalDistanceMeters / 1000);
+    const distHighwayKm = totalDistHighwayMeters / 1000;
+    const distUrbanKm = totalDistUrbanMeters / 1000;
+
+    // Temps de trajet réel calculé par rapport à la distance avec la variable autoroute distincte
+    const calculatedDurationSec = totalTimeUrbanSec + totalTimeHighwaySec;
+    // Durée minimale garantie (minimum 60s en temps standard pour éviter tout déplacement trop rapide)
+    const baseDurationSec = Math.max(60, Math.round(calculatedDurationSec));
+    const timeScale = baseDurationSec / Math.max(1, calculatedDurationSec);
+
+    // Ajustement proportionnel des durées de segments pour correspondre au total
+    const cumulativeTimeSec = [0];
+    segments.forEach((seg, idx) => {
+      seg.durationSec *= timeScale;
+      cumulativeTimeSec.push(cumulativeTimeSec[idx] + seg.durationSec);
+    });
+
     const durationMs = (baseDurationSec * 1000) / Math.max(1, game.speed || 1);
     const now = Date.now();
 
     const modeLabel = canUseEmergencySpeed 
       ? (statusTarget === 4 ? 'Statut 4 : Évacuation CHU (Gyrophare)' : 'Statut 2 : Départ Urgence (Gyrophare)') 
       : (isEmergency 
-          ? 'Statut 2 : Déplacement Urgent sans gyrophare (Vitesse normale 35 km/h)' 
+          ? 'Statut 2 : Déplacement Urgent sans gyrophare (Vitesse normale)' 
           : (statusTarget === 6 ? 'Statut 6 : Retour Antenne (Normal)' : 'Statut 2 : Déplacement Normal'));
+
+    const initialSpeedLabel = distHighwayKm > 0.5 ? `${speedUrbanKmh} km/h (Urbain) / ${speedHighwayKmh} km/h (Autoroute)` : `~${speedUrbanKmh} km/h`;
 
     marker.bindTooltip(`
       <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
@@ -262,7 +371,8 @@ window.ProtecSystems = {
         </div>
         <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName} (Mon Antenne)</div>
         <div style="color: #475569; font-size: 10px; margin-top: 1px;">${modeLabel}</div>
-        <div style="color: #0284c7; font-size: 10px; margin-top: 1px;">Vitesse : ~${realisticSpeedKmh} km/h • Reste : <strong>${distKm.toFixed(1)} km</strong></div>
+        <div style="color: #0284c7; font-size: 10px; margin-top: 1px;">Vitesse : ${initialSpeedLabel} • Reste : <strong>${distKm.toFixed(1)} km</strong></div>
+        ${distHighwayKm > 0.3 ? `<div style="color: #0369a1; font-size: 9.5px; margin-top: 1px;">Tronçon : ${distUrbanKm.toFixed(1)} km urbain + <strong>${distHighwayKm.toFixed(1)} km autoroute</strong></div>` : ''}
         ${mission?.title ? `<div style="color: #334155; font-size: 10px; margin-top: 2px; font-weight: 600;">🎯 Mission : ${mission.title}</div>` : ''}
         <div style="margin-top: 5px; padding: 3px 6px; background: #eff6ff; color: #1d4ed8; border-radius: 6px; font-weight: 800; font-size: 9px; text-align: center; border: 1px solid #bfdbfe;">
           👉 Cliquer pour tracer le trajet & retrouver la mission
@@ -283,11 +393,21 @@ window.ProtecSystems = {
       isEmergency: canUseEmergencySpeed,
       hasBeacon: hasBeacon,
       routeCoords: routeCoords,
+      segments: segments,
+      cumulativeTimeSec: cumulativeTimeSec,
+      totalDurationSec: baseDurationSec,
       distKm: distKm,
-      speedKmh: realisticSpeedKmh,
+      distHighwayKm: distHighwayKm,
+      distUrbanKm: distUrbanKm,
+      timeHighwaySec: Math.round(totalTimeHighwaySec * timeScale),
+      timeUrbanSec: Math.round(totalTimeUrbanSec * timeScale),
+      speedUrbanKmh: speedUrbanKmh,
+      speedHighwayKmh: speedHighwayKmh,
+      speedKmh: speedUrbanKmh,
       startTime: now,
       durationMs: durationMs,
       currentStep: 0,
+      currentIsHighway: false,
       polyline: polyline,
       marker: marker,
       evacData: mission?.evacHospitalData || null,
@@ -379,31 +499,69 @@ window.ProtecSystems = {
 
     for (let i = game.transits.length - 1; i >= 0; i--) {
       const t = game.transits[i];
-      const elapsed = Math.max(0, now - (t.startTime || now));
-      const progress = Math.min(1, elapsed / (t.durationMs || 30000));
+      const elapsedMs = Math.max(0, now - (t.startTime || now));
+      const gameSpeed = Math.max(1, game.speed || 1);
+      const elapsedGameSec = (elapsedMs / 1000) * gameSpeed;
+      const totalDurationSec = t.totalDurationSec || ((t.durationMs / 1000) * gameSpeed) || 60;
+      const progress = Math.min(1, elapsedGameSec / totalDurationSec);
 
       if (progress < 1) {
-        // Interpolation sous-fractionnaire fluide à 60 FPS le long du tracé routier
-        const floatStep = progress * (t.routeCoords.length - 1);
-        const idx0 = Math.floor(floatStep);
-        const idx1 = Math.min(t.routeCoords.length - 1, idx0 + 1);
-        const fraction = floatStep - idx0;
+        let currentPos = null;
+        let isHighwayCurrent = false;
+        let currentSegmentSpeed = t.speedKmh || 35;
 
-        const p0 = t.routeCoords[idx0] || t.routeCoords[0];
-        const p1 = t.routeCoords[idx1] || p0;
+        // Navigation ultra-précise par temps cumulé segment par segment avec accélération autoroute
+        if (Array.isArray(t.segments) && t.segments.length > 0 && Array.isArray(t.cumulativeTimeSec)) {
+          let segIdx = 0;
+          for (let s = 0; s < t.segments.length; s++) {
+            if (elapsedGameSec >= t.cumulativeTimeSec[s] && elapsedGameSec < t.cumulativeTimeSec[s + 1]) {
+              segIdx = s;
+              break;
+            }
+            if (s === t.segments.length - 1) segIdx = s;
+          }
 
-        const currentPos = [
-          p0[0] + (p1[0] - p0[0]) * fraction,
-          p0[1] + (p1[1] - p0[1]) * fraction
-        ];
-        t.currentStep = idx0;
+          const seg = t.segments[segIdx];
+          const t0 = t.cumulativeTimeSec[segIdx] || 0;
+          const t1 = t.cumulativeTimeSec[segIdx + 1] || (t0 + 1);
+          const segDelta = Math.max(0.001, t1 - t0);
+          const segFrac = Math.min(1, Math.max(0, (elapsedGameSec - t0) / segDelta));
+
+          currentPos = [
+            seg.p0[0] + (seg.p1[0] - seg.p0[0]) * segFrac,
+            seg.p0[1] + (seg.p1[1] - seg.p0[1]) * segFrac
+          ];
+          isHighwayCurrent = !!seg.isHighway;
+          currentSegmentSpeed = seg.isHighway ? (t.speedHighwayKmh || 105) : (t.speedUrbanKmh || 42);
+          t.currentStep = segIdx;
+          t.currentIsHighway = isHighwayCurrent;
+          t.speedKmh = currentSegmentSpeed;
+        } else {
+          // Fallback interpolation linéaire fluide à 60 FPS
+          const floatStep = progress * (t.routeCoords.length - 1);
+          const idx0 = Math.floor(floatStep);
+          const idx1 = Math.min(t.routeCoords.length - 1, idx0 + 1);
+          const fraction = floatStep - idx0;
+
+          const p0 = t.routeCoords[idx0] || t.routeCoords[0];
+          const p1 = t.routeCoords[idx1] || p0;
+
+          currentPos = [
+            p0[0] + (p1[0] - p0[0]) * fraction,
+            p0[1] + (p1[1] - p0[1]) * fraction
+          ];
+          t.currentStep = idx0;
+        }
 
         if (t.marker && currentPos) {
           t.marker.setLatLng(currentPos);
+          if (t.marker._icon) {
+            t.marker._icon.classList.toggle('is-highway-speed', isHighwayCurrent);
+          }
 
           if (t.isRemote) {
             const remainingKm = (t.distKm * (1 - progress)).toFixed(1);
-            const remainingSec = Math.max(1, Math.round((t.durationMs - elapsed) / 1000));
+            const remainingSec = Math.max(1, Math.round((totalDurationSec - elapsedGameSec) / gameSpeed));
             t.marker.setTooltipContent(`
               <div style="font-family: inherit; font-size: 11px; line-height: 1.35;">
                 <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
@@ -422,7 +580,7 @@ window.ProtecSystems = {
           }
 
           const remainingKm = (t.distKm * (1 - progress)).toFixed(1);
-          const remainingSec = Math.max(1, Math.round((t.durationMs - elapsed) / 1000));
+          const remainingSec = Math.max(1, Math.round((totalDurationSec - elapsedGameSec) / gameSpeed));
           const hospName = t.evacData?.hospital?.name || t.mission?.evacHospitalData?.hospital?.name || 'Urgences de Secteur';
           const specLabel = t.evacData?.specialtyInfo?.label || t.mission?.evacHospitalData?.specialtyInfo?.label || 'Urgences Générales';
           const specClass = t.evacData?.specialtyInfo?.badgeClass || 'bg-blue-100 text-blue-900 border-blue-300';
@@ -442,6 +600,15 @@ window.ProtecSystems = {
           }
 
           const stName = t.stationName || 'Mon Antenne';
+
+          const speedBadge = isHighwayCurrent
+            ? `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 5px; background: #0284c7; color: white; font-weight: 800; font-size: 9.5px; box-shadow: 0 1px 3px rgba(2,132,199,0.35);">🛣️ AUTOROUTE : ${currentSegmentSpeed} km/h (Accélération)</span>`
+            : `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 5px; background: #64748b; color: white; font-weight: 800; font-size: 9.5px;">🏙️ ZONE URBAINE : ${currentSegmentSpeed} km/h</span>`;
+
+          const highwayDetail = (t.distHighwayKm && t.distHighwayKm > 0.3)
+            ? `<div style="color: #0369a1; font-size: 9.5px; margin-top: 2px;">Itinéraire : ${t.distUrbanKm.toFixed(1)} km urbain + <strong>${t.distHighwayKm.toFixed(1)} km autoroute</strong></div>`
+            : '';
+
           t.marker.setTooltipContent(`
             <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
               <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
@@ -449,7 +616,9 @@ window.ProtecSystems = {
                 <strong style="color: #0f172a; font-size: 12px;">${t.vehicle.name}</strong>
               </div>
               <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stName} (Mon Antenne)</div>
-              <div style="color: #475569; font-size: 10px; margin-top: 1px;">Vitesse : <span class="font-bold ${t.isEmergency ? 'text-red-600' : 'text-slate-800'}">${t.speedKmh} km/h</span> • Reste : <strong>${remainingKm} km</strong> (~${remainingSec}s)</div>
+              <div style="margin-top: 3px; margin-bottom: 3px;">${speedBadge}</div>
+              <div style="color: #475569; font-size: 10px; margin-top: 1px;">Trajet restant : <strong>${remainingKm} km</strong> (~${remainingSec}s)</div>
+              ${highwayDetail}
               ${t.mission?.title ? `<div style="color: #334155; font-size: 10px; margin-top: 2px; font-weight: 600;">🎯 Mission : ${t.mission.title}</div>` : ''}
               ${t.statusTarget === 4 ? statusBadgeText : `<div class="text-[9px] font-bold text-slate-500">${statusBadgeText}</div>`}
               <div style="margin-top: 5px; padding: 3px 6px; background: #eff6ff; color: #1d4ed8; border-radius: 6px; font-weight: 800; font-size: 9px; text-align: center; border: 1px solid #bfdbfe;">
@@ -519,7 +688,9 @@ window.ProtecSystems = {
     if (game.player?.id && data.playerId && String(data.playerId) === String(game.player.id)) return;
 
     const transitId = `remote-transit-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    const routeCoords = await this.fetchRouteCoordinates(data.origin, data.dest);
+    const routeData = await this.fetchRouteDetails(data.origin, data.dest);
+    const routeCoords = routeData.coords;
+    const segments = routeData.segments;
 
     const isEmergency = !!data.isEmergency;
     const polyline = L.polyline(routeCoords, {
@@ -587,13 +758,43 @@ window.ProtecSystems = {
       }
     });
 
-    const distKm = Math.max(0.8, Math.hypot(
-      (data.dest.lat - data.origin.lat) * 111,
-      (data.dest.lng - data.origin.lng) * 111 * Math.cos(data.origin.lat * Math.PI / 180)
-    ));
+    const speedUrbanKmh = isEmergency ? 42 : 30;
+    const speedHighwayKmh = isEmergency ? 105 : 80;
 
-    const realisticSpeedKmh = data.speedKmh || (isEmergency ? 48 : 35);
-    const durationMs = data.durationMs || Math.max(45000, Math.round((distKm / realisticSpeedKmh) * 3600 * 1000 * 0.85));
+    let totalTimeUrbanSec = 0;
+    let totalTimeHighwaySec = 0;
+    let totalDistUrbanMeters = 0;
+    let totalDistHighwayMeters = 0;
+
+    segments.forEach(seg => {
+      const vKmh = seg.isHighway ? speedHighwayKmh : speedUrbanKmh;
+      const vMs = vKmh / 3.6;
+      seg.speedKmh = vKmh;
+      seg.durationSec = seg.distanceMeters / vMs;
+
+      if (seg.isHighway) {
+        totalTimeHighwaySec += seg.durationSec;
+        totalDistHighwayMeters += seg.distanceMeters;
+      } else {
+        totalTimeUrbanSec += seg.durationSec;
+        totalDistUrbanMeters += seg.distanceMeters;
+      }
+    });
+
+    const distKm = Math.max(0.8, (totalDistUrbanMeters + totalDistHighwayMeters) / 1000);
+    const distHighwayKm = totalDistHighwayMeters / 1000;
+    const distUrbanKm = totalDistUrbanMeters / 1000;
+    const calculatedDurationSec = totalTimeUrbanSec + totalTimeHighwaySec;
+    const baseDurationSec = Math.max(60, Math.round(calculatedDurationSec));
+    const timeScale = baseDurationSec / Math.max(1, calculatedDurationSec);
+
+    const cumulativeTimeSec = [0];
+    segments.forEach((seg, idx) => {
+      seg.durationSec *= timeScale;
+      cumulativeTimeSec.push(cumulativeTimeSec[idx] + seg.durationSec);
+    });
+
+    const durationMs = (baseDurationSec * 1000) / Math.max(1, game.speed || 1);
 
     marker.bindTooltip(`
       <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
@@ -603,7 +804,7 @@ window.ProtecSystems = {
         </div>
         <div style="color: #4338ca; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName} (${cityName || 'Secteur'})</div>
         <div style="color: #475569; font-size: 10px;">👤 Directeur : ${playerName}</div>
-        <div style="color: #0369a1; font-size: 10px; margin-top: 1px;">Vitesse : ~${realisticSpeedKmh} km/h • Reste : <strong>${distKm.toFixed(1)} km</strong></div>
+        <div style="color: #0369a1; font-size: 10px; margin-top: 1px;">Vitesse : ~${speedUrbanKmh} km/h • Reste : <strong>${distKm.toFixed(1)} km</strong></div>
         <div style="color: ${isEmergency ? '#dc2626' : '#475569'}; font-weight: 700; font-size: 10px; margin-top: 2px;">
           ${isEmergency ? '🚨 Départ Urgence' : 'Déplacement Normal'} • ${data.missionTitle || 'Opérations'}
         </div>
@@ -629,11 +830,19 @@ window.ProtecSystems = {
       vehicle: { name: vehName, type: data.vehicleType || 'VPSP' },
       isEmergency: isEmergency,
       routeCoords: routeCoords,
+      segments: segments,
+      cumulativeTimeSec: cumulativeTimeSec,
+      totalDurationSec: baseDurationSec,
       distKm: distKm,
-      speedKmh: realisticSpeedKmh,
+      distHighwayKm: distHighwayKm,
+      distUrbanKm: distUrbanKm,
+      speedUrbanKmh: speedUrbanKmh,
+      speedHighwayKmh: speedHighwayKmh,
+      speedKmh: speedUrbanKmh,
       startTime: Date.now(),
       durationMs: durationMs,
       currentStep: 0,
+      currentIsHighway: false,
       polyline: polyline,
       marker: marker,
       onArrival: data.onArrival || null

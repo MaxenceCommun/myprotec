@@ -2908,7 +2908,9 @@ window.ProtecAdmin = {
       { code: 'badge_def_sudest', name: 'Zone SUD-EST', subtitle: 'Auvergne-Rhône-Alpes', file: 'badge_def_sudest.png', color: 'from-indigo-600 to-purple-700', badgeColor: 'bg-indigo-100 text-indigo-800' },
       { code: 'badge_def_sud', name: 'Zone SUD', subtitle: 'PACA, Occitanie, Corse', file: 'badge_def_sud.png', color: 'from-amber-600 to-orange-700', badgeColor: 'bg-orange-100 text-orange-800' },
       { code: 'badge_def_paris', name: 'Zone PARIS', subtitle: 'Île-de-France & Préfecture de Police', file: 'badge_def_paris.png', color: 'from-blue-700 to-slate-800', badgeColor: 'bg-slate-100 text-slate-800' },
-      { code: 'badge_def_sudouest', name: 'Zone SUD-OUEST', subtitle: 'Nouvelle-Aquitaine', file: 'badge_def_sudouest.png', color: 'from-cyan-600 to-blue-700', badgeColor: 'bg-cyan-100 text-cyan-800' }
+      { code: 'badge_def_sudouest', name: 'Zone SUD-OUEST', subtitle: 'Nouvelle-Aquitaine', file: 'badge_def_sudouest.png', color: 'from-cyan-600 to-blue-700', badgeColor: 'bg-cyan-100 text-cyan-800' },
+      { code: 'badge_chat_noir', name: 'Écusson Chat Noir', subtitle: 'Distinction Opérationnelle • Situations Complexes', file: 'ecusson_chat_noir.png', color: 'from-zinc-800 to-black', badgeColor: 'bg-zinc-800 text-zinc-100' },
+      { code: 'badge_chat_blanc', name: 'Écusson Chat Blanc', subtitle: 'Distinction Opérationnelle • Baraka & Bienveillance', file: 'ecusson_chat_blanc.png', color: 'from-slate-100 to-slate-300 text-slate-900', badgeColor: 'bg-white text-slate-900 border border-slate-300' }
     ];
 
     // Options du catalogue complet

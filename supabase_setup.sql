@@ -786,7 +786,9 @@ INSERT INTO ecussons (code, nom, description, categorie, badge_url, rarete) VALU
   ('badge_def_sudest', 'Zone de Défense et de Sécurité Sud-Est', 'Coordination zonale de secours en montagne, vallées et métropoles (Auvergne-Rhône-Alpes).', 'renfort', 'images/badge_def_sudest.png', 'epique'),
   ('badge_def_sud', 'Zone de Défense et de Sécurité Sud', 'Coordination zonale des dispositifs méditerranéens et feux de forêts (PACA, Occitanie, Corse).', 'renfort', 'images/badge_def_sud.png', 'epique'),
   ('badge_def_paris', 'Zone de Défense et de Sécurité de Paris', 'Coordination zonale de la région capitale et Préfecture de Police (Île-de-France).', 'renfort', 'images/badge_def_paris.png', 'epique'),
-  ('badge_def_sudouest', 'Zone de Défense et de Sécurité Sud-Ouest', 'Coordination zonale des moyens de sécurité civile du Sud-Ouest (Nouvelle-Aquitaine).', 'renfort', 'images/badge_def_sudouest.png', 'epique')
+  ('badge_def_sudouest', 'Zone de Défense et de Sécurité Sud-Ouest', 'Coordination zonale des moyens de sécurité civile du Sud-Ouest (Nouvelle-Aquitaine).', 'renfort', 'images/badge_def_sudouest.png', 'epique'),
+  ('badge_chat_noir', 'Écusson Chat Noir', 'Distinction officielle de terrain face aux situations complexes et aux défis imprévus (Attribué par l’État-Major / Objectifs à venir).', 'distinction', 'images/ecusson_chat_noir.png', 'epique'),
+  ('badge_chat_blanc', 'Écusson Chat Blanc', 'Distinction officielle récompensant la bienveillance et le déroulement sans accroc des opérations (Attribué par l’État-Major / Objectifs à venir).', 'distinction', 'images/ecusson_chat_blanc.png', 'epique')
 ON CONFLICT (code) DO UPDATE SET
   nom = EXCLUDED.nom,
   description = EXCLUDED.description,

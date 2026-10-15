@@ -33,6 +33,19 @@ window.ProtecLogistique = {
   CATALOG: [
     // --- 1. PHARMACIE & CONSOMMABLES ---
     {
+      id: 'stock_materiels_ps',
+      category: 'pharmacie',
+      name: 'Stock Matériels PS (Consommables Premiers Secours)',
+      lucideIcon: 'briefcase-medical',
+      image: 'images/equipements/woundKits.png',
+      price: 150,
+      unit: 'lot (100 unités / 100%)',
+      badge: 'Réarmement PS',
+      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      desc: 'Dotation globale de consommables (pansements, compresses, O2, désinfection, colliers, attelles) pour réarmer les VPSP et VTU.',
+      usage: 'Permet de réarmer la flotte de secours (VPSP et VTU DPS). Diminue à chaque réarmement selon le % consommé.'
+    },
+    {
       id: 'oxygenBottles',
       category: 'pharmacie',
       name: 'Bouteille Oxygène Médical 5L (O2 B5)',
@@ -560,6 +573,12 @@ window.ProtecLogistique = {
     if (!station.stock) {
       station.stock = {};
     }
+    if (station.stockMaterielsPS === undefined) {
+      station.stockMaterielsPS = 150;
+    }
+    if (game && game.stockMaterielsPS === undefined) {
+      game.stockMaterielsPS = station.stockMaterielsPS;
+    }
     // Synchroniser avec game.logistics si existant
     if (game && game.logistics) {
       ['oxygenBottles', 'aedPads', 'woundKits', 'cervicalCollars'].forEach(k => {
@@ -670,6 +689,10 @@ window.ProtecLogistique = {
     const orderedItems = [];
     Object.entries(this.cart).forEach(([id, qty]) => {
       station.stock[id] = (station.stock[id] || 0) + qty;
+      if (id === 'stock_materiels_ps') {
+        station.stockMaterielsPS = (station.stockMaterielsPS || 0) + (100 * qty);
+        game.stockMaterielsPS = station.stockMaterielsPS;
+      }
       const catItem = this.CATALOG.find(i => i.id === id);
       if (catItem) orderedItems.push(`${qty}x ${catItem.name}`);
     });
@@ -927,14 +950,14 @@ window.ProtecLogistique = {
         </div>
 
         <!-- COLONNE DROITE (1/3) : PANIER D'ACHATS FIXE & VALIDATION -->
-        <div class="lg:col-span-1 p-4 rounded-3xl bg-slate-900 text-white border border-slate-800 shadow-xl space-y-4 lg:sticky lg:top-4">
+        <div class="lg:col-span-1 p-4 rounded-3xl bg-slate-50 border border-slate-200 text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-white shadow-md space-y-4 lg:sticky lg:top-4">
           
-          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <div class="flex items-center gap-2">
-              <i data-lucide="shopping-cart" class="w-4 h-4 text-blue-400"></i>
+              <i data-lucide="shopping-cart" class="w-4 h-4 text-pc-blue dark:text-blue-400"></i>
               <div>
-                <h4 class="text-xs font-black uppercase tracking-wider text-slate-200">Mon Panier</h4>
-                <span class="text-[10px] text-slate-400">Livraison à ${station?.name || 'l\'antenne'}</span>
+                <h4 class="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">Mon Panier</h4>
+                <span class="text-[10px] text-slate-500 dark:text-slate-400">Livraison à ${station?.name || 'l\'antenne'}</span>
               </div>
             </div>
             <span class="px-2 py-0.5 rounded-full text-xs font-black bg-blue-600 text-white font-mono">
@@ -945,10 +968,10 @@ window.ProtecLogistique = {
           <!-- Liste des articles dans le panier -->
           <div class="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
             ${cartCount === 0 ? `
-              <div class="py-8 text-center space-y-2 text-slate-400">
-                <i data-lucide="shopping-bag" class="w-9 h-9 mx-auto text-slate-600 stroke-1 block opacity-70"></i>
+              <div class="py-8 text-center space-y-2 text-slate-500 dark:text-slate-400">
+                <i data-lucide="shopping-bag" class="w-9 h-9 mx-auto text-slate-300 dark:text-slate-600 stroke-1 block opacity-70"></i>
                 <p class="text-xs">Votre panier est vide.</p>
-                <p class="text-[10.5px] text-slate-500">Ajoutez des lots, médicaments ou tenues depuis le catalogue.</p>
+                <p class="text-[10.5px] text-slate-400 dark:text-slate-500">Ajoutez des lots, médicaments ou tenues depuis le catalogue.</p>
               </div>
             ` : Object.entries(this.cart).map(([id, qty]) => {
               const item = this.CATALOG.find(i => i.id === id);
@@ -1011,7 +1034,7 @@ window.ProtecLogistique = {
                 Vider le panier
               </button>
             ` : `
-              <button disabled class="w-full py-3 rounded-2xl bg-slate-800 text-slate-500 font-bold text-xs cursor-not-allowed text-center">
+              <button disabled class="w-full py-3 rounded-2xl bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-500 font-bold text-xs cursor-not-allowed text-center">
                 Panier vide
               </button>
             `}

@@ -490,21 +490,53 @@ window.ProtecNotifications = {
     this.updateHeaderUI();
   },
 
+  // Comptage des notifications non lues
+  getUnreadCount() {
+    return (this.history || []).filter(item => item && !item.read).length;
+  },
+
+  // Marquer toutes les notifications comme lues
+  markAllAsRead() {
+    let changed = false;
+    (this.history || []).forEach(item => {
+      if (item && !item.read) {
+        item.read = true;
+        changed = true;
+      }
+    });
+    if (changed) {
+      try {
+        localStorage.setItem('protec_notif_history', JSON.stringify(this.history));
+      } catch (e) {}
+    }
+    this.updateHeaderUI();
+  },
+
   // Mise à jour de l'icône et des indicateurs visuels du header
   updateHeaderUI() {
+    const unreadCount = this.getUnreadCount();
+    const hasUnread = unreadCount > 0;
     const isGranted = (this.permission === 'granted' && this.config.enabled);
     const badge = document.getElementById('push-notif-badge');
     const badgeMobile = document.getElementById('push-notif-badge-mobile');
     const icon = document.getElementById('push-notif-icon');
 
     if (badge) {
-      badge.className = `absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ${isGranted ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`;
+      if (hasUnread) {
+        badge.className = 'absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white notif-badge-active';
+      } else {
+        badge.className = 'hidden';
+      }
     }
     if (badgeMobile) {
-      badgeMobile.className = `absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ${isGranted ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`;
+      if (hasUnread) {
+        badgeMobile.className = 'absolute top-1.5 right-1.5 w-2 h-2 rounded-full border border-white notif-badge-active';
+      } else {
+        badgeMobile.className = 'hidden';
+      }
     }
     if (icon) {
-      icon.className = `w-3.5 h-3.5 transition-transform ${isGranted ? 'text-amber-500 font-black' : 'text-slate-400'}`;
+      icon.className = `w-3.5 h-3.5 transition-transform ${hasUnread ? 'text-red-500 font-black animate-bounce' : (isGranted ? 'text-amber-500 font-black' : 'text-slate-400')}`;
     }
   },
 
@@ -702,18 +734,30 @@ window.ProtecNotifications = {
   },
 
   // Enregistrement d'une notification dans l'historique
+  sanitizeMessage(msg) {
+    if (typeof msg !== 'string') return msg;
+    return msg
+      .replace(/([,\s•\.\-]*[+\-]?\d+\s*(?:pts?|points?|%)\s*(?:de\s*)?(?:r[ée]putation|r[ée]put|popularit[ée]|morale?|motivation|coh[ée]sion|relations?)[^,\.\)]*)/gi, '')
+      .replace(/\s*\([^\)]*(?:r[ée]putation|r[ée]put|moral|motivation)[^\)]*\)/gi, '')
+      .replace(/(?:,\s*)?(?:baisse|perte)\s+(?:du\s+)?moral\s*(?:et\s*d[ée]gradation\s*de\s*la\s*r[ée]putation)?/gi, '')
+      .replace(/(?:,\s*)?d[ée]gradation\s+de\s+la\s+r[ée]putation/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  },
+
   recordNotification(data) {
     if (!data) return;
     const item = {
       id: Date.now() + Math.random(),
       title: data.title || 'Notification',
-      message: data.message || data.body || '',
+      message: this.sanitizeMessage(data.message || data.body || ''),
       color: data.color || 'blue',
       category: data.category || 'general',
       targetType: data.targetType || (data.target && data.target.type) || null,
       targetId: data.targetId || (data.target && data.target.id) || null,
       time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      date: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+      date: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+      read: false
     };
     this.history.unshift(item);
     if (this.history.length > 80) this.history = this.history.slice(0, 80);
@@ -723,6 +767,8 @@ window.ProtecNotifications = {
 
     const badge = document.getElementById('notif-history-count');
     if (badge) badge.textContent = this.history.length;
+
+    this.updateHeaderUI();
 
     if (this.activeTab === 'history') {
       const listEl = document.getElementById('notif-history-list');
@@ -781,6 +827,7 @@ window.ProtecNotifications = {
 
   // Envoi d'une vraie notification Push système (Arrière-plan & Écran verrouillé)
   sendPushNotification(title, body, options = {}) {
+    body = this.sanitizeMessage(body);
     // 1. Enregistre TOUJOURS dans le journal in-app
     this.recordNotification({ title, message: body, color: 'orange', category: options.category || 'push' });
 
@@ -980,6 +1027,7 @@ window.ProtecNotifications = {
     if (defaultTab) {
       this.activeTab = defaultTab;
     }
+    this.markAllAsRead();
     let modal = document.getElementById('notif-settings-modal');
     if (!modal) {
       this.createSettingsModalDOM();
@@ -1124,6 +1172,48 @@ window.ProtecNotifications = {
             <!-- SECTION 1 : INTERFACE & EXPÉRIENCE DE JEU -->
             <div class="space-y-2.5">
               <h4 class="font-black text-slate-700 uppercase tracking-wider text-[10px]">Interface & Affichage</h4>
+
+              <!-- Sélecteur de Thème Visuel (Système, Clair, Foncé) -->
+              <div class="p-3.5 rounded-2xl glass-card border border-slate-200 dark:border-slate-700 space-y-2.5 shadow-xs">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="font-extrabold text-slate-800 dark:text-white block text-xs">Thème de l’interface</span>
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                      Choisissez entre l'apparence claire, sombre ou automatique calquée sur votre système.
+                    </span>
+                  </div>
+                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold uppercase">
+                    ${(window.ProtecTheme?.getThemePreference() || 'system').toUpperCase()}
+                  </span>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 pt-1">
+                  ${(() => {
+                    const currentPref = window.ProtecTheme ? window.ProtecTheme.getThemePreference() : 'system';
+                    const themes = [
+                      { id: 'system', label: 'Système', icon: '💻', desc: 'Auto (OS)' },
+                      { id: 'light', label: 'Clair', icon: '☀️', desc: 'Lumineux' },
+                      { id: 'dark', label: 'Foncé', icon: '🌙', desc: 'Sombre' }
+                    ];
+                    return themes.map(th => {
+                      const isActive = (currentPref === th.id);
+                      return `
+                        <button type="button" 
+                          onclick="if(window.ProtecTheme) window.ProtecTheme.setThemePreference('${th.id}')"
+                          class="p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 ${
+                            isActive 
+                              ? 'bg-pc-blue text-white border-pc-blue shadow-sm ring-2 ring-pc-blue/30 font-black' 
+                              : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 font-bold'
+                          }">
+                          <span class="text-base leading-none">${th.icon}</span>
+                          <span class="text-xs">${th.label}</span>
+                          <span class="text-[9px] ${isActive ? 'text-blue-100' : 'text-slate-400'} font-normal">${th.desc}</span>
+                        </button>
+                      `;
+                    }).join('');
+                  })()}
+                </div>
+              </div>
 
               <label class="flex items-center justify-between p-3.5 rounded-2xl glass-card border border-slate-200 cursor-pointer hover:bg-slate-50/70 transition shadow-xs">
                 <div class="pr-3">

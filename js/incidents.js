@@ -71,7 +71,7 @@ window.ProtecIncidents = {
           text: 'Ventilation manuelle BAVU à l\'air ambiant & appel SMUR en urgence absolue',
           costReputation: -15,
           costDelayMin: 12,
-          outcome: 'La victime est sauvée de justesse mais le médecin du SMUR dresse un rapport d\'incident grave au SAMU et à l\'ARS pour véhicule non réarmé (-15 pts réputation SAMU).'
+          outcome: 'La victime est sauvée de justesse mais le médecin du SMUR dresse un rapport d\'incident grave au SAMU et à l\'ARS pour véhicule non réarmé.'
         },
         {
           text: 'Emprunter d\'urgence la bouteille de réserve du Poste Fixe (Lot A)',
@@ -922,8 +922,8 @@ window.ProtecIncidents = {
           </div>
           <div class="text-[11px] text-indigo-900/90 pl-8 space-y-0.5">
             <p>• Mobilise des secouristes disponibles ou d'astreinte de l'antenne sur le dispositif.</p>
-            <p class="font-bold text-amber-700">📉 Légère baisse de l'humeur et motivation de l'équipe et des renforts (-6%)</p>
-            <p class="font-bold text-emerald-700">🛡️ Baisse légère de réputation (-3 pts) : Limitation des dégâts (l'antenne assume en interne)</p>
+            <p class="font-bold text-indigo-700">📋 Mobilisation interne : sollicitation urgente de l'astreinte pour combler le sous-effectif.</p>
+            <p class="font-bold text-emerald-700">🛡️ Continuité opérationnelle : l'antenne maintient son autonomie et assure le dispositif.</p>
           </div>
         </button>
 
@@ -939,8 +939,8 @@ window.ProtecIncidents = {
           </div>
           <div class="text-[11px] text-rose-900/90 pl-8 space-y-0.5">
             <p>• Demande au CTA-CODIS (18/112) l'envoi d'un engin de sapeurs-pompiers en renfort.</p>
-            <p class="font-bold text-rose-700">⚠️ Baisse de l'humeur et motivation des bénévoles sur place (-20%)</p>
-            <p class="font-bold text-rose-800">❌ Dégradation marquée de la réputation de l'antenne (-15 pts auprès du SDIS & organisateur)</p>
+            <p class="font-bold text-rose-700">⚠️ Sollicitation extérieure : les sapeurs-pompiers assurent le renfort d'urgence.</p>
+            <p class="font-bold text-rose-800">❌ Constat de carence : signalement officiel auprès des autorités et de l'organisateur.</p>
           </div>
         </button>
       </div>
@@ -994,7 +994,7 @@ window.ProtecIncidents = {
       const namesText = reinforcedVols.length > 0 ? reinforcedVols.map(v => v.name).join(' & ') : 'équipe d’astreinte';
       game.showToast(
         'Renforts Internes Déployés 🚑',
-        `Renforts (${namesText}) arrivés sur « ${mission.title} ». Le poste est sécurisé en interne. Dégâts limités (-${repLoss} pts réput., fatigue passagère).`,
+        `Renforts (${namesText}) arrivés sur « ${mission.title} ». Le dispositif est sécurisé en interne.`,
         'blue'
       );
 
@@ -1029,7 +1029,7 @@ window.ProtecIncidents = {
 
       game.showToast(
         'Renforts SDIS Engagés 🚒',
-        `Sapeurs-pompiers déployés sur « ${mission.title} ». Relais pris par le SDIS. Baisse du moral (-20 motivation) et dégradation de la réputation (-${repLoss} pts).`,
+        `Sapeurs-pompiers déployés sur « ${mission.title} ». Prise de relais opérationnelle effectuée par le SDIS.`,
         'red'
       );
 

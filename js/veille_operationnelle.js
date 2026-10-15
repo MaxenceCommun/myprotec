@@ -300,7 +300,7 @@ window.ProtecVeille = {
       });
     }
 
-    game.showToast('Garde Terminée', `Fin de veille opérationnelle. Indemnités perçues : +${totalGains.toLocaleString('fr-FR')} € et +${ech.reputationPoints} pts de réputation.`, 'green');
+    game.showToast('Garde Terminée', `Fin de veille opérationnelle. Indemnités perçues : +${totalGains.toLocaleString('fr-FR')} €.`, 'green');
     game.saveGame();
     this.renderModal(game);
   },

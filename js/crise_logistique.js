@@ -28,8 +28,87 @@ window.ProtecCriseLogistique = {
   // Constantes de configuration
   MAX_DELTA_DEFAULT: 30, // 30 minutes de distance max pour 1ère intention
 
+  // Assainissement préventif et récupération automatique des crises et effectifs bloqués
+  sanitizeAndRecoverStuckCrises(game) {
+    if (!game) game = window.game;
+    if (!game || !Array.isArray(game.missions)) return;
+    const now = Date.now();
+
+    // 1. Clôturer d'office toute crise qui a reçu l'ordre de fin de mission ou qui dépasse la durée opérationnelle normale
+    game.missions.forEach(m => {
+      if (!m || m.status !== 'ongoing') return;
+      const isCrisisMission = m.isCrisis || ['crise', 'pompiers', 'samu', 'meteo'].includes(m.type);
+      if (!isCrisisMission) return;
+
+      const hasResolvedMsg = Array.isArray(m.operationalLog) && m.operationalLog.some(l => 
+        l && typeof l.text === 'string' && (
+          l.text.includes('Objectifs de mission pleinement atteints') || 
+          l.text.includes('autorise la levée du dispositif') ||
+          l.text.includes('Fin de mission')
+        )
+      );
+
+      const elapsedMs = now - (m.startedAt || m.spawnedAt || now);
+      const isOverdue = elapsedMs > 7200000; // Plus de 2 heures réelles pour une crise
+
+      if (m.crisisCanClose || hasResolvedMsg || isOverdue) {
+        console.warn(`[ProtecCriseLogistique] Auto-clôture de crise bloquée: ${m.title} (${m.id})`);
+        this.completeCrisisMission(game, m.id);
+      }
+    });
+
+    // 2. Récupérer les bénévoles orphelins restés en statut 'mission' alors qu'aucune mission active ne les engage
+    if (Array.isArray(game.volunteers)) {
+      const activeOngoingMissionIds = new Set(
+        game.missions.filter(m => ['ongoing', 'prealerte', 'declenche', 'en_cours', 'dispatched'].includes(m.status)).map(m => m.id)
+      );
+
+      game.volunteers.forEach(v => {
+        if (v.status === 'mission') {
+          const inValidMission = game.missions.some(m =>
+            activeOngoingMissionIds.has(m.id) &&
+            (m.id === v.currentMissionId || m.id === v.missionId || (m.registeredVolunteers || []).includes(v.id) || (m.assignedCrew?.volunteers || []).some(av => (typeof av === 'object' && av !== null ? av.id : av) === v.id))
+          );
+
+          if (!inValidMission) {
+            v.status = 'disponible';
+            v.currentMissionId = null;
+            v.missionId = null;
+            v.energy = Math.max(v.energy || 50, 75);
+            v.stress = Math.min(v.stress || 20, 20);
+          }
+        }
+      });
+    }
+
+    // 3. Récupérer les véhicules orphelins restés en statut 'mission'
+    if (Array.isArray(game.vehicles)) {
+      const activeOngoingMissionIds = new Set(
+        game.missions.filter(m => ['ongoing', 'prealerte', 'declenche', 'en_cours', 'dispatched'].includes(m.status)).map(m => m.id)
+      );
+
+      game.vehicles.forEach(veh => {
+        if (veh.status === 'mission') {
+          const inValidMission = game.missions.some(m =>
+            activeOngoingMissionIds.has(m.id) &&
+            (m.id === veh.currentMissionId || m.id === veh.missionId || (m.assignedVehicles || []).includes(veh.id) || (m.assignedCrew?.vehicles || []).some(av => (typeof av === 'object' && av !== null ? av.id : av) === veh.id))
+          );
+
+          if (!inValidMission) {
+            veh.status = 'disponible';
+            veh.currentMissionId = null;
+            veh.missionId = null;
+          }
+        }
+      });
+    }
+  },
+
   // Initialisation de l'état
   injectState(game) {
+    if (!game) return;
+    this.sanitizeAndRecoverStuckCrises(game);
+
     if (!game.municipalPartnership) {
       game.municipalPartnership = {
         signed: false,
@@ -93,8 +172,10 @@ window.ProtecCriseLogistique = {
           const cities = ['Centre-ville', 'Quartier Nord', 'Faubourg Sud', 'Zone Est', 'Commune voisine', 'Périphérie', 'Hameau'];
           const city = cities[Math.floor(Math.random() * cities.length)];
           const km = Math.round((Math.random() * 14 + 1.5) * 10) / 10;
-          v.homeAddress = `${Math.floor(Math.random() * 85) + 1} rue de la Paix, ${city} (${km} km)`;
-          v.travelTimeToStationMin = Math.max(6, Math.round(km * 2.2 + Math.random() * 3));
+          v.homeAddress = `${Math.floor(Math.random() * 85) + 1} rue de la Paix, ${city}`;
+          v.distance_base_km = km;
+          v.temps_ralliement_minutes = Math.max(6, Math.round(km * 2.2 + Math.random() * 3));
+          v.travelTimeToStationMin = v.temps_ralliement_minutes;
         }
         if (v.experience === undefined) {
           v.experience = v.rank === 'Chef de Dispositif' ? 85 : (v.rank === 'Chef de Poste' ? 70 : (v.rank === 'Chef d’Équipe' ? 55 : (v.rank === 'PSE2' ? 40 : 25)));
@@ -163,7 +244,22 @@ window.ProtecCriseLogistique = {
   },
 
   // Évolution de la main courante pendant le sinistre
+  // Évolution de la main courante pendant le sinistre
   progressCrisisMission(game, mission) {
+    if (!mission || mission.status !== 'ongoing') return;
+
+    // Si la crise a été déclarée terminée / prête à clôturer par le COS :
+    // Bloquer immédiatement toute dégradation d'énergie ou ajout de message
+    if (mission.crisisCanClose) {
+      const now = Date.now();
+      const elapsedSinceResolution = now - (mission.resolvedAt || now);
+      // Auto-clôture après 15 secondes pour libérer les moyens et les effectifs
+      if (elapsedSinceResolution >= 15000 || !mission.resolvedAt) {
+        this.completeCrisisMission(game, mission.id);
+      }
+      return;
+    }
+
     if (!mission.operationalLog) this.initMissionOperationalLog(mission);
 
     const now = Date.now();
@@ -184,7 +280,7 @@ window.ProtecCriseLogistique = {
       });
 
       // Génération d'un message d'évolution selon le type de crise
-      const entry = this.generateNextLogEntry(mission, timeStr, engaged.length);
+      const entry = this.generateNextLogEntry(mission, timeStr, engaged.length, game);
       if (entry) {
         mission.operationalLog.unshift(entry);
         if (window.ProtecAudio) window.ProtecAudio.playRadioBeep();
@@ -194,15 +290,42 @@ window.ProtecCriseLogistique = {
         }
       }
 
-      // Possibilité de résolution favorable si assez d'évolutions ont eu lieu (minimum 4-6 entrées)
-      if (mission.operationalLog.length >= 6 && Math.random() < 0.25) {
+      // Possibilité de résolution favorable si assez d'évolutions ont eu lieu (minimum 4-6 entrées, garanti à 8)
+      if (mission.operationalLog.length >= 8 || (mission.operationalLog.length >= 5 && Math.random() < 0.35)) {
         this.triggerCrisisResolution(game, mission);
       }
     }
   },
 
+  // Vérifie si un véhicule logistique / matériel est présent sur les lieux
+  isLogisticsVehicleOnScene(mission, game) {
+    if (!mission) return false;
+    const g = game || window.game;
+    const assignedVehs = (mission.assignedCrew?.vehicles || mission.vehicles || []).map(v => {
+      const id = typeof v === 'object' ? v.id : v;
+      return (g?.vehicles || []).find(veh => veh.id === id) || (typeof v === 'object' ? v : null);
+    }).filter(Boolean);
+
+    const logTypes = ['VTU', 'LOG', 'VLOG', 'PMA', 'FOURGON', 'VTP', 'REMORQUE', 'CAMION'];
+    const logVehs = assignedVehs.filter(v => {
+      const type = (v.type || '').toUpperCase();
+      const name = (v.name || '').toUpperCase();
+      const cat = (v.category || '').toUpperCase();
+      return logTypes.some(t => type.includes(t) || name.includes(t) || cat.includes(t)) ||
+             name.includes('LOGISTIQUE') || name.includes('MATÉRIEL') || name.includes('MATERIEL') || name.includes('CHU') || name.includes('PMA');
+    });
+
+    if (logVehs.length === 0) return false;
+
+    // Doit être arrivé sur les lieux (statut 'sur_les_lieux' ou 'intervention') et ne pas être en transit actif
+    return logVehs.some(v => {
+      const inTransit = (g?.transits || []).some(t => (t.vehicleId === v.id || t.vehicle?.id === v.id) && t.statusTarget === 2);
+      return (v.status === 'sur_les_lieux' || v.status === 'intervention') && !inTransit;
+    });
+  },
+
   // Assainissement préventif des logs existants pour garantir la logique opérationnelle
-  sanitizeOperationalLogs(mission) {
+  sanitizeOperationalLogs(mission, game) {
     if (!mission || !Array.isArray(mission.operationalLog)) return;
     const title = (mission.title || '').toLowerCase();
     const desc = (mission.desc || mission.scenarioText || '').toLowerCase();
@@ -222,13 +345,26 @@ window.ProtecCriseLogistique = {
         }
       });
     }
+
+    // Cohérence opérationnelle CHU : pas de lits de camp montés sans véhicule logistique sur les lieux
+    const hasLog = this.isLogisticsVehicleOnScene(mission, game || window.game);
+    if (!hasLog) {
+      mission.operationalLog.forEach(l => {
+        if (l && typeof l.text === 'string' && (l.text.includes('Montage de 50 lits') || (l.text.includes('lits de camp') && l.text.includes('installés')))) {
+          l.source = 'Responsable CHU Protec';
+          l.text = 'Hall sécurisé et zone de repli balisée. En attente de l’arrivée du véhicule logistique (VTU/LOG) transportant le matériel pour débuter le montage des lits de camp.';
+          l.type = 'info';
+        }
+      });
+    }
   },
 
-  generateNextLogEntry(mission, timeStr, volsCount) {
-    this.sanitizeOperationalLogs(mission);
+  generateNextLogEntry(mission, timeStr, volsCount, game) {
+    this.sanitizeOperationalLogs(mission, game);
 
     const logs = mission.operationalLog || [];
     const step = logs.length;
+    const hasLogOnScene = this.isLogisticsVehicleOnScene(mission, game || window.game);
 
     const title = (mission.title || '').toLowerCase();
     const desc = (mission.desc || mission.scenarioText || '').toLowerCase();
@@ -304,8 +440,10 @@ window.ProtecCriseLogistique = {
         },
         {
           source: 'Gestionnaire CHU Protec',
-          text: 'Centre d’hébergement en gymnase opérationnel : lits de camp installés, distribution de repas chauds et vêtements secs aux riverains évacués.',
-          type: 'info'
+          text: hasLogOnScene
+            ? 'Matériel logistique acheminé sur place : Centre d’hébergement en gymnase opérationnel, lits de camp installés, distribution de repas chauds et vêtements secs aux sinistrés.'
+            : 'Gymnase communal ouvert et sécurisé. En attente de l’arrivée du véhicule logistique (VTU/LOG) transportant les lits de camp pour débuter le montage du CHU.',
+          type: hasLogOnScene ? 'milestone' : 'info'
         },
         {
           source: 'Vigilance Crues & SIDPC',
@@ -369,8 +507,10 @@ window.ProtecCriseLogistique = {
         },
         {
           source: 'Responsable CHU Protec',
-          text: 'Montage de 50 lits de camp dans le hall de la gare. Bilans de confort et assistance aux personnes vulnérables et enfants en bas âge.',
-          type: 'milestone'
+          text: hasLogOnScene
+            ? 'Véhicule logistique sur place avec le matériel : montage de 50 lits de camp dans le hall de la gare. Bilans de confort et assistance aux personnes vulnérables et enfants en bas âge.'
+            : 'Hall de la gare sécurisé et zone de repli balisée. En attente de l’arrivée du véhicule logistique (VTU/LOG) et des lits de camp pour débuter l’aménagement du CHU.',
+          type: hasLogOnScene ? 'milestone' : 'info'
         },
         {
           source: 'Cellule Info Voyageurs',
@@ -538,8 +678,9 @@ window.ProtecCriseLogistique = {
 
   // Résolution finale de la crise par le CODIS
   triggerCrisisResolution(game, mission) {
-    if (mission.status !== 'ongoing') return;
+    if (!mission || mission.status !== 'ongoing' || mission.crisisCanClose) return;
     mission.crisisCanClose = true;
+    mission.resolvedAt = Date.now();
     const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
     mission.operationalLog.unshift({
@@ -551,9 +692,16 @@ window.ProtecCriseLogistique = {
     });
 
     if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
-    game.showToast('Ordre de Clôture Reçu !', `Le CODIS annonce la fin de mission pour « ${mission.title} ». Vous pouvez clôturer le dispositif.`, 'green');
+    game.showToast('Ordre de Clôture Reçu !', `Le CODIS annonce la fin de mission pour « ${mission.title} ». Rapatriement des équipes et libération automatique sous peu.`, 'green');
     game.saveGame();
     game.renderMissions();
+
+    // Auto-clôture de sécurité après 15 secondes pour garantir la libération des bénévoles et véhicules
+    setTimeout(() => {
+      if (mission && mission.status === 'ongoing' && mission.crisisCanClose) {
+        this.completeCrisisMission(game, mission.id);
+      }
+    }, 15000);
   },
 
   // Effectuer une rotation / relève d'équipage sur le sinistre
@@ -636,11 +784,594 @@ window.ProtecCriseLogistique = {
     game.openMissionDetails(mission.id);
   },
 
+  // Désengager un véhicule engagé sur un dispositif de crise avec son équipage complet et transit retour base
+  disengageVehicleFromCrisis(game, missionId, vehicleId) {
+    if (!game) game = window.game;
+    if (typeof game.toggleMissionVehicle === 'function') {
+      game.toggleMissionVehicle(missionId, vehicleId);
+    }
+  },
+
   // =========================================================================
   // 3. LOGISTIQUE & GESTION DU RÉARMEMENT DE LA FLOTTE
   // =========================================================================
 
   // Planifier une mission de réarmement logistique
+  
+  // Kits officiels de chargement des véhicules logistiques (VTU / VTL)
+  LOG_KITS: {
+    dps: {
+      id: 'dps',
+      name: 'Kit DPS (Matériels PS & Postes de Secours)',
+      shortName: 'Kit DPS (Secours)',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      icon: 'briefcase-medical',
+      capacitySize: 100, // 100% de la benne du VTU
+      buildingStorageSize: 8, // Encombrement économisé dans le bâtiment
+      loadTimeSec: 180, // 3 minutes en temps de jeu
+      unloadTimeSec: 120, // 2 minutes
+      desc: 'Lots de secours A & B, oxygénothérapie B5, brancards, chaises d\'escalier et dotation de réarmement pour VPSP sur zone.'
+    },
+    chu: {
+      id: 'chu',
+      name: 'Kit CHU (Hébergement d\'Urgence - 50 Lits & Duvets)',
+      shortName: 'Kit CHU (50 Lits)',
+      badgeColor: 'bg-blue-100 text-blue-800 border-blue-300',
+      icon: 'bed-double',
+      capacitySize: 100,
+      buildingStorageSize: 15,
+      loadTimeSec: 240, // 4 minutes
+      unloadTimeSec: 150, // 2.5 minutes
+      desc: '50 lits picots Sécurité Civile, 50 duvets thermiques et kits hygiène pour armer un gymnase ou une gare en urgence.'
+    },
+    pompage: {
+      id: 'pompage',
+      name: 'Kit Pompage & Inondations (Motopompes & Tuyaux)',
+      shortName: 'Kit Pompage',
+      badgeColor: 'bg-sky-100 text-sky-800 border-sky-300',
+      icon: 'waves',
+      capacitySize: 100,
+      buildingStorageSize: 10,
+      loadTimeSec: 210, // 3.5 minutes
+      unloadTimeSec: 120,
+      desc: 'Motopompes thermiques gros débit (60 m³/h), vide-caves, raclettes et 100m de tuyaux de refoulement pour crues et inondations.'
+    },
+    eclairage: {
+      id: 'eclairage',
+      name: 'Kit Éclairage & Énergie (Groupe Électrogène & Mâts LED)',
+      shortName: 'Kit Éclairage',
+      badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
+      icon: 'lightbulb',
+      capacitySize: 100,
+      buildingStorageSize: 10,
+      loadTimeSec: 180,
+      unloadTimeSec: 120,
+      desc: 'Groupe électrogène 3.5 kVA insonorisé, 2 mâts LED télescopiques 4m (50 000 lm), ballon Airstar et servitudes électriques.'
+    },
+    ravitaillement: {
+      id: 'ravitaillement',
+      name: 'Kit Ravitaillement & Vivres (Cuisine de Crise & Boissons)',
+      shortName: 'Kit Ravitaillement',
+      badgeColor: 'bg-orange-100 text-orange-800 border-orange-300',
+      icon: 'utensils',
+      capacitySize: 100,
+      buildingStorageSize: 8,
+      loadTimeSec: 180,
+      unloadTimeSec: 120,
+      desc: 'Percolateurs, vivres, thermos géants, gobelets, barnum pop-up et collations pour secouristes et populations sinistrées.'
+    },
+    cai: {
+      id: 'cai',
+      name: 'Kit CAI (Centre d\'Accueil des Impliqués & Soutien Psy)',
+      shortName: 'Kit CAI (Impliqués)',
+      badgeColor: 'bg-purple-100 text-purple-800 border-purple-300',
+      icon: 'heart-handshake',
+      capacitySize: 100,
+      buildingStorageSize: 8,
+      loadTimeSec: 180,
+      unloadTimeSec: 120,
+      desc: 'Claustras d\'intimité, tables pliantes, chaises, kits réconfort, couvertures et fiches SINUS pour prise en charge médico-psychologique.'
+    }
+  },
+
+  // Obtention du stock "Matériels PS" disponible (pourcentage / unités)
+  getStationStockPS(game, stationId = null) {
+    const station = stationId ? (game.stations || []).find(s => s.id === stationId) : (game.stations && game.stations[0]);
+    if (station) {
+      if (station.stockMaterielsPS === undefined) {
+        station.stockMaterielsPS = 150; // Dotation initiale de départ (150%)
+      }
+      return Math.round(station.stockMaterielsPS);
+    }
+    if (game.stockMaterielsPS === undefined) game.stockMaterielsPS = 150;
+    return Math.round(game.stockMaterielsPS);
+  },
+
+  // Ajustement du stock Matériels PS
+  adjustStationStockPS(game, amount, stationId = null) {
+    const station = stationId ? (game.stations || []).find(s => s.id === stationId) : (game.stations && game.stations[0]);
+    if (station) {
+      station.stockMaterielsPS = Math.max(0, Math.round(((station.stockMaterielsPS !== undefined ? station.stockMaterielsPS : 150) + amount) * 10) / 10);
+      game.stockMaterielsPS = station.stockMaterielsPS;
+      return station.stockMaterielsPS;
+    }
+    game.stockMaterielsPS = Math.max(0, Math.round(((game.stockMaterielsPS !== undefined ? game.stockMaterielsPS : 150) + amount) * 10) / 10);
+    return game.stockMaterielsPS;
+  },
+
+  // Évaluation de la possibilité de réarmer un véhicule (sur mission ou à la base)
+  canRearmVehicle(game, veh, mission = null) {
+    if (!veh) return { can: false, reason: 'Véhicule inexistant.' };
+
+    const armement = veh.armementLevel !== undefined ? veh.armementLevel : (veh.isRearmed === false ? 70 : 100);
+    if (armement >= 100 && veh.isRearmed !== false && !veh.needsRearming) {
+      return { can: false, reason: 'Le véhicule est déjà à 100% d\'armement et parfaitement opérationnel.' };
+    }
+
+    const missingPct = Math.max(0, 100 - armement);
+
+    // CAS 1 : Le véhicule est sur une mission active
+    if (mission) {
+      const assignedIds = mission.assignedVehicleIds || [];
+      const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+      // Recherche d'un véhicule LOG armé sur la mission
+      const armedLogVeh = allVehs.find(v => assignedIds.includes(v.id) && v.id !== veh.id && (v.type === 'VTU' || v.type === 'VTL' || v.type === 'VAHU') && (v.logKit === 'dps' || (v.armementLevel || 100) >= 30));
+
+      if (armedLogVeh) {
+        return {
+          can: true,
+          mode: 'mission',
+          logVehicle: armedLogVeh,
+          missingPct: missingPct
+        };
+      } else {
+        return {
+          can: false,
+          mode: 'mission',
+          reason: 'Réarmement sur zone impossible : aucun véhicule LOG armé (VTU avec Kit DPS) n\'est présent sur la mission. Le véhicule devra rentrer à la base pour se réarmer.',
+          missingPct: missingPct
+        };
+      }
+    }
+
+    // CAS 2 : Le véhicule est à la base
+    const currentStockPS = this.getStationStockPS(game, veh.stationId);
+    if (currentStockPS <= 0) {
+      return {
+        can: false,
+        mode: 'base',
+        reason: 'Stock "Matériels PS" épuisé au local (0%). Achetez du stock à la Centrale d\'Achats pour pouvoir réarmer vos véhicules.',
+        missingPct: missingPct,
+        currentStockPS: currentStockPS
+      };
+    }
+
+    return {
+      can: true,
+      mode: 'base',
+      missingPct: missingPct,
+      currentStockPS: currentStockPS,
+      willUse: Math.min(missingPct, currentStockPS)
+    };
+  },
+
+  // Réarmement d'un véhicule (à la base ou sur mission)
+  rearmVehicle(game, vehicleId, missionId = null) {
+    const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+    const veh = allVehs.find(v => v.id === vehicleId);
+    if (!veh) return;
+
+    const mission = missionId ? (game.missions || []).find(m => m.id === missionId) : null;
+    const check = this.canRearmVehicle(game, veh, mission);
+
+    if (!check.can) {
+      game.showToast('Réarmement Impossible ⚠️', check.reason, 'orange');
+      return;
+    }
+
+    const missing = check.missingPct || 30;
+
+    if (check.mode === 'mission') {
+      // Réarmé sur le terrain via le véhicule LOG
+      veh.armementLevel = 100;
+      veh.isRearmed = true;
+      veh.needsRearming = false;
+      if (check.logVehicle) {
+        check.logVehicle.armementLevel = Math.max(0, (check.logVehicle.armementLevel || 100) - missing);
+      }
+      game.showToast('Réarmé sur Zone ✓', `${veh.name} a été réarmé sur mission grâce au ${check.logVehicle.name} LOG présent sur place (-${missing}% matériels).`, 'green');
+    } else {
+      // Réarmé à la base via le stock du local
+      const consumed = Math.min(missing, check.currentStockPS);
+      this.adjustStationStockPS(game, -consumed, veh.stationId);
+      veh.armementLevel = Math.min(100, (veh.armementLevel || 70) + consumed);
+      veh.isRearmed = (veh.armementLevel >= 100);
+      veh.needsRearming = !veh.isRearmed;
+
+      const remainingStock = this.getStationStockPS(game, veh.stationId);
+      game.showToast('Véhicule Réarmé au Local ✓', `${veh.name} a été réarmé à la base (-${consumed}% au stock Matériels PS. Reste en réserve : ${remainingStock}%).`, 'green');
+    }
+
+    if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
+    game.saveGame();
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+    if (typeof game.refreshCurrentModalIfSafe === 'function') game.refreshCurrentModalIfSafe();
+  },
+
+  // Démarrer le chargement d'un kit dans un véhicule LOG (VTU / VTL)
+  startLoadingVehicleKit(game, vehicleId, kitId) {
+    const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+    const veh = allVehs.find(v => v.id === vehicleId);
+    if (!veh) return;
+
+    const kit = this.LOG_KITS[kitId];
+    if (!kit) return;
+
+    if (veh.status === 'chargement' || veh.status === 'dechargement' || veh.logOperation) {
+      game.showToast('Opération en cours', `Le véhicule ${veh.name} est déjà en cours de manipulation logistique.`, 'orange');
+      return;
+    }
+
+    if (veh.status !== 'dispo' && veh.status !== 'disponible') {
+      game.showToast('Véhicule Indisponible', `Le véhicule ${veh.name} n'est pas disponible au garage de la base.`, 'orange');
+      return;
+    }
+
+    if (veh.logKit && veh.logKit !== kitId) {
+      game.showToast('Véhicule Déjà Armé ⚠️', `${veh.name} contient déjà le ${this.LOG_KITS[veh.logKit]?.name || veh.logKit}. Vous devez d'abord le vider (décharger) avant de charger un nouveau matériel.`, 'orange');
+      return;
+    }
+
+    veh.status = 'chargement';
+    veh.logOperation = {
+      type: 'loading',
+      kitId: kitId,
+      startTime: Date.now(),
+      durationSec: kit.loadTimeSec || 180,
+      label: `Chargement : ${kit.shortName}`
+    };
+
+    game.showToast('Chargement Lancé 📦', `Manutentionnaires au travail : chargement du ${kit.name} dans ${veh.name} (${Math.round((kit.loadTimeSec || 180) / 60)} min).`, 'teal');
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    game.saveGame();
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+    if (typeof game.refreshCurrentModalIfSafe === 'function') game.refreshCurrentModalIfSafe();
+  },
+
+  // Démarrer le déchargement d'un véhicule LOG (vidage pour changer de kit)
+  startUnloadingVehicleKit(game, vehicleId) {
+    const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+    const veh = allVehs.find(v => v.id === vehicleId);
+    if (!veh) return;
+
+    if (!veh.logKit) {
+      game.showToast('Véhicule Déjà Vide', `${veh.name} n'a aucun matériel à décharger.`, 'blue');
+      return;
+    }
+
+    if (veh.status === 'chargement' || veh.status === 'dechargement' || veh.logOperation) {
+      game.showToast('Opération en cours', `Le véhicule ${veh.name} est déjà en cours de manipulation logistique.`, 'orange');
+      return;
+    }
+
+    if (veh.status !== 'dispo' && veh.status !== 'disponible') {
+      game.showToast('Véhicule Indisponible', `Le véhicule ${veh.name} n'est pas disponible au garage de la base.`, 'orange');
+      return;
+    }
+
+    const currentKit = this.LOG_KITS[veh.logKit];
+    const duration = currentKit?.unloadTimeSec || 120;
+
+    veh.status = 'dechargement';
+    veh.logOperation = {
+      type: 'unloading',
+      oldKitId: veh.logKit,
+      startTime: Date.now(),
+      durationSec: duration,
+      label: `Déchargement : ${currentKit?.shortName || 'Matériel'}`
+    };
+
+    game.showToast('Déchargement Lancé 🧹', `Vidage et restitution du matériel de ${veh.name} dans la réserve du bâtiment (${Math.round(duration / 60)} min).`, 'teal');
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    game.saveGame();
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+    if (typeof game.refreshCurrentModalIfSafe === 'function') game.refreshCurrentModalIfSafe();
+  },
+
+  // Analyse des compétences réglementaires d'un équipage de véhicule
+  getVehicleCrewQualifications(veh, crew = []) {
+    const hasLeader = crew.some(v => ['Chef de Dispositif', 'Chef de Poste', 'Chef d’Équipe', 'Chef d\'Équipe', 'CE', 'Cadre'].includes(v.rank) || (v.skills || []).some(s => s && s.toLowerCase().includes('ce')));
+    const hasPSE2 = crew.some(v => v.rank === 'PSE2' || ['Chef de Dispositif', 'Chef de Poste', 'Chef d’Équipe', 'Chef d\'Équipe', 'CE'].includes(v.rank) || (v.skills || []).some(s => s && s.toLowerCase().includes('pse2')));
+    const hasDriver = crew.some(v => (v.skills || []).some(s => s && (s.toLowerCase().includes('permis') || s.toLowerCase().includes('chauffeur') || s.toLowerCase().includes('conducteur'))) || (v.age && v.age >= 21) || v.role?.toLowerCase().includes('chauffeur') || v.role?.toLowerCase().includes('conducteur'));
+
+    const vehType = (veh.type || '').toUpperCase();
+    let required = [];
+    let missing = [];
+
+    if (vehType === 'VPSP') {
+      required = ['Chef d\'Équipe (CE)', 'Équipier (PSE2)', 'Chauffeur'];
+      if (!hasLeader) missing.push('Chef d\'Équipe (CE)');
+      if (!hasPSE2) missing.push('Équipier (PSE2)');
+      if (!hasDriver) missing.push('Chauffeur');
+    } else if (vehType === 'VTU' || vehType === 'VTL' || vehType === 'VAHU') {
+      required = ['Secouriste/Logisticien', 'Chauffeur'];
+      if (crew.length < 1) missing.push('Personnel');
+      if (!hasDriver) missing.push('Chauffeur');
+    } else if (vehType === 'PCM') {
+      required = ['Cadre / Chef Dispositif'];
+      if (!hasLeader) missing.push('Cadre / Chef Dispositif');
+    } else {
+      // VTP, VL, etc.
+      required = ['Chauffeur'];
+      if (!hasDriver) missing.push('Chauffeur');
+    }
+
+    return {
+      valid: missing.length === 0,
+      required: required,
+      missing: missing,
+      details: required.join(', ')
+    };
+  },
+
+  // Répartition de l'équipage inscrit sur un véhicule donné
+  getVehicleAssignedCrew(mission, veh, game) {
+    if (!mission || !veh) return [];
+    const allAssignedIds = mission.assignedVehicleIds || [];
+    const vehIdx = allAssignedIds.indexOf(veh.id);
+    if (vehIdx === -1) return [];
+
+    const regVolIds = mission.registeredVolunteers || [];
+    const vols = regVolIds.map(id => (game.volunteers || []).find(v => v.id === id)).filter(Boolean);
+
+    if (mission.vehicleCrews && mission.vehicleCrews[veh.id]) {
+      return mission.vehicleCrews[veh.id].map(id => (game.volunteers || []).find(v => v.id === id)).filter(Boolean);
+    }
+
+    let offset = 0;
+    for (let i = 0; i < vehIdx; i++) {
+      const prevVeh = (game.vehicles || []).find(v => v.id === allAssignedIds[i]);
+      const prevSeats = prevVeh ? (prevVeh.seatsCount || prevVeh.capacity || 4) : 4;
+      offset += prevSeats;
+    }
+    const seats = veh.seatsCount || veh.capacity || (veh.type === 'VPSP' ? 3 : veh.type === 'VTP' ? 9 : 4);
+    return vols.slice(offset, offset + seats);
+  },
+
+  // Détection du Kit LOG indispensable pour une mission
+  getRequiredMissionKit(mission) {
+    if (!mission) return null;
+    const type = (mission.type || '').toLowerCase();
+    const title = (mission.title || '').toLowerCase();
+    const desc = (mission.description || '').toLowerCase();
+
+    if (title.includes('inondation') || title.includes('pompage') || title.includes('crue') || title.includes('eau') || type === 'inondation' || desc.includes('pompage')) {
+      return this.LOG_KITS.pompage;
+    }
+    if (title.includes('chu') || title.includes('naufrag') || title.includes('hébergement') || title.includes('lits') || title.includes('gare') || title.includes('sncf') || (mission.isCrisis && (title.includes('évacuation') || title.includes('sinistr')))) {
+      return this.LOG_KITS.chu;
+    }
+    if (title.includes('cai') || title.includes('impliqué') || title.includes('cump') || title.includes('crash') || title.includes('attentat')) {
+      return this.LOG_KITS.cai;
+    }
+    if (title.includes('recherche') || title.includes('nuit') || title.includes('nocturne') || title.includes('tempête') || title.includes('éclairage')) {
+      return this.LOG_KITS.eclairage;
+    }
+    if (title.includes('canicule') || title.includes('ravitaillement') || title.includes('vivres') || title.includes('maraude')) {
+      return this.LOG_KITS.ravitaillement;
+    }
+    if (type === 'dps' && (mission.scale?.includes('ME') || mission.scale?.includes('GE') || (mission.requiredVolunteers || 0) >= 4)) {
+      return this.LOG_KITS.dps;
+    }
+    return null;
+  },
+
+  // Modale pour créer un Atelier de Réarmement Flotte
+  openCreateRearmamentModal(game) {
+    const primaryStation = game.stations[0] || { id: 'station-1', name: 'Antenne Locale' };
+    const stockPS = this.getStationStockPS(game, primaryStation.id);
+    const unrearmedVehs = (game.vehicles || []).filter(v => (v.armementLevel !== undefined && v.armementLevel < 100) || v.isRearmed === false || v.needsRearming);
+    const allCandidateVehs = unrearmedVehs.length > 0 ? unrearmedVehs : (game.vehicles || []);
+
+    const modalId = 'rearm-workshop-modal';
+    let modal = document.getElementById(modalId);
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = modalId;
+      modal.className = 'fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="w-full max-w-lg rounded-3xl glass-panel-heavy border border-white/80 p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-black">
+              <i data-lucide="wrench" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="text-sm sm:text-base font-black text-slate-900">Atelier de Réarmement Flotte</h3>
+              <p class="text-[11px] text-slate-500 font-semibold">Reconditionnement, désinfection et réarmement en équipe</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('${modalId}').remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
+            ✕
+          </button>
+        </div>
+
+        <!-- Jauge Stock PS disponible -->
+        <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <span class="text-base">📦</span>
+            <div>
+              <span class="font-extrabold text-slate-800">Stock "Matériels PS" au local :</span>
+              <p class="text-[10px] text-slate-500">Consommables nécessaires pour restaurer l'armement</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-xl text-xs font-black ${stockPS > 40 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'}">
+            ${stockPS}% disponible
+          </span>
+        </div>
+
+        <p class="text-xs text-slate-600 leading-snug">
+          Sélectionnez les véhicules à reconditionner lors de cette mission atelier au local.
+          <br><strong>Barème horaire :</strong> ~1h par VPSP, ~30 min par VTU à charge complète.
+        </p>
+
+        <!-- Liste des véhicules à cocher -->
+        <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
+          ${allCandidateVehs.map(v => {
+            const isVPSP = v.type === 'VPSP';
+            const duration = isVPSP ? 60 : 30;
+            const armement = v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100);
+            const needs = armement < 100 || v.needsRearming;
+
+            return `
+              <label class="p-3 rounded-2xl border ${needs ? 'bg-amber-50/60 border-amber-200 ring-1 ring-amber-100' : 'bg-white border-slate-200'} flex items-center justify-between gap-3 cursor-pointer hover:border-slate-300 transition">
+                <div class="flex items-center gap-3 min-w-0">
+                  <input type="checkbox" name="rearm_veh_cb" value="${v.id}" ${needs ? 'checked' : ''} onchange="window.ProtecCriseLogistique.recalcRearmModalTotals()" class="w-4 h-4 rounded text-pc-blue focus:ring-pc-blue border-slate-300">
+                  <div>
+                    <div class="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                      <span>${v.name}</span>
+                      <span class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${isVPSP ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}">${v.type}</span>
+                    </div>
+                    <div class="text-[10px] text-slate-500 font-semibold">
+                      Armement actuel : <strong class="${armement < 100 ? 'text-amber-700' : 'text-emerald-700'}">${armement}%</strong> • Durée estimée : ${duration} min
+                    </div>
+                  </div>
+                </div>
+                <span class="text-[11px] font-bold text-slate-600 shrink-0">+${100 - armement}% PS</span>
+              </label>
+            `;
+          }).join('')}
+        </div>
+
+        <!-- Récapitulatif temps et stock -->
+        <div id="rearm-modal-summary" class="p-3 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-xs space-y-1">
+          <!-- Calculé dynamiquement -->
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+          <button type="button" onclick="document.getElementById('${modalId}').remove()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+            Annuler
+          </button>
+          <button type="button" onclick="window.ProtecCriseLogistique.submitRearmWorkshopMission()" class="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-indigo-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+            <span>Créer la Mission d'Atelier</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    if (window.lucide) window.lucide.createIcons();
+    this.recalcRearmModalTotals();
+  },
+
+  recalcRearmModalTotals() {
+    const cbs = document.querySelectorAll('input[name="rearm_veh_cb"]:checked');
+    const vehIds = Array.from(cbs).map(c => c.value);
+    const game = window.game;
+    const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+    let totalMinutes = 0;
+    let totalMissingPS = 0;
+
+    vehIds.forEach(id => {
+      const v = allVehs.find(x => x.id === id);
+      if (v) {
+        totalMinutes += (v.type === 'VPSP' ? 60 : 30);
+        const armement = v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100);
+        totalMissingPS += Math.max(0, 100 - armement);
+      }
+    });
+
+    const sumEl = document.getElementById('rearm-modal-summary');
+    if (sumEl) {
+      const hours = Math.floor(totalMinutes / 60);
+      const mins = totalMinutes % 60;
+      const durationStr = hours > 0 ? `${hours}h${mins > 0 ? mins : ''}` : `${mins} min`;
+
+      sumEl.innerHTML = `
+        <div class="flex items-center justify-between font-bold text-indigo-950">
+          <span>Véhicules engagés : <strong>${vehIds.length}</strong></span>
+          <span>Charge totale : <strong>${durationStr} de travail</strong></span>
+        </div>
+        <p class="text-[10.5px] text-indigo-800 leading-snug">
+          Consommables requis : <strong>${totalMissingPS}%</strong> au stock Matériels PS.
+          <br><em>Le temps se réduira proportionnellement au nombre de bénévoles inscrits !</em>
+        </p>
+      `;
+    }
+  },
+
+  submitRearmWorkshopMission() {
+    const cbs = document.querySelectorAll('input[name="rearm_veh_cb"]:checked');
+    const vehIds = Array.from(cbs).map(c => c.value);
+    const game = window.game;
+
+    if (vehIds.length === 0) {
+      game.showToast('Aucun véhicule', 'Veuillez cocher au moins un véhicule à réarmer.', 'orange');
+      return;
+    }
+
+    const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+    let totalMinutes = 0;
+    let totalMissingPS = 0;
+
+    vehIds.forEach(id => {
+      const v = allVehs.find(x => x.id === id);
+      if (v) {
+        totalMinutes += (v.type === 'VPSP' ? 60 : 30);
+        const armement = v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100);
+        totalMissingPS += Math.max(0, 100 - armement);
+      }
+    });
+
+    const primaryStation = game.stations[0] || { id: 'station-1', name: 'Antenne Locale' };
+    const stockPS = this.getStationStockPS(game, primaryStation.id);
+
+    if (stockPS < totalMissingPS && stockPS <= 0) {
+      game.showToast('Stock Matériels PS Épuisé ⚠️', 'Impossible de lancer l\'atelier : le stock Matériels PS au local est vide (0%). Achetez du stock à la Centrale d\'Achats.', 'orange');
+      return;
+    }
+
+    const now = Date.now();
+    const mission = {
+      id: `rearm_workshop_${now}`,
+      type: 'rearmement',
+      title: `Atelier Réarmement Flotte (${vehIds.length} vhc)`,
+      subtitle: 'Nettoyage, désinfection, réarmement des consommables et reconditionnement',
+      description: `Atelier logistique au local pour réarmer et désinfecter ${vehIds.length} véhicule(s). Les bénévoles inscrits travaillent en équipe pour réduire la durée.`,
+      category: 'logistique',
+      status: 'planifie',
+      isRearmamentWorkshop: true,
+      targetVehicleIds: vehIds,
+      baseWorkMinutes: totalMinutes,
+      durationMinutes: totalMinutes,
+      duration: totalMinutes,
+      requiredVolunteers: Math.min(4, Math.max(1, Math.ceil(vehIds.length / 2))),
+      registeredVolunteers: [],
+      neededStockPS: totalMissingPS,
+      city: primaryStation.city || 'Local Antenne',
+      locationAddress: 'Atelier Logistique de l\'Antenne',
+      scale: 'LOGISTIQUE',
+      rewardMoney: 0,
+      rewardReputation: 12
+    };
+
+    if (!Array.isArray(game.missions)) game.missions = [];
+    game.missions.unshift(mission);
+
+    const modal = document.getElementById('rearm-workshop-modal');
+    if (modal) modal.remove();
+
+    game.showToast('Atelier Créé ! 🛠️', `La mission d'atelier pour ${vehIds.length} véhicule(s) est planifiée. Ouvrez-la pour y inscrire vos bénévoles !`, 'green');
+    if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
+    game.saveGame();
+    if (typeof game.openMissionDetails === 'function') {
+      game.openMissionDetails(mission.id);
+    }
+  },
+
   scheduleRearmamentMission(game, vehicleId, volunteerId = null) {
     const veh = game.vehicles.find(v => v.id === vehicleId);
     if (!veh) return;
@@ -688,15 +1419,106 @@ window.ProtecCriseLogistique = {
   // Mise à jour de l'horloge des tâches logistiques
   updateLogisticClock(game) {
     this.injectState(game);
+    const now = Date.now();
+
+    // 1. Gestion des opérations de chargement / déchargement des véhicules (Kits VTU)
+    if (Array.isArray(game.vehicles)) {
+      game.vehicles.forEach(veh => {
+        if (veh.logOperation) {
+          const elapsed = Math.floor((now - veh.logOperation.startTime) / 1000);
+          if (elapsed >= veh.logOperation.durationSec) {
+            // Opération terminée !
+            const op = veh.logOperation;
+            veh.logOperation = null;
+            veh.status = 'dispo';
+
+            if (op.type === 'loading') {
+              veh.logKit = op.kitId;
+              const kit = this.LOG_KITS[op.kitId];
+              game.showToast('📦 Chargement Terminé !', `${veh.name} est maintenant armé avec le ${kit ? kit.name : op.kitId}. Prêt au départ immédiat sans délai !`, 'green');
+              if (window.ProtecNotifications) {
+                window.ProtecNotifications.recordNotification({
+                  title: '📦 Véhicule Armé & Prêt',
+                  message: `${veh.name} a terminé son chargement (${kit ? kit.shortName : op.kitId}). Il est prêt pour engagement.`,
+                  category: 'logistique',
+                  color: 'emerald'
+                });
+              }
+            } else if (op.type === 'unloading') {
+              const oldKit = this.LOG_KITS[op.oldKitId];
+              veh.logKit = null;
+              game.showToast('🧹 Déchargement Terminé !', `${veh.name} a été entièrement vidé. Le matériel est réintégré dans le stockage du bâtiment.`, 'teal');
+            }
+
+            if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
+            if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+            if (typeof game.refreshCurrentModalIfSafe === 'function') game.refreshCurrentModalIfSafe();
+          }
+        }
+      });
+    }
+
+    // 2. Gestion des missions d'atelier de réarmement
+    if (Array.isArray(game.missions)) {
+      game.missions.forEach(m => {
+        if (m.isRearmentWorkshop || m.isRearmamentWorkshop) {
+          if (m.status === 'ongoing' || m.status === 'en_cours') {
+            const regCount = Math.max(1, (m.registeredVolunteers || []).length);
+            // La durée effective est réduite par le nombre de bénévoles inscrits
+            const effectiveMinutes = Math.max(10, Math.round((m.baseWorkMinutes || 60) / regCount));
+            m.durationMinutes = effectiveMinutes;
+
+            if (m.startTime) {
+              const elapsedMin = Math.floor((now - m.startTime) / 60000);
+              if (elapsedMin >= effectiveMinutes) {
+                // Clôture atelier
+                m.status = 'completed';
+                const targetIds = m.targetVehicleIds || [];
+                const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+                let rearmedCount = 0;
+
+                targetIds.forEach(id => {
+                  const v = allVehs.find(x => x.id === id);
+                  if (v) {
+                    v.armementLevel = 100;
+                    v.isRearmed = true;
+                    v.needsRearming = false;
+                    rearmedCount++;
+                  }
+                });
+
+                // Déduction du stock PS
+                this.adjustStationStockPS(game, -(m.neededStockPS || 30));
+
+                // Expérience pour les bénévoles
+                (m.registeredVolunteers || []).forEach(volId => {
+                  const vol = (game.volunteers || []).find(v => v.id === volId);
+                  if (vol) {
+                    vol.status = 'dispo';
+                    vol.experience = Math.min(100, (vol.experience || 30) + 8);
+                  }
+                });
+
+                game.showToast('🛠️ Atelier Réarmement Terminé !', `${rearmedCount} véhicule(s) ont été reconditionnés et réarmés à 100% au local.`, 'green');
+                if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
+                if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+                if (typeof game.refreshCurrentModalIfSafe === 'function') game.refreshCurrentModalIfSafe();
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // 3. Gestion des micro-tâches logistiques simples
     if (!game.logisticTasks || game.logisticTasks.length === 0) return;
 
-    const now = Date.now();
     game.logisticTasks = game.logisticTasks.filter(task => {
       const elapsed = Math.floor((now - task.startTime) / 1000);
       if (elapsed >= task.durationSeconds) {
-        // Tâche terminée !
         const veh = game.vehicles.find(v => v.id === task.vehicleId);
         if (veh) {
+          veh.armementLevel = 100;
           veh.isRearmed = true;
           veh.needsRearming = false;
           veh.a_rearme = false;
@@ -786,45 +1608,94 @@ window.ProtecCriseLogistique = {
   // Affichage du contrôle des places assises et de l'état de réarmement
   renderVehiclesCapacityAndRearmAlertHTML(game, mission) {
     this.injectState(game);
-    const assignedVehIds = mission.assignedCrew?.vehicles?.map(v => v.id) || [];
-    const assignedVehs = game.vehicles.filter(v => assignedVehIds.includes(v.id));
+    const assignedVehIds = (mission.assignedVehicleIds || []).concat(mission.assignedCrew?.vehicles?.map(v => v.id || v) || []);
+    const uniqueIds = Array.from(new Set(assignedVehIds.filter(Boolean)));
+    const assignedVehs = (game.vehicles || []).filter(v => uniqueIds.includes(v.id));
     const registeredCount = (mission.registeredVolunteers || []).length;
 
     let totalSeats = 0;
     let hasUnrearmed = false;
-    let unrearmedVehNames = [];
+    let unrearmedVehs = [];
 
     assignedVehs.forEach(v => {
       totalSeats += (v.seatsCount || v.capacity || 4);
-      if (v.isRearmed === false) {
+      const armement = v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100);
+      if (armement < 100 || v.isRearmed === false || v.needsRearming) {
         hasUnrearmed = true;
-        unrearmedVehNames.push(v.name);
+        unrearmedVehs.push(v);
       }
     });
 
     const missingSeats = Math.max(0, registeredCount - totalSeats);
     const hasEnoughSeats = totalSeats >= registeredCount;
 
-    return `
-      <div class="space-y-2">
-        <!-- État de réarmement des ambulances -->
-        ${hasUnrearmed ? `
-          <div class="p-3 rounded-2xl bg-amber-50 border-2 border-amber-400 text-amber-950 text-xs shadow-sm space-y-1.5">
+    // Détection d'un véhicule LOG armé sur la mission
+    const armedLogVeh = assignedVehs.find(v => (v.type === 'VTU' || v.type === 'VTL' || v.type === 'VAHU') && (v.logKit === 'dps' || (v.armementLevel || 100) >= 30));
+
+    // Détection du Kit indispensable pour la mission
+    const reqKit = this.getRequiredMissionKit(mission);
+    let kitMismatchAlert = '';
+    if (reqKit) {
+      const hasCorrectKit = assignedVehs.some(v => (v.type === 'VTU' || v.type === 'VTL' || v.type === 'VAHU') && v.logKit === reqKit.id);
+      if (!hasCorrectKit) {
+        kitMismatchAlert = `
+          <div class="p-3.5 rounded-2xl bg-amber-500/15 border-2 border-amber-500 text-amber-950 text-xs shadow-sm space-y-1.5 animate-pulse">
             <div class="flex items-center justify-between">
               <span class="font-black text-amber-900 flex items-center gap-1.5">
                 <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i>
-                ⚠️ VÉHICULE NON RÉARMÉ DÉTECTÉ
+                ⚠️ MATÉRIEL OPÉRATIONNEL EXIGÉ : ${reqKit.name}
+              </span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-200 text-amber-950">Indispensable</span>
+            </div>
+            <p class="text-[11px] text-amber-900 leading-snug">
+              Cette mission requiert un véhicule logistique (VTU) armé avec le <strong>${reqKit.name}</strong> (${reqKit.desc}). Sans ce kit opérationnel, le dispositif ne dispose pas du matériel requis par l'autorité.
+            </p>
+          </div>
+        `;
+      } else {
+        kitMismatchAlert = `
+          <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-center justify-between shadow-2xs">
+            <span class="font-black flex items-center gap-1.5">
+              <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
+              Dotation Matérielle Conforme : ${reqKit.shortName} armé à bord du dispositif ✓
+            </span>
+          </div>
+        `;
+      }
+    }
+
+    return `
+      <div class="space-y-2">
+        <!-- Alerte Matériel Requis pour la mission -->
+        ${kitMismatchAlert}
+
+        <!-- État de réarmement des véhicules engagés -->
+        ${hasUnrearmed ? `
+          <div class="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-400 text-amber-950 text-xs shadow-sm space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-amber-900 flex items-center gap-1.5">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i>
+                ⚠️ VÉHICULE NON RÉARMÉ SUR CE DISPOSITIF
               </span>
               <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-200 text-amber-900">Vigilance</span>
             </div>
             <p class="text-[11px] text-amber-800 leading-snug">
-              <strong>${unrearmedVehNames.join(', ')}</strong> n'a pas été réarmé après son dernier départ. Vous pouvez le faire partir, mais cela risque de causer des pannes ou un manque de matériel, réduisant l'humeur des équipiers et la réputation.
+              ${unrearmedVehs.map(v => `<strong>${v.name}</strong> (Armement : ${v.armementLevel || 70}%)`).join(', ')} n'ont pas été réarmés après leur précédente intervention.
             </p>
-            <div class="flex items-center gap-2 pt-1">
-              <button onclick="window.ProtecCriseLogistique.scheduleRearmamentMission(window.game, '${assignedVehs.find(v => !v.isRearmed)?.id}')" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] transition shadow flex items-center gap-1">
-                <i data-lucide="wrench" class="w-3.5 h-3.5"></i>
-                <span>Programmer Réarmement (2 min)</span>
-              </button>
+
+            <div class="flex items-center gap-2 pt-1 flex-wrap">
+              ${armedLogVeh ? `
+                <button onclick="window.ProtecCriseLogistique.rearmVehicle(window.game, '${unrearmedVehs[0]?.id}', '${mission.id}')" 
+                  class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] transition shadow flex items-center gap-1.5 cursor-pointer">
+                  <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+                  <span>Réarmer sur zone via le ${armedLogVeh.name} LOG</span>
+                </button>
+              ` : `
+                <div class="p-2 rounded-xl bg-amber-100/80 border border-amber-300 text-[11px] text-amber-900 font-semibold flex items-center gap-1.5">
+                  <i data-lucide="info" class="w-3.5 h-3.5 text-amber-700 shrink-0"></i>
+                  <span>Réarmement sur zone impossible : aucun véhicule LOG armé (VTU avec Kit DPS) n'est présent sur les lieux. Le véhicule doit se réarmer au local.</span>
+                </div>
+              `}
             </div>
           </div>
         ` : ''}
@@ -862,22 +1733,22 @@ window.ProtecCriseLogistique = {
     return `
       <div class="space-y-4">
         <!-- Bandeau d'état opérationnel SANS compte à rebours fixe -->
-        <div class="p-4 rounded-3xl bg-slate-900 text-white shadow-xl space-y-2.5">
+        <div class="p-4 rounded-3xl bg-amber-50/90 border border-amber-300 text-amber-950 dark:bg-slate-900 dark:border-slate-800 dark:text-white shadow-md space-y-2.5">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black uppercase flex items-center gap-2 text-pc-orange">
+            <span class="text-xs font-black uppercase flex items-center gap-2 text-amber-800 dark:text-pc-orange">
               <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
               CELLULE DE CRISE ACTIVE (CODIS / PRÉFECTURE)
             </span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white/10 text-slate-300">
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300 dark:bg-white/10 dark:text-slate-300 dark:border-transparent">
               Rotations : ${mission.rotationsCount || 0}
             </span>
           </div>
-          <p class="text-[11px] text-slate-300 leading-snug">
+          <p class="text-[11px] text-amber-900/80 dark:text-slate-300 leading-snug">
             Durée indéterminée dépendante de l'évolution du sinistre sur le terrain. Surveillez la main courante radio et gérez la fatigue de vos secouristes.
           </p>
-          <div class="flex items-center justify-between pt-1 border-t border-white/10 text-[11px]">
-            <span class="text-slate-400">Effectifs engagés en première ligne :</span>
-            <span class="font-extrabold text-pc-orange mono-num">${engaged.length} secouristes</span>
+          <div class="flex items-center justify-between pt-1 border-t border-amber-200 dark:border-white/10 text-[11px]">
+            <span class="text-amber-900/70 dark:text-slate-400">Effectifs engagés en première ligne :</span>
+            <span class="font-extrabold text-amber-900 dark:text-pc-orange mono-num">${engaged.length} secouristes</span>
           </div>
         </div>
 
@@ -959,12 +1830,77 @@ window.ProtecCriseLogistique = {
           </div>
         </div>
 
+        <!-- Flotte de Véhicules Engagés sur le Sinistre & Désengagement -->
+        ${(() => {
+          const assignedVehIds = (mission.assignedVehicleIds || []).concat(mission.assignedCrew?.vehicles?.map(v => (typeof v === 'object' && v !== null ? v.id : v)) || []).concat(mission.assignedVehicles || []);
+          const uniqueVehIds = Array.from(new Set(assignedVehIds.filter(Boolean)));
+          const assignedVehs = (game.vehicles || []).filter(v => uniqueVehIds.includes(v.id));
+
+          if (assignedVehs.length === 0) return '';
+
+          return `
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <i data-lucide="truck" class="w-3.5 h-3.5 text-pc-blue"></i>
+                  Vecteurs & Véhicules Engagés (${assignedVehs.length})
+                </h4>
+                <span class="text-[10px] text-slate-400 font-semibold">Désengagement individuel avec retour base</span>
+              </div>
+
+              <div class="space-y-2">
+                ${assignedVehs.map(veh => {
+                  const crew = this.getVehicleAssignedCrew(mission, veh, game);
+                  const isRearmed = veh.isRearmed !== false && (veh.armementLevel === undefined || veh.armementLevel >= 100);
+                  const kitName = veh.logKit && this.LOG_KITS[veh.logKit] ? this.LOG_KITS[veh.logKit].shortName : (veh.type === 'VPSP' ? 'Armement Sanitaire' : 'Standard');
+
+                  return `
+                    <div class="p-2.5 rounded-2xl glass-card border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs hover:shadow-xs transition">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-pc-blue/10 border border-pc-blue/20 flex items-center justify-center shrink-0">
+                          <i data-lucide="${veh.type === 'VPSP' ? 'ambulance' : 'truck'}" class="w-4 h-4 text-pc-blue"></i>
+                        </div>
+                        <div>
+                          <div class="flex items-center gap-2">
+                            <span class="font-extrabold text-slate-900">${veh.name}</span>
+                            <span class="px-2 py-0.5 rounded text-[9.5px] font-black bg-slate-100 text-slate-700 border border-slate-200">${veh.type}</span>
+                            <span class="px-2 py-0.5 rounded text-[9px] font-bold ${isRearmed ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">
+                              ${isRearmed ? '✓ Armé' : '⚠️ Non réarmé'}
+                            </span>
+                          </div>
+                          <div class="text-[10px] text-slate-500 font-medium flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <span>Équipage (${crew.length}) :</span>
+                            <strong class="text-slate-700">${crew.map(c => c.name).join(', ') || 'Aucun équipier à bord'}</strong>
+                            <span>•</span>
+                            <span class="text-sky-700 font-semibold">${kitName}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="shrink-0 flex items-center gap-2">
+                        <button 
+                          type="button" 
+                          onclick="window.game.toggleMissionVehicle('${mission.id}', '${veh.id}')" 
+                          class="w-full sm:w-auto px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 border border-rose-300 font-black text-[11px] transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer" 
+                          title="Désengager immédiatement ce véhicule et son équipage pour les faire rentrer à la base">
+                          <i data-lucide="corner-down-left" class="w-3.5 h-3.5"></i>
+                          <span>🛑 Désengager (Retour Base)</span>
+                        </button>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        })()}
+
         <!-- MAIN COURANTE OPÉRATIONNELLE CHRONOLOGIQUE -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
             <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
               <i data-lucide="radio" class="w-3.5 h-3.5 text-pc-blue"></i>
-              Main Courante des Transmissions (Temps Réel)
+              Main Courante des transmissions
             </h4>
             <span class="text-[10px] font-mono text-pc-blue font-bold animate-pulse">● EN DIRECT</span>
           </div>
@@ -994,20 +1930,24 @@ window.ProtecCriseLogistique = {
 
   // Clôture définitive de la crise une fois autorisée par le COS
   completeCrisisMission(game, missionId) {
-    const mission = game.missions.find(m => m.id === missionId);
+    if (!game) game = window.game;
+    const mission = (game.missions || []).find(m => m.id === missionId);
     if (!mission) return;
 
     mission.status = 'termine';
+    mission.crisisCanClose = false;
+    mission.endedAt = Date.now();
     const rewardMoney = mission.rewardMoney || 1200;
     const rewardReputation = mission.rewardReputation || 45;
 
+    if (!game.resources) game.resources = { money: 0 };
     game.resources.money += rewardMoney;
     game.resources.reputationScore = Math.min(100, (game.resources.reputationScore || 0) + rewardReputation);
 
     // Libérer tous les effectifs engagés
     const engagedVols = (game.volunteers || []).filter(v =>
       (mission.registeredVolunteers || []).includes(v.id) ||
-      (mission.assignedCrew?.volunteers || []).some(av => av.id === v.id) ||
+      (mission.assignedCrew?.volunteers || []).some(av => (typeof av === 'object' && av !== null ? av.id : av) === v.id) ||
       v.currentMissionId === mission.id ||
       v.missionId === mission.id
     );
@@ -1016,7 +1956,8 @@ window.ProtecCriseLogistique = {
       v.currentMissionId = null;
       v.missionId = null;
       v.experience = Math.min(100, (v.experience || 30) + 10);
-      v.stress = Math.max(5, (v.stress || 20) - 10);
+      v.stress = Math.min(20, Math.max(5, (v.stress || 20) - 25));
+      v.energy = Math.max(v.energy || 50, 75);
     });
 
     // Libérer tous les véhicules engagés et marquer les VPSP pour réarmement
@@ -1024,13 +1965,13 @@ window.ProtecCriseLogistique = {
       v.currentMissionId === mission.id ||
       v.missionId === mission.id ||
       (mission.assignedVehicles || []).includes(v.id) ||
-      (mission.assignedCrew?.vehicles || []).some(av => av.id === v.id)
+      (mission.assignedCrew?.vehicles || []).some(av => (typeof av === 'object' && av !== null ? av.id : av) === v.id)
     );
     engagedVehicles.forEach(v => {
       v.status = 'disponible';
       v.currentMissionId = null;
       v.missionId = null;
-      if (v.type === 'VPSP' || v.name.includes('VPSP')) {
+      if (v.type === 'VPSP' || (v.name && v.name.includes('VPSP'))) {
         v.isRearmed = false;
       }
     });
@@ -1045,7 +1986,7 @@ window.ProtecCriseLogistique = {
       }
     } catch (e) {}
 
-    game.showToast('Dispositif Clôturé avec Succès ! 🏆', `Fin de mission validée. +${rewardMoney} € et +${rewardReputation} pts de réputation !`, 'green');
+    game.showToast('Dispositif Clôturé avec Succès ! 🏆', `Fin de mission validée. +${rewardMoney} € versés à l'antenne, équipes de retour disponibles.`, 'green');
     
     if (typeof game.closeDrawer === 'function') game.closeDrawer();
     const modal = document.getElementById('mission-modal');
@@ -1061,7 +2002,7 @@ window.ProtecCriseLogistique = {
 
     game.saveGame();
     game.renderMissions();
-    game.updateStatsUI();
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
   },
 
   // =========================================================================
@@ -1756,7 +2697,9 @@ window.ProtecCriseLogistique = {
    * Boucle d'évolution en temps réel (appelée à chaque tick par app.js)
    */
   updateAllCrisesTick(game) {
-    if (!game || !game.activeCrises || game.activeCrises.length === 0) return;
+    if (!game) return;
+    this.sanitizeAndRecoverStuckCrises(game);
+    if (!game.activeCrises || game.activeCrises.length === 0) return;
 
     const now = Date.now();
 

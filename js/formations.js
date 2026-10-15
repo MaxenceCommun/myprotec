@@ -853,7 +853,7 @@ window.ProtecFormations = {
 
     game.showToast(
       'Session B2B Validée & Certifiée ! 🎓',
-      `Facturation honorée : +${grossPrice.toLocaleString('fr-FR')} € (-${consumableCost} € consommables déduits, soit +${netGain.toLocaleString('fr-FR')} € net) et +${repGain} pts de réputation !`,
+      `Facturation honorée : +${grossPrice.toLocaleString('fr-FR')} € (-${consumableCost} € consommables déduits, soit +${netGain.toLocaleString('fr-FR')} € net) !`,
       'green'
     );
 
@@ -1207,12 +1207,12 @@ window.ProtecFormations = {
       game.resources.money -= cost;
       vol.motivation = Math.min(100, (vol.motivation || 80) + 20);
       vol.humeur = Math.min(100, (vol.humeur || 80) + 15);
-      game.showToast('Stage Pris en Charge !', `L’antenne a réglé les ${cost} € de formation pour ${vol.name}. Moral au zénith !`, 'green');
+      game.showToast('Stage Pris en Charge !', `L’antenne a réglé les ${cost} € de formation pour ${vol.name}. Formation validée !`, 'green');
     } else {
       // Bénévole paye lui-même
       vol.motivation = Math.max(15, (vol.motivation || 80) - 25);
       vol.humeur = Math.max(15, (vol.humeur || 80) - 20);
-      game.showToast('Baisse de Moral !', `${vol.name} a dû payer lui-même son stage (${cost} €). Motivation en berne !`, 'orange');
+      game.showToast('Stage Financé par le Bénévole', `${vol.name} a financé lui-même son stage (${cost} €).`, 'blue');
     }
 
     // Attribution immédiate des compétences et rôles
@@ -1391,7 +1391,7 @@ window.ProtecFormations = {
     // Formation interne dispensée gratuitement par l'antenne
     vol.motivation = Math.min(100, (vol.motivation || 80) + 12);
     vol.humeur = Math.min(100, (vol.humeur || 80) + 10);
-    game.showToast('Bénévole Inscrit (Gratuit)', `${vol.name} est inscrit à la formation interne gratuite. Moral boosté !`, 'green');
+    game.showToast('Bénévole Inscrit (Gratuit)', `${vol.name} est inscrit à la formation interne gratuite.`, 'blue');
 
     session.registeredCandidates.push(volunteerId);
     game.saveGame();

@@ -107,7 +107,9 @@ window.ProtecEcussons = {
     { id: 'ec-zonal-sudest', code: 'badge_def_sudest', nom: 'Zone de Défense et de Sécurité Sud-Est', description: 'Coordination zonale de secours en montagne, vallées et métropoles (Auvergne-Rhône-Alpes).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_sudest.png' },
     { id: 'ec-zonal-sud', code: 'badge_def_sud', nom: 'Zone de Défense et de Sécurité Sud', description: 'Coordination zonale des dispositifs méditerranéens et feux de forêts (PACA, Occitanie, Corse).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_sud.png' },
     { id: 'ec-zonal-paris', code: 'badge_def_paris', nom: 'Zone de Défense et de Sécurité de Paris', description: 'Coordination zonale de la région capitale et Préfecture de Police (Île-de-France).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_paris.png' },
-    { id: 'ec-zonal-sudouest', code: 'badge_def_sudouest', nom: 'Zone de Défense et de Sécurité Sud-Ouest', description: 'Coordination zonale des moyens de sécurité civile du Sud-Ouest (Nouvelle-Aquitaine).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_sudouest.png' }
+    { id: 'ec-zonal-sudouest', code: 'badge_def_sudouest', nom: 'Zone de Défense et de Sécurité Sud-Ouest', description: 'Coordination zonale des moyens de sécurité civile du Sud-Ouest (Nouvelle-Aquitaine).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_sudouest.png' },
+    { id: 'ec-chat-noir', code: 'badge_chat_noir', nom: 'Écusson Chat Noir', description: 'Distinction officielle de terrain face aux situations complexes et aux défis imprévus (Attribué par l’État-Major / Objectifs à venir).', categorie: 'distinction', rarete: 'epique', icon: 'cat', color: '#18181b', imageUrl: 'images/ecusson_chat_noir.png', adminOnly: true },
+    { id: 'ec-chat-blanc', code: 'badge_chat_blanc', nom: 'Écusson Chat Blanc', description: 'Distinction officielle récompensant la bienveillance et le déroulement exemplaire des opérations (Attribué par l’État-Major / Objectifs à venir).', categorie: 'distinction', rarete: 'epique', icon: 'cat', color: '#f8fafc', imageUrl: 'images/ecusson_chat_blanc.png', adminOnly: true }
   ],
 
   // --- INITIALISATION DU MODULE & SYNCHRONISATION ---
@@ -151,6 +153,12 @@ window.ProtecEcussons = {
               img = 'images/badge_def_paris.png';
             } else if (item.code === 'badge_def_sudouest' || item.code === 'zonal_sudouest') {
               img = 'images/badge_def_sudouest.png';
+            } else if (item.code === 'badge_chat_noir' || (nom && nom.toLowerCase().includes('chat noir'))) {
+              nom = 'Écusson Chat Noir';
+              img = 'images/ecusson_chat_noir.png';
+            } else if (item.code === 'badge_chat_blanc' || (nom && nom.toLowerCase().includes('chat blanc'))) {
+              nom = 'Écusson Chat Blanc';
+              img = 'images/ecusson_chat_blanc.png';
             }
             return {
               ...fb,
@@ -359,6 +367,10 @@ window.ProtecEcussons = {
         imgSrc = 'images/badge_def_paris.png';
       } else if (badge.code === 'badge_def_sudouest' || badge.code === 'zonal_sudouest' || (badge.nom && badge.nom.includes('Défense') && badge.nom.includes('Sud-Ouest'))) {
         imgSrc = 'images/badge_def_sudouest.png';
+      } else if (badge.code === 'badge_chat_noir' || (badge.nom && badge.nom.toLowerCase().includes('chat noir'))) {
+        imgSrc = 'images/ecusson_chat_noir.png';
+      } else if (badge.code === 'badge_chat_blanc' || (badge.nom && badge.nom.toLowerCase().includes('chat blanc'))) {
+        imgSrc = 'images/ecusson_chat_blanc.png';
       }
     }
 

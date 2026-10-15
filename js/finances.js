@@ -1129,9 +1129,9 @@ window.ProtecFinances = {
         </defs>
 
         <!-- Lignes horizontales de repère -->
-        <line x1="${padX}" y1="${padY}" x2="${width - padX}" y2="${padY}" stroke="#334155" stroke-width="1" stroke-dasharray="4" />
-        <line x1="${padX}" y1="${height / 2}" x2="${width - padX}" y2="${height / 2}" stroke="#334155" stroke-width="1" stroke-dasharray="4" />
-        <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" stroke="#334155" stroke-width="1" />
+        <line x1="${padX}" y1="${padY}" x2="${width - padX}" y2="${padY}" stroke="currentColor" class="text-slate-300 dark:text-slate-700" stroke-width="1" stroke-dasharray="4" />
+        <line x1="${padX}" y1="${height / 2}" x2="${width - padX}" y2="${height / 2}" stroke="currentColor" class="text-slate-300 dark:text-slate-700" stroke-width="1" stroke-dasharray="4" />
+        <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" stroke="currentColor" class="text-slate-300 dark:text-slate-700" stroke-width="1" />
 
         <!-- Libellés Y -->
         <text x="${padX - 8}" y="${padY + 4}" fill="#94a3b8" font-size="9" text-anchor="end" font-weight="bold">${Math.round(maxBalance).toLocaleString('fr-FR')} €</text>

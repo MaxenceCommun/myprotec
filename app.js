@@ -1422,25 +1422,32 @@ class ProtecGame {
       }
     }
 
-    // Purge de sécurité des renforts extérieurs résiduels non engagés sur un dispositif en cours
-    if (Array.isArray(this.vehicles) && Array.isArray(this.missions)) {
-      const activeOngoingMissionIds = new Set(
-        this.missions.filter(m => m.status === 'ongoing' || m.status === 'en_cours' || m.status === 'dispatched').map(m => m.id)
-      );
+    // Purge absolue de sécurité : aucun véhicule ni bénévole fictif/généré artificiellement comme renfort
+    if (Array.isArray(this.vehicles)) {
       this.vehicles = this.vehicles.filter(v => {
-        if (v.isExternalReinforcement || v.isRenfort || (v.id && v.id.startsWith('veh-renf-'))) {
-          return this.missions.some(m => activeOngoingMissionIds.has(m.id) && (m.assignedVehicleIds || []).includes(v.id));
-        }
+        if (v && v.id && (v.id.startsWith("veh-renf-") || v.isExternalReinforcement)) return false;
         return true;
       });
-      if (Array.isArray(this.volunteers)) {
-        this.volunteers = this.volunteers.filter(v => {
-          if (v.isExternalReinforcement || v.isRenfort || v.isAlliedRenfort || (v.id && v.id.startsWith('vol-renf-'))) {
-            return this.missions.some(m => activeOngoingMissionIds.has(m.id) && (m.registeredVolunteers || []).includes(v.id));
-          }
-          return true;
-        });
-      }
+    }
+    if (Array.isArray(this.volunteers)) {
+      this.volunteers = this.volunteers.filter(v => {
+        if (v && v.id && (v.id.startsWith("vol-renf-") || v.isExternalReinforcement || (v.isRenfort && v.isAlliedRenfort))) return false;
+        return true;
+      });
+    }
+    if (Array.isArray(this.missions)) {
+      this.missions.forEach(m => {
+        if (Array.isArray(m.assignedVehicleIds)) {
+          m.assignedVehicleIds = m.assignedVehicleIds.filter(id => typeof id === "string" && !id.startsWith("veh-renf-"));
+        }
+        if (Array.isArray(m.registeredVolunteers)) {
+          m.registeredVolunteers = m.registeredVolunteers.filter(id => typeof id === "string" && !id.startsWith("vol-renf-"));
+        }
+      });
+    }
+
+    if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.sanitizeAndRecoverStuckCrises === 'function') {
+      window.ProtecCriseLogistique.sanitizeAndRecoverStuckCrises(this);
     }
   }
 
@@ -1959,7 +1966,16 @@ class ProtecGame {
       if (['completed', 'termine', 'cloture', 'archive', 'cancelled', 'annule', 'carence'].includes(mission.status)) return;
 
       // Les alertes actives et préalertes urgentes restent visibles en direct sur la carte même avec un filtre sélectionné
-      if (this.currentFilter !== 'all' && mission.type !== this.currentFilter && mission.status !== 'prealerte' && mission.status !== 'declenche') return;
+      const isUrgentOrCrisis = (
+        mission.isCrisis ||
+        mission.type === 'crise' ||
+        mission.crisisCanClose ||
+        mission.status === 'prealerte' ||
+        mission.status === 'declenche' ||
+        mission.status === 'ongoing' ||
+        ['pompiers', 'samu', 'meteo'].includes(mission.type)
+      );
+      if (this.currentFilter !== 'all' && mission.type !== this.currentFilter && !isUrgentOrCrisis) return;
 
       // Règle DPS : selon le mode actif ('today' = uniquement jour même ou en cours, 'all' = tous les DPS à venir)
       if (mission.type === 'dps' && mission.status === 'planifie') {
@@ -1968,6 +1984,15 @@ class ProtecGame {
 
         const isToday = mission.eventDate ? (mission.eventDate.day === this.clock.day && mission.eventDate.month === this.clock.month) : true;
         if (this.dpsFilterMode === 'today' && !isToday) return;
+      }
+
+      if (!mission.lat || !mission.lng || isNaN(mission.lat) || isNaN(mission.lng)) {
+        if (this.stations && this.stations[0] && this.stations[0].lat && this.stations[0].lng) {
+          mission.lat = this.stations[0].lat + (Math.random() - 0.5) * 0.04;
+          mission.lng = this.stations[0].lng + (Math.random() - 0.5) * 0.04;
+        } else {
+          return;
+        }
       }
 
       const isSncf = mission.alertOrigin === 'sncf' || (mission.title && mission.title.includes('SNCF'));
@@ -2824,7 +2849,7 @@ class ProtecGame {
     } else {
       item.isSector = false;
       if (!item.address || (!item.address.includes(currentCity) && !item.address.includes(item.postcode || ''))) {
-        item.address = this.generateRealisticStreetAddress(currentCity, item.lat, item.lng);
+        item.address = this.generateRealisticStreetAddress(currentCity, item.lat, item.lng, item.title || item.scenarioText || item.origin);
       }
     }
 
@@ -4072,12 +4097,155 @@ class ProtecGame {
       mission.assignedVehicleIds = [];
     }
 
-    const idx = mission.assignedVehicleIds.indexOf(vehicleId);
+    const isAssigned = mission.assignedVehicleIds.includes(vehicleId) ||
+      (Array.isArray(mission.assignedVehicles) && mission.assignedVehicles.includes(vehicleId)) ||
+      (mission.assignedCrew?.vehicles || []).some(v => (typeof v === 'object' && v !== null ? v.id : v) === vehicleId);
+
     const veh = this.vehicles.find(v => v.id === vehicleId);
 
-    if (idx >= 0) {
-      mission.assignedVehicleIds.splice(idx, 1);
-      this.showToast('Véhicule Retiré', `${veh ? veh.name : 'Véhicule'} retiré du dispositif.`, 'slate');
+    if (isAssigned) {
+      // 1. Identifier précisément le personnel associé à ce véhicule sur le dispositif
+      let crew = [];
+      if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.getVehicleAssignedCrew === 'function') {
+        crew = window.ProtecCriseLogistique.getVehicleAssignedCrew(mission, veh, this);
+      }
+      // Compléter avec les équipes constituées ou attributions directes
+      const matchingTeams = (mission.teams || mission.crisisTeams || []).filter(t => t.vehicleId === vehicleId);
+      const teamVolIds = [];
+      matchingTeams.forEach(t => {
+        Object.entries(mission.volunteerTeams || {}).forEach(([vId, tId]) => {
+          if (tId === t.id) teamVolIds.push(vId);
+        });
+      });
+      if (mission.vehicleCrews && mission.vehicleCrews[vehicleId]) {
+        teamVolIds.push(...mission.vehicleCrews[vehicleId]);
+      }
+      teamVolIds.forEach(vId => {
+        if (!crew.some(c => c.id === vId)) {
+          const v = (this.volunteers || []).find(vol => vol.id === vId);
+          if (v) crew.push(v);
+        }
+      });
+
+      // 2. Retirer le véhicule de toutes les listes d'engagement de la mission
+      mission.assignedVehicleIds = (mission.assignedVehicleIds || []).filter(id => id !== vehicleId);
+      if (Array.isArray(mission.assignedVehicles)) {
+        mission.assignedVehicles = mission.assignedVehicles.filter(id => id !== vehicleId);
+      }
+      if (Array.isArray(mission.engagedVehicles)) {
+        mission.engagedVehicles = mission.engagedVehicles.filter(id => id !== vehicleId);
+      }
+      if (mission.assignedCrew && Array.isArray(mission.assignedCrew.vehicles)) {
+        mission.assignedCrew.vehicles = mission.assignedCrew.vehicles.filter(v => (typeof v === 'object' && v !== null ? v.id : v) !== vehicleId);
+      }
+      if (mission.vehicleCrews) {
+        delete mission.vehicleCrews[vehicleId];
+      }
+
+      // 3. Désengager le personnel du véhicule de la mission
+      const crewIds = crew.map(c => c.id);
+      if (crewIds.length > 0) {
+        mission.registeredVolunteers = (mission.registeredVolunteers || []).filter(id => !crewIds.includes(id));
+        if (Array.isArray(mission.engagedVolunteers)) {
+          mission.engagedVolunteers = mission.engagedVolunteers.filter(id => !crewIds.includes(id));
+        }
+        if (mission.assignedCrew && Array.isArray(mission.assignedCrew.volunteers)) {
+          mission.assignedCrew.volunteers = mission.assignedCrew.volunteers.filter(v => !crewIds.includes(typeof v === 'object' && v !== null ? v.id : v));
+        }
+        if (mission.volunteerTeams) {
+          crewIds.forEach(id => delete mission.volunteerTeams[id]);
+        }
+      }
+
+      // 4. Vérifier si le véhicule est activement engagé sur le terrain
+      const isEngaged = (
+        mission.status === 'ongoing' ||
+        mission.status === 'en_cours' ||
+        veh?.status === 'mission' ||
+        veh?.status === 'sur_les_lieux' ||
+        veh?.status === 'transit' ||
+        veh?.currentMissionId === mission.id
+      );
+
+      if (isEngaged && veh) {
+        // Le véhicule et ses personnels sont sur les lieux : déclencher le transit physique retour vers la base
+        const baseStation = (this.stations || []).find(s => s.id === veh.stationId) || this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne' };
+        const originCoords = { lat: mission.lat || baseStation.lat, lng: mission.lng || baseStation.lng };
+        const destCoords = { lat: baseStation.lat, lng: baseStation.lng };
+
+        veh.status = 'transit';
+        veh.currentMissionId = null;
+        veh.missionId = null;
+
+        crew.forEach(v => {
+          v.status = 'transit';
+          v.currentMissionId = null;
+          v.missionId = null;
+          v.transitVehicleId = vehicleId;
+        });
+
+        if (Array.isArray(mission.operationalLog)) {
+          mission.operationalLog.unshift({
+            timestamp: Date.now(),
+            time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            source: 'Commandant des Opérations (COS)',
+            text: `Ordre de repli pour ${veh.name} et son équipage (${crew.map(c => c.name).join(', ') || 'équipage'}). Désengagement validé, transit retour à l'antenne engagé.`,
+            type: 'info'
+          });
+        }
+
+        if (window.ProtecSystems && typeof window.ProtecSystems.startTransit === 'function') {
+          window.ProtecSystems.startTransit(this, veh, originCoords, destCoords, mission, 6, () => {
+            if (veh) {
+              veh.status = 'dispo';
+              veh.currentMissionId = null;
+              veh.missionId = null;
+              if (veh.type === 'VPSP' || (veh.name && veh.name.includes('VPSP'))) {
+                veh.isRearmed = false;
+                veh.needsRearming = true;
+              }
+            }
+            crew.forEach(v => {
+              v.status = 'disponible';
+              v.currentMissionId = null;
+              v.missionId = null;
+              v.transitVehicleId = null;
+              v.energy = Math.max(v.energy || 50, 70);
+              v.stress = Math.min(20, Math.max(5, (v.stress || 20) - 20));
+            });
+            this.showToast(
+              'Retour Base Effectué 🏠',
+              `${veh.name} et son équipage (${crew.length} secouriste(s)) sont bien rentrés au local et sont de nouveau disponibles.`,
+              'blue'
+            );
+            this.saveGame();
+            this.renderMissions();
+            if (typeof this.updateStatsUI === 'function') this.updateStatsUI();
+          });
+        } else {
+          veh.status = 'dispo';
+          crew.forEach(v => { v.status = 'disponible'; });
+        }
+
+        this.showToast(
+          'Véhicule & Équipage Désengagés 🚒',
+          `${veh.name} et son équipage (${crew.length} secouriste(s)) quittent le dispositif et prennent la route du retour vers la base.`,
+          'orange'
+        );
+      } else {
+        // Retrait au local avant départ
+        if (veh) {
+          veh.status = 'disponible';
+          veh.currentMissionId = null;
+          veh.missionId = null;
+        }
+        crew.forEach(v => {
+          v.status = 'disponible';
+          v.currentMissionId = null;
+          v.missionId = null;
+        });
+        this.showToast('Véhicule Retiré', `${veh ? veh.name : 'Véhicule'} et son équipage (${crew.length} secouriste(s)) retirés du dispositif.`, 'slate');
+      }
     } else {
       // Vérifier si le véhicule est déjà utilisé sur une autre mission active en cours
       const busyMission = this.missions.find(m => m.id !== missionId && m.status === 'ongoing' && (m.assignedCrew?.vehicles || []).some(v => (v.id || v) === vehicleId));
@@ -4093,8 +4261,8 @@ class ProtecGame {
     this.saveGame();
   }
 
-  // Récupère toutes les antennes réelles disponibles pour envoyer des renforts opérationnels
-  getAvailableReinforcementSources(mission) {
+  // Récupère les antennes secondaires réelles du joueur pouvant fournir des renforts en moyens propres
+  getAvailableReinforcementSources(mission, equipageType = 'vpsp') {
     const sources = [];
     if (!mission) return sources;
 
@@ -4110,99 +4278,86 @@ class ProtecGame {
       return Math.hypot((missionLat - lat) * 111, (missionLng - lng) * 111 * Math.cos(missionLat * Math.PI / 180));
     };
 
-    // 1. Antennes secondaires appartenant au joueur (moyens propres)
+    // Antennes secondaires réelles appartenant au joueur
     if (Array.isArray(this.stations) && this.stations.length > 1) {
       this.stations.forEach((st, idx) => {
         if (idx === 0) return; // Antenne principale hôte
         const dist = calcDist(st.lat, st.lng);
+        const cleanType = (equipageType || 'vpsp').toLowerCase();
+
+        // Véhicules réels présents et disponibles
+        const availableVehs = (this.vehicles || []).filter(v => 
+          v.stationId === st.id && 
+          (v.status === 'dispo' || v.status === 'disponible') &&
+          (!cleanType || (v.type || '').toLowerCase() === cleanType)
+        );
+
+        // Bénévoles réels disponibles
+        const availableVols = (this.volunteers || []).filter(v => 
+          v.stationId === st.id && 
+          (v.status === 'disponible' || v.status === 'dispo')
+        );
+
+        // Vérification de l'adéquation de l'équipage
+        let isCrewReady = false;
+        let reason = '';
+        if (availableVehs.length === 0) {
+          reason = `Aucun ${cleanType.toUpperCase()} disponible au garage`;
+        } else if (cleanType === 'vpsp') {
+          const hasCE = availableVols.some(v => v.rank === 'CE' || v.role === "Chef d'équipe" || (v.skills || []).includes('ce'));
+          const hasPSE2 = availableVols.some(v => v.rank === 'PSE2' || (v.skills || []).includes('pse2'));
+          const hasDriver = availableVols.some(v => (v.skills || []).includes('permis_b') || (v.skills || []).includes('permis_vpsp') || (v.skills || []).includes('pse1'));
+          if (availableVols.length < 3) {
+            reason = `Effectif insuffisant (${availableVols.length}/3 secouristes disponibles)`;
+          } else if (!hasCE) {
+            reason = `Aucun Chef d'Équipe (CE) disponible`;
+          } else if (!hasPSE2) {
+            reason = `Aucun PSE2 disponible`;
+          } else if (!hasDriver) {
+            reason = `Aucun chauffeur disponible`;
+          } else {
+            isCrewReady = true;
+          }
+        } else if (cleanType === 'vtu') {
+          if (availableVols.length < 2) {
+            reason = `Effectif insuffisant (${availableVols.length}/2 logisticiens disponibles)`;
+          } else {
+            isCrewReady = true;
+          }
+        } else if (cleanType === 'vtp') {
+          if (availableVols.length < 3) {
+            reason = `Effectif insuffisant (${availableVols.length}/3-6 secouristes disponibles)`;
+          } else {
+            isCrewReady = true;
+          }
+        } else if (cleanType === 'vl') {
+          if (availableVols.length < 1) {
+            reason = `Aucun cadre ou secouriste disponible`;
+          } else {
+            isCrewReady = true;
+          }
+        } else {
+          isCrewReady = availableVehs.length > 0 && availableVols.length >= 2;
+        }
+
         sources.push({
           id: st.id,
           name: st.name || `Antenne de ${st.city}`,
           city: st.city || 'Antenne Secondaire',
           departmentCode: st.departmentCode || myDept,
           category: 'player_secondary',
-          badge: 'Mon Antenne',
+          badge: 'Mon Antenne Secondaire',
           badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
           lat: st.lat,
           lng: st.lng,
           distanceKm: parseFloat(dist.toFixed(1)),
           cost: 0,
-          icon: 'building'
-        });
-      });
-    }
-
-    // 2. Antennes de directeurs alliés (Réseau Multijoueur / Alliance FNPC)
-    if (Array.isArray(this.allianceStations) && this.allianceStations.length > 0) {
-      this.allianceStations.forEach(st => {
-        if (!st.lat || !st.lng) return;
-        const dist = calcDist(st.lat, st.lng);
-        sources.push({
-          id: st.id || `alliance-${st.stationName}`,
-          name: st.name || st.stationName || `Antenne de ${st.city}`,
-          city: st.city || 'Alliance FNPC',
-          departmentCode: st.departmentCode || myDept,
-          category: 'alliance',
-          badge: 'Alliance FNPC',
-          badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-          lat: st.lat,
-          lng: st.lng,
-          distanceKm: parseFloat(dist.toFixed(1)),
-          cost: 40,
-          icon: 'users'
-        });
-      });
-    }
-
-    // 3. Antennes officielles de l'ADPC départementale (Communes du département hôte)
-    let deptCommunes = [];
-    if (window.ProtecDepartements && typeof window.ProtecDepartements.getCommunesForDepartment === 'function') {
-      deptCommunes = window.ProtecDepartements.getCommunesForDepartment(myDept) || [];
-    }
-
-    const hostCityLower = (myPrimaryStation.city || '').trim().toLowerCase();
-    const otherCommunes = deptCommunes.filter(c => (c.nom || '').trim().toLowerCase() !== hostCityLower);
-
-    otherCommunes.forEach(c => {
-      const dist = calcDist(c.lat, c.lng);
-      const allowance = Math.min(160, Math.max(50, Math.round(45 + dist * 1.6)));
-      sources.push({
-        id: `adpc-${myDept}-${c.nom.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-        name: `Protection Civile de ${c.nom}`,
-        city: c.nom,
-        departmentCode: myDept,
-        category: 'adpc_department',
-        badge: `ADPC ${myDept}`,
-        badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
-        lat: c.lat,
-        lng: c.lng,
-        distanceKm: parseFloat(dist.toFixed(1)),
-        cost: allowance,
-        icon: 'shield'
-      });
-    });
-
-    // 4. Antennes zonales des départements limitrophes de la même région administrative
-    const allDepts = window.ProtecDepartements?.list || [];
-    const currentDeptObj = allDepts.find(d => String(d.code) === String(myDept));
-    if (currentDeptObj && currentDeptObj.region) {
-      const neighborDepts = allDepts.filter(d => d.region === currentDeptObj.region && String(d.code) !== String(myDept));
-      neighborDepts.slice(0, 4).forEach(nd => {
-        const dist = calcDist(nd.lat, nd.lng);
-        const allowance = Math.min(250, Math.max(110, Math.round(80 + dist * 1.4)));
-        sources.push({
-          id: `adpc-zonal-${nd.code}-${nd.chefLieu.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-          name: `Protection Civile de ${nd.chefLieu} (ADPC ${nd.code})`,
-          city: nd.chefLieu,
-          departmentCode: nd.code,
-          category: 'adpc_regional',
-          badge: `Zone ${nd.code}`,
-          badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
-          lat: nd.lat,
-          lng: nd.lng,
-          distanceKm: parseFloat(dist.toFixed(1)),
-          cost: allowance,
-          icon: 'navigation'
+          icon: 'building',
+          availableVehiclesCount: availableVehs.length,
+          availableVolunteersCount: availableVols.length,
+          firstVehicle: availableVehs[0] || null,
+          isCrewReady: isCrewReady,
+          reason: reason
         });
       });
     }
@@ -4218,41 +4373,37 @@ class ProtecGame {
     return sources;
   }
 
-  // Ouverture du sélecteur d'antenne pour un renfort opérationnel
+  // Ouverture du sélecteur d'antenne pour un renfort opérationnel réel
   openReinforcementStationSelectorModal(missionId, equipageType = 'vpsp') {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
 
-    const sources = this.getAvailableReinforcementSources(mission);
-    if (sources.length === 0) {
-      this.showToast('Aucune antenne joignable', 'Aucune antenne de renfort n\'a pu être localisée dans la zone.', 'orange');
-      return;
-    }
+    const sources = this.getAvailableReinforcementSources(mission, equipageType);
 
     const configByType = {
       vpsp: {
         title: 'Ambulance VPSP & Équipage Sanitaire',
         icon: '🚑',
-        crewDesc: '1 Ambulance VPSP + 1 Chef d\'Équipe (CE), 1 PSE2 et 1 Chauffeur PSE1',
-        badges: ['Ambulance VPSP', '3 Secouristes', 'CE + PSE2 + PSE1']
+        crewDesc: "1 Ambulance VPSP + 1 Chef d'Équipe (CE), 1 PSE2 et 1 Chauffeur PSE1",
+        badges: ['Ambulance VPSP', '3 Secouristes', 'CE + PSE2 + Chauffeur']
       },
       vtu: {
         title: 'Véhicule Tout Usage & Binôme Logistique',
         icon: '🚐',
-        crewDesc: '1 Véhicule Tout Usage (VTU) + 1 Chef Logistique et 1 Équipier Logistique',
-        badges: ['VTU Logistique', '2 Équipiers', 'CE Log + PSE1']
+        crewDesc: "1 Véhicule Tout Usage (VTU) + 2 logisticiens / secouristes d'intervention",
+        badges: ['VTU Logistique', '2 Équipiers']
       },
       vtp: {
-        title: 'Minibus VTP & Section d\'Intervention',
+        title: "Minibus VTP & Section d'Intervention",
         icon: '🚌',
-        crewDesc: '1 Minibus 9 places (VTP) + 1 Chef d\'Équipe et 5 Secouristes (PSE1/PSE2)',
-        badges: ['Minibus 9pl', '6 Secouristes', '1 CE + 2 PSE2 + 3 PSE1']
+        crewDesc: "1 Minibus (VTP) + 1 Chef d'Équipe et secouristes (3 à 6 pers.)",
+        badges: ['Minibus 9pl', '3-6 Secouristes']
       },
       vl: {
         title: 'Véhicule Léger Cadre & Commandement',
         icon: '🚗',
-        crewDesc: '1 Véhicule Léger (VL) + 1 Chef de Dispositif (CD) et 1 Adjoint de Secteur',
-        badges: ['VL Liaison', '2 Cadres', 'Chef de Dispositif + CE']
+        crewDesc: '1 Véhicule Léger (VL) + 1 Cadre opérationnel',
+        badges: ['VL Liaison', '1 Cadre']
       }
     };
 
@@ -4266,17 +4417,6 @@ class ProtecGame {
       document.body.appendChild(modal);
     }
 
-    const currentMoney = this.resources?.money || 0;
-    const isCrisis = Boolean(
-      mission.type === 'crise' ||
-      mission.status === 'prealerte' ||
-      mission.status === 'declenche' ||
-      mission.isCrisis === true ||
-      mission.isEmergencyPlan === true ||
-      mission.urgency === 'critique'
-    );
-    const apcCrisisDecision = window.ProtecAPC?.getCrisisAutonomousStatus?.(window.ProtecAPC?.cachedAPC, this) || { isAdopted: false };
-
     modal.innerHTML = `
       <div class="glass-panel-heavy rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col p-5 sm:p-6 shadow-2xl border border-white/90 animate-scale-in text-slate-800">
         <!-- En-tête -->
@@ -4287,12 +4427,11 @@ class ProtecGame {
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 tracking-wider">Renfort Opérationnel Réel</span>
-                ${isCrisis ? '<span class="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-rose-600 text-white tracking-wider animate-pulse">Situation de Crise</span>' : ''}
-                <span class="text-xs font-semibold text-slate-400">Règlement FNPC</span>
+                <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 tracking-wider">Renfort Réel Inter-Antennes</span>
+                <span class="text-xs font-semibold text-slate-400">Doctrine FNPC</span>
               </div>
               <h3 class="text-base sm:text-lg font-black text-slate-900">${cfg.title}</h3>
-              <p class="text-xs text-slate-500">Pour le dispositif : <span class="font-bold text-slate-700">« ${mission.title} »</span> (${mission.commune || mission.city || 'Secteur'})</p>
+              <p class="text-xs text-slate-500">Pour le dispositif : <span class="font-bold text-slate-700">« ${mission.title} »</span></p>
             </div>
           </div>
           <button onclick="document.getElementById('${modalId}').remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center font-bold text-sm transition cursor-pointer">
@@ -4300,71 +4439,67 @@ class ProtecGame {
           </button>
         </div>
 
-        <!-- Récapitulatif composition -->
-        <div class="my-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 shrink-0">
-          <div class="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
-            <span>Composition de l'équipage mobilisé :</span>
-            <span class="text-[11px] text-slate-500">Trésorerie disponible : <strong class="text-emerald-700">${currentMoney.toLocaleString()} €</strong></span>
+        <!-- Appel Réseau Inter-Antennes -->
+        <div class="my-3 p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 shrink-0 space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">📡</span>
+              <div>
+                <div class="text-xs font-black text-blue-950 uppercase tracking-wide">Solliciter d'Autres Antennes Réelles (Réseau FNPC)</div>
+                <div class="text-[11px] text-blue-800 font-medium">Aucun véhicule ni personnel n'est généré par le joueur : la demande est diffusée sur le réseau aux directeurs confrères.</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onclick="document.getElementById('${modalId}').remove(); window.game.requestAllianceRenfortForMission('${mission.id}');"
+              class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95">
+              <span>Lancer Appel Réseau</span>
+              <span class="text-sm">→</span>
+            </button>
           </div>
-          <p class="text-xs text-slate-600 mb-2">${cfg.crewDesc}</p>
+        </div>
+
+        <!-- Récapitulatif composition attendue -->
+        <div class="mb-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 shrink-0">
+          <div class="text-xs font-bold text-slate-700 mb-1">Composition de l'équipage requis :</div>
+          <p class="text-xs text-slate-600 mb-1.5">${cfg.crewDesc}</p>
           <div class="flex flex-wrap gap-1.5">
             ${cfg.badges.map(b => `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white text-indigo-700 border border-indigo-200/60 shadow-2xs">${b}</span>`).join('')}
           </div>
         </div>
 
-        <!-- Note doctrine FNPC & Décision APC -->
-        <div class="mb-3 space-y-1.5 shrink-0">
-          <div class="px-3 py-2 rounded-xl bg-blue-50/70 border border-blue-200 text-[11px] text-blue-900 flex items-center gap-2">
-            <span class="text-base">📍</span>
-            <span>Les renforts sont engagés depuis une antenne réelle. Le véhicule partira physiquement de ces coordonnées et fera route sur la carte en temps réel.</span>
-          </div>
-          ${isCrisis ? `
-            <div class="px-3 py-2 rounded-xl ${apcCrisisDecision.isAdopted ? 'bg-emerald-50 border border-emerald-300 text-emerald-900' : 'bg-amber-50 border border-amber-300 text-amber-900'} text-[11px] flex items-center justify-between gap-2">
-              <span class="flex items-center gap-1.5">
-                <span>🏛️</span>
-                <span><strong>Décision APC (Engagement Crise) :</strong> ${
-                  apcCrisisDecision.isAdopted
-                    ? 'Majorité POUR active — Les renforts alliés du département peuvent être engagés d\'office en autonomie !'
-                    : 'Majorité CONTRE ou sans quorum — Accord préalable obligatoire du confrère.'
-                }</span>
-              </span>
-              <button type="button" onclick="document.getElementById('${modalId}').remove(); window.ProtecAPC.renderModal(window.game); window.ProtecAPC.switchTab('politique', window.game);" class="text-[10px] font-black underline shrink-0 cursor-pointer">
-                Voir délibérations APC →
-              </button>
-            </div>
-          ` : ''}
-        </div>
-
-        <!-- Liste des antennes disponibles -->
+        <!-- Titre liste antennes secondaires -->
         <div class="text-xs font-black uppercase tracking-wider text-slate-500 mb-2 shrink-0">
-          Choisir l'antenne d'envoi (${sources.length} disponibles) :
+          Détacher depuis mes antennes secondaires propres (${sources.length} disponible${sources.length > 1 ? 's' : ''}) :
         </div>
 
+        <!-- Liste des antennes secondaires -->
         <div class="overflow-y-auto space-y-2.5 pr-1 flex-1 min-h-0 custom-scrollbar">
-          ${sources.map(s => {
-            const canAfford = currentMoney >= s.cost;
-            const isAlliance = (s.category === 'alliance');
-            const isAllianceBlocked = isAlliance && (!isCrisis || !apcCrisisDecision.isAdopted);
-
+          ${sources.length === 0 ? `
+            <div class="p-6 rounded-2xl bg-slate-50 border border-dashed border-slate-300 text-center space-y-2">
+              <div class="text-2xl">🏢</div>
+              <div class="text-xs font-bold text-slate-700">Aucune antenne secondaire enregistrée</div>
+              <p class="text-[11px] text-slate-500 max-w-md mx-auto">
+                Vous ne disposez actuellement d'aucune antenne secondaire avec des moyens propres. Pour obtenir du soutien sur cette mission, utilisez le bouton d'appel réseau ci-dessus pour solliciter d'autres antennes réelles.
+              </p>
+            </div>
+          ` : sources.map(s => {
             return `
-              <div class="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-indigo-300 transition shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="p-3.5 rounded-2xl bg-white border ${s.isCrewReady ? 'border-slate-200 hover:border-indigo-300' : 'border-slate-200 bg-slate-50/60'} transition shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div class="space-y-1">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="px-2 py-0.5 rounded text-[10px] font-black border ${s.badgeColor}">
                       ${s.badge}
                     </span>
                     <span class="text-xs font-black text-slate-900">${s.name}</span>
-                    ${isAlliance ? (
-                      isCrisis 
-                        ? (apcCrisisDecision.isAdopted 
-                            ? '<span class="px-2 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">⚡ Réquisition Autonome (APC OK)</span>' 
-                            : '<span class="px-2 py-0.2 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300">🔒 Validation Requise (Vote APC Contre)</span>')
-                        : '<span class="px-2 py-0.2 rounded text-[9px] font-black bg-slate-100 text-slate-600 border border-slate-200">Validation Requise (Hors Crise)</span>'
-                    ) : ''}
+                    ${s.isCrewReady 
+                      ? '<span class="px-2 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Véhicule & Équipage Prêts</span>'
+                      : `<span class="px-2 py-0.2 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">⚠️ ${s.reason}</span>`
+                    }
                   </div>
                   <div class="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap">
                     <span class="flex items-center gap-1">
-                      <span class="font-bold text-slate-700">📍 Ville :</span> ${s.city} (${s.departmentCode})
+                      <span class="font-bold text-slate-700">📍 Ville :</span> ${s.city}
                     </span>
                     <span class="flex items-center gap-1">
                       <span class="font-bold text-slate-700">📏 Distance :</span> ${s.distanceKm} km
@@ -4373,34 +4508,24 @@ class ProtecGame {
                       <span class="font-bold text-indigo-700">⏱️ Acheminement :</span> ~${s.transitMinutes} min
                     </span>
                   </div>
+                  ${s.firstVehicle ? `
+                    <div class="text-[11px] text-slate-600 pt-0.5">
+                      Véhicule mobilisé : <strong class="text-slate-800">${s.firstVehicle.name}</strong> (${s.availableVolunteersCount} secouriste(s) dispo sur place)
+                    </div>
+                  ` : ''}
                 </div>
 
                 <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                  <div class="text-right">
-                    <div class="text-xs font-black ${s.cost === 0 ? 'text-emerald-700' : 'text-slate-800'}">
-                      ${s.cost === 0 ? 'Gratuit (Moyens propres)' : `${s.cost} €`}
-                    </div>
-                    <div class="text-[9px] text-slate-400">
-                      ${s.cost === 0 ? 'Moyens internes' : 'Indemnité déplacement'}
-                    </div>
-                  </div>
-
                   <button
                     type="button"
-                    ${!canAfford ? 'disabled' : ''}
+                    ${!s.isCrewReady ? 'disabled' : ''}
                     onclick="window.game.dispatchReinforcementFromStation('${mission.id}', '${equipageType}', '${s.id}')"
                     class="px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-xs active:scale-95 ${
-                      !canAfford 
+                      !s.isCrewReady 
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' 
-                        : (isAllianceBlocked
-                            ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
-                            : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200')
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
                     }">
-                    <span>${
-                      !canAfford 
-                        ? 'Fonds insuffisants' 
-                        : (isAllianceBlocked ? 'Validation requise' : 'Engager ce Renfort')
-                    }</span>
+                    <span>${s.isCrewReady ? 'Détacher ce Renfort Réel' : 'Moyens Indisponibles'}</span>
                     <span class="text-sm">→</span>
                   </button>
                 </div>
@@ -4415,7 +4540,7 @@ class ProtecGame {
             type="button" 
             onclick="document.getElementById('${modalId}').remove()" 
             class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
-            Fermer sans engager
+            Fermer
           </button>
         </div>
       </div>
@@ -4426,279 +4551,187 @@ class ProtecGame {
     }
   }
 
-  // Envoi et acheminement physique du renfort depuis l'antenne sélectionnée
+  // Envoi et acheminement physique d'un renfort réel depuis une antenne secondaire du joueur
   async dispatchReinforcementFromStation(missionId, equipageType, stationId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
 
-    const sources = this.getAvailableReinforcementSources(mission);
-    const source = sources.find(s => s.id === stationId);
-    if (!source) {
+    // Vérifier que la station source est bien une antenne secondaire réelle du joueur
+    const sourceStation = (this.stations || []).find(s => s.id === stationId);
+    if (!sourceStation) {
       this.showToast('Erreur d\'acheminement', 'L\'antenne sélectionnée est introuvable.', 'red');
       return;
-    }
-
-    const isCrisis = Boolean(
-      mission.type === 'crise' ||
-      mission.status === 'prealerte' ||
-      mission.status === 'declenche' ||
-      mission.isCrisis === true ||
-      mission.isEmergencyPlan === true ||
-      mission.urgency === 'critique'
-    );
-    const apcCrisisDecision = window.ProtecAPC?.getCrisisAutonomousStatus?.(window.ProtecAPC?.cachedAPC, this) || { isAdopted: false };
-
-    // VÉRIFICATION DÉLIBÉRATION APC : ENGAGEMENT EN AUTONOMIE D'UN AUTRE JOUEUR SANS VALIDATION (CRISES UNIQUEMENT)
-    if (source.category === 'alliance') {
-      if (!isCrisis) {
-        if (window.ProtecDialog) {
-          await window.ProtecDialog.alert(
-            "L'engagement en autonomie immédiate d'un engin avec personnel d'un autre joueur sans sa validation préalable est strictement restreint aux situations de crises majeures (selon la délibération de direction d'APC).\n\nPour ce dispositif ordinaire, vous devez obtenir l'accord préalable du directeur ou faire appel aux antennes régionales de l'ADPC.",
-            "Réservé aux Crises Uniquement"
-          );
-        } else {
-          this.showToast('Engagement Restreint', 'L\'engagement autonome sans accord d\'un autre joueur est réservé aux crises.', 'orange');
-        }
-        return;
-      }
-
-      if (isCrisis && !apcCrisisDecision.isAdopted) {
-        if (window.ProtecDialog) {
-          await window.ProtecDialog.alert(
-            "La décision de direction départementale d'APC n'autorise pas l'engagement en autonomie sans validation d'un confrère (résolution 'Pour' non adoptée à la majorité).\n\nPour autoriser la réquisition d'office des moyens départementaux en situation de crise, rendez-vous dans l'onglet APC > 'Conventions & Décisions' et votez POUR cette délibération.",
-            "Décision de Direction APC Non Adoptée"
-          );
-        } else {
-          this.showToast('Décision APC Non Adoptée', 'L\'APC n\'a pas adopté la résolution d\'autonomie en crise.', 'orange');
-        }
-        return;
-      }
     }
 
     if (!Array.isArray(mission.assignedVehicleIds)) mission.assignedVehicleIds = [];
     if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
     if (!mission.volunteerRoles) mission.volunteerRoles = {};
 
-    // Déduction des frais d'indemnité kilométrique et logistique FNPC
-    if (source.cost > 0) {
-      if ((this.resources.money || 0) < source.cost) {
-        this.showToast('Trésorerie insuffisante', `Il vous manque ${(source.cost - (this.resources.money || 0))} € pour couvrir le défraiement kilométrique de l'antenne de ${source.name}.`, 'red');
-        return;
-      }
-      this.resources.money -= source.cost;
-      if (window.ProtecFinances) {
-        window.ProtecFinances.recordTransaction(
-          this,
-          -source.cost,
-          `Défraiement Renfort FNPC : ${equipageType.toUpperCase()} (${source.name})`,
-          'logistique',
-          `RENF-${Date.now()}`,
-          source.name
-        );
-      }
-    }
+    const cleanType = (equipageType || 'vpsp').toLowerCase();
 
-    const now = Date.now();
-    const city = source.city || 'Antenne';
-    const dept = source.departmentCode || '54';
-    let newVeh = null;
-    let crewVols = [];
+    // 1. Recherche du VÉHICULE RÉEL à cette antenne (aucun véhicule fictif n'est généré)
+    const realVeh = (this.vehicles || []).find(v => 
+      v.stationId === sourceStation.id && 
+      (v.status === 'dispo' || v.status === 'disponible') &&
+      (v.type || '').toLowerCase() === cleanType
+    );
 
-    // Génération réaliste de noms de secouristes pour l'antenne d'envoi
-    const prenoms = ['Thomas', 'Camille', 'Alexandre', 'Léa', 'Lucas', 'Chloé', 'Antoine', 'Sophie', 'Maxime', 'Julie', 'Nicolas', 'Emma'];
-    const noms = ['Dubois', 'Leroy', 'Moreau', 'Laurent', 'Simon', 'Lefebvre', 'Roux', 'David', 'Bertrand', 'Fontaine', 'Garnier', 'Faure'];
-    const pickName = (role) => {
-      const p = prenoms[Math.floor(Math.random() * prenoms.length)];
-      const n = noms[Math.floor(Math.random() * noms.length)];
-      return `[${city}] ${p} ${n}`;
-    };
-
-    if (equipageType === 'vpsp') {
-      newVeh = {
-        id: `veh-renf-vpsp-${now}`,
-        name: `VPSP — ${source.name}`,
-        type: 'VPSP',
-        status: 'transit',
-        isRenfort: true,
-        isExternalReinforcement: true,
-        stationId: source.id,
-        stationName: source.name,
-        originCity: city,
-        originLat: source.lat,
-        originLng: source.lng,
-        immat: `RF-${Math.floor(100 + Math.random()*899)}-${dept}`,
-        fuel: 100,
-        mechanical: 98,
-        seatsCount: 3
-      };
-      crewVols = [
-        { id: `vol-renf-ce-${now}`, name: pickName(), role: 'Chef d\'équipe', rank: 'CE', skills: ['ce', 'pse2', 'pse1', 'permis_b', 'permis_vpsp'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'ce' },
-        { id: `vol-renf-pse2-${now}`, name: pickName(), role: 'Équipier Secouriste', rank: 'PSE2', skills: ['pse2', 'pse1', 'permis_b'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'pse2' },
-        { id: `vol-renf-pse1-${now}`, name: pickName(), role: 'Secouriste Chauffeur', rank: 'PSE1', skills: ['pse1', 'permis_b', 'permis_vpsp'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'conducteur' }
-      ];
-    } else if (equipageType === 'vtu') {
-      newVeh = {
-        id: `veh-renf-vtu-${now}`,
-        name: `VTU — ${source.name}`,
-        type: 'VTU',
-        status: 'transit',
-        isRenfort: true,
-        isExternalReinforcement: true,
-        stationId: source.id,
-        stationName: source.name,
-        originCity: city,
-        originLat: source.lat,
-        originLng: source.lng,
-        immat: `RF-${Math.floor(100 + Math.random()*899)}-${dept}`,
-        fuel: 100,
-        mechanical: 98,
-        seatsCount: 3
-      };
-      crewVols = [
-        { id: `vol-renf-log1-${now}`, name: pickName(), role: 'Chef Logistique', rank: 'CE', skills: ['ce', 'pse1', 'permis_b'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'logistique' },
-        { id: `vol-renf-log2-${now}`, name: pickName(), role: 'Équipier Logistique', rank: 'PSE1', skills: ['pse1', 'permis_b'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'equipier' }
-      ];
-    } else if (equipageType === 'vtp') {
-      newVeh = {
-        id: `veh-renf-vtp-${now}`,
-        name: `VTP — ${source.name}`,
-        type: 'VTP',
-        status: 'transit',
-        isRenfort: true,
-        isExternalReinforcement: true,
-        stationId: source.id,
-        stationName: source.name,
-        originCity: city,
-        originLat: source.lat,
-        originLng: source.lng,
-        immat: `RF-${Math.floor(100 + Math.random()*899)}-${dept}`,
-        fuel: 100,
-        mechanical: 98,
-        seatsCount: 9
-      };
-      crewVols = [
-        { id: `vol-renf-vtp-ce-${now}`, name: pickName(), role: 'Chef d\'équipe', rank: 'CE', skills: ['ce', 'pse2', 'pse1', 'permis_b'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'ce' },
-        { id: `vol-renf-vtp-p2a-${now}`, name: pickName(), role: 'Équipier Secouriste', rank: 'PSE2', skills: ['pse2', 'pse1', 'permis_b'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'pse2' },
-        { id: `vol-renf-vtp-p2b-${now}`, name: pickName(), role: 'Équipier Secouriste', rank: 'PSE2', skills: ['pse2', 'pse1'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'pse2' },
-        { id: `vol-renf-vtp-p1a-${now}`, name: pickName(), role: 'Secouriste', rank: 'PSE1', skills: ['pse1', 'permis_b'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'equipier' },
-        { id: `vol-renf-vtp-p1b-${now}`, name: pickName(), role: 'Secouriste', rank: 'PSE1', skills: ['pse1'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'equipier' },
-        { id: `vol-renf-vtp-p1c-${now}`, name: pickName(), role: 'Secouriste Chauffeur', rank: 'PSE1', skills: ['pse1', 'permis_b'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'conducteur' }
-      ];
-    } else if (equipageType === 'vl') {
-      newVeh = {
-        id: `veh-renf-vl-${now}`,
-        name: `VL Cadre — ${source.name}`,
-        type: 'VL',
-        isCommandement: true,
-        status: 'transit',
-        isRenfort: true,
-        isExternalReinforcement: true,
-        stationId: source.id,
-        stationName: source.name,
-        originCity: city,
-        originLat: source.lat,
-        originLng: source.lng,
-        immat: `RF-${Math.floor(100 + Math.random()*899)}-${dept}`,
-        fuel: 100,
-        mechanical: 98,
-        seatsCount: 4
-      };
-      crewVols = [
-        { id: `vol-renf-cd-${now}`, name: pickName(), role: 'Chef de Dispositif', rank: 'Cadre', skills: ['cd', 'ce', 'pse2', 'pse1', 'permis_b'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'chef_dispositif' },
-        { id: `vol-renf-adj-${now}`, name: pickName(), role: 'Adjoint de Secteur', rank: 'CE', skills: ['ce', 'pse2', 'pse1', 'permis_b'], isRenfort: true, isExternalReinforcement: true, isAlliedRenfort: true, originStationId: source.id, originStationName: source.name, energy: 95, status: 'mission', missionRole: 'adjoint' }
-      ];
-    }
-
-    if (newVeh) {
-      this.vehicles.push(newVeh);
-      mission.assignedVehicleIds.push(newVeh.id);
-
-      crewVols.forEach(v => {
-        this.volunteers.push(v);
-        mission.registeredVolunteers.push(v.id);
-        if (v.missionRole) {
-          mission.volunteerRoles[v.id] = v.missionRole;
-        }
-      });
-
-      // Fermeture du modal de sélection d'antenne
-      const modal = document.getElementById('modal-renfort-station-selector');
-      if (modal) modal.remove();
-
-      // Déclenchement du transit routier réel sur la carte depuis l'antenne d'origine
-      if (window.ProtecSystems) {
-        window.ProtecSystems.startTransit(
-          this,
-          newVeh,
-          { lat: source.lat, lng: source.lng },
-          { lat: mission.lat, lng: mission.lng },
-          mission,
-          2,
-          () => {
-            newVeh.status = 'mission';
-            this.showToast(
-              'Renfort Arrivé sur Place 🏁',
-              `${newVeh.name} est arrivé sur le dispositif « ${mission.title} » et est opérationnel !`,
-              'green'
-            );
-          }
-        );
-      }
-
-      const isRequisitionApc = (source.category === 'alliance' && isCrisis);
+    if (!realVeh) {
       this.showToast(
-        isRequisitionApc ? 'Réquisition de Crise APC Actée 🚨' : 'Renfort en Route 🚑',
-        isRequisitionApc
-          ? `En application de la décision de direction d'APC, 1 ${newVeh.type} et ${crewVols.length} secouriste(s) de ${source.name} sont engagés d'office pour la crise ! (~${source.transitMinutes} min de route).`
-          : `Départ de ${source.name} (${source.distanceKm} km, ~${source.transitMinutes} min). 1 ${newVeh.type} et ${crewVols.length} secouriste(s) font route !`,
-        'green'
+        'Véhicule Indisponible', 
+        `Aucun ${cleanType.toUpperCase()} disponible au garage de l'antenne de ${sourceStation.name || sourceStation.city}.`, 
+        'orange'
+      );
+      return;
+    }
+
+    // 2. Recherche des BÉNÉVOLES RÉELS à cette antenne (aucun bénévole fictif n'est généré)
+    const availableVols = (this.volunteers || []).filter(v => 
+      v.stationId === sourceStation.id && 
+      (v.status === 'disponible' || v.status === 'dispo')
+    );
+
+    let selectedCrew = [];
+
+    if (cleanType === 'vpsp') {
+      const ceVol = availableVols.find(v => 
+        v.rank === 'CE' || v.role === "Chef d'équipe" || (Array.isArray(v.skills) && v.skills.includes('ce'))
+      );
+      const pse2Vol = availableVols.find(v => 
+        v.id !== ceVol?.id && (v.rank === 'PSE2' || (Array.isArray(v.skills) && v.skills.includes('pse2')))
+      );
+      const driverVol = availableVols.find(v => 
+        v.id !== ceVol?.id && v.id !== pse2Vol?.id && 
+        (Array.isArray(v.skills) && (v.skills.includes('permis_b') || v.skills.includes('permis_vpsp') || v.skills.includes('pse1')))
       );
 
-      this.openMissionDetails(missionId);
-      this.saveGame();
+      if (!ceVol || !pse2Vol || !driverVol) {
+        this.showToast(
+          'Équipage Incomplet', 
+          `L'antenne de ${sourceStation.name || sourceStation.city} ne dispose pas de l'équipage VPSP complet disponible (1 CE + 1 PSE2 + 1 Chauffeur).`, 
+          'orange'
+        );
+        return;
+      }
+
+      ceVol.missionRole = 'ce';
+      pse2Vol.missionRole = 'pse2';
+      driverVol.missionRole = 'conducteur';
+      selectedCrew = [ceVol, pse2Vol, driverVol];
+    } else if (cleanType === 'vtu') {
+      if (availableVols.length < 2) {
+        this.showToast(
+          'Effectif Insuffisant', 
+          `Il faut au moins 2 bénévoles disponibles à l'antenne de ${sourceStation.name || sourceStation.city} pour armer le VTU.`, 
+          'orange'
+        );
+        return;
+      }
+      const log1 = availableVols[0];
+      const log2 = availableVols[1];
+      log1.missionRole = 'logistique';
+      log2.missionRole = 'equipier';
+      selectedCrew = [log1, log2];
+    } else if (cleanType === 'vtp') {
+      if (availableVols.length < 3) {
+        this.showToast(
+          'Effectif Insuffisant', 
+          `Il faut au moins 3 à 6 bénévoles disponibles à l'antenne de ${sourceStation.name || sourceStation.city} pour la section VTP.`, 
+          'orange'
+        );
+        return;
+      }
+      selectedCrew = availableVols.slice(0, Math.min(6, availableVols.length));
+    } else if (cleanType === 'vl') {
+      const cadre = availableVols.find(v => v.rank === 'Cadre' || (Array.isArray(v.skills) && (v.skills.includes('cd') || v.skills.includes('ce')))) || availableVols[0];
+      if (!cadre) {
+        this.showToast(
+          'Effectif Insuffisant', 
+          `Aucun cadre ou secouriste disponible pour la VL à l'antenne de ${sourceStation.name || sourceStation.city}.`, 
+          'orange'
+        );
+        return;
+      }
+      cadre.missionRole = 'chef_dispositif';
+      selectedCrew = [cadre];
     }
+
+    // Engagement du véhicule réel et de l'équipage réel
+    realVeh.status = 'transit';
+    realVeh.assignedMissionId = mission.id;
+    if (!mission.assignedVehicleIds.includes(realVeh.id)) {
+      mission.assignedVehicleIds.push(realVeh.id);
+    }
+
+    selectedCrew.forEach(vol => {
+      vol.status = 'mission';
+      vol.assignedMissionId = mission.id;
+      if (!mission.registeredVolunteers.includes(vol.id)) {
+        mission.registeredVolunteers.push(vol.id);
+      }
+      if (vol.missionRole) {
+        mission.volunteerRoles[vol.id] = vol.missionRole;
+      }
+    });
+
+    // Fermeture du modal de sélection d'antenne
+    const modal = document.getElementById('modal-renfort-station-selector');
+    if (modal) modal.remove();
+
+    // Déclenchement du transit routier réel sur la carte depuis l'antenne d'origine
+    if (window.ProtecSystems) {
+      window.ProtecSystems.startTransit(
+        this,
+        realVeh,
+        { lat: sourceStation.lat, lng: sourceStation.lng },
+        { lat: mission.lat, lng: mission.lng },
+        mission,
+        2,
+        () => {
+          realVeh.status = 'mission';
+          this.showToast(
+            'Renfort Arrivé sur Place 🏁',
+            `${realVeh.name} est arrivé sur le dispositif « ${mission.title} » et est opérationnel !`,
+            'green'
+          );
+        }
+      );
+    }
+
+    this.showToast(
+      'Renfort en Route 🚑',
+      `Départ de ${sourceStation.name || sourceStation.city}. Le ${realVeh.name} et ${selectedCrew.length} secouristes réels font route vers le dispositif !`,
+      'green'
+    );
+
+    this.openMissionDetails(missionId);
+    this.saveGame();
   }
 
   // Démobilisation propre des renforts à la clôture ou annulation du dispositif
   demobilizeMissionReinforcements(mission) {
     if (!mission) return;
 
-    // Véhicules de renfort affectés
-    const renfortVehs = (this.vehicles || []).filter(v => 
-      (v.isExternalReinforcement || v.isRenfort || (v.id && v.id.startsWith('veh-renf-'))) &&
-      (mission.assignedVehicleIds || []).includes(v.id)
-    );
+    // Purge de tout ID synthétique résiduel
+    this.vehicles = (this.vehicles || []).filter(v => !(v.id && typeof v.id === 'string' && v.id.startsWith('veh-renf-')));
+    this.volunteers = (this.volunteers || []).filter(v => !(v.id && typeof v.id === 'string' && v.id.startsWith('vol-renf-')));
 
-    // Bénévoles de renfort affectés
-    const renfortVols = (this.volunteers || []).filter(v => 
-      (v.isExternalReinforcement || v.isRenfort || v.isAlliedRenfort || (v.id && v.id.startsWith('vol-renf-'))) &&
-      (mission.registeredVolunteers || []).includes(v.id)
-    );
+    // Bénévoles réels détachés : retour à l'état disponible
+    (this.volunteers || []).forEach(v => {
+      if (v.assignedMissionId === mission.id) {
+        v.assignedMissionId = null;
+        v.status = 'disponible';
+      }
+    });
 
-    if (renfortVehs.length === 0 && renfortVols.length === 0) return;
-
-    const renfortVehIds = new Set(renfortVehs.map(v => v.id));
-    const renfortVolIds = new Set(renfortVols.map(v => v.id));
-
-    // Suppression définitive de la flotte et des effectifs de l'antenne hôte
-    this.vehicles = (this.vehicles || []).filter(v => !renfortVehIds.has(v.id));
-    this.volunteers = (this.volunteers || []).filter(v => !renfortVolIds.has(v.id));
-
-    if (Array.isArray(mission.assignedVehicleIds)) {
-      mission.assignedVehicleIds = mission.assignedVehicleIds.filter(id => !renfortVehIds.has(id));
-    }
-    if (Array.isArray(mission.registeredVolunteers)) {
-      mission.registeredVolunteers = mission.registeredVolunteers.filter(id => !renfortVolIds.has(id));
-    }
-
-    const stationNames = [...new Set(renfortVehs.map(v => v.stationName || v.originCity).filter(Boolean))].join(', ') || 'leurs antennes respectives';
-    this.showToast(
-      'Démobilisation des Renforts 🤝',
-      `Les équipages extérieurs ont achevé leur mission et regagnent ${stationNames}. Moyens libérés.`,
-      'blue'
-    );
+    // Véhicules réels détachés : retour au garage
+    (this.vehicles || []).forEach(v => {
+      if (v.assignedMissionId === mission.id) {
+        v.assignedMissionId = null;
+        v.status = 'dispo';
+      }
+    });
   }
-
   // Demande d'un équipage de renfort complet indissociable (ouvre le sélecteur d'antenne réelle)
   requestRenfortEquipage(missionId, equipageType = 'vpsp') {
     this.openReinforcementStationSelectorModal(missionId, equipageType);
@@ -4724,6 +4757,110 @@ class ProtecGame {
       this.toggleMissionVehicle(missionId, vId);
     }
   }
+  // Fonctions opérationnelles par autorité pour les véhicules engagés
+  getAvailableVehicleFunctions(mission, veh) {
+    if (!mission) return ['Mission Générale'];
+    const origin = (((mission.alertOrigin || '') + ' ' + (mission.authority || '')).toLowerCase());
+    const type = (mission.type || '').toLowerCase();
+    const title = (mission.title || '').toLowerCase();
+    const vehType = (veh && veh.type ? veh.type.toUpperCase() : '');
+
+    let tasks = [];
+
+    if (origin.includes('sncf') || type.includes('sncf') || title.includes('sncf') || title.includes('gare') || title.includes('ferroviaire')) {
+      tasks = [
+        'SNCF - Prise en charge naufragés du rail',
+        'SNCF - Distribution de vivres & bouteilles',
+        'SNCF - Montage & armement CHU Gare',
+        'SNCF - Évacuation Sanitaire & Navette Gare',
+        'SNCF - Soutien Médico-Psychologique (CUMP)',
+        'SNCF - Éclairage autonome & Servitudes',
+        'SNCF - Poste de Liaison Gare'
+      ];
+    } else if (origin.includes('samu') || type === 'samu' || title.includes('samu') || title.includes('15')) {
+      tasks = [
+        'SAMU 15 - Évacuation Sanitaire d\'Urgence (Noria VPSP)',
+        'SAMU 15 - Prise en charge Détresse Vitale',
+        'SAMU 15 - Armement Poste Médical Avancé (PMA)',
+        'SAMU 15 - Soutien Sanitaire & Premiers Soins',
+        'SAMU 15 - Rapatriement Sanitaire d\'Urgence',
+        'SAMU 15 - Liaison Régulation Médicale 15'
+      ];
+    } else if (origin.includes('sdis') || origin.includes('pompier') || type === 'pompiers' || title.includes('sdis') || title.includes('18') || title.includes('incendie')) {
+      tasks = [
+        'SDIS 18 - Soutien Sanitaire aux Pompiers (3SP)',
+        'SDIS 18 - Noria d\'Évacuation Blessés (VPSP)',
+        'SDIS 18 - Épuisement des Eaux & Motopompes',
+        'SDIS 18 - Éclairage & Balisage de Secteur',
+        'SDIS 18 - Ravitaillement & Vivres des Équipes',
+        'SDIS 18 - Poste de Commandement de Secteur'
+      ];
+    } else if (mission.isCrisis || type === 'crise' || title.includes('novi') || title.includes('orsec') || origin.includes('prefecture') || origin.includes('etat')) {
+      tasks = [
+        'PRÉFECTURE - Centre d\'Hébergement d\'Urgence (CHU)',
+        'PRÉFECTURE - Centre d\'Accueil des Impliqués (CAI)',
+        'PRÉFECTURE - Poste de Commandement Mobile (PCM)',
+        'PRÉFECTURE - Noria d\'Évacuation Sanitaire (VPSP)',
+        'PRÉFECTURE - Soutien Logistique & Éclairage Fort',
+        'PRÉFECTURE - Ravitaillement de la Population',
+        'PRÉFECTURE - Navette Évacuation Population'
+      ];
+    } else if (type === 'social' || origin.includes('115') || title.includes('maraude')) {
+      tasks = [
+        '115 SOCIAL - Maraude & Écoute de Rue',
+        '115 SOCIAL - Distribution Vestimentaire & Couvertures',
+        '115 SOCIAL - Ravitaillement Vivres & Boissons Chaudes',
+        '115 SOCIAL - Orientation & Mise à l\'Abri CHRS',
+        '115 SOCIAL - Évacuation & Soins Sanitaires VPSP'
+      ];
+    } else {
+      tasks = [
+        'DPS - Poste de Secours Fixe (PAP)',
+        'DPS - Évacuation Sanitaire d\'Urgence (VPSP)',
+        'DPS - Patrouille & Binôme de Secteur',
+        'DPS - Commandement de Dispositif',
+        'DPS - Ravitaillement & Vivres Bénévoles',
+        'DPS - Liaison & Logistique Matériel'
+      ];
+    }
+
+    if (vehType === 'VPSP' && !tasks.some(t => t.includes('VPSP') || t.includes('Évacuation') || t.includes('Sanitaire'))) {
+      tasks.unshift('Évacuation Sanitaire / Soins (VPSP)');
+    } else if (vehType === 'PCM' && !tasks.some(t => t.includes('Commandement') || t.includes('PCM'))) {
+      tasks.unshift('Poste de Commandement Mobile (PCM)');
+    } else if ((vehType === 'VTU' || vehType === 'VTL') && !tasks.some(t => t.includes('Logistique') || t.includes('Vivres') || t.includes('CHU') || t.includes('Matériel'))) {
+      tasks.unshift('Logistique & Matériel d\'Intervention');
+    }
+
+    return tasks;
+  }
+
+  // Affectation d'un véhicule à une fonction / tâche opérationnelle demandée par l\'autorité
+  setVehicleMissionFunction(missionId, vehicleId, functionName) {
+    const mission = (this.missions || []).find(m => m.id === missionId);
+    if (!mission) return;
+    if (!mission.vehicleFunctions) mission.vehicleFunctions = {};
+    mission.vehicleFunctions[vehicleId] = functionName;
+
+    const allVehicles = (this.vehicles || []).concat(this.allVehicles || []);
+    const veh = allVehicles.find(v => v.id === vehicleId);
+    if (veh) {
+      veh.currentMissionFunction = functionName;
+    }
+
+    if (mission.isCrisis || mission.type === 'crise') {
+      const vehLabel = veh ? (veh.indicatif || veh.name) : 'Véhicule';
+      if (typeof this.addMainCouranteEntry === 'function') {
+        this.addMainCouranteEntry(mission.id, 'LOG', 'Affectation opérationnelle : ' + vehLabel + ' affecté à la tâche "' + functionName + '"');
+      }
+    }
+
+    this.save();
+    if (typeof this.renderMissionModal === 'function') {
+      this.renderMissionModal(mission.id);
+    }
+  }
+
 
   // Affectation automatique libre de tous les véhicules requis disponibles
   autoAssignVehiclesToMission(missionId) {
@@ -6773,12 +6910,12 @@ class ProtecGame {
         authority: 'sncf',
         authorityLabel: 'SNCF (Direction Nationale de Crise)',
         authorityBadgeBg: 'bg-purple-50 text-purple-800 border-purple-300',
-        title: 'Trafic Ferroviaire Interrompu : Rame TGV Bloquée en Pleine Voie',
-        scenarioText: 'Rupture d’alimentation caténaire consécutive à de fortes rafales de vent. Le TGV 6742 est immobilisé en pleine voie avec 640 passagers sans électricité ni chauffage. Les navettes d’acheminement rapatrient les voyageurs par vagues successives vers la gare centrale. La direction de crise SNCF sollicite la Protection Civile pour pré-alerte et montage d’un Centre d’Hébergement d’Urgence (CHU 50 lits) et distribution d’eau.',
+        title: 'Crise Ferroviaire : Prise en Charge Voyageurs & CHU en Gare (TGV Bloqué en Ligne)',
+        scenarioText: 'Rupture d’alimentation caténaire sur la ligne à grande vitesse (LGV) en amont. Le TGV 6742 est immobilisé en pleine voie hors agglomération avec 640 passagers sans électricité ni chauffage. Les navettes et bus d’acheminement rapatrient les voyageurs par vagues successives vers la gare centrale. La direction de crise SNCF sollicite la Protection Civile pour l’accueil en gare, le montage d’un Centre d’Hébergement d’Urgence (CHU 50 lits) et la distribution d’eau et de vivres.',
         assignedMissions: [
           'Montage et tenue d’un CHU en gare centrale (50 lits)',
           'Distribution massive d’eau et collations d’urgence',
-          'Accueil, orientation et réconfort des voyageurs déroutés'
+          'Accueil, orientation et réconfort des voyageurs rapatriés'
         ],
         requiredAssets: {
           vpsp: 1,
@@ -6945,7 +7082,7 @@ class ProtecGame {
       preMobilisationActive: false,
       registeredVolunteers: [],
       assignedCrew: { volunteers: [], vehicles: [] },
-      address: this.generateRealisticStreetAddress(pick.title, coords.lat, coords.lng),
+      address: this.generateRealisticStreetAddress(base.city || 'Paris', coords.lat, coords.lng, pick.title || pick.origin),
       isSector: false,
       departmentCode: base.departmentCode || deptCode
     };
@@ -7260,7 +7397,7 @@ class ProtecGame {
       const authorityName = mission.authorityLabel || 'l’autorité opérationnelle';
       this.showToast(
         '⚡ Pré-Mobilisation Ciblée Enclenchée',
-        `Appel d’astreinte diffusé aux ${totalVols} secouristes (Taux IRL ~15%, max ~${mission.maxMobilisableAstreinte} équipiers mobilisables).`,
+        `Appel d’astreinte diffusé aux secouristes. Mobilisation progressive en cours...`,
         'amber'
       );
     } else {
@@ -7314,7 +7451,7 @@ class ProtecGame {
 
     const originName = mission.authorityLabel || (mission.alertOrigin === 'sncf' ? 'la SNCF' : 'la Préfecture');
     this.recordAlertTriggerLog(mission, 'levee_favorable', `Préalerte levée par ${originName} (situation maîtrisée par les secours publics ou risque écarté). Effectifs démobilisés. Indemnité de veille républicaine (+120 €) perçue.`, { repImpact: 10, moneyImpact: 120 });
-    this.showToast('🟢 Préalerte Levée !', `Situation maîtrisée par les secours publics ! ${originName} lève le dispositif de veille. Bénévoles démobilisés (+120 € indemnité de veille, +10 réputation). Consigné au registre.`, 'green');
+    this.showToast('🟢 Préalerte Levée !', `Situation maîtrisée par les secours publics ! ${originName} lève le dispositif de veille. Bénévoles démobilisés (+120 € indemnité de veille). Consigné au registre.`, 'green');
 
     // Clôture départementale sur Supabase pour tous les joueurs
     if (window.ProtecSupabase) {
@@ -7492,7 +7629,7 @@ class ProtecGame {
     this.updateStatsUI();
     this.saveGame();
     if (waitDays >= 2) {
-      this.showToast('Bénévole Intégré (Démotivé)', `${cand.name} a signé sa charte mais débute avec un moral entamé (${newVol.motivation}%) après ${waitDays} jours d’attente sans réponse.`, 'orange');
+      this.showToast('Bénévole Intégré', `${cand.name} a signé sa charte après ${waitDays} jours d’attente et rejoint les effectifs.`, 'blue');
     } else {
       this.showToast('Bénévole Intégré !', `${cand.name} (${initialRank}${cand.isTrainer ? ' • Formateur' : ''}) a signé sa charte d'engagement bénévole !`, 'green');
     }
@@ -7845,7 +7982,7 @@ class ProtecGame {
         this.resources.reputationScore = currentRep + repGain;
         this.showToast(
           'Poste Sécurisé & Clôturé 👏',
-          `Dispositif « ${mission.title} » initialement sous-dimensionné mais parfaitement stabilisé grâce au déploiement de vos renforts internes (+${repGain} popularité).`,
+          `Dispositif « ${mission.title} » initialement sous-dimensionné mais parfaitement stabilisé grâce au déploiement de vos renforts internes.`,
           'blue'
         );
       } else if (mission.understaffChoice === 'sdis') {
@@ -7894,7 +8031,7 @@ class ProtecGame {
 
         this.showToast(
           'Catastrophe sur le DPS !',
-          `Dispositif sous-dimensionné (${crew.length}/${minReq} requis) ou sans encadrement sur « ${mission.title} » ! Secouristes débordés, organisateur furieux et réputation en baisse (-${repLoss} pts).`,
+          `Dispositif sous-dimensionné (${crew.length}/${minReq} requis) ou sans encadrement sur « ${mission.title} » ! Secouristes débordés et organisateur mécontent.`,
           'red'
         );
 
@@ -8003,10 +8140,9 @@ class ProtecGame {
           photoToastMsg = ` • 📸 Dossier photo constitué par ${photographeNames} (disponible dans l'onglet Communication)`;
         }
 
-        const paramDetail = paramTier >= 2 ? ` (Multiparamétrique : +${paramDef?.stats?.samuRepBonus || 5} appréciation SAMU)` : '';
         this.showToast(
           'Bilan Organisateur : Parfait !',
-          `L’organisateur de « ${mission.title} » est comblé par le professionnalisme de vos secouristes (+${repGain} popularité, -${consumableCost} € consommables)${paramDetail}.${photoToastMsg}`,
+          `L’organisateur de « ${mission.title} » est comblé par le professionnalisme de vos secouristes (-${consumableCost} € consommables).${photoToastMsg}`,
           'green'
         );
 
@@ -8218,6 +8354,13 @@ class ProtecGame {
       // Nécessite un réarmement de matériel avant de repartir
       veh.needsRearming = true;
       veh.fuel = Math.max(10, (veh.fuel || 90) - 15);
+      // Consommation réaliste d'armement consommables (~30% par mission)
+      if (veh.type === 'VPSP' || (veh.type === 'VTU' && veh.logKit === 'dps')) {
+        const loss = Math.floor(Math.random() * 15 + 25); // 25% à 40% de consommables utilisés
+        veh.armementLevel = Math.max(10, (veh.armementLevel !== undefined ? veh.armementLevel : 100) - loss);
+        veh.isRearmed = false;
+        veh.needsRearming = true;
+      }
 
       // Incrémentation réaliste du kilométrage compteur (trajet aller-retour et patrouille)
       const missionKm = Math.floor(Math.random() * 25 + 15);
@@ -9667,7 +9810,7 @@ class ProtecGame {
     const missionKindTitle = mission.type === 'social' ? 'Annulation de la Maraude' : (mission.type === 'pompiers' ? 'Annulation de la Garde' : 'Annulation du Dispositif');
 
     const confirmed = await window.ProtecDialog.confirm(
-      `Êtes-vous certain de vouloir annuler ${missionKind} « ${mission.title} » ?\n\nAttention : Cette annulation impactera la popularité de votre antenne (-${repLoss} pts de réputation) car le demandeur devra trouver une autre association en urgence.`,
+      `Êtes-vous certain de vouloir annuler ${missionKind} « ${mission.title} » ?\n\nAttention : Cette annulation mettra le demandeur en difficulté car il devra trouver une autre association en urgence.`,
       missionKindTitle,
       { isDestructive: true, confirmText: 'Confirmer l\'annulation', cancelText: 'Conserver la mission' }
     );
@@ -9689,11 +9832,11 @@ class ProtecGame {
     this.recordAlertTriggerLog(mission, 'annulee_joueur', `Annulation manuelle décidée par la direction de l'antenne (-${repLoss} réputation).`, { repImpact: -repLoss });
     this.missions = this.missions.filter(m => m.id !== missionId);
 
-    this.showToast('DPS Annulé', `Le dispositif « ${mission.title} » a été annulé (-${repLoss} réputation). L'événement est conservé dans votre registre des déclenchements.`, 'orange');
+    this.showToast('DPS Annulé', `Le dispositif « ${mission.title} » a été annulé. L'événement est conservé dans votre registre des déclenchements.`, 'orange');
     if (window.ProtecNotifications) {
       window.ProtecNotifications.recordNotification({
         title: `⚠️ ${alertMsg}`,
-        message: `Le DPS « ${mission.title} » a été annulé par votre antenne. Perte de réputation : -${repLoss} points. Consigné dans le registre des alertes.`,
+        message: `Le DPS « ${mission.title} » a été annulé par votre antenne. Consigné dans le registre des alertes.`,
         category: 'dps',
         level: 'warning'
       });
@@ -10593,7 +10736,7 @@ class ProtecGame {
                 </div>
                 <p class="text-[10px] text-slate-400">
                   ${mission.preMobilisationActive 
-                    ? `Les équipiers répondent progressivement à l'appel d'astreinte (taux IRL ~15% de l'effectif total d'antenne mobilisable en 10 min).` 
+                    ? `Les secouristes d'astreinte consultent leurs messages et confirment progressivement leur disponibilité.` 
                     : 'En veille simple, aucun bénévole n\'est mobilisé d\'avance. Si l\'alerte se confirme, le rassemblement à la base prendra le délai standard.'}
                 </p>
               </div>
@@ -10876,7 +11019,7 @@ class ProtecGame {
 
             ${hasTeamManagement ? `
               <!-- PANNEAU D'ORGANISATION DES ÉQUIPES OPÉRATIONNELLES (CONTRÔLE TOTAL DU JOUEUR, RIEN PAR DÉFAUT) -->
-              <div class="p-4 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl space-y-3.5 border border-indigo-400/30">
+              <div class="p-4 rounded-3xl bg-slate-50 border border-slate-200 text-slate-900 dark:bg-gradient-to-r dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900 dark:text-white dark:border-indigo-400/30 shadow-md space-y-3.5">
                 <div class="flex items-center justify-between flex-wrap gap-2">
                   <div class="flex items-center gap-2.5">
                     <div class="w-9 h-9 rounded-2xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-lg border border-indigo-500/40 shadow-xs">
@@ -10884,10 +11027,10 @@ class ProtecGame {
                     </div>
                     <div>
                       <div class="flex items-center gap-2">
-                        <h4 class="text-xs font-black uppercase text-white tracking-wider">Organisation des Équipes Opérationnelles</h4>
+                        <h4 class="text-xs font-black uppercase text-slate-800 dark:text-white tracking-wider">Organisation des Équipes Opérationnelles</h4>
                         ${isCrisisMission ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-red-500 text-white animate-pulse">Crise</span>' : '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-500 text-white">Dispositif</span>'}
                       </div>
-                      <p class="text-[10px] text-slate-300">Créez vos équipes et affectez vos secouristes. Rien n'est imposé par défaut : vous avez la main totale.</p>
+                      <p class="text-[10px] text-slate-500 dark:text-slate-300">Créez vos équipes et affectez vos secouristes. Rien n'est imposé par défaut : vous avez la main totale.</p>
                     </div>
                   </div>
                   <div class="flex items-center gap-2">
@@ -10901,8 +11044,8 @@ class ProtecGame {
                 </div>
 
                 <!-- Barre d'outils de création d'équipes -->
-                <div class="p-2.5 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-1.5 flex-wrap">
-                  <span class="text-[10px] font-bold text-slate-300 mr-1 flex items-center gap-1">
+                <div class="p-2.5 rounded-2xl bg-white border border-slate-200 dark:bg-white/5 dark:border-white/10 flex items-center gap-1.5 flex-wrap">
+                  <span class="text-[10px] font-bold text-slate-600 dark:text-slate-300 mr-1 flex items-center gap-1">
                     <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-pc-blue"></i>
                     <span>Ajouter une équipe :</span>
                   </span>
@@ -10921,7 +11064,7 @@ class ProtecGame {
                   <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'soutien')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-600/80 hover:bg-amber-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un soutien logistique">
                     <span>+ Soutien Log</span>
                   </button>
-                  <button type="button" onclick="window.game.promptCreateCustomTeam('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-white/10 hover:bg-white/20 text-white border border-white/20 transition flex items-center gap-1 cursor-pointer ml-auto" title="Créer une équipe personnalisée">
+                  <button type="button" onclick="window.game.promptCreateCustomTeam('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white dark:border-white/20 transition flex items-center gap-1 cursor-pointer ml-auto" title="Créer une équipe personnalisée">
                     <span>+ Équipe Libre...</span>
                   </button>
                 </div>
@@ -10941,16 +11084,16 @@ class ProtecGame {
                       const assignedVehiclesList = (mission.assignedVehicles || []).map(id => this.vehicles.find(veh => veh.id === id)).filter(Boolean);
 
                       return `
-                        <div class="p-3 rounded-2xl ${isDeployed ? 'bg-emerald-950/40 border border-emerald-500/50' : 'bg-white/10 border border-white/15'} flex flex-col justify-between space-y-2.5 shadow-sm">
+                        <div class="p-3 rounded-2xl ${isDeployed ? 'bg-emerald-50/80 border border-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-500/50' : 'bg-white border border-slate-200 dark:bg-white/10 dark:border-white/15'} flex flex-col justify-between space-y-2.5 shadow-2xs">
                           <div class="flex items-center justify-between">
                             <div class="flex items-center gap-1.5">
                               <span class="px-2 py-0.5 rounded-lg text-[10px] font-black ${isDeployed ? 'bg-emerald-500 text-white' : 'bg-pc-blue text-white'}">
                                 ${team.name}
                               </span>
-                              <span class="text-[11px] font-bold text-white truncate max-w-[150px]">${team.label || team.name}</span>
+                              <span class="text-[11px] font-bold text-slate-800 dark:text-white truncate max-w-[150px]">${team.label || team.name}</span>
                             </div>
                             <div class="flex items-center gap-1">
-                              <span class="text-[10px] font-bold ${members.length > 0 ? (isDeployed ? 'text-emerald-300' : 'text-slate-300') : 'text-amber-300'}">
+                              <span class="text-[10px] font-bold ${members.length > 0 ? (isDeployed ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-300') : 'text-amber-600 dark:text-amber-300'}">
                                 ${members.length} secouriste(s)
                               </span>
                               <button type="button" onclick="window.game.removeMissionTeam('${mission.id}', '${team.id}')" class="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 transition cursor-pointer" title="Supprimer cette équipe">
@@ -11123,12 +11266,26 @@ class ProtecGame {
                         </td>
                         <td class="py-2 px-3">
                           <div class="font-bold text-slate-900 leading-tight">${v.name}</div>
-                          ${isCrisisMission ? `
-                            <div class="text-[9px] text-slate-500 truncate max-w-[220px]" title="Adresse de résidence : ${v.adresse ? `${v.adresse}, ${v.commune || ''}` : (v.homeAddress || v.commune || 'Domicile')}">
-                              🏠 ${v.adresse ? `${v.adresse}, ${v.commune || ''}` : (v.homeAddress || v.commune || 'Domicile')} 
-                              <span class="text-slate-400 font-semibold">(${v.distance_base_km || 4} km - ~${v.temps_ralliement_minutes || v.travelTimeToStationMin || 8} min)</span>
-                            </div>
-                          ` : ''}
+                          ${(() => {
+                            if (!isCrisisMission) return '';
+                            const rawHome = v.adresse ? `${v.adresse}, ${v.commune || ''}` : (v.homeAddress || v.commune || 'Domicile');
+                            const distMatch = rawHome.match(/\((\d+(\.\d+)?)\s*km\)/i);
+                            const cleanAddr = rawHome.replace(/\s*\(\d+(\.\d+)?\s*km\)/gi, '').trim();
+                            const distKm = v.distance_base_km || (distMatch ? parseFloat(distMatch[1]) : 4);
+                            const rallyMin = v.temps_ralliement_minutes || v.temps_trajet_base_minutes || v.travelTimeToStationMin || Math.max(4, Math.round(distKm * 2.2));
+
+                            return `
+                              <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-black bg-blue-50 text-pc-blue border border-blue-200 shadow-2xs">
+                                  ⏱️ Trajet base : ~${rallyMin} min
+                                  <span class="text-[8px] font-semibold text-slate-400">(${distKm} km)</span>
+                                </span>
+                              </div>
+                              <div class="text-[9px] text-slate-500 truncate max-w-[240px] mt-0.5" title="Adresse de résidence : ${cleanAddr}">
+                                🏠 ${cleanAddr}
+                              </div>
+                            `;
+                          })()}
                           <div class="flex items-center gap-1 mt-0.5 flex-wrap">
                             ${(() => {
                               if (isEngaged) {
@@ -11388,19 +11545,20 @@ class ProtecGame {
                             <th class="py-2.5 px-3">Véhicule</th>
                             <th class="py-2.5 px-3">Statut</th>
                             <th class="py-2.5 px-3">Indicatif</th>
-                            <th class="py-2.5 px-3 hidden sm:table-cell">Immatriculation</th>
-                            <th class="py-2.5 px-3">Fonction</th>
+                            <th class="py-2.5 px-3">Tâche & Mission demandée par l'Autorité</th>
                             <th class="py-2.5 px-3 hidden sm:table-cell">Kilométrage</th>
                           </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                           ${assignedVehsList.map(veh => {
-                            const immat = getVehicleImmat(veh);
                             const indicatif = veh.indicatif || `${veh.type} ${veh.num || 1}`;
                             const mileage = veh.mileage || veh.kilometrage || 118400;
                             veh.mileage = mileage;
                             veh.kilometrage = mileage;
-                            const fonction = veh.type === 'VPSP' ? 'Évacuation / Soins' : (veh.type === 'PCM' ? 'Poste Commandement' : 'Liaison / Transport');
+                            const availableTasks = typeof this.getAvailableVehicleFunctions === 'function'
+                              ? this.getAvailableVehicleFunctions(mission, veh)
+                              : ['Mission Opérationnelle'];
+                            const currentTask = (mission.vehicleFunctions && mission.vehicleFunctions[veh.id]) || veh.currentMissionFunction || availableTasks[0];
 
                             return `
                               <tr class="hover:bg-slate-50/80 transition">
@@ -11421,13 +11579,14 @@ class ProtecGame {
                                 <td class="py-2 px-3 font-bold text-slate-800 text-[11px]">
                                   ${indicatif}
                                 </td>
-                                <td class="py-2 px-3 hidden sm:table-cell font-mono text-[10px] text-slate-700 font-bold">
-                                  ${immat}
-                                </td>
                                 <td class="py-2 px-3">
-                                  <span class="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-semibold border border-slate-200">
-                                    ${fonction}
-                                  </span>
+                                  <div class="flex items-center gap-1.5">
+                                    <select onchange="window.game.setVehicleMissionFunction('${mission.id}', '${veh.id}', this.value)"
+                                      class="text-[11px] font-bold bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-lg px-2 py-1 text-slate-800 focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue transition cursor-pointer max-w-[260px] truncate shadow-2xs"
+                                      title="Affecter ce véhicule à la tâche demandée par l'autorité">
+                                      ${availableTasks.map(t => `<option value="${t.replace(/"/g, '&quot;')}" ${t === currentTask ? 'selected' : ''}>${t}</option>`).join('')}
+                                    </select>
+                                  </div>
                                 </td>
                                 <td class="py-2 px-3 hidden sm:table-cell font-mono text-[10px] text-slate-600">
                                   ${mileage.toLocaleString()} km
@@ -11489,7 +11648,7 @@ class ProtecGame {
                           return `
                             <div class="col-span-full p-2.5 rounded-xl bg-white border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
                               <span>🚶</span>
-                              <span>Dispositif pédestre / poste de secours fixe (aucun véhicule requis au devis). Vous pouvez engager librement des véhicules pour acheminer vos bénévoles.</span>
+                              <span>${isCrisisMission ? "Dispositif à pied d'œuvre (aucun véhicule requis par l'autorité). Vous pouvez engager des véhicules pour acheminer vos bénévoles." : "Dispositif pédestre / poste de secours fixe (aucun véhicule requis au devis). Vous pouvez engager librement des véhicules pour acheminer vos bénévoles."}</span>
                             </div>
                           `;
                         }
@@ -11516,7 +11675,7 @@ class ProtecGame {
                                 <span class="text-2xl shrink-0">${type === 'VPSP' ? '🚑' : type === 'PCM' ? '📡' : type === 'VTU' ? '🚐' : type === 'VTP' ? '🚌' : '🚗'}</span>
                                 <div class="min-w-0">
                                   <div class="text-xs font-black truncate">${type}</div>
-                                  <div class="text-[10px] font-semibold text-slate-600">${reqCount} requis au devis</div>
+                                  <div class="text-[10px] font-semibold text-slate-600">${reqCount} ${isCrisisMission ? "requis pour la mission" : "requis au devis"}</div>
                                 </div>
                               </div>
                               <div class="shrink-0">
@@ -11590,6 +11749,40 @@ class ProtecGame {
                           const seats = veh.seatsCount || veh.capacity || (veh.type === 'VPSP' ? 3 : veh.type === 'VTP' ? 9 : 4);
                           const isRequiredType = Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.includes(veh.type);
 
+                          // 1. Équipage et compétences à bord
+                          const vehCrew = isAssigned && window.ProtecCriseLogistique ? window.ProtecCriseLogistique.getVehicleAssignedCrew(mission, veh, this) : [];
+                          const crewCount = vehCrew.length;
+                          const qual = isAssigned && window.ProtecCriseLogistique ? window.ProtecCriseLogistique.getVehicleCrewQualifications(veh, vehCrew) : { valid: true };
+
+                          // 2. Armement du véhicule (LOG / VPSP)
+                          const armement = veh.armementLevel !== undefined ? veh.armementLevel : (veh.isRearmed === false ? 70 : 100);
+                          let armementBadgeHTML = '';
+                          let armementText = '';
+
+                          if (veh.type === 'VPSP') {
+                            if (armement >= 90) {
+                              armementBadgeHTML = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">Armement PS : ' + armement + '% ✓</span>';
+                              armementText = '💉 Armement PS : ' + armement + '%';
+                            } else {
+                              armementBadgeHTML = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">⚠️ Armement PS : ' + armement + '%</span>';
+                              armementText = '⚠️ Armement : ' + armement + '% (Réarmement requis)';
+                            }
+                          } else if (veh.type === 'VTU' || veh.type === 'VTL' || veh.type === 'VAHU') {
+                            if (veh.logOperation) {
+                              armementBadgeHTML = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">⏳ ' + veh.logOperation.label + '</span>';
+                              armementText = '⏳ ' + veh.logOperation.label;
+                            } else if (veh.logKit && window.ProtecCriseLogistique?.LOG_KITS?.[veh.logKit]) {
+                              const kit = window.ProtecCriseLogistique.LOG_KITS[veh.logKit];
+                              armementBadgeHTML = '<span class="px-2 py-0.5 rounded text-[9px] font-black ' + kit.badgeColor + '">📦 ' + kit.shortName + '</span>';
+                              armementText = '📦 Armé : ' + kit.name;
+                            } else {
+                              armementBadgeHTML = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">⚠️ Benne Vide (Non armé)</span>';
+                              armementText = '⚠️ Benne Vide (Aucun kit armé)';
+                            }
+                          } else {
+                            armementText = 'Véhicule opérationnel';
+                          }
+
                           return `
                             <div class="p-3 rounded-2xl border transition flex items-center justify-between gap-3 ${
                               isAssigned 
@@ -11611,16 +11804,21 @@ class ProtecGame {
                                       veh.type === 'VTP' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
                                       'bg-slate-100 text-slate-800 border border-slate-200'
                                     }">${veh.type}</span>
-                                    ${isRequiredType && !isAssigned ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300 whitespace-nowrap">⭐ Requis au devis</span>' : ''}
+                                    ${isRequiredType && !isAssigned ? ('<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300 whitespace-nowrap">⭐ ' + (isCrisisMission ? 'Requis pour la mission' : 'Requis au devis') + '</span>') : ''}
+                                    ${armementBadgeHTML}
+                                    ${isAssigned ? (qual.valid 
+                                      ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Compétences validées</span>' 
+                                      : '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1" title="Manque : ' + qual.missing.join(', ') + '"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span> Manque : ' + qual.missing.join(', ') + '</span>'
+                                    ) : ''}
                                   </div>
                                   <div class="flex items-center gap-2.5 text-[10px] text-slate-500 pt-1 flex-wrap">
-                                    <span class="font-mono text-slate-800 font-extrabold whitespace-nowrap">${veh.immat || 'PC-00-AA'}</span>
-                                    <span>•</span>
-                                    <span class="whitespace-nowrap">💺 ${seats} places</span>
+                                    <span class="whitespace-nowrap font-bold text-slate-700">👥 ${crewCount}/${seats} à bord</span>
                                     <span>•</span>
                                     <span class="${fuelPct > 40 ? 'text-emerald-600' : 'text-amber-600'} font-extrabold whitespace-nowrap">⛽ ${fuelPct}%</span>
                                     <span>•</span>
                                     <span class="text-slate-600 font-extrabold whitespace-nowrap">🔧 ${mechPct}%</span>
+                                    <span>•</span>
+                                    <span class="whitespace-nowrap font-semibold text-slate-600">${armementText}</span>
                                   </div>
                                 </div>
                               </div>
@@ -11657,138 +11855,142 @@ class ProtecGame {
                     </div>
                   </div>
 
-                  <!-- 3. EN BAS : RENFORTS D'ÉQUIPAGES INDISSOCIABLES (VÉHICULE + PERSONNEL) -->
+                  <!-- 3. EN BAS : RENFORTS D'ÉQUIPAGES RÉELS (INTER-ANTENNES & RÉSEAU FNPC) -->
                   <div class="p-3.5 rounded-xl bg-gradient-to-r from-indigo-50/80 to-purple-50/80 border border-indigo-200/80 space-y-3">
-                    <div class="flex items-center justify-between">
+                    <div class="flex items-start justify-between gap-2">
                       <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-                          <i data-lucide="users" class="w-4 h-4"></i>
+                        <div class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                          <i data-lucide="radio" class="w-4 h-4"></i>
                         </div>
                         <div>
                           <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wide">
-                            Renforts Opérationnels Réels (Antennes Voisines, ADPC & FNPC)
+                            Renforts Opérationnels Réels (Inter-Antennes & Réseau FNPC)
                           </h4>
                           <p class="text-[10px] text-indigo-800 font-medium">
-                            Provenance réelle garantie : chaque renfort part d'une <strong>autre antenne identifiée</strong> (déplacement calculé sur la carte) avec son équipage complet.
+                            Doctrine FNPC : aucun véhicule ni secouriste n'est généré par le joueur. Les renforts proviennent exclusivement de vos antennes secondaires réelles ou d'autres antennes via le réseau.
                           </p>
                         </div>
                       </div>
                       <button 
                         type="button" 
                         onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" 
-                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1 cursor-pointer active:scale-95">
+                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1 cursor-pointer active:scale-95 shrink-0">
                         <i data-lucide="radio" class="w-3 h-3"></i>
                         <span>Fréquence Réseau</span>
                       </button>
                     </div>
 
-                    <!-- Packs d'équipages complets (2 colonnes spacieuses sans débordement) -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <!-- Pack VPSP -->
-                      <div class="p-3 rounded-xl bg-white border border-indigo-100 shadow-2xs space-y-2 flex flex-col justify-between">
-                        <div>
+                    <!-- Carte 1 : Diffusion Appel Réseau Inter-Antennes -->
+                    <div class="p-3 rounded-xl bg-white border border-indigo-100 shadow-2xs space-y-2">
+                      ${(() => {
+                        const activeRenf = (this.renforts || []).find(r => r.missionId === mission.id && r.status === 'open');
+                        if (activeRenf) {
+                          return `
+                            <div class="flex items-center justify-between gap-2">
+                              <div class="flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                                <span class="text-xs font-black text-slate-900">📡 Appel en Cours sur le Réseau (${activeRenf.zoneLabel || 'Département'})</span>
+                              </div>
+                              <span class="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">En Veille</span>
+                            </div>
+                            <p class="text-[11px] text-slate-600 leading-snug">
+                              Demande transmise : <strong class="text-slate-800">${activeRenf.unitRequested || 'Renforts'}</strong>. Les directeurs des antennes alliées du réseau peuvent engager leurs effectifs réels.
+                            </p>
+                            <div class="flex justify-end pt-1">
+                              <button 
+                                type="button" 
+                                onclick="window.game.openModule('alliance');" 
+                                class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition cursor-pointer">
+                                Suivre sur la fréquence alliance →
+                              </button>
+                            </div>
+                          `;
+                        }
+                        return `
                           <div class="flex items-center justify-between">
-                            <span class="text-xs font-black text-slate-900">🚑 Équipage VPSP</span>
-                            <span class="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">3 pers.</span>
+                            <span class="text-xs font-black text-slate-900">📡 Solliciter le Réseau des Antennes Confrères</span>
+                            <span class="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">Réseau FNPC</span>
                           </div>
-                          <p class="text-[10px] text-slate-600 leading-snug pt-1">
-                            1 Ambulance VPSP + 1 Chef d'Équipe, 1 PSE2 et 1 Chauffeur PSE1.
+                          <p class="text-[11px] text-slate-600 leading-snug">
+                            Publiez une demande sur les canaux départemental, zonal ou national. Les directeurs des autres antennes recevront l'appel et pourront dépêcher leurs propres véhicules et secouristes réels.
                           </p>
-                        </div>
-                        <button 
-                          type="button" 
-                          onclick="window.game.requestRenfortEquipage('${mission.id}', 'vpsp')" 
-                          class="w-full py-2 rounded-lg text-[11px] font-black bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 transition flex items-center justify-center gap-1 cursor-pointer shadow-xs active:scale-95">
-                          <i data-lucide="handshake" class="w-3.5 h-3.5"></i>
-                          <span>Demander VPSP</span>
-                        </button>
-                      </div>
+                          <button 
+                            type="button" 
+                            onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" 
+                            class="w-full py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95">
+                            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                            <span>Diffuser un Appel à Renfort sur le Réseau</span>
+                          </button>
+                        `;
+                      })()}
+                    </div>
 
-                      <!-- Pack VTU -->
-                      <div class="p-3 rounded-xl bg-white border border-indigo-100 shadow-2xs space-y-2 flex flex-col justify-between">
-                        <div>
-                          <div class="flex items-center justify-between">
-                            <span class="text-xs font-black text-slate-900">🚐 Équipage VTU</span>
-                            <span class="text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">2 pers.</span>
-                          </div>
-                          <p class="text-[10px] text-slate-600 leading-snug pt-1">
-                            1 Véhicule Tout Usage + 2 logisticiens / secouristes d'intervention.
-                          </p>
-                        </div>
-                        <button 
-                          type="button" 
-                          onclick="window.game.requestRenfortEquipage('${mission.id}', 'vtu')" 
-                          class="w-full py-2 rounded-lg text-[11px] font-black bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 transition flex items-center justify-center gap-1 cursor-pointer shadow-xs active:scale-95">
-                          <i data-lucide="handshake" class="w-3.5 h-3.5"></i>
-                          <span>Demander VTU</span>
-                        </button>
+                    <!-- Carte 2 : Moyens Propres des Antennes Secondaires -->
+                    <div class="p-3 rounded-xl bg-white border border-indigo-100 shadow-2xs space-y-2">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs font-black text-slate-900">🏢 Moyens de vos Antennes Secondaires</span>
+                        <span class="text-[9px] font-bold text-slate-500">Moyens propres réels</span>
                       </div>
+                      ${(() => {
+                        const secStations = (this.stations || []).slice(1);
+                        if (secStations.length === 0) {
+                          return `
+                            <div class="text-[11px] text-slate-500 italic py-1">
+                              Vous ne possédez actuellement aucune antenne secondaire (base unique : ${this.stations?.[0]?.name || 'Base Principale'}). Pour recevoir des renforts, diffusez un appel réseau ci-dessus.
+                            </div>
+                          `;
+                        }
+                        return `
+                          <div class="space-y-2 pt-1">
+                            ${secStations.map(st => {
+                              const availVehs = (this.vehicles || []).filter(v => v.stationId === st.id && (v.status === 'dispo' || v.status === 'disponible'));
+                              const availVols = (this.volunteers || []).filter(v => v.stationId === st.id && (v.status === 'disponible' || v.status === 'dispo'));
+                              const hasVpsp = availVehs.some(v => (v.type || '').toUpperCase() === 'VPSP');
+                              const hasVtu = availVehs.some(v => (v.type || '').toUpperCase() === 'VTU');
 
-                      <!-- Pack VTP -->
-                      <div class="p-3 rounded-xl bg-white border border-indigo-100 shadow-2xs space-y-2 flex flex-col justify-between">
-                        <div>
-                          <div class="flex items-center justify-between">
-                            <span class="text-xs font-black text-slate-900">🚌 Section VTP</span>
-                            <span class="text-[9px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">6 pers.</span>
+                              return `
+                                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <div>
+                                    <div class="text-xs font-black text-slate-800">${st.name || st.city}</div>
+                                    <div class="text-[10px] text-slate-500">
+                                      Disponibles : <strong>${availVehs.length}</strong> véhicule(s), <strong>${availVols.length}</strong> secouriste(s)
+                                    </div>
+                                  </div>
+                                  <div class="flex items-center gap-1.5 shrink-0 flex-wrap">
+                                    <button 
+                                      type="button" 
+                                      ${!hasVpsp || availVols.length < 3 ? 'disabled' : ''}
+                                      onclick="window.game.dispatchReinforcementFromStation('${mission.id}', 'vpsp', '${st.id}')"
+                                      class="px-2 py-1 rounded text-[10px] font-black transition cursor-pointer ${
+                                        hasVpsp && availVols.length >= 3 
+                                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs' 
+                                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                      }">
+                                      Détacher VPSP
+                                    </button>
+                                    <button 
+                                      type="button" 
+                                      ${!hasVtu || availVols.length < 2 ? 'disabled' : ''}
+                                      onclick="window.game.dispatchReinforcementFromStation('${mission.id}', 'vtu', '${st.id}')"
+                                      class="px-2 py-1 rounded text-[10px] font-black transition cursor-pointer ${
+                                        hasVtu && availVols.length >= 2 
+                                          ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs' 
+                                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                      }">
+                                      Détacher VTU
+                                    </button>
+                                  </div>
+                                </div>
+                              `;
+                            }).join('')}
                           </div>
-                          <p class="text-[10px] text-slate-600 leading-snug pt-1">
-                            1 Minibus 9 places + 1 Chef d'Équipe et 5 secouristes (PSE1/PSE2).
-                          </p>
-                        </div>
-                        <button 
-                          type="button" 
-                          onclick="window.game.requestRenfortEquipage('${mission.id}', 'vtp')" 
-                          class="w-full py-2 rounded-lg text-[11px] font-black bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 transition flex items-center justify-center gap-1 cursor-pointer shadow-xs active:scale-95">
-                          <i data-lucide="handshake" class="w-3.5 h-3.5"></i>
-                          <span>Demander VTP</span>
-                        </button>
-                      </div>
-
-                      <!-- Pack VL Commandement -->
-                      <div class="p-3 rounded-xl bg-white border border-indigo-100 shadow-2xs space-y-2 flex flex-col justify-between">
-                        <div>
-                          <div class="flex items-center justify-between">
-                            <span class="text-xs font-black text-slate-900">🚗 Cadre & VL</span>
-                            <span class="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">2 pers.</span>
-                          </div>
-                          <p class="text-[10px] text-slate-600 leading-snug pt-1">
-                            1 VL de liaison/commandement + 1 Chef de Dispositif et 1 Adjoint.
-                          </p>
-                        </div>
-                        <button 
-                          type="button" 
-                          onclick="window.game.requestRenfortEquipage('${mission.id}', 'vl')" 
-                          class="w-full py-2 rounded-lg text-[11px] font-black bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 transition flex items-center justify-center gap-1 cursor-pointer shadow-xs active:scale-95">
-                          <i data-lucide="handshake" class="w-3.5 h-3.5"></i>
-                          <span>Demander VL</span>
-                        </button>
-                      </div>
+                        `;
+                      })()}
                     </div>
                   </div>
                 </div>
 
-                ${(() => {
-                  if (!window.ProtecRNMSC || registeredVols.length === 0) return '';
-                  const rnmscVehs = (this.vehicles || []).filter(veh => (mission.requiredVehicles || []).includes(veh.type));
-                  const comp = window.ProtecRNMSC.validateCrewCompliance(mission, registeredVols, rnmscVehs, this);
-                  if (!comp.valid) {
-                    return `
-                      <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 text-xs flex items-center justify-between gap-2">
-                        <div class="flex items-center gap-1.5 min-w-0">
-                          <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 flex-shrink-0"></i>
-                          <span class="text-[11px] font-bold truncate">RNMSC : ${comp.errors[0]}</span>
-                        </div>
-                      </div>
-                    `;
-                  } else {
-                    return `
-                      <div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 text-xs flex items-center gap-2">
-                        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
-                        <span class="text-[11px] font-bold">Dotation Véhicules RNMSC Validée ✓</span>
-                      </div>
-                    `;
-                  }
-                })()}
+                <!-- Information de tranche RNMSC masquée -->
               </div>
             ` : logistiqueSubTab === 'materiel' ? `
               <!-- SOUS-ONGLET MATÉRIEL (eProtec STYLE) -->
@@ -17390,6 +17592,10 @@ class ProtecGame {
                 <span>➕</span>
                 <span>Commander un Véhicule</span>
               </button>
+              <button onclick="window.ProtecCriseLogistique.openCreateRearmamentModal(window.game)" class="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <span>🔧</span>
+                <span>Atelier Réarmement Flotte</span>
+              </button>
             </div>
           </div>
 
@@ -17549,6 +17755,35 @@ class ProtecGame {
                         <span>📦</span>
                         <span>Armement</span>
                       </button>
+                      ${(v.type === 'VTU' || v.type === 'VTL' || v.type === 'VAHU') ? `
+                        ${v.logOperation ? `
+                          <span class="px-2.5 py-1.5 rounded-xl text-xs font-black bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+                            ⏳ ${v.logOperation.label}
+                          </span>
+                        ` : v.logKit ? `
+                          <button onclick="window.ProtecCriseLogistique.startUnloadingVehicleKit(window.game, '${v.id}')" class="px-3 py-1.5 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-900 text-xs font-bold transition flex items-center gap-1 cursor-pointer border border-orange-300" title="Vider le véhicule pour libérer la benne ou changer de kit">
+                            <span>🧹</span>
+                            <span>Décharger (${window.ProtecCriseLogistique?.LOG_KITS?.[v.logKit]?.shortName || 'Kit'})</span>
+                          </button>
+                        ` : `
+                          <select onchange="if(this.value) { window.ProtecCriseLogistique.startLoadingVehicleKit(window.game, '${v.id}', this.value); this.value=''; }" class="text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl px-2.5 py-1.5 text-slate-800 transition cursor-pointer">
+                            <option value="">📦 Charger un Kit LOG...</option>
+                            <option value="dps">📦 Kit DPS (Matériels PS)</option>
+                            <option value="chu">🛏️ Kit CHU (50 Lits de Camp)</option>
+                            <option value="pompage">💧 Kit Pompage (Inondations)</option>
+                            <option value="eclairage">💡 Kit Éclairage & Énergie</option>
+                            <option value="ravitaillement">🍲 Kit Ravitaillement & Vivres</option>
+                            <option value="cai">🤝 Kit CAI (Impliqués & CUMP)</option>
+                          </select>
+                        `}
+                      ` : ''}
+
+                      ${(v.armementLevel !== undefined && v.armementLevel < 100) || v.needsRearming ? `
+                        <button onclick="window.ProtecCriseLogistique.rearmVehicle(window.game, '${v.id}')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition flex items-center gap-1 shadow-sm cursor-pointer" title="Réarmer ce véhicule au local">
+                          <span>🔧</span>
+                          <span>Réarmer (${v.armementLevel || 70}%)</span>
+                        </button>
+                      ` : ''}
 
                       ${(isDispo && window.ProtecMarcheOccasion) ? `
                         <button onclick="window.ProtecMarcheOccasion.openSellModal('vehicle', '${v.id}')" class="px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-pc-orange text-xs font-bold transition flex items-center gap-1 cursor-pointer border border-orange-200" title="Mettre ce véhicule en vente sur la bourse d'occasion">
@@ -19379,7 +19614,8 @@ class ProtecGame {
             const targetNeed = m.requiredVolunteers || 1;
             const ceiling = Math.min(targetNeed, m.maxMobilisableAstreinte);
 
-            if (currentMobilised < ceiling) {
+            const elapsedAstreinteSec = (m.prealertTotalSec || 65) - (m.prealertSecondsLeft || 0);
+            if (elapsedAstreinteSec >= 20 && currentMobilised < ceiling) {
               // Rythme IRL : 30 bénévoles en 600s (10 min) pour 200 bénévoles = N / 4000 par seconde
               // Pour 200 bénévoles -> 0.05 / sec (~1 bénévole toutes les 20 secondes)
               // Pour 50 bénévoles -> 0.0125 / sec (~1 bénévole toutes les 80 secondes)
@@ -19393,7 +19629,7 @@ class ProtecGame {
                   m.registeredVolunteers.push(dispoVol.id);
                   if (this.selectedMissionId === m.id) {
                     const volCountEl = document.getElementById('prealert-vols-count');
-                    if (volCountEl) volCountEl.textContent = `${m.registeredVolunteers.length} / ${m.requiredVolunteers} secouristes prêts (Plafond d'astreinte : ${m.maxMobilisableAstreinte})`;
+                    if (volCountEl) volCountEl.textContent = `${m.registeredVolunteers.length} / ${m.requiredVolunteers} secouristes prêts`;
                     const barEl = document.getElementById('prealert-vols-bar');
                     if (barEl) barEl.style.width = `${Math.min(100, Math.round((m.registeredVolunteers.length / m.requiredVolunteers) * 100))}%`;
                   }
@@ -20840,6 +21076,18 @@ class ProtecGame {
   showToast(title, message, color = 'blue', target = null) {
     const container = document.getElementById('toast-container');
     if (!container) return;
+
+    // RÈGLE MÉTIER : Moral, motivation et réputation sont des données cachées du joueur.
+    // Filtrage systématique de sécurité pour ne jamais exposer ces données dans l'interface ou les notifications.
+    if (typeof message === 'string') {
+      message = message
+        .replace(/([,\s•\.\-]*[+\-]?\d+\s*(?:pts?|points?|%)\s*(?:de\s*)?(?:r[ée]putation|r[ée]put|popularit[ée]|morale?|motivation|coh[ée]sion|relations?)[^,\.\)]*)/gi, '')
+        .replace(/\s*\([^\)]*(?:r[ée]putation|r[ée]put|moral|motivation)[^\)]*\)/gi, '')
+        .replace(/(?:,\s*)?(?:baisse|perte)\s+(?:du\s+)?moral\s*(?:et\s*d[ée]gradation\s*de\s*la\s*r[ée]putation)?/gi, '')
+        .replace(/(?:,\s*)?d[ée]gradation\s+de\s+la\s+r[ée]putation/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
 
     // Enregistrement systématique dans l'historique des notifications
     if (window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {

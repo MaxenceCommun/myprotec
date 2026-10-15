@@ -1601,6 +1601,14 @@ window.ProtecLocaux = {
     if (window.ProtecEquipements && typeof window.ProtecEquipements.getLotsStorageUsed === 'function') {
       used += window.ProtecEquipements.getLotsStorageUsed(game);
     }
+    // Économie de stockage : le matériel armé à l'avance dans les véhicules LOG ne prend plus de place dans le bâtiment !
+    let vehicleStoredVolume = 0;
+    (game.vehicles || []).forEach(v => {
+      if (v.logKit && window.ProtecCriseLogistique?.LOG_KITS?.[v.logKit]) {
+        vehicleStoredVolume += window.ProtecCriseLogistique.LOG_KITS[v.logKit].buildingStorageSize || 10;
+      }
+    });
+    used = Math.max(0, used - vehicleStoredVolume);
     return used;
   },
 
