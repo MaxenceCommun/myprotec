@@ -1607,11 +1607,18 @@ class ProtecGame {
           maxZoom: 19
         })
       ]),
-      dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 20
-      }),
+      dark: L.layerGroup([
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+          attribution: 'Tiles &copy; Esri',
+          maxNativeZoom: 16,
+          maxZoom: 19
+        }),
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+          attribution: '',
+          maxNativeZoom: 16,
+          maxZoom: 19
+        })
+      ]),
       osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19
@@ -1625,7 +1632,7 @@ class ProtecGame {
     }
 
     this.layerControl = L.control.layers({
-      'Mode Sombre (Dark Matter)': this.baseLayers.dark,
+      'Mode Sombre (Gris foncé)': this.baseLayers.dark,
       'Mode Clair (Épuré)': this.baseLayers.light,
       'Rues (OpenStreetMap)': this.baseLayers.osm
     }, null, { position: 'bottomright' }).addTo(this.map);
