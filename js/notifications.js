@@ -32,70 +32,167 @@ window.ProtecNotifications = {
     return outputArray;
   },
 
-  async syncPushSubscription(game) {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+  async getServiceWorkerRegistration() {
+    if (!('serviceWorker' in navigator)) return null;
+    try {
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        const swUrl = new URL('sw.js', window.location.href).href;
+        const swScope = new URL('./', window.location.href).pathname;
+        reg = await navigator.serviceWorker.register(swUrl, { scope: swScope });
+      }
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      return reg;
+    } catch (e) {
+      console.warn('[WebPush] Erreur getServiceWorkerRegistration:', e);
       return null;
+    }
+  },
+
+  async subscribeUserToPush(onProgress) {
+    const log = (msg) => {
+      console.log('[WebPush]', msg);
+      if (typeof onProgress === 'function') onProgress(msg);
+    };
+
+    if (typeof window === 'undefined') {
+      return { success: false, message: 'Environnement non-navigateur' };
+    }
+
+    log('Vérification compatibilité navigateur...');
+    if (!('serviceWorker' in navigator)) {
+      return { success: false, message: 'Les Service Workers ne sont pas supportés sur ce navigateur' };
+    }
+
+    if (!('PushManager' in window)) {
+      return {
+        success: false,
+        message: "PushManager indisponible. Sur iPhone/iPad, installez d'abord l'application sur l'écran d'accueil."
+      };
     }
 
     try {
-      if (!this.swRegistration) {
-        this.swRegistration = await navigator.serviceWorker.ready;
-      }
-      if (!this.swRegistration || !this.swRegistration.pushManager) return null;
-
-      // 1. Récupération de la clé VAPID publique depuis le serveur Node.js ou clé permanente intégrée
-      if (!this.vapidPublicKey) {
-        try {
-          const res = await fetch('/api/push/vapid-public-key');
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.publicKey) {
-              this.vapidPublicKey = data.publicKey;
-            }
-          }
-        } catch (e) {}
+      // 1. Demande de permission native au système OS
+      log('Demande de permission de notification au système...');
+      const permission = await Notification.requestPermission();
+      this.permission = permission;
+      log(`Permission accordée : ${permission}`);
+      if (permission !== 'granted') {
+        return {
+          success: false,
+          message: 'Permission de notification refusée. Activez-la dans les réglages du navigateur.'
+        };
       }
 
-      // Clé VAPID permanente officielle (garantit le fonctionnement sur GitHub Pages / Hébergement statique)
-      if (!this.vapidPublicKey) {
-        this.vapidPublicKey = 'BLQwylrKZbl-hkqtTwe2S7UdMLWtzH-_TgedTCQ99UW7ydaZhxdcMVhC231UOKsDWrlEj38DsvFy26tA6nfHY3o';
+      // 2. Enregistrement ou récupération du Service Worker
+      log('Initialisation du Service Worker W3C...');
+      let registration = await this.getServiceWorkerRegistration();
+      if (!registration) {
+        throw new Error('Impossible d\'enregistrer le Service Worker');
       }
+      this.swRegistration = registration;
 
-      // 2. Souscription auprès du pushManager du navigateur
-      let sub = await this.swRegistration.pushManager.getSubscription();
-      if (!sub) {
-        sub = await this.swRegistration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: this.urlBase64ToUint8Array(this.vapidPublicKey)
-        });
-      }
-
-      this.pushSubscription = sub;
-
-      // 3. Résolution exacte du profil joueur (depuis window.game, ProtecAuth ou localStorage)
-      let cachedUser = null;
+      // 3. Clé VAPID officielle W3C (identique à Site Protec)
+      let vapidPublicKey = 'BHB8wWHGzna7sB2I7J17-BWXzyfcQFlqDoOxL27ZrVewvMHP6P7vl7YFvOhVV3wB4ZvHQNbYs7m7xB_Rj2tZa0Y';
       try {
-        cachedUser = JSON.parse(localStorage.getItem('protec_user_profile') || '{}');
+        const keyRes = await fetch('/api/push/key');
+        if (keyRes.ok) {
+          const keyData = await keyRes.json();
+          if (keyData.publicKey) vapidPublicKey = keyData.publicKey;
+        }
       } catch (e) {}
 
-      const playerId = game?.player?.id || window.ProtecAuth?.currentUser?.id || cachedUser?.id || 'local';
-      const username = game?.player?.name || window.ProtecAuth?.currentUser?.username || cachedUser?.username || 'Directeur';
+      this.vapidPublicKey = vapidPublicKey;
+      const convertedVapidKey = this.urlBase64ToUint8Array(vapidPublicKey);
 
-      // Transmettre le joueur actif au Service Worker pour les réveils en arrière-plan
-      if (this.swRegistration && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({
-          type: 'SET_CURRENT_USER',
-          user: { id: playerId, username }
-        });
+      // 4. Vérifier si l'appareil a déjà une souscription active
+      log('Vérification de la souscription PushManager existante...');
+      let subscription = null;
+      try {
+        subscription = await registration.pushManager.getSubscription();
+      } catch (e) {
+        log(`Note: getSubscription a renvoyé : ${e?.message}`);
       }
 
-      // 4. Enregistrement auprès du serveur Node.js si actif
+      // 5. Création de la souscription auprès de Google FCM / Apple APNs
+      if (!subscription) {
+        log('Attente de l\'activation complète du Service Worker...');
+        if (!registration.active) {
+          await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise(res => setTimeout(res, 2500))
+          ]).catch(() => null);
+          const updatedReg = await this.getServiceWorkerRegistration();
+          if (updatedReg) registration = updatedReg;
+        }
+
+        log('Appel à pushManager.subscribe auprès des passerelles FCM / Apple...');
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedVapidKey
+        });
+        log('Souscription PushManager créée avec succès !');
+      } else {
+        log('Souscription existante retrouvée avec succès !');
+      }
+
+      this.pushSubscription = subscription;
+
+      // 6. Sauvegarde locale dans localStorage pour réutilisation instantanée
+      try {
+        localStorage.setItem('protec_push_sub', JSON.stringify(subscription));
+      } catch (e) {}
+
+      // 7. Résolution du joueur
+      let cachedUser = null;
+      try {
+        cachedUser = window.ProtecAuth?.currentUser || JSON.parse(localStorage.getItem('protec_user_profile') || '{}');
+      } catch (e) {}
+
+      const playerId = cachedUser?.id || (window.game?.player?.id) || 'local';
+      const username = cachedUser?.username || (window.game?.player?.name) || 'Directeur';
+
+      // 8. Transmission persistante dans la table Supabase push_subscriptions
+      if (window.ProtecSupabase?.client) {
+        try {
+          const subJson = (typeof subscription.toJSON === 'function') ? subscription.toJSON() : subscription;
+          await window.ProtecSupabase.client.from('push_subscriptions').upsert({
+            endpoint: subscription.endpoint,
+            user_id: (playerId && playerId !== 'local') ? playerId : null,
+            p256dh: subJson.keys?.p256dh || '',
+            auth: subJson.keys?.auth || '',
+            user_agent: navigator.userAgent,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'endpoint' });
+          log('Abonnement synchronisé dans la table Supabase push_subscriptions.');
+        } catch (eSupa) {
+          console.warn('[WebPush] Erreur Supabase push_subscriptions:', eSupa);
+        }
+
+        // Sauvegarde miroir dans game_saves
+        if (playerId && playerId !== 'local') {
+          try {
+            window.ProtecSupabase.client.from('game_saves').select('save_data').eq('user_id', playerId).maybeSingle().then(({ data }) => {
+              if (data) {
+                const sd = data.save_data || {};
+                sd.push_subscription = (typeof subscription.toJSON === 'function') ? subscription.toJSON() : subscription;
+                sd.push_updated_at = new Date().toISOString();
+                window.ProtecSupabase.client.from('game_saves').update({ save_data: sd }).eq('user_id', playerId).then(() => {});
+              }
+            });
+          } catch (e) {}
+        }
+      }
+
+      // 9. Enregistrement auprès du serveur Node.js si actif
       try {
         await fetch('/api/push/subscribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            subscription: sub.toJSON(),
+            subscription: (typeof subscription.toJSON === 'function') ? subscription.toJSON() : subscription,
             playerId,
             username,
             userAgent: navigator.userAgent
@@ -103,28 +200,38 @@ window.ProtecNotifications = {
         });
       } catch (e) {}
 
-      // 5. Synchronisation persistante auprès de Supabase (game_saves & players)
-      if (window.ProtecSupabase?.client && playerId && playerId !== 'local') {
-        try {
-          // A. Sauvegarde dans game_saves pour le Service Worker
-          window.ProtecSupabase.client.from('game_saves').select('save_data').eq('user_id', playerId).maybeSingle().then(({ data }) => {
-            if (data) {
-              const sd = data.save_data || {};
-              sd.push_subscription = sub.toJSON();
-              sd.push_updated_at = new Date().toISOString();
-              window.ProtecSupabase.client.from('game_saves').update({ save_data: sd }).eq('user_id', playerId).then(() => {});
-            }
-          });
-        } catch (e) {}
+      // Informer le Service Worker du joueur actuel
+      if (registration.active) {
+        registration.active.postMessage({
+          type: 'SET_CURRENT_USER',
+          user: { id: playerId, username }
+        });
       }
 
-      console.log(`📲 [Push] Abonnement prêt pour ${username} (Clé VAPID active).`);
-      return sub;
-    } catch (err) {
-      console.warn('Erreur abonnement PushManager:', err);
-      return null;
+      this.config.enabled = true;
+      this.saveConfig();
+      this.updateHeaderUI();
+      this.hideSubscriptionBanner();
+
+      return {
+        success: true,
+        message: 'Push Notifications et Bip opérationnels sur ce téléphone !',
+        subscription
+      };
+    } catch (error) {
+      log(`ERREUR : ${error?.message || error}`);
+      console.error('Erreur détaillée abonnement push:', error);
+      return {
+        success: false,
+        message: error?.message || "Échec de l'abonnement push"
+      };
     }
   },
+
+  async syncPushSubscription(game) {
+    return (await this.subscribeUserToPush()).subscription || null;
+  },
+
 
   isDeviceMobile() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth < 768 && ('ontouchstart' in window));
@@ -220,7 +327,7 @@ window.ProtecNotifications = {
     // 2. Enregistrement du Service Worker et synchronisation Web Push
     if ('serviceWorker' in navigator) {
       try {
-        const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        const reg = await this.getServiceWorkerRegistration();
         this.swRegistration = reg;
 
         navigator.serviceWorker.addEventListener('message', (event) => {
@@ -235,7 +342,8 @@ window.ProtecNotifications = {
         });
 
         if (this.permission === 'granted') {
-          this.syncPushSubscription(game);
+          // Synchronisation automatique immédiate (fonctionne dès index.html)
+          this.subscribeUserToPush();
         }
 
         // Vérification des notifications en attente dans Supabase
@@ -245,8 +353,9 @@ window.ProtecNotifications = {
       }
     }
 
-    // 3. Mise à jour des badges visuels dans l'UI
+    // 3. Mise à jour des badges visuels dans l'UI et affichage bannière W3C
     this.updateHeaderUI();
+    this.checkAndRenderSubscriptionBanner();
 
     // 4. Écoute du cycle de vie de la page pour le moteur d'incitation
     document.addEventListener('visibilitychange', () => {
@@ -280,6 +389,87 @@ window.ProtecNotifications = {
         localStorage.setItem('protec_pc_heartbeat', Date.now().toString());
       }
     }, 10000);
+  },
+
+  // Bannière d'incitation à l'abonnement Push (conforme à PushSubscriptionBanner de Site Protec)
+  checkAndRenderSubscriptionBanner() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    if (this.permission === 'granted' || sessionStorage.getItem('protec_push_banner_dismissed')) {
+      this.hideSubscriptionBanner();
+      return;
+    }
+
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || Boolean(navigator.standalone);
+
+    let banner = document.getElementById('push-subscription-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'push-subscription-banner';
+      banner.className = 'w-full bg-gradient-to-r from-red-600 via-orange-600 to-amber-600 text-white px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold shadow-md border-b border-red-500 z-50 transition-all duration-300';
+      
+      const targetContainer = document.getElementById('landing-referral-banner') || document.body.firstElementChild;
+      if (targetContainer && targetContainer.parentNode) {
+        targetContainer.parentNode.insertBefore(banner, targetContainer);
+      } else {
+        document.body.prepend(banner);
+      }
+    }
+
+    if (isIos && !isStandalone) {
+      // iPhone / iPad : instructions PWA requises par Apple
+      banner.innerHTML = `
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3 text-left">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl shrink-0">📱</span>
+            <p class="text-[11px] sm:text-xs leading-snug">
+              <strong>Bénévole sur iPhone :</strong> Pour recevoir les alertes d'urgence même application fermée, installez l'application : touchez <strong>Partager</strong> <span class="font-mono bg-white/20 px-1 rounded">⎋</span> en bas de Safari, puis <strong>« Sur l'écran d'accueil »</strong>.
+            </p>
+          </div>
+          <button onclick="window.ProtecNotifications.dismissBanner()" class="text-white/80 hover:text-white text-xs underline shrink-0 cursor-pointer">
+            Masquer
+          </button>
+        </div>
+      `;
+    } else {
+      // Cas général Android & Ordinateur
+      banner.innerHTML = `
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0 text-base">🚨</div>
+            <div>
+              <p class="text-xs sm:text-sm font-black tracking-tight text-white">
+                Activer les alertes de secours sur ce téléphone (même app fermée)
+              </p>
+              <p class="text-[11px] text-red-100 font-normal">
+                Recevez les départs réflexes SAMU 15, gardes SDIS et devis DPS avec vibreur même téléphone verrouillé.
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button onclick="window.ProtecNotifications.requestPermission()" class="bg-white text-red-900 hover:bg-red-50 font-black text-xs px-3.5 py-1.5 sm:py-2 rounded-xl shadow-sm border border-red-200 transition cursor-pointer flex items-center gap-1.5 shrink-0">
+              <span>🔔 M'ABONNER AUX ALERTES</span>
+            </button>
+            <button onclick="window.ProtecNotifications.dismissBanner()" class="text-white/80 hover:text-white text-xs underline px-2 py-1 cursor-pointer">
+              Plus tard
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    banner.classList.remove('hidden');
+  },
+
+  dismissBanner() {
+    sessionStorage.setItem('protec_push_banner_dismissed', 'true');
+    this.hideSubscriptionBanner();
+  },
+
+  hideSubscriptionBanner() {
+    const banner = document.getElementById('push-subscription-banner');
+    if (banner) {
+      banner.classList.add('hidden');
+    }
   },
 
   // Chargement de la configuration
@@ -318,38 +508,37 @@ window.ProtecNotifications = {
     }
   },
 
-  // Demande d'autorisation de notifications native
+  // Demande d'autorisation de notifications native avec abonnement W3C immédiat
   async requestPermission() {
-    if (!('Notification' in window)) {
-      if (window.game) window.game.showToast('Navigateur Non Compatible', 'Votre navigateur ne prend pas en charge les notifications Web.', 'orange');
-      return false;
-    }
+    const res = await this.subscribeUserToPush((msg) => {
+      console.log('[PushRegister]', msg);
+    });
 
-    try {
-      const perm = await Notification.requestPermission();
-      this.permission = perm;
+    if (res.success) {
+      this.permission = 'granted';
+      this.config.enabled = true;
+      this.saveConfig();
       this.updateHeaderUI();
+      this.hideSubscriptionBanner();
 
-      if (perm === 'granted') {
-        this.config.enabled = true;
-        this.saveConfig();
-        await this.syncPushSubscription(window.game);
-        this.sendPushNotification(
-          'Notifications MyProtec Activées',
-          'Parfait ! Vous recevrez désormais les alertes SAMU 15, SDIS, devis DPS et rappels d’intervention en direct sur votre appareil, même lorsque l’application est fermée.',
-          { tag: 'welcome-notification' }
-        );
-        if (window.game) window.game.showToast('Notifications Activées', 'Alertes prêtes (y compris avec application fermée) !', 'green');
-        return true;
-      } else {
-        if (window.game) window.game.showToast('Autorisation Refusée', 'Les notifications ont été bloquées par votre navigateur.', 'orange');
-        return false;
+      this.sendPushNotification(
+        'Notifications MyProtec Activées',
+        'Parfait ! Vous recevrez désormais les alertes SAMU 15, SDIS, devis DPS et rappels d’intervention en direct sur votre appareil, même lorsque l’application est fermée.',
+        { tag: 'welcome-notification' }
+      );
+
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast('Notifications Activées', 'Alertes prêtes (y compris avec application fermée) !', 'green');
       }
-    } catch (e) {
-      console.warn('Erreur demande permission:', e);
+      return true;
+    } else {
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast('Autorisation Requise', res.message, 'orange');
+      }
       return false;
     }
   },
+
 
   // Émission sonore opérationnelle (Intégration des sons MP3 officiels)
   playAlertSound(title = '', body = '', options = {}) {

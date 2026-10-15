@@ -10,8 +10,9 @@
  * - En cas de coupure réseau, le client bloque immédiatement l'accès au jeu.
  */
 
-const CACHE_VERSION = 'myprotec-online-v2.3.2';
+const CACHE_VERSION = 'myprotec-online-v2.4.0';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
+
 
 // Assets statiques essentiels mis en cache pour la rapidité de chargement
 const STATIC_ASSETS = [
@@ -185,8 +186,8 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// 4. NOTIFICATIONS PUSH NATIVES (MOBILITÉ & ARRIÈRE-PLAN APP FERMÉE)
-let backgroundAlertTimers = [];
+// 4. NOTIFICATIONS PUSH NATIVES W3C (MOBILITÉ & RÉVEIL TERMINAL APP FERMÉE)
+// Conforme architecture officielle W3C Web Push RFC 8030 / RFC 8291 / RFC 8292
 
 // Résolution absolue et sécurisée des URLs d'assets (compatible GitHub Pages en sous-dossier et localhost)
 const getAssetUrl = (path) => {
@@ -199,46 +200,57 @@ const DEFAULT_BADGE = getAssetUrl('badge-monochrome.png');
 const DEFAULT_ICON = getAssetUrl('badge-monochrome.png');
 
 self.addEventListener('push', (event) => {
-  let data = {
-    title: '🚨 Alerte Protection Civile',
-    body: 'Nouvelle sollicitation opérationnelle en attente de validation.',
+  let payload = {
+    title: '🚨 ALERTE MYPROTEC',
+    body: 'Mobilisation opérationnelle demandée !',
     icon: DEFAULT_ICON,
     badge: DEFAULT_BADGE,
-    tag: `protec-push-${Date.now()}`,
-    data: { url: 'jeu.html' }
+    tag: `protec-alert-${Date.now()}`,
+    data: { url: 'jeu.html' },
+    actions: [
+      { action: 'action_open', title: '📍 Voir l\'Intervention' },
+      { action: 'action_dispo', title: '✅ Disponible' }
+    ]
   };
 
   if (event.data) {
     try {
-      data = Object.assign(data, event.data.json());
+      const json = event.data.json();
+      payload = Object.assign(payload, json);
     } catch (e) {
-      data.body = event.data.text();
+      payload.body = event.data.text();
     }
   }
+
+  const notificationOptions = {
+    body: payload.body || payload.message || 'Intervention ou devis en attente.',
+    icon: payload.icon ? getAssetUrl(payload.icon) : DEFAULT_ICON,
+    badge: payload.badge ? getAssetUrl(payload.badge) : DEFAULT_BADGE,
+    vibrate: [500, 200, 500, 200, 1000, 300, 1000], // Séquence vibratoire d'urgence
+    sound: getAssetUrl('sons/alerte_crise.mp3'),
+    tag: payload.tag || `protec-alert-${Date.now()}`,
+    renotify: true,
+    requireInteraction: true,
+    data: payload.data || { url: 'jeu.html' },
+    actions: payload.actions || [
+      { action: 'action_open', title: '📍 Voir l\'Intervention' },
+      { action: 'action_dispo', title: '✅ Disponible' }
+    ]
+  };
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       const isForeground = clientList && clientList.some(c => c.visibilityState === 'visible' && c.focused);
       if (isForeground) {
-        // Le jeu est déjà actif au premier plan : diffuser un message interne
+        // Si l'application est déjà ouverte et au premier plan actif : propager au jeu
         clientList.forEach(c => {
-          c.postMessage({ type: 'PUSH_NOTIFICATION_RECEIVED', data });
+          c.postMessage({ type: 'PUSH_NOTIFICATION_RECEIVED', data: payload });
         });
         return;
       }
 
-      // L'application est en arrière-plan ou TOTALEMENT FERMÉE sur mobile / PC :
-      // Affichage de la notification native au niveau de l'OS avec vibreur et son
-      return self.registration.showNotification(data.title || '🚨 Alerte Protection Civile', {
-        body: data.body || data.message || 'Intervention ou devis en attente.',
-        icon: data.icon ? getAssetUrl(data.icon) : DEFAULT_ICON,
-        badge: data.badge ? getAssetUrl(data.badge) : DEFAULT_BADGE,
-        tag: data.tag || `protec-alert-${Date.now()}`,
-        vibrate: [300, 150, 300, 150, 450],
-        renotify: true,
-        requireInteraction: true,
-        data: data.data || { url: 'jeu.html' }
-      });
+      // Application FERMÉE ou écran verrouillé : réveil OS natif immédiat
+      return self.registration.showNotification(payload.title || '🚨 ALERTE MYPROTEC', notificationOptions);
     })
   );
 });
@@ -246,6 +258,7 @@ self.addEventListener('push', (event) => {
 // Clic sur une notification push sur l'écran verrouillé ou dans le centre de notifications
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const action = event.action;
   const rawUrl = event.notification.data?.url || 'jeu.html';
   const targetUrl = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
     ? rawUrl
@@ -253,17 +266,25 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // 1. Si une fenêtre du jeu est déjà ouverte, la focaliser
       for (const client of clientList) {
-        if (client.url && (client.url.includes('jeu') || client.url.includes(self.registration.scope)) && 'focus' in client) {
-          return client.focus();
+        if (client.url && (client.url.includes('jeu') || client.url.includes(self.registration.scope))) {
+          if ('focus' in client) {
+            if (action) {
+              client.postMessage({ type: 'NOTIFICATION_ACTION_CLICKED', action, data: event.notification.data });
+            }
+            return client.focus();
+          }
         }
       }
+      // 2. Sinon ouvrir la fenêtre
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }
     })
   );
 });
+
 
 // 5. GESTION DES MESSAGES DEPUIS L'APPLICATION & SYNC ARRIÈRE-PLAN
 const SUPABASE_URL = 'https://yrayehhbqcnuiuejqsjz.supabase.co';

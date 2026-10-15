@@ -2679,10 +2679,22 @@ window.ProtecAdmin = {
       });
       if (res.ok) {
         const json = await res.json();
-        pushDispatched = Number(json.pushDispatchedCount || 0);
+        pushDispatched += Number(json.pushDispatchedCount || 0);
       }
     } catch (e) {
-      console.warn('Erreur envoi notification via backend /api/admin/notify-player:', e);
+      // Backend local non joint (ex: hébergement statique GitHub Pages)
+    }
+
+    // 1b. Tentative via l'Edge Function Supabase officielle send-push si disponible
+    if (window.ProtecSupabase?.client?.functions) {
+      try {
+        const edgeRes = await window.ProtecSupabase.client.functions.invoke('send-push', {
+          body: defaultPayload
+        });
+        if (edgeRes?.data?.count) {
+          pushDispatched += Number(edgeRes.data.count);
+        }
+      } catch (eEdge) {}
     }
 
     // 2. Broadcast temps réel Supabase & Enregistrement en base de données
@@ -2703,8 +2715,16 @@ window.ProtecAdmin = {
     const isMe = !targetUserId || targetUserId === 'all' || 
                  (window.game?.player?.id && window.game.player.id === targetUserId) ||
                  (window.ProtecAuth?.currentUser?.id && window.ProtecAuth.currentUser.id === targetUserId);
-    if (isMe && window.game && typeof window.game.handleMultiplayerEvent === 'function') {
-      window.game.handleMultiplayerEvent('admin_player_notification', defaultPayload);
+    if (isMe) {
+      if (window.game && typeof window.game.handleMultiplayerEvent === 'function') {
+        window.game.handleMultiplayerEvent('admin_player_notification', defaultPayload);
+      }
+      if (defaultPayload.push !== false && window.ProtecNotifications && typeof window.ProtecNotifications.sendPushNotification === 'function') {
+        window.ProtecNotifications.sendPushNotification(defaultPayload.title, defaultPayload.message, {
+          category: defaultPayload.category,
+          color: defaultPayload.type
+        });
+      }
     }
 
     const targetName = targetUserId === 'all' 
@@ -2713,12 +2733,13 @@ window.ProtecAdmin = {
 
     if (window.game && typeof window.game.showToast === 'function') {
       if (pushDispatched > 0) {
-        window.game.showToast('Push Délivré', `Alerte transmise à ${targetName} (${pushDispatched} push OS délivré même app fermée).`, 'green');
+        window.game.showToast('Push W3C Délivré', `Alerte transmise à ${targetName} (${pushDispatched} push W3C envoyé même app fermée).`, 'green');
       } else {
-        window.game.showToast('Notification Émise', `Test envoyé à ${targetName} (flux en direct).`, 'green');
+        window.game.showToast('Notification Émise', `Alerte envoyée à ${targetName} (flux en direct).`, 'green');
       }
     }
   },
+
 
   previewTestNotificationLocally(payload = {}) {
     const notifPayload = {

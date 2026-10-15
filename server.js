@@ -209,95 +209,85 @@ function fromBase64Url(str) {
   return Buffer.from(s, 'base64');
 }
 
-function getOrCreateVapidKeys() {
-  if (db.data.vapidKeys && db.data.vapidKeys.publicKey && db.data.vapidKeys.privateKeyDer) {
-    return db.data.vapidKeys;
-  }
+// Initialisation officielle Web Push W3C (identique à Site Protec)
+let webpush = null;
+try {
+  webpush = require('web-push');
+} catch (e) {
+  console.warn('[WebPush] Module web-push non disponible, utilisation fallback crypto natif.');
+}
+
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BHB8wWHGzna7sB2I7J17-BWXzyfcQFlqDoOxL27ZrVewvMHP6P7vl7YFvOhVV3wB4ZvHQNbYs7m7xB_Rj2tZa0Y';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'bRSlsX-Ed4AYgDNq9DwBVT5KUq7_8Rf2bwSyoF6ovCk';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:contact@protection-civile54.org';
+
+if (webpush) {
   try {
-    const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', {
-      namedCurve: 'prime256v1',
-      publicKeyEncoding: { type: 'spki', format: 'der' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'der' }
-    });
-    const rawPublicKey = publicKey.subarray(publicKey.length - 65);
-    db.data.vapidKeys = {
-      publicKey: toBase64Url(rawPublicKey),
-      privateKeyDer: privateKey.toString('base64'),
-      subject: 'mailto:contact@myprotec.fr'
-    };
-    db.save();
-    console.log('🔑 Clés VAPID Web Push initialisées avec succès.');
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    console.log('✅ [WebPush] Moteur W3C configuré avec les clés VAPID officielles.');
   } catch (err) {
-    console.error('Erreur génération clés VAPID:', err);
+    console.warn('[WebPush] Erreur configuration VAPID webpush:', err);
   }
-  return db.data.vapidKeys;
 }
 
-function createVapidJwt(audience, vapidKeys) {
-  const header = toBase64Url(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
-  const exp = Math.floor(Date.now() / 1000) + (12 * 3600);
-  const claims = toBase64Url(JSON.stringify({
-    aud: audience,
-    exp: exp,
-    sub: vapidKeys.subject || 'mailto:contact@myprotec.fr'
-  }));
-  const unsignedToken = `${header}.${claims}`;
-  const privKeyObj = crypto.createPrivateKey({
-    key: Buffer.from(vapidKeys.privateKeyDer, 'base64'),
-    format: 'der',
-    type: 'pkcs8'
-  });
-  const signature = crypto.sign('SHA256', Buffer.from(unsignedToken), {
-    key: privKeyObj,
-    dsaEncoding: 'ieee-p1363'
-  });
-  return `${unsignedToken}.${toBase64Url(signature)}`;
+function getVapidPublicKey() {
+  return VAPID_PUBLIC_KEY;
 }
 
-function encryptWebPushPayload(payloadString, subscriptionKeys) {
-  const clientPub = fromBase64Url(subscriptionKeys.p256dh);
-  const clientAuth = fromBase64Url(subscriptionKeys.auth);
+async function sendSingleWebPush(subscription, payloadObject) {
+  if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
+    return { success: false, error: 'Abonnement incomplet' };
+  }
 
-  const localEcdh = crypto.createECDH('prime256v1');
-  localEcdh.generateKeys();
-  const localPub = localEcdh.getPublicKey();
+  const payloadStr = JSON.stringify(payloadObject);
 
-  const sharedSecret = localEcdh.computeSecret(clientPub);
-  const salt = crypto.randomBytes(16);
+  // 1. Utilisation prioritaire du module officiel web-push
+  if (webpush) {
+    try {
+      await webpush.sendNotification({
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: subscription.keys.p256dh,
+          auth: subscription.keys.auth
+        }
+      }, payloadStr, {
+        urgency: 'high', // OBLIGATOIRE : réveil instantané du smartphone même écran éteint / verrouillé
+        TTL: 86400      // 24 heures de persistance
+      });
+      return { success: true, status: 200 };
+    } catch (err) {
+      const statusCode = err && (err.statusCode || err.status);
+      if (statusCode === 410 || statusCode === 404) {
+        return { success: false, expired: true, status: statusCode, error: err.message };
+      }
+      return { success: false, status: statusCode, error: err.message };
+    }
+  }
 
-  const keyInfo = Buffer.concat([Buffer.from('WebPush: info\0', 'utf8'), clientPub, localPub]);
-  const prk = crypto.hkdfSync('sha256', sharedSecret, clientAuth, keyInfo, 32);
-
-  const cek = crypto.hkdfSync('sha256', prk, salt, Buffer.from('Content-Encoding: aes128gcm\0', 'utf8'), 16);
-  const nonce = crypto.hkdfSync('sha256', prk, salt, Buffer.from('Content-Encoding: nonce\0', 'utf8'), 12);
-
-  const plaintext = Buffer.concat([Buffer.from(payloadString, 'utf8'), Buffer.from([2])]);
-  const cipher = crypto.createCipheriv('aes-128-gcm', cek, nonce);
-  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
-
-  const rsBuf = Buffer.alloc(4);
-  rsBuf.writeUInt32BE(4096, 0);
-
-  return Buffer.concat([
-    salt,
-    rsBuf,
-    Buffer.from([0x41]),
-    localPub,
-    ciphertext
-  ]);
-}
-
-function sendSingleWebPush(subscription, payloadObject, vapidKeys) {
+  // 2. Fallback crypto natif RFC 8291 / RFC 8292 si web-push absent
   return new Promise((resolve) => {
     try {
-      if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
-        return resolve({ success: false, error: 'Abonnement incomplet' });
-      }
-
       const endpointUrl = new URL(subscription.endpoint);
       const audience = `${endpointUrl.protocol}//${endpointUrl.host}`;
-      const jwt = createVapidJwt(audience, vapidKeys);
-      const bodyBuffer = encryptWebPushPayload(JSON.stringify(payloadObject), subscription.keys);
+      const header = toBase64Url(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
+      const exp = Math.floor(Date.now() / 1000) + (12 * 3600);
+      const claims = toBase64Url(JSON.stringify({
+        aud: audience,
+        exp: exp,
+        sub: VAPID_SUBJECT
+      }));
+      const unsignedToken = `${header}.${claims}`;
+      const privKeyObj = crypto.createPrivateKey({
+        key: Buffer.from(VAPID_PRIVATE_KEY, 'base64'),
+        format: 'der',
+        type: 'pkcs8'
+      });
+      const signature = crypto.sign('SHA256', Buffer.from(unsignedToken), {
+        key: privKeyObj,
+        dsaEncoding: 'ieee-p1363'
+      });
+      const jwt = `${unsignedToken}.${toBase64Url(signature)}`;
+      const bodyBuffer = encryptWebPushPayload(payloadStr, subscription.keys);
 
       const clientModule = endpointUrl.protocol === 'http:' ? http : https;
       const req = clientModule.request({
@@ -311,7 +301,7 @@ function sendSingleWebPush(subscription, payloadObject, vapidKeys) {
           'Content-Encoding': 'aes128gcm',
           'Content-Type': 'application/octet-stream',
           'Content-Length': bodyBuffer.length,
-          'Authorization': `vapid t=${jwt}, k=${vapidKeys.publicKey}`
+          'Authorization': `vapid t=${jwt}, k=${VAPID_PUBLIC_KEY}`
         }
       }, (res) => {
         let respData = '';
@@ -327,10 +317,7 @@ function sendSingleWebPush(subscription, payloadObject, vapidKeys) {
         });
       });
 
-      req.on('error', (err) => {
-        resolve({ success: false, error: err.message });
-      });
-
+      req.on('error', (err) => resolve({ success: false, error: err.message }));
       req.write(bodyBuffer);
       req.end();
     } catch (e) {
@@ -340,9 +327,6 @@ function sendSingleWebPush(subscription, payloadObject, vapidKeys) {
 }
 
 async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
-  const vapidKeys = getOrCreateVapidKeys();
-  if (!vapidKeys || !vapidKeys.publicKey) return 0;
-
   const subs = Object.values(db.data.pushSubscriptions || {});
   const matchingSubs = subs.filter(s => {
     if (!s || !s.endpoint) return false;
@@ -357,7 +341,7 @@ async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
 
   let sentCount = 0;
   for (const sub of matchingSubs) {
-    const res = await sendSingleWebPush(sub, payloadObject, vapidKeys);
+    const res = await sendSingleWebPush(sub, payloadObject);
     if (res.success) {
       sentCount++;
       sub.lastUsed = Date.now();
@@ -368,6 +352,7 @@ async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
   }
   return sentCount;
 }
+
 
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
@@ -1042,12 +1027,55 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Clé publique VAPID pour les Push Notifications du Service Worker
-  if (url === '/api/push/vapid-public-key' && req.method === 'GET') {
-    const keys = getOrCreateVapidKeys();
-    sendJson(res, 200, { success: true, publicKey: keys.publicKey });
+  // Clé publique VAPID pour les Push Notifications du Service Worker (compatible /api/push/key et /api/push/vapid-public-key)
+  if ((url === '/api/push/key' || url === '/api/push/vapid-public-key') && req.method === 'GET') {
+    sendJson(res, 200, { success: true, publicKey: getVapidPublicKey() });
     return;
   }
+
+  // Route de test direct Push W3C (identique à Site Protec)
+  if (url === '/api/push/test' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const targetSub = parsed.subscription || null;
+        const testPayload = {
+          title: parsed.title || '🚨 TEST PUSH RÉUSSI (MyProtec)',
+          body: parsed.body || parsed.message || 'Le canal de notification W3C est 100% opérationnel même application fermée !',
+          icon: 'badge-monochrome.png',
+          badge: 'badge-monochrome.png',
+          data: { url: 'jeu.html' },
+          actions: [
+            { action: 'action_open', title: '📍 Voir l\'Intervention' },
+            { action: 'action_dispo', title: '✅ Disponible' }
+          ]
+        };
+
+        if (targetSub && targetSub.endpoint) {
+          const directRes = await sendSingleWebPush(targetSub, testPayload);
+          sendJson(res, directRes.success ? 200 : 500, {
+            success: directRes.success,
+            count: directRes.success ? 1 : 0,
+            message: directRes.success ? 'Notification Push d\'urgence envoyée immédiatement à votre terminal mobile !' : directRes.error
+          });
+          return;
+        }
+
+        const count = await dispatchWebPushToPlayer(parsed.targetUserId || 'all', testPayload);
+        sendJson(res, 200, {
+          success: true,
+          count,
+          message: `Notification Push W3C envoyée à ${count} smartphone(s)`
+        });
+      } catch (err) {
+        sendJson(res, 500, { success: false, error: err.message });
+      }
+    });
+    return;
+  }
+
 
   // Enregistrement d'un abonnement Push (Web & Mobile, PWA)
   if (url === '/api/push/subscribe' && req.method === 'POST') {

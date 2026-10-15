@@ -1288,5 +1288,39 @@ CREATE POLICY "apc_update_all" ON apc_departments FOR UPDATE USING (true);
 
 GRANT ALL ON TABLE apc_departments TO anon, authenticated, service_role;
 
+-- ==============================================================================
+-- 15. TABLE DES ABONNEMENTS PUSH W3C (NOTIFICATIONS APP FERMÉE / ÉCRAN ÉTEINT)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_push_sub_endpoint ON push_subscriptions(endpoint);
+CREATE INDEX IF NOT EXISTS idx_push_sub_user_id ON push_subscriptions(user_id);
+
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "push_subs_select_all" ON push_subscriptions;
+CREATE POLICY "push_subs_select_all" ON push_subscriptions FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "push_subs_insert_all" ON push_subscriptions;
+CREATE POLICY "push_subs_insert_all" ON push_subscriptions FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "push_subs_update_all" ON push_subscriptions;
+CREATE POLICY "push_subs_update_all" ON push_subscriptions FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "push_subs_delete_all" ON push_subscriptions;
+CREATE POLICY "push_subs_delete_all" ON push_subscriptions FOR DELETE USING (true);
+
+GRANT ALL ON TABLE push_subscriptions TO anon, authenticated, service_role;
+
+
 
 

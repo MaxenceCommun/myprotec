@@ -472,7 +472,7 @@ window.MyProtecLanding = {
   async syncLeaderboardWithDatabase() {
     try {
       // 1. Vérifier si une partie locale du joueur possède des écussons
-      const localRaw = localStorage.getItem('protec_save') || localStorage.getItem('myprotec_save');
+      const localRaw = localStorage.getItem('protec_save') || localStorage.getItem('myprotec_save') || localStorage.getItem('protec_save_game');
       if (localRaw) {
         const lSave = JSON.parse(localRaw);
         const lEcussons = lSave.localEcussons || lSave.ecussons || [];
@@ -530,11 +530,36 @@ window.MyProtecLanding = {
 
       // 2. Interroger Supabase si la table antenne_ecussons a des données
       if (window.ProtecSupabase && window.ProtecSupabase.client) {
-        const { data: supaAntennes, error } = await window.ProtecSupabase.client
-          .from('antenne_ecussons')
-          .select('antenne_id, quantite, ecusson:ecussons(*)');
+        const [
+          { data: supaAntennes, error: errAntennes },
+          { data: supaStations },
+          { data: supaPlayers }
+        ] = await Promise.all([
+          window.ProtecSupabase.client.from('antenne_ecussons').select('antenne_id, quantite, ecusson:ecussons(*)'),
+          window.ProtecSupabase.client.from('alliance_stations').select('id, player_id, player_name, station_name, city').catch(() => ({ data: [] })),
+          window.ProtecSupabase.client.from('players').select('id, username, station_name, city, department_code').catch(() => ({ data: [] }))
+        ]);
 
-        if (!error && supaAntennes && supaAntennes.length > 0) {
+        if (!errAntennes && supaAntennes && supaAntennes.length > 0) {
+          // Indexation rapide des stations et profils directeurs
+          const stationsMap = new Map();
+          (supaStations || []).forEach(s => {
+            if (s.id) stationsMap.set(s.id, s);
+            if (s.player_id && !stationsMap.has(s.player_id)) stationsMap.set(s.player_id, s);
+          });
+
+          const playersMap = new Map();
+          (supaPlayers || []).forEach(p => {
+            if (p.id) playersMap.set(p.id, p);
+            if (p.username) playersMap.set(p.username, p);
+          });
+
+          // Profil utilisateur actuellement connecté (si présent)
+          let currentProfile = null;
+          try {
+            currentProfile = JSON.parse(localStorage.getItem('protec_user_profile') || '{}');
+          } catch (e) {}
+
           // Grouper par antenne_id
           const groups = {};
           supaAntennes.forEach(item => {
@@ -568,14 +593,54 @@ window.MyProtecLanding = {
             }
           });
 
-          // Mettre à jour les données réelles
+          // Mettre à jour les données réelles avec les vrais noms d'antenne et pseudos de joueurs
           const dynamicList = [];
           for (const [antId, bList] of Object.entries(groups)) {
+            const st = stationsMap.get(antId);
+            const pl = playersMap.get(antId) || (st?.player_id ? playersMap.get(st.player_id) : null);
+
+            // Vérifier aussi la session connectée locale si c'est le joueur en cours
+            const isCurrent = (currentProfile?.id === antId) || (currentProfile?.station_id === antId);
+            const effPl = pl || (isCurrent ? currentProfile : null);
+
+            // Résolution du nom de l'antenne
+            let stationName = st?.station_name || effPl?.station_name;
+            if (!stationName || stationName === 'Antenne Locale' || stationName === 'Mon Antenne' || stationName.startsWith('station-')) {
+              const city = effPl?.city || st?.city;
+              const dept = effPl?.department_code;
+              if (city) {
+                stationName = `Antenne de ${city}`;
+              } else if (dept) {
+                stationName = `Antenne Protection Civile (${dept})`;
+              } else {
+                stationName = 'Antenne Protection Civile';
+              }
+            } else if (!stationName.toLowerCase().includes('antenne') && !stationName.toLowerCase().includes('protection civile')) {
+              // Si le nom est juste une ville (ex: "Nancy"), on le rend plus valorisant
+              stationName = `Antenne de ${stationName}`;
+            }
+
+            // Pseudo du joueur / directeur
+            const directorName = effPl?.username || st?.player_name || 'Directeur d’Antenne';
+
+            // Ville et département
+            const city = effPl?.city || st?.city || '';
+            const dept = effPl?.department_code || '';
+            let deptLabel = 'Réseau National';
+            if (city && dept) {
+              deptLabel = `${city} (${dept})`;
+            } else if (city) {
+              deptLabel = city;
+            } else if (dept) {
+              deptLabel = `Département ${dept}`;
+            }
+
             dynamicList.push({
               id: `supa-${antId}`,
-              name: `Antenne Territoriale (${antId.slice(0, 8)})`,
-              director: 'Direction d’Antenne',
-              department: 'Réseau National FNPC',
+              antenneId: antId,
+              name: stationName,
+              director: directorName,
+              department: deptLabel,
               badges: bList
             });
           }

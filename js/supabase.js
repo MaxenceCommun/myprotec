@@ -467,6 +467,27 @@ window.ProtecSupabase = {
     return false;
   },
 
+  // Sauvegarde d'un abonnement Push W3C dans la table dédiée push_subscriptions
+  async savePushSubscription(subscription, userId) {
+    if (!this.client || !subscription || !subscription.endpoint) return false;
+    try {
+      const subJson = (typeof subscription.toJSON === 'function') ? subscription.toJSON() : subscription;
+      const { error } = await this.client.from('push_subscriptions').upsert({
+        endpoint: subscription.endpoint,
+        user_id: userId || null,
+        p256dh: subJson.keys?.p256dh || '',
+        auth: subJson.keys?.auth || '',
+        user_agent: navigator.userAgent,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'endpoint' });
+      return !error;
+    } catch (e) {
+      console.warn('Erreur savePushSubscription Supabase:', e);
+      return false;
+    }
+  },
+
+
   // Diffusion d'une attribution d'écusson en direct
   broadcastBadgeAwarded(data) {
     if (!this.realtimeChannel) return;
