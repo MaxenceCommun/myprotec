@@ -1160,6 +1160,23 @@ const server = http.createServer((req, res) => {
           data: Object.assign({ url: '/jeu.html' }, reqData.data || {})
         };
 
+        const delaySec = Math.min(Math.max(0, Number(reqData.delaySeconds) || 0), 300);
+        if (delaySec > 0) {
+          setTimeout(async () => {
+            try {
+              await sendSingleWebPush(targetSub, notificationPayload);
+            } catch (e) {}
+          }, delaySec * 1000);
+
+          return sendJson(res, 200, {
+            success: true,
+            scheduled: true,
+            delaySeconds: delaySec,
+            endpoint: targetSub.endpoint,
+            recipient: targetSub.username || targetSub.user_id || 'Inconnu'
+          });
+        }
+
         const result = await sendSingleWebPush(targetSub, notificationPayload);
         if (result.success) {
           sendJson(res, 200, {

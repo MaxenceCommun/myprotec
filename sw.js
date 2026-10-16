@@ -213,7 +213,7 @@ self.addEventListener('push', (event) => {
       payload = event.data.json();
     } catch (e) {
       payload = {
-        title: 'Alerte Opérationnelle MyProtec',
+        title: '🚨 Alerte Opérationnelle MyProtec',
         body: event.data.text()
       };
     }
@@ -232,7 +232,6 @@ self.addEventListener('push', (event) => {
     vibrate: payload.vibrate || [500, 200, 500, 200, 500],
     tag: payload.tag || `protec-alert-${Date.now()}`,
     renotify: true,
-    requireInteraction: true,
     data: Object.assign({ url: targetUrl }, payload.data || {}),
     actions: payload.actions || [
       { action: 'action_open', title: '📍 Voir l’Intervention' }
@@ -240,14 +239,24 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(title, notificationOptions).then(() => {
-      // Si une fenêtre est active en avant-plan, lui propager également l'événement en direct
-      return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-        clientList.forEach((c) => {
-          c.postMessage({ type: 'PUSH_NOTIFICATION_RECEIVED', data: payload });
+    self.registration.showNotification(title, notificationOptions)
+      .catch((err) => {
+        console.warn('[SW] showNotification échec avec options complètes, essai fallback simple:', err);
+        return self.registration.showNotification(title, {
+          body: body,
+          icon: icon,
+          data: { url: targetUrl }
         });
-      });
-    })
+      })
+      .then(() => {
+        // Si une fenêtre est active en avant-plan, lui propager également l'événement en direct
+        return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+          clientList.forEach((c) => {
+            try { c.postMessage({ type: 'PUSH_NOTIFICATION_RECEIVED', data: payload }); } catch (e) {}
+          });
+        });
+      })
+      .catch((err) => console.error('[SW] Erreur finale notification push:', err))
   );
 });
 
@@ -286,15 +295,49 @@ self.addEventListener('notificationclick', (event) => {
 // 5. GESTION DES MESSAGES DEPUIS L'APPLICATION & SYNC ARRIÈRE-PLAN
 const SUPABASE_URL = 'https://yrayehhbqcnuiuejqsjz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs';
+const USER_CACHE_KEY = 'protec-user-cache-v1';
 
 let currentUserId = null;
 let currentUsername = 'Directeur';
 
+async function getStoredUserId() {
+  if (currentUserId && currentUserId !== 'local') return currentUserId;
+  try {
+    const cache = await caches.open(USER_CACHE_KEY);
+    const cached = await cache.match('/active-user-session');
+    if (cached) {
+      const parsed = await cached.json();
+      if (parsed?.id) {
+        currentUserId = parsed.id;
+        currentUsername = parsed.username || currentUsername;
+        return currentUserId;
+      }
+    }
+  } catch (e) {}
+  return currentUserId;
+}
+
+async function persistCurrentUser(user) {
+  if (!user || !user.id) return;
+  currentUserId = user.id;
+  currentUsername = user.username || currentUsername;
+  try {
+    const cache = await caches.open(USER_CACHE_KEY);
+    await cache.put(
+      new Request('/active-user-session'),
+      new Response(JSON.stringify({ id: user.id, username: user.username }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
+    );
+  } catch (e) {}
+}
+
 async function checkPendingSupabaseAlerts() {
-  if (!currentUserId || currentUserId === 'local') return;
+  const userId = await getStoredUserId();
+  if (!userId || userId === 'local') return;
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(currentUserId)}&select=save_data`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(userId)}&select=save_data`, {
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
@@ -318,7 +361,7 @@ async function checkPendingSupabaseAlerts() {
     for (const notif of pending) {
       if (isForeground) {
         clientList.forEach(c => {
-          c.postMessage({ type: 'PUSH_NOTIFICATION_RECEIVED', data: notif });
+          try { c.postMessage({ type: 'PUSH_NOTIFICATION_RECEIVED', data: notif }); } catch (e) {}
         });
       } else {
         await self.registration.showNotification(notif.title || '🚨 Alerte Protection Civile', {
@@ -328,15 +371,19 @@ async function checkPendingSupabaseAlerts() {
           tag: notif.tag || `protec-pending-${Date.now()}`,
           vibrate: [300, 150, 300, 150, 450],
           renotify: true,
-          requireInteraction: true,
           data: notif.data || { url: 'jeu.html' }
+        }).catch(() => {
+          return self.registration.showNotification(notif.title || '🚨 Alerte Protection Civile', {
+            body: notif.body || notif.message || 'Nouvelle notification opérationnelle.',
+            icon: DEFAULT_ICON
+          });
         });
       }
     }
 
     // Purger les notifications traitées dans Supabase
     saveData.pending_notifications = [];
-    await fetch(`${SUPABASE_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(currentUserId)}`, {
+    await fetch(`${SUPABASE_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(userId)}`, {
       method: 'PATCH',
       headers: {
         'apikey': SUPABASE_KEY,
@@ -356,45 +403,52 @@ self.addEventListener('message', (event) => {
 
   // Enregistrement de l'utilisateur actif
   if (event.data.type === 'SET_CURRENT_USER' && event.data.user) {
-    currentUserId = event.data.user.id;
-    currentUsername = event.data.user.username;
-    checkPendingSupabaseAlerts();
+    event.waitUntil(
+      persistCurrentUser(event.data.user).then(() => checkPendingSupabaseAlerts())
+    );
   }
 
   // Planification d'une alerte si l'utilisateur quitte ou ferme l'application
   if (event.data.type === 'SCHEDULE_BACKGROUND_ALERT') {
-    const delayMs = Number(event.data.delayMs) || 180000;
+    const delayMs = Number(event.data.delayMs) || 5000;
     const alertData = event.data.data || {
       title: '🚨 Alerte 15 : VPSP Requis',
       body: 'Le SAMU demande une ambulance de votre antenne. Reprenez votre service !',
       url: 'jeu.html'
     };
 
-    // Vérifier également immédiatement la file d'attente
-    checkPendingSupabaseAlerts();
+    const taskPromise = new Promise((resolve) => {
+      const timerId = setTimeout(() => {
+        checkPendingSupabaseAlerts().finally(() => {
+          self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+            const isForeground = clientList && clientList.some(c => c.visibilityState === 'visible' && c.focused);
+            if (isForeground) {
+              resolve();
+              return;
+            }
 
-    const timerId = setTimeout(() => {
-      // Vérifier les notifications en attente Supabase en priorité
-      checkPendingSupabaseAlerts().finally(() => {
-        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-          const isForeground = clientList && clientList.some(c => c.visibilityState === 'visible' && c.focused);
-          if (isForeground) return;
-
-          self.registration.showNotification(alertData.title, {
-            body: alertData.body,
-            icon: alertData.icon ? getAssetUrl(alertData.icon) : DEFAULT_ICON,
-            badge: alertData.badge ? getAssetUrl(alertData.badge) : DEFAULT_BADGE,
-            tag: `protec-bg-${Date.now()}`,
-            vibrate: [300, 150, 300, 150, 450],
-            renotify: true,
-            requireInteraction: true,
-            data: { url: alertData.url || 'jeu.html' }
-          });
+            self.registration.showNotification(alertData.title, {
+              body: alertData.body,
+              icon: alertData.icon ? getAssetUrl(alertData.icon) : DEFAULT_ICON,
+              badge: alertData.badge ? getAssetUrl(alertData.badge) : DEFAULT_BADGE,
+              tag: `protec-bg-${Date.now()}`,
+              vibrate: [300, 150, 300, 150, 450],
+              renotify: true,
+              data: { url: alertData.url || 'jeu.html' }
+            }).catch(() => {
+              return self.registration.showNotification(alertData.title, {
+                body: alertData.body,
+                icon: DEFAULT_ICON
+              });
+            }).finally(resolve);
+          }).catch(resolve);
         });
-      });
-    }, delayMs);
+      }, delayMs);
 
-    backgroundAlertTimers.push(timerId);
+      backgroundAlertTimers.push(timerId);
+    });
+
+    event.waitUntil(taskPromise);
   }
 
   // Annulation si l'utilisateur est revenu sur le jeu

@@ -94,8 +94,8 @@ window.ProtecNotifications = {
       }
       this.swRegistration = registration;
 
-      // 3. Clé VAPID officielle W3C (identique à Site Protec)
-      let vapidPublicKey = 'BHB8wWHGzna7sB2I7J17-BWXzyfcQFlqDoOxL27ZrVewvMHP6P7vl7YFvOhVV3wB4ZvHQNbYs7m7xB_Rj2tZa0Y';
+      // 3. Clé VAPID officielle W3C (synchronisée avec le serveur Protec)
+      let vapidPublicKey = 'BKLdj5RykkIOWRhAriMzfKsYON-juKOqSvFCclSz6zgr0CRZdLlQOhfd9nAwmXZZjsNMJU-pl5Csy4Yg-c6mHe0';
       try {
         const keyRes = await fetch('/api/push/key');
         if (keyRes.ok) {
@@ -310,10 +310,13 @@ window.ProtecNotifications = {
     this.loadConfig();
     try {
       this.history = JSON.parse(localStorage.getItem('protec_notif_history') || '[]');
-      // Dédoublonnage d'assainissement : ne conserver qu'une seule notification Trésorerie & Bilan par jour au maximum
+      // Dédoublonnage d'assainissement et purge des notifications de filtres
       const seenBilanDays = new Set();
       this.history = this.history.filter(item => {
-        if (item && item.title && item.title.includes('Trésorerie & Bilan')) {
+        if (!item || !item.title) return false;
+        // Purger les notifications système de filtres
+        if (item.title.includes('Filtre DPS') || item.title.includes('Filtre')) return false;
+        if (item.title.includes('Trésorerie & Bilan')) {
           const dayKey = item.date || item.time || 'day';
           if (seenBilanDays.has(dayKey)) return false;
           seenBilanDays.add(dayKey);
@@ -812,6 +815,10 @@ window.ProtecNotifications = {
 
   recordNotification(data) {
     if (!data) return;
+    // RÈGLE MÉTIER : Ne jamais enregistrer les changements d'affichage de filtres (ex: Filtre DPS) dans le journal d'alertes
+    if (data.skipRecord || (data.title && (data.title.includes('Filtre DPS') || data.title.includes('Filtre')))) {
+      return;
+    }
     const item = {
       id: Date.now() + Math.random(),
       title: data.title || 'Notification',
@@ -1084,20 +1091,47 @@ window.ProtecNotifications = {
   },
 
   // Test avec application fermée ou mise en veille (compte à rebours)
-  testOfflinePush(seconds = 5) {
+  async testOfflinePush(seconds = 5) {
     if (this.permission !== 'granted') {
-      this.requestPermission();
-      return;
+      await this.requestPermission();
+      if (this.permission !== 'granted') return;
     }
     if (window.game && typeof window.game.showToast === 'function') {
       window.game.showToast('Test App Fermée', `Fermez ou réduisez maintenant l'application. La notification arrivera dans ${seconds}s !`, 'orange');
     }
+
+    let subEndpoint = this.pushSubscription?.endpoint;
+    if (!subEndpoint) {
+      try {
+        const localSub = JSON.parse(localStorage.getItem('protec_push_sub') || '{}');
+        subEndpoint = localSub.endpoint;
+      } catch (e) {}
+    }
+
+    // 1. Déclenchement serveur Web Push avec délai (garantie réveil réseau OS hors-ligne)
+    if (subEndpoint) {
+      fetch('/api/push/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: subEndpoint,
+          delaySeconds: seconds,
+          title: '🚨 Test Web Push Réussi (App Fermée)',
+          body: 'Votre terminal a bien reçu l’alerte native alors que l’application était totalement fermée !',
+          icon: '/icons/icon-192x192.png',
+          badge: '/icons/badge-monochrome.png',
+          data: { url: '/jeu.html' }
+        })
+      }).catch(() => {});
+    }
+
+    // 2. Programmation Service Worker locale (secours immédiat)
     if (this.swRegistration && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
         type: 'SCHEDULE_BACKGROUND_ALERT',
         delayMs: seconds * 1000,
         data: {
-          title: '🚨 Test Réussi : Application Fermée',
+          title: '🚨 Test Réussi : Alerte Arrière-Plan',
           body: 'Le Service Worker MyProtec a bien délivré cette alerte en arrière-plan avec sonnerie et vibreur !',
           url: '/jeu.html'
         }

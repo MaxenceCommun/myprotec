@@ -13,9 +13,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
-const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") || "BHB8wWHGzna7sB2I7J17-BWXzyfcQFlqDoOxL27ZrVewvMHP6P7vl7YFvOhVV3wB4ZvHQNbYs7m7xB_Rj2tZa0Y";
-const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") || "bRSlsX-Ed4AYgDNq9DwBVT5KUq7_8Rf2bwSyoF6ovCk";
-const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") || "mailto:contact@protection-civile54.org";
+const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") || "BKLdj5RykkIOWRhAriMzfKsYON-juKOqSvFCclSz6zgr0CRZdLlQOhfd9nAwmXZZjsNMJU-pl5Csy4Yg-c6mHe0";
+const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") || "rgoFrFwds0VGKS46Hl2OUKrjlir3Htd3ccpvZ7aQQNA";
+const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") || "mailto:contact@myprotec.fr";
 
 webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 

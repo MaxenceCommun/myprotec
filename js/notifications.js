@@ -1091,20 +1091,47 @@ window.ProtecNotifications = {
   },
 
   // Test avec application fermée ou mise en veille (compte à rebours)
-  testOfflinePush(seconds = 5) {
+  async testOfflinePush(seconds = 5) {
     if (this.permission !== 'granted') {
-      this.requestPermission();
-      return;
+      await this.requestPermission();
+      if (this.permission !== 'granted') return;
     }
     if (window.game && typeof window.game.showToast === 'function') {
       window.game.showToast('Test App Fermée', `Fermez ou réduisez maintenant l'application. La notification arrivera dans ${seconds}s !`, 'orange');
     }
+
+    let subEndpoint = this.pushSubscription?.endpoint;
+    if (!subEndpoint) {
+      try {
+        const localSub = JSON.parse(localStorage.getItem('protec_push_sub') || '{}');
+        subEndpoint = localSub.endpoint;
+      } catch (e) {}
+    }
+
+    // 1. Déclenchement serveur Web Push avec délai (garantie réveil réseau OS hors-ligne)
+    if (subEndpoint) {
+      fetch('/api/push/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: subEndpoint,
+          delaySeconds: seconds,
+          title: '🚨 Test Web Push Réussi (App Fermée)',
+          body: 'Votre terminal a bien reçu l’alerte native alors que l’application était totalement fermée !',
+          icon: '/icons/icon-192x192.png',
+          badge: '/icons/badge-monochrome.png',
+          data: { url: '/jeu.html' }
+        })
+      }).catch(() => {});
+    }
+
+    // 2. Programmation Service Worker locale (secours immédiat)
     if (this.swRegistration && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
         type: 'SCHEDULE_BACKGROUND_ALERT',
         delayMs: seconds * 1000,
         data: {
-          title: '🚨 Test Réussi : Application Fermée',
+          title: '🚨 Test Réussi : Alerte Arrière-Plan',
           body: 'Le Service Worker MyProtec a bien délivré cette alerte en arrière-plan avec sonnerie et vibreur !',
           url: '/jeu.html'
         }

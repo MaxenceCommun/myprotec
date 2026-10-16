@@ -356,10 +356,6 @@
           <span class="w-6 h-6 rounded-full bg-slate-100 group-hover:bg-pc-orange group-hover:text-white transition flex items-center justify-center font-black text-xs shadow-xs">?</span>
         </button>
 
-        <!-- Reset / Options Button -->
-        <button onclick="window.game.confirmResetGame()" class="glass-panel px-3 h-10 sm:h-12 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-white/90 transition shadow-sm group flex items-center justify-center" title="Recommencer une nouvelle partie à zéro">
-          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 group-hover:-rotate-90 transition-transform"></i>
-        </button>
       </div>
 
       <!-- Droite Mobile : Barre d'accès rapide ultra-compacte (< 768px - Anti Débordement) -->
@@ -1025,9 +1021,7 @@
         <button onclick="window.game.closeMobileMenu(); window.ProtecAuth.openReferralShareModal()" class="py-2.5 px-3 rounded-xl bg-amber-50 text-amber-800 font-bold text-xs flex items-center justify-center gap-1.5 active:bg-amber-100 transition" title="Parrainage & QR Code">
           <i data-lucide="gift" class="w-4 h-4 text-amber-600"></i> Parrainage
         </button>
-        <button onclick="window.game.closeMobileMenu(); window.game.confirmResetGame()" class="py-2.5 px-3 rounded-xl bg-rose-50 text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 active:bg-rose-100 transition">
-          <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reset
-        </button>
+
       </div>
     </div>
   </div>
@@ -1117,9 +1111,6 @@
 
       <div class="p-3.5 rounded-2xl bg-red-50/70 border border-red-200 text-xs text-red-950 space-y-2">
         <p class="font-extrabold">Cette action réinitialise entièrement votre antenne à zéro (trésorerie, bénévoles, véhicules, missions).</p>
-        <p class="text-[11px] text-red-800">
-          🛡️ <strong>Sécurité anti fausse manipulation :</strong> Une copie intégrale de vos données est automatiquement archivée en BDD. Un administrateur pourra vous la restituer à tout moment en cas d'erreur.
-        </p>
       </div>
 
       <div class="space-y-2">
@@ -1133,7 +1124,7 @@
         </button>
         <button onclick="window.game.executeSecureReset()" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/30 transition flex items-center gap-1.5">
           <i data-lucide="alert-octagon" class="w-4 h-4"></i>
-          Réinitialiser & Archiver
+          Confirmer la réinitialisation
         </button>
       </div>
     </div>

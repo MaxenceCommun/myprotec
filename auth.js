@@ -818,14 +818,18 @@ window.ProtecAuth = {
       container.innerHTML = `
         <div class="space-y-3.5">
           <!-- Barre d'onglets du profil -->
-          <div class="grid grid-cols-2 rounded-2xl bg-slate-100 p-1 gap-1 border border-slate-200/70">
-            <button type="button" onclick="window.ProtecAuth.setProfileTab('identite')" class="py-2 px-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTabKey === 'identite' ? 'bg-white text-pc-blue shadow-xs' : 'text-slate-500 hover:text-slate-800'}">
+          <div class="grid grid-cols-3 rounded-2xl bg-slate-100 dark:bg-slate-800 p-1 gap-1 border border-slate-200/70 dark:border-slate-700">
+            <button type="button" onclick="window.ProtecAuth.setProfileTab('identite')" class="py-2 px-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTabKey === 'identite' ? 'bg-white dark:bg-slate-900 text-pc-blue shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}">
               <i data-lucide="user" class="w-3.5 h-3.5"></i>
               <span class="truncate">Identité</span>
             </button>
-            <button type="button" onclick="window.ProtecAuth.setProfileTab('parrainage')" class="py-2 px-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTabKey === 'parrainage' ? 'bg-white text-pc-blue shadow-xs' : 'text-slate-500 hover:text-slate-800'}">
+            <button type="button" onclick="window.ProtecAuth.setProfileTab('parrainage')" class="py-2 px-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTabKey === 'parrainage' ? 'bg-white dark:bg-slate-900 text-pc-blue shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}">
               <i data-lucide="gift" class="w-3.5 h-3.5"></i>
               <span class="truncate">Parrainage</span>
+            </button>
+            <button type="button" onclick="window.ProtecAuth.setProfileTab('danger')" class="py-2 px-1 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${activeTabKey === 'danger' ? 'bg-rose-600 text-white shadow-xs' : 'text-rose-600/80 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40'}">
+              <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+              <span class="truncate">Zone Danger</span>
             </button>
           </div>
 
@@ -1012,6 +1016,37 @@ window.ProtecAuth = {
               <div class="text-[10px] text-slate-600 flex items-center justify-between p-2 rounded-xl bg-blue-50/50 border border-blue-100">
                 <span>🎁 Filleul : <strong>+1 500 €</strong> à l'inscription</span>
                 <span>👑 Parrain : <strong>+2 500 €</strong> au 1er DPS</span>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- CONTENU ONGLET 3 : ZONE DE DANGER (RÉINITIALISATION DE L'ANTENNE) -->
+          ${activeTabKey === 'danger' ? `
+            <div class="space-y-3 animate-in fade-in duration-150">
+              <div class="p-4 rounded-2xl bg-rose-50/90 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 space-y-3 shadow-xs">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center text-lg font-black shrink-0">
+                    <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                  </div>
+                  <div>
+                    <h5 class="text-xs font-black text-rose-950 dark:text-rose-200 uppercase tracking-wide">Zone de Danger</h5>
+                    <p class="text-[10px] text-rose-700 dark:text-rose-400">Actions irréversibles sur votre antenne</p>
+                  </div>
+                </div>
+
+                <div class="text-[11px] text-rose-900 dark:text-rose-200 leading-relaxed space-y-1.5 bg-white/70 dark:bg-slate-900/70 p-3 rounded-xl border border-rose-200/60 dark:border-rose-800/40">
+                  <p class="font-extrabold text-rose-950 dark:text-rose-100">⚠️ Réinitialisation complète de l'antenne</p>
+                  <p>
+                    Cette action réinitialise entièrement votre antenne à son état de départ : solde de trésorerie initial, suppression des véhicules et matériels achetés, libération des effectifs et remise à zéro des interventions.
+                  </p>
+                </div>
+
+                <div class="pt-1">
+                  <button type="button" onclick="window.ProtecAuth.closeAuthModal(); if (window.game && window.game.confirmResetGame) { window.game.confirmResetGame(); } else { window.location.href='jeu.html?reset=1'; }" class="w-full py-3 px-4 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 active:scale-98 text-white shadow-md shadow-rose-600/30 transition flex items-center justify-center gap-2 cursor-pointer">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                    <span>Réinitialiser la partie à zéro</span>
+                  </button>
+                </div>
               </div>
             </div>
           ` : ''}
