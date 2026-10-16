@@ -922,9 +922,8 @@ class ProtecGame {
       const stSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`;
       const stHtml = `
         <div class="custom-leaflet-marker">
-          <div class="marker-inner bg-indigo-700 border-2 border-indigo-200 shadow-xl flex items-center justify-center">
+          <div class="marker-inner bg-indigo-700 border-2 border-indigo-200 shadow-xl flex items-center justify-center transition-transform hover:scale-110">
             ${stSvg}
-            <span class="badge-counter bg-indigo-500">${st.vehicles || 1}</span>
           </div>
         </div>
       `;
@@ -1959,9 +1958,8 @@ class ProtecGame {
       const el = document.createElement('div');
       el.className = 'custom-leaflet-marker';
       el.innerHTML = `
-        <div class="marker-inner bg-white border-2 border-pc-blue p-0.5 shadow-lg">
-          <img src="logo_protection_civile.png" alt="PC" class="w-full h-full object-contain rounded-full" />
-          <span class="badge-counter bg-pc-orange">${Array.isArray(station.vehicles) ? station.vehicles.length : (this.vehicles || []).filter(v => v.stationId === station.id).length}</span>
+        <div class="marker-inner bg-white border-2 border-pc-blue p-1 shadow-lg flex items-center justify-center transition-transform hover:scale-110" title="${station.name || 'Antenne de la Protection Civile'}">
+          <img src="base_antenne.png" alt="Base Antenne" class="w-full h-full object-contain" />
         </div>
       `;
 
