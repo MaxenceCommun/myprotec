@@ -532,10 +532,32 @@
     }
   };
 
+  const CONFIG_CATEGORIES = {
+    alertes: { label: 'Alertes & Départs', icon: '🚨' },
+    dps: { label: 'DPS & Devis', icon: '📋' },
+    formations: { label: 'Formations B2B', icon: '🎓' },
+    recrutement: { label: 'Recrutement', icon: '👥' },
+    mobilisation: { label: 'Délais & Réponse', icon: '⏱️' },
+    economie: { label: 'Économie & Finances', icon: '💶' },
+    reputation: { label: 'Réputation & Notoriété', icon: '⭐' },
+    humeur: { label: 'Humeur & Moral', icon: '❤️' }
+  };
+
   // OBJET DE GESTION DU GAMEPLAY CONFIG
   window.ProtecGameplayConfig = {
     schema: CONFIG_SCHEMA,
+    SCHEMA: CONFIG_SCHEMA,
+    categories: CONFIG_CATEGORIES,
+    CATEGORIES: CONFIG_CATEGORIES,
     values: {},
+
+    getAll() {
+      const result = {};
+      Object.keys(CONFIG_SCHEMA).forEach(k => {
+        result[k] = this.get(k);
+      });
+      return result;
+    },
 
     init() {
       this.resetToDefaults(false);

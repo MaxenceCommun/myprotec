@@ -6634,26 +6634,28 @@ window.ProtecAdmin = {
     const container = document.getElementById('admin-view-balancing');
     if (!container) return;
     if (!window.ProtecGameplayConfig) {
-      container.innerHTML = `<div class="p-8 text-center text-rose-500 font-bold">Module d'équilibrage non disponible.</div>`;
+      container.innerHTML = `<div class="p-8 text-center text-rose-500 font-bold bg-white rounded-2xl border border-slate-200">Module d'équilibrage non disponible.</div>`;
       return;
     }
 
-    const cfg = window.ProtecGameplayConfig;
-    const schema = cfg.SCHEMA;
-    const currentValues = cfg.getAll();
-    const categories = cfg.CATEGORIES;
+    try {
+      const cfg = window.ProtecGameplayConfig;
+      const schema = cfg.SCHEMA || cfg.schema || {};
+      const currentValues = typeof cfg.getAll === 'function' ? cfg.getAll() : (cfg.values || {});
+      const categories = cfg.CATEGORIES || cfg.categories || {};
 
-    const activeCategory = this.balancingCategoryFilter || 'all';
-    const query = this.balancingSearchQuery || '';
+      const activeCategory = this.balancingCategoryFilter || 'all';
+      const query = this.balancingSearchQuery || '';
 
-    const entries = Object.entries(schema).filter(([key, def]) => {
-      if (activeCategory !== 'all' && def.category !== activeCategory) return false;
-      if (query) {
-        const text = `${def.label} ${def.desc} ${def.category} ${key}`.toLowerCase();
-        if (!text.includes(query)) return false;
-      }
-      return true;
-    });
+      const entries = Object.entries(schema).filter(([key, def]) => {
+        if (!def) return false;
+        if (activeCategory !== 'all' && def.category !== activeCategory) return false;
+        if (query) {
+          const text = `${def.label || ''} ${def.desc || ''} ${def.category || ''} ${key}`.toLowerCase();
+          if (!text.includes(query)) return false;
+        }
+        return true;
+      });
 
     container.innerHTML = `
       <!-- En-tête avec Actions Globales -->
@@ -6850,6 +6852,15 @@ window.ProtecAdmin = {
         }).join('')}
       </div>
     `;
+    } catch (err) {
+      console.error('[ProtecAdmin] Erreur renderBalancingView:', err);
+      container.innerHTML = `
+        <div class="p-8 text-center bg-white rounded-2xl border border-rose-200 space-y-2">
+          <div class="text-rose-600 font-black text-sm">⚠️ Erreur lors du chargement de l'équilibrage</div>
+          <p class="text-xs text-slate-500">${err.message}</p>
+        </div>
+      `;
+    }
   }
 };
 
