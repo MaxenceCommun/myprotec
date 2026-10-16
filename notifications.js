@@ -314,8 +314,29 @@ window.ProtecNotifications = {
       const seenBilanDays = new Set();
       this.history = this.history.filter(item => {
         if (!item || !item.title) return false;
-        // Purger les notifications système de filtres
-        if (item.title.includes('Filtre DPS') || item.title.includes('Filtre')) return false;
+        const t = (item.title || '').toLowerCase();
+        const m = (item.message || '').toLowerCase();
+        // Purger les notifications système de filtres, thèmes, apparence, préférences
+        if (
+          t.includes('filtre') ||
+          t.includes('apparence') ||
+          t.includes('thème') ||
+          t.includes('theme') ||
+          t.includes('paramètre') ||
+          t.includes('parametre') ||
+          t.includes('option') ||
+          t.includes('préférence') ||
+          t.includes('preference') ||
+          t.includes('copié') ||
+          t.includes('copie') ||
+          t.includes('presse-papier') ||
+          t.includes('acronyme') ||
+          t.includes('journal') ||
+          m.includes('thème sélectionné') ||
+          m.includes('mode sombre') ||
+          m.includes('mode clair')
+        ) return false;
+
         if (item.title.includes('Trésorerie & Bilan')) {
           const dayKey = item.date || item.time || 'day';
           if (seenBilanDays.has(dayKey)) return false;
@@ -815,8 +836,31 @@ window.ProtecNotifications = {
 
   recordNotification(data) {
     if (!data) return;
-    // RÈGLE MÉTIER : Ne jamais enregistrer les changements d'affichage de filtres (ex: Filtre DPS) dans le journal d'alertes
-    if (data.skipRecord || (data.title && (data.title.includes('Filtre DPS') || data.title.includes('Filtre')))) {
+    const t = (data.title || '').toLowerCase();
+    const m = (data.message || data.body || '').toLowerCase();
+
+    // RÈGLE MÉTIER STRICTE : Ne jamais enregistrer les événements cosmétiques, filtres, thèmes ou réglages dans le journal d'alertes
+    if (
+      data.skipRecord ||
+      t.includes('filtre') ||
+      t.includes('apparence') ||
+      t.includes('thème') ||
+      t.includes('theme') ||
+      t.includes('paramètre') ||
+      t.includes('parametre') ||
+      t.includes('option') ||
+      t.includes('préférence') ||
+      t.includes('preference') ||
+      t.includes('copié') ||
+      t.includes('copie') ||
+      t.includes('presse-papier') ||
+      t.includes('acronyme') ||
+      t.includes('journal') ||
+      m.includes('thème sélectionné') ||
+      m.includes('mode sombre') ||
+      m.includes('mode clair') ||
+      m.includes('presse-papier')
+    ) {
       return;
     }
     const item = {
@@ -889,6 +933,7 @@ window.ProtecNotifications = {
     try {
       localStorage.removeItem('protec_notif_history');
     } catch (e) {}
+    this.updateHeaderUI();
     this.renderSettingsModalBody();
   },
 

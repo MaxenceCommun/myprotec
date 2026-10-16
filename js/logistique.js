@@ -46,6 +46,20 @@ window.ProtecLogistique = {
       usage: 'Permet de réarmer la flotte de secours (VPSP et VTU DPS). Diminue à chaque réarmement selon le % consommé.'
     },
     {
+      id: 'caisse_rearmement',
+      category: 'pharmacie',
+      name: 'Caisse de Réarmement Opérationnel (Kit de Réassort)',
+      lucideIcon: 'archive',
+      image: 'images/equipements/woundKits.png',
+      price: 60,
+      unit: 'caisse (100% réassort)',
+      slots: 1,
+      badge: 'Réarmement Opérationnel',
+      badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+      desc: 'Caisse de consommables complète (pansements, compresses, tubulures O2, perfusions, attelles, colliers). Embarquable dans un véhicule LOG (1 slot) ou utilisable à la base pour réarmer en 1 clic.',
+      usage: 'Réarme immédiatement un VPSP ou un Lot entamé à 100% à la base ou directement sur le terrain.'
+    },
+    {
       id: 'oxygenBottles',
       category: 'pharmacie',
       name: 'Bouteille Oxygène Médical 5L (O2 B5)',
@@ -159,10 +173,14 @@ window.ProtecLogistique = {
       image: 'images/equipements/lot_secours_a.png',
       price: 850,
       unit: 'lot complet',
+      slots: 2,
+      types: ['PS'],
+      consumables: 100,
+      isLot: true,
       badge: 'Dotation Majeure',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300',
       desc: 'Sac d’intervention complet avec oxygénothérapie, BAVU, oxymètre, tensiomètre, colliers et garrot.',
-      usage: 'Armement obligatoire de base de tout VPSP et PAPS (+35% rapidité prise en charge).'
+      usage: 'Armement obligatoire de base de tout VPSP et PAPS (+35% rapidité prise en charge). Embarquable dans un véhicule LOG (2 slots).'
     },
     {
       id: 'lot_secours_b',
@@ -172,10 +190,14 @@ window.ProtecLogistique = {
       image: 'images/equipements/lot_secours_b.png',
       price: 1250,
       unit: 'lot complet',
+      slots: 2,
+      types: ['PS'],
+      consumables: 100,
+      isLot: true,
       badge: 'Traumatologie Lourde',
       badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-300',
       desc: 'Matelas immobilisateur à dépression avec pompe, plan dur adulte/enfant et chaise de transport.',
-      usage: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates (+25 réputation).'
+      usage: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates (+25 réputation). Embarquable dans un véhicule LOG (2 slots).'
     },
     {
       id: 'lot_secours_c',
@@ -185,10 +207,14 @@ window.ProtecLogistique = {
       image: 'images/equipements/lot_secours_c.png',
       price: 1750,
       unit: 'lot complet',
+      slots: 4,
+      types: ['PS'],
+      consumables: 100,
+      isLot: true,
       badge: 'Grands Dispositifs',
       badgeColor: 'bg-purple-50 text-purple-800 border-purple-300',
       desc: 'Tente gonflable 16 m², 2 brancards sur tréteaux, rampe LED, table de secrétariat SINUS.',
-      usage: 'Permet d’accueillir et soigner jusqu’à 6 victimes simultanément sur DPS-ME et festivals.'
+      usage: 'Permet d’accueillir et soigner jusqu’à 6 victimes simultanément sur DPS-ME et festivals. Embarquable dans un véhicule LOG (4 slots).'
     },
     {
       id: 'sac_pedestre',
@@ -347,10 +373,14 @@ window.ProtecLogistique = {
       image: 'images/equipements/lot_hebergement.png',
       price: 2100,
       unit: 'lot complet',
+      slots: 3,
+      types: ['LOG', 'TP'],
+      consumables: 100,
+      isLot: true,
       badge: 'Plan PCS Sinistrés',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300',
       desc: '30 lits de camp métalliques Sécurité Civile, 30 duvets thermiques et 30 kits d’hygiène.',
-      usage: 'Armement immédiat d’un Centre d’Hébergement d’Urgence (CHU) ou gymnase communal.'
+      usage: 'Armement immédiat d’un Centre d’Hébergement d’Urgence (CHU) ou gymnase communal. Embarquable dans un véhicule LOG (3 slots).'
     },
     {
       id: 'lot_ravitaillement',
@@ -1437,5 +1467,1140 @@ window.ProtecLogistique = {
         </div>
       </div>
     `;
+  },
+
+  // =========================================================================
+  // 4. MOTEUR UNIFIÉ DES TYPES & CAPACITÉS MULTIPLES DES VÉHICULES
+  // =========================================================================
+
+  CAPACITIES: {
+    LOG: { code: 'LOG', label: 'Logistique', icon: '📦', desc: 'Permet d\'embarquer du stockage logistique libre (lots, caisses, vélos).', badgeClass: 'bg-amber-100 text-amber-900 border-amber-300' },
+    PS: { code: 'PS', label: 'Premiers Secours', icon: '🩺', desc: 'Permet la prise en charge et les soins sur place (postes fixes, PMA, lots).', badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
+    VPSP: { code: 'VPSP', label: 'Évacuation Sanitaire', icon: '🚑', desc: 'Véhicule de Premiers Secours à Personne, permet l\'évacuation vers un hôpital.', badgeClass: 'bg-red-100 text-red-900 border-red-300' },
+    TP: { code: 'TP', label: 'Transport de Personnes', icon: '👥', desc: 'Permet d\'acheminer du personnel ou d\'évacuer des personnes impliquées / non blessées.', badgeClass: 'bg-sky-100 text-sky-900 border-sky-300' }
+  },
+
+  normalizeVehicle(veh) {
+    if (!veh) return veh;
+    const t = (veh.type || '').toUpperCase();
+    const name = (veh.name || '').toLowerCase();
+    const model = (veh.model || '').toLowerCase();
+
+    // 1. Définition des types multiples (tags de capacité)
+    if (!Array.isArray(veh.types) || veh.types.length === 0) {
+      if (t === 'VPSP') {
+        veh.types = ['PS', 'VPSP'];
+      } else if (t === 'VTU' || t === 'VTL') {
+        veh.types = ['LOG', 'TP'];
+      } else if (t === 'VTP') {
+        veh.types = ['TP'];
+      } else if (t === 'VL') {
+        veh.types = ['TP'];
+      } else if (t === 'VLHR') {
+        veh.types = (name.includes('pickup') || model.includes('hilux') || name.includes('benne')) ? ['LOG', 'TP'] : ['TP'];
+      } else if (t === 'FLIT') {
+        veh.types = ['LOG', 'TP'];
+      } else if (t === 'VAHU') {
+        veh.types = ['LOG', 'TP'];
+      } else if (t === 'VELO' || name.includes('vélo') || name.includes('velo') || name.includes('vtt')) {
+        veh.types = ['PS'];
+      } else if (t === 'QUAD' || t === 'MPS') {
+        veh.types = ['PS'];
+      } else if (t === 'PCM') {
+        veh.types = ['TP', 'LOG'];
+      } else if (t === 'VST') {
+        veh.types = ['LOG', 'TP'];
+      } else if (t === 'VTD' || t === 'VCYN') {
+        veh.types = ['LOG', 'TP'];
+      } else {
+        veh.types = ['TP'];
+      }
+    }
+
+    // 2. RÈGLE STRICTE : Tout véhicule sans le tag LOG a strictement capacity_log = 0 !
+    if (!veh.types.includes('LOG')) {
+      veh.capacity_log = 0;
+    } else if (veh.capacity_log === undefined || veh.capacity_log === null) {
+      if (t === 'FLIT') veh.capacity_log = 12;
+      else if (t === 'VTU' || t === 'VTL' || t === 'VST') veh.capacity_log = 6;
+      else if (t === 'VAHU' || t === 'VTD') veh.capacity_log = 4;
+      else if (t === 'PCM' || t === 'VLHR') veh.capacity_log = 2;
+      else veh.capacity_log = 4;
+    }
+
+    // 3. Cas particulier des vélos (VTT Secours) :
+    // Le vélo est un vecteur PS mais doit obligatoirement être transporté par un véhicule LOG (encombrement 1 slot).
+    if (t === 'VELO' || name.includes('vélo') || name.includes('velo') || name.includes('vtt')) {
+      veh.isBicycle = true;
+      veh.transportSlots = 1;
+      veh.requiresLogTransport = true;
+      veh.capacity_log = 0;
+      if (!veh.types.includes('PS')) veh.types.push('PS');
+      veh.types = veh.types.filter(tag => tag !== 'LOG'); // Pas de LOG pour le vélo lui-même
+    }
+
+    // 4. Jauge de consommables (0 à 100%) - Prêt à l'emploi à l'achat
+    if (veh.consumables === undefined) {
+      veh.consumables = (veh.armementLevel !== undefined) ? veh.armementLevel : 100;
+    }
+    veh.consumables = Math.max(0, Math.min(100, veh.consumables));
+    veh.armementLevel = Math.round(veh.consumables);
+    veh.isRearmed = (veh.consumables >= 100);
+    veh.needsRearming = (veh.consumables < 100);
+
+    // 5. Inventaire embarqué (items dans le véhicule LOG)
+    if (!Array.isArray(veh.loadedItems)) {
+      veh.loadedItems = [];
+    }
+
+    return veh;
+  },
+
+  getVehicleTypes(veh) {
+    if (!veh) return [];
+    this.normalizeVehicle(veh);
+    return Array.isArray(veh.types) ? veh.types : ['TP'];
+  },
+
+  getVehicleCapacityLog(veh) {
+    if (!veh) return 0;
+    this.normalizeVehicle(veh);
+    return veh.types.includes('LOG') ? (veh.capacity_log || 0) : 0;
+  },
+
+  getUsedLogSlots(veh) {
+    if (!veh || !Array.isArray(veh.loadedItems)) return 0;
+    return veh.loadedItems.reduce((sum, item) => sum + (item.slots || 1), 0);
+  },
+
+  getFreeLogSlots(veh) {
+    const cap = this.getVehicleCapacityLog(veh);
+    return Math.max(0, cap - this.getUsedLogSlots(veh));
+  },
+
+  canLoadInVehicle(veh, item) {
+    this.normalizeVehicle(veh);
+    if (!veh.types || !veh.types.includes('LOG')) {
+      return { can: false, reason: 'Ce véhicule ne dispose pas du tag LOG (capacité de stockage libre = 0).' };
+    }
+    const needed = item.slots || 1;
+    const free = this.getFreeLogSlots(veh);
+    if (free < needed) {
+      return { can: false, reason: `Espace logistique insuffisant (${free}/${veh.capacity_log} slots libres, ${needed} requis).` };
+    }
+    return { can: true };
+  },
+
+  // =========================================================================
+  // 5. GESTION DES CHARGEMENTS DE LOTS, CAISSES & VÉLOS AVANT DÉPART
+  // =========================================================================
+
+  loadItemToVehicle(missionId, vehicleId, itemId) {
+    const game = window.game;
+    if (!game) return;
+    const mission = (game.missions || []).find(m => m.id === missionId);
+    const veh = (game.vehicles || []).find(v => v.id === vehicleId);
+    if (!veh) return;
+
+    this.normalizeVehicle(veh);
+    const station = (game.stations || []).find(s => s.id === veh.stationId) || game.stations[0];
+    this.ensureStationStock(station, game);
+
+    // Vérifier disponibilité en stock
+    const availableInStock = station.stock[itemId] || 0;
+    const catItem = this.CATALOG.find(i => i.id === itemId);
+
+    if (availableInStock <= 0) {
+      // Proposer d'acheter l'item directement si caisse de réarmement
+      if (itemId === 'caisse_rearmement') {
+        const cost = catItem ? catItem.price : 60;
+        if (game.resources.money < cost) {
+          game.showToast('Stock épuisé', `Aucune caisse de réarmement au local et trésorerie insuffisante (${cost} € requise).`, 'orange');
+          return;
+        }
+        game.resources.money -= cost;
+        station.stock[itemId] = 1;
+        game.showToast('Caisse achetée 🛒', `1 Caisse de réarmement achetée pour ${cost} € et ajoutée au stock.`, 'teal');
+      } else {
+        game.showToast('Stock épuisé', `Aucun exemplaire de « ${catItem?.name || itemId} » disponible au local. Commandez-en à la Centrale d'Achats.`, 'orange');
+        return;
+      }
+    }
+
+    const check = this.canLoadInVehicle(veh, catItem || { slots: 1 });
+    if (!check.can) {
+      game.showToast('Chargement impossible ⚠️', check.reason, 'orange');
+      return;
+    }
+
+    // Déduire du stock local
+    station.stock[itemId] = Math.max(0, (station.stock[itemId] || 1) - 1);
+
+    // Embarquer l'item dans le véhicule LOG
+    const loadedEntry = {
+      id: itemId,
+      name: catItem?.name || itemId,
+      shortName: catItem?.name ? catItem.name.split('(')[0].trim() : itemId,
+      slots: catItem?.slots || 1,
+      types: catItem?.types || (itemId === 'caisse_rearmement' ? ['LOG'] : ['PS']),
+      consumables: 100,
+      maxConsumables: 100,
+      isLot: !!catItem?.isLot,
+      isCaisseRearm: itemId === 'caisse_rearmement'
+    };
+
+    veh.loadedItems.push(loadedEntry);
+    game.showToast('Matériel chargé 📦', `« ${loadedEntry.name} » (${loadedEntry.slots} slot(s)) embarqué dans ${veh.name}.`, 'green');
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+
+    game.saveGame();
+    if (typeof game.openMissionDetails === 'function' && mission) {
+      game.openMissionDetails(mission.id);
+    }
+  },
+
+  unloadItemFromVehicle(missionId, vehicleId, itemIndex) {
+    const game = window.game;
+    if (!game) return;
+    const mission = (game.missions || []).find(m => m.id === missionId);
+    const veh = (game.vehicles || []).find(v => v.id === vehicleId);
+    if (!veh || !Array.isArray(veh.loadedItems) || !veh.loadedItems[itemIndex]) return;
+
+    const station = (game.stations || []).find(s => s.id === veh.stationId) || game.stations[0];
+    this.ensureStationStock(station, game);
+
+    const item = veh.loadedItems.splice(itemIndex, 1)[0];
+    station.stock[item.id] = (station.stock[item.id] || 0) + 1;
+
+    game.showToast('Matériel déchargé 🧹', `« ${item.name} » restitué au stock du local de ${station.name}.`, 'teal');
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+
+    game.saveGame();
+    if (typeof game.openMissionDetails === 'function' && mission) {
+      game.openMissionDetails(mission.id);
+    }
+  },
+
+  loadBicycleToVehicle(missionId, vehicleId, bikeId) {
+    const game = window.game;
+    if (!game) return;
+    const mission = (game.missions || []).find(m => m.id === missionId);
+    const veh = (game.vehicles || []).find(v => v.id === vehicleId);
+    const bike = (game.vehicles || []).find(v => v.id === bikeId);
+    if (!veh || !bike) return;
+
+    this.normalizeVehicle(veh);
+    this.normalizeVehicle(bike);
+
+    const check = this.canLoadInVehicle(veh, { slots: 1 });
+    if (!check.can) {
+      game.showToast('Transport Vélo impossible', check.reason, 'orange');
+      return;
+    }
+
+    bike.transportedBy = veh.id;
+    veh.loadedItems.push({
+      id: bike.id,
+      name: bike.name || 'VTT Secours',
+      shortName: 'VTT Secours (Vélo)',
+      slots: 1,
+      isVehicle: true,
+      types: ['PS'],
+      consumables: bike.consumables || 100
+    });
+
+    game.showToast('VTT Embarqué 🚲', `${bike.name} est chargé dans ${veh.name} (1 slot LOG). Transport routier sécurisé !`, 'green');
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+
+    game.saveGame();
+    if (typeof game.openMissionDetails === 'function' && mission) {
+      game.openMissionDetails(mission.id);
+    }
+  },
+
+  unloadBicycleFromVehicle(missionId, vehicleId, bikeId) {
+    const game = window.game;
+    if (!game) return;
+    const mission = (game.missions || []).find(m => m.id === missionId);
+    const veh = (game.vehicles || []).find(v => v.id === vehicleId);
+    const bike = (game.vehicles || []).find(v => v.id === bikeId);
+    if (!veh) return;
+
+    if (Array.isArray(veh.loadedItems)) {
+      veh.loadedItems = veh.loadedItems.filter(it => it.id !== bikeId);
+    }
+    if (bike) bike.transportedBy = null;
+
+    game.showToast('VTT Déchargé', `${bike ? bike.name : 'VTT'} retiré du véhicule porteur.`, 'slate');
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+
+    if (typeof game.saveGame === 'function') game.saveGame();
+    if (typeof game.openMissionDetails === 'function' && mission) {
+      game.openMissionDetails(mission.id);
+    }
+  },
+
+  getMissionVehicles(mission, game) {
+    if (!mission) return [];
+    const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+    let rawList = [];
+    if (Array.isArray(mission.assignedVehicleIds)) rawList = mission.assignedVehicleIds;
+    else if (Array.isArray(mission.assignedVehicles)) rawList = mission.assignedVehicles;
+    else if (mission.assignedCrew && Array.isArray(mission.assignedCrew.vehicles)) rawList = mission.assignedCrew.vehicles;
+
+    return rawList.map(item => {
+      if (typeof item === 'object' && item !== null) return item;
+      return allVehs.find(v => v.id === item);
+    }).filter(Boolean);
+  },
+
+  getMissionVolunteers(mission, game) {
+    if (!mission) return [];
+    const allVols = game.volunteers || [];
+    let rawList = [];
+    if (Array.isArray(mission.registeredVolunteers)) rawList = mission.registeredVolunteers;
+    else if (Array.isArray(mission.assignedVolunteers)) rawList = mission.assignedVolunteers;
+    else if (mission.assignedCrew && Array.isArray(mission.assignedCrew.volunteers)) rawList = mission.assignedCrew.volunteers;
+
+    return rawList.map(item => {
+      if (typeof item === 'object' && item !== null) return item;
+      return allVols.find(v => v.id === item);
+    }).filter(Boolean);
+  },
+
+  // Vérification stricte du transport des vélos pour tout départ
+  checkBicycleTransport(mission, game) {
+    if (!mission) return { valid: true };
+    const assignedVehs = this.getMissionVehicles(mission, game);
+
+    const bicycles = assignedVehs.filter(v => {
+      this.normalizeVehicle(v);
+      return v.isBicycle || v.type === 'VELO' || (v.name || '').toLowerCase().includes('vélo') || (v.name || '').toLowerCase().includes('vtt');
+    });
+
+    if (bicycles.length === 0) return { valid: true };
+
+    const logVehicles = assignedVehs.filter(v => {
+      this.normalizeVehicle(v);
+      return (v.types || []).includes('LOG');
+    });
+
+    if (logVehicles.length === 0) {
+      return {
+        valid: false,
+        reason: 'Un vélo (VTT Secours) est engagé mais ne peut pas se déplacer par la route : vous devez obligatoirement engager au moins un véhicule disposant du tag LOG pour le transporter.'
+      };
+    }
+
+    // Vérifier que chaque vélo est bien transporté ou qu'il y a assez de slots LOG
+    for (const bike of bicycles) {
+      const isExplicitlyCarried = logVehicles.some(lv => Array.isArray(lv.loadedItems) && lv.loadedItems.some(it => it.id === bike.id));
+      if (!isExplicitlyCarried) {
+        // Tenter l'attribution automatique dans un slot libre
+        const candidate = logVehicles.find(lv => this.getFreeLogSlots(lv) >= 1);
+        if (candidate) {
+          candidate.loadedItems.push({
+            id: bike.id,
+            name: bike.name || 'VTT Secours',
+            shortName: 'VTT Secours',
+            slots: 1,
+            isVehicle: true,
+            types: ['PS'],
+            consumables: bike.consumables || 100
+          });
+          bike.transportedBy = candidate.id;
+        } else {
+          return {
+            valid: false,
+            reason: `Espace logistique insuffisant : aucun véhicule LOG n'a de slot libre pour transporter le ${bike.name || 'vélo'}. Libérez 1 slot de transport.`
+          };
+        }
+      }
+    }
+
+    return { valid: true };
+  },
+
+  // =========================================================================
+  // 6. RÉARMEMENT À LA BASE (1-CLIC) & SUR MISSION
+  // =========================================================================
+
+  rearmAtBaseOneClick(game, stationId) {
+    if (!game) game = window.game;
+    const station = (game.stations || []).find(s => s.id === stationId) || (game.stations && game.stations[0]) || { id: 'default', stock: {} };
+    this.ensureStationStock(station, game);
+
+    // Véhicules rattachés à cette antenne ayant des consommables entamés
+    const candidateVehs = (game.vehicles || []).filter(v => {
+      if (station.id !== 'default' && v.stationId && v.stationId !== station.id) return false;
+      this.normalizeVehicle(v);
+      return (v.consumables < 100 || v.armementLevel < 100 || v.needsRearming);
+    });
+
+    if (candidateVehs.length === 0) {
+      game.showToast('Flotte 100% Opérationnelle ✓', 'Tous vos véhicules et lots à l\'antenne sont déjà à 100% d\'armement !', 'green');
+      return;
+    }
+
+    const availableCaisses = station.stock.caisse_rearmement || 0;
+    const availablePS = station.stockMaterielsPS || 0;
+
+    // Calculer les besoins : 1 caisse peut réarmer 100% de consommables
+    let totalMissing = 0;
+    candidateVehs.forEach(v => {
+      totalMissing += (100 - (v.consumables || 100));
+    });
+    const caissesNeeded = Math.ceil(totalMissing / 100) || 1;
+
+    if (availableCaisses >= caissesNeeded) {
+      // Utiliser les caisses de réarmement du stock
+      station.stock.caisse_rearmement -= caissesNeeded;
+      candidateVehs.forEach(v => {
+        v.consumables = 100;
+        v.armementLevel = 100;
+        v.isRearmed = true;
+        v.needsRearming = false;
+        v.warnedLowConsumables = false;
+        v.breachedConsumables = false;
+      });
+      game.showToast('Flotte Réarmée en 1 Clic ✓', `${candidateVehs.length} véhicule(s) réarmé(s) à 100% (-${caissesNeeded} caisse(s) de réarmement au stock).`, 'green');
+    } else if (availablePS >= totalMissing) {
+      // Utiliser le stock Matériels PS
+      station.stockMaterielsPS -= totalMissing;
+      game.stockMaterielsPS = station.stockMaterielsPS;
+      candidateVehs.forEach(v => {
+        v.consumables = 100;
+        v.armementLevel = 100;
+        v.isRearmed = true;
+        v.needsRearming = false;
+        v.warnedLowConsumables = false;
+        v.breachedConsumables = false;
+      });
+      game.showToast('Flotte Réarmée au Local ✓', `${candidateVehs.length} véhicule(s) réarmé(s) à 100% (-${Math.round(totalMissing)}% au stock Matériels PS).`, 'green');
+    } else {
+      // Proposer d'acheter les caisses manquantes
+      const buyCost = caissesNeeded * 60;
+      if (game.resources.money >= buyCost) {
+        if (confirm(`Stock local insuffisant. Acheter ${caissesNeeded} Caisse(s) de réarmement pour ${buyCost} € et réarmer immédiatement la flotte ?`)) {
+          game.resources.money -= buyCost;
+          candidateVehs.forEach(v => {
+            v.consumables = 100;
+            v.armementLevel = 100;
+            v.isRearmed = true;
+            v.needsRearming = false;
+            v.warnedLowConsumables = false;
+            v.breachedConsumables = false;
+          });
+          game.showToast('Réarmement Validé ✓', `${candidateVehs.length} véhicule(s) réarmé(s) à 100% (${buyCost} € facturés à la Centrale d'Achats).`, 'green');
+        } else {
+          return;
+        }
+      } else {
+        game.showToast('Ressources Insuffisantes', `Stock local vide et trésorerie insuffisante (${buyCost} € requis pour ${caissesNeeded} caisse(s)).`, 'orange');
+        return;
+      }
+    }
+
+    if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
+    game.saveGame();
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+    if (typeof game.renderStations === 'function') game.renderStations();
+  },
+
+  rearmVehicleSingle(game, vehicleId) {
+    if (!game) game = window.game;
+    const veh = (game.vehicles || []).find(v => v.id === vehicleId);
+    if (!veh) return;
+    this.normalizeVehicle(veh);
+
+    if (veh.consumables >= 100) {
+      game.showToast('Véhicule Complet', `${veh.name} est déjà à 100% d'armement consommables.`, 'blue');
+      return;
+    }
+
+    const station = (game.stations || []).find(s => s.id === veh.stationId) || game.stations[0];
+    this.ensureStationStock(station, game);
+
+    const missing = 100 - veh.consumables;
+    if ((station.stock.caisse_rearmement || 0) >= 1) {
+      station.stock.caisse_rearmement -= 1;
+      veh.consumables = 100;
+      veh.armementLevel = 100;
+      veh.isRearmed = true;
+      veh.needsRearming = false;
+      veh.warnedLowConsumables = false;
+      veh.breachedConsumables = false;
+      game.showToast('Véhicule Réarmé ✓', `${veh.name} a été réarmé à 100% (-1 caisse de réarmement).`, 'green');
+    } else if ((station.stockMaterielsPS || 0) >= missing) {
+      station.stockMaterielsPS -= missing;
+      game.stockMaterielsPS = station.stockMaterielsPS;
+      veh.consumables = 100;
+      veh.armementLevel = 100;
+      veh.isRearmed = true;
+      veh.needsRearming = false;
+      veh.warnedLowConsumables = false;
+      veh.breachedConsumables = false;
+      game.showToast('Véhicule Réarmé ✓', `${veh.name} a été réarmé à 100% (-${missing}% matériels PS).`, 'green');
+    } else {
+      if (game.resources.money >= 60) {
+        if (confirm(`Stock épuisé. Acheter 1 Caisse de réarmement pour 60 € et réarmer ${veh.name} ?`)) {
+          game.resources.money -= 60;
+          veh.consumables = 100;
+          veh.armementLevel = 100;
+          veh.isRearmed = true;
+          veh.needsRearming = false;
+          veh.warnedLowConsumables = false;
+          veh.breachedConsumables = false;
+          game.showToast('Véhicule Réarmé ✓', `${veh.name} réarmé à 100% (60 € débités).`, 'green');
+        } else {
+          return;
+        }
+      } else {
+        game.showToast('Stock épuisé', 'Aucune caisse de réarmement disponible et trésorerie insuffisante (60 €).', 'orange');
+        return;
+      }
+    }
+
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    game.saveGame();
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+  },
+
+  // =========================================================================
+  // 7. MOTEUR DE CONSOMMATION HORAIRE DYNAMIQUE SUR TOUTES LES MISSIONS
+  // =========================================================================
+
+  processMissionConsumptionTick(game, mission, deltaSec) {
+    if (!mission || mission.status !== 'ongoing') return;
+    if (!deltaSec || deltaSec <= 0) return;
+
+    const assignedVehs = this.getMissionVehicles(mission, game);
+
+    // Identifier les vecteurs de soins PS/VPSP
+    const psVehicles = assignedVehs.filter(v => {
+      this.normalizeVehicle(v);
+      return (v.types || []).includes('PS') || (v.types || []).includes('VPSP');
+    });
+
+    // Lots de secours embarqués dans les véhicules LOG de la mission
+    const activeLots = [];
+    assignedVehs.filter(v => (v.types || []).includes('LOG')).forEach(lv => {
+      (lv.loadedItems || []).forEach(it => {
+        if (it.types && it.types.includes('PS')) {
+          activeLots.push({ item: it, parentVehicle: lv });
+        }
+      });
+    });
+
+    if (psVehicles.length === 0 && activeLots.length === 0) return;
+
+    // RÈGLE DE CONSOMMATION :
+    // - Petite mission / court dispositif (PAPS <= 2h-3h) : consommation faible (0% à 5% au total sur toute la durée)
+    // - Dispositif moyen à grand (DPS-PE à DPS-GE, 12h à 36h+, Urgences, Catastrophes) : consommation importante
+    const durHours = (mission.durationHours || ((mission.durationSeconds || 7200) / 3600));
+    const scale = (mission.scale || '').toUpperCase();
+    const type = (mission.type || '').toLowerCase();
+    const isCrisis = mission.isCrisis || ['crise', 'pompiers', 'samu', 'meteo'].includes(type);
+
+    let hourlyRate = 2.0; // 2% par heure -> 4% sur 2 heures pour petite mission
+    if (durHours <= 3 && !isCrisis && (scale.includes('PAPS') || (mission.requiredVolunteers || 0) <= 3)) {
+      hourlyRate = 1.8; // ~3.6% sur 2 heures (entre 0% et 5%)
+    } else if (scale.includes('DPS-PE') || durHours <= 6) {
+      hourlyRate = 7.5; // 7.5% / heure -> ~30-45% sur 4-6h
+    } else if (scale.includes('DPS-ME') || (durHours > 6 && durHours <= 12)) {
+      hourlyRate = 13.0; // 13% / heure
+    } else if (scale.includes('DPS-GE') || isCrisis || durHours > 12) {
+      hourlyRate = 19.0; // 19% / heure -> rupture en ~5 heures sans réarmement
+    }
+
+    const tickLoss = (hourlyRate / 3600) * deltaSec;
+
+    // 1. Dégradation sur les véhicules PS/VPSP
+    psVehicles.forEach(v => {
+      this.normalizeVehicle(v);
+      if (v.consumables > 0) {
+        v.consumables = Math.max(0, v.consumables - tickLoss);
+        v.armementLevel = Math.round(v.consumables);
+        v.isRearmed = (v.consumables >= 100);
+        v.needsRearming = (v.consumables < 100);
+
+        // Alerte à 5%
+        if (v.consumables <= 5 && !v.warnedLowConsumables) {
+          v.warnedLowConsumables = true;
+          this.triggerWarning5Percent(game, mission, v);
+        }
+
+        // RUPTURE À 0%
+        if (v.consumables <= 0 && !v.breachedConsumables) {
+          v.breachedConsumables = true;
+          this.triggerAstreinteConsumableAlert(game, mission, v);
+        }
+      } else if (v.consumables <= 0 && !v.breachedConsumables) {
+        v.breachedConsumables = true;
+        this.triggerAstreinteConsumableAlert(game, mission, v);
+      }
+    });
+
+    // 2. Dégradation sur les lots embarqués (résistent mieux car plus grande capacité)
+    activeLots.forEach(({ item, parentVehicle }) => {
+      if (item.consumables === undefined) item.consumables = 100;
+      if (item.consumables > 0) {
+        item.consumables = Math.max(0, item.consumables - (tickLoss * 0.60));
+        if (item.consumables <= 5 && !item.warnedLowConsumables) {
+          item.warnedLowConsumables = true;
+          this.triggerWarning5Percent(game, mission, item, parentVehicle);
+        }
+        if (item.consumables <= 0 && !item.breachedConsumables) {
+          item.breachedConsumables = true;
+          this.triggerAstreinteConsumableAlert(game, mission, item, parentVehicle);
+        }
+      } else if (item.consumables <= 0 && !item.breachedConsumables) {
+        item.breachedConsumables = true;
+        this.triggerAstreinteConsumableAlert(game, mission, item, parentVehicle);
+      }
+    });
+  },
+
+  // Alerte préventive à 5%
+  triggerWarning5Percent(game, mission, item, parentVeh = null) {
+    const name = item.name || item.label || 'Vecteur de secours';
+    const parentTxt = parentVeh ? ` (embarqué dans ${parentVeh.name})` : '';
+    game.showToast('⚠️ Consommables Critiques (5%)', `Attention : ${name}${parentTxt} sur « ${mission.title} » est sur le point d'épuiser ses consommables (jauge à 5%). Préparez un réarmement !`, 'orange');
+    if (window.ProtecAudio && typeof window.ProtecAudio.playRadioBeep === 'function') {
+      window.ProtecAudio.playRadioBeep();
+    }
+  },
+
+  // =========================================================================
+  // 8. RUPTURE À 0% : ALERTE DU RESPONSABLE & ARBITRAGE ASTREINTE
+  // =========================================================================
+
+  triggerAstreinteConsumableAlert(game, mission, item, parentVeh = null) {
+    const itemName = item.name || item.label || 'Vecteur de secours';
+    mission.logisticsAstreinteAlert = true;
+
+    // Identifier le responsable du dispositif
+    let leaderName = 'Chef de Dispositif';
+    let leaderRank = 'CD';
+    const vols = this.getMissionVolunteers(mission, game);
+    if (vols.length > 0) {
+      const leader = vols.find(v => ['Chef de Dispositif', 'Chef de Poste', 'Chef d’Équipe', 'Chef d\'Équipe', 'CE', 'Cadre'].includes(v.rank) || (v.skills || []).some(s => s && s.toLowerCase().includes('ce')));
+      if (leader) {
+        leaderName = leader.name;
+        leaderRank = leader.rank;
+      } else if (vols[0]) {
+        leaderName = vols[0].name;
+        leaderRank = vols[0].rank || 'Secouriste';
+      }
+    }
+
+    // 1. Première baisse immédiate de moral et motivation chez les bénévoles (-15%)
+    vols.forEach(vol => {
+      vol.motivation = Math.max(10, (vol.motivation || 75) - 15);
+      vol.humeur = Math.max(10, (vol.humeur || 75) - 15);
+      vol.morale = Math.max(10, (vol.morale || 75) - 15);
+    });
+
+    // 2. Notification d'astreinte
+    const notifTitle = '🚨 APPEL ASTREINTE : Rupture de Consommables !';
+    const notifMsg = `${leaderRank} ${leaderName} signale une rupture totale de consommables (${itemName}) sur « ${mission.title} ». Demande urgente d'un renfort LOG !`;
+
+    if (window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
+      window.ProtecNotifications.recordNotification({
+        title: notifTitle,
+        message: notifMsg,
+        category: 'crise',
+        level: 'danger'
+      });
+    } else if (typeof game.addNotification === 'function') {
+      game.addNotification(notifTitle, notifMsg, 'danger');
+    }
+
+    if (window.ProtecAudio && typeof window.ProtecAudio.playRadioBeep === 'function') {
+      window.ProtecAudio.playRadioBeep();
+    }
+
+    // 3. Ouvrir la modale d'arbitrage de l'astreinte
+    this.openAstreinteModal(game, mission, item, leaderName, leaderRank);
+  },
+
+  openAstreinteModal(game, mission, item, leaderName, leaderRank) {
+    const existing = document.getElementById('astreinte-consumable-modal');
+    if (existing) existing.remove();
+
+    const itemName = item.name || item.label || 'Vecteur de secours';
+
+    // Rechercher les véhicules LOG disponibles à la base
+    const availableLogVehs = (game.vehicles || []).filter(v => {
+      this.normalizeVehicle(v);
+      return (v.types || []).includes('LOG') && (v.status === 'dispo' || v.status === 'disponible');
+    });
+
+    const modalHTML = `
+      <div id="astreinte-consumable-modal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+        <div class="w-full max-w-xl bg-white rounded-3xl shadow-2xl border-2 border-red-500 overflow-hidden flex flex-col max-h-[90vh]">
+          <!-- En-tête Alerte d'Urgence Astreinte -->
+          <div class="p-4 sm:p-5 bg-gradient-to-r from-red-600 via-rose-700 to-red-800 text-white flex items-center justify-between gap-3 shadow-md">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-2xl shadow-inner animate-pulse">
+                🚨
+              </div>
+              <div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-white/25 border border-white/30">
+                  Appel d'Urgence Astreinte
+                </span>
+                <h3 class="text-base sm:text-lg font-black tracking-tight leading-tight mt-0.5">
+                  Rupture Complète de Consommables (0%)
+                </h3>
+              </div>
+            </div>
+            <button onclick="document.getElementById('astreinte-consumable-modal').remove()" class="text-white/80 hover:text-white text-lg p-1">✕</button>
+          </div>
+
+          <div class="p-5 overflow-y-auto space-y-4 text-xs">
+            <!-- Message radio officiel du responsable -->
+            <div class="p-4 rounded-2xl bg-red-50/90 border border-red-200 text-slate-800 space-y-2">
+              <div class="flex items-center gap-2 font-black text-xs text-red-900">
+                <span>📻</span>
+                <span>Message Radio — ${leaderRank} ${leaderName} (Responsable sur le Dispositif) :</span>
+              </div>
+              <blockquote class="italic text-slate-700 leading-relaxed border-l-4 border-red-400 pl-3">
+                « Astreinte de garde ? Ici ${leaderName} sur « ${mission.title} ». Nous sommes en <strong>rupture totale de consommables sur ${itemName}</strong> ! Les trousses et sacs de secours sont vides, les secouristes sont complètement démunis face aux victimes ! Nous demandons l'envoi immédiat d'un renfort LOG depuis l'antenne avec des caisses de réarmement ! »
+              </blockquote>
+            </div>
+
+            <!-- Impact immédiat -->
+            <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-center gap-2.5">
+              <span class="text-xl">⚠️</span>
+              <div>
+                <strong>Impact Moral Terrain :</strong> Frustration immédiate des bénévoles engagés (<strong>-15% de moral</strong>). Sans renfort logistique, le mécontentement va s'aggraver et l'autorité organisatrice appliquera des pénalités sévères.
+              </div>
+            </div>
+
+            <!-- Choix opérationnel de l'astreinte -->
+            <div class="space-y-3 pt-2">
+              <h4 class="font-black text-slate-900 uppercase text-[11px] tracking-wider">
+                Décision de l'Astreinte :
+              </h4>
+
+              <!-- Option 1 : Déployer un renfort LOG -->
+              <div class="p-4 rounded-2xl bg-emerald-50/80 border-2 border-emerald-300 space-y-3">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <h5 class="text-xs font-black text-emerald-950 flex items-center gap-1.5">
+                      <span>📦</span>
+                      <span>OPTION 1 : Envoyer un Renfort LOG d'Astreinte</span>
+                    </h5>
+                    <p class="text-[11px] text-emerald-800 mt-0.5">
+                      Fait partir immédiatement un véhicule LOG chargé de caisses de réarmement. À l'arrivée sur zone, le matériel est réarmé, le moral se stabilise (+10%) et la mission continue sereinement.
+                    </p>
+                  </div>
+                </div>
+
+                ${availableLogVehs.length > 0 ? `
+                  <div class="space-y-2">
+                    <label class="text-[10px] font-black uppercase text-emerald-900 block">Sélectionnez le véhicule LOG au garage :</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      ${availableLogVehs.map(lv => `
+                        <button 
+                          onclick="window.ProtecLogistique.sendAstreinteReinforcement(window.game, '${mission.id}', '${lv.id}'); document.getElementById('astreinte-consumable-modal').remove();"
+                          class="p-2.5 rounded-xl border border-emerald-300 bg-white hover:bg-emerald-100/70 text-left transition cursor-pointer shadow-xs flex items-center gap-2.5 group">
+                          <span class="text-2xl">${lv.type === 'FLIT' ? '🏗️' : '🚐'}</span>
+                          <div class="min-w-0 flex-1">
+                            <div class="font-black text-xs text-slate-900 truncate group-hover:text-emerald-900">${lv.name}</div>
+                            <div class="text-[10px] text-slate-500">${lv.capacity_log} slots LOG • Carburant ${lv.fuel || 90}%</div>
+                          </div>
+                          <span class="px-2 py-1 rounded-lg bg-emerald-600 text-white font-black text-[10px] shrink-0">Déployer ➔</span>
+                        </button>
+                      `).join('')}
+                    </div>
+                  </div>
+                ` : `
+                  <div class="p-3 rounded-xl bg-amber-100/80 border border-amber-300 text-amber-900 text-xs">
+                    ⚠️ Aucun véhicule LOG n'est actuellement disponible au garage (tous engagés). Vous pouvez ordonner un détachement d'urgence ou refuser.
+                  </div>
+                `}
+              </div>
+
+              <!-- Option 2 : Refuser ou Pas de renfort -->
+              <div class="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-3">
+                <div>
+                  <h5 class="text-xs font-black text-rose-950 flex items-center gap-1.5">
+                    <span>❌</span>
+                    <span>OPTION 2 : Refuser le Renfort (Indisponibilité de moyens)</span>
+                  </h5>
+                  <p class="text-[10.5px] text-rose-800 mt-0.5">
+                    L'équipe reste sur place sans matériel : <strong>-25% de moral</strong> supplémentaire et <strong>-35% de satisfaction organisateur</strong> (pénalité de convention).
+                  </p>
+                </div>
+                <button 
+                  onclick="window.ProtecLogistique.refuseAstreinteReinforcement(window.game, '${mission.id}'); document.getElementById('astreinte-consumable-modal').remove();"
+                  class="px-3.5 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer shrink-0">
+                  Refuser le Renfort
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    if (window.lucide) window.lucide.createIcons();
+  },
+
+  sendAstreinteReinforcement(game, missionId, logVehId) {
+    if (!game) game = window.game;
+    const mission = (game.missions || []).find(m => m.id === missionId);
+    const veh = (game.vehicles || []).find(v => v.id === logVehId);
+    if (!mission || !veh) return;
+
+    this.normalizeVehicle(veh);
+    const station = (game.stations || []).find(s => s.id === veh.stationId) || game.stations[0];
+    this.ensureStationStock(station, game);
+
+    // Vérifier si au moins 1 caisse de réarmement est embarquée ou en stock
+    let hasCaisse = (veh.loadedItems || []).some(it => it.isCaisseRearm || it.id === 'caisse_rearmement');
+    if (!hasCaisse) {
+      if ((station.stock.caisse_rearmement || 0) >= 1) {
+        station.stock.caisse_rearmement -= 1;
+        veh.loadedItems.push({
+          id: 'caisse_rearmement',
+          name: 'Caisse de Réarmement Opérationnel',
+          slots: 1,
+          isCaisseRearm: true,
+          types: ['LOG'],
+          consumables: 100
+        });
+        hasCaisse = true;
+      } else if (game.resources.money >= 60) {
+        game.resources.money -= 60;
+        veh.loadedItems.push({
+          id: 'caisse_rearmement',
+          name: 'Caisse de Réarmement Opérationnel',
+          slots: 1,
+          isCaisseRearm: true,
+          types: ['LOG'],
+          consumables: 100
+        });
+        hasCaisse = true;
+        game.showToast('Caisse achetée 🛒', '1 Caisse de réarmement achetée pour 60 € et chargée à bord.', 'teal');
+      }
+    }
+
+    veh.status = 'transit_astreinte';
+    veh.fuel = Math.max(10, (veh.fuel || 90) - 5);
+
+    mission.astreinteReinforcement = {
+      vehicleId: veh.id,
+      vehicleName: veh.name,
+      startedAt: Date.now(),
+      etaSeconds: 40 // 40 secondes réelles d'acheminement sous gyrophares
+    };
+
+    game.showToast('Renfort LOG Déployé 🚨', `Le ${veh.name} est parti d'urgence avec les caisses de réarmement vers « ${mission.title} » !`, 'green');
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+
+    game.saveGame();
+  },
+
+  refuseAstreinteReinforcement(game, missionId) {
+    if (!game) game = window.game;
+    const mission = (game.missions || []).find(m => m.id === missionId);
+    if (!mission) return;
+
+    mission.consumablesBreachedAndRefused = true;
+
+    // Chute sévère du moral et de l'humeur (-25%)
+    const vols = this.getMissionVolunteers(mission, game);
+    vols.forEach(vol => {
+      vol.motivation = Math.max(5, (vol.motivation || 60) - 25);
+      vol.humeur = Math.max(5, (vol.humeur || 60) - 25);
+      vol.morale = Math.max(5, (vol.morale || 60) - 25);
+    });
+
+    // Dégradation de la note de satisfaction et de relation client (-35%)
+    mission.organizerSatisfaction = Math.max(10, (mission.organizerSatisfaction !== undefined ? mission.organizerSatisfaction : 85) - 35);
+    game.resources.reputation = Math.max(10, (game.resources.reputation || 50) - 5);
+
+    game.showToast('Renfort Refusé ⚠️', `Faute de matériel, l'équipe poursuit en mode très dégradé. Le moral des bénévoles s'effondre et l'organisateur dépose une réclamation.`, 'orange');
+    if (window.ProtecAudio) window.ProtecAudio.playRadioBeep();
+
+    game.saveGame();
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+  },
+
+  // Suivi en temps réel de l'acheminement du renfort LOG dans l'horloge
+  updateAstreinteTransits(game, deltaSec) {
+    if (!game || !Array.isArray(game.missions)) return;
+    const now = Date.now();
+
+    game.missions.forEach(m => {
+      if (m.astreinteReinforcement && m.status === 'ongoing') {
+        const ar = m.astreinteReinforcement;
+        const elapsed = Math.floor((now - ar.startedAt) / 1000);
+
+        if (elapsed >= (ar.etaSeconds || 40)) {
+          // Arrivée sur zone !
+          const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+          const renfVeh = allVehs.find(v => v.id === ar.vehicleId);
+
+          // Réarmer tous les véhicules PS/VPSP et lots en souffrance sur la mission
+          const assignedVehs = (m.assignedVehicleIds || []).map(id => allVehs.find(v => v.id === id)).filter(Boolean);
+          assignedVehs.forEach(v => {
+            if ((v.types || []).includes('PS') || (v.types || []).includes('VPSP')) {
+              v.consumables = 100;
+              v.armementLevel = 100;
+              v.isRearmed = true;
+              v.needsRearming = false;
+              v.warnedLowConsumables = false;
+              v.breachedConsumables = false;
+            }
+          });
+
+          // Réarmer les lots embarqués
+          assignedVehs.filter(v => (v.types || []).includes('LOG')).forEach(lv => {
+            (lv.loadedItems || []).forEach(it => {
+              if (it.types && it.types.includes('PS')) {
+                it.consumables = 100;
+                it.warnedLowConsumables = false;
+                it.breachedConsumables = false;
+              }
+            });
+          });
+
+          // Stabiliser et remonter le moral des bénévoles (+10%)
+          if (Array.isArray(m.registeredVolunteers)) {
+            m.registeredVolunteers.forEach(id => {
+              const vol = (game.volunteers || []).find(v => v.id === id);
+              if (vol) {
+                vol.motivation = Math.min(100, (vol.motivation || 50) + 10);
+                vol.humeur = Math.min(100, (vol.humeur || 50) + 10);
+              }
+            });
+          }
+
+          if (renfVeh) {
+            renfVeh.status = 'sur_les_lieux';
+          }
+
+          game.showToast('Renfort LOG Arrivé ! 🟢', `Le renfort LOG est arrivé sur « ${m.title} ». Réarmement effectué à 100%, le moral des secouristes remonte !`, 'green');
+          if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
+
+          m.astreinteReinforcement = null;
+          game.saveGame();
+          if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+        }
+      }
+    });
+  },
+
+  // =========================================================================
+  // 9. SECTION UI : ARMEMENT & CHARGEMENT LOGISTIQUE AVANT DÉPART MISSION
+  // =========================================================================
+
+  renderLogisticsArmamentSection(game, mission) {
+    if (!game || !mission) return '';
+    const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+    const assignedVehs = (mission.assignedVehicleIds || []).map(id => allVehs.find(v => v.id === id)).filter(Boolean);
+
+    if (assignedVehs.length === 0) return '';
+
+    const station = (game.stations || []).find(s => s.id === assignedVehs[0]?.stationId) || game.stations[0];
+    this.ensureStationStock(station, game);
+
+    const logVehicles = assignedVehs.filter(v => {
+      this.normalizeVehicle(v);
+      return (v.types || []).includes('LOG');
+    });
+
+    const bicycles = assignedVehs.filter(v => {
+      this.normalizeVehicle(v);
+      return v.isBicycle || v.type === 'VELO' || (v.name || '').toLowerCase().includes('vélo') || (v.name || '').toLowerCase().includes('vtt');
+    });
+
+    // Évaluation du transport des vélos
+    const bikeTransportCheck = this.checkBicycleTransport(mission, game);
+
+    return `
+      <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-xs">
+              📦
+            </div>
+            <div>
+              <h4 class="text-xs font-black text-slate-900 uppercase tracking-wide">
+                Armement Logistique & Capacité des Véhicules
+              </h4>
+              <p class="text-[10px] text-slate-500">
+                Seuls les véhicules disposant du tag <strong>LOG</strong> peuvent embarquer des lots, caisses de réarmement et vélos.
+              </p>
+            </div>
+          </div>
+          <span class="text-[10px] font-bold text-slate-500">
+            ${logVehicles.length} véhicule(s) LOG engagé(s)
+          </span>
+        </div>
+
+        <!-- Alerte transport VTT si concerné -->
+        ${bicycles.length > 0 ? (
+          bikeTransportCheck.valid ? `
+            <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs font-bold flex items-center gap-2.5 shadow-2xs">
+              <span class="text-lg">🚲</span>
+              <div>
+                <strong>VTT Secours Prêt au Transport :</strong> Le vélo est sécurisé dans un véhicule LOG (encombrement 1 slot). Il sera déployé à l'arrivée sur zone.
+              </div>
+            </div>
+          ` : `
+            <div class="p-3 rounded-xl bg-rose-50 border-2 border-rose-400 text-rose-950 text-xs font-black flex items-center gap-2.5 animate-pulse shadow-xs">
+              <span class="text-xl">⚠️</span>
+              <div>
+                <strong>Avertissement Transport VTT :</strong> ${bikeTransportCheck.reason}
+              </div>
+            </div>
+          `
+        ) : ''}
+
+        <!-- Détail de chaque véhicule engagé -->
+        <div class="space-y-3">
+          ${assignedVehs.map(veh => {
+            this.normalizeVehicle(veh);
+            const isLog = (veh.types || []).includes('LOG');
+            const capLog = veh.capacity_log || 0;
+            const usedSlots = this.getUsedLogSlots(veh);
+            const freeSlots = Math.max(0, capLog - usedSlots);
+            const consumables = Math.round(veh.consumables !== undefined ? veh.consumables : 100);
+
+            return `
+              <div class="p-3.5 rounded-xl border ${isLog ? 'border-amber-200 bg-amber-50/40' : 'border-slate-200 bg-slate-50/60'} space-y-2.5">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-xl">${isLog ? '🚐' : (veh.type === 'VPSP' ? '🚑' : (veh.isBicycle ? '🚲' : '🚗'))}</span>
+                    <div>
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <strong class="text-xs text-slate-900">${veh.name}</strong>
+                        ${this.getVehicleCapabilitiesBadgesHTML(veh)}
+                      </div>
+                      <div class="text-[10px] text-slate-500 mt-0.5">
+                        ${veh.model || veh.type} • 
+                        ${isLog ? `Capacité LOG : <strong class="text-amber-900">${usedSlots} / ${capLog} slots occupés</strong>` : '<span class="text-slate-400 italic">Strictement dotation native (Capacité LOG : 0)</span>'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Jauge Consommables -->
+                  <div class="flex items-center gap-2 sm:justify-end">
+                    <span class="text-[10px] font-bold text-slate-600">Jauge Soins :</span>
+                    <div class="w-20 bg-slate-200 h-2 rounded-full overflow-hidden border border-slate-300">
+                      <div class="h-full rounded-full ${consumables > 40 ? 'bg-emerald-500' : (consumables > 15 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${consumables}%"></div>
+                    </div>
+                    <span class="font-mono font-black text-xs ${consumables > 40 ? 'text-emerald-700' : (consumables > 15 ? 'text-amber-700' : 'text-red-700')}">${consumables}%</span>
+                  </div>
+                </div>
+
+                ${isLog ? `
+                  <!-- Espace de chargement pour véhicule LOG -->
+                  <div class="pt-2 border-t border-amber-200/80 space-y-2">
+                    <div class="flex items-center justify-between text-[11px]">
+                      <span class="font-black text-amber-950 uppercase text-[10px]">
+                        Matériels & Lots Embarqués (${(veh.loadedItems || []).length})
+                      </span>
+                      <span class="text-[10px] font-bold ${freeSlots > 0 ? 'text-emerald-700' : 'text-amber-800'}">
+                        ${freeSlots} slot(s) libre(s)
+                      </span>
+                    </div>
+
+                    <!-- Items actuellement dans le véhicule -->
+                    ${(veh.loadedItems || []).length > 0 ? `
+                      <div class="flex flex-wrap gap-1.5">
+                        ${veh.loadedItems.map((it, idx) => `
+                          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-bold bg-white border border-amber-300 text-slate-800 shadow-2xs">
+                            <span>${it.isVehicle ? '🚲' : (it.isCaisseRearm ? '📦' : '🧰')}</span>
+                            <span>${it.shortName || it.name} (${it.slots} slot)</span>
+                            ${it.consumables !== undefined ? `<span class="text-[9px] font-mono px-1 rounded bg-slate-100">${Math.round(it.consumables)}%</span>` : ''}
+                            <button 
+                              type="button" 
+                              onclick="window.ProtecLogistique.unloadItemFromVehicle('${mission.id}', '${veh.id}', ${idx})" 
+                              class="text-rose-500 hover:text-rose-700 font-black ml-0.5 cursor-pointer" 
+                              title="Décharger et ranger au local">✕</button>
+                          </span>
+                        `).join('')}
+                      </div>
+                    ` : `
+                      <div class="text-[10.5px] text-slate-500 italic p-1.5 bg-white/70 rounded-lg">
+                        Aucun lot ni caisse chargée. Cliquez ci-dessous pour armer ce véhicule.
+                      </div>
+                    `}
+
+                    <!-- Boutons de chargement rapide -->
+                    <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecLogistique.loadItemToVehicle('${mission.id}', '${veh.id}', 'caisse_rearmement')"
+                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1">
+                        <span>+ Caisse Réarmement (1 slot)</span>
+                      </button>
+
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecLogistique.loadItemToVehicle('${mission.id}', '${veh.id}', 'lot_secours_a')"
+                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue hover:bg-blue-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1">
+                        <span>+ Lot A Secours (2 slots)</span>
+                      </button>
+
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecLogistique.loadItemToVehicle('${mission.id}', '${veh.id}', 'lot_secours_b')"
+                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1">
+                        <span>+ Lot B Traumatologie (2 slots)</span>
+                      </button>
+
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecLogistique.loadItemToVehicle('${mission.id}', '${veh.id}', 'lot_hebergement')"
+                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1">
+                        <span>+ Lot Hébergement (3 slots)</span>
+                      </button>
+
+                      ${bicycles.filter(b => !b.transportedBy).map(b => `
+                        <button 
+                          type="button" 
+                          onclick="window.ProtecLogistique.loadBicycleToVehicle('${mission.id}', '${veh.id}', '${b.id}')"
+                          class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1">
+                          <span>+ Embarquer ${b.name} (1 slot)</span>
+                        </button>
+                      `).join('')}
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  },
+
+  getVehicleCapabilitiesBadgesHTML(veh) {
+    if (!veh) return '';
+    this.normalizeVehicle(veh);
+    const types = Array.isArray(veh.types) ? veh.types : ['TP'];
+
+    return `
+      <div class="inline-flex items-center gap-1 flex-wrap">
+        ${types.map(code => {
+          const cap = this.CAPACITIES[code] || { code: code, label: code, badgeClass: 'bg-slate-100 text-slate-800 border-slate-300' };
+          const extraInfo = (code === 'LOG') ? ` (${veh.capacity_log || 0} slots)` : '';
+          return `
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border shadow-2xs ${cap.badgeClass}" title="${cap.label} : ${cap.desc}">
+              <span>${cap.icon || '🏷️'}</span>
+              <span class="ml-1 font-mono">${code}${extraInfo}</span>
+            </span>
+          `;
+        }).join('')}
+      </div>
+    `;
   }
 };
+

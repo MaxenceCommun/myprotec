@@ -40,7 +40,7 @@ window.ProtecTheme = {
         light: 'Thème Clair',
         dark: 'Thème Foncé'
       };
-      window.game.showToast('Apparence', `Thème sélectionné : ${labels[theme]}`, 'blue');
+      window.game.showToast('Apparence', `Thème sélectionné : ${labels[theme]}`, 'blue', null, { skipRecord: true, silent: true });
     }
   },
 

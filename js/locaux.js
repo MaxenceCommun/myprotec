@@ -1002,6 +1002,10 @@ window.ProtecLocaux = {
     premises.erpBaesChecked = true;
     premises.erpRegisterUpToDate = true;
     premises.lastErpAuditTimestamp = Date.now();
+    premises.lastErpInspectionDate = Date.now();
+    // Repousser le prochain contrôle inopiné ERP à dans 1 mois en moyenne (20 à 40 jours aléatoires)
+    const nextRandomDays = 20 + Math.random() * 20;
+    premises.nextErpInspectionDate = Date.now() + Math.round(nextRandomDays * 86400 * 1000);
 
     game.showToast('Audit & Registre ERP Validés ✓', 'Extincteurs vérifiés, blocs de secours opérationnels et registre de sécurité visé. Salle de formation 100% conforme !', 'green');
     game.updateStatsUI();

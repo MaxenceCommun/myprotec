@@ -2263,41 +2263,7 @@ updateWeatherAndDayNight(game) {
       );
     }
 
-    // 3. COMMISSION DE SÉCURITÉ ERP (Contrôle inopiné avec 30% de chance chaque mois)
-    if (Math.random() < 0.30) {
-      const erpScore = premises.erpSecurityScore !== undefined ? premises.erpSecurityScore : 90;
-      const isConforme = premises.erpStatus === 'conforme' && erpScore >= 75;
-      if (!isConforme) {
-        const fine = 500;
-        game.resources.money = Math.max(0, game.resources.money - fine);
-        premises.erpStatus = 'non_conforme';
-        premises.erpSecurityScore = Math.max(25, erpScore - 20);
-        if (window.ProtecFinances) {
-          window.ProtecFinances.recordTransaction(game, -fine, `Amende administrative de non-conformité ERP - Commission de Sécurité`, 'locaux');
-        }
-        game.showToast(
-          '🚨 Contrôle de Sécurité ERP Défavorable !',
-          `La commission de sécurité municipale a constaté des infractions (extincteurs/BAES). Amende de ${fine} € et fermeture temporaire de la salle de formation PSC1 jusqu'à audit !`,
-          'red'
-        );
-        if (window.ProtecNotifications) {
-          window.ProtecNotifications.recordNotification({
-            title: '🧯 Sanction de Sécurité ERP (Amende 500 €)',
-            message: `Non-conformité relevée lors de l'inspection inopinée des locaux. Les sessions PSC1 sont suspendues. Rendez-vous dans le module Locaux pour réaliser un audit de remise aux normes (220 €).`,
-            category: 'general',
-            level: 'error'
-          });
-        }
-      } else {
-        game.showToast(
-          'Contrôle ERP Conforme ✓',
-          `La commission de sécurité a inspecté le bâtiment de l'antenne. Registre à jour et blocs de secours opérationnels : agrément ERP renouvelé avec félicitations !`,
-          'green'
-        );
-      }
-    }
-
-    // 4. MAINTENANCE & CONSOMMABLES DU PARC MATÉRIEL (Moniteurs, QCPR, Radios, Brancards)
+    // 3. MAINTENANCE & CONSOMMABLES DU PARC MATÉRIEL (Moniteurs, QCPR, Radios, Brancards)
     const annualMaintenance = (window.ProtecEquipements && typeof window.ProtecEquipements.getTotalAnnualMaintenance === 'function')
       ? window.ProtecEquipements.getTotalAnnualMaintenance(game)
       : 240;
@@ -2314,8 +2280,96 @@ updateWeatherAndDayNight(game) {
       }
     }
 
+    if (premises.chargesHistory) {
+      premises.chargesHistory[monthKey] = { processedAt: Date.now() };
+    }
     game.saveGame();
     game.updateStatsUI();
+  },
+
+  // =========================================================================
+  // 9. CONTRÔLE DE SÉCURITÉ ERP (ÉTABLISSEMENT RECEVANT DU PUBLIC)
+  // RÈGLE MÉTIER : 1 fois par mois en moyenne, de façon inopinée et aléatoire.
+  // STRICTEMENT INTERDIT lors de la connexion du joueur !
+  // =========================================================================
+
+  checkErpInspectionSchedule(game, isConnection = false) {
+    if (!game || !game.stations || !game.stations[0]) return;
+    const station = game.stations[0];
+    const premises = (window.ProtecLocaux && typeof window.ProtecLocaux.getStationPremises === 'function')
+      ? window.ProtecLocaux.getStationPremises(game, station.id)
+      : (station.premises || {});
+    if (!premises) return;
+
+    const now = Date.now();
+
+    // 1. Initialisation de l'échéance aléatoire si inexistante
+    if (!premises.nextErpInspectionDate) {
+      // 1 fois par mois en moyenne : intervalle aléatoire entre 20 et 40 jours (moyenne 30 jours)
+      const randomDays = 20 + Math.random() * 20;
+      premises.nextErpInspectionDate = now + Math.round(randomDays * 86400 * 1000);
+      return;
+    }
+
+    // 2. RÈGLE STRICTE : JAMAIS de contrôle ERP à la connexion du joueur
+    if (isConnection) {
+      // Si la date prévue a été dépassée pendant une déconnexion prolongée,
+      // on reprogramme le passage inopiné dans 15 à 45 minutes de jeu actif pour ne jamais surprendre au login
+      if (now >= premises.nextErpInspectionDate) {
+        const postponeMinutes = 15 + Math.random() * 30;
+        premises.nextErpInspectionDate = now + Math.round(postponeMinutes * 60 * 1000);
+      }
+      return;
+    }
+
+    // 3. Déclenchement inopiné en cours de partie quand l'échéance aléatoire est échue
+    if (now >= premises.nextErpInspectionDate) {
+      this.executeErpInspection(game, station, premises);
+    }
+  },
+
+  executeErpInspection(game, station, premises) {
+    const now = Date.now();
+    premises.lastErpInspectionDate = now;
+
+    // Reprogrammer le prochain contrôle aléatoire (en moyenne 1 mois, soit entre 20 et 40 jours)
+    const nextRandomDays = 20 + Math.random() * 20;
+    premises.nextErpInspectionDate = now + Math.round(nextRandomDays * 86400 * 1000);
+
+    const erpScore = premises.erpSecurityScore !== undefined ? premises.erpSecurityScore : 90;
+    const isConforme = premises.erpStatus === 'conforme' && erpScore >= 75;
+
+    if (!isConforme) {
+      const fine = 500;
+      game.resources.money = Math.max(0, game.resources.money - fine);
+      premises.erpStatus = 'non_conforme';
+      premises.erpSecurityScore = Math.max(25, erpScore - 20);
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(game, -fine, `Amende administrative de non-conformité ERP - Commission de Sécurité`, 'locaux');
+      }
+      game.showToast(
+        '🚨 Contrôle de Sécurité ERP Défavorable !',
+        `La commission de sécurité municipale inopinée a constaté des infractions (extincteurs/BAES). Amende de ${fine} € et fermeture temporaire de la salle de formation PSC1 jusqu'à audit !`,
+        'red'
+      );
+      if (window.ProtecNotifications) {
+        window.ProtecNotifications.recordNotification({
+          title: '🧯 Sanction de Sécurité ERP (Amende 500 €)',
+          message: `Non-conformité relevée lors de l'inspection inopinée des locaux. Les sessions PSC1 sont suspendues. Rendez-vous dans le module Locaux pour réaliser un audit de remise aux normes (220 €).`,
+          category: 'general',
+          level: 'error'
+        });
+      }
+    } else {
+      game.showToast(
+        'Contrôle ERP Conforme ✓',
+        `La commission de sécurité municipale a inspecté inopinément le bâtiment de l'antenne. Registre à jour et blocs de secours opérationnels : agrément ERP renouvelé avec félicitations !`,
+        'green'
+      );
+    }
+
+    game.saveGame();
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
   },
 
   async triggerMonthlyEventsGeneration(game, monthKey) {

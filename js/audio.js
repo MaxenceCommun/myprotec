@@ -256,8 +256,29 @@ window.ProtecAudio = {
     const t = (title || '').toLowerCase();
     const m = (message || '').toLowerCase();
 
-    // EXCLUSION STRICTE : Ne jamais émettre de son lors du changement de filtre de la carte (ex: Filtre DPS)
-    if (t.includes('filtre') || t.includes('filtre dps')) return;
+    // EXCLUSION STRICTE : Ne jamais émettre de son lors du changement de filtre, thème, apparence, paramètres ou préférences
+    if (
+      t.includes('filtre') || 
+      t.includes('apparence') || 
+      t.includes('thème') || 
+      t.includes('theme') || 
+      t.includes('paramètre') || 
+      t.includes('parametre') || 
+      t.includes('option') || 
+      t.includes('préférence') || 
+      t.includes('preference') || 
+      t.includes('copié') || 
+      t.includes('copie') || 
+      t.includes('presse-papier') || 
+      t.includes('acronyme') || 
+      t.includes('journal') || 
+      m.includes('thème sélectionné') || 
+      m.includes('mode sombre') || 
+      m.includes('mode clair') || 
+      m.includes('presse-papier')
+    ) {
+      return;
+    }
 
     // RÈGLE STRICTE 1 : Exclure impérativement les simples demandes de renfort !
     const isRenfort = t.includes('renfort') || m.includes('renfort') || t.includes('alliance');

@@ -613,6 +613,9 @@ window.ProtecAdvanced = {
     {
       type: 'VPSP',
       functions: ["PS"],
+      types: ['PS', 'VPSP'],
+      capacity_log: 0,
+      consumables: 100,
       name: 'Véhicule de Premiers Secours à Personnes (VPSP)',
       category: 'Secours d’Urgence',
       missionFilter: ['secours'],
@@ -629,6 +632,9 @@ window.ProtecAdvanced = {
     {
       type: 'VL',
       functions: ["LIAISON","CMD"],
+      types: ['TP'],
+      capacity_log: 0,
+      consumables: 100,
       name: 'Véhicule de Liaison (VL)',
       category: 'Reconnaissance Rapide',
       missionFilter: ['liaison'],
@@ -646,6 +652,9 @@ window.ProtecAdvanced = {
     {
       type: 'VLHR',
       functions: ["HR","LIAISON","CMD"],
+      types: ['LOG', 'TP'],
+      capacity_log: 2,
+      consumables: 100,
       name: 'Véhicule Léger Hors Route (VLHR 4x4)',
       category: 'Tout-Terrain',
       missionFilter: ['liaison', 'tout_terrain'],
@@ -663,6 +672,9 @@ window.ProtecAdvanced = {
     {
       type: 'VTU',
       functions: ["TU","LOG"],
+      types: ['LOG', 'TP'],
+      capacity_log: 6,
+      consumables: 100,
       name: 'VTU - Fourgon Tout Usage (Logistique)',
       category: 'Logistique & Soutien',
       missionFilter: ['logistique'],
@@ -680,6 +692,9 @@ window.ProtecAdvanced = {
     {
       type: 'VTP',
       functions: ["TP"],
+      types: ['TP'],
+      capacity_log: 0,
+      consumables: 100,
       name: 'Transport de Personnel (VTP)',
       category: 'Transport d’Équipes',
       missionFilter: ['logistique'],
@@ -696,6 +711,9 @@ window.ProtecAdvanced = {
     {
       type: 'PCM',
       functions: ["CMD","LIAISON"],
+      types: ['TP', 'LOG'],
+      capacity_log: 2,
+      consumables: 100,
       name: 'Poste de Commandement Mobile (PCM Renault Midlum)',
       category: 'Commandement Lourd',
       missionFilter: ['liaison'],
@@ -712,6 +730,9 @@ window.ProtecAdvanced = {
     {
       type: 'VAHU',
       functions: ["SOC","POP"],
+      types: ['LOG', 'TP'],
+      capacity_log: 4,
+      consumables: 100,
       name: 'VAHU - Véhicule d\'Accueil et d\'Hébergement d\'Urgence',
       category: 'Action Sociale & Accueil',
       missionFilter: ['social'],
@@ -728,6 +749,9 @@ window.ProtecAdvanced = {
     {
       type: 'FLIT',
       functions: ["LOG","POP","TECH"],
+      types: ['LOG', 'TP'],
+      capacity_log: 12,
+      consumables: 100,
       name: 'FLIT - Fourgon Lourd d\'Intervention Technique & Soutien Pop',
       category: 'Technique & Soutien Lourd',
       missionFilter: ['logistique', 'usar', 'crise'],
@@ -744,6 +768,9 @@ window.ProtecAdvanced = {
     {
       type: 'VCYN',
       functions: ["CYNO","TECH"],
+      types: ['LOG', 'TP'],
+      capacity_log: 2,
+      consumables: 100,
       name: 'Véhicule Cynotechnique (VCYN)',
       category: 'USAR / Cyno',
       missionFilter: ['usar'],
@@ -761,6 +788,9 @@ window.ProtecAdvanced = {
     {
       type: 'ERS',
       functions: ["SSA"],
+      types: ['TP'],
+      capacity_log: 0,
+      consumables: 100,
       name: 'ERS - Embarcation de Reconnaissance et de Sauvetage',
       category: 'Sauvetage Aquatique (SSA)',
       missionFilter: ['nautique'],
@@ -780,6 +810,9 @@ window.ProtecAdvanced = {
     {
       type: 'MPS',
       functions: ["PS","LIAISON"],
+      types: ['PS'],
+      capacity_log: 0,
+      consumables: 100,
       name: 'MPS - Moto de Premiers Secours',
       category: 'Vecteur Rapide',
       missionFilter: ['secours', 'tout_terrain'],
@@ -796,6 +829,9 @@ window.ProtecAdvanced = {
     {
       type: 'QUAD',
       functions: ["HR","PS"],
+      types: ['PS'],
+      capacity_log: 0,
+      consumables: 100,
       name: 'Quad Tout-Terrain d’Intervention',
       category: 'Tout-Terrain Agile',
       missionFilter: ['tout_terrain'],
@@ -814,6 +850,9 @@ window.ProtecAdvanced = {
     {
       type: 'VTD',
       functions: ["TECH"],
+      types: ['LOG', 'TP'],
+      capacity_log: 4,
+      consumables: 100,
       name: 'Véhicule Technique Déblaiement (USAR)',
       category: 'Sauvetage Déblaiement (USAR)',
       missionFilter: ['usar'],
@@ -830,10 +869,16 @@ window.ProtecAdvanced = {
     {
       type: 'VELO',
       functions: ["PS"],
+      types: ['PS'],
+      capacity_log: 0,
+      isBicycle: true,
+      transportSlots: 1,
+      requiresLogTransport: true,
+      consumables: 100,
       name: 'Binôme Vélo / VTT Premiers Secours',
       category: 'Dispositif Mobile',
       missionFilter: ['secours', 'tout_terrain'],
-      desc: 'Vélos équipés de sacoches d’urgence et DAE pour patrouilles mobiles sur courses à pied et berges.',
+      desc: 'Vélos équipés de sacoches d’urgence et DAE pour patrouilles mobiles sur courses à pied et berges. Transport routier obligatoire dans un véhicule LOG (1 slot).',
       cost: 2500,
       capacity: 2,
       licenseRequired: 'None',
@@ -846,6 +891,9 @@ window.ProtecAdvanced = {
     {
       type: 'VST',
       functions: ["LOG","TECH"],
+      types: ['LOG', 'TP'],
+      capacity_log: 6,
+      consumables: 100,
       name: 'Véhicule de Soutien Technique (VST)',
       category: 'Soutien & Énergie',
       missionFilter: ['logistique'],
@@ -862,6 +910,9 @@ window.ProtecAdvanced = {
     {
       type: 'REM',
       functions: ["LOG","TECH"],
+      types: ['LOG'],
+      capacity_log: 4,
+      consumables: 100,
       name: 'Remorque Lot PMA & Éclairage',
       category: 'Remorque Spécialisée',
       missionFilter: ['logistique', 'tout_terrain'],
@@ -1571,8 +1622,19 @@ window.ProtecAdvanced = {
       hasConverter230v: true,
       installedOptions: Array.isArray(variantOptions?.installedOptions) ? variantOptions.installedOptions : [],
       requiresTrailer: cat.requiresTrailer || false,
-      reqSkills: cat.reqSkills || []
+      reqSkills: cat.reqSkills || [],
+      types: cat.types ? [...cat.types] : (vehicleType === 'VPSP' ? ['PS', 'VPSP'] : (['VTU', 'FLIT', 'VAHU', 'VST'].includes(vehicleType) ? ['LOG', 'TP'] : ['TP'])),
+      capacity_log: cat.capacity_log !== undefined ? cat.capacity_log : (['VTU', 'FLIT', 'VAHU', 'VST'].includes(vehicleType) ? 6 : 0),
+      consumables: 100,
+      armementLevel: 100,
+      isRearmed: true,
+      needsRearming: false,
+      loadedItems: []
     };
+
+    if (window.ProtecLogistique && typeof window.ProtecLogistique.normalizeVehicle === 'function') {
+      window.ProtecLogistique.normalizeVehicle(newVeh);
+    }
 
     game.vehicles.push(newVeh);
     station.vehicles.push(vehId);

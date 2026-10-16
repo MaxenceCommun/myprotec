@@ -1248,6 +1248,11 @@ class ProtecGame {
       window.ProtecSystems.checkMonthlyEventsCycle(this);
     }
 
+    // Initialisation de l'échéancier ERP (strictement AUCUN contrôle immédiat à la connexion)
+    if (window.ProtecSystems && typeof window.ProtecSystems.checkErpInspectionSchedule === 'function') {
+      window.ProtecSystems.checkErpInspectionSchedule(this, true);
+    }
+
     // Initialisation du tableau d'écussons et synchronisation cloud Supabase
     if (window.ProtecEcussons) {
       window.ProtecEcussons.initEcussons(this).catch(e => console.warn('Erreur init écussons:', e));
@@ -8077,6 +8082,15 @@ class ProtecGame {
       }
     }
 
+    // Vérification du transport routier obligatoire des vélos (VTT Secours)
+    if (window.ProtecLogistique && typeof window.ProtecLogistique.checkBicycleTransport === 'function') {
+      const bikeCheck = window.ProtecLogistique.checkBicycleTransport(mission, this);
+      if (!bikeCheck.valid) {
+        this.showToast('Transport Vélo Requis 🚲', bikeCheck.reason, 'orange');
+        return;
+      }
+    }
+
     if (!hasRequiredSkills && mission.type === 'pompiers') {
       this.applyPrefectureSanction('Équipage déployé sans les qualifications obligatoires (Absence de Chef d’Équipe ou PSE)', 12);
     }
@@ -10132,6 +10146,16 @@ class ProtecGame {
   deployAllReadyCrisisTeams(missionId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
+
+    // Vérification du transport routier obligatoire des vélos (VTT Secours)
+    if (window.ProtecLogistique && typeof window.ProtecLogistique.checkBicycleTransport === 'function') {
+      const bikeCheck = window.ProtecLogistique.checkBicycleTransport(mission, this);
+      if (!bikeCheck.valid) {
+        this.showToast('Transport Vélo Requis 🚲', bikeCheck.reason, 'orange');
+        return;
+      }
+    }
+
     const teamsList = this.getCrisisTeamsList(mission);
     const registered = mission.registeredVolunteers || [];
     let deployedCount = 0;
@@ -12474,6 +12498,7 @@ class ProtecGame {
                                       veh.type === 'VTP' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
                                       'bg-slate-100 text-slate-800 border border-slate-200'
                                     }">${veh.type}</span>
+                                    ${window.ProtecLogistique ? window.ProtecLogistique.getVehicleCapabilitiesBadgesHTML(veh) : ''}
                                     ${isRequiredType && !isAssigned ? ('<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300 whitespace-nowrap">⭐ ' + (isCrisisMission ? 'Requis pour la mission' : 'Requis au devis') + '</span>') : ''}
                                     ${armementBadgeHTML}
                                     ${isAssigned ? (qual.valid 
@@ -12489,6 +12514,7 @@ class ProtecGame {
                                     <span class="text-slate-600 font-extrabold whitespace-nowrap">🔧 ${mechPct}%</span>
                                     <span>•</span>
                                     <span class="whitespace-nowrap font-semibold text-slate-600">${armementText}</span>
+                                    ${(veh.types && veh.types.includes('LOG')) ? `<span>•</span><span class="font-bold text-amber-900">📦 ${window.ProtecLogistique ? window.ProtecLogistique.getUsedLogSlots(veh) : 0}/${veh.capacity_log} slots LOG</span>` : `<span>•</span><span class="text-slate-400">LOG: 0</span>`}
                                   </div>
                                 </div>
                               </div>
@@ -12524,6 +12550,9 @@ class ProtecGame {
                       })()}
                     </div>
                   </div>
+
+                  <!-- 2-bis. ARMEMENT & CHARGEMENT LOGISTIQUE (LOTS, CAISSES, VÉLOS) -->
+                  ${window.ProtecLogistique && typeof window.ProtecLogistique.renderLogisticsArmamentSection === 'function' ? window.ProtecLogistique.renderLogisticsArmamentSection(this, mission) : ''}
 
                   <!-- 3. EN BAS : RENFORTS D'ÉQUIPAGES RÉELS (INTER-ANTENNES & RÉSEAU FNPC) -->
                   <div class="p-3.5 rounded-xl bg-gradient-to-r from-indigo-50/80 to-purple-50/80 border border-indigo-200/80 space-y-3">
@@ -18563,6 +18592,10 @@ class ProtecGame {
                 <span>➕</span>
                 <span>Commander un Véhicule</span>
               </button>
+              <button onclick="window.ProtecLogistique.rearmAtBaseOneClick(window.game, '${primaryStation.id}')" class="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer" title="Réarmer tous les véhicules et lots entamés en 1 clic">
+                <span>📦</span>
+                <span>Réarmer Flotte & Lots</span>
+              </button>
               <button onclick="window.ProtecCriseLogistique.openCreateRearmamentModal(window.game)" class="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
                 <span>🔧</span>
                 <span>Atelier Réarmement Flotte</span>
@@ -18598,6 +18631,7 @@ class ProtecGame {
                 </button>
               </div>
             ` : (this.vehicles || []).map(v => {
+              if (window.ProtecLogistique) window.ProtecLogistique.normalizeVehicle(v);
               const cond = this.getVehicleCondition(v);
               const isDispo = v.status === 'dispo' || v.status === 'disponible';
               const isBroken = !!v.isBrokenDown;
@@ -18652,6 +18686,9 @@ class ProtecGame {
                 ctBadge = `<span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✅ CT Valide (${cond.ctDaysLeft}j)</span>`;
               }
 
+              const capLog = v.capacity_log !== undefined ? v.capacity_log : (v.types && v.types.includes('LOG') ? 4 : 0);
+              const consumablesVal = Math.round(v.consumables !== undefined ? v.consumables : (v.armementLevel || 100));
+
               return `
                 <div class="fleet-vehicle-card p-4 rounded-2xl bg-white border ${isBroken ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200'} hover:border-slate-300 hover:shadow-sm transition space-y-3" data-name="${(v.name || '').toLowerCase()}" data-type="${(v.type || '').toLowerCase()}">
                   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -18665,14 +18702,14 @@ class ProtecGame {
                           <span class="px-2 py-0.5 rounded text-[10px] font-bold ${cond.badgeClass}">${cond.label}</span>
                           <button onclick="window.game.openRenameVehicleModal('${v.id}')" class="text-slate-400 hover:text-pc-blue text-xs p-0.5 rounded transition cursor-pointer" title="Renommer l'indicatif">✏️</button>
                         </div>
-                        <div class="my-1">
-                          ${this.getVehicleFunctionsBadgesHTML(v, true)}
+                        <div class="my-1 flex items-center gap-1.5 flex-wrap">
+                          ${window.ProtecLogistique ? window.ProtecLogistique.getVehicleCapabilitiesBadgesHTML(v) : this.getVehicleFunctionsBadgesHTML(v, true)}
                         </div>
                         <p class="text-xs font-semibold text-slate-600 mt-0.5">
                           ${v.model || v.label || v.type}
                         </p>
                         <p class="text-[11px] text-slate-500">
-                          Mise en circulation : <strong>${v.year || 2018}</strong> (${cond.age} ans) • Compteur : <strong>${(v.mileage || 115000).toLocaleString('fr-FR')} km</strong> • <strong>${v.capacity || 4} places</strong>
+                          Mise en circulation : <strong>${v.year || 2018}</strong> (${cond.age} ans) • Compteur : <strong>${(v.mileage || 115000).toLocaleString('fr-FR')} km</strong> • <strong>${v.capacity || 4} places</strong> • ${v.types && v.types.includes('LOG') ? `<strong class="text-amber-900">📦 Capacité LOG : ${capLog} slots</strong>` : '<span class="text-slate-400 italic">Capacité LOG : 0 (Strictement dotation native)</span>'}
                         </p>
                       </div>
                     </div>
@@ -18689,14 +18726,29 @@ class ProtecGame {
                     </div>
                   </div>
 
-                  <!-- Jauge mécanique et actions réglementaires -->
+                  <!-- Jauge mécanique, consommables et actions réglementaires -->
                   <div class="pt-2.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                    <div class="flex items-center gap-3">
-                      <span class="text-[11px] font-bold text-slate-500">État Mécanique :</span>
-                      <div class="w-28 bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
-                        <div class="h-full rounded-full ${(v.mechanical || 90) > 70 ? 'bg-emerald-500' : ((v.mechanical || 90) > 40 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${v.mechanical || 90}%"></div>
+                    <div class="flex items-center gap-4 flex-wrap">
+                      <div class="flex items-center gap-2">
+                        <span class="text-[11px] font-bold text-slate-500">Mécanique :</span>
+                        <div class="w-20 bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+                          <div class="h-full rounded-full ${(v.mechanical || 90) > 70 ? 'bg-emerald-500' : ((v.mechanical || 90) > 40 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${v.mechanical || 90}%"></div>
+                        </div>
+                        <span class="font-mono font-bold text-slate-700 text-[11px]">${v.mechanical || 90}%</span>
                       </div>
-                      <span class="font-mono font-bold text-slate-700 text-[11px]">${v.mechanical || 90}%</span>
+
+                      <div class="flex items-center gap-2">
+                        <span class="text-[11px] font-bold text-slate-500">Consommables :</span>
+                        <div class="w-20 bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+                          <div class="h-full rounded-full ${consumablesVal > 40 ? 'bg-emerald-500' : (consumablesVal > 15 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${consumablesVal}%"></div>
+                        </div>
+                        <span class="font-mono font-bold text-[11px] ${consumablesVal > 40 ? 'text-emerald-700' : 'text-amber-700'}">${consumablesVal}%</span>
+                        ${consumablesVal < 100 ? `
+                          <button onclick="window.ProtecLogistique.rearmVehicleSingle(window.game, '${v.id}')" class="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-[10px] hover:bg-emerald-200 transition cursor-pointer">
+                            Réarmer
+                          </button>
+                        ` : ''}
+                      </div>
                     </div>
 
                     <div class="flex items-center flex-wrap gap-2">
@@ -19596,8 +19648,19 @@ class ProtecGame {
       insuranceMonthlyCost: insuranceCost,
       licenseRequired: catalogItem?.licenseRequired || (['FLIT', 'VALOG', 'PCM'].includes(type) ? 'C' : 'B'),
       stationId: stationId,
-      image: this.getVehicleImage(type)
+      image: this.getVehicleImage(type),
+      types: catalogItem?.types ? [...catalogItem.types] : (type === 'VPSP' ? ['PS', 'VPSP'] : (['VTU', 'FLIT', 'VAHU', 'VST'].includes(type) ? ['LOG', 'TP'] : ['TP'])),
+      capacity_log: catalogItem?.capacity_log !== undefined ? catalogItem.capacity_log : (['VTU', 'FLIT', 'VAHU', 'VST'].includes(type) ? 6 : 0),
+      consumables: 100,
+      armementLevel: 100,
+      isRearmed: true,
+      needsRearming: false,
+      loadedItems: []
     };
+
+    if (window.ProtecLogistique && typeof window.ProtecLogistique.normalizeVehicle === 'function') {
+      window.ProtecLogistique.normalizeVehicle(newVeh);
+    }
 
     this.vehicles.push(newVeh);
     station.vehicles.push(vehId);
@@ -20471,8 +20534,18 @@ class ProtecGame {
               this.completeMission(m);
             }
           }
+
+          // Consommation horaire dynamique des consommables (Tous types de dispositifs & missions)
+          if (m.status === 'ongoing' && window.ProtecLogistique && typeof window.ProtecLogistique.processMissionConsumptionTick === 'function') {
+            window.ProtecLogistique.processMissionConsumptionTick(this, m, 1);
+          }
         }
       });
+
+      // Suivi de l'acheminement des renforts LOG d'astreinte
+      if (window.ProtecLogistique && typeof window.ProtecLogistique.updateAstreinteTransits === 'function') {
+        window.ProtecLogistique.updateAstreinteTransits(this, 1);
+      }
 
       // 1c. LOGISTIQUE RÉELLE : Réarmement des véhicules et tâches en cours
       if (window.ProtecCriseLogistique) {
@@ -20487,6 +20560,10 @@ class ProtecGame {
         // Détection du passage mensuel et génération des événements réels du département
         if (window.ProtecSystems && typeof window.ProtecSystems.checkMonthlyEventsCycle === 'function') {
           window.ProtecSystems.checkMonthlyEventsCycle(this);
+        }
+        // Surveillance inopinée de l'échéance ERP (1 fois par mois en moyenne, aléatoire)
+        if (window.ProtecSystems && typeof window.ProtecSystems.checkErpInspectionSchedule === 'function') {
+          window.ProtecSystems.checkErpInspectionSchedule(this, false);
         }
         if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.checkMonthlyTerritoryRefresh === 'function') {
           window.ProtecEvenementsReels.checkMonthlyTerritoryRefresh(this);
@@ -22351,9 +22428,31 @@ class ProtecGame {
         .trim();
     }
 
-    const isFilterNotif = (typeof title === 'string' && (title.includes('Filtre DPS') || title.includes('Filtre')));
-    const skipRecord = !!(options?.skipRecord || isFilterNotif);
-    const silent = !!(options?.silent || isFilterNotif);
+    const t = (typeof title === 'string' ? title : '').toLowerCase();
+    const m = (typeof message === 'string' ? message : '').toLowerCase();
+
+    const isNonAlert = 
+      t.includes('filtre') || 
+      t.includes('apparence') || 
+      t.includes('thème') || 
+      t.includes('theme') || 
+      t.includes('paramètre') || 
+      t.includes('parametre') || 
+      t.includes('option') || 
+      t.includes('préférence') || 
+      t.includes('preference') || 
+      t.includes('copié') || 
+      t.includes('copie') || 
+      t.includes('presse-papier') || 
+      t.includes('acronyme') || 
+      t.includes('journal') || 
+      m.includes('thème sélectionné') || 
+      m.includes('mode sombre') || 
+      m.includes('mode clair') || 
+      m.includes('presse-papier');
+
+    const skipRecord = !!(options?.skipRecord || isNonAlert);
+    const silent = !!(options?.silent || isNonAlert);
 
     // Enregistrement dans l'historique des notifications (sauf si skipRecord ou notification de filtre)
     if (!skipRecord && window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
