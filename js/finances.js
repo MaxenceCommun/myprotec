@@ -753,19 +753,19 @@ window.ProtecFinances = {
       })()}
 
       <!-- 2. COURBE SVG D'ÉVOLUTION DU SOLDE BANCAIRE -->
-      <div class="p-5 rounded-3xl bg-slate-900 text-white shadow-xl space-y-3">
+      <div class="p-5 rounded-3xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3 transition-colors">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">
+            <div class="w-8 h-8 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm">
               <i data-lucide="trending-up" class="w-4 h-4"></i>
             </div>
             <div>
-              <h4 class="text-sm font-black text-white leading-tight">Courbe Chronologique du Solde</h4>
-              <p class="text-[11px] text-slate-400">Évolution du solde quotidien de l'antenne sur toute la période</p>
+              <h4 class="text-sm font-black text-slate-900 dark:text-white leading-tight">Courbe Chronologique du Solde</h4>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">Évolution du solde quotidien de l'antenne sur toute la période</p>
             </div>
           </div>
           <div class="flex items-center gap-3 text-xs">
-            <span class="px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 text-[10px] font-mono border border-slate-700">
+            <span class="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-mono border border-slate-200 dark:border-slate-700">
               Max : ${maxBalance.toLocaleString('fr-FR')} €
             </span>
           </div>
@@ -1146,20 +1146,20 @@ window.ProtecFinances = {
         </defs>
 
         <!-- Lignes horizontales de repère -->
-        <line x1="${padX}" y1="${padY}" x2="${width - padX}" y2="${padY}" stroke="currentColor" class="text-slate-300 dark:text-slate-700" stroke-width="1" stroke-dasharray="4" />
-        <line x1="${padX}" y1="${height / 2}" x2="${width - padX}" y2="${height / 2}" stroke="currentColor" class="text-slate-300 dark:text-slate-700" stroke-width="1" stroke-dasharray="4" />
+        <line x1="${padX}" y1="${padY}" x2="${width - padX}" y2="${padY}" stroke="currentColor" class="text-slate-200 dark:text-slate-800" stroke-width="1" stroke-dasharray="4" />
+        <line x1="${padX}" y1="${height / 2}" x2="${width - padX}" y2="${height / 2}" stroke="currentColor" class="text-slate-200 dark:text-slate-800" stroke-width="1" stroke-dasharray="4" />
         <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" stroke="currentColor" class="text-slate-300 dark:text-slate-700" stroke-width="1" />
 
         <!-- Libellés Y -->
-        <text x="${padX - 8}" y="${padY + 4}" fill="#94a3b8" font-size="9" text-anchor="end" font-weight="bold">${Math.round(maxBalance).toLocaleString('fr-FR')} €</text>
-        <text x="${padX - 8}" y="${height / 2 + 3}" fill="#64748b" font-size="8" text-anchor="end">${Math.round((maxBalance + minBalance) / 2).toLocaleString('fr-FR')} €</text>
-        <text x="${padX - 8}" y="${height - padY + 3}" fill="#94a3b8" font-size="9" text-anchor="end" font-weight="bold">${Math.round(minBalance).toLocaleString('fr-FR')} €</text>
+        <text x="${padX - 8}" y="${padY + 4}" fill="#64748b" class="dark:fill-slate-400" font-size="9" text-anchor="end" font-weight="bold">${Math.round(maxBalance).toLocaleString('fr-FR')} €</text>
+        <text x="${padX - 8}" y="${height / 2 + 3}" fill="#94a3b8" class="dark:fill-slate-500" font-size="8" text-anchor="end">${Math.round((maxBalance + minBalance) / 2).toLocaleString('fr-FR')} €</text>
+        <text x="${padX - 8}" y="${height - padY + 3}" fill="#64748b" class="dark:fill-slate-400" font-size="9" text-anchor="end" font-weight="bold">${Math.round(minBalance).toLocaleString('fr-FR')} €</text>
 
         <!-- Surface dégradée -->
         <path d="${fillPathD}" fill="url(#financesGradient)" />
 
         <!-- Ligne continue de solde -->
-        <path d="${pathD}" fill="none" stroke="#34d399" stroke-width="3" stroke-linecap="round" />
+        <path d="${pathD}" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" />
 
         <!-- Points de données cliquables/survolables (un point par jour) -->
         ${points.map((p, i) => `
@@ -1169,7 +1169,7 @@ window.ProtecFinances = {
             <title>${p.item.dateStr || ''} : ${(p.item.balance || 0).toLocaleString('fr-FR')} €\nSolde quotidien</title>
             <!-- Libellé du jour en bas -->
             ${i % Math.ceil(points.length / 8) === 0 || i === points.length - 1 ? `
-              <text x="${p.x}" y="${height - 6}" fill="#94a3b8" font-size="8" text-anchor="middle" font-weight="600">${p.item.dateStr}</text>
+              <text x="${p.x}" y="${height - 6}" fill="#64748b" class="dark:fill-slate-400" font-size="8" text-anchor="middle" font-weight="600">${p.item.dateStr}</text>
             ` : ''}
           </g>
         `).join('')}

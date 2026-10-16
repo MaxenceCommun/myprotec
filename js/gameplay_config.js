@@ -438,6 +438,39 @@
       unit: 'x',
       default: 1.0
     },
+    shippingBaseFee: {
+      category: 'economie',
+      label: 'Frais de Livraison Centrale d\'Achats',
+      desc: 'Frais d\'affrètement et de transport facturés par commande pour inciter au regroupement des achats.',
+      type: 'number',
+      min: 0,
+      max: 150,
+      step: 5,
+      unit: '€',
+      default: 35
+    },
+    shippingFreeThreshold: {
+      category: 'economie',
+      label: 'Seuil Franco de Port (Livraison Offerte)',
+      desc: 'Montant minimal de commande à partir duquel les frais de port sont offerts.',
+      type: 'number',
+      min: 50,
+      max: 1000,
+      step: 25,
+      unit: '€',
+      default: 350
+    },
+    deliveryDurationSeconds: {
+      category: 'economie',
+      label: 'Délai d\'Acheminement de Livraison',
+      desc: 'Durée en secondes nécessaires pour que le colis soit préparé, transporté et entreposé au stock.',
+      type: 'number',
+      min: 10,
+      max: 600,
+      step: 10,
+      unit: 'sec',
+      default: 120
+    },
 
     // --- 7. RÉPUTATION & NOTORIÉTÉ ---
     reputationGainMultiplier: {
@@ -529,6 +562,19 @@
       step: 5,
       unit: '%',
       default: 25
+    },
+
+    // --- 9. CARTE & IMPLANTATION DES ANTENNES ---
+    minStationDistanceKm: {
+      category: 'carte',
+      label: 'Distance Minimale entre Antennes',
+      desc: 'Distance minimale obligatoire (en kilomètres à vol d\'oiseau) imposée lors de l\'implantation d\'une nouvelle antenne par rapport aux antennes existantes.',
+      type: 'number',
+      min: 1,
+      max: 100,
+      step: 1,
+      unit: 'km',
+      default: 20
     }
   };
 
@@ -540,7 +586,8 @@
     mobilisation: { label: 'Délais & Réponse', icon: '⏱️' },
     economie: { label: 'Économie & Finances', icon: '💶' },
     reputation: { label: 'Réputation & Notoriété', icon: '⭐' },
-    humeur: { label: 'Humeur & Moral', icon: '❤️' }
+    humeur: { label: 'Humeur & Moral', icon: '❤️' },
+    carte: { label: 'Carte & Antennes', icon: '📍' }
   };
 
   // OBJET DE GESTION DU GAMEPLAY CONFIG

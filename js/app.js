@@ -185,9 +185,9 @@ class ProtecGame {
     this.alertSubscription = {
       active: false,
       monthlyCost: 75,
-      autoSmsNewMission: true,
-      autoRelanceShortage: true,
-      autoIndividualCalls: true,
+      autoSmsNewMission: false,
+      autoRelanceShortage: false,
+      autoIndividualCalls: false,
       lastTickMinute: -1,
       lastMonthlyDebitMonth: null,
       stats: {
@@ -919,11 +919,10 @@ class ProtecGame {
       if (isNaN(lat) || isNaN(lng)) return;
       if (this.stations.some(my => Math.abs(parseFloat(my.lat) - lat) < 0.0003 && Math.abs(parseFloat(my.lng) - lng) < 0.0003)) return;
 
-      const stSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`;
       const stHtml = `
         <div class="custom-leaflet-marker">
-          <div class="marker-inner bg-indigo-700 border-2 border-indigo-200 shadow-xl flex items-center justify-center transition-transform hover:scale-110">
-            ${stSvg}
+          <div class="marker-inner bg-white border-[2.5px] border-[#024589] shadow-md shadow-blue-900/25 p-1 flex items-center justify-center transition-transform hover:scale-110" title="${st.name || 'Antenne Protection Civile'}">
+            <img src="base_antenne.png" alt="Antenne Réseau" class="w-full h-full object-contain" />
           </div>
         </div>
       `;
@@ -1299,8 +1298,8 @@ class ProtecGame {
           this.showOnboardingModal();
         }
       }
-    } else {
       this.syncDepartmentFromStation();
+      this.ensureStarterVehicle();
       this.showToast('Partie chargée', `Bienvenue ! Votre antenne compte ${this.volunteers.length} secouristes.`, 'blue');
       if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.ensureTerritoryEvents === 'function') {
         window.ProtecEvenementsReels.ensureTerritoryEvents(this);
@@ -1963,8 +1962,11 @@ class ProtecGame {
       const el = document.createElement('div');
       el.className = 'custom-leaflet-marker';
       el.innerHTML = `
-        <div class="marker-inner bg-white border-2 border-pc-blue p-1 shadow-lg flex items-center justify-center transition-transform hover:scale-110" title="${station.name || 'Antenne de la Protection Civile'}">
-          <img src="base_antenne.png" alt="Base Antenne" class="w-full h-full object-contain" />
+        <div class="marker-inner bg-white border-[3px] border-[#f78d20] shadow-[0_6px_16px_rgba(247,141,32,0.45)] p-1 flex items-center justify-center transition-transform hover:scale-115 relative" title="${station.name || 'Mon Antenne (QG)'}">
+          <img src="base_antenne.png" alt="Mon Antenne" class="w-full h-full object-contain" />
+          <div class="absolute -bottom-1 -right-1 px-1.5 py-0.2 rounded-full bg-[#f78d20] text-white text-[9px] font-black tracking-tight border border-white shadow-xs">
+            MOI
+          </div>
         </div>
       `;
 
@@ -2595,9 +2597,15 @@ class ProtecGame {
     const isFirst = this.stations.length === 0;
     this.stations.push(newStation);
     if (isFirst) {
-      // 1. ZÉRO VÉHICULE AU DÉPART (L'antenne démarre sans véhicule, dotation de 40 000 € en trésorerie pour acheter son parc)
-      this.vehicles = [];
-      newStation.vehicles = [];
+      // 1. DOTATION INITIALE : 1 VPSP Ancien fourni avec l'antenne
+      const starterVpsp = this.createDefaultStarterVPSP ? this.createDefaultStarterVPSP(stationId, newStation) : null;
+      if (starterVpsp) {
+        this.vehicles = [starterVpsp];
+        newStation.vehicles = [starterVpsp.id];
+      } else {
+        this.vehicles = [];
+        newStation.vehicles = [];
+      }
 
       // 2. ZÉRO MATÉRIEL AU DÉPART (stock vierge)
       newStation.stock = {};
@@ -3716,8 +3724,10 @@ class ProtecGame {
         pole: 'dps',
         poleLabel: 'Secours & DPS',
         poleColor: 'bg-pc-blue',
-        type: m.type === 'dps' ? 'DPS' : 'Garde',
-        badgeBg: m.type === 'dps' ? 'bg-pc-blue text-white' : 'bg-pc-orange text-white',
+        type: (m.type === 'garde_samu' || m.type === 'samu') ? 'Garde SAMU' : (m.type === 'pompiers' || m.type === 'garde_sdis' ? 'Garde Pompiers' : (m.type === 'dps' ? 'DPS' : 'Garde')),
+        badgeBg: (m.type === 'garde_samu' || m.type === 'samu') ? 'bg-sky-600 text-white' : (m.type === 'pompiers' || m.type === 'garde_sdis' ? 'bg-orange-600 text-white' : 'bg-pc-blue text-white'),
+        isGarde: !!(m.isGarde || m.type === 'garde_samu' || m.type === 'samu'),
+        posture: m.posture || 'base',
         title: m.title,
         eventDate: eDate,
         startHour: m.startHour || eDate.hour || 14,
@@ -5989,20 +5999,266 @@ class ProtecGame {
     this.saveGame();
   }
 
-  // Déclencher une relance manuelle sur un poste planifié
+  // Comparaison calendaire robuste pour détecter d'éventuels conflits d'engagement
+  isSameMissionDate(d1, d2) {
+    if (!d1 || !d2) return false;
+    const y1 = d1.year ?? this.clock?.year;
+    const y2 = d2.year ?? this.clock?.year;
+    const m1 = d1.month ?? this.clock?.month;
+    const m2 = d2.month ?? this.clock?.month;
+    const day1 = d1.day ?? this.clock?.day;
+    const day2 = d2.day ?? this.clock?.day;
+    return y1 === y2 && m1 === m2 && day1 === day2;
+  }
+
+  // Contrôle strict des qualifications requises (CE, PSE2, PSE1, Permis, Formateur, etc.)
+  isVolunteerQualifiedForMission(vol, mission) {
+    if (!vol || !mission) return false;
+
+    const volRank = (vol.rank || 'Secouriste').toUpperCase();
+    const skills = (typeof this.getVolunteerAllSkills === 'function' ? this.getVolunteerAllSkills(vol) : []).map(s => s.id.toLowerCase());
+
+    // 1. Mission de type FORMATION (PSC1, SST, etc.)
+    if (mission.type === 'formation' || (mission.requiredRanks || []).includes('Formateur')) {
+      return vol.isTrainer || skills.includes('formateur_psc') || skills.includes('formateur_ps') || skills.includes('formateur_sst');
+    }
+
+    const reqRanks = Array.isArray(mission.requiredRanks) ? mission.requiredRanks : [];
+
+    // Si la mission ne spécifie pas de rangs particuliers, au moins le PSE1 est requis pour les missions DPS / Secours
+    if (reqRanks.length === 0) {
+      if (['dps', 'samu', 'pompiers', 'urgence'].includes(mission.type)) {
+        return ['CD', 'CE', 'PSE2', 'PSE1'].includes(volRank) || skills.includes('pse1') || skills.includes('pse2');
+      }
+      return true; // Maraude sociale ou soutien logistique ouvert
+    }
+
+    // Récupérer les compétences de l'équipage déjà inscrit sur cette mission
+    const registeredIds = mission.registeredVolunteers || [];
+    const currentCrew = registeredIds.map(id => (this.volunteers || []).find(v => v.id === id)).filter(Boolean);
+
+    // 2. Gestion des postes clés non encore pourvus :
+    // A. Chef de Dispositif (CD)
+    if (reqRanks.includes('CD')) {
+      const hasCD = currentCrew.some(c => (c.rank || '').toUpperCase() === 'CD' || (c.rank || '').includes('Dispositif'));
+      if (!hasCD) {
+        if (volRank === 'CD' || skills.includes('cd')) return true;
+      }
+    }
+
+    // B. Chef d'Équipe (CE)
+    if (reqRanks.includes('CE')) {
+      const hasCE = currentCrew.some(c => ['CD', 'CE'].includes((c.rank || '').toUpperCase()) || (c.rank || '').includes('Équipe'));
+      if (!hasCE) {
+        if (['CD', 'CE'].includes(volRank) || skills.includes('ce') || skills.includes('cd')) return true;
+      }
+    }
+
+    // C. Équipier PSE2
+    if (reqRanks.includes('PSE2')) {
+      const countPSE2 = currentCrew.filter(c => ['CD', 'CE', 'PSE2'].includes((c.rank || '').toUpperCase()) || this.hasVolunteerSkill(c, 'pse2')).length;
+      const neededPSE2 = reqRanks.filter(r => r === 'PSE2').length || 1;
+      if (countPSE2 < neededPSE2) {
+        if (['CD', 'CE', 'PSE2'].includes(volRank) || skills.includes('pse2')) return true;
+      }
+    }
+
+    // D. Secouriste PSE1
+    if (reqRanks.includes('PSE1')) {
+      const countPSE1 = currentCrew.filter(c => ['CD', 'CE', 'PSE2', 'PSE1'].includes((c.rank || '').toUpperCase()) || this.hasVolunteerSkill(c, 'pse1')).length;
+      const neededPSE1 = reqRanks.filter(r => r === 'PSE1').length || 1;
+      if (countPSE1 < neededPSE1) {
+        if (['CD', 'CE', 'PSE2', 'PSE1'].includes(volRank) || skills.includes('pse1') || skills.includes('pse2')) return true;
+      }
+    }
+
+    // E. Conducteur pour véhicules spécialisés (Poids Lourd Permis C pour FLIT/VALOG, ou Permis B / VPSP)
+    if (Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) {
+      const requiresPL = mission.requiredVehicles.some(vt => ['FLIT', 'VALOG'].includes(vt));
+      if (requiresPL) {
+        const hasPLDriver = currentCrew.some(c => this.hasVolunteerSkill(c, 'permis_c'));
+        if (!hasPLDriver) {
+          if (this.hasVolunteerSkill(vol, 'permis_c')) return true;
+        }
+      }
+    }
+
+    // F. Places complémentaires restantes :
+    // Le bénévole doit détenir au moins une qualification compatible avec la mission
+    const hasAnyReqRank = reqRanks.some(req => {
+      const cleanReq = req.toUpperCase();
+      if (cleanReq === 'CD') return volRank === 'CD';
+      if (cleanReq === 'CE') return ['CD', 'CE'].includes(volRank);
+      if (cleanReq === 'PSE2') return ['CD', 'CE', 'PSE2'].includes(volRank) || skills.includes('pse2');
+      if (cleanReq === 'PSE1') return ['CD', 'CE', 'PSE2', 'PSE1'].includes(volRank) || skills.includes('pse1') || skills.includes('pse2');
+      if (cleanReq === 'SECOURISTE') return ['CD', 'CE', 'PSE2', 'PSE1', 'SECOURISTE'].includes(volRank);
+      return false;
+    });
+
+    return hasAnyReqRank;
+  }
+
+  // Vérifie si un bénévole peut s'inscrire sur une mission du planning
+  canVolunteerRegisterForMission(vol, mission) {
+    if (!vol || !mission) return false;
+    if (mission.status !== 'planifie') return false;
+
+    const registered = mission.registeredVolunteers || [];
+    // 1. Déjà inscrit ou effectif complet
+    if (registered.includes(vol.id)) return false;
+    if (registered.length >= (mission.requiredVolunteers || 1)) return false;
+
+    // 2. État physique et disponibilité opérationnelle
+    if (vol.isBurnout) return false;
+    if (vol.status === 'mission') return false;
+    if (vol.energy !== undefined && vol.energy < 25) return false;
+
+    // 3. Conflit d'agenda le même jour avec une autre mission planifiée ou en cours
+    if (mission.eventDate) {
+      const hasConflict = (this.missions || []).some(m => 
+        m.id !== mission.id &&
+        ['planifie', 'declenche', 'en_cours'].includes(m.status) &&
+        (m.registeredVolunteers || []).includes(vol.id) &&
+        this.isSameMissionDate(m.eventDate, mission.eventDate)
+      );
+      if (hasConflict) return false;
+    }
+
+    // 4. Disponibilité du secouriste pour le jour de la mission
+    if (window.ProtecPersonnel && typeof window.ProtecPersonnel.calculateAvailability === 'function') {
+      const dispoCheck = window.ProtecPersonnel.calculateAvailability(vol, this, mission);
+      if (!dispoCheck.available) return false;
+    } else {
+      const evalRes = this.evaluateVolunteerAvailability(vol, mission.eventDate, mission);
+      if (!evalRes.isAvailable) return false;
+    }
+
+    // 5. Condition stricte de compétences et qualifications requises
+    return this.isVolunteerQualifiedForMission(vol, mission);
+  }
+
+  // Inscription spontanée et autonome des bénévoles via la consultation du planning (eProtec)
+  // RÈGLE : Les missions prévues d'avance ne nécessitent AUCUN message SMS.
+  // Les bénévoles le voient directement dans le planning et s'y inscrivent sous condition de compétences et de place.
+  processSpontaneousPlanningRegistrations() {
+    const plannedMissions = (this.missions || []).filter(m => 
+      m.status === 'planifie' &&
+      (m.registeredVolunteers?.length || 0) < (m.requiredVolunteers || 1)
+    );
+
+    if (plannedMissions.length === 0) return;
+
+    let hasChanges = false;
+
+    plannedMissions.forEach(mission => {
+      const regCount = mission.registeredVolunteers?.length || 0;
+      const reqCount = mission.requiredVolunteers || 1;
+      if (regCount >= reqCount) return;
+
+      // Recherche des bénévoles qualifiés et disponibles
+      const candidates = (this.volunteers || []).filter(vol => this.canVolunteerRegisterForMission(vol, mission));
+      if (candidates.length === 0) return;
+
+      // Tri par motivation, trait dévoué et lissage aléatoire
+      candidates.sort((a, b) => {
+        const scoreA = (a.motivation || 70) + (a.trait === 'devoue' ? 20 : 0) + (Math.random() * 15);
+        const scoreB = (b.motivation || 70) + (b.trait === 'devoue' ? 20 : 0) + (Math.random() * 15);
+        return scoreB - scoreA;
+      });
+
+      const candidate = candidates[0];
+      if (!candidate) return;
+
+      // Calcul d'une probabilité d'inscription spontanée par minute virtuelle
+      const motiv = candidate.motivation || 70;
+      let proba = 0.22 * (motiv / 80);
+      if (candidate.trait === 'devoue') proba *= 1.35;
+      if (candidate.trait === 'casanier') proba *= 0.70;
+
+      // Si la date est proche (dans les 7 prochains jours), le taux de consultation du planning augmente
+      if (mission.eventDate) {
+        const missionDay = mission.eventDate.day ?? this.clock?.day;
+        const curDay = this.clock?.day || 1;
+        const diffDays = Math.abs(missionDay - curDay);
+        if (diffDays <= 3) proba *= 1.4;
+        else if (diffDays <= 7) proba *= 1.15;
+      }
+
+      // Tirage au sort de consultation et positionnement
+      if (Math.random() < Math.min(0.75, proba)) {
+        if (!mission.registeredVolunteers) mission.registeredVolunteers = [];
+        mission.registeredVolunteers.push(candidate.id);
+        hasChanges = true;
+
+        const newRegCount = mission.registeredVolunteers.length;
+        const isNowFull = newRegCount >= reqCount;
+
+        // Notification discrète d'inscription spontanée au planning
+        this.showToast(
+          '📅 Planning : Inscription Spontanée',
+          `${candidate.name} (${candidate.rank || 'Secouriste'}) s'est inscrit(e) sur le dispositif « ${mission.title} » (${newRegCount}/${reqCount}).`,
+          'blue'
+        );
+
+        if (window.ProtecAntenneMessages && typeof window.ProtecAntenneMessages.addOperationnelMessage === 'function') {
+          window.ProtecAntenneMessages.addOperationnelMessage(
+            candidate.name,
+            `📅 Inscription spontanée au planning sur le dispositif « ${mission.title} » (${newRegCount}/${reqCount} secouristes).`,
+            candidate.rank || 'Secouriste',
+            'calendar-check',
+            { badgeColor: 'sky' }
+          );
+        }
+
+        if (isNowFull) {
+          mission.isFull = true;
+          this.showToast(
+            '✅ Effectif Complet !',
+            `L'équipage pour « ${mission.title} » est désormais au complet (${newRegCount}/${reqCount} secouristes). Aucun SMS requis !`,
+            'green'
+          );
+        }
+
+        if (this.selectedMissionId === mission.id) {
+          this.openMissionDetails(mission.id);
+        }
+      }
+    });
+
+    if (hasChanges) {
+      this.saveGame();
+      this.renderMissions();
+      this.updateStatsUI();
+    }
+  }
+
+  // Rétrocompatibilité : redirige vers processSpontaneousPlanningRegistrations
+  checkVolunteerRegistrations(mission) {
+    if (mission && mission.status === 'planifie') {
+      this.processSpontaneousPlanningRegistrations();
+    }
+  }
+
+  // Déclencher une relance manuelle sur un poste planifié (strictement à l'initiative du joueur)
   manualRelanceVolunteers(missionId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
 
-    mission.relancesCount = (mission.relancesCount || 0) + 1;
-    mission.sollicitationSent = true;
-
     const regCount = mission.registeredVolunteers?.length || 0;
     const reqCount = mission.requiredVolunteers || 4;
 
+    if (regCount >= reqCount) {
+      this.showToast('Effectif Déjà Complet ✅', `L'effectif pour « ${mission.title} » est déjà au complet (${regCount}/${reqCount}). Aucun SMS nécessaire !`, 'green');
+      return;
+    }
+
+    mission.relancesCount = (mission.relancesCount || 0) + 1;
+    mission.sollicitationSent = true;
+
+    const missing = reqCount - regCount;
     this.showToast(
-      'Relance Transmise 🔔',
-      `Relance #${mission.relancesCount} envoyée aux effectifs pour « ${mission.title} » (${regCount}/${reqCount} inscrits).`,
+      'Appel SMS Transmis 📱',
+      `Appel de mobilisation #${mission.relancesCount} envoyé pour « ${mission.title} » (${missing} poste${missing > 1 ? 's' : ''} vacant${missing > 1 ? 's' : ''}).`,
       'amber'
     );
 
@@ -6013,7 +6269,7 @@ class ProtecGame {
         type: 'relance',
         senderName: `${this.player?.name || 'Directeur'} (Direction)`,
         recipientName: 'Secouristes d’antenne',
-        text: `🔔 Relance d'effectif #${mission.relancesCount} transmise pour le poste « ${mission.title} » (${regCount} / ${reqCount} secouristes pourvus). Répondez à la convocation !`
+        text: `📱 Appel de mobilisation SMS #${mission.relancesCount} transmis pour « ${mission.title} » : ${missing} poste(s) encore disponible(s). Répondez à la convocation !`
       });
     }
 
@@ -6021,7 +6277,7 @@ class ProtecGame {
     this.renderMissions();
     this.updateStatsUI();
 
-    // Déclencher la mobilisation de nouveaux bénévoles (silencieux pour éviter double notification / double son)
+    // Déclencher la mobilisation de nouveaux bénévoles
     this.launchSmsMobilization(missionId, true);
 
     if (this.selectedMissionId === missionId) {
@@ -6029,45 +6285,23 @@ class ProtecGame {
     }
   }
 
-  checkVolunteerRegistrations(mission) {
-    if (mission.status !== 'planifie') return;
-    if (mission.registeredVolunteers.length >= mission.requiredVolunteers) return;
-
-    const totalVols = (this.volunteers || []).length;
-    // Avec peu de bénévoles (ex: <= 5), la mobilisation spontanée est plus difficile et rare
-    const smallTeamPenalty = totalVols <= 5 ? 0.35 : 0.75;
-
-    for (const vol of this.volunteers) {
-      if (mission.registeredVolunteers.includes(vol.id)) continue;
-      if (mission.registeredVolunteers.length >= mission.requiredVolunteers) break;
-
-      if (window.ProtecPersonnel) {
-        const dispoCheck = window.ProtecPersonnel.calculateAvailability(vol, this, mission);
-        if (!dispoCheck.available) continue;
-      } else {
-        const isAvailableThisDay = vol.dispoJours?.includes(mission.eventDate?.dayName);
-        if (!isAvailableThisDay && Math.random() > 0.15) continue;
-      }
-
-      // Taux d'inscription spontanée mesuré et réaliste
-      const chance = ((vol.motivation || 70) / 100) * smallTeamPenalty * 0.40;
-      if (Math.random() < chance) {
-        mission.registeredVolunteers.push(vol.id);
-        break; // Au maximum 1 bénévole à la fois pour étaler dans le temps
-      }
-    }
-
-    this.renderMissions();
-    this.updateStatsUI();
-  }
-
   relanceVolunteers(missionId) {
-    this.launchSmsMobilization(missionId);
+    this.manualRelanceVolunteers(missionId);
   }
 
   launchSmsMobilization(missionId, silent = false) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
+
+    // RÈGLE : Les SMS sont UNIQUEMENT s'il manque du monde !
+    const regCount = (mission.registeredVolunteers || []).length;
+    const reqCount = mission.requiredVolunteers || 1;
+    if (regCount >= reqCount) {
+      if (!silent) {
+        this.showToast('Effectif Déjà Complet ✅', `L'effectif pour « ${mission.title} » est déjà au complet (${regCount}/${reqCount}). Aucun SMS nécessaire !`, 'green');
+      }
+      return;
+    }
 
     if (mission.smsCampaignActive) {
       if (!silent) this.showToast('Diffusion SMS en cours', 'Une mobilisation SMS est déjà active. Les réponses des secouristes arrivent...', 'blue');
@@ -6231,9 +6465,9 @@ class ProtecGame {
       this.alertSubscription = {
         active: false,
         monthlyCost: 75,
-        autoSmsNewMission: true,
-        autoRelanceShortage: true,
-        autoIndividualCalls: true,
+        autoSmsNewMission: false,
+        autoRelanceShortage: false,
+        autoIndividualCalls: false,
         lastTickMinute: -1,
         lastMonthlyDebitMonth: null,
         stats: { smsSent: 0, relancesSent: 0, callsMade: 0, volunteersRecruited: 0 }
@@ -6320,16 +6554,19 @@ class ProtecGame {
     if (this.alertSubscription.lastTickMinute === curMinute) return;
     this.alertSubscription.lastTickMinute = curMinute;
 
-    const incompleteMissions = this.missions.filter(m => 
-      ['planifie', 'prealerte'].includes(m.status) &&
+    // Neutralisation formelle : Les missions prévues d'avance ne reçoivent AUCUN SMS automatique.
+    // Les bénévoles le voient dans le planning et s'y inscrivent de façon autonome (processSpontaneousPlanningRegistrations).
+    // Les SMS sont strictement déclenchés par le joueur quand il manque du monde.
+    const urgentIncompleteMissions = this.missions.filter(m => 
+      m.status === 'prealerte' &&
       (m.registeredVolunteers?.length || 0) < (m.requiredVolunteers || 1)
     );
 
-    if (incompleteMissions.length === 0) return;
+    if (urgentIncompleteMissions.length === 0) return;
 
-    // A. ENVOI SMS AUTOMATIQUE DES NOUVELLES MISSIONS NON ENCORE SOLLICITÉES
+    // A. MOBILISATION URGENTE AUTOMATISÉE SUR PRÉALERTE (si activée)
     if (this.alertSubscription.autoSmsNewMission) {
-      incompleteMissions.forEach(mission => {
+      urgentIncompleteMissions.forEach(mission => {
         if (!mission.sollicitationSent && !mission.smsCampaignActive) {
           this.launchSmsMobilization(mission.id);
           this.alertSubscription.stats = this.alertSubscription.stats || {};
@@ -6338,25 +6575,18 @@ class ProtecGame {
       });
     }
 
-    // B. RELANCES AUTOMATIQUES EN CAS DE MANQUE DE PERSONNEL
+    // B. RELANCES URGENTES AUTOMATIQUES SUR PRÉALERTE (si activée)
     if (this.alertSubscription.autoRelanceShortage) {
-      incompleteMissions.forEach(mission => {
+      urgentIncompleteMissions.forEach(mission => {
         const regCount = mission.registeredVolunteers?.length || 0;
         const reqCount = mission.requiredVolunteers || 1;
         const relances = mission.relancesCount || 0;
 
-        // Si la mission a déjà été alertée, n'est pas pleine, sans campagne en cours, et max 4 relances
-        if (mission.sollicitationSent && regCount < reqCount && relances < 4 && !mission.smsCampaignActive) {
-          // Relance aléatoire étalée (environ 30% de chance chaque minute)
-          if (Math.random() < 0.30) {
+        if (mission.sollicitationSent && regCount < reqCount && relances < 3 && !mission.smsCampaignActive) {
+          if (Math.random() < 0.25) {
             mission.relancesCount = relances + 1;
             this.alertSubscription.stats = this.alertSubscription.stats || {};
             this.alertSubscription.stats.relancesSent = (this.alertSubscription.stats.relancesSent || 0) + 1;
-            this.showToast(
-              '🤖 E-Alerte Auto : Relance Transmise',
-              `Relance automatique #${mission.relancesCount} pour « ${mission.title} » (${regCount}/${reqCount} inscrits).`,
-              'amber'
-            );
             this.launchSmsMobilization(mission.id);
           }
         }
@@ -11327,6 +11557,12 @@ class ProtecGame {
           </div>
         ` : ''}
 
+        ${(mission.isGarde || mission.type === 'garde_samu') && window.ProtecGardesSamu ? `
+          <div class="mb-4">
+            ${window.ProtecGardesSamu.renderGuardDetailHTML(this, mission)}
+          </div>
+        ` : ''}
+
         <!-- BARRE D'ONGLETS DU DISPOSITIF (STYLE eProtec) -->
         <div class="flex items-center gap-1 border-b border-slate-200 pb-0 overflow-x-auto text-xs font-bold">
           <button type="button" onclick="window.game.setMissionDetailTab('info')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'info' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
@@ -11603,10 +11839,17 @@ class ProtecGame {
                   <i data-lucide="users" class="w-3.5 h-3.5"></i>
                   <span>Renforts</span>
                 </button>
-                <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="px-3 py-1.5 rounded-lg text-[10px] font-black bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition flex items-center gap-1 cursor-pointer ml-auto" title="Lancer une campagne SMS d'alerte et de mobilisation">
-                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                  <span>${mission.smsCampaignActive ? 'SMS en cours...' : 'Alerte SMS'}</span>
-                </button>
+                ${(registeredVols.length < (mission.requiredVolunteers || 1)) ? `
+                  <button onclick="window.game.launchSmsMobilization('${mission.id}')" class="px-3 py-1.5 rounded-lg text-[10px] font-black bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer ml-auto" title="Envoyer manuellement un appel par SMS aux secouristes disponibles">
+                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                    <span>${mission.smsCampaignActive ? 'SMS en cours...' : `Alerte SMS (${(mission.requiredVolunteers || 1) - registeredVols.length} manquant${((mission.requiredVolunteers || 1) - registeredVols.length) > 1 ? 's' : ''})`}</span>
+                  </button>
+                ` : `
+                  <div class="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1.5 ml-auto shadow-2xs" title="Tous les postes sont pourvus. Aucun appel SMS nécessaire.">
+                    <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i>
+                    <span>Effectif complet (aucun SMS requis)</span>
+                  </div>
+                `}
               </div>
             </div>
 
@@ -12935,10 +13178,17 @@ class ProtecGame {
           <i data-lucide="x-circle" class="w-3.5 h-3.5 flex-shrink-0 text-rose-600"></i>
           <span>${mission.type === 'social' ? 'Annuler Maraude' : (mission.type === 'pompiers' ? 'Annuler Garde' : (mission.type === 'samu' ? 'Refuser Urgence' : 'Annuler DPS'))}</span>
         </button>
-        <button onclick="window.game.manualRelanceVolunteers('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 hover:bg-amber-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Déclencher une relance d'équipe avec suivi">
-          <i data-lucide="bell" class="w-3.5 h-3.5 flex-shrink-0 text-amber-600"></i>
-          <span>Relancer (${mission.relancesCount || 0})</span>
-        </button>
+        ${!isComplete ? `
+          <button onclick="window.game.manualRelanceVolunteers('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 hover:bg-amber-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 border border-amber-200 cursor-pointer" title="Envoyer manuellement un appel par SMS aux secouristes pour combler les postes manquants">
+            <i data-lucide="bell" class="w-3.5 h-3.5 flex-shrink-0 text-amber-600"></i>
+            <span>Appel SMS (${mission.requiredVolunteers - registeredVols.length} manquant${(mission.requiredVolunteers - registeredVols.length) > 1 ? 's' : ''})</span>
+          </button>
+        ` : `
+          <div class="px-3 py-2.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 shadow-2xs" title="Effectif complet. Aucun appel SMS nécessaire.">
+            <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i>
+            <span>Effectif complet</span>
+          </div>
+        `}
         ${(mission.type === 'crise' || mission.isCrisis) && canEchelon ? `
           <button onclick="window.game.launchEchelonMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Faire partir un 1er engin avec 3 secouristes">
             <i data-lucide="truck" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>1er Engin</span>
@@ -18086,51 +18336,130 @@ class ProtecGame {
                 </div>
               </div>
             ` : `
-              <!-- Choix du joueur : Déclenchement Automatique (Garde Postée) vs Manuel (Astreinte) -->
+              <!-- Palier d'antenne & Régime conventionné des gardes -->
+              ${(() => {
+                const tier = window.ProtecGardesSamu ? window.ProtecGardesSamu.getAntennaTier(this) : { label: 'Antenne Standard', badge: 'Convention Active', badgeColor: 'bg-sky-100 text-sky-900', conventionDesc: 'Gardes régulières selon vos effectifs et astreintes d’urgence.', cadenceText: 'Standard' };
+                const scheduledGuards = (this.missions || []).filter(m => (m.type === 'garde_samu' || m.type === 'samu') && (m.status === 'planifie' || m.status === 'ongoing'));
+                
+                return `
+                  <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                      <div class="flex items-center gap-2">
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${tier.badgeColor}">
+                          ${tier.badge}
+                        </span>
+                        <span class="text-xs font-black text-slate-800">Régime de Convention : <strong class="text-pc-blue">${tier.cadenceText}</strong></span>
+                      </div>
+                      <span class="text-[10.5px] text-slate-500 font-semibold">${scheduledGuards.length} garde(s) au planning</span>
+                    </div>
+
+                    <p class="text-[11px] text-slate-600 leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
+                      ${tier.conventionDesc}
+                    </p>
+
+                    <div class="p-2.5 rounded-xl bg-amber-50/80 border border-amber-300 text-[11px] text-amber-900 flex items-start gap-2">
+                      <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
+                      <span><strong>Règle d'engagement opérationnel :</strong> Le SAMU réquisitionne un vecteur (1 VPSP), mais si <strong>aucun secouriste n'est inscrit</strong> sur la garde, aucun départ réflexe ne sera déclenché. Le joueur garde la main sur la composition de ses effectifs.</span>
+                    </div>
+
+                    <!-- Actions d'anticipation et simulation de pics -->
+                    <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                      <span class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Anticipation des pics :</span>
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <button type="button" 
+                          onclick="if(window.ProtecGardesSamu) { window.ProtecGardesSamu.generateForecastGuard(window.game); window.game.openModule('samu'); }" 
+                          class="px-2.5 py-1.5 rounded-lg text-[10.5px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 transition flex items-center gap-1 cursor-pointer">
+                          <i data-lucide="clock" class="w-3.5 h-3.5 text-indigo-600"></i>
+                          <span>+ Demande Prévisionnelle (Pic à venir)</span>
+                        </button>
+                        <button type="button" 
+                          onclick="if(window.ProtecGardesSamu) { window.ProtecGardesSamu.generateEmergencyGuard(window.game); window.game.openModule('samu'); }" 
+                          class="px-2.5 py-1.5 rounded-lg text-[10.5px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 transition flex items-center gap-1 cursor-pointer">
+                          <i data-lucide="siren" class="w-3.5 h-3.5 text-rose-600"></i>
+                          <span>🚨 Déclenchement d'Urgence (Astreinte NOVI)</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Gardes inscrites au planning opérationnel -->
+                  <div class="space-y-2.5">
+                    <div class="flex items-center justify-between">
+                      <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                        <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
+                        <span>Gardes SAMU Programmées au Planning (${scheduledGuards.length})</span>
+                      </h4>
+                      <button onclick="window.game.openModule('planning')" class="text-[11px] font-bold text-pc-blue hover:underline">
+                        Ouvrir le Planning Général →
+                      </button>
+                    </div>
+
+                    ${scheduledGuards.length === 0 ? `
+                      <div class="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-300 text-center text-xs text-slate-500">
+                        Aucune garde actuellement programmée. Les créneaux sont générés automatiquement selon la taille de votre antenne.
+                      </div>
+                    ` : `
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        ${scheduledGuards.map(g => {
+                          const reg = (g.registeredVolunteers || []).length;
+                          const req = g.requiredVolunteers || 3;
+                          const isArmed = reg >= req;
+                          const ed = g.eventDate || {};
+                          const dateStr = ed.day ? `${String(ed.day).padStart(2, '0')}/${String(ed.month + 1).padStart(2, '0')} à ${String(ed.hour || g.startHour || 20).padStart(2, '0')}h00` : 'Créneau';
+
+                          return `
+                            <div class="p-3 rounded-xl bg-white border ${isArmed ? 'border-emerald-300 shadow-2xs' : 'border-amber-300 bg-amber-50/20'} space-y-2">
+                              <div class="flex items-center justify-between gap-1">
+                                <span class="text-xs font-black text-slate-900">${g.title}</span>
+                                <span class="px-2 py-0.5 rounded text-[9.5px] font-black ${isArmed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800 animate-pulse'}">
+                                  ${isArmed ? '✅ Armé' : '⚠️ Non Armé'}
+                                </span>
+                              </div>
+                              <div class="flex items-center justify-between text-[10.5px] text-slate-500">
+                                <span>📅 ${dateStr} (${g.durationHours || 6}h)</span>
+                                <strong class="${isArmed ? 'text-emerald-700' : 'text-amber-800'} font-mono">${reg}/${req} secouristes</strong>
+                              </div>
+                              <div class="pt-1.5 border-t border-slate-100 flex items-center justify-between">
+                                <span class="text-[10px] text-slate-400">${g.posture === 'base' ? '🏢 À la base' : '🏠 Domicile (Astreinte)'}</span>
+                                <button onclick="window.game.closeModal(); window.game.openMissionDetails('${g.id}')" class="px-2.5 py-1 rounded-lg text-[10.5px] font-black bg-pc-blue hover:bg-pc-blue-light text-white transition cursor-pointer">
+                                  Gérer l'équipage
+                                </button>
+                              </div>
+                            </div>
+                          `;
+                        }).join('')}
+                      </div>
+                    `}
+                  </div>
+                `;
+              })()}
+
+              <!-- Choix de posture opérationnelle par défaut -->
               <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <div class="text-xs font-bold text-slate-800 flex items-center gap-2">
-                    <span>Déclenchement Opérationnel :</span>
+                    <span>Posture de Garde Réflexe :</span>
                     <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${this.samuGarde?.mode === 'poste' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-pc-blue border border-blue-300'}">
-                      ${this.samuGarde?.mode === 'poste' ? '🛡️ Garde Postée (Départ Auto)' : '🏠 Astreinte Domicile (Départ Manuel)'}
+                      ${this.samuGarde?.mode === 'poste' ? '🛡️ À la Base (Départ Immédiat)' : '🏠 Dispo Domicile (Astreinte)'}
                     </span>
                   </div>
                   <p class="text-[10px] text-slate-500 mt-0.5">
-                    ${this.samuGarde?.mode === 'poste' ? 'Départ réflexe automatique instantané dès appel 15 (0 clic, réactivité max, fatigue accrue -15).' : 'L’équipage attend à domicile, vous déclenchez vous-même le départ (moins fatiguant -5).'}
+                    ${this.samuGarde?.mode === 'poste' ? 'Présence physique en caserne : départ instantané sans délai, fatigue accrue (-15 énergie).' : 'Équipage d’astreinte chez eux : départ après ralliement, fatigue économisée (-3 énergie).'}
                   </p>
                 </div>
                 <div class="flex items-center gap-1.5 shrink-0">
                   <button onclick="window.game.setSamuGuardMode('poste')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.samuGarde?.mode === 'poste' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
-                    🛡️ Garde Postée (Auto)
+                    🏢 À la Base (Auto)
                   </button>
                   <button onclick="window.game.setSamuGuardMode('astreinte')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.samuGarde?.mode !== 'poste' ? 'bg-pc-blue text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
-                    🏠 Astreinte (Manuel)
+                    🏠 Domicile (Éco fatigue)
                   </button>
                 </div>
-              </div>
-
-              <!-- Actions d'armement de la garde -->
-              <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between">
-                ${isGuardActive ? `
-                  <div class="text-xs text-emerald-800">
-                    <span>Ambulance engagée : <strong>${currentVpsp?.name || 'VPSP'}</strong> • Équipage : <strong>${currentCrew.length} secouristes</strong></span>
-                  </div>
-                  <button onclick="window.game.stopSamuGuard()" class="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow transition cursor-pointer">
-                    Mettre fin à la Garde SAMU
-                  </button>
-                ` : `
-                  <div class="text-xs text-slate-500">
-                    ${vpsps.length === 0 ? '⚠️ Vous devez posséder au moins 1 VPSP pour armer une garde SAMU.' : `${dispoVpsps.length} VPSP et ${qualifiedVolunteers.length} secouristes qualifiés disponibles.`}
-                  </div>
-                  <button onclick="window.game.startSamuGuard()" ${vpsps.length === 0 || qualifiedVolunteers.length < 3 ? 'disabled class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed"' : 'class="px-4 py-2 rounded-xl text-xs font-black bg-pc-orange hover:bg-pc-orange-hover text-white shadow-md transition cursor-pointer"'}>
-                    Armer la Garde SAMU (VPSP)
-                  </button>
-                `}
               </div>
             `}
           </div>
 
-          <!-- Alertes & Missions de la garde en cours -->
+          <!-- Alertes & Départs Réflexes Régulés en cours -->
           <div class="space-y-3">
             <div class="flex items-center justify-between">
               <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">
@@ -18143,7 +18472,7 @@ class ProtecGame {
               <div class="p-6 rounded-2xl glass-card text-center space-y-1">
                 <p class="text-xs font-bold text-slate-700">Aucun départ réflexe régulé pour l'instant.</p>
                 <p class="text-[11px] text-slate-500">
-                  ${isGuardActive ? 'Le centre 15 vous dépêchera dès qu’une urgence survient sur votre secteur.' : 'Armez une Garde SAMU ci-dessus pour recevoir des appels réflexes du 15.'}
+                  Le centre 15 vous dépêchera dès qu’une urgence survient sur votre secteur et que votre vecteur est armé.
                 </p>
               </div>
             ` : ''}
@@ -19528,10 +19857,72 @@ class ProtecGame {
     this.saveGame();
   }
 
+  createDefaultStarterVPSP(stationId, stationObj = null) {
+    const station = stationObj || (this.stations ? this.stations.find(s => s.id === stationId) : null) || (this.stations ? this.stations[0] : null);
+    const callsign = (typeof this.generateVehicleCallsign === 'function') 
+      ? this.generateVehicleCallsign('VPSP', stationId, station)
+      : 'VPSP 01 ANTENNE';
+
+    const starterVpsp = {
+      id: `vpsp-starter-${Date.now()}`,
+      name: callsign,
+      type: 'VPSP',
+      label: 'Véhicule de Premiers Secours à Personnes (Ancien)',
+      model: 'Renault Master II Phase 2 2.5 dCi 120 (Dotation Initiale)',
+      year: 2014,
+      mileage: 178500,
+      kilometrage: 178500,
+      capacity: 5,
+      seatsCount: 5,
+      extraCapacityLabel: null,
+      hasTowHitch: false,
+      requiresTrailer: false,
+      reqSkills: ['permis_vpsp'],
+      status: 'dispo',
+      fuel: 90,
+      mechanical: 85,
+      ctStatus: 'valide',
+      ctExpiryTimestamp: Date.now() + (300 * 24 * 3600 * 1000), // CT valide ~10 mois
+      insuranceStatus: 'assure',
+      insuranceMonthlyCost: 65,
+      licenseRequired: 'B',
+      stationId: stationId,
+      image: (typeof this.getVehicleImage === 'function') ? this.getVehicleImage('VPSP') : 'images/vehicles/VPSP.png',
+      types: ['PS', 'VPSP'],
+      capacity_log: 0,
+      consumables: 100,
+      armementLevel: 100,
+      isRearmed: true,
+      needsRearming: false,
+      loadedItems: []
+    };
+
+    if (window.ProtecLogistique && typeof window.ProtecLogistique.normalizeVehicle === 'function') {
+      window.ProtecLogistique.normalizeVehicle(starterVpsp);
+    }
+
+    return starterVpsp;
+  }
+
   ensureStarterVehicle() {
-    // RÈGLE OFFICIELLE : L'antenne commence sans véhicule par défaut (0 véhicule).
-    // Le joueur dispose de 40 000 € en trésorerie pour acheter et équiper sa flotte.
-    return;
+    if (!this.stations || this.stations.length === 0) return;
+    if (Array.isArray(this.vehicles) && this.vehicles.length > 0) return;
+
+    const mainStation = this.stations[0];
+    const starter = this.createDefaultStarterVPSP(mainStation.id, mainStation);
+    this.vehicles = [starter];
+
+    if (Array.isArray(mainStation.vehicles)) {
+      if (!mainStation.vehicles.includes(starter.id)) {
+        mainStation.vehicles.push(starter.id);
+      }
+    } else {
+      mainStation.vehicles = [starter.id];
+    }
+
+    if (typeof this.updateStatsUI === 'function') this.updateStatsUI();
+    if (typeof this.renderStations === 'function') this.renderStations();
+    this.saveGame();
   }
 
   normalizeAllVehicles() {
@@ -20619,6 +21010,11 @@ class ProtecGame {
         window.ProtecFormations.processClockTick(this);
       }
 
+      // 1h. GESTION DES COMMANDES & LIVRAISONS LOGISTIQUES EN COURS (Suivi et déchargement)
+      if (window.ProtecLogistique && typeof window.ProtecLogistique.updateDeliveriesClock === 'function') {
+        window.ProtecLogistique.updateDeliveriesClock(this);
+      }
+
       // 1b. DÉPART ET GESTION DU TEMPS RÉEL SUR LES ALERTES ET DPS
       if (this.clock.second === 0) {
         // 1b-1. Contrôle des alertes urgentes déclenchées non engagées (Carence / Expiration horaire)
@@ -20800,11 +21196,19 @@ class ProtecGame {
 
         // 1b-ter. SYSTÈME D'ALERTE ET RELANCE AUTOMATISÉE (E-ALERTE SAAS)
         this.checkAutoAlertSystem(currentTime);
+
+        // 1b-spont. INSCRIPTION SPONTANÉE DES BÉNÉVOLES AU PLANNING (Consultation eProtec sans SMS)
+        this.processSpontaneousPlanningRegistrations();
       }
 
       // 1b-bis. INSTRUCTION ET DÉLIBÉRATION RÉALISTE DES CONVENTIONS (SAMU, SDIS, SNCF, CUMP)
       if (window.ProtecConventions && typeof window.ProtecConventions.checkConventionDecisions === 'function') {
         window.ProtecConventions.checkConventionDecisions(this);
+      }
+
+      // 1b-quater. SYNCHRONISATION DES GARDES CONVENTIONNÉES AU PLANNING (SAMU / SDIS)
+      if (window.ProtecGardesSamu && typeof window.ProtecGardesSamu.syncPlanningGuards === 'function') {
+        window.ProtecGardesSamu.syncPlanningGuards(this);
       }
 
       // 1c. GESTION DES PRÉALERTES ÉVOLUTIVES (Veille Opérationnelle AASC)
@@ -21308,37 +21712,76 @@ class ProtecGame {
 
     this.enrichMissionLocationWithCity(newSamu);
 
-    // DÉCLENCHEMENT AUTOMATIQUE SI GARDE POSTÉE RÉFLEXE (Choix joueur : Postée = Auto, Astreinte = Manuel)
-    const isAutoPoste = this.samuGarde && this.samuGarde.active && this.samuGarde.mode === 'poste';
-    if (isAutoPoste) {
-      const vpsp = this.vehicles.find(v => v.id === this.samuGarde.vehicleId);
-      if (vpsp && vpsp.status !== 'mission') {
+    // DÉCLENCHEMENT DE LA GARDE SAMU (Contrôle strict des effectifs & Posture Base vs Domicile)
+    const activeGuard = window.ProtecGardesSamu ? window.ProtecGardesSamu.getCurrentActiveGuard(this) : null;
+    const triggerCheck = window.ProtecGardesSamu 
+      ? window.ProtecGardesSamu.canTriggerVector(activeGuard, this) 
+      : (this.samuGarde && this.samuGarde.active && (this.samuGarde.crewVolunteerIds || []).length >= 3 
+          ? { canTrigger: true, crew: (this.samuGarde.crewVolunteerIds || []).map(id => this.volunteers.find(v => v.id === id)).filter(Boolean), posture: this.samuGarde.mode } 
+          : { canTrigger: false, reason: 'Aucun secouriste inscrit sur la garde' });
+
+    let isAutoPoste = false;
+
+    if (triggerCheck.canTrigger) {
+      const crewVols = triggerCheck.crew || [];
+      const posture = triggerCheck.posture || (this.samuGarde?.mode === 'poste' ? 'base' : 'domicile');
+      const isBaseReady = (posture === 'base' || posture === 'poste');
+
+      // Trouver un VPSP disponible pour la mission
+      const vpsp = (activeGuard && activeGuard.assignedCrew?.vehicles?.[0]) || 
+                   (this.samuGarde?.vehicleId ? this.vehicles.find(v => v.id === this.samuGarde.vehicleId) : null) || 
+                   this.vehicles.find(v => v.type === 'VPSP' && v.status !== 'mission');
+
+      if (vpsp && vpsp.status !== 'mission' && isBaseReady) {
+        // Posture À la base prêt à partir : Départ réflexe 100% automatique !
         newSamu.status = 'ongoing';
         newSamu.startedAt = Date.now();
-        newSamu.registeredVolunteers = [...(this.samuGarde.crewVolunteerIds || [])];
+        newSamu.registeredVolunteers = crewVols.map(v => v.id);
         newSamu.assignedCrew = {
-          volunteers: [...(this.samuGarde.crewVolunteerIds || [])],
+          volunteers: crewVols.map(v => v.id),
           vehicles: [vpsp]
         };
         vpsp.status = 'mission';
+        isAutoPoste = true;
 
-        // Fatigue accrue garde postée (-15 énergie)
-        (this.samuGarde.crewVolunteerIds || []).forEach(vid => {
-          const vol = this.volunteers.find(v => v.id === vid);
+        // Fatigue de garde postée à la caserne (-15 énergie)
+        crewVols.forEach(vol => {
           if (vol) vol.energy = Math.max(10, (vol.energy || 80) - 15);
         });
 
-        // Transit routier prioritaire vers le lieu de la détresse
         const base = this.stations[0] || { lat: 48.8566, lng: 2.3522 };
         if (window.ProtecConventions) {
-          window.ProtecConventions.creerTimelineUrgence(this, newSamu, this.samuGarde.crewVolunteerIds || [], vpsp, base);
+          window.ProtecConventions.creerTimelineUrgence(this, newSamu, crewVols.map(v => v.id), vpsp, base);
         }
         if (window.ProtecSystems) {
           window.ProtecSystems.startTransit(this, vpsp, { lat: base.lat, lng: base.lng }, { lat: newSamu.lat, lng: newSamu.lng }, newSamu, 2);
         }
 
-        this.showToast('⚡ SAMU 15 (Départ Réflexe Auto)', `Ambulance ${vpsp.name} partie immédiatement vers « ${pick.title} » sans attente !`, 'green');
+        this.showToast('⚡ SAMU 15 (Départ Réflexe Base)', `Ambulance ${vpsp.name} partie immédiatement vers « ${pick.title} » sans délai (Équipage à la base) !`, 'green');
+      } else if (vpsp && !isBaseReady) {
+        // Posture Dispo domicile : Équipage d'astreinte, fatigue grandement économisée (-3)
+        newSamu.status = 'planifie';
+        newSamu.registeredVolunteers = crewVols.map(v => v.id);
+        newSamu.assignedCrew = {
+          volunteers: crewVols.map(v => v.id),
+          vehicles: [vpsp]
+        };
+
+        // Fatigue minimale d'astreinte domicile (-3 énergie seulement)
+        crewVols.forEach(vol => {
+          if (vol) vol.energy = Math.max(10, (vol.energy || 80) - 3);
+        });
+
+        this.showToast('🏠 Appel Régulation 15 (Astreinte Domicile)', `Appel pour « ${pick.title} » ! Équipage prévenu à domicile (ralliement requis, fatigue économisée).`, 'blue');
       }
+    } else {
+      // RÈGLE D'OR : SI PERSONNE D'INSCRIT -> AUCUN DÉCLENCHEMENT DU VECTEUR
+      newSamu.status = 'planifie';
+      this.showToast(
+        '⚠️ Appel SAMU 15 (Départ Bloqué)',
+        `Appel régulation 15 pour « ${pick.title} » mais aucun équipage n'est inscrit sur la garde ! Le vecteur VPSP reste au garage (carence opérationnelle).`,
+        'orange'
+      );
     }
 
     this.missions.push(newSamu);
@@ -22480,10 +22923,11 @@ class ProtecGame {
 
     let iconBg = 'bg-pc-blue/10 text-pc-blue';
     let iconName = 'bell';
-    if (color === 'orange') { iconBg = 'bg-pc-orange/15 text-pc-orange'; iconName = 'alert-triangle'; }
-    if (color === 'green') { iconBg = 'bg-emerald-100 text-emerald-600'; iconName = 'check-circle-2'; }
-    if (color === 'purple') { iconBg = 'bg-purple-100 text-purple-600'; iconName = 'camera'; }
-    if (color === 'red') { iconBg = 'bg-rose-100 text-rose-600'; iconName = 'alert-octagon'; }
+    let barColor = 'bg-pc-blue';
+    if (color === 'orange') { iconBg = 'bg-pc-orange/15 text-pc-orange'; iconName = 'alert-triangle'; barColor = 'bg-pc-orange'; }
+    if (color === 'green') { iconBg = 'bg-emerald-100 text-emerald-600'; iconName = 'check-circle-2'; barColor = 'bg-emerald-500'; }
+    if (color === 'purple') { iconBg = 'bg-purple-100 text-purple-600'; iconName = 'camera'; barColor = 'bg-purple-500'; }
+    if (color === 'red') { iconBg = 'bg-rose-100 text-rose-600'; iconName = 'alert-octagon'; barColor = 'bg-rose-500'; }
 
     const isAlert = color === 'red' || color === 'orange' || (target && ['mission', 'crise'].includes(target.type)) || (typeof title === 'string' && /alerte|urgence|samu|sdis|crise|départ réflexe|renfort/i.test(title));
     const toastDuration = isAlert ? 15000 : 4500;
@@ -22495,20 +22939,15 @@ class ProtecGame {
       </div>
       <div class="flex-1 pr-2">
         <div class="flex items-center justify-between">
-          <h5 class="text-xs font-extrabold text-slate-900 leading-tight">${title}</h5>
-          <div class="flex items-center gap-1.5 ml-1">
-            ${isAlert ? `<span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-rose-500 text-white animate-pulse">ALERTE (15s)</span>` : ''}
-            ${hasTarget ? `<span class="text-[9px] font-bold text-pc-blue underline">${resolvedTarget.label || 'Voir ➜'}</span>` : ''}
-          </div>
+          <h5 class="text-xs font-extrabold text-slate-900 dark:text-slate-100 leading-tight">${title}</h5>
+          ${hasTarget ? `<span class="text-[9px] font-bold text-pc-blue dark:text-sky-400 underline ml-1">${resolvedTarget.label || 'Voir ➜'}</span>` : ''}
         </div>
-        <p class="text-[11px] text-slate-600 mt-0.5 leading-normal">${message}</p>
-        ${isAlert ? `
-          <div class="w-full bg-slate-200/80 h-1 rounded-full overflow-hidden mt-1.5">
-            <div id="${barId}" class="bg-rose-500 h-full transition-all duration-[15000ms] ease-linear w-full"></div>
-          </div>
-        ` : ''}
+        <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 leading-normal">${message}</p>
+        <div class="w-full bg-slate-200/80 dark:bg-slate-700/60 h-1 rounded-full overflow-hidden mt-1.5">
+          <div id="${barId}" class="${barColor} h-full rounded-full" style="width: 100%;"></div>
+        </div>
       </div>
-      <button onclick="event.stopPropagation(); this.closest('.glass-panel-heavy').remove()" class="text-slate-400 hover:text-slate-600 p-0.5" title="Fermer">
+      <button onclick="event.stopPropagation(); this.closest('.glass-panel-heavy').remove()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 transition" title="Fermer">
         <i data-lucide="x" class="w-3.5 h-3.5"></i>
       </button>
     `;
@@ -22533,18 +22972,53 @@ class ProtecGame {
     container.appendChild(toast);
     if (window.lucide) window.lucide.createIcons();
 
-    setTimeout(() => {
-      toast.classList.remove('translate-y-2', 'opacity-0');
-      if (isAlert) {
-        const bar = document.getElementById(barId);
-        if (bar) bar.style.width = '0%';
+    let remainingTime = toastDuration;
+    let startTimestamp = Date.now();
+    let timeoutId = null;
+
+    const bar = document.getElementById(barId);
+
+    const startTimer = () => {
+      startTimestamp = Date.now();
+      if (bar) {
+        bar.style.transition = `width ${remainingTime}ms linear`;
+        bar.style.width = '0%';
       }
-    }, 20);
+      timeoutId = setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-x-4');
+        setTimeout(() => toast.remove(), 300);
+      }, remainingTime);
+    };
+
+    const pauseTimer = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      const elapsed = Date.now() - startTimestamp;
+      remainingTime = Math.max(100, remainingTime - elapsed);
+      if (bar) {
+        const computedWidth = window.getComputedStyle(bar).width;
+        bar.style.transition = 'none';
+        bar.style.width = computedWidth;
+      }
+    };
+
+    const resumeTimer = () => {
+      if (remainingTime > 0 && !timeoutId) {
+        requestAnimationFrame(() => {
+          startTimer();
+        });
+      }
+    };
+
+    toast.addEventListener('mouseenter', pauseTimer);
+    toast.addEventListener('mouseleave', resumeTimer);
 
     setTimeout(() => {
-      toast.classList.add('opacity-0', 'translate-x-4');
-      setTimeout(() => toast.remove(), 300);
-    }, toastDuration);
+      toast.classList.remove('translate-y-2', 'opacity-0');
+      startTimer();
+    }, 20);
   }
 
   // Souscription aux Web Push Notifications

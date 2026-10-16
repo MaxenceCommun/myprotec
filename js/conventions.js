@@ -234,6 +234,25 @@ window.ProtecConventions = {
                 <p class="text-[11px] text-slate-600 mt-1">Mise à disposition conventionnée d'une ambulance VPSP armée pour départs réflexes et interventions d'urgence sous régulation médicale 15.</p>
               </div>
 
+              ${(() => {
+                const tier = window.ProtecGardesSamu ? window.ProtecGardesSamu.getAntennaTier(game) : null;
+                if (!tier) return '';
+                return `
+                  <div class="p-2.5 rounded-xl bg-sky-50 border border-sky-200 text-[10px] space-y-1">
+                    <div class="flex items-center justify-between font-bold text-sky-950">
+                      <span>Régime selon taille de votre antenne :</span>
+                      <span class="px-2 py-0.2 rounded font-black ${tier.badgeColor}">${tier.cadenceText}</span>
+                    </div>
+                    <p class="text-slate-600 leading-tight">
+                      • <strong>Petite antenne</strong> (< 12 bénév.) : Urgences sanitaires & NOVI uniquement.<br/>
+                      • <strong>Moyenne antenne</strong> (12-24 bénév.) : Gardes week-ends & jours fériés.<br/>
+                      • <strong>Grosse antenne</strong> (≥ 25 bénév.) : Gardes tous les soirs & week-ends.<br/>
+                      <em class="text-amber-800">Toutes les gardes sont au planning. Le joueur garde la main sur les effectifs : pas d'inscrit = aucun départ réflexe.</em>
+                    </p>
+                  </div>
+                `;
+              })()}
+
               <div class="p-2.5 rounded-xl bg-slate-50 text-[10px] space-y-1 font-semibold text-slate-700">
                 <div class="flex justify-between">
                   <span>Indemnisation SAMU :</span>

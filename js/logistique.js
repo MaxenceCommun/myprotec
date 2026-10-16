@@ -692,15 +692,35 @@ window.ProtecLogistique = {
     return { total, itemsCount };
   },
 
+  getShippingFee(subtotal) {
+    if (subtotal <= 0) return 0;
+    const baseFee = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('shippingBaseFee', 35) : 35;
+    const threshold = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('shippingFreeThreshold', 350) : 350;
+    if (subtotal >= threshold) return 0;
+    return baseFee;
+  },
+
+  getDeliveryDurationSeconds() {
+    return window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('deliveryDurationSeconds', 120) : 120;
+  },
+
+  getActiveDeliveries(game) {
+    if (!game || !Array.isArray(game.deliveries)) return [];
+    return game.deliveries.filter(d => d && d.status === 'in_transit');
+  },
+
   checkout(game) {
-    const { total, itemsCount } = this.getCartTotal();
+    const { total: subtotal, itemsCount } = this.getCartTotal();
     if (itemsCount === 0) {
       game.showToast('Panier vide', 'Ajoutez du matériel au panier avant de commander.', 'orange');
       return;
     }
 
-    if (game.resources.money < total) {
-      game.showToast('Trésorerie insuffisante', `Il vous manque ${(total - game.resources.money).toLocaleString('fr-FR')} € pour valider cette commande.`, 'red');
+    const shippingFee = this.getShippingFee(subtotal);
+    const totalToPay = subtotal + shippingFee;
+
+    if (game.resources.money < totalToPay) {
+      game.showToast('Trésorerie insuffisante', `Il vous manque ${(totalToPay - game.resources.money).toLocaleString('fr-FR')} € (articles + frais de livraison).`, 'red');
       return;
     }
 
@@ -712,37 +732,158 @@ window.ProtecLogistique = {
 
     this.ensureStationStock(station, game);
 
-    // Débit trésorerie
-    game.resources.money -= total;
+    // Débit immédiat de la trésorerie
+    game.resources.money -= totalToPay;
 
-    // Ajout des articles dans le stock de l'antenne
-    const orderedItems = [];
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        game,
+        -totalToPay,
+        `Commande Centrale d'Achats (${itemsCount} articles${shippingFee > 0 ? ` + frais d'envoi ${shippingFee} €` : ' - Port offert'})`,
+        'logistique',
+        `ACHAT-${Date.now()}`,
+        'Centrale Logistique Protection Civile'
+      );
+    }
+
+    // Préparation des détails des articles commandés
+    const orderedItemsSummary = [];
     Object.entries(this.cart).forEach(([id, qty]) => {
-      station.stock[id] = (station.stock[id] || 0) + qty;
-      if (id === 'stock_materiels_ps') {
-        station.stockMaterielsPS = (station.stockMaterielsPS || 0) + (100 * qty);
-        game.stockMaterielsPS = station.stockMaterielsPS;
-      }
       const catItem = this.CATALOG.find(i => i.id === id);
-      if (catItem) orderedItems.push(`${qty}x ${catItem.name}`);
+      if (catItem) {
+        orderedItemsSummary.push({
+          id,
+          name: catItem.name,
+          qty,
+          price: catItem.price,
+          total: catItem.price * qty,
+          image: catItem.image,
+          lucideIcon: catItem.lucideIcon || 'package'
+        });
+      }
     });
 
-    // Synchronisation avec les jauges globales
-    this.syncToGlobalLogistics(game);
+    if (!Array.isArray(game.deliveries)) game.deliveries = [];
+    const durationSec = this.getDeliveryDurationSeconds();
 
-    // Sauvegarde
-    game.updateStatsUI();
-    game.saveGame();
+    const delivery = {
+      id: `deliv-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      orderNumber: `CMD-${Date.now().toString(36).toUpperCase()}`,
+      createdAt: Date.now(),
+      durationSeconds: durationSec,
+      etaTimestamp: Date.now() + (durationSec * 1000),
+      stationId: station.id,
+      stationName: station.name,
+      stationCity: station.city,
+      items: { ...this.cart },
+      itemsSummary: orderedItemsSummary,
+      subtotal,
+      shippingFee,
+      totalCost: totalToPay,
+      carrier: 'Messagerie Logistique Protection Civile (Centrale FNPC)',
+      status: 'in_transit'
+    };
+
+    game.deliveries.unshift(delivery);
 
     // Vider le panier
     this.cart = {};
 
-    // Notification et redirection vers l'onglet stock
-    game.showToast('Commande Réceptionnée ! 📦', `Achat de ${total.toLocaleString('fr-FR')} € validé. Matériel entreposé à ${station.name}.`, 'green');
-    
-    // Basculer vers l'onglet Stock pour voir les nouveaux articles arrivés
-    this.activeTab = 'stock';
+    // Sauvegarde immédiate
+    game.updateStatsUI();
+    game.saveGame();
+
+    const minStr = Math.ceil(durationSec / 60);
+    game.showToast(
+      '🚚 Commande Validée & Expédiée !', 
+      `Montant réglé : ${totalToPay.toLocaleString('fr-FR')} € ${shippingFee > 0 ? `(dont ${shippingFee} € de livraison)` : '(Livraison offerte)'}. Arrivée estimée dans ${minStr} min à ${station.name}.`, 
+      'green'
+    );
+
+    // Basculer vers le suivi en direct des livraisons
+    this.activeTab = 'livraisons';
     this.renderModal(game);
+  },
+
+  updateDeliveriesClock(game) {
+    if (!game || !Array.isArray(game.deliveries)) return;
+
+    let hasDelivered = false;
+    const now = Date.now();
+
+    game.deliveries.forEach(d => {
+      if (d && d.status === 'in_transit' && now >= d.etaTimestamp) {
+        d.status = 'delivered';
+        d.deliveredAt = now;
+        hasDelivered = true;
+
+        const station = (game.stations || []).find(s => s.id === d.stationId) || game.stations[0];
+        if (station) {
+          this.ensureStationStock(station, game);
+          Object.entries(d.items || {}).forEach(([itemId, qty]) => {
+            station.stock[itemId] = (station.stock[itemId] || 0) + qty;
+            if (itemId === 'stock_materiels_ps') {
+              station.stockMaterielsPS = (station.stockMaterielsPS || 0) + (100 * qty);
+              game.stockMaterielsPS = station.stockMaterielsPS;
+            }
+          });
+        }
+
+        this.syncToGlobalLogistics(game);
+
+        if (typeof game.showToast === 'function') {
+          game.showToast(
+            '📦 Commande Réceptionnée !',
+            `Le colis « ${d.orderNumber} » vient d'être livré à « ${d.stationName} ». Le matériel a été rangé dans le stock de l'antenne.`,
+            'green'
+          );
+        }
+      }
+    });
+
+    if (hasDelivered) {
+      game.updateStatsUI();
+      game.saveGame();
+      if (typeof document !== 'undefined') {
+        const modalOpen = document.getElementById('main-modal');
+        const title = document.getElementById('modal-title');
+        if (modalOpen && !modalOpen.classList.contains('hidden') && title && title.textContent.includes('Centrale d’Achats')) {
+          this.renderModal(game);
+        }
+      }
+    } else {
+      if (this.activeTab === 'livraisons' && typeof document !== 'undefined') {
+        const modalOpen = document.getElementById('main-modal');
+        if (modalOpen && !modalOpen.classList.contains('hidden')) {
+          this.updateLiveDeliveryTrackers(game);
+        }
+      }
+    }
+  },
+
+  updateLiveDeliveryTrackers(game) {
+    const activeDeliveries = this.getActiveDeliveries(game);
+    activeDeliveries.forEach(d => {
+      const remainingSec = Math.max(0, Math.ceil((d.etaTimestamp - Date.now()) / 1000));
+      const totalSec = d.durationSeconds || 120;
+      const elapsed = Math.max(0, totalSec - remainingSec);
+      const progress = Math.min(100, Math.round((elapsed / totalSec) * 100));
+
+      const timerEl = document.getElementById(`delivery-timer-${d.id}`);
+      if (timerEl) {
+        const m = Math.floor(remainingSec / 60);
+        const s = remainingSec % 60;
+        timerEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      }
+      const progressEl = document.getElementById(`delivery-progress-${d.id}`);
+      if (progressEl) {
+        progressEl.style.width = `${progress}%`;
+      }
+      const percentEl = document.getElementById(`delivery-percent-${d.id}`);
+      if (percentEl) {
+        percentEl.textContent = `${progress}%`;
+      }
+    });
   },
 
   // =========================================================================
@@ -821,19 +962,24 @@ window.ProtecLogistique = {
             </span>
           </div>
 
-          <!-- Onglets Principaux [ Boutique | Stock | Flotte ] -->
-          <div class="flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-black self-start md:self-auto">
+          <!-- Onglets Principaux [ Boutique | Livraisons | Stock | Flotte ] -->
+          <div class="flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-black self-start md:self-auto flex-wrap">
             <button onclick="window.ProtecLogistique.setTab('boutique')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'boutique' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
               <i data-lucide="shopping-bag" class="w-4 h-4"></i>
               <span>Boutique en Ligne</span>
               ${cartCount > 0 ? `<span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400 text-slate-900 font-black">${cartCount}</span>` : ''}
+            </button>
+            <button onclick="window.ProtecLogistique.setTab('livraisons')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'livraisons' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
+              <i data-lucide="truck" class="w-4 h-4"></i>
+              <span>Suivi Livraisons</span>
+              ${this.getActiveDeliveries(game).length > 0 ? `<span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-white font-black animate-pulse shadow-xs">${this.getActiveDeliveries(game).length}</span>` : ''}
             </button>
             <button onclick="window.ProtecLogistique.setTab('stock')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'stock' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
               <i data-lucide="package" class="w-4 h-4"></i>
               <span>Stock de l'Antenne</span>
             </button>
             <button onclick="window.ProtecLogistique.setTab('flotte')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'flotte' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
-              <i data-lucide="truck" class="w-4 h-4"></i>
+              <i data-lucide="shield-check" class="w-4 h-4"></i>
               <span>Flotte & Garage</span>
             </button>
           </div>
@@ -841,6 +987,7 @@ window.ProtecLogistique = {
 
         <!-- CONTENU DYNAMIQUE SELON L'ONGLET ACTIF -->
         ${this.activeTab === 'boutique' ? this.renderBoutiqueHTML(game, station, cartTotal, cartCount) : ''}
+        ${this.activeTab === 'livraisons' ? this.renderLivraisonsHTML(game, station) : ''}
         ${this.activeTab === 'stock' ? this.renderStockHTML(game, station) : ''}
         ${this.activeTab === 'flotte' ? this.renderFlotteHTML(game, station) : ''}
 
@@ -855,6 +1002,13 @@ window.ProtecLogistique = {
   // =========================================================================
 
   renderBoutiqueHTML(game, station, cartTotal, cartCount) {
+    const shippingFee = this.getShippingFee(cartTotal);
+    const grandTotal = cartTotal + shippingFee;
+    const freeThreshold = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('shippingFreeThreshold', 350) : 350;
+    const baseFee = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('shippingBaseFee', 35) : 35;
+    const neededForFree = Math.max(0, freeThreshold - cartTotal);
+    const deliveryDuration = this.getDeliveryDurationSeconds();
+
     const filteredItems = this.CATALOG.filter(item => {
       const matchCat = this.selectedCategory === 'all' || item.category === this.selectedCategory;
       const matchSearch = !this.searchQuery || 
@@ -872,13 +1026,13 @@ window.ProtecLogistique = {
           </div>
           <div>
             <h4 class="text-xs sm:text-sm font-black leading-tight">Centrale d'Approvisionnement Fédérale</h4>
-            <p class="text-[11px] text-blue-100">Matériel officiel agréé Sécurité Civile & ARS • Livraison immédiate en réserve de l'antenne sélectionnée</p>
+            <p class="text-[11px] text-blue-100">Matériel officiel agréé Sécurité Civile & ARS • Expédition sous ~${Math.round(deliveryDuration / 60)} min vers l'antenne sélectionnée</p>
           </div>
         </div>
         <div class="hidden sm:flex items-center gap-2 text-right">
           <div>
             <span class="text-[10px] text-blue-200 block">Frais d'expédition</span>
-            <strong class="text-xs text-emerald-300 font-bold">Offerts (0 €)</strong>
+            <strong class="text-xs text-emerald-300 font-bold">Gratuits dès ${freeThreshold} € (${baseFee} € sinon)</strong>
           </div>
         </div>
       </div>
@@ -1031,36 +1185,64 @@ window.ProtecLogistique = {
           </div>
 
           <!-- Total et Récapitulatif financier -->
-          <div class="pt-3 border-t border-slate-800 space-y-2 text-xs">
-            <div class="flex justify-between text-slate-400 text-[11px]">
+          <div class="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2 text-xs">
+            <div class="flex justify-between text-slate-500 dark:text-slate-400 text-[11px]">
               <span>Sous-total articles :</span>
-              <span class="font-mono text-slate-200">${cartTotal.toLocaleString('fr-FR')} €</span>
-            </div>
-            <div class="flex justify-between text-slate-400 text-[11px]">
-              <span>Livraison en caserne :</span>
-              <span class="font-bold text-emerald-400">Gratuite (0 €)</span>
+              <span class="font-mono font-bold text-slate-800 dark:text-slate-200">${cartTotal.toLocaleString('fr-FR')} €</span>
             </div>
             
-            <div class="flex justify-between items-baseline pt-1 border-t border-slate-800 text-sm font-black">
-              <span>Total Commande :</span>
-              <span class="text-base text-emerald-400 font-mono">${cartTotal.toLocaleString('fr-FR')} €</span>
+            <div class="flex justify-between text-slate-500 dark:text-slate-400 text-[11px]">
+              <span>Frais de livraison :</span>
+              ${cartTotal === 0 ? `
+                <span class="text-slate-400 font-mono">0 €</span>
+              ` : shippingFee === 0 ? `
+                <span class="font-black text-emerald-500 flex items-center gap-1">
+                  <i data-lucide="gift" class="w-3 h-3"></i> Offerts (0 €)
+                </span>
+              ` : `
+                <span class="font-black text-amber-500 font-mono">+${shippingFee.toLocaleString('fr-FR')} €</span>
+              `}
             </div>
 
-            <div class="flex justify-between text-[10.5px] ${game.resources.money < cartTotal ? 'text-rose-400' : 'text-slate-400'}">
+            ${cartTotal > 0 && neededForFree > 0 ? `
+              <div class="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[10.5px] text-amber-600 dark:text-amber-300 leading-snug flex items-start gap-1.5">
+                <i data-lucide="info" class="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5"></i>
+                <span>Ajoutez encore <strong>${neededForFree.toLocaleString('fr-FR')} €</strong> pour bénéficier de la <strong>livraison offerte</strong> (franco dès ${freeThreshold} €).</span>
+              </div>
+            ` : ''}
+
+            ${cartTotal > 0 && shippingFee === 0 ? `
+              <div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[10.5px] text-emerald-600 dark:text-emerald-300 leading-snug flex items-center gap-1.5">
+                <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-500 flex-shrink-0"></i>
+                <span>Super ! Vous bénéficiez des <strong>frais de port offerts</strong> pour cette commande.</span>
+              </div>
+            ` : ''}
+            
+            <div class="flex justify-between items-baseline pt-2 border-t border-slate-200 dark:border-slate-800 text-sm font-black">
+              <span>Total Commande :</span>
+              <span class="text-base text-emerald-600 dark:text-emerald-400 font-mono">${grandTotal.toLocaleString('fr-FR')} €</span>
+            </div>
+
+            <div class="flex justify-between text-[10.5px] ${game.resources.money < grandTotal ? 'text-rose-500 font-bold' : 'text-slate-500 dark:text-slate-400'}">
               <span>Trésorerie restante :</span>
-              <span class="font-mono font-bold">${Math.max(0, game.resources.money - cartTotal).toLocaleString('fr-FR')} €</span>
+              <span class="font-mono font-bold">${Math.max(0, game.resources.money - grandTotal).toLocaleString('fr-FR')} €</span>
+            </div>
+
+            <div class="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500 pt-0.5">
+              <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
+              <span>Délai d'acheminement estimé : ~${Math.round(deliveryDuration / 60)} min</span>
             </div>
           </div>
 
           <!-- Bouton de paiement / validation -->
           <div class="space-y-2 pt-1">
             ${cartCount > 0 ? `
-              <button onclick="window.ProtecLogistique.checkout(window.game)" class="w-full py-3 rounded-2xl ${game.resources.money >= cartTotal ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white shadow-lg cursor-pointer' : 'bg-slate-700 text-slate-400 cursor-not-allowed'} font-black text-xs transition flex items-center justify-center gap-2 active:scale-95" ${game.resources.money < cartTotal ? 'disabled' : ''}>
-                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-                <span>${game.resources.money >= cartTotal ? `Valider la Commande (${cartTotal.toLocaleString('fr-FR')} €)` : 'Trésorerie Insuffisante'}</span>
+              <button onclick="window.ProtecLogistique.checkout(window.game)" class="w-full py-3 rounded-2xl ${game.resources.money >= grandTotal ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white shadow-lg cursor-pointer' : 'bg-slate-300 text-slate-500 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed'} font-black text-xs transition flex items-center justify-center gap-2 active:scale-95" ${game.resources.money < grandTotal ? 'disabled' : ''}>
+                <i data-lucide="truck" class="w-4 h-4"></i>
+                <span>${game.resources.money >= grandTotal ? `Commander et Expédier (${grandTotal.toLocaleString('fr-FR')} €)` : 'Trésorerie Insuffisante'}</span>
               </button>
 
-              <button onclick="window.ProtecLogistique.clearCart()" class="w-full py-1.5 rounded-xl text-[10.5px] text-slate-400 hover:text-slate-200 transition">
+              <button onclick="window.ProtecLogistique.clearCart()" class="w-full py-1.5 rounded-xl text-[10.5px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
                 Vider le panier
               </button>
             ` : `
@@ -1072,6 +1254,215 @@ window.ProtecLogistique = {
 
         </div>
 
+      </div>
+    `;
+  },
+
+  // =========================================================================
+  // 6.bis ONGLET SUIVI DES LIVRAISONS EN DIRECT
+  // =========================================================================
+
+  renderLivraisonsHTML(game, station) {
+    const deliveries = Array.isArray(game.deliveries) ? [...game.deliveries] : [];
+    const activeDeliveries = deliveries.filter(d => d.status === 'in_transit')
+      .sort((a, b) => a.etaTimestamp - b.etaTimestamp);
+    const completedDeliveries = deliveries.filter(d => d.status === 'delivered')
+      .sort((a, b) => (b.deliveredAt || b.etaTimestamp) - (a.deliveredAt || a.etaTimestamp))
+      .slice(0, 10);
+
+    const now = Date.now();
+    const freeThreshold = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('shippingFreeThreshold', 350) : 350;
+    const baseFee = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('shippingBaseFee', 35) : 35;
+
+    return `
+      <div class="space-y-4">
+        <!-- Bandeau d'information logistique & règles de transport -->
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white flex items-center justify-between gap-3 shadow-sm">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center shadow-inner flex-shrink-0">
+              <i data-lucide="truck" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <h4 class="text-xs sm:text-sm font-black leading-tight">Centre de Dispatching Logistique & Expéditions</h4>
+              <p class="text-[11px] text-amber-100">Frais forfaitaires de groupage : ${baseFee} € • Offerts dès ${freeThreshold} € d'achats groupés • Délais d'acheminement en temps réel</p>
+            </div>
+          </div>
+          <div class="hidden sm:flex items-center gap-2 text-right">
+            <div class="px-2.5 py-1 rounded-lg bg-black/20 backdrop-blur border border-white/20 text-xs font-mono font-bold">
+              ${activeDeliveries.length} en transit
+            </div>
+          </div>
+        </div>
+
+        ${activeDeliveries.length === 0 && completedDeliveries.length === 0 ? `
+          <!-- État vide : Aucune commande -->
+          <div class="p-12 text-center rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
+            <div class="w-16 h-16 rounded-full bg-slate-100 mx-auto flex items-center justify-center text-slate-400">
+              <i data-lucide="package-search" class="w-8 h-8 text-slate-400 stroke-1"></i>
+            </div>
+            <div class="max-w-md mx-auto space-y-1">
+              <h4 class="text-sm font-black text-slate-800">Aucune expédition en cours</h4>
+              <p class="text-xs text-slate-500">Passez commande dans la centrale d'achats pour approvisionner vos réserves. Suivez ici la progression en direct des camions transporteurs.</p>
+            </div>
+            <button onclick="window.ProtecLogistique.setTab('boutique')" class="px-4 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition inline-flex items-center gap-2 cursor-pointer">
+              <i data-lucide="shopping-bag" class="w-4 h-4"></i>
+              <span>Ouvrir la Boutique</span>
+            </button>
+          </div>
+        ` : `
+          <!-- Section 1 : Livraisons actives en cours de route -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between text-xs font-black text-slate-700">
+              <span class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                <span>Expéditions En Transit (${activeDeliveries.length})</span>
+              </span>
+              <span class="text-[11px] text-slate-400 font-normal">Mise à jour automatique chaque seconde</span>
+            </div>
+
+            ${activeDeliveries.length === 0 ? `
+              <div class="p-5 rounded-2xl bg-white border border-dashed border-slate-300 text-center space-y-2">
+                <p class="text-xs text-slate-500 font-semibold">Aucun convoi actuellement sur les routes.</p>
+                <button onclick="window.ProtecLogistique.setTab('boutique')" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition inline-flex items-center gap-1.5">
+                  <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i>
+                  <span>Commander du matériel</span>
+                </button>
+              </div>
+            ` : `
+              <div class="grid grid-cols-1 gap-3">
+                ${activeDeliveries.map(d => {
+                  const remainingSec = Math.max(0, Math.ceil((d.etaTimestamp - now) / 1000));
+                  const totalSec = d.durationSeconds || 120;
+                  const elapsed = Math.max(0, totalSec - remainingSec);
+                  const progress = Math.min(100, Math.round((elapsed / totalSec) * 100));
+                  const m = Math.floor(remainingSec / 60);
+                  const s = remainingSec % 60;
+                  const timeFormatted = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+                  const orderDate = new Date(d.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+                  return `
+                    <div class="p-4 rounded-2xl bg-white border border-amber-200/80 shadow-xs hover:shadow-md transition space-y-3.5">
+                      <!-- En-tête commande -->
+                      <div class="flex items-center justify-between gap-2 flex-wrap border-b border-slate-100 pb-2.5">
+                        <div class="flex items-center gap-2.5">
+                          <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-black">
+                            <i data-lucide="truck" class="w-5 h-5"></i>
+                          </div>
+                          <div>
+                            <div class="flex items-center gap-2">
+                              <span class="text-xs font-black text-slate-900 font-mono">Colis #${d.orderNumber}</span>
+                              <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300/80 flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                En route
+                              </span>
+                            </div>
+                            <div class="text-[11px] text-slate-500 mt-0.5">
+                              Destination : <strong class="text-slate-800">${d.stationName}</strong> • Commandé à ${orderDate}
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- Compte à rebours dynamique -->
+                        <div class="text-right">
+                          <span class="text-[10px] uppercase tracking-wider text-slate-400 font-black block">Livraison estimée</span>
+                          <div class="flex items-baseline gap-1 justify-end">
+                            <span id="delivery-timer-${d.id}" class="text-xl font-mono font-black text-amber-600">${timeFormatted}</span>
+                            <span class="text-xs text-slate-400 font-bold">restant</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Stepper visuel 3 étapes -->
+                      <div class="grid grid-cols-3 gap-2 text-center text-[10px] font-bold">
+                        <div class="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex flex-col items-center gap-1">
+                          <i data-lucide="package-check" class="w-4 h-4 text-emerald-600"></i>
+                          <span>1. Préparation FNPC</span>
+                          <span class="text-[9px] text-emerald-600 font-mono">Terminée</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 flex flex-col items-center gap-1">
+                          <i data-lucide="truck" class="w-4 h-4 text-amber-600 animate-bounce"></i>
+                          <span>2. Convoi Routier</span>
+                          <span id="delivery-percent-${d.id}" class="text-[9px] text-amber-700 font-mono font-black">${progress}%</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 flex flex-col items-center gap-1">
+                          <i data-lucide="warehouse" class="w-4 h-4 text-slate-400"></i>
+                          <span>3. Stockage Réserve</span>
+                          <span class="text-[9px] text-slate-400 font-mono">En attente</span>
+                        </div>
+                      </div>
+
+                      <!-- Barre de progression -->
+                      <div class="space-y-1">
+                        <div class="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
+                          <div id="delivery-progress-${d.id}" class="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-emerald-500 transition-all duration-1000" style="width: ${progress}%;"></div>
+                        </div>
+                        <div class="flex justify-between text-[10px] text-slate-400 font-mono">
+                          <span>Plateforme Logistique</span>
+                          <span>Antenne ${d.stationName}</span>
+                        </div>
+                      </div>
+
+                      <!-- Contenu du colis -->
+                      <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs flex-wrap">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="text-[11px] font-bold text-slate-500">Contenu :</span>
+                          <span class="text-[11px] text-slate-700 font-medium">${d.itemsSummary || 'Matériels divers'}</span>
+                        </div>
+                        <div class="text-right text-[11px] font-mono">
+                          <span class="text-slate-400">Total : </span>
+                          <strong class="text-slate-900 font-black">${d.totalCost.toLocaleString('fr-FR')} €</strong>
+                          <span class="text-[10px] text-slate-400">(${d.shippingFee === 0 ? 'Port offert' : `Frais port : ${d.shippingFee} €`})</span>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+
+          <!-- Section 2 : Historique des commandes livrées -->
+          ${completedDeliveries.length > 0 ? `
+            <div class="space-y-3 pt-3 border-t border-slate-200">
+              <div class="flex items-center justify-between text-xs font-black text-slate-700">
+                <span class="flex items-center gap-2">
+                  <i data-lucide="history" class="w-4 h-4 text-slate-400"></i>
+                  <span>Dernières Commandes Réceptionnées (${completedDeliveries.length})</span>
+                </span>
+                <span class="text-[11px] text-slate-400 font-normal">Disponibles dans le stock</span>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                ${completedDeliveries.map(d => {
+                  const deliveredDate = d.deliveredAt ? new Date(d.deliveredAt).toLocaleString('fr-FR', {
+                    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                  }) : 'Récemment';
+
+                  return `
+                    <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs hover:border-slate-300 transition space-y-2">
+                      <div class="flex items-center justify-between gap-1">
+                        <div class="flex items-center gap-1.5">
+                          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          <span class="text-xs font-black text-slate-900 font-mono">#${d.orderNumber}</span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded text-[9.5px] font-black bg-emerald-100 text-emerald-800">
+                          Livré
+                        </span>
+                      </div>
+                      
+                      <p class="text-[11px] text-slate-600 line-clamp-1">${d.itemsSummary || 'Articles livrés'}</p>
+                      
+                      <div class="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10.5px] text-slate-400">
+                        <span>${d.stationName} • ${deliveredDate}</span>
+                        <span class="font-mono font-bold text-slate-800">${d.totalCost.toLocaleString('fr-FR')} €</span>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+        `}
       </div>
     `;
   },

@@ -34,6 +34,14 @@ window.ProtecOnboarding = {
   },
   step2Map: null,
   step2Marker: null,
+  existingAllianceStations: [],
+  exclusionCircles: [],
+  existingStationMarkers: [],
+  maskLayer: null,
+  deptBorderLayer: null,
+  placementValidation: { isValid: true, message: '', nearestStationName: null, nearestDist: null },
+  cachedGeoJSON: null,
+  lastValidPosition: null,
 
   // 3. Mobilier acheté et typage des pièces du bâtiment (initialement VIDE)
   placedFurniture: [],
@@ -151,6 +159,14 @@ window.ProtecOnboarding = {
   },
 
   setStep(step) {
+    if (this.currentStep === 2 && step === 3) {
+      if (this.placementValidation && !this.placementValidation.isValid) {
+        if (this.game && typeof this.game.showToast === 'function') {
+          this.game.showToast('Emplacement Non Valide ⛔', this.placementValidation.message || 'Veuillez positionner votre antenne à un endroit conforme.', 'red');
+        }
+        return;
+      }
+    }
     this.currentStep = Math.max(1, Math.min(4, step));
     this.renderWizard();
 
@@ -426,34 +442,414 @@ window.ProtecOnboarding = {
   },
 
   // -------------------------------------------------------------
+  // OUTILS GÉOGRAPHIQUES & GESTION DES CONTRAINTES D'IMPLANTATION
+  // -------------------------------------------------------------
+  normalizeCityName(str) {
+    if (!str) return '';
+    return String(str).toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/^ville\s+de\s+/i, '')
+      .replace(/^commune\s+de\s+/i, '')
+      .replace(/[^a-z0-9]/g, '');
+  },
+
+  async loadDepartementsGeoJSON() {
+    if (this.cachedGeoJSON) return this.cachedGeoJSON;
+    if (window._cachedDepartementsGeoJSON) {
+      this.cachedGeoJSON = window._cachedDepartementsGeoJSON;
+      return this.cachedGeoJSON;
+    }
+    try {
+      const res = await fetch('data/departements-version-simplifiee.geojson');
+      if (res.ok) {
+        const data = await res.json();
+        this.cachedGeoJSON = data;
+        window._cachedDepartementsGeoJSON = data;
+        return data;
+      }
+    } catch (e) {
+      console.warn('Impossible de charger data/departements-version-simplifiee.geojson:', e);
+    }
+    return null;
+  },
+
+  isPointInPolygonRing(pt, ring) {
+    let inside = false;
+    const x = pt[0], y = pt[1];
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1];
+      const xj = ring[j][0], yj = ring[j][1];
+      const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  },
+
+  isPointInDepartment(lat, lng, deptCode) {
+    const code = String(deptCode).trim();
+    if (this.cachedGeoJSON && this.cachedGeoJSON.features) {
+      const feat = this.cachedGeoJSON.features.find(f => f.properties && f.properties.code === code);
+      if (feat && feat.geometry) {
+        const pt = [lng, lat]; // [x, y]
+        const geom = feat.geometry;
+        if (geom.type === 'Polygon') {
+          if (!this.isPointInPolygonRing(pt, geom.coordinates[0])) return false;
+          for (let k = 1; k < geom.coordinates.length; k++) {
+            if (this.isPointInPolygonRing(pt, geom.coordinates[k])) return false;
+          }
+          return true;
+        } else if (geom.type === 'MultiPolygon') {
+          for (const poly of geom.coordinates) {
+            if (this.isPointInPolygonRing(pt, poly[0])) {
+              let inHole = false;
+              for (let k = 1; k < poly.length; k++) {
+                if (this.isPointInPolygonRing(pt, poly[k])) { inHole = true; break; }
+              }
+              if (!inHole) return true;
+            }
+          }
+          return false;
+        }
+      }
+    }
+
+    // Fallback boîte englobante officielle
+    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(code) : null;
+    if (deptInfo && deptInfo.bbox) {
+      const [minLat, minLng, maxLat, maxLng] = deptInfo.bbox;
+      return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+    }
+    return true;
+  },
+
+  async loadExistingStations() {
+    let stations = [];
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.getAllianceStations === 'function') {
+      try {
+        const myId = (this.game?.player && this.game.player.id) || localStorage.getItem('protec_player_id');
+        const list = await window.ProtecSupabase.getAllianceStations(myId);
+        if (Array.isArray(list)) stations = list;
+      } catch (e) {
+        console.warn('Erreur chargement alliance_stations:', e);
+      }
+    }
+    if ((!stations || stations.length === 0) && this.game && Array.isArray(this.game.stations)) {
+      stations = this.game.stations.filter(s => s && !isNaN(s.lat) && !isNaN(s.lng));
+    }
+    this.existingAllianceStations = stations || [];
+    return this.existingAllianceStations;
+  },
+
+  validateCandidateLocation(lat, lng, cityName) {
+    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.deptCode) : null;
+    const deptName = deptInfo ? deptInfo.name : this.deptCode;
+    const minKm = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('minStationDistanceKm', 20) : 20;
+
+    // 1. Règle absolue : obligatoirement dans le département d'inscription
+    const inDept = this.isPointInDepartment(lat, lng, this.deptCode);
+    if (!inDept) {
+      return {
+        isValid: false,
+        reason: 'outside_dept',
+        message: `Emplacement hors limites : votre antenne doit être obligatoirement située à l'intérieur du département ${deptName} (${this.deptCode}).`,
+        minDistance: minKm,
+        nearestDist: null,
+        nearestStationName: null
+      };
+    }
+
+    // 2. Règle de distance minimale par rapport à toutes les antennes existantes
+    let nearestDist = null;
+    let nearestSt = null;
+
+    if (Array.isArray(this.existingAllianceStations)) {
+      for (const st of this.existingAllianceStations) {
+        const stLat = parseFloat(st.lat);
+        const stLng = parseFloat(st.lng);
+        if (isNaN(stLat) || isNaN(stLng)) continue;
+
+        const dist = window.ProtecDepartements 
+          ? window.ProtecDepartements.calculateDistance(lat, lng, stLat, stLng)
+          : 999;
+
+        if (nearestDist === null || dist < nearestDist) {
+          nearestDist = dist;
+          nearestSt = st;
+        }
+
+        if (dist < minKm) {
+          return {
+            isValid: false,
+            reason: 'too_close',
+            station: st,
+            distance: dist,
+            minDistance: minKm,
+            message: `Trop proche d'une antenne existante (« ${st.station_name || st.name || st.city} ») : distance mesurée à ${dist.toFixed(1)} km (minimum requis : ${minKm} km).`,
+            nearestDist: dist,
+            nearestStationName: st.station_name || st.name || st.city
+          };
+        }
+      }
+    }
+
+    // 3. Règle d'exclusivité communale : pas dans la même ville
+    const normCandCity = this.normalizeCityName(cityName);
+    if (normCandCity && Array.isArray(this.existingAllianceStations)) {
+      for (const st of this.existingAllianceStations) {
+        const normStCity = this.normalizeCityName(st.city);
+        if (normStCity && normStCity === normCandCity) {
+          return {
+            isValid: false,
+            reason: 'same_city',
+            station: st,
+            cityName: cityName,
+            minDistance: minKm,
+            message: `La commune de « ${cityName} » dispose déjà d'une antenne de la Protection Civile (« ${st.station_name || st.name} »). Veuillez vous implanter dans une autre commune.`,
+            nearestDist,
+            nearestStationName: st.station_name || st.name || st.city
+          };
+        }
+      }
+    }
+
+    return {
+      isValid: true,
+      message: 'Emplacement conforme aux règles territoriales d\'implantation.',
+      nearestDist,
+      nearestStationName: nearestSt ? (nearestSt.station_name || nearestSt.name || nearestSt.city) : null,
+      minDistance: minKm
+    };
+  },
+
+  renderExistingStationsOnMap() {
+    if (!this.step2Map || !window.L) return;
+
+    (this.exclusionCircles || []).forEach(c => {
+      try { this.step2Map.removeLayer(c); } catch (e) {}
+    });
+    this.exclusionCircles = [];
+
+    (this.existingStationMarkers || []).forEach(m => {
+      try { this.step2Map.removeLayer(m); } catch (e) {}
+    });
+    this.existingStationMarkers = [];
+
+    const minKm = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('minStationDistanceKm', 20) : 20;
+
+    (this.existingAllianceStations || []).forEach(st => {
+      const lat = parseFloat(st.lat);
+      const lng = parseFloat(st.lng);
+      if (isNaN(lat) || isNaN(lng)) return;
+
+      // Cercle d'exclusion
+      const circle = L.circle([lat, lng], {
+        radius: minKm * 1000,
+        color: '#f43f5e',
+        fillColor: '#fda4af',
+        fillOpacity: 0.16,
+        weight: 1.5,
+        dashArray: '5, 5'
+      }).addTo(this.step2Map);
+
+      circle.bindTooltip(`Zone d'exclusion ${minKm} km — Antenne « ${st.station_name || st.name || st.city} »`, {
+        direction: 'center',
+        opacity: 0.95
+      });
+      this.exclusionCircles.push(circle);
+
+      // Marqueur antenne réseau existante avec la même icône base_antenne.png et contour bleu
+      const stMarkerIcon = L.divIcon({
+        className: 'clean-marker',
+        html: `
+          <div class="custom-leaflet-marker" style="display:flex; align-items:center; justify-content:center;">
+            <div class="marker-inner bg-white p-1 flex items-center justify-center transition-transform hover:scale-110" style="width:38px; height:38px; border-radius:50%; border:2.5px solid #024589; box-shadow:0 4px 12px rgba(2,69,137,0.3); background:white;">
+              <img src="base_antenne.png" alt="Antenne Réseau" style="width:100%; height:100%; object-fit:contain;" />
+            </div>
+          </div>
+        `,
+        iconSize: [38, 38],
+        iconAnchor: [19, 19]
+      });
+
+      const marker = L.marker([lat, lng], { icon: stMarkerIcon }).addTo(this.step2Map);
+      const popupContent = `
+        <div style="font-family:inherit; font-size:11px; line-height:1.4; padding:2px;">
+          <div style="font-weight:900; color:#1e1b4b; font-size:12px;">${st.station_name || st.name || 'Antenne Protection Civile'}</div>
+          <div style="color:#4338ca; font-weight:700;">📍 Commune : ${st.city || 'Secteur Local'}</div>
+          <div style="color:#64748b; font-size:10px;">Directeur : ${st.player_name || st.playerName || 'Directeur d’Antenne'}</div>
+          <div style="margin-top:4px; padding:2px 6px; background:#ffe4e6; color:#9f1239; border-radius:4px; font-weight:800; font-size:10px; text-align:center;">
+            Zone d'exclusion : min. ${minKm} km
+          </div>
+        </div>
+      `;
+      marker.bindPopup(popupContent);
+      marker.bindTooltip(`Antenne existante : ${st.station_name || st.city}`, { direction: 'top', offset: [0, -18] });
+      this.existingStationMarkers.push(marker);
+    });
+  },
+
+  updateCandidateMarkerStyle(isValid) {
+    if (!this.step2Marker) return;
+    const borderColor = isValid ? '#f78d20' : '#e11d48';
+    const ringColor = isValid ? 'rgba(247,141,32,0.45)' : 'rgba(225,29,72,0.45)';
+    const tagBg = isValid ? '#f78d20' : '#e11d48';
+    const tagText = isValid ? 'MOI' : '⚠️';
+
+    const iconHtml = `
+      <div class="custom-leaflet-marker" style="display:flex; align-items:center; justify-content:center;">
+        <div class="marker-inner bg-white p-1 flex items-center justify-center transition-transform hover:scale-115" style="width:42px; height:42px; border-radius:50%; border:3px solid ${borderColor}; box-shadow:0 6px 16px ${ringColor}; position:relative; background:white;">
+          <img src="base_antenne.png" alt="Mon Antenne" style="width:100%; height:100%; object-fit:contain;" />
+          <div style="position:absolute; bottom:-3px; right:-3px; background:${tagBg}; color:white; font-size:9px; font-weight:900; padding:1px 4px; border-radius:9999px; border:1.5px solid white; box-shadow:0 1px 3px rgba(0,0,0,0.2);">${tagText}</div>
+        </div>
+      </div>
+    `;
+    this.step2Marker.setIcon(L.divIcon({
+      className: 'clean-marker',
+      html: iconHtml,
+      iconSize: [42, 42],
+      iconAnchor: [21, 21]
+    }));
+  },
+
+  updateValidationUI(validation) {
+    const cardEl = document.getElementById('step2-status-card');
+    const validateBtn = document.getElementById('step2-validate-btn');
+    const minKm = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('minStationDistanceKm', 20) : 20;
+
+    this.updateCandidateMarkerStyle(validation.isValid);
+
+    if (validateBtn) {
+      if (validation.isValid) {
+        validateBtn.disabled = false;
+        validateBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
+        validateBtn.classList.add('bg-gradient-to-r', 'from-pc-blue', 'to-pc-blue-light', 'hover:brightness-110', 'shadow-lg');
+      } else {
+        validateBtn.disabled = true;
+        validateBtn.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
+        validateBtn.classList.remove('from-pc-blue', 'to-pc-blue-light', 'hover:brightness-110');
+      }
+    }
+
+    if (!cardEl) return;
+
+    if (validation.isValid) {
+      const nearestInfo = (validation.nearestDist !== null && validation.nearestDist < 900)
+        ? `• Antenne la plus proche : <strong>${validation.nearestStationName || 'Réseau'}</strong> à <strong>${validation.nearestDist.toFixed(1)} km</strong> (≥ ${minKm} km)`
+        : `• Aucune antenne proche (< ${minKm} km)`;
+
+      cardEl.className = 'p-3.5 rounded-2xl bg-emerald-50/90 border-2 border-emerald-300 text-xs text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-sm transition-all';
+      cardEl.innerHTML = `
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white font-black text-base flex items-center justify-center shadow-xs flex-shrink-0">
+            🏢
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-black text-slate-900" id="step2-city-label">${this.placementData.city}</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-200 text-emerald-900 border border-emerald-300">
+                ✓ Emplacement Autorisé
+              </span>
+            </div>
+            <div class="text-[11px] text-slate-600 mt-0.5">
+              Département <strong>${this.deptCode}</strong> • <span class="font-mono text-slate-500" id="step2-coords-label">${this.placementData.lat.toFixed(4)}, ${this.placementData.lng.toFixed(4)}</span>
+            </div>
+            <div class="text-[10px] text-emerald-800 font-medium mt-0.5">
+              ${nearestInfo}
+            </div>
+          </div>
+        </div>
+
+        <button 
+          type="button" 
+          onclick="window.ProtecOnboarding.resetMapPosition()"
+          class="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs transition cursor-pointer shadow-2xs whitespace-nowrap self-end sm:self-auto">
+          🎯 Recentrer
+        </button>
+      `;
+    } else {
+      cardEl.className = 'p-3.5 rounded-2xl bg-rose-50/95 border-2 border-rose-400 text-xs text-rose-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-sm transition-all';
+      cardEl.innerHTML = `
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-rose-600 text-white font-black text-base flex items-center justify-center shadow-xs flex-shrink-0">
+            ⚠️
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-black text-rose-900" id="step2-city-label">${this.placementData.city}</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-200 text-rose-900 border border-rose-300">
+                ⛔ Non Conforme
+              </span>
+            </div>
+            <div class="text-[11px] text-rose-800 font-bold mt-0.5">
+              ${validation.message}
+            </div>
+            <div class="text-[10px] text-rose-600 mt-0.5">
+              Département ${this.deptCode} • <span class="font-mono" id="step2-coords-label">${this.placementData.lat.toFixed(4)}, ${this.placementData.lng.toFixed(4)}</span> (Cliquez sur une zone libre dans le département)
+            </div>
+          </div>
+        </div>
+
+        <button 
+          type="button" 
+          onclick="window.ProtecOnboarding.resetMapPosition()"
+          class="px-3 py-1.5 rounded-xl bg-white border border-rose-300 hover:bg-rose-100 text-rose-800 font-bold text-xs transition cursor-pointer shadow-2xs whitespace-nowrap self-end sm:self-auto">
+          🎯 Recentrer
+        </button>
+      `;
+    }
+  },
+
+  // -------------------------------------------------------------
   // ÉTAPE 2 : PLACEMENT DU BÂTIMENT SUR LA CARTE
   // -------------------------------------------------------------
   renderStep2() {
     const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.deptCode) : null;
     const deptName = deptInfo ? deptInfo.name : this.deptCode;
+    const minKm = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('minStationDistanceKm', 20) : 20;
 
     return `
       <div class="space-y-4">
         <div class="text-center space-y-1">
           <span class="text-2xl">🗺️</span>
           <h2 class="text-xl sm:text-2xl font-black text-slate-900">2. Placement de votre Bâtiment sur la Carte</h2>
-          <p class="text-xs text-slate-600 max-w-lg mx-auto">
+          <p class="text-xs text-slate-600 max-w-xl mx-auto">
             Définissez l'emplacement officiel de votre local d'antenne dans le département <strong>${deptName} (${this.deptCode})</strong>.
+            Le bâtiment doit obligatoirement être situé dans le département, dans une commune libre, et à <strong>au moins ${minKm} km</strong> de toute autre antenne.
           </p>
         </div>
 
+        <!-- Légende opérationnelle de la carte -->
+        <div class="flex items-center justify-between flex-wrap gap-2 px-1 text-[11px]">
+          <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-1 font-bold text-slate-700">
+              <span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span>
+              Votre Antenne
+            </span>
+            <span class="inline-flex items-center gap-1 font-bold text-indigo-700">
+              <span class="w-3 h-3 rounded-full bg-indigo-600 inline-block"></span>
+              Antennes Existantes
+            </span>
+            <span class="inline-flex items-center gap-1 font-bold text-rose-600">
+              <span class="w-3 h-3 rounded-full bg-rose-200 border border-rose-500 inline-block"></span>
+              Exclusion (${minKm} km)
+            </span>
+          </div>
+          <span class="text-slate-500 font-medium">L'extérieur du département est verrouillé et grisé</span>
+        </div>
+
         <!-- Cadre de la carte Leaflet interactive -->
-        <div class="relative w-full h-[280px] sm:h-[320px] rounded-2xl overflow-hidden border-2 border-slate-300 shadow-md">
+        <div class="relative w-full h-[280px] sm:h-[340px] rounded-2xl overflow-hidden border-2 border-slate-300 shadow-md">
           <div id="step2-onboarding-map" class="w-full h-full"></div>
           
-          <div class="absolute top-2.5 left-2.5 z-[1000] px-3 py-1.5 rounded-xl bg-white/90 backdrop-blur border border-slate-200 text-xs font-bold text-slate-800 shadow-sm flex items-center gap-1.5 pointer-events-none">
+          <div class="absolute top-2.5 left-2.5 z-[1000] px-3 py-1.5 rounded-xl bg-white/95 backdrop-blur border border-slate-300 text-xs font-bold text-slate-800 shadow-sm flex items-center gap-1.5 pointer-events-none">
             <span class="text-pc-orange">📍</span>
-            <span>Cliquez sur la carte pour positionner votre antenne</span>
+            <span>Cliquez sur la carte ou déplacez le marqueur dans le département</span>
           </div>
         </div>
 
-        <!-- Récapitulatif de l'emplacement sélectionné -->
-        <div class="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <!-- Récapitulatif dynamique de l'emplacement et conformité -->
+        <div id="step2-status-card" class="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-pc-blue text-white font-black text-base flex items-center justify-center shadow-xs">
               🏢
@@ -484,6 +880,7 @@ window.ProtecOnboarding = {
           </button>
           <button 
             type="button" 
+            id="step2-validate-btn"
             onclick="window.ProtecOnboarding.setStep(3)"
             class="flex-1 py-3.5 rounded-2xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-lg hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer">
             <span>Valider l'emplacement & Aménager le bâtiment</span>
@@ -494,7 +891,7 @@ window.ProtecOnboarding = {
     `;
   },
 
-  initStep2Map() {
+  async initStep2Map() {
     const mapEl = document.getElementById('step2-onboarding-map');
     if (!mapEl || !window.L) return;
 
@@ -506,7 +903,7 @@ window.ProtecOnboarding = {
     const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.deptCode) : null;
     const initialLat = this.placementData.lat || (deptInfo ? deptInfo.lat : 48.8566);
     const initialLng = this.placementData.lng || (deptInfo ? deptInfo.lng : 2.3522);
-    const initialZoom = deptInfo ? deptInfo.zoom : 11;
+    const initialZoom = deptInfo ? (deptInfo.zoom || 10) : 10;
 
     this.step2Map = L.map('step2-onboarding-map', {
       center: [initialLat, initialLng],
@@ -518,32 +915,123 @@ window.ProtecOnboarding = {
       attribution: '© OpenStreetMap'
     }).addTo(this.step2Map);
 
+    // 1. Chargement du GeoJSON et des antennes existantes
+    const [geojsonData, existingStations] = await Promise.all([
+      this.loadDepartementsGeoJSON(),
+      this.loadExistingStations()
+    ]);
+
+    // 2. Application du masque inversé (extérieur du département grisé) et du contour départemental
+    if (geojsonData && geojsonData.features) {
+      const code = String(this.deptCode).trim();
+      const feat = geojsonData.features.find(f => f.properties && f.properties.code === code);
+      if (feat && feat.geometry) {
+        const worldOuter = [[90, -180], [90, 180], [-90, 180], [-90, -180]];
+        const holes = [];
+        const geom = feat.geometry;
+        if (geom.type === 'Polygon') {
+          holes.push(geom.coordinates[0].map(([lng, lat]) => [lat, lng]));
+        } else if (geom.type === 'MultiPolygon') {
+          geom.coordinates.forEach(poly => {
+            holes.push(poly[0].map(([lng, lat]) => [lat, lng]));
+          });
+        }
+
+        // Masque sombre inversé recouvrant la carte sauf le département
+        this.maskLayer = L.polygon([worldOuter, ...holes], {
+          color: '#090d16',
+          fillColor: '#090d16',
+          fillOpacity: 0.62,
+          weight: 0,
+          interactive: false
+        }).addTo(this.step2Map);
+
+        // Contour net du département sélectionné
+        this.deptBorderLayer = L.geoJSON(feat, {
+          style: {
+            color: '#024589',
+            weight: 3.5,
+            fillColor: '#024589',
+            fillOpacity: 0.04,
+            dashArray: '3, 6',
+            lineCap: 'round',
+            interactive: false
+          }
+        }).addTo(this.step2Map);
+
+        try {
+          const b = this.deptBorderLayer.getBounds();
+          this.step2Map.fitBounds(b, { padding: [20, 20] });
+          this.step2Map.setMaxBounds(b.pad(0.40));
+          this.step2Map.setMinZoom(Math.max(6, this.step2Map.getZoom() - 2));
+        } catch (e) {}
+      }
+    }
+
+    // 3. Affichage des antennes existantes et de leurs cercles d'exclusion (20 km)
+    this.renderExistingStationsOnMap();
+
+    // 4. Marqueur interactif de l'antenne candidate du joueur
     const markerIcon = L.divIcon({
       className: 'clean-marker',
       html: `
-        <div style="background:#ea580c; border:2px solid white; border-radius:12px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(0,0,0,0.3); font-size:16px;">
-          🏢
+        <div class="custom-leaflet-marker" style="display:flex; align-items:center; justify-content:center;">
+          <div class="marker-inner bg-white p-1 flex items-center justify-center transition-transform hover:scale-115" style="width:42px; height:42px; border-radius:50%; border:3px solid #f78d20; box-shadow:0 6px 16px rgba(247,141,32,0.45); position:relative; background:white;">
+            <img src="base_antenne.png" alt="Mon Antenne" style="width:100%; height:100%; object-fit:contain;" />
+            <div style="position:absolute; bottom:-3px; right:-3px; background:#f78d20; color:white; font-size:9px; font-weight:900; padding:1px 4px; border-radius:9999px; border:1.5px solid white; box-shadow:0 1px 3px rgba(0,0,0,0.2);">MOI</div>
+          </div>
         </div>
       `,
-      iconSize: [34, 34],
-      iconAnchor: [17, 17]
+      iconSize: [42, 42],
+      iconAnchor: [21, 21]
     });
 
-    this.step2Marker = L.marker([initialLat, initialLng], { icon: markerIcon, draggable: true }).addTo(this.step2Map);
+    this.step2Marker = L.marker([initialLat, initialLng], { 
+      icon: markerIcon, 
+      draggable: true,
+      zIndexOffset: 1000 
+    }).addTo(this.step2Map);
 
+    this.lastValidPosition = { lat: initialLat, lng: initialLng };
+
+    // Gestion du drag du marqueur
     this.step2Marker.on('dragend', (e) => {
       const pos = e.target.getLatLng();
+      const inDept = this.isPointInDepartment(pos.lat, pos.lng, this.deptCode);
+      if (!inDept) {
+        if (this.game?.showToast) {
+          this.game.showToast('Zone non autorisée ⛔', `Vous devez placer votre antenne dans votre département (${this.deptCode}).`, 'red');
+        }
+        if (this.lastValidPosition) {
+          this.step2Marker.setLatLng([this.lastValidPosition.lat, this.lastValidPosition.lng]);
+          this.updatePlacementCoords(this.lastValidPosition.lat, this.lastValidPosition.lng);
+        }
+        return;
+      }
       this.updatePlacementCoords(pos.lat, pos.lng);
     });
 
+    // Gestion du clic sur la carte
     this.step2Map.on('click', (e) => {
+      const lat = e.latlng.lat;
+      const lng = e.latlng.lng;
+      const inDept = this.isPointInDepartment(lat, lng, this.deptCode);
+      if (!inDept) {
+        if (this.game?.showToast) {
+          this.game.showToast('Zone non autorisée ⛔', `Vous devez placer votre antenne dans le département sélectionné (${this.deptCode}).`, 'red');
+        }
+        return;
+      }
       this.step2Marker.setLatLng(e.latlng);
-      this.updatePlacementCoords(e.latlng.lat, e.latlng.lng);
+      this.updatePlacementCoords(lat, lng);
     });
 
     setTimeout(() => {
       if (this.step2Map) this.step2Map.invalidateSize();
     }, 200);
+
+    // Lancer la première vérification
+    this.updatePlacementCoords(initialLat, initialLng);
   },
 
   async updatePlacementCoords(lat, lng) {
@@ -553,67 +1041,47 @@ window.ProtecOnboarding = {
     const coordsEl = document.getElementById('step2-coords-label');
     if (coordsEl) coordsEl.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
-    // 1. Détection dynamique du département correspondant aux coordonnées
-    if (window.ProtecDepartements && typeof window.ProtecDepartements.getDepartmentByCoordinates === 'function') {
-      const detectedDept = window.ProtecDepartements.getDepartmentByCoordinates(lat, lng);
-      if (detectedDept && detectedDept.code) {
-        this.deptCode = detectedDept.code;
-        this.placementData.citycode = detectedDept.code;
-        if (this.game?.player) this.game.player.departmentCode = detectedDept.code;
-        if (this.game) this.game.currentDepartmentCode = detectedDept.code;
-        localStorage.setItem('protec_department_code', detectedDept.code);
+    let detectedCity = this.placementData.city || 'Commune Locale';
 
-        const subHeader = document.querySelector('#onboarding-modal h2 ~ p');
-        if (subHeader) {
-          subHeader.innerHTML = `Définissez l'emplacement officiel de votre local d'antenne dans le département <strong>${detectedDept.name} (${detectedDept.code})</strong>.`;
-        }
-        const deptLabelUnderMap = document.querySelector('#step2-city-label ~ div');
-        if (deptLabelUnderMap) {
-          deptLabelUnderMap.innerHTML = `Département ${detectedDept.code} • <span class="font-mono text-slate-500" id="step2-coords-label">${lat.toFixed(4)}, ${lng.toFixed(4)}</span>`;
-        }
-      }
-    }
-
+    // 1. Détection de la commune via API Adresse Gouv
     try {
-      // 2. API officielle Adresse Gouv (France)
       const res = await fetch(`https://api-adresse.data.gouv.fr/reverse/?lon=${lng}&lat=${lat}`);
       const data = await res.json();
       if (data.features && data.features.length > 0) {
         const props = data.features[0].properties;
-        const detectedCity = props.city || props.town || props.village || props.municipality || props.district || props.name;
-        if (detectedCity) {
-          this.placementData.city = detectedCity;
-          if (props.postcode && props.postcode.length >= 2) {
-            const postalDept = props.postcode.startsWith('97') ? props.postcode.substr(0, 3) : props.postcode.substr(0, 2);
-            if (postalDept) {
-              this.deptCode = postalDept;
-              this.placementData.citycode = postalDept;
-              if (this.game?.player) this.game.player.departmentCode = postalDept;
-              if (this.game) this.game.currentDepartmentCode = postalDept;
-              localStorage.setItem('protec_department_code', postalDept);
-            }
-          }
-          const cityEl = document.getElementById('step2-city-label');
-          if (cityEl) cityEl.textContent = detectedCity;
-          return;
-        }
+        const c = props.city || props.town || props.village || props.municipality || props.district || props.name;
+        if (c) detectedCity = c;
       }
     } catch (e) {
-      // Ignorer si indisponible
+      // 2. Fallback Nominatim OSM
+      try {
+        const res2 = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`);
+        const data2 = await res2.json();
+        const addr = data2.address || {};
+        const c2 = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.county;
+        if (c2) detectedCity = c2;
+      } catch (e2) {}
     }
 
-    try {
-      // 3. Fallback OpenStreetMap / Nominatim
-      const res2 = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`);
-      const data2 = await res2.json();
-      const addr = data2.address || {};
-      const detectedCity2 = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.county;
-      if (detectedCity2) {
-        this.placementData.city = detectedCity2;
-        const cityEl = document.getElementById('step2-city-label');
-        if (cityEl) cityEl.textContent = detectedCity2;
-      }
-    } catch (e) {}
+    // 3. Fallback interne si indisponible
+    if ((!detectedCity || detectedCity === 'Commune Locale') && window.ProtecDepartements && typeof window.ProtecDepartements.getNearestCommune === 'function') {
+      const nearest = window.ProtecDepartements.getNearestCommune(lat, lng, this.deptCode);
+      if (nearest && nearest.nom) detectedCity = nearest.nom;
+    }
+
+    this.placementData.city = detectedCity;
+    const cityEl = document.getElementById('step2-city-label');
+    if (cityEl) cityEl.textContent = detectedCity;
+
+    // 4. Validation stricte des critères d'implantation (Département, 20km, même commune)
+    const validation = this.validateCandidateLocation(lat, lng, detectedCity);
+    this.placementValidation = validation;
+
+    if (validation.isValid) {
+      this.lastValidPosition = { lat, lng };
+    }
+
+    this.updateValidationUI(validation);
   },
 
   resetMapPosition() {
@@ -624,7 +1092,7 @@ window.ProtecOnboarding = {
     this.placementData.lng = deptInfo.lng;
 
     if (this.step2Map && this.step2Marker) {
-      this.step2Map.setView([deptInfo.lat, deptInfo.lng], deptInfo.zoom || 11);
+      this.step2Map.setView([deptInfo.lat, deptInfo.lng], deptInfo.zoom || 10);
       this.step2Marker.setLatLng([deptInfo.lat, deptInfo.lng]);
     }
     const coordsEl = document.getElementById('step2-coords-label');
@@ -1169,9 +1637,49 @@ window.ProtecOnboarding = {
       initialSetupDone: true
     };
 
-    // 2. Exactement 0 véhicule au départ
-    game.vehicles = [];
-    newStation.vehicles = [];
+    // 2. Dotation initiale officielle : 1 VPSP Ancien fourni avec l'antenne
+    const starterVpsp = (typeof game.createDefaultStarterVPSP === 'function')
+      ? game.createDefaultStarterVPSP(stationId, newStation)
+      : {
+          id: `vpsp-starter-${Date.now()}`,
+          name: game.generateVehicleCallsign ? game.generateVehicleCallsign('VPSP', stationId, newStation) : `VPSP 01 ${city.toUpperCase()}`,
+          type: 'VPSP',
+          label: 'Véhicule de Premiers Secours à Personnes (Ancien)',
+          model: 'Renault Master II Phase 2 2.5 dCi 120 (Dotation Initiale)',
+          year: 2014,
+          mileage: 178500,
+          kilometrage: 178500,
+          capacity: 5,
+          seatsCount: 5,
+          extraCapacityLabel: null,
+          hasTowHitch: false,
+          requiresTrailer: false,
+          reqSkills: ['permis_vpsp'],
+          status: 'dispo',
+          fuel: 90,
+          mechanical: 85,
+          ctStatus: 'valide',
+          ctExpiryTimestamp: Date.now() + (300 * 24 * 3600 * 1000),
+          insuranceStatus: 'assure',
+          insuranceMonthlyCost: 65,
+          licenseRequired: 'B',
+          stationId: stationId,
+          image: (typeof game.getVehicleImage === 'function') ? game.getVehicleImage('VPSP') : 'images/vehicles/VPSP.png',
+          types: ['PS', 'VPSP'],
+          capacity_log: 0,
+          consumables: 100,
+          armementLevel: 100,
+          isRearmed: true,
+          needsRearming: false,
+          loadedItems: []
+        };
+
+    if (window.ProtecLogistique && typeof window.ProtecLogistique.normalizeVehicle === 'function') {
+      window.ProtecLogistique.normalizeVehicle(starterVpsp);
+    }
+
+    game.vehicles = [starterVpsp];
+    newStation.vehicles = [starterVpsp.id];
 
     // 3. Exactement 0 stock de consommables au départ
     game.logistics = {
