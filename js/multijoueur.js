@@ -585,6 +585,7 @@ window.ProtecMultiplayer = {
     game.showToast('Appel à Renfort Diffusé', `Mobilisation ${zoneLabels[zone]} transmise sur le réseau avec succès !`, 'green');
     game.save();
     game.updateStatsUI();
+    if (typeof game.renderMissions === 'function') game.renderMissions();
   },
 
   // =========================================================================

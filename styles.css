@@ -652,7 +652,15 @@ html, body {
 
 @media (min-width: 769px) {
   #context-drawer {
-    width: clamp(540px, 42vw, 700px) !important;
+    width: clamp(620px, 50vw, 860px) !important;
+    max-width: calc(100vw - 2rem) !important;
+    transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  #context-drawer.drawer-crisis {
+    width: clamp(840px, 70vw, 1220px) !important;
+  }
+  #context-drawer.drawer-expanded {
+    width: clamp(980px, 88vw, 1480px) !important;
     max-width: calc(100vw - 2rem) !important;
   }
 }
@@ -672,6 +680,11 @@ html, body {
     border-top-left-radius: 1.5rem !important;
     border-top-right-radius: 1.5rem !important;
     margin: 0 !important;
+  }
+  #context-drawer.drawer-crisis,
+  #context-drawer.drawer-expanded {
+    height: 96vh !important;
+    max-height: 98vh !important;
   }
 
   .drawer-slide-in {

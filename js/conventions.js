@@ -198,33 +198,43 @@ window.ProtecConventions = {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           <!-- 1. CONVENTION CADRE SAMU 15 (GARDES RÉFLEXES VPSP) -->
-          <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${game.samuConvention?.signed ? 'border-sky-300 ring-1 ring-sky-300/30' : 'border-slate-200'}">
-            <div class="space-y-2">
+          <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${
+            game.samuConvention?.terminatedByAuthority 
+              ? 'border-rose-400 ring-2 ring-rose-400/40 bg-rose-50/20' 
+              : (game.samuConvention?.signed 
+                  ? 'border-sky-300 ring-1 ring-sky-300/30' 
+                  : (game.samuConvention?.requestStatus === 'accepted' ? 'border-amber-300 ring-2 ring-amber-300/40' : 'border-slate-200'))
+          }">
+            <div class="space-y-2.5">
               <div class="flex items-center justify-between">
                 <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase bg-sky-100 text-sky-950 border border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-700/60">
                   SAMU 15 • Urgences VPSP
                 </span>
                 <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                  game.samuConvention?.signed 
-                    ? 'bg-emerald-600 text-white' 
-                    : (game.samuConvention?.requestStatus === 'instruction' 
-                        ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse' 
-                        : (game.samuConvention?.requestStatus === 'accepted' 
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                            : (game.samuConvention?.requestStatus === 'rejected' 
-                                ? 'bg-rose-100 text-rose-800 border border-rose-300' 
-                                : 'bg-slate-100 text-slate-700')))
+                  game.samuConvention?.terminatedByAuthority
+                    ? 'bg-rose-700 text-white'
+                    : (game.samuConvention?.signed 
+                        ? 'bg-emerald-600 text-white' 
+                        : (game.samuConvention?.requestStatus === 'instruction' 
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse' 
+                            : (game.samuConvention?.requestStatus === 'accepted' 
+                                ? 'bg-amber-500 text-white shadow-xs animate-bounce' 
+                                : (game.samuConvention?.requestStatus === 'rejected' 
+                                    ? 'bg-rose-100 text-rose-800 border border-rose-300' 
+                                    : 'bg-slate-100 text-slate-700'))))
                 }">
                   ${
-                    game.samuConvention?.signed 
-                      ? 'Convention Signée ✓' 
-                      : (game.samuConvention?.requestStatus === 'instruction' 
-                          ? 'Instruction en cours ⏳' 
-                          : (game.samuConvention?.requestStatus === 'accepted' 
-                              ? 'Demande Acceptée ✓' 
-                              : (game.samuConvention?.requestStatus === 'rejected' 
-                                  ? 'Demande Ajournée ✗' 
-                                  : 'Non Conventionnée')))
+                    game.samuConvention?.terminatedByAuthority
+                      ? 'Résiliée d’Office 🛑'
+                      : (game.samuConvention?.signed 
+                          ? 'Convention Signée ✓' 
+                          : (game.samuConvention?.requestStatus === 'instruction' 
+                              ? 'Instruction en cours ⏳' 
+                              : (game.samuConvention?.requestStatus === 'accepted' 
+                                  ? 'Proposition de l’Autorité en Attente ✍️' 
+                                  : (game.samuConvention?.requestStatus === 'rejected' 
+                                      ? 'Demande Ajournée ✗' 
+                                      : 'Non Conventionnée'))))
                   }
                 </span>
               </div>
@@ -234,41 +244,109 @@ window.ProtecConventions = {
                 <p class="text-[11px] text-slate-600 mt-1">Mise à disposition conventionnée d'une ambulance VPSP armée pour départs réflexes et interventions d'urgence sous régulation médicale 15.</p>
               </div>
 
-              ${(() => {
-                const tier = window.ProtecGardesSamu ? window.ProtecGardesSamu.getAntennaTier(game) : null;
-                if (!tier) return '';
-                return `
-                  <div class="p-2.5 rounded-xl bg-sky-50 border border-sky-200 text-[10px] space-y-1">
-                    <div class="flex items-center justify-between font-bold text-sky-950">
-                      <span>Régime selon taille de votre antenne :</span>
-                      <span class="px-2 py-0.2 rounded font-black ${tier.badgeColor}">${tier.cadenceText}</span>
-                    </div>
-                    <p class="text-slate-600 leading-tight">
-                      • <strong>Petite antenne</strong> (< 12 bénév.) : Urgences sanitaires & NOVI uniquement.<br/>
-                      • <strong>Moyenne antenne</strong> (12-24 bénév.) : Gardes week-ends & jours fériés.<br/>
-                      • <strong>Grosse antenne</strong> (≥ 25 bénév.) : Gardes tous les soirs & week-ends.<br/>
-                      <em class="text-amber-800">Toutes les gardes sont au planning. Le joueur garde la main sur les effectifs : pas d'inscrit = aucun départ réflexe.</em>
-                    </p>
-                  </div>
-                `;
-              })()}
-
-              <div class="p-2.5 rounded-xl bg-slate-50 text-[10px] space-y-1 font-semibold text-slate-700">
-                <div class="flex justify-between">
-                  <span>Indemnisation SAMU :</span>
-                  <span class="text-emerald-700 font-bold">280 à 480 € / intervention</span>
+              <!-- PÉRIMÈTRE & EXIGENCES IMPOSÉS PAR L'AUTORITÉ (ÉVOLUTIF) -->
+              <div class="p-2.5 rounded-xl bg-sky-50/80 border border-sky-200 text-[10.5px] space-y-2">
+                <div class="flex items-center justify-between font-black text-sky-950">
+                  <span>Périmètre imposé par l’Autorité :</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] ${game.samuConvention?.scope === 'toutes_urgences' ? 'bg-indigo-600 text-white' : 'bg-pc-blue text-white'}">
+                    ${game.samuConvention?.scope === 'toutes_urgences' ? '🚑 Toutes Urgences & Traumatologie' : '⚡ Urgences Réflexes Vitales uniquement (UR)'}
+                  </span>
                 </div>
-                <div class="flex justify-between">
-                  <span>Dotation de signature :</span>
-                  <span class="text-emerald-700 font-bold">+350 €</span>
-                </div>
-                <div class="flex justify-between">
-                  <span>Cadre d'intervention :</span>
-                  <span>Missions de secours d'urgence & départs réflexes sous régulation médicale 15</span>
+                <p class="text-slate-600 leading-tight">
+                  ${game.samuConvention?.scope === 'toutes_urgences'
+                    ? '• <strong>Missions autorisées :</strong> Urgences vitales (ACR, AVC, détresses) + Traumatologie (AVP deux-roues, fractures, chutes, brûlures, malaises).'
+                    : '• <strong>Missions autorisées :</strong> Strictement réservé aux départs réflexes vitaux majeurs (Arrêt Cardio-Respiratoire ACR, suspicion AVC, détresses respiratoires, douleurs thoraciques constrictives).'}
+                </p>
+                <div class="pt-1.5 border-t border-sky-200/80 grid grid-cols-2 gap-1 text-[10px] text-slate-700">
+                  <div>⏱️ <strong>Délai max départ :</strong> <span class="text-indigo-900 font-bold">&lt; 3 min (Base) / &lt; 12 min (Domicile)</span></div>
+                  <div>👥 <strong>Équipage mini :</strong> <span class="text-indigo-900 font-bold">3 secouristes (dont 1 CE/PSE2)</span></div>
                 </div>
               </div>
 
-              ${game.samuConvention?.requestStatus === 'rejected' ? `
+              <!-- SUIVI DES MANQUEMENTS & SANCTIONS DE L'AUTORITÉ -->
+              ${game.samuConvention?.signed ? (() => {
+                const strikes = game.samuConvention.strikesCount || 0;
+                return `
+                  <div class="p-2.5 rounded-xl border text-[10px] space-y-1.5 ${
+                    strikes === 0 
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+                      : (strikes === 1 ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-rose-50 border-rose-300 text-rose-900')
+                  }">
+                    <div class="flex items-center justify-between font-black">
+                      <span class="flex items-center gap-1">
+                        <span>${strikes === 0 ? '🛡️ Respect des engagements :' : '⚠️ Contrôle Régulation 15 :'}</span>
+                      </span>
+                      <span class="px-2 py-0.5 rounded font-black ${
+                        strikes === 0 ? 'bg-emerald-600 text-white' : (strikes === 1 ? 'bg-amber-600 text-white' : 'bg-rose-600 text-white animate-pulse')
+                      }">
+                        ${strikes} / 3 manquement(s)
+                      </span>
+                    </div>
+                    <p class="leading-tight">
+                      ${strikes === 0 
+                        ? 'Aucune carence ni retard constaté. Votre antenne jouit de la confiance totale du Médecin-Chef régulateur.' 
+                        : (strikes === 1 
+                            ? '<strong>1er avertissement formel notifié :</strong> Tout retard excessif ou défaut d’équipage entraîne une pénalité financière (-250 €).' 
+                            : '<strong>2ème avertissement formel :</strong> Situation critique ! Au 3ème manquement, l’autorité résilie immédiatement la convention.')}
+                    </p>
+                    ${(game.samuConvention.strikesHistory && game.samuConvention.strikesHistory.length > 0) ? `
+                      <div class="pt-1 border-t border-slate-200/60 text-[9.5px] italic text-slate-600">
+                        Dernier manquement : ${game.samuConvention.strikesHistory[game.samuConvention.strikesHistory.length - 1].reason} (-${game.samuConvention.strikesHistory[game.samuConvention.strikesHistory.length - 1].penalty} €)
+                      </div>
+                    ` : ''}
+                  </div>
+                `;
+              })() : ''}
+
+              <!-- PROPOSITION D'AVENANT DE L'AUTORITÉ (ÉVOLUTION DE CONVENTION) -->
+              ${(game.samuConvention?.signed && game.samuConvention?.pendingProposal) ? `
+                <div class="p-3 rounded-xl bg-gradient-to-r from-amber-50 to-indigo-50 border-2 border-indigo-400 text-xs space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="font-black text-indigo-950 flex items-center gap-1.5">
+                      <span>📑</span>
+                      <span>Proposition d’Avenant de l’Autorité</span>
+                    </span>
+                    <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-600 text-white uppercase">Avenant n°2</span>
+                  </div>
+                  <h6 class="text-[11px] font-extrabold text-slate-900">${game.samuConvention.pendingProposal.title}</h6>
+                  <p class="text-[10px] text-slate-600 italic leading-snug">« ${game.samuConvention.pendingProposal.authorityNote} »</p>
+                  <div class="p-2 rounded-lg bg-white/80 border border-indigo-200 text-[10px] space-y-1 font-semibold text-slate-800">
+                    <div>🎯 <strong>Nouveau périmètre :</strong> ${game.samuConvention.pendingProposal.newScopeLabel}</div>
+                    <div>💰 <strong>Indemnisation rehaussée :</strong> ${game.samuConvention.pendingProposal.newIndemnisation.perMission} € / mission (+200 € prime de signature)</div>
+                    <div class="text-rose-700 font-bold">⚠️ En acceptant, vous engagez votre antenne sur des exigences accrues sous peine de sanctions.</div>
+                  </div>
+                  <div class="flex gap-2 pt-1">
+                    <button type="button" onclick="window.game.acceptSamuConventionAvenant()" class="flex-1 py-1.5 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-sm cursor-pointer">
+                      Accepter l’Avenant
+                    </button>
+                    <button type="button" onclick="window.game.refuseSamuConventionAvenant()" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 transition cursor-pointer">
+                      Décliner
+                    </button>
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- FIN DE CONVENTION NOTIFIÉE PAR L'AUTORITÉ -->
+              ${game.samuConvention?.terminatedByAuthority ? `
+                <div class="p-3 rounded-xl bg-rose-50 border-2 border-rose-400 text-xs text-rose-950 space-y-2">
+                  <div class="flex items-center justify-between font-black">
+                    <span class="flex items-center gap-1.5 text-rose-800">
+                      <span>🛑</span>
+                      <span>Résiliation d’Office par le SAMU 15</span>
+                    </span>
+                    <span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-600 text-white">Rupture Unilatérale</span>
+                  </div>
+                  <p class="text-[10.5px] leading-tight text-rose-900">
+                    ${game.samuConvention.terminationReason || 'L’autorité régulatrice a mis fin à la convention suite à 3 manquements opérationnels répétés.'}
+                  </p>
+                  <div class="text-[10px] font-bold text-rose-700 bg-rose-100/80 p-2 rounded-lg border border-rose-200">
+                    Statut conventionné révoqué. Vous devez reconstituer vos effectifs et assurer des postes de secours irréprochables pour restaurer la confiance.
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- REJET CLASSIQUE -->
+              ${(game.samuConvention?.requestStatus === 'rejected' && !game.samuConvention?.terminatedByAuthority) ? `
                 <div class="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 flex items-center justify-between" ${game.samuConvention.rejectReason ? `title="${game.samuConvention.rejectReason.replace(/"/g, '&quot;')}"` : ''}>
                   <span class="font-bold flex items-center gap-1.5">
                     <span>⚠️ Demande Ajournée</span>
@@ -279,6 +357,7 @@ window.ProtecConventions = {
                 </div>
               ` : ''}
 
+              <!-- INSTRUCTION EN COURS -->
               ${game.samuConvention?.requestStatus === 'instruction' ? `
                 <div class="p-2 rounded-xl bg-amber-50 border border-amber-200 text-[10px] text-amber-800 space-y-1">
                   <div class="font-bold flex items-center justify-between">
@@ -288,9 +367,24 @@ window.ProtecConventions = {
                   <div class="w-full bg-amber-200 h-1.5 rounded-full overflow-hidden">
                     <div class="bg-amber-600 h-full rounded-full transition-all duration-300" style="width: ${Math.min(100, Math.max(5, 100 - (((game.samuConvention.reviewTimer || 1) / (game.samuConvention.initialTimer || 120)) * 100)))}%"></div>
                   </div>
-                  <div class="text-[9px] text-amber-700 italic">La direction du SAMU examine le sérieux et l'implantation de votre antenne...</div>
+                  <div class="text-[9px] text-amber-700 italic">La direction du SAMU examine le sérieux, les effectifs et l'implantation de votre antenne...</div>
                 </div>
               ` : ''}
+
+              <div class="p-2.5 rounded-xl bg-slate-50 text-[10px] space-y-1 font-semibold text-slate-700">
+                <div class="flex justify-between">
+                  <span>Indemnisation SAMU :</span>
+                  <span class="text-emerald-700 font-bold">${game.samuConvention?.indemnisation?.perMission || 320} € / intervention</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Dotation de signature :</span>
+                  <span class="text-emerald-700 font-bold">+350 €</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Autorité régulatrice :</span>
+                  <span>Direction Médicale SAMU 15 & ARS</span>
+                </div>
+              </div>
             </div>
 
             <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
@@ -307,14 +401,19 @@ window.ProtecConventions = {
                   <span>Instruction en cours (Décision sous peu...)</span>
                 </button>
               ` : game.samuConvention?.requestStatus === 'accepted' ? `
-                <button onclick="window.game.signSamuConvention()" class="w-full px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer animate-bounce">
-                  <span>✍️</span>
-                  <span>Convention Validée : Parapher & Activer (+350 €)</span>
-                </button>
+                <div class="flex gap-2 w-full">
+                  <button onclick="window.game.signSamuConvention()" class="flex-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1 cursor-pointer animate-bounce">
+                    <span>✍️</span>
+                    <span>Accepter les Exigences (+350 €)</span>
+                  </button>
+                  <button onclick="window.game.refuseSamuConvention()" class="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs transition cursor-pointer">
+                    Décliner
+                  </button>
+                </div>
               ` : `
                 <button onclick="window.game.requestSamuConvention()" class="w-full px-3.5 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
                   <span>📑</span>
-                  <span>${game.samuConvention?.requestStatus === 'rejected' ? 'Renouveler la Demande au SAMU 15' : 'Déposer une Demande de Conventionnement SAMU 15'}</span>
+                  <span>${(game.samuConvention?.requestStatus === 'rejected' || game.samuConvention?.terminatedByAuthority) ? 'Renouveler la Demande au SAMU 15' : 'Déposer une Demande de Conventionnement SAMU 15'}</span>
                 </button>
               `}
             </div>
@@ -1689,16 +1788,40 @@ if (numVehicles > 0 && totalCrew > 0) {
       conv.requestStatus = 'accepted';
       conv.rejectReason = null;
 
+      if (type === 'samu') {
+        const totalVols = (game.volunteers || []).length;
+        const vpsps = (game.vehicles || []).filter(v => v.type === 'VPSP').length;
+        const isBig = totalVols >= 20 && vpsps >= 2;
+        conv.scope = conv.scope || (isBig ? 'toutes_urgences' : 'ur_only');
+        conv.scopeLabel = conv.scope === 'toutes_urgences'
+          ? 'Toutes Urgences & Traumatologie (AVP, traumatismes, malaises, urgences vitales)'
+          : 'Urgences Réflexes Vitales uniquement (UR : AVC, ACR, détresses respiratoires, douleurs thoraciques)';
+        conv.requirements = {
+          minVolunteers: 3,
+          requiredLeaderRank: 'CE',
+          maxDepartureBaseMinutes: 3,
+          maxDepartureHomeMinutes: 12
+        };
+        conv.indemnisation = {
+          perMission: conv.scope === 'toutes_urgences' ? 380 : 320,
+          hourlyGuard: conv.scope === 'toutes_urgences' ? 50 : 45
+        };
+        conv.authority = 'Direction Médicale SAMU 15 & ARS';
+        conv.strikesCount = 0;
+        conv.strikesHistory = [];
+        conv.terminatedByAuthority = false;
+      }
+
       game.showToast(
         `Convention ${titlePartner} Acceptée ! 🎉`,
-        `La direction a statué favorablement sur votre dossier de conventionnement ! Vous pouvez désormais parapher la convention.`,
+        `La direction a statué favorablement sur votre dossier de conventionnement ! L'autorité a fixé les clauses et exigences minimales. L'antenne peut désormais accepter ou refuser.`,
         'green'
       );
 
       if (window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
         window.ProtecNotifications.recordNotification({
           title: `✅ Convention ${titlePartner} Acceptée`,
-          message: `Votre demande de conventionnement a été validée par la commission. Cliquez sur le module Conventions pour signer et ratifier le partenariat.`,
+          message: `L'autorité SAMU a validé le dossier et fixé ses exigences (Délais, effectifs, périmètre). Choisissez d'accepter ou décliner dans le module Conventions.`,
           category: 'conventions',
           level: 'success'
         });

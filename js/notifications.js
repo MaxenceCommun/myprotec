@@ -1419,34 +1419,6 @@ window.ProtecNotifications = {
               ` : ''}
             </div>
 
-            <!-- Bouton Test Direct & Test App Fermée -->
-            ${isPermGranted ? `
-              <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-                <div>
-                  <span class="font-bold text-slate-800 block">Vérifier le fonctionnement immédiat</span>
-                  <span class="text-[11px] text-slate-500">Déclenche une notification test avec sonnerie d'urgence sur cet écran</span>
-                </div>
-                <button onclick="window.ProtecNotifications.testNotification()" class="px-3.5 py-1.5 rounded-xl bg-pc-orange hover:brightness-110 text-white font-extrabold shadow transition flex items-center gap-1.5">
-                  <i data-lucide="bell-ring" class="w-3.5 h-3.5"></i>
-                  Tester
-                </button>
-              </div>
-
-              <div class="flex items-center justify-between p-3.5 rounded-2xl bg-amber-50/80 border border-amber-300/80">
-                <div>
-                  <div class="flex items-center gap-1.5">
-                    <span class="font-black text-amber-950 block">Test Réception Mobile (App Fermée)</span>
-                    <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">Push OS</span>
-                  </div>
-                  <span class="text-[11px] text-amber-800 leading-snug">Lance un délai de 5s : fermez le navigateur ou verrouillez l'écran pour tester l'alerte native</span>
-                </div>
-                <button onclick="window.ProtecNotifications.testOfflinePush(5)" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold shadow transition flex items-center gap-1.5 flex-shrink-0">
-                  <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
-                  Fermer & Tester (5s)
-                </button>
-              </div>
-            ` : ''}
-
             <!-- Paramètres Généraux -->
             <div class="space-y-2.5 pt-2">
               <h4 class="font-black text-slate-700 uppercase tracking-wider text-[10px]">Options Générales</h4>

@@ -194,6 +194,8 @@ window.ProtecAPC = {
               description: "Autoriser l'engagement en autonomie d'un engin avec équipage complet d'un confrère sans validation préalable, exclusivement lors des crises majeures.",
               votes: {}
             },
+            crisisAlertStrategy: data.crisis_alert_strategy || data.crisisAlertStrategy || 'proche', // 'proche' | 'astreinte' | 'tous'
+            crisisAckTimeoutSeconds: Number(data.crisis_ack_timeout_seconds || data.crisisAckTimeoutSeconds || 45),
             lastProcessedDay: data.last_processed_day || null,
             updatedAt: data.updated_at
           };
@@ -219,6 +221,8 @@ window.ProtecAPC = {
             votes: {}
           };
         }
+        if (!apc.crisisAlertStrategy) apc.crisisAlertStrategy = 'proche';
+        if (!apc.crisisAckTimeoutSeconds) apc.crisisAckTimeoutSeconds = 45;
       } else {
         // Création initiale : le premier joueur en devient automatiquement le Président
         const defaultPresidentId = game.player?.id || 'usr_player';
@@ -258,6 +262,8 @@ window.ProtecAPC = {
             description: "Autoriser l'engagement en autonomie d'un engin avec équipage complet d'un confrère sans validation préalable, exclusivement lors des crises majeures.",
             votes: {}
           },
+          crisisAlertStrategy: 'proche', // 'proche' | 'astreinte' | 'tous'
+          crisisAckTimeoutSeconds: 45,
           lastProcessedDay: null,
           updatedAt: new Date().toISOString()
         };
@@ -355,6 +361,8 @@ window.ProtecAPC = {
           debts: apc.debts,
           solidarity_fund: apc.solidarityFund,
           crisis_autonomous_requisition: apc.crisisAutonomousRequisition,
+          crisis_alert_strategy: apc.crisisAlertStrategy || 'proche',
+          crisis_ack_timeout_seconds: apc.crisisAckTimeoutSeconds || 45,
           last_processed_day: apc.lastProcessedDay,
           updated_at: new Date().toISOString()
         };
@@ -362,8 +370,10 @@ window.ProtecAPC = {
           .from('apc_departments')
           .upsert(payload, { onConflict: 'department_code' });
         if (res && res.error) {
-          // Si la colonne n'existe pas encore dans Supabase, retirer le champ pour persister le reste sans erreur
+          // Si les colonnes n'existent pas encore dans Supabase, retirer les champs spécifiques pour persister le reste sans erreur
           delete payload.crisis_autonomous_requisition;
+          delete payload.crisis_alert_strategy;
+          delete payload.crisis_ack_timeout_seconds;
           await window.ProtecSupabase.client
             .from('apc_departments')
             .upsert(payload, { onConflict: 'department_code' });
@@ -834,6 +844,50 @@ window.ProtecAPC = {
     this.renderModal(game);
   },
 
+  // Définir la stratégie d'alerte en cas de crise départementale (Arbitrage du Président de l'APC)
+  async setCrisisAlertStrategy(strategy, game) {
+    if (!['proche', 'astreinte', 'tous'].includes(strategy)) return;
+    const apc = await this.getAPCData(game);
+    const pid = game.player?.id;
+    const isPresident = (apc.presidentId === pid) || (this.deptPlayersCache.length <= 1);
+
+    if (!isPresident) {
+      if (window.ProtecDialog) {
+        await window.ProtecDialog.alert('Seul le Président de l’APC départementale peut modifier la stratégie d’alerte de crise.', 'Action Réservée au Président');
+      } else {
+        alert('Seul le Président de l’APC départementale peut modifier la stratégie d’alerte de crise.');
+      }
+      return;
+    }
+
+    apc.crisisAlertStrategy = strategy;
+    await this.saveAPC(apc);
+
+    // Diffusion temps réel aux directeurs du département
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.broadcastDepartmentCrisisUpdate === 'function') {
+      window.ProtecSupabase.broadcastDepartmentCrisisUpdate({
+        departmentCode: apc.departmentCode,
+        status: 'apc_strategy_update',
+        crisisAlertStrategy: strategy,
+        presidentName: apc.presidentName
+      });
+    }
+
+    const labels = {
+      proche: 'Antenne la plus proche en priorité',
+      astreinte: 'Astreinte Départementale en priorité',
+      tous: 'Alerte générale simultanée (Tous les joueurs)'
+    };
+
+    game.showToast(
+      'Décision Présidentielle Enregistrée ⚖️',
+      `La stratégie d'alerte de crise départementale est désormais : « ${labels[strategy]} ».`,
+      'green'
+    );
+
+    this.renderModal(game);
+  },
+
   // =========================================================================
   // RENDU INTERFACE UTILISATEUR & MODALE APC
   // =========================================================================
@@ -1291,6 +1345,152 @@ window.ProtecAPC = {
                   <span>Voter CONTRE</span>
                 </button>
               </div>
+            </div>
+          </div>
+
+          <!-- CARTE DÉCISION PRÉSIDENTIELLE : STRATÉGIE D'ALERTE EN CAS DE CRISE -->
+          <div class="p-4 rounded-2xl bg-gradient-to-br from-amber-500/5 via-slate-50 to-orange-500/5 border border-slate-200 space-y-3.5">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-pc-orange text-white uppercase tracking-wider">
+                  Décision Présidentielle APC
+                </span>
+                <strong class="text-xs sm:text-sm font-black text-slate-900">
+                  Stratégie d'Alerte et d'Escalade en Cas de Crise Départementale
+                </strong>
+              </div>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-900 border border-indigo-200">
+                ${isPresident ? '⚙️ Arbitrage du Président' : '🔒 Règle Fédérale Fixée'}
+              </span>
+            </div>
+
+            <p class="text-xs text-slate-600 leading-relaxed">
+              En cas d'accident ferroviaire, plan NOVI, catastrophe météo ou réquisition préfectorale d'urgence, définissez à quel échelon l'alerte opérationnelle est envoyée en première intention.
+            </p>
+
+            <!-- Les 3 options de stratégie d'alerte -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              
+              <!-- Option 1 : Proche en priorité -->
+              ${(() => {
+                const currentStrat = apc.crisisAlertStrategy || 'proche';
+                const isSelected = currentStrat === 'proche';
+                return `
+                  <div class="p-3.5 rounded-2xl border transition-all ${
+                    isSelected 
+                      ? 'border-pc-orange bg-orange-50/70 shadow-sm ring-2 ring-orange-300/60' 
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  } flex flex-col justify-between space-y-2.5">
+                    <div class="space-y-1.5">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xl">📍</span>
+                        ${isSelected ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-pc-orange text-white uppercase">✓ En Vigueur</span>' : ''}
+                      </div>
+                      <h6 class="text-xs font-black text-slate-900">1. Antenne la plus proche en priorité</h6>
+                      <p class="text-[11px] text-slate-600 leading-snug">
+                        L'alerte prioritaire est adressée au directeur le plus proche géographiquement du sinistre (délai de 45s).
+                      </p>
+                      <div class="text-[10px] text-slate-500 pt-1 border-t border-slate-100 space-y-0.5 font-semibold">
+                        <div>⏱️ Escalade 1 : Astreinte Départementale</div>
+                        <div>📢 Escalade 2 : Tous les Directeurs</div>
+                      </div>
+                    </div>
+                    ${isPresident ? `
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecAPC.setCrisisAlertStrategy('proche', window.game)" 
+                        class="w-full py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          isSelected 
+                            ? 'bg-pc-orange text-white shadow-xs' 
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }">
+                        ${isSelected ? '✓ Règle Active' : 'Choisir cette règle'}
+                      </button>
+                    ` : ''}
+                  </div>
+                `;
+              })()}
+
+              <!-- Option 2 : Astreinte Départementale en priorité -->
+              ${(() => {
+                const currentStrat = apc.crisisAlertStrategy || 'proche';
+                const isSelected = currentStrat === 'astreinte';
+                return `
+                  <div class="p-3.5 rounded-2xl border transition-all ${
+                    isSelected 
+                      ? 'border-emerald-600 bg-emerald-50/70 shadow-sm ring-2 ring-emerald-300/60' 
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  } flex flex-col justify-between space-y-2.5">
+                    <div class="space-y-1.5">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xl">🛡️</span>
+                        ${isSelected ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-600 text-white uppercase">✓ En Vigueur</span>' : ''}
+                      </div>
+                      <h6 class="text-xs font-black text-slate-900">2. Astreinte Départementale en priorité</h6>
+                      <p class="text-[11px] text-slate-600 leading-snug">
+                        L'alerte est transmise au cadre de permanence d'astreinte départementale en service.
+                      </p>
+                      <div class="text-[10px] text-slate-500 pt-1 border-t border-slate-100 space-y-0.5 font-semibold">
+                        <div>⏱️ Si vacante/expirée : Antenne la plus proche</div>
+                        <div>📢 Escalade 2 : Tous les Directeurs</div>
+                      </div>
+                    </div>
+                    ${isPresident ? `
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecAPC.setCrisisAlertStrategy('astreinte', window.game)" 
+                        class="w-full py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          isSelected 
+                            ? 'bg-emerald-600 text-white shadow-xs' 
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }">
+                        ${isSelected ? '✓ Règle Active' : 'Choisir cette règle'}
+                      </button>
+                    ` : ''}
+                  </div>
+                `;
+              })()}
+
+              <!-- Option 3 : Tous les directeurs du département -->
+              ${(() => {
+                const currentStrat = apc.crisisAlertStrategy || 'proche';
+                const isSelected = currentStrat === 'tous';
+                return `
+                  <div class="p-3.5 rounded-2xl border transition-all ${
+                    isSelected 
+                      ? 'border-red-600 bg-red-50/70 shadow-sm ring-2 ring-red-300/60' 
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  } flex flex-col justify-between space-y-2.5">
+                    <div class="space-y-1.5">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xl">📢</span>
+                        ${isSelected ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-red-600 text-white uppercase">✓ En Vigueur</span>' : ''}
+                      </div>
+                      <h6 class="text-xs font-black text-slate-900">3. Tous les Joueurs du Département</h6>
+                      <p class="text-[11px] text-slate-600 leading-snug">
+                        Alerte générale simultanée. Le premier directeur qui acquitte prend la main sur la gestion de crise.
+                      </p>
+                      <div class="text-[10px] text-slate-500 pt-1 border-t border-slate-100 space-y-0.5 font-semibold">
+                        <div>⚡ Alerte instantanée sans délai d'attente</div>
+                        <div>🤝 Possibilité de laisser la main ensuite</div>
+                      </div>
+                    </div>
+                    ${isPresident ? `
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecAPC.setCrisisAlertStrategy('tous', window.game)" 
+                        class="w-full py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          isSelected 
+                            ? 'bg-red-600 text-white shadow-xs' 
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }">
+                        ${isSelected ? '✓ Règle Active' : 'Choisir cette règle'}
+                      </button>
+                    ` : ''}
+                  </div>
+                `;
+              })()}
+
             </div>
           </div>
         </div>

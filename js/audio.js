@@ -223,6 +223,16 @@ window.ProtecAudio = {
     this.playFile('alerte_crise');
   },
 
+  /**
+   * 7. Son d'annulation ou de levée de préalerte (doux, jamais de sirène d'alerte)
+   */
+  playCancelSound() {
+    this.playFile('expire');
+  },
+  playPrealertCancelledSound() {
+    this.playFile('expire');
+  },
+
   // =========================================================================
   // ROUTEUR INTELLIGENT DE TOASTS ET NOTIFICATIONS
   // Détermine automatiquement le bon son selon le type d'événement
@@ -280,6 +290,29 @@ window.ProtecAudio = {
       return;
     }
 
+    // EXCLUSION STRICTE : Ne jamais émettre de son pour les notes de frais, repas ou remboursements
+    const isNdf = t.includes('note de frais') || t.includes('notes de frais') || 
+                  m.includes('note de frais') || m.includes('notes de frais') || 
+                  t.includes('ndf') || m.includes('ndf') || 
+                  (t.includes('repas') && !t.includes('crise') && !t.includes('orsec'));
+    if (isNdf) {
+      return;
+    }
+
+    // RÈGLE STRICTE : Préalerte annulée ou levée -> Son d'annulation dédié, JAMAIS de sirène d'alerte de crise
+    const isCancellationOrLifted = 
+      t.includes('levée') || t.includes('levee') || m.includes('levée') || m.includes('levee') ||
+      t.includes('annul') || m.includes('annul') ||
+      t.includes('démobilis') || t.includes('demobilis') || m.includes('démobilis') || m.includes('demobilis') ||
+      t.includes('veille simple') || m.includes('veille simple') ||
+      m.includes('lève le dispositif') || m.includes('leve le dispositif') ||
+      m.includes('situation maîtrisée') || m.includes('situation maitrisee');
+
+    if (isCancellationOrLifted) {
+      this.playCancelSound();
+      return;
+    }
+
     // RÈGLE STRICTE 1 : Exclure impérativement les simples demandes de renfort !
     const isRenfort = t.includes('renfort') || m.includes('renfort') || t.includes('alliance');
 
@@ -299,8 +332,8 @@ window.ProtecAudio = {
                      t.includes('astreinte') || m.includes('bénévole sur base');
 
     // 1. Alertes de crises (départementale, préalerte, plan d'urgence, alerte confirmée, NOVI, ORSEC)
-    // Se déclenche sur : préalerte ET alerte - mais JAMAIS sur les simples mises à jour
-    const isCrisisAlertOrPrealert = !isRenfort && !isUpdate && (
+    // Se déclenche sur : préalerte ET alerte - mais JAMAIS sur les simples mises à jour, ni notes de frais, ni annulations/levées
+    const isCrisisAlertOrPrealert = !isRenfort && !isUpdate && !isNdf && !isCancellationOrLifted && (
       t.includes('préalerte') || t.includes('prealerte') || m.includes('préalerte') || m.includes('prealerte') ||
       t.includes('alerte de crise') || m.includes('alerte de crise') ||
       t.includes('crise départementale') || m.includes('crise départementale') ||
