@@ -33,7 +33,7 @@ window.ProtecContratsAnnuels = {
       minVehiclesRequired: 1,
       minReputationRequired: 40,
       requiredAgrement: 'D',
-      desc: 'Couverture sanitaire de l’ensemble des matchs officiels à domicile (championnat + coupes au stade municipal). Rencontres programmées un week-end sur deux avec ambulance VPSP en bord de pelouse.',
+      desc: 'Couverture sanitaire de l’ensemble des matchs officiels à domicile (championnat + coupes au stade municipal). Rencontres programmées un week-end sur deux avec VPSP en bord de pelouse.',
       eventsNames: [
         'Match de Championnat Régional (Journée {n})',
         'Coupe Régionale - Tour Éliminatoire',
@@ -199,8 +199,8 @@ window.ProtecContratsAnnuels = {
     const clubTitle = realClub ? `Club Résident : ${realClub.name} (${realClub.venue})` : `Club Résident de ${city} (Stade Municipal)`;
     const clubClient = realClub ? (realClub.client || `${realClub.name} SASP`) : `Direction Sportive • ${city}`;
     const clubDesc = realClub 
-      ? `Convention cadre d'exclusivité sanitaire avec le club résident ${realClub.name} au stade ${realClub.venue} (${realClub.capacity ? realClub.capacity.toLocaleString('fr-FR') : '15 000'} places). Tous les matchs officiels à domicile avec ambulance VPSP en bord de pelouse.`
-      : `Couverture sanitaire de l'ensemble des matchs officiels à domicile au stade municipal de ${city}. Rencontres un week-end sur deux avec ambulance VPSP en bord de pelouse.`;
+      ? `Convention cadre d'exclusivité sanitaire avec le club résident ${realClub.name} au stade ${realClub.venue} (${realClub.capacity ? realClub.capacity.toLocaleString('fr-FR') : '15 000'} places). Tous les matchs officiels à domicile avec VPSP en bord de pelouse.`
+      : `Couverture sanitaire de l'ensemble des matchs officiels à domicile au stade municipal de ${city}. Rencontres un week-end sur deux avec VPSP en bord de pelouse.`;
 
     // 2. Grande Salle de Spectacles / Zénith du Territoire
     let venueName = `Zénith & Grande Salle de ${city}`;

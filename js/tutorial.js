@@ -80,7 +80,7 @@ window.ProtecTutorial = {
       2: {
         badge: 'Étape 2/3 • Flotte Opérationnelle',
         title: 'Acquérir un 1er Véhicule de Secours',
-        desc: 'Votre antenne est désormais agréée AASC ! Commandez une première ambulance VPSP (5 places) ou un utilitaire VTU (3 places).',
+        desc: 'Votre antenne est désormais agréée AASC ! Commandez un premier VPSP (5 places) ou un utilitaire VTU (3 places).',
         actionText: '🚑 Acheter un Véhicule',
         actionFn: "window.game.openModule('boutique_vehicules')",
         altText: 'Voir la Flotte',

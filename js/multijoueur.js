@@ -270,7 +270,7 @@ window.ProtecMultiplayer = {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
             <!-- VPSP -->
             <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-              <span class="font-bold text-slate-800 truncate mr-2">🚑 Ambulance VPSP</span>
+              <span class="font-bold text-slate-800 truncate mr-2">🚑 VPSP (Secours d’Urgence)</span>
               <div class="flex items-center gap-1.5 shrink-0">
                 <button type="button" onclick="const el=document.getElementById('renfort-veh-vpsp-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
                 <input type="number" id="renfort-veh-vpsp-count" value="${(mission.requiredVehicles && mission.requiredVehicles.includes('VPSP')) ? '1' : '0'}" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
@@ -467,7 +467,7 @@ window.ProtecMultiplayer = {
     const daeQty = parseInt(document.getElementById('renfort-mat-dae-count')?.value || 0);
     const tenteQty = parseInt(document.getElementById('renfort-mat-tente-count')?.value || 0);
 
-    if (vpspQty > 0) selectedVehicles.push(vpspQty > 1 ? `${vpspQty} Ambulances VPSP` : '1 Ambulance VPSP');
+    if (vpspQty > 0) selectedVehicles.push(vpspQty > 1 ? `${vpspQty} VPSP` : '1 VPSP');
     if (vtuQty > 0) selectedVehicles.push(vtuQty > 1 ? `${vtuQty} VTU` : '1 VTU');
     if (vlQty > 0) selectedVehicles.push(vlQty > 1 ? `${vlQty} VL` : '1 VL');
     if (pmaQty > 0) selectedVehicles.push(pmaQty > 1 ? `${pmaQty} Lots PMA` : '1 Lot PMA');

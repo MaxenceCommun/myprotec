@@ -2106,7 +2106,7 @@ window.ProtecAdmin = {
     if (!sData.vehicles) sData.vehicles = [];
 
     const names = {
-      VPSP: "Ambulance VPSP",
+      VPSP: "VPSP Premiers Secours",
       VTU: "Fourgon VTU Logistique",
       VL: "VL Liaison",
       VTP: "VTP Transport Personnel",

@@ -688,7 +688,7 @@ window.ProtecQuickDispatch = {
               </div>
               <div>
                 <h6 class="text-xs font-black">Garde Conventionnée SAMU 15</h6>
-                <p class="text-[10px] text-slate-300 leading-tight">${hasActiveSamuGarde ? 'Permanence en cours avec le CRRA 15.' : 'Active la permanence ambulance VPSP (indemnité horaire).'}</p>
+                <p class="text-[10px] text-slate-300 leading-tight">${hasActiveSamuGarde ? 'Permanence en cours avec le CRRA 15.' : 'Active la permanence VPSP (indemnité horaire).'}</p>
               </div>
             </button>
 

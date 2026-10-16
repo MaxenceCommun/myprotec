@@ -130,7 +130,7 @@ window.ProtecPersonnel = {
       cost: 3800,
       icon: 'activity',
       color: 'orange',
-      unlocks: 'Départs Réflexes Ambulance VPSP & Réquisition SAMU',
+      unlocks: 'Départs Réflexes VPSP & Réquisition SAMU',
       desc: 'Convention ARS et Préfecture validant la conformité sanitaire des VPSP pour intervenir sur demande du SAMU 15 et des Sapeurs-Pompiers.'
     },
     {

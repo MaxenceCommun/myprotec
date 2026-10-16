@@ -313,6 +313,34 @@ window.ProtecAudio = {
       return;
     }
 
+    // RÈGLE PERSONNALISÉE : Respect strict des 3 statuts et du son configuré par le joueur
+    if (window.ProtecNotifications && typeof window.ProtecNotifications.getAlertMode === 'function') {
+      let matchedCategory = null;
+      if (t.includes('samu') || m.includes('samu') || target?.type === 'samu') {
+        matchedCategory = 'samu';
+      } else if (t.includes('sdis') || m.includes('sdis') || t.includes('pompier') || m.includes('pompier') || target?.type === 'pompiers') {
+        matchedCategory = 'sdis';
+      } else if (t.includes('dps') || m.includes('dps') || t.includes('devis') || m.includes('devis') || target?.type === 'devis' || target?.type === 'dps') {
+        matchedCategory = 'dps';
+      } else if (t.includes('candidature') || m.includes('candidature') || t.includes('recrutement') || m.includes('recrutement') || target?.type === 'rh') {
+        matchedCategory = 'rh';
+      } else if (t.includes('météo') || t.includes('meteo') || t.includes('vigilance') || m.includes('météo') || m.includes('meteo') || target?.type === 'meteo') {
+        matchedCategory = 'weather';
+      }
+
+      if (matchedCategory) {
+        const mode = window.ProtecNotifications.getAlertMode(matchedCategory);
+        if (mode === 'off') {
+          return; // Alerte désactivée par le joueur : silence total
+        }
+        const customSound = window.ProtecNotifications.getAlertSound(matchedCategory);
+        if (customSound) {
+          this.playFile(customSound);
+          return;
+        }
+      }
+    }
+
     // RÈGLE STRICTE 1 : Exclure impérativement les simples demandes de renfort !
     const isRenfort = t.includes('renfort') || m.includes('renfort') || t.includes('alliance');
 

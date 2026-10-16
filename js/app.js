@@ -548,8 +548,8 @@ class ProtecGame {
         leaderLabel: 'Chef de Bord VPSP',
         lateTitle: 'Retard Départ Urgence 15 !',
         lateDepartureTitle: '⚠️ Départ Réflexe Bloqué',
-        departureToast: (h) => `L’ambulance VPSP part sous gyrophare en intervention d'urgence pour « ${mission.title} » !`,
-        lateMsg: (hour, registered, req) => `La régulation SAMU 15 attend le départ du vecteur pour l'intervention « ${mission.title} », mais l'équipage est incomplet (${registered}/${req}) ! Complétez l'équipage pour engager l'ambulance.`,
+        departureToast: (h) => `Le VPSP part sous gyrophare en intervention d'urgence pour « ${mission.title} » !`,
+        lateMsg: (hour, registered, req) => `La régulation SAMU 15 attend le départ du vecteur pour l'intervention « ${mission.title} », mais l'équipage est incomplet (${registered}/${req}) ! Complétez l'équipage pour engager le VPSP.`,
         departureLateMsg: (hour, registered, req) => `Départ réflexe immédiat demandé par le 15 pour « ${mission.title} » (${hour}) mais l'équipage VPSP n'est pas complet (${registered}/${req}) !`,
         expiredMsg: `Faute de départ dans les délais impartis, la régulation SAMU 15 a réorienté l'intervention « ${mission.title} » vers un autre moyen (carence opérationnelle).`
       };
@@ -1723,12 +1723,12 @@ class ProtecGame {
         if (!veh.capacity) veh.capacity = (veh.type === 'VPSP' ? 5 : (veh.type === 'VTP' ? 9 : 4));
         if (!veh.seatsCount) veh.seatsCount = veh.capacity;
         if (!veh.image && typeof this.getVehicleImage === 'function') veh.image = this.getVehicleImage(veh.type);
-        if (!veh.label) {
-          veh.label = veh.type === 'VPSP' ? 'Véhicule de Premiers Secours à Personnes' : (veh.type === 'VTU' ? 'Véhicule Tout Usage' : (veh.type === 'VL' ? 'Véhicule Léger' : veh.type));
+        if (!veh.label || veh.label.includes('Ambulance')) {
+          veh.label = veh.type === 'VPSP' ? 'Véhicule de Premiers Secours à Personnes' : (veh.type === 'VTU' ? 'Véhicule Tout Usage' : (veh.type === 'VL' ? 'Véhicule Léger' : (veh.type === 'VTP' ? 'Véhicule de Transport de Personnel' : (veh.label || veh.type))));
         }
 
         // 4. Harmonisation de l'indicatif officiel si placeholder admin (ex: "Ambulance VPSP Antenne")
-        if (veh.name === 'Ambulance VPSP Antenne' || veh.name === 'Ambulance VPSP' || !veh.name) {
+        if (veh.name === 'Ambulance VPSP Antenne' || veh.name === 'Ambulance VPSP' || (veh.name && veh.name.includes('Ambulance')) || !veh.name) {
           const cityName = (st.city || st.name || 'ANTENNE').toUpperCase();
           const sameType = this.vehicles.filter(other => other.type === veh.type && (other.stationId === st.id || st.vehicles.includes(other.id)));
           const idx = Math.max(1, sameType.indexOf(veh) + 1);
@@ -4987,28 +4987,28 @@ class ProtecGame {
 
     const configByType = {
       vpsp: {
-        title: 'Ambulance VPSP & Équipage Sanitaire',
+        title: 'VPSP & Équipage Sanitaire',
         icon: '🚑',
-        crewDesc: "1 Ambulance VPSP + 1 Chef d'Équipe (CE), 1 PSE2 et 1 Chauffeur PSE1",
-        badges: ['Ambulance VPSP', '3 Secouristes', 'CE + PSE2 + Chauffeur']
+        crewDesc: "1 VPSP + 1 Chef d'Équipe (CE), 1 PSE2 et 1 Chauffeur PSE1",
+        badges: ['VPSP', '3 Secouristes', 'CE + PSE2 + Chauffeur']
       },
       vtu: {
         title: 'Véhicule Tout Usage & Binôme Logistique',
         icon: '🚐',
         crewDesc: "1 Véhicule Tout Usage (VTU) + 2 logisticiens / secouristes d'intervention",
-        badges: ['VTU Logistique', '2 Équipiers']
+        badges: ['VTU', '2 Équipiers']
       },
       vtp: {
-        title: "Minibus VTP & Section d'Intervention",
+        title: "VTP & Section d'Intervention",
         icon: '🚌',
-        crewDesc: "1 Minibus (VTP) + 1 Chef d'Équipe et secouristes (3 à 6 pers.)",
-        badges: ['Minibus 9pl', '3-6 Secouristes']
+        crewDesc: "1 Véhicule de Transport de Personnel (VTP) + 1 Chef d'Équipe et secouristes (3 à 6 pers.)",
+        badges: ['VTP 9 places', '3-6 Secouristes']
       },
       vl: {
         title: 'Véhicule Léger Cadre & Commandement',
         icon: '🚗',
         crewDesc: '1 Véhicule Léger (VL) + 1 Cadre opérationnel',
-        badges: ['VL Liaison', '1 Cadre']
+        badges: ['VL', '1 Cadre']
       }
     };
 
@@ -6071,7 +6071,7 @@ class ProtecGame {
       complianceErrors.push(`Encadrement insuffisant (${devis.configuredCE || 0} CE engagés pour ${hiddenAudit.requiredCE} requis)`);
     }
     if (hiddenAudit.needsVPSP && !(devis.configuredVehicles || []).includes('VPSP')) {
-      complianceErrors.push(`Ambulance VPSP requise non intégrée au dispositif`);
+      complianceErrors.push(`VPSP requis non intégré au dispositif`);
     }
     if (hiddenAudit.needsLotA && !(devis.configuredLots || []).includes('lot_a')) {
       complianceErrors.push(`Lot A de prompt secours obligatoire non engagé`);
@@ -7404,7 +7404,7 @@ class ProtecGame {
     const vpsps = this.vehicles.filter(v => v.type === 'VPSP');
     const qualified = this.volunteers.filter(v => ['CE', 'PSE2', 'PSE1'].includes(v.rank));
     if (vpsps.length < 1 || qualified.length < 3) {
-      this.showToast('Critères Non Remplis', 'Pour conventionner avec le SAMU 15, votre antenne doit disposer d’au moins 1 ambulance VPSP et 3 secouristes qualifiés (CE, PSE2, PSE1).', 'orange');
+      this.showToast('Critères Non Remplis', 'Pour conventionner avec le SAMU 15, votre antenne doit disposer d’au moins 1 VPSP et 3 secouristes qualifiés (CE, PSE2, PSE1).', 'orange');
       return;
     }
 
@@ -7825,7 +7825,7 @@ class ProtecGame {
     const vpsps = this.vehicles.filter(v => v.type === 'VPSP');
     const qualified = this.volunteers.filter(v => ['CE', 'PSE2', 'PSE1'].includes(v.rank));
     if (vpsps.length < 1 || qualified.length < 3) {
-      this.showToast('Critères Non Remplis', `Pour conventionner avec ${auth.shortName}, votre antenne doit disposer d’au moins 1 ambulance VPSP et 3 secouristes qualifiés.`, 'orange');
+      this.showToast('Critères Non Remplis', `Pour conventionner avec ${auth.shortName}, votre antenne doit disposer d’au moins 1 VPSP et 3 secouristes qualifiés.`, 'orange');
       return;
     }
 
@@ -10875,7 +10875,7 @@ class ProtecGame {
       color = 'blue';
     } else if (presetType === 'vpsp') {
       name = `VPSP ${existingCount + 1}`;
-      label = `Équipage Ambulance VPSP ${existingCount + 1}`;
+      label = `Équipage VPSP ${existingCount + 1}`;
       icon = 'truck';
       color = 'emerald';
     } else if (presetType === 'binome') {
@@ -11440,31 +11440,42 @@ class ProtecGame {
       return;
     }
 
-    let repLoss = 3;
-    let alertMsg = 'Annulation anticipée du DPS';
-    if (mission.eventDate) {
-      const todayDay = this.currentDayIndex || 0;
-      const daysUntil = (mission.eventDate.dayIndex !== undefined ? mission.eventDate.dayIndex - todayDay : 1);
-      if (daysUntil <= 0) {
-        repLoss = 12; // Le jour même
-        alertMsg = 'Annulation le jour même du DPS';
-      } else if (daysUntil === 1) {
-        repLoss = 8; // La veille
-        alertMsg = 'Annulation la veille du DPS';
+    const isOptionalRenfort = Boolean(mission.isRenfort || mission.isOptionalRenfort);
+    let repLoss = isOptionalRenfort ? 0 : 3;
+    let alertMsg = isOptionalRenfort ? 'Déclinaison de la demande de renfort' : 'Annulation anticipée du DPS';
+    if (!isOptionalRenfort) {
+      if (mission.eventDate) {
+        const todayDay = this.currentDayIndex || 0;
+        const daysUntil = (mission.eventDate.dayIndex !== undefined ? mission.eventDate.dayIndex - todayDay : 1);
+        if (daysUntil <= 0) {
+          repLoss = 12; // Le jour même
+          alertMsg = 'Annulation le jour même du DPS';
+        } else if (daysUntil === 1) {
+          repLoss = 8; // La veille
+          alertMsg = 'Annulation la veille du DPS';
+        } else {
+          repLoss = 4;
+        }
       } else {
-        repLoss = 4;
+        repLoss = 5;
       }
-    } else {
-      repLoss = 5;
     }
 
-    const missionKind = mission.type === 'social' ? 'la maraude' : (mission.type === 'pompiers' ? 'la garde SDIS' : (mission.type === 'samu' ? 'l’intervention SAMU' : 'le DPS'));
-    const missionKindTitle = mission.type === 'social' ? 'Annulation de la Maraude' : (mission.type === 'pompiers' ? 'Annulation de la Garde' : 'Annulation du Dispositif');
+    const missionKind = isOptionalRenfort
+      ? 'la demande de renfort ponctuelle'
+      : (mission.type === 'social' ? 'la maraude' : (mission.type === 'pompiers' ? 'la garde SDIS' : (mission.type === 'samu' ? 'l’intervention SAMU' : 'le DPS')));
+    const missionKindTitle = isOptionalRenfort
+      ? 'Décliner la Demande de Renfort'
+      : (mission.type === 'social' ? 'Annulation de la Maraude' : (mission.type === 'pompiers' ? 'Annulation de la Garde' : 'Annulation du Dispositif'));
+
+    const confirmPrompt = isOptionalRenfort
+      ? `Cette sollicitation du ${mission.type === 'pompiers' ? 'CODIS' : 'SAMU 15'} est une demande de renfort ponctuelle sans obligation.\n\nVous pouvez la décliner sans aucune sanction ni perte de réputation.`
+      : `Êtes-vous certain de vouloir annuler ${missionKind} « ${mission.title} » ?\n\nAttention : Cette annulation mettra le demandeur en difficulté car il devra trouver une autre association en urgence.`;
 
     const confirmed = await window.ProtecDialog.confirm(
-      `Êtes-vous certain de vouloir annuler ${missionKind} « ${mission.title} » ?\n\nAttention : Cette annulation mettra le demandeur en difficulté car il devra trouver une autre association en urgence.`,
+      confirmPrompt,
       missionKindTitle,
-      { isDestructive: true, confirmText: 'Confirmer l\'annulation', cancelText: 'Conserver la mission' }
+      { isDestructive: !isOptionalRenfort, confirmText: isOptionalRenfort ? 'Décliner le renfort' : 'Confirmer l\'annulation', cancelText: 'Conserver la mission' }
     );
     if (!confirmed) {
       return;
@@ -11480,17 +11491,19 @@ class ProtecGame {
     // Démobilisation propre des éventuels renforts extérieurs engagés
     this.demobilizeMissionReinforcements(mission);
 
-    this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 50) - repLoss);
-    this.recordAlertTriggerLog(mission, 'annulee_joueur', `Annulation manuelle décidée par la direction de l'antenne (-${repLoss} réputation).`, { repImpact: -repLoss });
+    if (repLoss > 0) {
+      this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 50) - repLoss);
+    }
+    this.recordAlertTriggerLog(mission, isOptionalRenfort ? 'renfort_decline' : 'annulee_joueur', isOptionalRenfort ? 'Demande de renfort ponctuelle déclinée (0 sanction, sans obligation).' : `Annulation manuelle décidée par la direction de l'antenne (-${repLoss} réputation).`, { repImpact: -repLoss });
     this.missions = this.missions.filter(m => m.id !== missionId);
 
-    this.showToast('DPS Annulé', `Le dispositif « ${mission.title} » a été annulé. L'événement est conservé dans votre registre des déclenchements.`, 'orange');
+    this.showToast(isOptionalRenfort ? 'Renfort Décliné' : 'DPS Annulé', isOptionalRenfort ? `La demande de renfort « ${mission.title} » a été déclinée sans aucune sanction.` : `Le dispositif « ${mission.title} » a été annulé. L'événement est conservé dans votre registre des déclenchements.`, isOptionalRenfort ? 'blue' : 'orange');
     if (window.ProtecNotifications) {
       window.ProtecNotifications.recordNotification({
-        title: `⚠️ ${alertMsg}`,
-        message: `Le DPS « ${mission.title} » a été annulé par votre antenne. Consigné dans le registre des alertes.`,
-        category: 'dps',
-        level: 'warning'
+        title: isOptionalRenfort ? `ℹ️ ${alertMsg}` : `⚠️ ${alertMsg}`,
+        message: isOptionalRenfort ? `Demande de renfort déclinée sans pénalité pour l'antenne.` : `Le DPS « ${mission.title} » a été annulé par votre antenne. Consigné dans le registre des alertes.`,
+        category: mission.type === 'samu' ? 'samu' : (mission.type === 'pompiers' ? 'sdis' : 'dps'),
+        level: isOptionalRenfort ? 'info' : 'warning'
       });
     }
 
@@ -12156,10 +12169,6 @@ class ProtecGame {
             <span class="font-bold text-slate-900 truncate" title="${mission.title}">${mission.title}</span>
             <span class="text-slate-500 hidden sm:inline text-[10px]">${breadcrumbDateStr}</span>
           </div>
-          <button type="button" onclick="window.game.openFinancesModal()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] shadow-xs flex items-center gap-1.5 transition cursor-pointer shrink-0" title="Consulter la trésorerie et le journal des notes de frais">
-            <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
-            <span>Notes de Frais</span>
-          </button>
         </div>
         ${mission.isCumpCai ? `
           <div class="p-3.5 rounded-2xl bg-gradient-to-r from-red-600 via-rose-700 to-indigo-800 text-white shadow-md space-y-2">
@@ -12792,7 +12801,7 @@ class ProtecGame {
                   <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'psa')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-blue-600/80 hover:bg-blue-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un Poste de Secours (PSA)">
                     <span>+ Équipe PSA</span>
                   </button>
-                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'vpsp')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-600/80 hover:bg-emerald-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un équipage Ambulance (VPSP)">
+                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'vpsp')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-600/80 hover:bg-emerald-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un équipage VPSP">
                     <span>+ Équipage VPSP</span>
                   </button>
                   <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'binome')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600/80 hover:bg-indigo-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un Binôme de Patrouille PAPS">
@@ -12934,9 +12943,14 @@ class ProtecGame {
                               <span class="px-2.5 py-1 rounded-xl text-[10px] font-black ${isDeployed ? 'bg-emerald-600 text-white' : 'bg-pc-blue text-white'} shrink-0 shadow-2xs">
                                 ${team.name}
                               </span>
-                              <span class="text-xs font-black text-slate-900 dark:text-white truncate" title="${team.label || team.name}">
-                                ${team.label || team.name}
-                              </span>
+                              ${(() => {
+                                const cleanTeamLabel = (team.label || team.name || '').replace(/Ambulance\s*VPSP/gi, 'VPSP').replace(/Ambulance/gi, 'VPSP');
+                                return `
+                                  <span class="text-xs font-black text-slate-900 dark:text-white truncate" title="${cleanTeamLabel}">
+                                    ${cleanTeamLabel}
+                                  </span>
+                                `;
+                              })()}
                             </div>
                             <div class="flex items-center gap-1.5 shrink-0">
                               <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-lg ${members.length > 0 ? (isDeployed ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300') : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'}">
@@ -16348,7 +16362,7 @@ class ProtecGame {
       case 'messagerie':
         return true;
 
-      // SAMU 15 : Nécessite au moins 1 ambulance VPSP et 3 secouristes
+      // SAMU 15 : Nécessite au moins 1 VPSP et 3 secouristes
       case 'samu':
         return vpspCount >= 1 && totalVols >= 3;
 
@@ -16625,7 +16639,11 @@ class ProtecGame {
       'marche': 'marche_occasion',
       'occasion': 'marche_occasion',
       'marche_occasion': 'marche_occasion',
-      'formations': 'formation'
+      'formations': 'formation',
+      'boutique_vehicules': 'boutique_vehicules',
+      'boutique_vehicule': 'boutique_vehicules',
+      'achat_vehicule': 'boutique_vehicules',
+      'achat_vehicules': 'boutique_vehicules'
     };
 
     if (moduleKey === 'evenements') {
@@ -17973,7 +17991,7 @@ class ProtecGame {
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-slate-800">
               <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Vacation secouriste : <strong class="text-amber-950 font-black">18,00 €/h</strong></div>
-              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Ambulance VPSP : <strong class="text-amber-950 font-black">110,00 €</strong></div>
+              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">VPSP : <strong class="text-amber-950 font-black">110,00 €</strong></div>
               <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Matériel & DSA : <strong class="text-amber-950 font-black">35 à 120 €</strong></div>
               <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Frais convention : <strong class="text-amber-950 font-black">40,00 €</strong></div>
             </div>
@@ -18464,10 +18482,10 @@ class ProtecGame {
                         </p>
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-1">
                           ${[
-                            { type: 'VPSP', name: 'Ambulance VPSP', funcBadge: 'PS', emoji: '🚑' },
-                            { type: 'VTU', name: 'Logistique VTU', funcBadge: 'TU / LOG', emoji: '🚚' },
-                            { type: 'VL', name: 'Véhicule Liaison VL', funcBadge: 'LIAISON / CMD', emoji: '🚗' },
-                            { type: 'VTP', name: 'Transport VTP', funcBadge: 'TP', emoji: '🚐' },
+                            { type: 'VPSP', name: 'VPSP (Secours à Personnes)', funcBadge: 'PS', emoji: '🚑' },
+                            { type: 'VTU', name: 'VTU (Logistique & Appui)', funcBadge: 'TU / LOG', emoji: '🚚' },
+                            { type: 'VL', name: 'VL (Liaison & Commandement)', funcBadge: 'LIAISON / CMD', emoji: '🚗' },
+                            { type: 'VTP', name: 'VTP (Transport de Personnel)', funcBadge: 'TP', emoji: '🚐' },
                             { type: 'VLHR', name: 'Véhicule Hors Route VLHR', funcBadge: 'HR / 4x4', emoji: '🚙' },
                             { type: 'MOTO', name: 'Moto Secours MPS', funcBadge: 'PS', emoji: '🏍️' },
                             { type: 'VELO', name: 'Patrouille Vélo / VTT', funcBadge: 'PS', emoji: '🚲' },
@@ -19372,7 +19390,7 @@ class ProtecGame {
                       ? 'Étape requise : Convention Préfectorale d’AASC (800 €)' 
                       : (this.samuConvention?.requestStatus === 'rejected'
                           ? `Demande ajournée (Dernière demande le ${window.ProtecConventions ? window.ProtecConventions.formatRequestDate(this.samuConvention) : (this.samuConvention?.lastRequestDate || '')})`
-                          : 'Prérequis SAMU : 1 ambulance VPSP et 3 secouristes qualifiés')}
+                          : 'Prérequis SAMU : 1 VPSP et 3 secouristes qualifiés')}
                   </div>
                   ${!this.aascConvention?.signed ? `
                     <button onclick="window.game.openModule('conventions')" class="px-4 py-2 rounded-xl text-xs font-black bg-amber-700 hover:bg-amber-800 text-white shadow-sm transition cursor-pointer">
@@ -19501,21 +19519,21 @@ class ProtecGame {
               <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <div class="text-xs font-bold text-slate-800 flex items-center gap-2">
-                    <span>Posture de Garde Réflexe :</span>
+                    <span>Posture & Alerte Opérationnelle :</span>
                     <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${this.samuGarde?.mode === 'poste' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-pc-blue border border-blue-300'}">
-                      ${this.samuGarde?.mode === 'poste' ? '🛡️ À la Base (Départ Immédiat)' : '🏠 Dispo Domicile (Astreinte)'}
+                      ${this.samuGarde?.mode === 'poste' ? '🛡️ À la Base (Mode Auto - Sans Alerte Antenne)' : '🏠 Dispo Domicile (Astreinte - Alerte & Validation)'}
                     </span>
                   </div>
-                  <p class="text-[10px] text-slate-500 mt-0.5">
-                    ${this.samuGarde?.mode === 'poste' ? 'Présence physique en caserne : départ instantané sans délai, fatigue accrue (-15 énergie).' : 'Équipage d’astreinte chez eux : départ après ralliement, fatigue économisée (-3 énergie).'}
+                  <p class="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                    ${this.samuGarde?.mode === 'poste' ? 'Dans la réalité, le SAMU 15 bipe directement l’équipage en caserne (bipeur / radio embarquée). Les départs sont 100% automatiques : <strong>aucune alerte sonore ni notification n’est émise à chaque intervention pour l’antenne</strong>.' : 'Équipage d’astreinte chez eux : la régulation 15 contacte l’antenne pour chaque appel. Vous devez sonner l’équipage et valider manuellement le départ (alertes et gestion requises).'}
                   </p>
                 </div>
                 <div class="flex items-center gap-1.5 shrink-0">
-                  <button onclick="window.game.setSamuGuardMode('poste')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.samuGarde?.mode === 'poste' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
+                  <button onclick="window.game.setSamuGuardMode('poste')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.samuGarde?.mode === 'poste' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}" title="Départs réflexes automatiques sans alerte sonore, le SAMU bipant directement l'équipage">
                     🏢 À la Base (Auto)
                   </button>
-                  <button onclick="window.game.setSamuGuardMode('astreinte')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.samuGarde?.mode !== 'poste' ? 'bg-pc-blue text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
-                    🏠 Domicile (Éco fatigue)
+                  <button onclick="window.game.setSamuGuardMode('astreinte')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.samuGarde?.mode !== 'poste' ? 'bg-pc-blue text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}" title="Astreinte domicile avec alerte et validation manuelle">
+                    🏠 Domicile (Manuel)
                   </button>
                 </div>
               </div>
@@ -19707,7 +19725,7 @@ class ProtecGame {
 
                 <div class="pt-2 border-t border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div class="text-[10.5px] text-amber-800 font-bold">
-                    ${!this.aascConvention?.signed ? 'Étape requise : Convention Préfectorale d’AASC (800 €)' : `Prérequis ${auth.shortName} : 1 ambulance VPSP et 3 secouristes qualifiés`}
+                    ${!this.aascConvention?.signed ? 'Étape requise : Convention Préfectorale d’AASC (800 €)' : `Prérequis ${auth.shortName} : 1 VPSP et 3 secouristes qualifiés`}
                   </div>
                   ${!this.aascConvention?.signed ? `
                     <button onclick="window.game.openModule('conventions')" class="px-4 py-2 rounded-xl text-xs font-black bg-amber-700 hover:bg-amber-800 text-white shadow-sm transition cursor-pointer">
@@ -19727,18 +19745,18 @@ class ProtecGame {
                   <div class="text-xs font-bold text-slate-800 flex items-center gap-2">
                     <span>Déclenchement Opérationnel :</span>
                     <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${sdis?.mode === 'poste' ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-blue-100 text-pc-blue border border-blue-300'}">
-                      ${sdis?.mode === 'poste' ? '🛡️ Caserne Postée (Départ Auto)' : '🏠 Astreinte Domicile (Départ Manuel)'}
+                      ${sdis?.mode === 'poste' ? '🛡️ Caserne Postée (Mode Auto - Sans Alerte Antenne)' : '🏠 Astreinte Domicile (Départ Manuel - Alerte Requise)'}
                     </span>
                   </div>
-                  <p class="text-[10px] text-slate-500 mt-0.5">
-                    ${sdis?.mode === 'poste' ? `Départ automatique immédiat dès alerte ${auth.codisName} (0 clic, réactivité max, fatigue accrue -15).` : 'L’équipage attend vos ordres, vous déclenchez vous-même le départ (moins fatiguant -5).'}
+                  <p class="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                    ${sdis?.mode === 'poste' ? `Dans la réalité, le ${auth.codisName} sonne directement l'équipage posté en caserne (bipeur sélectif / alarme caserne). Les départs sont 100% automatiques : <strong>aucune alerte sonore pour l'antenne</strong>.` : 'L’équipage est chez lui d’astreinte, le CTA-CODIS sollicite l’antenne qui ordonne et valide le départ manuellement (alertes et gestion requises).'}
                   </p>
                 </div>
                 <div class="flex items-center gap-1.5 shrink-0">
-                  <button onclick="window.game.setSdisGuardMode('poste')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${sdis?.mode === 'poste' ? 'bg-red-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
+                  <button onclick="window.game.setSdisGuardMode('poste')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${sdis?.mode === 'poste' ? 'bg-red-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}" title="Départs automatiques sans alerte sonore pour l'antenne">
                     🛡️ Caserne Postée (Auto)
                   </button>
-                  <button onclick="window.game.setSdisGuardMode('astreinte')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${sdis?.mode !== 'poste' ? 'bg-pc-blue text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}">
+                  <button onclick="window.game.setSdisGuardMode('astreinte')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${sdis?.mode !== 'poste' ? 'bg-pc-blue text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'}" title="Astreinte domicile avec alerte et validation manuelle">
                     🏠 Astreinte (Manuel)
                   </button>
                 </div>
@@ -20227,6 +20245,20 @@ class ProtecGame {
           </div>
         </div>
       `;
+    } else if (moduleKey === 'boutique_vehicules') {
+      title.textContent = 'Commander un Véhicule Opérationnel';
+      subtitle.textContent = 'Flotte de premiers secours, logistique, tout usage et commandement';
+      icon.setAttribute('data-lucide', 'truck');
+      const stationId = this.selectedStationId || (this.stations && this.stations[0]?.id);
+      if (window.ProtecAdvancedModals) {
+        try {
+          body.innerHTML = window.ProtecAdvancedModals.renderVehicleShop(this, stationId);
+        } catch (e) {
+          console.error('[ProtecAdvancedModals] Error rendering vehicle shop:', e);
+        }
+      }
+      if (window.lucide) window.lucide.createIcons();
+      return;
     } else if (moduleKey === 'radio') {
       // Le module Radio PC permanent a été retiré (la gestion de crise assure la main courante lors des sinistres)
       this.openModule('tchat', isBackNavigation);
@@ -20598,17 +20630,10 @@ class ProtecGame {
   }
 
   openBuyVehicleModal(stationId) {
-    const modal = document.getElementById('main-modal');
-    modal.classList.remove('hidden');
-    document.getElementById('modal-title').textContent = 'Commander un Véhicule Opérationnel';
-    document.getElementById('modal-subtitle').textContent = 'Flotte d’urgence, de logistique, fluviale et commandement';
-    document.getElementById('modal-icon').setAttribute('data-lucide', 'truck');
-
-    if (window.ProtecAdvancedModals) {
-      document.getElementById('modal-body').innerHTML = window.ProtecAdvancedModals.renderVehicleShop(this, stationId);
+    if (stationId) {
+      this.selectedStationId = stationId;
     }
-
-    if (window.lucide) window.lucide.createIcons();
+    this.openModule('boutique_vehicules');
   }
 
   // --- SYSTÈME FLOTTE : INDICATIFS, CONDITION, CONTRÔLE TECHNIQUE & ASSURANCE ---
@@ -22495,12 +22520,20 @@ class ProtecGame {
             const elapsedMins = (currentTime - m.spawnedAt) / 60000;
             if (elapsedMins > m.maxResponseMinutes && !m.sanctionApplied) {
               m.sanctionApplied = true;
-              this.applyPrefectureSanction(`Retard inacceptable de départ sur réquisition pompiers (${Math.round(elapsedMins)} min d'attente)`, 18);
+              m.status = 'canceled';
+              if (m.isRenfort || m.isOptionalRenfort) {
+                // DEMANDE DE RENFORT SANS OBLIGATION : AUCUNE SANCTION NI PÉNALITÉ
+                if (typeof this.showToast === 'function') {
+                  this.showToast('Demande de Renfort Clôturée', `Le CODIS a réorienté la demande vers un autre moyen. Aucune sanction appliquée (demande facultative).`, 'blue');
+                }
+              } else {
+                this.applyPrefectureSanction(`Retard inacceptable de départ sur réquisition pompiers (${Math.round(elapsedMins)} min d'attente)`, 18);
+              }
             }
           }
         });
 
-        // 3c-bis. Contrôle des retards de départ réflexe SAMU 15 (Sanctions conventionnelles de l'autorité régulatrice)
+        // 3c-bis. Contrôle des retards de départ réflexe SAMU 15 (Sanctions conventionnelles sauf si renfort facultatif)
         if (this.samuConvention && this.samuConvention.signed) {
           const pendingSamu = this.missions.filter(m => m.type === 'samu' && m.status === 'planifie');
           pendingSamu.forEach(m => {
@@ -22509,7 +22542,14 @@ class ProtecGame {
               if (elapsedMins > m.maxResponseMinutes && !m.sanctionApplied) {
                 m.sanctionApplied = true;
                 m.status = 'canceled';
-                this.applySamuConventionStrike(`Dépassement inacceptable du délai de départ réflexe imposé par la convention (${Math.round(elapsedMins)} min d'attente constatée)`, 250);
+                if (m.isRenfort || m.isOptionalRenfort) {
+                  // DEMANDE DE RENFORT SANS OBLIGATION : AUCUNE SANCTION NI PÉNALITÉ
+                  if (typeof this.showToast === 'function') {
+                    this.showToast('Demande de Renfort Clôturée', `Le SAMU 15 a réorienté la demande vers un autre service. Aucune sanction appliquée (demande sans obligation).`, 'blue');
+                  }
+                } else {
+                  this.applySamuConventionStrike(`Dépassement inacceptable du délai de départ réflexe imposé par la convention (${Math.round(elapsedMins)} min d'attente constatée)`, 250);
+                }
               }
             }
           });
@@ -22783,13 +22823,26 @@ class ProtecGame {
   }
 
   // Alerte d'urgence SAMU 15 calibrée aux moyens de l'antenne (Convention Cadre requise)
+  // Alerte d'urgence SAMU 15 calibrée aux moyens de l'antenne (Convention Cadre requise)
   triggerRandomSamuEmergency() {
     if (!this.samuConvention || !this.samuConvention.signed) return;
     if (!this.samuGarde || !this.samuGarde.active) return;
-    const pendingSamu = this.missions.filter(m => m.type === 'samu' && m.status === 'planifie');
-    if (pendingSamu.length >= 2) return;
 
-    const base = this.stations[Math.floor(Math.random() * this.stations.length)];
+    // CONTRÔLE STRICT DU NOMBRE DE VECTEURS PROTEC ALLOUÉS AU SAMU
+    // Dans la réalité, le SAMU sait exactement combien de vecteurs Protec il a sous contrat (généralement 1 VPSP).
+    // RÈGLE : Il n'y a JAMAIS plus d'interventions en même temps que de vecteurs demandés.
+    const activeGuard = window.ProtecGardesSamu ? window.ProtecGardesSamu.getCurrentActiveGuard(this) : null;
+    const maxSamuVectors = Math.max(1, (activeGuard?.assignedCrew?.vehicles?.length || (activeGuard?.requiredVehicles?.length) || 1));
+    const activeStandardSamu = (this.missions || []).filter(m => m.type === 'samu' && !m.isRenfort && !m.isGarde && (m.status === 'ongoing' || m.status === 'planifie'));
+
+    if (activeStandardSamu.length >= maxSamuVectors) {
+      // Tous les vecteurs Protec conventionnés sont déjà engagés en intervention !
+      // Le SAMU peut toutefois, assez rarement, solliciter l'antenne pour un renfort rapide par manque de vecteur.
+      this.maybeTriggerSamuRenfortRequest();
+      return;
+    }
+
+    const base = this.stations[Math.floor(Math.random() * this.stations.length)] || { lat: 48.8566, lng: 2.3522, name: 'Antenne Protection Civile' };
     const capacity = this.calculatePlayerCapacity();
 
     const emergencies = [
@@ -22829,7 +22882,6 @@ class ProtecGame {
     if (reqVol >= 3 && capacity.ceCount > 0) ranks.unshift('CE');
 
     // Déterminer la posture et les exigences de délais conventionnels
-    const activeGuard = window.ProtecGardesSamu ? window.ProtecGardesSamu.getCurrentActiveGuard(this) : null;
     const posture = activeGuard?.posture || (this.samuGarde?.mode === 'poste' ? 'base' : 'domicile');
     const maxRespMins = (posture === 'domicile')
       ? (this.samuConvention.requirements?.maxDepartureHomeMinutes || 12)
@@ -22886,6 +22938,7 @@ class ProtecGame {
 
       if (vpsp && vpsp.status !== 'mission' && isBaseReady) {
         // Posture À la base prêt à partir : Départ réflexe 100% automatique !
+        // Dans la réalité, le SAMU alerte directement l'équipage posté (bipeur / radio Antarès).
         isAutoPoste = true;
 
         // Fatigue de garde postée à la caserne (-15 énergie)
@@ -22893,17 +22946,20 @@ class ProtecGame {
           if (vol) vol.energy = Math.max(10, (vol.energy || 80) - 15);
         });
 
-        const base = this.stations[0] || { lat: 48.8566, lng: 2.3522 };
+        const baseStation = this.stations[0] || { lat: 48.8566, lng: 2.3522 };
         if (window.ProtecConventions) {
-          window.ProtecConventions.creerTimelineUrgence(this, newSamu, crewVols.map(v => v.id), vpsp, base);
+          window.ProtecConventions.creerTimelineUrgence(this, newSamu, crewVols.map(v => v.id), vpsp, baseStation);
         }
 
         // Lancement officiel du cycle complet d'intervention (Départ transit -> Sur place -> Transport CHU -> Retour base)
-        this.dispatchSamuEmergencyIntervention(newSamu, vpsp, crewVols, base);
+        this.dispatchSamuEmergencyIntervention(newSamu, vpsp, crewVols, baseStation);
 
-        this.showToast('⚡ SAMU 15 (Départ Réflexe Base)', `Ambulance ${vpsp.name} partie immédiatement vers « ${pick.title} » sans délai (Équipage à la base) !`, 'green');
+        // Journal radio discret (pas d'alerte sonore ni toast pour l'antenne car bipeur direct avec l'équipage)
+        if (window.ProtecSystems && typeof window.ProtecSystems.addRadioLog === 'function') {
+          window.ProtecSystems.addRadioLog(this, vpsp.name, 2, `STATUT 2 : ${vpsp.name} parti immédiatement vers « ${pick.title} » (Bipage régulation 15 direct).`);
+        }
       } else if (vpsp && !isBaseReady) {
-        // Posture Dispo domicile : Équipage d'astreinte, fatigue grandement économisée (-3)
+        // Posture Dispo domicile : Équipage d'astreinte, validation manuelle requise
         newSamu.status = 'planifie';
         newSamu.registeredVolunteers = crewVols.map(v => v.id);
         newSamu.assignedCrew = {
@@ -22934,24 +22990,130 @@ class ProtecGame {
     this.updateStatsUI();
     this.saveGame();
 
+    // RÈGLE : Ne pas être alerté si le mode auto est activé !
+    // Dans la réalité, le SAMU a un moyen d'alerte direct avec l'équipage posté (bipeur sélectif, terminal radio embarqué).
+    // Si isAutoPoste est actif, aucune notification sonore ni toast d'alerte n'est envoyé à l'antenne.
+    if (!isAutoPoste) {
+      if (window.ProtecNotifications) {
+        window.ProtecNotifications.notifyCategory(
+          'samu',
+          `🚑 DÉPART RÉFLEXE SAMU 15`,
+          `${pick.title} à proximité de ${base.name}. VPSP demandé en urgence !`,
+          `samu-${newSamu.id}`
+        );
+      } else if (window.ProtecIncidents) {
+        window.ProtecIncidents.sendSystemNotification(
+          `🚑 DÉPART RÉFLEXE SAMU 15`,
+          `${pick.title} à proximité de ${base.name}. VPSP demandé !`,
+          `samu-${newSamu.id}`
+        );
+      }
+      this.showToast('Appel Régulation SAMU 15', `Départ réflexe : ${pick.title} !`, 'orange');
+    }
+  }
+
+  // Sollicitation ponctuelle et rare d'un renfort SAMU par manque de vecteurs (sans obligation, fort bonus si réalisé)
+  maybeTriggerSamuRenfortRequest(baseStation = null) {
+    if (!this.samuConvention || !this.samuConvention.signed) return;
+
+    // Pas de cumul de demandes de renfort
+    const hasPendingRenfort = (this.missions || []).some(m => (m.type === 'samu' || m.type === 'pompiers') && m.isRenfort && m.status === 'planifie');
+    if (hasPendingRenfort) return;
+
+    // Cooldown temporel (au moins 3 minutes réelles)
+    const now = Date.now();
+    if (!this.lastRenfortRequestTime) this.lastRenfortRequestTime = 0;
+    if (now - this.lastRenfortRequestTime < 180000) return;
+
+    // Déclenchement rare (~8% de probabilité par contrôle quand tous les vecteurs sont occupés)
+    const renfortChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('samuRenfortChance', 0.08) : 0.08;
+    if (Math.random() > renfortChance) return;
+
+    this.lastRenfortRequestTime = now;
+    const base = baseStation || this.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne Protection Civile' };
+    const samuCoords = this.calculateRealisticMissionLocation(base, 'samu');
+
+    const renfortScenarios = [
+      {
+        title: 'Pic Sanitaire : Débordement SAMU 15 (Demande Renfort)',
+        desc: 'Saturation générale des ambulances. Le médecin régulateur 15 sollicite un VPSP supplémentaire en renfort rapide. Sans obligation : aucune sanction ni perte de réputation si non réalisé, fort bonus si vous pouvez armer un équipage !',
+        durMin: 30,
+        reward: 580
+      },
+      {
+        title: 'Urgences Multiples : Renfort VPSP Sollicité par le 15',
+        desc: 'Multiplication des interventions sur la zone. La régulation 15 contacte l’antenne pour savoir si un deuxième vecteur peut être armé d’urgence. Totalement facultatif : bonus réputation et prime de renfort si accepté.',
+        durMin: 25,
+        reward: 520
+      },
+      {
+        title: 'Accident Voie Publique : Demande Renfort Ambulancier SAMU',
+        desc: 'Intervention d’envergure nécessitant plusieurs ambulances. Le SAMU 15 fait appel à vos effectifs de réserve pour un engagement rapide. Aucune sanction si vous ne pouvez pas honorer cette demande.',
+        durMin: 28,
+        reward: 550
+      }
+    ];
+
+    const pick = renfortScenarios[Math.floor(Math.random() * renfortScenarios.length)];
+
+    const renfortMission = {
+      id: `m-samu-renfort-${Date.now()}`,
+      type: 'samu',
+      isRenfort: true,
+      isOptionalRenfort: true,
+      categoryLabel: '🚨 SAMU 15 - Demande de Renfort Ponctuelle (Facultative)',
+      title: pick.title,
+      desc: pick.desc,
+      lat: samuCoords.lat,
+      lng: samuCoords.lng,
+      scale: 'Vecteur VPSP Renfort (Facultatif)',
+      eventDate: { ...this.clock, hour: this.clock.hour },
+      durationSeconds: pick.durMin * 60,
+      durationHours: (pick.durMin / 60).toFixed(1),
+      requiredVolunteers: 3,
+      requiredRanks: ['CE', 'PSE2', 'PSE1'],
+      requiredVehicles: ['VPSP'],
+      rewardMoney: pick.reward + 250, // Prime de renfort exceptionnelle
+      rewardReputation: 55, // Fort bonus réputation
+      progress: 0,
+      status: 'planifie',
+      registeredVolunteers: [],
+      assignedCrew: { volunteers: [], vehicles: [] },
+      address: this.generateRealisticStreetAddress(this.stations[0]?.city || 'Paris', samuCoords.lat, samuCoords.lng),
+      isSector: false,
+      spawnedAt: Date.now(),
+      maxResponseMinutes: 15, // 15 min de délai pour mobiliser et répondre
+      sanctionApplied: false
+    };
+
+    this.enrichMissionLocationWithCity(renfortMission);
+    this.missions.push(renfortMission);
+    this.renderMissions();
+    this.updateStatsUI();
+    this.saveGame();
+
+    // Pour la demande de renfort, il y a de la gestion manuelle (mobiliser un équipage/véhicule de réserve),
+    // donc NOTIFICATION obligatoire sonore et visuelle !
     if (window.ProtecNotifications) {
       window.ProtecNotifications.notifyCategory(
         'samu',
-        isAutoPoste ? `⚡ DÉPART IMMÉDIAT SAMU 15 (Auto)` : `🚑 DÉPART RÉFLEXE SAMU 15`,
-        `${pick.title} à proximité de ${base.name}. ${isAutoPoste ? 'Équipage en route.' : 'VPSP demandé en urgence !'}`,
-        `samu-${newSamu.id}`
+        '🚨 DEMANDE DE RENFORT SAMU 15 (Facultative)',
+        `Pénurie de vecteurs : le 15 sollicite 1 VPSP en renfort rapide pour « ${pick.title} ». Sans obligation !`,
+        `renfort-${renfortMission.id}`
       );
     } else if (window.ProtecIncidents) {
       window.ProtecIncidents.sendSystemNotification(
-        `🚑 DÉPART RÉFLEXE SAMU 15`,
-        `${pick.title} à proximité de ${base.name}. VPSP demandé !`,
-        `samu-${newSamu.id}`
+        '🚨 DEMANDE DE RENFORT SAMU 15 (Facultative)',
+        `Le SAMU sollicite un renfort rapide. Sans obligation !`,
+        `renfort-${renfortMission.id}`
       );
     }
 
-    if (!isAutoPoste) {
-      this.showToast('Appel Régulation SAMU 15', `Départ réflexe : ${pick.title} !`, 'orange');
-    }
+    this.showToast(
+      '🚨 Demande de Renfort SAMU 15 (Sans Obligation)',
+      `Pénurie de vecteurs : le 15 sollicite 1 VPSP en renfort rapide. Sans obligation (0 sanction si refusé), fort bonus si honoré !`,
+      'orange'
+    );
   }
 
   // =========================================================================
@@ -23181,9 +23343,21 @@ class ProtecGame {
       }
     });
 
-    const reward = Number(mission.rewardMoney || 320);
+    let reward = Number(mission.rewardMoney || 320);
+    let repBonus = Number(mission.rewardReputation || 20);
+
+    // BONUS SI LE RENFORT FACULTATIF EST HONORÉ AVEC SUCCÈS
+    if (mission.isRenfort || mission.isOptionalRenfort) {
+      reward += 200; // Prime d'urgence renfort supplémentaire
+      repBonus += 30; // Grand bond de réputation
+      this.reputation_samu = Math.min(100, (this.reputation_samu !== undefined ? this.reputation_samu : 50) + 6);
+      if (typeof this.showToast === 'function') {
+        this.showToast('Félicitations Régulation 15 🌟', `Remerciements appuyés du SAMU 15 : renfort VPSP exceptionnel honoré avec brio ! Prime et bonus de réputation accordés.`, 'green');
+      }
+    }
+
     this.resources.money = (this.resources.money || 0) + reward;
-    this.resources.reputationScore = (this.resources.reputationScore || 50) + (mission.rewardReputation || 20);
+    this.resources.reputationScore = (this.resources.reputationScore || 50) + repBonus;
 
     if (window.ProtecFinances && typeof window.ProtecFinances.recordTransaction === 'function') {
       window.ProtecFinances.recordTransaction(
@@ -23222,7 +23396,13 @@ class ProtecGame {
   setSamuGuardMode(mode) {
     if (!this.samuGarde) this.samuGarde = {};
     this.samuGarde.mode = mode;
-    this.showToast('Mode Opérationnel SAMU', mode === 'poste' ? '🛡️ Garde Postée sélectionnée : départs réflexes 100% automatiques !' : '🏠 Astreinte Domicile sélectionnée : validation manuelle par vos soins.', 'blue');
+    this.showToast(
+      'Mode Opérationnel SAMU 15',
+      mode === 'poste' 
+        ? '🛡️ Garde Postée : Liaison directe SAMU/équipage (bipeur/radio). Départs 100% automatiques sans alerte sonore pour l’antenne !' 
+        : '🏠 Astreinte Domicile : La régulation sonne l’antenne à chaque appel, validation manuelle requise.',
+      'blue'
+    );
     this.saveGame();
     this.openModule('samu');
   }
@@ -23230,7 +23410,13 @@ class ProtecGame {
   setSdisGuardMode(mode) {
     if (!this.sdisGarde) this.sdisGarde = {};
     this.sdisGarde.mode = mode;
-    this.showToast('Mode Opérationnel SDIS', mode === 'poste' ? '🛡️ Garde Caserne Postée sélectionnée : départ réflexe automatique !' : '🏠 Astreinte Domicile sélectionnée : validation manuelle par vos soins.', 'blue');
+    this.showToast(
+      'Mode Opérationnel SDIS',
+      mode === 'poste' 
+        ? '🛡️ Garde Caserne : Liaison directe CODIS/équipage (bipeur). Départs automatiques sans alerte sonore pour l’antenne !' 
+        : '🏠 Astreinte Domicile : Validation manuelle requise par vos soins.',
+      'blue'
+    );
     this.saveGame();
     this.openModule('pompiers');
   }
@@ -23249,7 +23435,7 @@ class ProtecGame {
 
     const vpsp = this.vehicles.find(v => v.type === 'VPSP' && v.status === 'dispo');
     if (!vpsp) {
-      this.showToast('Aucun VPSP disponible', 'Vous devez disposer d’au moins 1 ambulance VPSP libre au garage.', 'orange');
+      this.showToast('Aucun VPSP disponible', 'Vous devez disposer d’au moins 1 VPSP libre au garage.', 'orange');
       return;
     }
 
@@ -23383,7 +23569,7 @@ class ProtecGame {
     // 1. Contrôle véhicule VPSP
     const vpsp = this.vehicles.find(v => v.type === 'VPSP' && v.status === 'dispo');
     if (!vpsp) {
-      this.showToast('VPSP manquant', 'Une ambulance VPSP libre est exigée pour armer la garde caserne pompiers.', 'orange');
+      this.showToast('VPSP manquant', 'Un VPSP libre est exigé pour armer la garde caserne pompiers.', 'orange');
       return;
     }
 
@@ -23503,8 +23689,18 @@ class ProtecGame {
   triggerRandomSdisEmergency() {
     if (!this.sdisGarde || !this.sdisGarde.active) return;
 
-    const pending = this.missions.filter(m => m.type === 'pompiers' && m.status === 'planifie');
-    if (pending.length >= 2) return;
+    // CONTRÔLE STRICT DU NOMBRE DE VECTEURS DEMANDÉS PAR LE SDIS / CODIS
+    // RÈGLE : Il n'y a jamais plus d'interventions en même temps que de vecteurs demandés.
+    // Le CODIS sait exactement combien de vecteurs Protec sont engagés en caserne (1 VPSP).
+    const maxSdisVectors = 1;
+    const activeStandardSdis = (this.missions || []).filter(m => m.type === 'pompiers' && !m.isRenfort && !m.isGarde && (m.status === 'ongoing' || m.status === 'planifie'));
+
+    if (activeStandardSdis.length >= maxSdisVectors) {
+      // Le vecteur de caserne est déjà engagé en intervention !
+      // Le CODIS peut toutefois solliciter très rarement un renfort exceptionnel sans obligation.
+      this.maybeTriggerSdisRenfortRequest();
+      return;
+    }
 
     const base = this.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Caserne Pompiers' };
     const sdisCoords = this.calculateRealisticMissionLocation(base, 'pompiers');
@@ -23600,12 +23796,16 @@ class ProtecGame {
 
     this.enrichMissionLocationWithCity(newSdis);
 
-    // DÉCLENCHEMENT AUTOMATIQUE SI GARDE CASERNE POSTÉE (Choix joueur : Caserne Postée = Auto, Astreinte = Manuel)
+    // DÉCLENCHEMENT AUTOMATIQUE SI GARDE CASERNE POSTÉE
+    // Dans la réalité, le CTA-CODIS sonne directement l'équipage posté en caserne (bipeur / avertisseur caserne).
     const isAutoSdis = this.sdisGarde && this.sdisGarde.active && this.sdisGarde.mode === 'poste';
+    let vpspEngaged = null;
+
     if (isAutoSdis) {
       const vpsp = this.vehicles.find(v => v.id === this.sdisGarde.vehicleId);
       const crewIds = this.sdisGarde.caserneCrew || [];
       if (vpsp && vpsp.status !== 'mission' && crewIds.length > 0) {
+        vpspEngaged = vpsp;
         newSdis.status = 'ongoing';
         newSdis.startedAt = Date.now();
         newSdis.registeredVolunteers = [...crewIds];
@@ -23621,16 +23821,19 @@ class ProtecGame {
           if (vol) vol.energy = Math.max(10, (vol.energy || 80) - 15);
         });
 
-        const base = this.stations[0] || { lat: 48.8566, lng: 2.3522 };
+        const baseStation = this.stations[0] || { lat: 48.8566, lng: 2.3522 };
         if (window.ProtecConventions) {
-          window.ProtecConventions.creerTimelineUrgence(this, newSdis, crewIds, vpsp, base);
+          window.ProtecConventions.creerTimelineUrgence(this, newSdis, crewIds, vpsp, baseStation);
         }
         if (window.ProtecSystems) {
-          window.ProtecSystems.startTransit(this, vpsp, { lat: base.lat, lng: base.lng }, { lat: newSdis.lat, lng: newSdis.lng }, newSdis, 2);
+          window.ProtecSystems.startTransit(this, vpsp, { lat: baseStation.lat, lng: baseStation.lng }, { lat: newSdis.lat, lng: newSdis.lng }, newSdis, 2);
         }
 
-        const pompAuth = this.getPompierAuthority(base?.departmentCode);
-        this.showToast(`⚡ ${pompAuth.label} (Départ Réflexe Auto)`, `Ambulance ${vpsp.name} partie immédiatement vers « ${pick.title} » sans attente !`, 'red');
+        // Trace discrète dans le journal radio opérationnel
+        const pompAuth = this.getPompierAuthority(baseStation?.departmentCode);
+        if (window.ProtecSystems && typeof window.ProtecSystems.addRadioLog === 'function') {
+          window.ProtecSystems.addRadioLog(this, vpsp.name, 2, `STATUT 2 : ${vpsp.name} parti immédiatement vers « ${pick.title} » (Bipage direct CTA-CODIS).`);
+        }
       }
     }
 
@@ -23640,24 +23843,124 @@ class ProtecGame {
     this.updateStatsUI();
     this.saveGame();
 
+    // RÈGLE : Ne pas être alerté si le mode auto est activé !
+    // Si isAutoSdis est actif, aucune notification sonore ni toast n'est envoyé pour l'antenne.
+    if (!isAutoSdis) {
+      if (window.ProtecNotifications) {
+        window.ProtecNotifications.notifyCategory(
+          'sdis',
+          `🚒 DÉPART POMPIERS IMMÉDIAT (${pompAuth.label})`,
+          `${pick.title} : Équipage VPSP en ${pompAuth.caserneLabel} sonné pour départ réflexe !`,
+          `sdis-${newSdis.id}`
+        );
+      } else if (window.ProtecIncidents) {
+        window.ProtecIncidents.sendSystemNotification(
+          `🚨 DÉPART POMPIERS IMMÉDIAT (${pompAuth.label})`,
+          `${pick.title} ! Équipage VPSP sonné par le ${pompAuth.codisLabel} !`,
+          `sdis-${newSdis.id}`
+        );
+      }
+      this.showToast(`Départ Pompiers (${pompAuth.codisLabel})`, `${pick.title} ! Départ réflexe immédiat requis.`, 'orange');
+    }
+  }
+
+  // Sollicitation ponctuelle et rare d'un renfort SDIS par manque de vecteurs (sans obligation, fort bonus si réalisé)
+  maybeTriggerSdisRenfortRequest() {
+    if (!this.sdisGarde || !this.sdisGarde.active) return;
+
+    // Pas de cumul de demandes de renfort
+    const hasPendingRenfort = (this.missions || []).some(m => (m.type === 'samu' || m.type === 'pompiers') && m.isRenfort && m.status === 'planifie');
+    if (hasPendingRenfort) return;
+
+    // Cooldown temporel (au moins 3 minutes réelles)
+    const now = Date.now();
+    if (!this.lastRenfortRequestTime) this.lastRenfortRequestTime = 0;
+    if (now - this.lastRenfortRequestTime < 180000) return;
+
+    // Déclenchement rare (~8% de probabilité par contrôle quand tous les vecteurs sont occupés)
+    const renfortChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('sdisRenfortChance', 0.08) : 0.08;
+    if (Math.random() > renfortChance) return;
+
+    this.lastRenfortRequestTime = now;
+    const base = this.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Caserne Pompiers' };
+    const sdisCoords = this.calculateRealisticMissionLocation(base, 'pompiers');
+    const pompAuth = this.getPompierAuthority(base?.departmentCode);
+
+    const renfortScenarios = [
+      {
+        title: 'Débordement Secteur : Demande Renfort VSAV / VPSP',
+        desc: 'Tous les VSAV des centres de secours voisins sont engagés sur feu ou AVP. Le CODIS sollicite un VPSP supplémentaire en renfort ponctuel rapide. Demande sans obligation : aucune sanction si refusé, prime exceptionnelle accordée si honoré !',
+        durMin: 30,
+        reward: 580
+      },
+      {
+        title: 'Accident Multi-Victimes : Renfort Sanitaire Pompiers',
+        desc: 'Carambolage urbain impliquant plusieurs véhicules. Le CTA-CODIS contacte votre base pour savoir si un VPSP de réserve peut être armé. Demande facultative et sans sanction.',
+        durMin: 35,
+        reward: 600
+      }
+    ];
+
+    const pick = renfortScenarios[Math.floor(Math.random() * renfortScenarios.length)];
+
+    const renfortMission = {
+      id: `m-sdis-renfort-${Date.now()}`,
+      type: 'pompiers',
+      isRenfort: true,
+      isOptionalRenfort: true,
+      categoryLabel: `🚨 ${pompAuth.codisLabel} - Demande de Renfort Ponctuelle (Facultative)`,
+      title: pick.title,
+      desc: pick.desc,
+      lat: sdisCoords.lat,
+      lng: sdisCoords.lng,
+      scale: 'Vecteur VPSP Renfort (Facultatif)',
+      eventDate: { ...this.clock, hour: this.clock.hour },
+      durationSeconds: pick.durMin * 60,
+      durationHours: (pick.durMin / 60).toFixed(1),
+      requiredVolunteers: 3,
+      requiredRanks: ['CE', 'PSE2', 'PSE1'],
+      requiredVehicles: ['VPSP'],
+      rewardMoney: pick.reward + 250, // Prime de renfort
+      rewardReputation: 55, // Fort bonus réputation
+      maxResponseMinutes: 15, // 15 min pour mobiliser
+      spawnedAt: Date.now(),
+      progress: 0,
+      status: 'planifie',
+      registeredVolunteers: [],
+      assignedCrew: { volunteers: [], vehicles: [] },
+      address: this.generateRealisticStreetAddress(this.stations[0]?.city || 'Paris', sdisCoords.lat, sdisCoords.lng),
+      isSector: false,
+      sanctionApplied: false
+    };
+
+    this.enrichMissionLocationWithCity(renfortMission);
+    this.missions.push(renfortMission);
+    this.renderMissions();
+    this.updateStatsUI();
+    this.saveGame();
+
+    // Pour la demande de renfort, il y a de la gestion manuelle (mobiliser un équipage/véhicule de réserve),
+    // donc NOTIFICATION obligatoire sonore et visuelle !
     if (window.ProtecNotifications) {
       window.ProtecNotifications.notifyCategory(
         'sdis',
-        isAutoSdis ? `⚡ DÉPART IMMÉDIAT ${pompAuth.codisLabel} (Auto)` : `🚒 DÉPART POMPIERS IMMÉDIAT (${pompAuth.label})`,
-        `${pick.title} : ${isAutoSdis ? 'Équipage en route sous gyrophare.' : `Équipage VPSP en ${pompAuth.caserneLabel} sonné pour départ réflexe !`}`,
-        `sdis-${newSdis.id}`
+        `🚨 DEMANDE DE RENFORT ${pompAuth.codisLabel} (Facultative)`,
+        `Pénurie de VSAV : le CODIS sollicite 1 VPSP en renfort rapide pour « ${pick.title} ». Sans obligation !`,
+        `renfort-${renfortMission.id}`
       );
     } else if (window.ProtecIncidents) {
       window.ProtecIncidents.sendSystemNotification(
-        `🚨 DÉPART POMPIERS IMMÉDIAT (${pompAuth.label})`,
-        `${pick.title} ! Équipage VPSP sonné par le ${pompAuth.codisLabel} !`,
-        `sdis-${newSdis.id}`
+        `🚨 DEMANDE DE RENFORT ${pompAuth.codisLabel}`,
+        `Le CODIS sollicite un renfort rapide. Sans obligation !`,
+        `renfort-${renfortMission.id}`
       );
     }
 
-    if (!isAutoSdis) {
-      this.showToast(`Départ Pompiers (${pompAuth.codisLabel})`, `${pick.title} ! Départ réflexe immédiat requis.`, 'orange');
-    }
+    this.showToast(
+      `🚨 Demande de Renfort ${pompAuth.codisLabel} (Sans Obligation)`,
+      `Pénurie de VSAV : les pompiers sollicitent 1 VPSP en renfort rapide. Sans obligation (0 sanction), fort bonus si honoré !`,
+      'orange'
+    );
   }
 
   applyPrefectureSanction(reason, scorePenalty = 15) {

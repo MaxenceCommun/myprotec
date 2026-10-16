@@ -64,6 +64,16 @@
               }
             ]
           }
+        ],
+        "lastDailyFinanceReport": "2026-10-16",
+        "pending_notifications": [
+          {
+            "title": "Trésorerie & Bilan d’Activité",
+            "message": "Bilan quotidien de votre antenne à 00h00. Trésorerie disponible : 0 €. Votre antenne est prête pour une nouvelle journée opérationnelle.",
+            "category": "finances",
+            "type": "blue",
+            "created_at": "2026-10-15T22:00:08.170Z"
+          }
         ]
       }
     }
@@ -97,7 +107,12 @@
   "referralLogs": [],
   "fraudLogs": [],
   "pushSubscriptions": {},
-  "vapidKeys": null,
+  "vapidKeys": {
+    "publicKey": "BKLdj5RykkIOWRhAriMzfKsYON-juKOqSvFCclSz6zgr0CRZdLlQOhfd9nAwmXZZjsNMJU-pl5Csy4Yg-c6mHe0",
+    "privateKey": "rgoFrFwds0VGKS46Hl2OUKrjlir3Htd3ccpvZ7aQQNA",
+    "subject": "mailto:contact@myprotec.fr",
+    "created_at": "2026-10-15T19:23:19.248Z"
+  },
   "equipmentTiersConfig": {
     "categories": [
       "formation",

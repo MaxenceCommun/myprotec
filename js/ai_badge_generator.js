@@ -120,7 +120,7 @@
                     <span class="text-[10px] text-slate-400 font-bold">Idées rapides :</span>
                     <button type="button" onclick="window.ProtecAIBadgeGenerator.injectSamplePrompt('festival')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 transition cursor-pointer">DPS Festival</button>
                     <button type="button" onclick="window.ProtecAIBadgeGenerator.injectSamplePrompt('inondation')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 transition cursor-pointer">Crues & Inondations</button>
-                    <button type="button" onclick="window.ProtecAIBadgeGenerator.injectSamplePrompt('vpsp')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 transition cursor-pointer">Ambulance VPSP</button>
+                    <button type="button" onclick="window.ProtecAIBadgeGenerator.injectSamplePrompt('vpsp')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 transition cursor-pointer">VPSP d'Urgence</button>
                     <button type="button" onclick="window.ProtecAIBadgeGenerator.injectSamplePrompt('cyno')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 transition cursor-pointer">Équipe Cynophile</button>
                     <button type="button" onclick="window.ProtecAIBadgeGenerator.injectSamplePrompt('neige')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 transition cursor-pointer">Soutien Naufragés Neige</button>
                   </div>
@@ -336,7 +336,7 @@
       const samples = {
         festival: "Un binôme secouriste de la Protection Civile avec un brancard pliable veillant sur la foule lors d'un concert de musique de nuit.",
         inondation: "Une barque de sauvetage de la Protection Civile naviguant dans une rue inondée avec deux sauveteurs nautiques casqués aidant des résidents.",
-        vpsp: "Une ambulance VPSP de la Protection Civile avec gyrophares allumés de nuit et deux équipiers secouristes en gilets de haute visibilité.",
+        vpsp: "Un VPSP de la Protection Civile avec gyrophares allumés de nuit et deux équipiers secouristes en gilets de haute visibilité.",
         cyno: "Un maître-chien secouriste de la Protection Civile avec son berger allemand de recherche en décombres, harnais d'intervention.",
         neige: "Bénévoles distribuant des couvertures de survie et boissons chaudes aux automobilistes bloqués sur autoroute sous une tempête de neige."
       };

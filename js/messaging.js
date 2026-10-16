@@ -630,7 +630,7 @@ window.ProtecMessaging = {
   renderRenfortCard(m, isMe, game) {
     const parsed = this.parseRenfortMessage(m.text) || {};
     const zoneLabel = (m.zoneLabel || parsed.zoneLabel || 'DÉPARTEMENTALE').toUpperCase();
-    const unitRequested = m.unitRequested || parsed.unitRequested || '5 Secouriste(s) + 1 Ambulance VPSP';
+    const unitRequested = m.unitRequested || parsed.unitRequested || '5 Secouriste(s) + 1 VPSP';
     let missionTitle = m.missionTitle || parsed.missionTitle || 'Dispositif de secours';
     missionTitle = missionTitle.replace(/^\[(ALERTE ACTIVE|PRE-ALERTE|CRITIQUE|URGENCE)\]\s*/i, '');
     const indemnite = m.indemnite || parsed.indemnite || 200;
@@ -684,7 +684,7 @@ window.ProtecMessaging = {
               </div>
               <div class="min-w-0">
                 <span class="text-[9px] font-bold text-pc-blue-dark uppercase tracking-tight block">Vecteurs & Flotte</span>
-                <span class="text-xs font-black text-pc-blue truncate block">${vehsStr || '1 Ambulance VPSP'}</span>
+                <span class="text-xs font-black text-pc-blue truncate block">${vehsStr || '1 VPSP'}</span>
               </div>
             </div>
           </div>

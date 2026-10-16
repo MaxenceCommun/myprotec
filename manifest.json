@@ -110,7 +110,7 @@
     {
       "name": "Urgences SAMU 15",
       "short_name": "SAMU 15",
-      "description": "Départs réflexes ambulance VPSP et régulation médicale",
+      "description": "Départs réflexes VPSP et régulation médicale",
       "url": "./?module=samu",
       "icons": [{ "src": "icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" }]
     },

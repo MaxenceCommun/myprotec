@@ -2324,7 +2324,7 @@ window.ProtecLocaux = {
             <line x1="4" y1="95" x2="96" y2="95" stroke="#facc15" stroke-width="3" stroke-dasharray="6,4"/>
             <!-- Baie de stationnement délimitée blanche -->
             <rect x="14" y="8" width="72" height="84" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="8,4"/>
-            <!-- Silhouette Top-Down Ambulance VPSP officielle -->
+            <!-- Silhouette Top-Down VPSP officiel -->
             <rect x="28" y="16" width="44" height="68" fill="#ffffff" stroke="#b91c1c" stroke-width="1.5" rx="6"/>
             <!-- Pare-brise teinté -->
             <path d="M 32 28 Q 50 24 68 28 L 65 37 L 35 37 Z" fill="#38bdf8" opacity="0.8"/>
@@ -3535,7 +3535,7 @@ window.ProtecLocaux = {
               <span>🚗 Parking Opérationnel</span>
               <span class="text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono">43.2 m²</span>
             </div>
-            <p class="text-[10px] text-slate-400 leading-tight">4.8m × 9.0m • 2 places d'ambulance VPSP 01 / VTU 01 et accès cour.</p>
+            <p class="text-[10px] text-slate-400 leading-tight">4.8m × 9.0m • 2 places de VPSP 01 / VTU 01 et accès cour.</p>
           </div>
 
           <div class="p-3 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-1">

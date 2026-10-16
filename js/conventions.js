@@ -241,7 +241,7 @@ window.ProtecConventions = {
 
               <div>
                 <h5 class="text-xs font-black text-slate-900">Convention Cadre SAMU 15 (Permanence & Gardes VPSP)</h5>
-                <p class="text-[11px] text-slate-600 mt-1">Mise à disposition conventionnée d'une ambulance VPSP armée pour départs réflexes et interventions d'urgence sous régulation médicale 15.</p>
+                <p class="text-[11px] text-slate-600 mt-1">Mise à disposition conventionnée d'un VPSP armé pour départs réflexes et interventions d'urgence sous régulation médicale 15.</p>
               </div>
 
               <!-- PÉRIMÈTRE & EXIGENCES IMPOSÉS PAR L'AUTORITÉ (ÉVOLUTIF) -->

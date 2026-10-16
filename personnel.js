@@ -130,7 +130,7 @@ window.ProtecPersonnel = {
       cost: 3800,
       icon: 'activity',
       color: 'orange',
-      unlocks: 'Départs Réflexes Ambulance VPSP & Réquisition SAMU',
+      unlocks: 'Départs Réflexes VPSP & Réquisition SAMU',
       desc: 'Convention ARS et Préfecture validant la conformité sanitaire des VPSP pour intervenir sur demande du SAMU 15 et des Sapeurs-Pompiers.'
     },
     {
@@ -2952,7 +2952,18 @@ window.ProtecPersonnel = {
       const station = (game.stations || []).find(s => s.id === v.stationId) || game.stations?.[0];
       if (!station) return;
 
-      const deptCode = String(station.departmentCode || game.currentDepartmentCode || (game.player && game.player.departmentCode) || '54').trim().toUpperCase();
+      let deptCode = null;
+      if (station.lat && station.lng && window.ProtecDepartements && typeof window.ProtecDepartements.getDepartmentByCoordinates === 'function') {
+        const found = window.ProtecDepartements.getDepartmentByCoordinates(station.lat, station.lng);
+        if (found) {
+          deptCode = found.code;
+          station.departmentCode = found.code;
+        }
+      }
+      if (!deptCode) {
+        deptCode = String(station.departmentCode || game.currentDepartmentCode || (game.player && game.player.departmentCode) || '54').trim().toUpperCase();
+      }
+
       let needsReseed = false;
 
       // Doit avoir une commune, un code postal, des coordonnées et une adresse
@@ -2960,7 +2971,7 @@ window.ProtecPersonnel = {
         needsReseed = true;
       }
 
-      // Si le code postal ne correspond pas au département
+      // Si le code postal ne correspond pas au département réel de la station
       if (!needsReseed && v.code_postal) {
         const cpPrefix = v.code_postal.slice(0, deptCode.length);
         if (cpPrefix !== deptCode && !['2A', '2B'].includes(deptCode)) {

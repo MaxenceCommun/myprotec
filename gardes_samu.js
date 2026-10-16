@@ -190,7 +190,7 @@ window.ProtecGardesSamu = {
             isPlanned: true,
             status: 'planifie',
             title: slot.title,
-            desc: `Convention Partenariale SAMU 15 : Mise à disposition sous astreinte ou garde postée d'une ambulance VPSP armée pour les interventions d'urgence sous régulation 15.`,
+            desc: `Convention Partenariale SAMU 15 : Mise à disposition sous astreinte ou garde postée d'un VPSP armé pour les interventions d'urgence sous régulation 15.`,
             categoryLabel: 'Garde Conventionnée SAMU 15',
             scale: 'Vecteur VPSP (1 CE + 1 PSE2 + 1 PSE1)',
             eventDate: {
@@ -557,8 +557,8 @@ window.ProtecGardesSamu = {
       game.showToast(
         isBase ? '🏢 Posture : À la base prêt à partir' : '🏠 Posture : Dispo domicile (Astreinte)',
         isBase 
-          ? 'Équipage présent à la caserne. Départs réflexes automatiques sans délai (fatigue normale -15).'
-          : 'Équipage en astreinte chez eux. Fatigue grandement économisée (-3), délai de ralliement lors d’un appel.',
+          ? 'Équipage en caserne. Le SAMU/CODIS bipe directement l’équipage : départs 100% automatiques sans alerte sonore pour l’antenne.'
+          : 'Équipage chez eux. La régulation appelle l’antenne qui doit sonner l’équipage et valider le départ (alertes et gestion requises).',
         'blue'
       );
     }
@@ -647,7 +647,7 @@ window.ProtecGardesSamu = {
               <span class="text-xs font-black uppercase tracking-wider text-amber-400">Positionnement & Gestion de la Fatigue</span>
             </div>
             <span class="text-[10px] font-bold px-2 py-0.5 rounded-md ${isBase ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'}">
-              ${isBase ? '🏢 À la base (Prêt au départ)' : '🏠 Dispo domicile (Astreinte)'}
+              ${isBase ? '🏢 À la base (Mode Auto • Bipage direct équipage)' : '🏠 Dispo domicile (Astreinte • Alerte antenne)'}
             </span>
           </div>
 
@@ -658,22 +658,22 @@ window.ProtecGardesSamu = {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button type="button" 
               onclick="window.ProtecGardesSamu.setPosture(window.game, '${mission.id}', 'base')" 
-              class="px-3 py-2.5 rounded-xl font-black text-xs transition flex flex-col items-center justify-center gap-0.5 cursor-pointer ${isBase ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}">
+              class="px-3 py-2.5 rounded-xl font-black text-xs transition flex flex-col items-center justify-center gap-0.5 cursor-pointer ${isBase ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}" title="Départs réflexes automatiques sans alerte sonore, liaison directe bipeur avec l'équipage">
               <span class="flex items-center gap-1.5">
                 <i data-lucide="building" class="w-3.5 h-3.5"></i>
-                <span>À la base (Prêt à partir)</span>
+                <span>À la base (Auto)</span>
               </span>
-              <span class="text-[9.5px] opacity-80 font-normal">Départ réflexe 0 min • Fatigue accrue (-15)</span>
+              <span class="text-[9.5px] opacity-80 font-normal">Départ 0 min • Bipage direct équipage • Fatigue (-15)</span>
             </button>
 
             <button type="button" 
               onclick="window.ProtecGardesSamu.setPosture(window.game, '${mission.id}', 'domicile')" 
-              class="px-3 py-2.5 rounded-xl font-black text-xs transition flex flex-col items-center justify-center gap-0.5 cursor-pointer ${!isBase ? 'bg-pc-blue text-white shadow-md ring-2 ring-blue-400' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}">
+              class="px-3 py-2.5 rounded-xl font-black text-xs transition flex flex-col items-center justify-center gap-0.5 cursor-pointer ${!isBase ? 'bg-pc-blue text-white shadow-md ring-2 ring-blue-400' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}" title="Astreinte domicile avec alerte sonore et validation requise">
               <span class="flex items-center gap-1.5">
                 <i data-lucide="home" class="w-3.5 h-3.5"></i>
                 <span>Dispo domicile (Astreinte)</span>
               </span>
-              <span class="text-[9.5px] opacity-80 font-normal">Économie fatigue (-3) • Délai ralliement ~10m</span>
+              <span class="text-[9.5px] opacity-80 font-normal">Économie fatigue (-3) • Alerte antenne & ralliement ~10m</span>
             </button>
           </div>
         </div>

@@ -35,7 +35,7 @@ window.ProtecCommunication = {
       color: 'orange',
       badge: 'Moyens & Rigueur',
       desc: 'Présentation de notre VPSP et des équipements de secours (DAE, oxygène, lots de prompt secours).',
-      sampleText: 'Zoom sur notre ambulance VPSP réarmée et vérifiée par nos équipes. Matériel de pointe opérationnel 24h/24 au service des citoyens ! 🚑✨ #Urgence #Secours #VPSP',
+      sampleText: 'Zoom sur notre VPSP réarmé et vérifié par nos équipes. Matériel de pointe opérationnel 24h/24 au service des citoyens ! 🚑✨ #Urgence #Secours #VPSP',
       visibilityGain: 18,
       repGain: 8,
       rewardType: 'confiance'
@@ -184,7 +184,7 @@ window.ProtecCommunication = {
             themeId: 'materiel',
             authorName: 'Antenne Protection Civile',
             authorRole: 'Direction d’Antenne',
-            text: 'Prise de garde opérationnelle ! Notre ambulance VPSP est armée et prête à intervenir sur toute sollicitation de la Préfecture et du SAMU.',
+            text: 'Prise de garde opérationnelle ! Notre VPSP est armé et prêt à intervenir sur toute sollicitation de la Préfecture et du SAMU.',
             likes: 112,
             shares: 19,
             commentsCount: 6,
@@ -369,7 +369,7 @@ window.ProtecCommunication = {
         };
       }
 
-      const vehName = anyVeh ? (anyVeh.name || anyVeh.immat || anyVeh.type) : 'Ambulance VPSP';
+      const vehName = anyVeh ? (anyVeh.name || anyVeh.immat || anyVeh.type) : 'VPSP';
       return {
         eligible: true,
         reason: null,
