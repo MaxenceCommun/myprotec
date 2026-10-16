@@ -399,9 +399,12 @@ window.ProtecAdmin = {
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'admin-edit-event-modal';
-      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
       document.body.appendChild(modal);
     }
+    modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 
     const b = ev.badge || {};
     const bImg = b.imageUrl || '';
@@ -409,18 +412,18 @@ window.ProtecAdmin = {
     const units = b.availableUnits || 4;
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-2xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div class="glass-panel w-full max-w-2xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-md">
               <i data-lucide="edit-3" class="w-5 h-5"></i>
             </div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Modifier l'Événement (Pouvoir Administrateur)</h3>
-              <p class="text-xs text-slate-500 font-semibold">Ajustez l'adresse, l'indemnisation, les moyens et l'écusson avant ou après validation</p>
+              <h3 class="text-base font-black text-slate-900 dark:text-slate-100 leading-tight">Modifier l'Événement (Pouvoir Administrateur)</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Ajustez l'adresse, l'indemnisation, les moyens et l'écusson avant ou après validation</p>
             </div>
           </div>
-          <button onclick="document.getElementById('admin-edit-event-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+          <button onclick="const m = document.getElementById('admin-edit-event-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
         </div>
 
         <form id="admin-edit-event-form" onsubmit="event.preventDefault(); window.ProtecAdmin.saveEventEdit('${ev.id}');" class="space-y-3.5 text-xs">
@@ -4900,21 +4903,24 @@ window.ProtecAdmin = {
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'admin-edit-vehicle-modal';
-      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
       document.body.appendChild(modal);
     }
+    modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold">🚑</div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Modifier le Véhicule : ${v.name}</h3>
-              <p class="text-xs text-slate-500 font-semibold">Modifiez les tarifs, caractéristiques et photo du modèle</p>
+              <h3 class="text-base font-black text-slate-900 dark:text-slate-100 leading-tight">Modifier le Véhicule : ${v.name}</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Modifiez les tarifs, caractéristiques et photo du modèle</p>
             </div>
           </div>
-          <button onclick="document.getElementById('admin-edit-vehicle-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+          <button onclick="const m = document.getElementById('admin-edit-vehicle-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
         </div>
 
         <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveVehicleEdit(${index});" class="space-y-3 text-xs">
@@ -5016,21 +5022,24 @@ window.ProtecAdmin = {
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'admin-create-vehicle-modal';
-      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
       document.body.appendChild(modal);
     }
+    modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold">➕</div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Ajouter un Nouveau Véhicule</h3>
-              <p class="text-xs text-slate-500 font-semibold">Créez un modèle sur mesure pour la boutique du jeu</p>
+              <h3 class="text-base font-black text-slate-900 dark:text-slate-100 leading-tight">Ajouter un Nouveau Véhicule</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Créez un modèle sur mesure pour la boutique du jeu</p>
             </div>
           </div>
-          <button onclick="document.getElementById('admin-create-vehicle-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+          <button onclick="const m = document.getElementById('admin-create-vehicle-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
         </div>
 
         <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveNewVehicle();" class="space-y-3 text-xs">
@@ -5472,21 +5481,24 @@ window.ProtecAdmin = {
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'admin-edit-equipment-modal';
-      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
       document.body.appendChild(modal);
     }
+    modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold">🎒</div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Modifier le Matériel : ${item.name}</h3>
-              <p class="text-xs text-slate-500 font-semibold">Modifiez le prix, le volume, la description et les bonus</p>
+              <h3 class="text-base font-black text-slate-900 dark:text-slate-100 leading-tight">Modifier le Matériel : ${item.name}</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Modifiez le prix, le volume, la description et les bonus</p>
             </div>
           </div>
-          <button onclick="document.getElementById('admin-edit-equipment-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+          <button onclick="const m = document.getElementById('admin-edit-equipment-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
         </div>
 
         <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveEquipmentEdit(${index});" class="space-y-3 text-xs">
@@ -5567,21 +5579,24 @@ window.ProtecAdmin = {
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'admin-create-equipment-modal';
-      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
       document.body.appendChild(modal);
     }
+    modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold">➕</div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Ajouter un Nouveau Matériel / Lot</h3>
-              <p class="text-xs text-slate-500 font-semibold">Créez un nouvel équipement ou kit spécialisé pour les antennes</p>
+              <h3 class="text-base font-black text-slate-900 dark:text-slate-100 leading-tight">Ajouter un Nouveau Matériel / Lot</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Créez un nouvel équipement ou kit spécialisé pour les antennes</p>
             </div>
           </div>
-          <button onclick="document.getElementById('admin-create-equipment-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+          <button onclick="const m = document.getElementById('admin-create-equipment-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
         </div>
 
         <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveNewEquipment();" class="space-y-3 text-xs">
@@ -5809,69 +5824,85 @@ window.ProtecAdmin = {
     const b = this.badgesCache[index];
     if (!b) return;
 
+    const badgeName = b.name || b.nom || b.code || 'Écusson';
+    const badgeCode = b.code || b.id || '';
+    const badgeCategory = b.category || b.categorie || 'specialite';
+    const rawRarity = (b.rarityTier || b.rarete || 'Rare').toLowerCase();
+    const isCommun = rawRarity.includes('commun') && !rawRarity.includes('peu');
+    const isPeuCommun = rawRarity.includes('peu');
+    const isRare = rawRarity === 'rare';
+    const isTresRare = rawRarity.includes('tres') || rawRarity.includes('très');
+    const isEpique = rawRarity.includes('epiq') || rawRarity.includes('épiq');
+    const isLegendaire = rawRarity.includes('legend') || rawRarity.includes('légend');
+    const badgeImage = b.imageUrl || b.badge_url || '';
+    const badgeDesc = b.desc || b.description || '';
+
     let modal = document.getElementById('admin-edit-badge-modal');
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'admin-edit-badge-modal';
-      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
       document.body.appendChild(modal);
     }
+    modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div class="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-bold">🏅</div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Modifier l'Écusson : ${b.name}</h3>
-              <p class="text-xs text-slate-500 font-semibold">Ajustez le visuel PNG, le titre et la rareté</p>
+              <h3 class="text-base font-black text-slate-900 dark:text-slate-100 leading-tight">Modifier l'Écusson : ${badgeName}</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Ajustez le visuel PNG, le titre et la rareté</p>
             </div>
           </div>
-          <button onclick="document.getElementById('admin-edit-badge-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+          <button onclick="const m = document.getElementById('admin-edit-badge-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
         </div>
 
         <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveBadgeEdit(${index});" class="space-y-3 text-xs">
           <div>
-            <label class="block font-bold text-slate-700 mb-0.5">Code unique :</label>
-            <input type="text" id="adm-bdg-code" value="${b.code || ''}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Code unique :</label>
+            <input type="text" id="adm-bdg-code" value="${badgeCode}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-mono text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" required />
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-0.5">Nom de l'écusson :</label>
-            <input type="text" id="adm-bdg-name" value="${b.name || ''}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Nom de l'écusson :</label>
+            <input type="text" id="adm-bdg-name" value="${badgeName}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" required />
           </div>
 
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block font-bold text-slate-700 mb-0.5">Catégorie :</label>
-              <input type="text" id="adm-bdg-cat" value="${b.category || 'Special'}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+              <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Catégorie :</label>
+              <input type="text" id="adm-bdg-cat" value="${badgeCategory}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" required />
             </div>
             <div>
-              <label class="block font-bold text-slate-700 mb-0.5">Rareté :</label>
-              <select id="adm-bdg-rarity" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
-                <option value="Commun" ${b.rarityTier === 'Commun' ? 'selected' : ''}>Commun</option>
-                <option value="Peu Commun" ${b.rarityTier === 'Peu Commun' ? 'selected' : ''}>Peu Commun</option>
-                <option value="Rare" ${b.rarityTier === 'Rare' ? 'selected' : ''}>Rare</option>
-                <option value="Très Rare" ${b.rarityTier === 'Très Rare' ? 'selected' : ''}>Très Rare</option>
-                <option value="Épique" ${b.rarityTier === 'Épique' ? 'selected' : ''}>Épique</option>
-                <option value="Légendaire" ${b.rarityTier === 'Légendaire' ? 'selected' : ''}>Légendaire</option>
+              <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Rareté :</label>
+              <select id="adm-bdg-rarity" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800">
+                <option value="Commun" ${isCommun ? 'selected' : ''}>Commun</option>
+                <option value="Peu Commun" ${isPeuCommun ? 'selected' : ''}>Peu Commun</option>
+                <option value="Rare" ${isRare ? 'selected' : ''}>Rare</option>
+                <option value="Très Rare" ${isTresRare ? 'selected' : ''}>Très Rare</option>
+                <option value="Épique" ${isEpique ? 'selected' : ''}>Épique</option>
+                <option value="Légendaire" ${isLegendaire ? 'selected' : ''}>Légendaire</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-0.5">Chemin ou URL de l'image (PNG découpé) :</label>
-            <input type="text" id="adm-bdg-image" value="${b.imageUrl || ''}" placeholder="Ex: images/badges/membre_fondateur.png" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" />
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Chemin ou URL de l'image (PNG découpé) :</label>
+            <input type="text" id="adm-bdg-image" value="${badgeImage}" placeholder="Ex: images/badges/membre_fondateur.png" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-mono text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" />
             <p class="text-[10px] text-slate-400 mt-1">Vous pouvez aussi utiliser le Générateur IA pour générer un nouvel écusson et coller son chemin ici.</p>
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-0.5">Description & Contexte d'obtention :</label>
-            <textarea id="adm-bdg-desc" rows="3" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white">${b.desc || ''}</textarea>
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Description & Contexte d'obtention :</label>
+            <textarea id="adm-bdg-desc" rows="3" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800">${badgeDesc}</textarea>
           </div>
 
-          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-            <button type="button" onclick="document.getElementById('admin-edit-badge-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Annuler</button>
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onclick="const m = document.getElementById('admin-edit-badge-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer">Annuler</button>
             <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md transition cursor-pointer">✓ Sauvegarder</button>
           </div>
         </form>
@@ -5879,23 +5910,40 @@ window.ProtecAdmin = {
     `;
 
     modal.classList.remove('hidden');
+    modal.classList.add('flex');
   },
 
   async saveBadgeEdit(index) {
     const b = this.badgesCache[index];
     if (!b) return;
 
-    b.code = document.getElementById('adm-bdg-code').value.trim();
-    b.name = document.getElementById('adm-bdg-name').value.trim();
-    b.category = document.getElementById('adm-bdg-cat').value.trim();
-    b.rarityTier = document.getElementById('adm-bdg-rarity').value;
-    b.imageUrl = document.getElementById('adm-bdg-image').value.trim();
-    b.desc = document.getElementById('adm-bdg-desc').value.trim();
+    const code = document.getElementById('adm-bdg-code').value.trim();
+    const name = document.getElementById('adm-bdg-name').value.trim();
+    const cat = document.getElementById('adm-bdg-cat').value.trim();
+    const rarity = document.getElementById('adm-bdg-rarity').value;
+    const img = document.getElementById('adm-bdg-image').value.trim();
+    const desc = document.getElementById('adm-bdg-desc').value.trim();
 
-    document.getElementById('admin-edit-badge-modal')?.classList.add('hidden');
+    b.code = code;
+    b.name = name;
+    b.nom = name;
+    b.category = cat;
+    b.categorie = cat;
+    b.rarityTier = rarity;
+    b.rarete = rarity.toLowerCase().replace(/ /g, '_').replace(/é/g, 'e').replace(/è/g, 'e');
+    b.imageUrl = img;
+    b.badge_url = img;
+    b.desc = desc;
+    b.description = desc;
+
+    const modal = document.getElementById('admin-edit-badge-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
     await this.saveBadgesCatalog();
     this.renderBadgesCatalogTable();
-    if (window.game) window.game.showToast('Écusson Modifié', `« ${b.name} » a été mis à jour.`, 'green');
+    if (window.game) window.game.showToast('Écusson Modifié', `« ${name} » a été mis à jour.`, 'green');
   },
 
   openCreateBadgeModal() {
@@ -5903,42 +5951,45 @@ window.ProtecAdmin = {
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'admin-create-badge-modal';
-      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
       document.body.appendChild(modal);
     }
+    modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div class="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold">➕</div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Créer un Nouvel Écusson</h3>
-              <p class="text-xs text-slate-500 font-semibold">Ajoutez un insigne commémoratif ou départemental au jeu</p>
+              <h3 class="text-base font-black text-slate-900 dark:text-slate-100 leading-tight">Créer un Nouvel Écusson</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Ajoutez un insigne commémoratif ou départemental au jeu</p>
             </div>
           </div>
-          <button onclick="document.getElementById('admin-create-badge-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+          <button onclick="const m = document.getElementById('admin-create-badge-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
         </div>
 
         <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveNewBadge();" class="space-y-3 text-xs">
           <div>
-            <label class="block font-bold text-slate-700 mb-0.5">Code unique (ex: dept_75, pionnier_2026) :</label>
-            <input type="text" id="adm-new-bdg-code" placeholder="Ex: dept_54" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Code unique (ex: dept_75, pionnier_2026) :</label>
+            <input type="text" id="adm-new-bdg-code" placeholder="Ex: dept_54" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-mono text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" required />
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-0.5">Nom complet de l'écusson :</label>
-            <input type="text" id="adm-new-bdg-name" placeholder="Ex: Meurthe-et-Moselle (54)" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Nom complet de l'écusson :</label>
+            <input type="text" id="adm-new-bdg-name" placeholder="Ex: Meurthe-et-Moselle (54)" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" required />
           </div>
 
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block font-bold text-slate-700 mb-0.5">Catégorie :</label>
-              <input type="text" id="adm-new-bdg-cat" value="Départemental" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+              <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Catégorie :</label>
+              <input type="text" id="adm-new-bdg-cat" value="Départemental" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" required />
             </div>
             <div>
-              <label class="block font-bold text-slate-700 mb-0.5">Rareté :</label>
-              <select id="adm-new-bdg-rarity" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white">
+              <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Rareté :</label>
+              <select id="adm-new-bdg-rarity" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800">
                 <option value="Commun">Commun</option>
                 <option value="Peu Commun">Peu Commun</option>
                 <option value="Rare" selected>Rare</option>
@@ -5949,17 +6000,17 @@ window.ProtecAdmin = {
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-0.5">Chemin ou URL de l'image PNG :</label>
-            <input type="text" id="adm-new-bdg-image" placeholder="images/badges/mon_ecusson.png" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" />
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Chemin ou URL de l'image PNG :</label>
+            <input type="text" id="adm-new-bdg-image" placeholder="images/badges/mon_ecusson.png" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-mono text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" />
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-0.5">Description :</label>
-            <textarea id="adm-new-bdg-desc" rows="2" placeholder="Description de l'insigne..." class="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-slate-800 bg-white" required></textarea>
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-0.5">Description :</label>
+            <textarea id="adm-new-bdg-desc" rows="2" placeholder="Description de l'insigne..." class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" required></textarea>
           </div>
 
-          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-            <button type="button" onclick="document.getElementById('admin-create-badge-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Annuler</button>
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onclick="const m = document.getElementById('admin-create-badge-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer">Annuler</button>
             <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition cursor-pointer">✓ Créer l'Écusson</button>
           </div>
         </form>
@@ -5967,20 +6018,30 @@ window.ProtecAdmin = {
     `;
 
     modal.classList.remove('hidden');
+    modal.classList.add('flex');
   },
 
   async saveNewBadge() {
     const newBadge = {
       code: document.getElementById('adm-new-bdg-code').value.trim(),
       name: document.getElementById('adm-new-bdg-name').value.trim(),
+      nom: document.getElementById('adm-new-bdg-name').value.trim(),
       category: document.getElementById('adm-new-bdg-cat').value.trim(),
+      categorie: document.getElementById('adm-new-bdg-cat').value.trim(),
       rarityTier: document.getElementById('adm-new-bdg-rarity').value,
+      rarete: document.getElementById('adm-new-bdg-rarity').value.toLowerCase().replace(/ /g, '_'),
       imageUrl: document.getElementById('adm-new-bdg-image').value.trim(),
-      desc: document.getElementById('adm-new-bdg-desc').value.trim()
+      badge_url: document.getElementById('adm-new-bdg-image').value.trim(),
+      desc: document.getElementById('adm-new-bdg-desc').value.trim(),
+      description: document.getElementById('adm-new-bdg-desc').value.trim()
     };
 
     this.badgesCache.push(newBadge);
-    document.getElementById('admin-create-badge-modal')?.classList.add('hidden');
+    const modal = document.getElementById('admin-create-badge-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
     await this.saveBadgesCatalog();
     this.renderBadgesCatalogTable();
     if (window.game) window.game.showToast('Nouvel Écusson Créé', `« ${newBadge.name} » a rejoint le catalogue.`, 'green');
@@ -6007,43 +6068,50 @@ window.ProtecAdmin = {
     const badge = (this.badgesCache || []).find(b => b.code === badgeCode);
     if (!badge) return;
 
+    const badgeName = badge.name || badge.nom || badge.code || 'Écusson';
+    const badgeCategory = (badge.category || badge.categorie || 'Insigne') + ' • ' + (badge.rarityTier || badge.rarete || 'Rare');
+    const badgeImage = badge.imageUrl || badge.badge_url || '';
+
     let modal = document.getElementById('admin-award-badge-modal');
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'admin-award-badge-modal';
-      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
       document.body.appendChild(modal);
     }
+    modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 
     const players = this.usersCache || [];
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div class="glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold">🎁</div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Décerner l'Écusson</h3>
-              <p class="text-xs text-slate-500 font-semibold">Attribuez directement cet insigne à un directeur</p>
+              <h3 class="text-base font-black text-slate-900 dark:text-slate-100 leading-tight">Décerner l'Écusson</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Attribuez directement cet insigne à un directeur</p>
             </div>
           </div>
-          <button onclick="document.getElementById('admin-award-badge-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+          <button onclick="const m = document.getElementById('admin-award-badge-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
         </div>
 
-        <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-3">
+        <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center gap-3">
           <div class="w-12 h-14 rounded-xl bg-slate-900 p-1 flex items-center justify-center overflow-hidden flex-shrink-0">
-            ${badge.imageUrl ? `<img src="${badge.imageUrl}" class="w-full h-full object-contain" />` : `<span>🛡️</span>`}
+            ${badgeImage ? `<img src="${badgeImage}" class="w-full h-full object-contain" />` : `<span>🛡️</span>`}
           </div>
           <div>
-            <h4 class="text-xs font-black text-slate-900">${badge.name}</h4>
-            <span class="text-[10px] text-slate-500 block">${badge.category} • ${badge.rarityTier}</span>
+            <h4 class="text-xs font-black text-slate-900 dark:text-slate-100">${badgeName}</h4>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400 block">${badgeCategory}</span>
           </div>
         </div>
 
         <form onsubmit="event.preventDefault(); window.ProtecAdmin.submitAwardBadge('${badge.code}');" class="space-y-3 text-xs">
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Sélectionner le Directeur bénéficiaire :</label>
-            <select id="adm-award-user" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required>
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Sélectionner le Directeur bénéficiaire :</label>
+            <select id="adm-award-user" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" required>
               <option value="">-- Choisir un directeur dans la base --</option>
               <option value="all">🌟 TOUS LES DIRECTEURS (Distribution Fédérale Globale)</option>
               ${players.map(p => `
@@ -6053,12 +6121,12 @@ window.ProtecAdmin = {
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Quantité attribuée :</label>
-            <input type="number" id="adm-award-qty" value="1" min="1" max="10" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 bg-white" required />
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Quantité attribuée :</label>
+            <input type="number" id="adm-award-qty" value="1" min="1" max="10" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" required />
           </div>
 
-          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-            <button type="button" onclick="document.getElementById('admin-award-badge-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Annuler</button>
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onclick="const m = document.getElementById('admin-award-badge-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer">Annuler</button>
             <button type="submit" class="px-5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition cursor-pointer">✓ Décerner Officiellement</button>
           </div>
         </form>
@@ -6066,6 +6134,7 @@ window.ProtecAdmin = {
     `;
 
     modal.classList.remove('hidden');
+    modal.classList.add('flex');
   },
 
   async submitAwardBadge(badgeCode) {
@@ -6082,7 +6151,11 @@ window.ProtecAdmin = {
     }
 
     // Fermer la modale
-    document.getElementById('admin-award-badge-modal')?.classList.add('hidden');
+    const modal = document.getElementById('admin-award-badge-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
 
     // Déléguer au système officiel (persistance Supabase, Realtime, Cache, Backend local)
     await this.awardBadgeToPlayer(userId, badgeCode, qty, true);
@@ -6096,23 +6169,26 @@ window.ProtecAdmin = {
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'admin-create-event-modal';
-      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+      modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
       document.body.appendChild(modal);
     }
+    modal.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 
     const badges = this.badgesCache || [];
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white border border-slate-200 text-slate-800 my-8">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 my-8">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-bold">🎪</div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Créer un Nouvel Événement Fédéral Officiel</h3>
-              <p class="text-xs text-slate-500 font-semibold">Publiez une mission événementielle ouverte sur la carte de France</p>
+              <h3 class="text-base font-black text-slate-900 dark:text-slate-100 leading-tight">Créer un Nouvel Événement Fédéral Officiel</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Publiez une mission événementielle ouverte sur la carte de France</p>
             </div>
           </div>
-          <button onclick="document.getElementById('admin-create-event-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
+          <button onclick="const m = document.getElementById('admin-create-event-modal'); m?.classList.add('hidden'); m?.classList.remove('flex');" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
         </div>
 
         <form onsubmit="event.preventDefault(); window.ProtecAdmin.saveNewEvent();" class="space-y-3 text-xs">

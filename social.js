@@ -165,11 +165,12 @@ window.ProtecSocial = {
 
   // Générer une mission de maraude rattachée à une subvention
   generateMaraudeMission(game, contract) {
-    const base = game.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne' };
+    const base = game.stations[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', city: 'Nancy' };
     const locCoords = (typeof game.calculateRealisticMissionLocation === 'function')
       ? game.calculateRealisticMissionLocation(base, 'social')
-      : { lat: base.lat + (Math.random() - 0.5) * 0.03, lng: base.lng + (Math.random() - 0.5) * 0.03 };
+      : { lat: base.lat + (Math.random() - 0.5) * 0.015, lng: base.lng + (Math.random() - 0.5) * 0.015 };
 
+    const cityName = locCoords.commune || base.city || 'Nancy';
     const missionId = `maraude-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const newMission = {
       id: missionId,
@@ -183,8 +184,15 @@ window.ProtecSocial = {
       desc: `Maraude de contact, réconfort et distribution solidaire sous convention ${contract.funder}. Objectif : distribuer des kits repas et hygiène, évaluer la situation des personnes isolées.`,
       lat: locCoords.lat,
       lng: locCoords.lng,
+      commune: cityName,
+      postcode: locCoords.postcode || '',
       scale: 'Maraude Solidaire (2-4 secouristes)',
-      eventDate: { ...game.clock },
+      eventDate: (() => {
+        let m = Math.round((game.clock?.minute || 0) / 5) * 5;
+        let h = (game.clock?.hour || 0);
+        if (m >= 60) { h = (h + Math.floor(m / 60)) % 24; m = m % 60; }
+        return { ...game.clock, hour: h, minute: m };
+      })(),
       durationSeconds: 90 * 60, // 1h30 de maraude
       durationHours: 2.0,
       requiredVolunteers: 3,
@@ -197,8 +205,8 @@ window.ProtecSocial = {
       registeredVolunteers: [],
       assignedCrew: { volunteers: [], vehicles: [] },
       isSector: true,
-      sector: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${game.stations?.[0]?.city || 'Agglomération'})`,
-      address: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${game.stations?.[0]?.city || 'Agglomération'})`
+      sector: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${cityName})`,
+      address: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${cityName})`
     };
 
     if (typeof game.enrichMissionLocationWithCity === 'function') {
@@ -471,6 +479,23 @@ window.ProtecSocial = {
     body.innerHTML = `
       <div class="space-y-6">
 
+        <!-- Barre de navigation supérieure de l'Action Sociale -->
+        <div class="flex items-center justify-between border-b border-slate-200/80 pb-3 flex-wrap gap-2">
+          <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl">
+            <button class="px-4 py-2 rounded-xl text-xs font-black bg-purple-600 text-white shadow-md flex items-center gap-2">
+              <i data-lucide="heart-handshake" class="w-3.5 h-3.5"></i>
+              <span>Gestion & Maraudes Sociales</span>
+            </button>
+            <button onclick="window.game.openPlanningFiltered('social')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 text-purple-900 hover:bg-purple-100 cursor-pointer border border-transparent hover:border-purple-300" title="Consulter le calendrier complet des maraudes et de tous les pôles">
+              <i data-lucide="calendar" class="w-3.5 h-3.5 text-purple-600"></i>
+              <span>📅 Planning Maraudes & Social</span>
+            </button>
+          </div>
+          <div class="text-xs font-bold text-slate-500 flex items-center gap-2">
+            <span>Maraudes actives : <strong>${(game.missions || []).filter(m => m.type === 'social').length}</strong></span>
+          </div>
+        </div>
+
         <!-- Bandeau d'information réglementaire -->
         <div class="p-3.5 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white shadow-md flex items-center justify-between text-xs">
           <div class="flex items-center gap-3">
@@ -517,12 +542,12 @@ window.ProtecSocial = {
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
             ${!data.activeCollecte ? `
-              <button onclick="window.ProtecSocial.startCollecte(window.game)" class="p-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-left transition space-y-1">
+              <button onclick="window.ProtecSocial.startCollecte(window.game)" class="p-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 dark:border-purple-800/50 text-left transition space-y-1">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-black text-purple-900">🛒 Collecte Supermarché</span>
-                  <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-purple-200 text-purple-900">Gratuit</span>
+                  <span class="text-xs font-black text-purple-900 dark:text-purple-200">🛒 Collecte Supermarché</span>
+                  <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-200 text-purple-950 dark:bg-purple-900/70 dark:text-purple-100 dark:border dark:border-purple-600/50">Gratuit</span>
                 </div>
-                <p class="text-[10px] text-purple-700">Mobilise 2 bénévoles. Récolte ~20 denrées alimentaires et kits.</p>
+                <p class="text-[10px] text-purple-700 dark:text-purple-300">Mobilise 2 bénévoles. Récolte ~20 denrées alimentaires et kits.</p>
               </button>
             ` : ''}
 

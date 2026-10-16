@@ -852,87 +852,87 @@ window.ProtecFinances = {
             
             <button
               onclick="window.ProtecFinances.setCategoryFilter('all')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'all' ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'all' ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}">
               <i data-lucide="layers" class="w-3.5 h-3.5"></i> Toutes
             </button>
 
             <!-- Entrées -->
             <button
               onclick="window.ProtecFinances.setCategoryFilter('dps')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'dps' ? 'bg-amber-600 text-white border-amber-600 shadow-sm' : 'bg-amber-50 text-amber-800 border-amber-200 hover:border-amber-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'dps' ? 'bg-amber-600 text-white border-amber-600 shadow-sm' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border-amber-200 dark:border-amber-800/60 hover:border-amber-300 dark:hover:border-amber-700'}">
               <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i> DPS & Postes
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('formation')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'formation' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:border-emerald-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'formation' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800/60 hover:border-emerald-300 dark:hover:border-emerald-700'}">
               <i data-lucide="graduation-cap" class="w-3.5 h-3.5"></i> Formations GP
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('garde')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'garde' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-blue-50 text-blue-800 border-blue-200 hover:border-blue-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'garde' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800/60 hover:border-blue-300 dark:hover:border-blue-700'}">
               <i data-lucide="heart-pulse" class="w-3.5 h-3.5"></i> Gardes SAMU/SDIS
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('subvention')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'subvention' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:border-indigo-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'subvention' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 border-indigo-200 dark:border-indigo-800/60 hover:border-indigo-300 dark:hover:border-indigo-700'}">
               <i data-lucide="landmark" class="w-3.5 h-3.5"></i> Subventions
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('dons')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'dons' ? 'bg-pink-600 text-white border-pink-600 shadow-sm' : 'bg-pink-50 text-pink-800 border-pink-200 hover:border-pink-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'dons' ? 'bg-pink-600 text-white border-pink-600 shadow-sm' : 'bg-pink-50 dark:bg-pink-950/40 text-pink-900 dark:text-pink-200 border-pink-200 dark:border-pink-800/60 hover:border-pink-300 dark:hover:border-pink-700'}">
               <i data-lucide="heart-handshake" class="w-3.5 h-3.5"></i> Dons & Mécénat
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('renfort')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'renfort' ? 'bg-cyan-600 text-white border-cyan-600 shadow-sm' : 'bg-cyan-50 text-cyan-800 border-cyan-200 hover:border-cyan-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'renfort' ? 'bg-cyan-600 text-white border-cyan-600 shadow-sm' : 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-900 dark:text-cyan-200 border-cyan-200 dark:border-cyan-800/60 hover:border-cyan-300 dark:hover:border-cyan-700'}">
               <i data-lucide="users" class="w-3.5 h-3.5"></i> Renforts
             </button>
 
             <!-- Sorties -->
             <button
               onclick="window.ProtecFinances.setCategoryFilter('vehicule')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'vehicule' ? 'bg-orange-600 text-white border-orange-600 shadow-sm' : 'bg-orange-50 text-orange-800 border-orange-200 hover:border-orange-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'vehicule' ? 'bg-orange-600 text-white border-orange-600 shadow-sm' : 'bg-orange-50 dark:bg-orange-950/40 text-orange-900 dark:text-orange-200 border-orange-200 dark:border-orange-800/60 hover:border-orange-300 dark:hover:border-orange-700'}">
               <i data-lucide="truck" class="w-3.5 h-3.5"></i> Véhicules
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('logistique')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'logistique' ? 'bg-rose-600 text-white border-rose-600 shadow-sm' : 'bg-rose-50 text-rose-800 border-rose-200 hover:border-rose-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'logistique' ? 'bg-rose-600 text-white border-rose-600 shadow-sm' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200 border-rose-200 dark:border-rose-800/60 hover:border-rose-300 dark:hover:border-rose-700'}">
               <i data-lucide="package" class="w-3.5 h-3.5"></i> Logistique & Matériel
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('locaux')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'locaux' ? 'bg-amber-800 text-white border-amber-800 shadow-sm' : 'bg-amber-100 text-amber-900 border-amber-200 hover:border-amber-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'locaux' ? 'bg-amber-800 text-white border-amber-800 shadow-sm' : 'bg-amber-100 dark:bg-amber-950/50 text-amber-950 dark:text-amber-200 border-amber-300 dark:border-amber-800/60 hover:border-amber-400 dark:hover:border-amber-700'}">
               <i data-lucide="building-2" class="w-3.5 h-3.5"></i> Locaux & Bâtiment
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('entretien')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'entretien' ? 'bg-slate-700 text-white border-slate-700 shadow-sm' : 'bg-slate-100 text-slate-800 border-slate-200 hover:border-slate-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'entretien' ? 'bg-slate-700 text-white border-slate-700 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600'}">
               <i data-lucide="wrench" class="w-3.5 h-3.5"></i> Entretien & Carburant
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('formation_interne')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'formation_interne' ? 'bg-violet-600 text-white border-violet-600 shadow-sm' : 'bg-violet-50 text-violet-800 border-violet-200 hover:border-violet-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'formation_interne' ? 'bg-violet-600 text-white border-violet-600 shadow-sm' : 'bg-violet-50 dark:bg-violet-950/40 text-violet-900 dark:text-violet-200 border-violet-200 dark:border-violet-800/60 hover:border-violet-300 dark:hover:border-violet-700'}">
               <i data-lucide="award" class="w-3.5 h-3.5"></i> Formations Internes
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('frais')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'frais' ? 'bg-stone-700 text-white border-stone-700 shadow-sm' : 'bg-stone-100 text-stone-800 border-stone-200 hover:border-stone-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'frais' ? 'bg-stone-700 text-white border-stone-700 shadow-sm' : 'bg-stone-100 dark:bg-stone-900/60 text-stone-900 dark:text-stone-200 border-stone-300 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-600'}">
               <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Frais & Assurances
             </button>
 
             <button
               onclick="window.ProtecFinances.setCategoryFilter('ndf_repas')"
-              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'ndf_repas' ? 'bg-amber-600 text-white border-amber-600 shadow-sm' : 'bg-amber-50 text-amber-800 border-amber-200 hover:border-amber-300'}">
+              class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${this.filters.category === 'ndf_repas' ? 'bg-amber-600 text-white border-amber-600 shadow-sm' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border-amber-200 dark:border-amber-800/60 hover:border-amber-300 dark:hover:border-amber-700'}">
               <i data-lucide="utensils" class="w-3.5 h-3.5"></i> Repas & NDF
             </button>
 

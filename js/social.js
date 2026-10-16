@@ -542,12 +542,12 @@ window.ProtecSocial = {
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
             ${!data.activeCollecte ? `
-              <button onclick="window.ProtecSocial.startCollecte(window.game)" class="p-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-left transition space-y-1">
+              <button onclick="window.ProtecSocial.startCollecte(window.game)" class="p-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 dark:border-purple-800/50 text-left transition space-y-1">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-black text-purple-900">🛒 Collecte Supermarché</span>
-                  <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-purple-200 text-purple-900">Gratuit</span>
+                  <span class="text-xs font-black text-purple-900 dark:text-purple-200">🛒 Collecte Supermarché</span>
+                  <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-200 text-purple-950 dark:bg-purple-900/70 dark:text-purple-100 dark:border dark:border-purple-600/50">Gratuit</span>
                 </div>
-                <p class="text-[10px] text-purple-700">Mobilise 2 bénévoles. Récolte ~20 denrées alimentaires et kits.</p>
+                <p class="text-[10px] text-purple-700 dark:text-purple-300">Mobilise 2 bénévoles. Récolte ~20 denrées alimentaires et kits.</p>
               </button>
             ` : ''}
 

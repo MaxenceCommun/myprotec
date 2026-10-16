@@ -201,7 +201,7 @@ window.ProtecConventions = {
           <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${game.samuConvention?.signed ? 'border-sky-300 ring-1 ring-sky-300/30' : 'border-slate-200'}">
             <div class="space-y-2">
               <div class="flex items-center justify-between">
-                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase bg-sky-100 text-sky-900 border border-sky-200">
+                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase bg-sky-100 text-sky-950 border border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-700/60">
                   SAMU 15 • Urgences VPSP
                 </span>
                 <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${
@@ -612,7 +612,7 @@ window.ProtecConventions = {
           <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border border-slate-200">
             <div class="space-y-2">
               <div class="flex items-center justify-between">
-                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase bg-sky-100 text-sky-900 border border-sky-200">
+                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase bg-sky-100 text-sky-950 border border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-700/60">
                   Mairies • Préfecture
                 </span>
                 <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-600 text-white">

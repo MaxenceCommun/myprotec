@@ -340,12 +340,12 @@ window.ProtecPoles = {
                   </div>
 
                   <!-- Responsable du Pôle -->
-                  <div class="p-3 rounded-xl bg-slate-100/70 space-y-1.5">
+                  <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 space-y-1.5">
                     <div class="flex items-center justify-between text-[11px]">
-                      <span class="font-bold text-slate-500 uppercase text-[9px]">Responsable désigné :</span>
-                      <span class="font-black text-slate-800">${leader ? leader.name : 'Poste Vacant'}</span>
+                      <span class="font-bold text-slate-500 dark:text-slate-400 uppercase text-[9px] tracking-wider">Responsable désigné :</span>
+                      <span class="font-black text-slate-800 dark:text-slate-100">${leader ? leader.name : 'Poste Vacant'}</span>
                     </div>
-                    <select onchange="window.ProtecPoles.setPoleLeader(window.game, '${p.id}', this.value)" class="w-full text-xs p-1.5 rounded-lg border border-slate-200 glass-input font-medium">
+                    <select onchange="window.ProtecPoles.setPoleLeader(window.game, '${p.id}', this.value)" class="w-full text-xs p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium focus:ring-2 focus:ring-pc-blue">
                       <option value="">Nommer un responsable...</option>
                       ${game.volunteers.map(v => `
                         <option value="${v.id}" ${p.responsibleId === v.id ? 'selected' : ''}>
@@ -382,8 +382,8 @@ window.ProtecPoles = {
                 </div>
 
                 <!-- Assigner un membre -->
-                <div class="pt-3 border-t border-slate-100">
-                  <select onchange="if(this.value) window.ProtecPoles.assignVolunteerToPole(window.game, this.value, '${p.id}'); this.value='';" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-pc-blue">
+                <div class="pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <select onchange="if(this.value) window.ProtecPoles.assignVolunteerToPole(window.game, this.value, '${p.id}'); this.value='';" class="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-pc-blue dark:text-sky-400 font-bold">
                     <option value="">+ Affecter un bénévole / salarié à ce pôle...</option>
                     ${game.volunteers.filter(v => !p.assignedVolunteerIds.includes(v.id)).map(v => `
                       <option value="${v.id}">${v.name} (${v.rank} • ${v.dispoType === 'salarié' ? 'Salarié' : 'Bénévole'})</option>
