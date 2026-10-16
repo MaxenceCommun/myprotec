@@ -17168,7 +17168,6 @@ class ProtecGame {
       ],
       rh: [
         { key: 'recrutement', label: 'Bénévoles & Équipe', icon: 'users', count: this.volunteers?.length || 0 },
-        { key: 'formation', label: 'Formations', icon: 'graduation-cap' },
         { key: 'poles', label: 'Pôles d\'Antenne', icon: 'layers' },
         { key: 'communication', label: 'Communication & Médias', icon: 'megaphone' }
       ],
