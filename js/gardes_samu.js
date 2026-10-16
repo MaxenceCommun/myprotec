@@ -696,8 +696,12 @@ window.ProtecGardesSamu = {
                                     (slot.roleId === 'chef_de_bord' ? mission.registeredVolunteers?.[0] : (slot.roleId === 'equipier' ? mission.registeredVolunteers?.[1] : mission.registeredVolunteers?.[2]));
               const assignedVol = assignedVolId ? (game.volunteers || []).find(v => v.id === assignedVolId) : null;
 
+              const qualif = (assignedVol && game && typeof game.checkVolunteerRoleQualification === 'function') 
+                ? game.checkVolunteerRoleQualification(assignedVol, slot.roleId === 'chef_de_bord' ? 'chef_equipe' : slot.roleId) 
+                : { qualified: true };
+
               return `
-                <div class="p-3 rounded-xl border ${assignedVol ? 'bg-white border-emerald-300 shadow-2xs' : 'bg-slate-50 border-dashed border-slate-300'} space-y-2">
+                <div class="p-3 rounded-xl border ${assignedVol ? (!qualif.qualified ? 'bg-amber-50/60 border-amber-300 shadow-2xs' : 'bg-white border-emerald-300 shadow-2xs') : 'bg-slate-50 border-dashed border-slate-300'} space-y-2">
                   <div class="flex items-center justify-between text-[11px] font-black text-slate-800">
                     <span class="flex items-center gap-1">
                       <i data-lucide="${slot.icon}" class="w-3.5 h-3.5 text-pc-blue"></i>
@@ -706,10 +710,17 @@ window.ProtecGardesSamu = {
                   </div>
 
                   ${assignedVol ? `
-                    <div class="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between gap-1">
+                    <div class="p-2 rounded-lg ${!qualif.qualified ? 'bg-amber-100/70 border border-amber-300' : 'bg-emerald-50 border border-emerald-200'} text-xs flex items-center justify-between gap-1">
                       <div class="min-w-0">
-                        <strong class="text-emerald-950 font-bold block truncate">${assignedVol.name}</strong>
-                        <span class="text-[10px] text-emerald-700 font-mono">${assignedVol.rank} • Énergie ${assignedVol.energy || 80}%</span>
+                        <strong class="text-slate-900 font-bold block truncate">${assignedVol.name}</strong>
+                        <div class="text-[10px] ${!qualif.qualified ? 'text-amber-900' : 'text-emerald-700'} font-mono flex items-center gap-1">
+                          <span>${assignedVol.rank} • Énergie ${assignedVol.energy || 80}%</span>
+                          ${!qualif.qualified ? `
+                            <span class="inline-flex items-center text-amber-600 shrink-0 cursor-help" title="${qualif.reason.replace(/"/g, '&quot;')}">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-amber-500 shrink-0"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                            </span>
+                          ` : ''}
+                        </div>
                       </div>
                       <button type="button" 
                         onclick="window.ProtecGardesSamu.removeCrewMember(window.game, '${mission.id}', '${assignedVol.id}')" 

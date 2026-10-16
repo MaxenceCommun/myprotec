@@ -51,8 +51,8 @@ window.ProtecCriseLogistique = {
       const elapsedMs = now - (m.startedAt || m.spawnedAt || now);
       const isOverdue = elapsedMs > 7200000; // Plus de 2 heures réelles pour une crise
 
-      if (m.crisisCanClose || hasResolvedMsg || isOverdue) {
-        console.warn(`[ProtecCriseLogistique] Auto-clôture de crise bloquée: ${m.title} (${m.id})`);
+      if (isOverdue) {
+        console.warn(`[ProtecCriseLogistique] Auto-clôture de crise bloquée (> 2h): ${m.title} (${m.id})`);
         this.completeCrisisMission(game, m.id);
       }
     });
@@ -243,128 +243,281 @@ window.ProtecCriseLogistique = {
     }
   },
 
-  // Évolution de la main courante pendant le sinistre
-  // Évolution de la main courante pendant le sinistre
-  progressCrisisMission(game, mission) {
-    if (!mission || mission.status !== 'ongoing') return;
-
-    // Si la crise a été déclarée terminée / prête à clôturer par le COS :
-    // Bloquer immédiatement toute dégradation d'énergie ou ajout de message
-    if (mission.crisisCanClose) {
-      const now = Date.now();
-      const elapsedSinceResolution = now - (mission.resolvedAt || now);
-      // Auto-clôture après 15 secondes pour libérer les moyens et les effectifs
-      if (elapsedSinceResolution >= 15000 || !mission.resolvedAt) {
-        this.completeCrisisMission(game, mission.id);
-      }
-      return;
-    }
-
-    if (!mission.operationalLog) this.initMissionOperationalLog(mission);
-
-    const now = Date.now();
-    if (!mission.lastLogUpdate) mission.lastLogUpdate = now;
-
-    // Ajout d'une entrée toutes les 45 à 90 secondes réelles
-    if (now - mission.lastLogUpdate > 55000) {
-      mission.lastLogUpdate = now;
-      const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-
-      // Fatigue et stress progressifs pour les secouristes engagés
-      const engaged = game.volunteers.filter(v => (mission.registeredVolunteers || []).includes(v.id));
-      engaged.forEach(v => {
-        v.energy = Math.max(5, (v.energy || 80) - 3);
-        // Le stress monte plus vite si le bénévole a une faible résistance
-        const stressInc = (100 - (v.stressResistance || 50)) > 40 ? 4 : 2;
-        v.stress = Math.min(100, (v.stress || 10) + stressInc);
-      });
-
-      // Génération d'un message d'évolution selon le type de crise
-      const entry = this.generateNextLogEntry(mission, timeStr, engaged.length, game);
-      if (entry) {
-        mission.operationalLog.unshift(entry);
-        if (window.ProtecAudio) window.ProtecAudio.playRadioBeep();
-
-        if (entry.type === 'milestone') {
-          game.showToast('Main Courante : Évolution', `${mission.title} : ${entry.text}`, 'blue');
-        }
-      }
-
-      // Possibilité de résolution favorable si assez d'évolutions ont eu lieu (minimum 4-6 entrées, garanti à 8)
-      if (mission.operationalLog.length >= 8 || (mission.operationalLog.length >= 5 && Math.random() < 0.35)) {
-        this.triggerCrisisResolution(game, mission);
-      }
-    }
-  },
-
-  // Vérifie si un véhicule logistique / matériel est présent sur les lieux
-  isLogisticsVehicleOnScene(mission, game) {
-    if (!mission) return false;
+  /**
+   * Analyse détaillée et temps réel des moyens et effectifs engagés sur la mission de crise
+   */
+  getOperationalAssetsStatus(mission, game) {
+    if (!mission) return { volsOnScene: 0, volsInTransit: 0, volsAtBase: 0, vpspOnScene: false, vpspInTransit: false, vpspAtBase: false, logOnScene: false, logInTransit: false, logAtBase: false, hasAnyOnScene: false, hasAnyAssetDeparted: false, anyTeamDeployed: false };
     const g = game || window.game;
+    const now = Date.now() + (g?.serverTimeOffset || 0);
+
+    let volsOnScene = 0;
+    let volsInTransit = 0;
+    let volsAtBase = 0;
+    let vpspOnScene = false;
+    let vpspInTransit = false;
+    let vpspAtBase = false;
+    let logOnScene = false;
+    let logInTransit = false;
+    let logAtBase = false;
+    let anyTeamDeployed = false;
+    let hasAnyAssetDeparted = false;
+
+    const logTypes = ['VTU', 'LOG', 'VLOG', 'PMA', 'FOURGON', 'VTP', 'REMORQUE', 'CAMION'];
+
+    // 1. Analyse des équipes de crise déployées avec timeline
+    if (mission.crisisTeamDeployments && typeof mission.crisisTeamDeployments === 'object') {
+      Object.values(mission.crisisTeamDeployments).forEach(dep => {
+        if (!dep) return;
+        anyTeamDeployed = true;
+        const veh = dep.assignedVeh || (g?.vehicles || []).find(v => v.id === dep.vehicleId);
+        const vType = (veh?.type || '').toUpperCase();
+        const vName = (veh?.name || '').toUpperCase();
+        const isVpsp = vType === 'VPSP' || vName.includes('VPSP');
+        const isLog = logTypes.some(t => vType.includes(t) || vName.includes(t)) || vName.includes('LOGISTIQUE') || vName.includes('MATÉRIEL') || vName.includes('MATERIEL');
+
+        const isOnScene = dep.status === 'sur_les_lieux' || (dep.crisisArrivalAt && now >= dep.crisisArrivalAt);
+        const isInTransit = dep.status === 'en_route_gyros' || dep.status === 'en_route_normal' || 
+          (dep.vehicleDepartureAt && now >= dep.vehicleDepartureAt && (!dep.crisisArrivalAt || now < dep.crisisArrivalAt));
+        const isAtBase = dep.status === 'armement_2min' || 
+          (dep.maxArrivalBaseAt && now >= dep.maxArrivalBaseAt && (!dep.vehicleDepartureAt || now < dep.vehicleDepartureAt));
+
+        if (isOnScene) {
+          volsOnScene += (dep.volunteersCount || 0);
+          if (isVpsp) vpspOnScene = true;
+          if (isLog) logOnScene = true;
+          hasAnyAssetDeparted = true;
+        } else if (isInTransit) {
+          volsInTransit += (dep.volunteersCount || 0);
+          if (isVpsp) vpspInTransit = true;
+          if (isLog) logInTransit = true;
+          hasAnyAssetDeparted = true;
+        } else if (isAtBase) {
+          volsAtBase += (dep.volunteersCount || 0);
+          if (isVpsp) vpspAtBase = true;
+          if (isLog) logAtBase = true;
+        }
+      });
+    }
+
+    // 2. Détection via les véhicules directement affectés à la mission
     const assignedVehs = (mission.assignedCrew?.vehicles || mission.vehicles || []).map(v => {
       const id = typeof v === 'object' ? v.id : v;
       return (g?.vehicles || []).find(veh => veh.id === id) || (typeof v === 'object' ? v : null);
     }).filter(Boolean);
 
-    const logTypes = ['VTU', 'LOG', 'VLOG', 'PMA', 'FOURGON', 'VTP', 'REMORQUE', 'CAMION'];
-    const logVehs = assignedVehs.filter(v => {
-      const type = (v.type || '').toUpperCase();
-      const name = (v.name || '').toUpperCase();
-      const cat = (v.category || '').toUpperCase();
-      return logTypes.some(t => type.includes(t) || name.includes(t) || cat.includes(t)) ||
-             name.includes('LOGISTIQUE') || name.includes('MATÉRIEL') || name.includes('MATERIEL') || name.includes('CHU') || name.includes('PMA');
+    assignedVehs.forEach(v => {
+      const vType = (v.type || '').toUpperCase();
+      const vName = (v.name || '').toUpperCase();
+      const isVpsp = vType === 'VPSP' || vName.includes('VPSP');
+      const isLog = logTypes.some(t => vType.includes(t) || vName.includes(t)) || vName.includes('LOGISTIQUE') || vName.includes('MATÉRIEL') || vName.includes('MATERIEL');
+
+      const inTransitActive = (g?.transits || []).some(t => (t.vehicleId === v.id || t.vehicle?.id === v.id) && t.statusTarget === 2);
+      if (v.status === 'sur_les_lieux' || v.status === 'intervention') {
+        if (!inTransitActive) {
+          if (isVpsp) vpspOnScene = true;
+          if (isLog) logOnScene = true;
+          hasAnyAssetDeparted = true;
+        } else {
+          if (isVpsp) vpspInTransit = true;
+          if (isLog) logInTransit = true;
+          hasAnyAssetDeparted = true;
+        }
+      } else if (inTransitActive || v.status === 'transit') {
+        if (isVpsp) vpspInTransit = true;
+        if (isLog) logInTransit = true;
+        hasAnyAssetDeparted = true;
+      }
     });
 
-    if (logVehs.length === 0) return false;
+    const hasAnyOnScene = volsOnScene > 0 || vpspOnScene || logOnScene;
 
-    // Doit être arrivé sur les lieux (statut 'sur_les_lieux' ou 'intervention') et ne pas être en transit actif
-    return logVehs.some(v => {
-      const inTransit = (g?.transits || []).some(t => (t.vehicleId === v.id || t.vehicle?.id === v.id) && t.statusTarget === 2);
-      return (v.status === 'sur_les_lieux' || v.status === 'intervention') && !inTransit;
-    });
+    return {
+      anyTeamDeployed,
+      volsOnScene,
+      volsInTransit,
+      volsAtBase,
+      vpspOnScene,
+      vpspInTransit,
+      vpspAtBase,
+      logOnScene,
+      logInTransit,
+      logAtBase,
+      hasAnyOnScene,
+      hasAnyAssetDeparted
+    };
+  },
+
+  // Évolution de la main courante pendant le sinistre
+  progressCrisisMission(game, mission) {
+    if (!mission || mission.status !== 'ongoing') return;
+
+    // Si la crise a été déclarée prête à clôturer par le COS :
+    // Ne plus rien ajouter et laisser le directeur décider de la clôture
+    if (mission.crisisCanClose) {
+      return;
+    }
+
+    if (!mission.operationalLog) this.initMissionOperationalLog(mission);
+    this.sanitizeOperationalLogs(mission, game);
+
+    const now = Date.now();
+    if (!mission.lastLogUpdate) mission.lastLogUpdate = now;
+
+    // CADENCE RÉALISTE : Intervalle d'au moins 120 à 180 secondes réelles (2 à 3 minutes) entre les messages
+    const updateIntervalMs = 120000;
+    if (now - mission.lastLogUpdate < updateIntervalMs) {
+      return;
+    }
+
+    mission.lastLogUpdate = now;
+    const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+    const assets = this.getOperationalAssetsStatus(mission, game);
+
+    // Fatigue et stress progressifs UNIQUEMENT pour les secouristes réellement présents sur le terrain
+    if (assets.volsOnScene > 0) {
+      const onSceneVolIds = new Set();
+      if (mission.crisisTeamDeployments) {
+        Object.values(mission.crisisTeamDeployments).forEach(dep => {
+          if (dep && (dep.status === 'sur_les_lieux' || (dep.crisisArrivalAt && now >= dep.crisisArrivalAt))) {
+            (dep.volunteerIds || []).forEach(id => onSceneVolIds.add(id));
+          }
+        });
+      }
+      game.volunteers.filter(v => onSceneVolIds.has(v.id)).forEach(v => {
+        v.energy = Math.max(5, (v.energy || 80) - 2);
+        const stressInc = (100 - (v.stressResistance || 50)) > 40 ? 3 : 1;
+        v.stress = Math.min(100, (v.stress || 10) + stressInc);
+      });
+    }
+
+    // Génération du prochain message adapté au statut des moyens
+    const entry = this.generateNextLogEntry(mission, timeStr, assets.volsOnScene, game, assets);
+    if (entry) {
+      mission.operationalLog.unshift(entry);
+      if (window.ProtecAudio) window.ProtecAudio.playRadioBeep();
+
+      if (entry.type === 'milestone') {
+        game.showToast('Main Courante : Évolution', `${mission.title} : ${entry.text}`, 'blue');
+      }
+    }
+
+    // Résolution finale du sinistre par le COS UNIQUEMENT SI :
+    // 1. Des moyens et effectifs Protec sont réellement sur place
+    // 2. Si incendie ou crise sanitaire : le VPSP a été sur place et a opéré
+    // 3. Durée réelle minimale de 12 à 15 minutes réelles écoulée
+    // 4. Au moins 6 entrées radio significatives enregistrées
+    const crisisDurationMs = now - (mission.startedAt || mission.spawnedAt || now);
+    const minCrisisDurationMs = 12 * 60 * 1000; // 12 minutes réelles minimum
+
+    const titleLower = (mission.title || '').toLowerCase();
+    const typeLower = (mission.crisisType || '').toLowerCase();
+    const isFireOrSanitary = titleLower.includes('feu') || titleLower.includes('incendie') || titleLower.includes('ehpad') || typeLower.includes('feu');
+    const requiredVpspCheck = isFireOrSanitary ? assets.vpspOnScene : true;
+
+    if (
+      assets.hasAnyOnScene &&
+      requiredVpspCheck &&
+      crisisDurationMs >= minCrisisDurationMs &&
+      mission.operationalLog.length >= 6
+    ) {
+      this.triggerCrisisResolution(game, mission);
+    }
+  },
+
+  // Vérifie si un véhicule logistique / matériel est présent sur les lieux
+  isLogisticsVehicleOnScene(mission, game) {
+    return this.getOperationalAssetsStatus(mission, game).logOnScene;
   },
 
   // Assainissement préventif des logs existants pour garantir la logique opérationnelle
   sanitizeOperationalLogs(mission, game) {
     if (!mission || !Array.isArray(mission.operationalLog)) return;
-    const title = (mission.title || '').toLowerCase();
-    const desc = (mission.desc || mission.scenarioText || '').toLowerCase();
-    const cType = (mission.crisisType || '').toLowerCase();
-    const allText = `${title} ${desc} ${cType}`;
+    const assets = this.getOperationalAssetsStatus(mission, game);
 
-    const isFire = allText.includes('feu') || allText.includes('incendie') || allText.includes('immeuble') || allText.includes('habitation') || allText.includes('flamme') || allText.includes('ehpad');
-    const isFlood = allText.includes('inondation') || allText.includes('crue') || allText.includes('submersion') || allText.includes('pompage') || allText.includes('tempête') || allText.includes('eaux chargées');
-
-    // Si la mission concerne un feu ou un sinistre non inondable, éradiquer toute mention erronée de pompage
-    if (isFire && !isFlood) {
+    // RÈGLE 1 : Si le VPSP n'est pas sur les lieux, aucune prise en charge sanitaire au CAI par le VPSP
+    if (!assets.vpspOnScene) {
       mission.operationalLog.forEach(l => {
-        if (l && typeof l.text === 'string' && l.text.toLowerCase().includes('pompage')) {
-          const vols = (mission.registeredVolunteers || []).length || 3;
-          l.source = 'PC de Crise CODIS 18';
-          l.text = `Dispositif Protec actif sur le secteur (${vols} intervenants engagés). Actions d’accueil au CAI, bilans secouristes et soutien sanitaire aux évacués en cours.`;
+        if (!l || typeof l.text !== 'string') return;
+        if (
+          l.text.includes('Prise en charge sanitaire au CAI') || 
+          l.text.includes('oxygénothérapie normobarre') || 
+          l.text.includes('Bilans transmis à la régulation 15')
+        ) {
+          if (assets.vpspInTransit) {
+            l.source = 'PC Radio Protec';
+            l.text = 'VPSP Protec en transit routier vers le sinistre (Statut 2). Implantation du CAI en cours de préparation sur place.';
+            l.type = 'info';
+          } else {
+            l.source = 'COS Sapeurs-Pompiers';
+            l.text = 'Sauvetages et reconnaissances sous ARI en cours. En attente du départ et de l’arrivée du VPSP Protection Civile pour l’armement sanitaire du CAI.';
+            l.type = 'info';
+          }
         }
       });
     }
 
-    // Cohérence opérationnelle CHU : pas de lits de camp montés sans véhicule logistique sur les lieux
-    const hasLog = this.isLogisticsVehicleOnScene(mission, game || window.game);
-    if (!hasLog) {
+    // RÈGLE 2 : Si aucun moyen Protec n'est encore sur les lieux, aucune action Protec sur site
+    if (!assets.hasAnyOnScene) {
+      mission.operationalLog.forEach(l => {
+        if (!l || typeof l.text !== 'string') return;
+        if (l.text.includes('résidents sinistrés recensés') || l.text.includes('Distribution de couvertures isothermiques')) {
+          l.source = 'Cellule de Crise Mairie';
+          l.text = 'Gymnase communal réquisitionné et ouvert par l’astreinte municipale. En attente de l’arrivée des secouristes Protec pour l’accueil.';
+          l.type = 'info';
+        }
+        if (l.text.includes('Point ravitaillement opérationnel') || l.text.includes('réhydratation et collations')) {
+          l.source = 'CODIS 18';
+          l.text = 'Soutien sanitaire et logistique associative sollicités au front d’attaque. En attente de l’engagement des vecteurs associatifs.';
+          l.type = 'info';
+        }
+        if (l.text.includes('Foyer principal circonscrit') && l.text.includes('Prise en charge des sinistrés achevée')) {
+          l.source = 'CODIS 18';
+          l.text = 'Sauvetages et reconnaissances toujours en cours dans les étages. Les sapeurs-pompiers poursuivent l’attaque du sinistre.';
+          l.type = 'info';
+        }
+      });
+    }
+
+    // RÈGLE 3 : Pas de montage de lits sans vecteur logistique sur place
+    if (!assets.logOnScene) {
       mission.operationalLog.forEach(l => {
         if (l && typeof l.text === 'string' && (l.text.includes('Montage de 50 lits') || (l.text.includes('lits de camp') && l.text.includes('installés')))) {
-          l.source = 'Responsable CHU Protec';
-          l.text = 'Hall sécurisé et zone de repli balisée. En attente de l’arrivée du véhicule logistique (VTU/LOG) transportant le matériel pour débuter le montage des lits de camp.';
+          l.source = 'Responsable CAI Protec';
+          l.text = 'Hall sécurisé et zone de repli balisée. En attente de l’arrivée du véhicule logistique (VTU/LOG) pour débuter le montage des lits de camp.';
           l.type = 'info';
+        }
+      });
+    }
+
+    // RÈGLE 4 : Élimination des mentions erronées de pompage sur les feux
+    const title = (mission.title || '').toLowerCase();
+    const desc = (mission.desc || mission.scenarioText || '').toLowerCase();
+    const cType = (mission.crisisType || '').toLowerCase();
+    const allText = `${title} ${desc} ${cType}`;
+    const isFire = allText.includes('feu') || allText.includes('incendie') || allText.includes('immeuble') || allText.includes('habitation') || allText.includes('ehpad');
+    const isFlood = allText.includes('inondation') || allText.includes('crue') || allText.includes('submersion') || allText.includes('pompage');
+    if (isFire && !isFlood) {
+      mission.operationalLog.forEach(l => {
+        if (l && typeof l.text === 'string' && l.text.toLowerCase().includes('pompage')) {
+          l.source = 'PC de Crise CODIS 18';
+          l.text = 'Dispositif de lutte contre les flammes actif. Équipes associatives en soutien accueil et premier secours.';
         }
       });
     }
   },
 
-  generateNextLogEntry(mission, timeStr, volsCount, game) {
+  generateNextLogEntry(mission, timeStr, volsCount, game, inputAssets) {
     this.sanitizeOperationalLogs(mission, game);
 
     const logs = mission.operationalLog || [];
-    const step = logs.length;
-    const hasLogOnScene = this.isLogisticsVehicleOnScene(mission, game || window.game);
+    const assets = inputAssets || this.getOperationalAssetsStatus(mission, game || window.game);
+    const hasLogOnScene = assets.logOnScene;
+    const hasVpspOnScene = assets.vpspOnScene;
+    const hasAnyOnScene = assets.hasAnyOnScene;
+    const hasDeparted = assets.hasAnyAssetDeparted;
+    const volsOnScene = assets.volsOnScene;
 
     const title = (mission.title || '').toLowerCase();
     const desc = (mission.desc || mission.scenarioText || '').toLowerCase();
@@ -372,308 +525,431 @@ window.ProtecCriseLogistique = {
     const authority = (mission.authority || mission.authorityLabel || mission.alertOrigin || '').toLowerCase();
     const allText = `${title} ${desc} ${cType} ${authority}`;
 
-    let msgs = null;
-
-    // 1. INCENDIE / FEU D'HABITATION / FEU D'IMMEUBLE / FEU URBAIN / EHPAD
-    if (
-      cType === 'feu_immeuble' || cType === 'incendie_ehpad' ||
+    const isFire = cType === 'feu_immeuble' || cType === 'incendie_ehpad' ||
       allText.includes('feu') || allText.includes('incendie') || allText.includes('immeuble') ||
-      allText.includes('habitation') || allText.includes('flamme') || allText.includes('fumée') ||
-      allText.includes('ehpad')
-    ) {
-      msgs = [
-        {
-          source: 'PC de Crise CODIS 18',
-          text: `Important incendie en cours. Dispositif Protec actif sur le secteur (${volsCount} intervenants engagés). Armement immédiat du Centre d’Accueil des Impliqués (CAI) et sécurisation du périmètre.`,
-          type: 'info'
-        },
-        {
-          source: 'COS Sapeurs-Pompiers',
-          text: 'Sauvetages et reconnaissances en cours dans les étages sous ARI. Noria d’évacuation des résidents vers notre point de rassemblement des impliqués.',
-          type: 'info'
-        },
-        {
-          source: 'Équipage VPSP / CAI',
-          text: 'Prise en charge sanitaire au CAI : 4 personnes incommodées par les fumées placées sous oxygénothérapie normobarre. Bilans transmis à la régulation 15.',
-          type: 'milestone'
-        },
-        {
-          source: 'Chef de Dispositif Protec',
-          text: 'Point de situation : résidents sinistrés recensés au gymnase de repli. Distribution de couvertures isothermiques, réconfort psychologique et boissons chaudes.',
-          type: 'info'
-        },
-        {
-          source: 'Soutien Sanitaire SDIS',
-          text: 'Point ravitaillement opérationnel : réhydratation et collations énergétiques fournies aux binômes sapeurs-pompiers engagés au front d’attaque.',
-          type: 'info'
-        },
-        {
-          source: 'Cellule de Crise Mairie',
-          text: 'Foyer principal circonscrit par les sapeurs-pompiers. Prise en charge des sinistrés achevée et relogements d’urgence organisés par la municipalité.',
-          type: 'success'
-        }
-      ];
-    }
+      allText.includes('habitation') || allText.includes('flamme') || allText.includes('fumée') || allText.includes('ehpad');
 
-    // 2. INONDATIONS / CRUES / RUISSELLEMENT / TEMPÊTE / POMPAGE
-    else if (
-      cType === 'inondation_lotissements' || cType === 'tempete_rouge' ||
+    const isFlood = cType === 'inondation_lotissements' || cType === 'tempete_rouge' ||
       allText.includes('inondation') || allText.includes('crue') || allText.includes('submersion') ||
       allText.includes('pompage') || allText.includes('tempête') || allText.includes('ruissellement') ||
-      allText.includes('eaux chargées') || allText.includes('motopompe')
-    ) {
-      msgs = [
-        {
-          source: 'PC de Crise CODIS / Mairie',
-          text: `Montée des eaux critique sur le secteur (${volsCount} intervenants engagés). Actions de reconnaissance, pompage des points bas et armement du CHU en cours.`,
-          type: 'info'
-        },
-        {
-          source: 'Sauveteurs Nautiques SDIS',
-          text: 'Sauvetages par embarcations légères sur les lotissements inondés. Noria d’évacuation des sinistrés vers le Centre d’Hébergement d’Urgence.',
-          type: 'info'
-        },
-        {
-          source: 'Équipe Technique Protec',
-          text: 'Motopompes thermiques déployées : épuisement et pompage actif des axes stratégiques et sous-sols prioritaires.',
-          type: 'milestone'
-        },
-        {
-          source: 'Gestionnaire CHU Protec',
-          text: hasLogOnScene
-            ? 'Matériel logistique acheminé sur place : Centre d’hébergement en gymnase opérationnel, lits de camp installés, distribution de repas chauds et vêtements secs aux sinistrés.'
-            : 'Gymnase communal ouvert et sécurisé. En attente de l’arrivée du véhicule logistique (VTU/LOG) transportant les lits de camp pour débuter le montage du CHU.',
-          type: hasLogOnScene ? 'milestone' : 'info'
-        },
-        {
-          source: 'Vigilance Crues & SIDPC',
-          text: 'Stabilisation de la crue et amorçage de la décrue. Poursuite des actions d’épuisement par pompage et sécurisation des habitations.',
-          type: 'success'
-        }
-      ];
-    }
+      allText.includes('eaux chargées') || allText.includes('motopompe');
 
-    // 3. ACCIDENT GRAVE / PLAN NOVI / CARAMBOLAGE / AUTOCAR / VICTIMES MULTIPLES
-    else if (
-      cType === 'accident_novi' || allText.includes('novi') || allText.includes('carambolage') ||
+    const isNovi = cType === 'accident_novi' || allText.includes('novi') || allText.includes('carambolage') ||
       allText.includes('accident') || allText.includes('autocar') || allText.includes('collision') ||
-      allText.includes('multiples victimes') || allText.includes('pma')
-    ) {
-      msgs = [
-        {
-          source: 'Régulation SAMU 15 / CODIS',
-          text: `Plan NOVI déclenché suite à accident à cinétique violente. Dispositif Protec actif (${volsCount} intervenants). Montage et armement du Poste Médical Avancé (PMA).`,
-          type: 'info'
-        },
-        {
-          source: 'Médecin Chef PMA',
-          text: 'Tri des victimes en cours avec pose de bracelets SINUS. Équipes Protec positionnées en soutien au brancardage et surveillance des Urgences Relatives.',
-          type: 'info'
-        },
-        {
-          source: 'Régulation Sanitaire 15',
-          text: 'Grande Noria d’évacuation : nos VPSP prennent en charge les blessés stabilisés pour transfert prioritaire vers les urgences du Trauma Center.',
-          type: 'milestone'
-        },
-        {
-          source: 'Officier de Liaison Protec',
-          text: 'Point de situation intermédiaire : 14 impliqués accueillis et réconfortés. Prise en charge psychologique des témoins et familles.',
-          type: 'info'
-        },
-        {
-          source: 'Commandant des Opérations',
-          text: 'Toutes les victimes ont été évacuées vers les hôpitaux de secteur. Voies dégagées et désarmement progressif du dispositif.',
-          type: 'success'
-        }
-      ];
-    }
+      allText.includes('multiples victimes') || allText.includes('pma');
 
-    // 4. FERROVIAIRE / SNCF / TGV BLOQUÉ / NAUFRAGÉS DES TRANSPORTS
-    else if (
-      cType === 'tgv_bloque' || allText.includes('tgv') || allText.includes('sncf') ||
+    const isTrain = cType === 'tgv_bloque' || allText.includes('tgv') || allText.includes('sncf') ||
       allText.includes('train') || allText.includes('ferroviaire') || allText.includes('voyageur') ||
-      allText.includes('gare') || allText.includes('caténaire')
-    ) {
-      msgs = [
-        {
-          source: 'Direction de Crise SNCF',
-          text: `Trafic ferroviaire interrompu. Dispositif Protec actif en gare (${volsCount} intervenants). Accueil des passagers et aménagement de la zone de repli.`,
-          type: 'info'
-        },
-        {
-          source: 'Coordination Gare',
-          text: 'Arrivée des navettes de passagers : distribution massive de bouteilles d’eau et collations d’urgence aux voyageurs déroutés.',
-          type: 'info'
-        },
-        {
-          source: 'Responsable CHU Protec',
-          text: hasLogOnScene
-            ? 'Véhicule logistique sur place avec le matériel : montage de 50 lits de camp dans le hall de la gare. Bilans de confort et assistance aux personnes vulnérables et enfants en bas âge.'
-            : 'Hall de la gare sécurisé et zone de repli balisée. En attente de l’arrivée du véhicule logistique (VTU/LOG) et des lits de camp pour débuter l’aménagement du CHU.',
-          type: hasLogOnScene ? 'milestone' : 'info'
-        },
-        {
-          source: 'Cellule Info Voyageurs',
-          text: 'Régulation des correspondances en cours. Présence rassurante des secouristes Protec le long des quais et en salle d’attente.',
-          type: 'info'
-        },
-        {
-          source: 'Direction de Crise SNCF',
-          text: 'Mise en place des bus de substitution achevée. Évacuation ordonnée et fin de prise en charge des derniers voyageurs.',
-          type: 'success'
-        }
-      ];
-    }
+      allText.includes('gare') || allText.includes('caténaire');
 
-    // 5. RECHERCHE DE PERSONNE DISPARUE / BATTUE / GENDARMERIE
-    else if (
-      cType === 'recherche_disparu' || cType === 'recherche_foret' ||
+    const isSearch = cType === 'recherche_disparu' || cType === 'recherche_foret' ||
       allText.includes('recherche') || allText.includes('disparu') || allText.includes('battue') ||
-      allText.includes('cyno') || allText.includes('forêt') || allText.includes('boisée')
-    ) {
-      msgs = [
+      allText.includes('cyno') || allText.includes('forêt') || allText.includes('boisée');
+
+    const isCrash = cType === 'crash_aerien' || allText.includes('crash') || allText.includes('aérien') || allText.includes('avion');
+
+    let pool = [];
+
+    // =========================================================================
+    // PHASE 1 : AUCUN MOYEN PROTEC N'A QUITTÉ LA BASE (!hasDeparted)
+    // =========================================================================
+    if (!hasDeparted) {
+      if (isFire) {
+        pool = [
+          {
+            source: 'PC de Crise CODIS 18',
+            text: 'Important incendie urbain en cours. Plusieurs lances en manœuvre. Demande de renfort associatif confirmée auprès de la Protec. En attente du départ de vos moyens depuis la base.',
+            type: 'info'
+          },
+          {
+            source: 'COS Sapeurs-Pompiers',
+            text: 'Sauvetages et reconnaissances dans les étages sous ARI. Sinistrés évacués regroupés sur le trottoir sous la pluie. Besoin urgent de l’ouverture d’un Centre d’Accueil (CAI) dès votre arrivée.',
+            type: 'info'
+          },
+          {
+            source: 'Cellule de Crise Mairie',
+            text: 'Gymnase communal déverrouillé par l’astreinte municipale. Les services municipaux attendent l’arrivée de la Protection Civile pour structurer l’accueil.',
+            type: 'info'
+          },
+          {
+            source: 'Cadre d’Astreinte Protec',
+            text: 'Rassemblement et équipement des effectifs à l’antenne. Validez le départ des vecteurs (VPSP et logistique) dès armement complet.',
+            type: 'alert'
+          }
+        ];
+      } else if (isFlood) {
+        pool = [
+          {
+            source: 'PC de Crise CODIS / Mairie',
+            text: 'Montée rapide des eaux constatée sur les points bas. Demande de renfort associatif transmise à la Protec. En attente du départ de vos effectifs.',
+            type: 'info'
+          },
+          {
+            source: 'Sauveteurs Nautiques SDIS',
+            text: 'Reconnaissances en barque engagées. Plusieurs dizaines d’habitants isolés. Les pompiers sollicitent la Protec pour l’hébergement d’urgence dès votre mise en route.',
+            type: 'info'
+          },
+          {
+            source: 'Cadre d’Astreinte Protec',
+            text: 'Préparation des lots d’épuisement et vérification des paquetages à la base. Déclenchez le transit dès que les conducteurs sont en place.',
+            type: 'alert'
+          }
+        ];
+      } else if (isNovi || isCrash) {
+        pool = [
+          {
+            source: 'Régulation SAMU 15 / CODIS',
+            text: 'Accident grave à cinétique violente. Plan NOVI déclenché. Demande d’engagement de vos vecteurs VPSP et soutien logistique. En attente de confirmation de départ.',
+            type: 'info'
+          },
+          {
+            source: 'Médecin Chef PMA',
+            text: 'Reconnaissances médicales sur la zone de choc. Tri sommaire en cours. Fort besoin de renforts sanitaires associatifs pour la prise en charge et la noria.',
+            type: 'info'
+          },
+          {
+            source: 'Cadre d’Astreinte Protec',
+            text: 'Mobilisation d’urgence à l’antenne. Armez le VPSP et engagez le départ sur ordre du régulateur.',
+            type: 'alert'
+          }
+        ];
+      } else if (isTrain) {
+        pool = [
+          {
+            source: 'Direction de Crise SNCF',
+            text: 'Rame immobilisée en pleine voie. Des centaines de voyageurs bloqués. Convention de secours activée. En attente du départ de vos équipes pour la gare.',
+            type: 'info'
+          },
+          {
+            source: 'Cadre d’Astreinte Protec',
+            text: 'Chargement des packs d’eau et couvertures à l’antenne. En attente de l’ordre de départ du véhicule d’intervention.',
+            type: 'alert'
+          }
+        ];
+      } else if (isSearch) {
+        pool = [
+          {
+            source: 'Commandement Gendarmerie',
+            text: 'Battue opérationnelle planifiée. Point de rassemblement des moyens fixé au PC Gendarmerie. En attente de l’engagement de vos effectifs depuis l’antenne.',
+            type: 'info'
+          },
+          {
+            source: 'Cadre d’Astreinte Protec',
+            text: 'Briefing topo et vérification des tenues de terrain à l’antenne. Confirmez le départ des véhicules.',
+            type: 'alert'
+          }
+        ];
+      } else {
+        pool = [
+          {
+            source: 'PC de Crise / Autorités',
+            text: 'Événement majeur en cours sur le secteur. Les services de secours sollicitent l’appui de la Protection Civile. En attente du départ de vos moyens depuis la base.',
+            type: 'info'
+          },
+          {
+            source: 'Commandement Opérationnel',
+            text: 'Dispositif de sécurité en place sur le terrain. Les autorités attendent la confirmation du départ de vos premiers effectifs.',
+            type: 'info'
+          },
+          {
+            source: 'Cadre d’Astreinte Protec',
+            text: 'Préparation et vérification des équipements à l’antenne. Procédez au départ des vecteurs pour engager la mission.',
+            type: 'alert'
+          }
+        ];
+      }
+    }
+
+    // =========================================================================
+    // PHASE 2 : MOYENS EN TRANSIT ROUTIER, AUCUN SUR PLACE (hasDeparted && !hasAnyOnScene)
+    // =========================================================================
+    else if (!hasAnyOnScene) {
+      pool = [
         {
-          source: 'Commandement Gendarmerie',
-          text: `Battue opérationnelle lancée. Dispositif Protec engagé (${volsCount} intervenants). Équipes pédestres en chaîne de ratissage et appui drone thermique.`,
+          source: 'Vecteur Protec en transit',
+          text: 'Équipage Protec en transit routier (Statut 2). Progression ralentie par la circulation dense. ETA estimé à quelques minutes.',
           type: 'info'
         },
         {
-          source: 'Unité Drone Protec',
-          text: 'Survol des crêtes et combes par drone : caméra infrarouge active. Transmission des secteurs suspects aux équipes cynotechniques au sol.',
+          source: 'PC de Crise CODIS 18',
+          text: 'CODIS bien reçu le départ et le transit de vos premiers moyens. Le COS sur place est prévenu de votre approche et prépare le guidage.',
           type: 'info'
         },
         {
-          source: 'Équipe Cynotechnique Protec',
-          text: 'Marquage d’odeur positif par le chien de recherche ! Les équipes pédestres convergent avec lot de brancardage et coquille.',
-          type: 'milestone'
+          source: 'Police Municipale / Forces de l’Ordre',
+          text: 'Périmètre sécurisé et jalonnement des accès activé pour fluidifier l’arrivée des véhicules de la Protection Civile sur la zone d’implantation.',
+          type: 'info'
         },
         {
-          source: 'Commandement Gendarmerie',
-          text: 'Personne disparue localisée vivante et consciente, en hypothermie modérée. Bilan secouriste complet et réchauffement en cours.',
-          type: 'success'
-        },
-        {
-          source: 'Régulation SAMU 15',
-          text: 'Évacuation de la victime par notre VPSP vers les urgences les plus proches. Fin des opérations de battue.',
-          type: 'milestone'
+          source: 'COS sur place',
+          text: 'Point de situation sur site : impliqués regroupés sous préau ou zone protégée. Nous attendons votre premier échelon pour organiser l’accueil.',
+          type: 'info'
         }
       ];
     }
 
-    // 6. CRASH AÉRIEN & CAI / CUMP
-    else if (
-      cType === 'crash_aerien' || allText.includes('crash') || allText.includes('aérien') || allText.includes('avion')
-    ) {
-      msgs = [
-        {
-          source: 'Médecin Référent CUMP',
-          text: `Plan d'urgence aéronautique activé. Dispositif Protec opérationnel (${volsCount} secouristes). Montage du CAI sous le gymnase réquisitionné.`,
-          type: 'milestone'
-        },
-        {
-          source: 'Secrétariat SINUS Protec',
-          text: 'Traçabilité et identification : bracelets SINUS posés, prise en charge psychologique active des impliqués et réconfort chaud.',
-          type: 'info'
-        },
-        {
-          source: 'CODIS 15/18',
-          text: 'Rotation d’équipes nécessaire. Recommandation : relève des secouristes en première ligne pour prévenir la fatigue psychologique.',
-          type: 'alert'
-        },
-        {
-          source: 'Préfecture',
-          text: 'Point presse préfectoral : félicitations adressées aux équipes agréées pour la dignité et la rigueur de l’accueil des familles.',
-          type: 'info'
-        }
-      ];
+    // =========================================================================
+    // PHASE 3 : MOYENS SUR SITE MAIS AUCUN VPSP SUR PLACE (hasAnyOnScene && !hasVpspOnScene)
+    // =========================================================================
+    else if (!hasVpspOnScene) {
+      if (isFire) {
+        pool = [
+          {
+            source: 'Chef de Dispositif Protec',
+            text: `Échelon Protec sur les lieux (${volsOnScene} secouristes sur site). Prise de contact avec le COS et ouverture du Centre d’Accueil des Impliqués (CAI) dans le gymnase.`,
+            type: 'info'
+          },
+          {
+            source: 'Gestionnaire CAI Protec',
+            text: 'Accueil et recensement des familles évacuées : distribution de réconfort, boissons chaudes et couvertures de survie. En attente de l’arrivée du VPSP pour débuter les bilans sanitaires.',
+            type: 'info'
+          },
+          {
+            source: 'Logistique Protec',
+            text: hasLogOnScene
+              ? 'Véhicule logistique sur place : déchargement des lits de camp, barnums et éclairages pour aménager la zone de repos du gymnase.'
+              : 'Espace d’accueil sommaire mis en place. En attente de l’arrivée du véhicule logistique (VTU/LOG) pour déployer les lits de camp.',
+            type: hasLogOnScene ? 'milestone' : 'info'
+          },
+          {
+            source: 'COS Sapeurs-Pompiers',
+            text: 'Attaque du feu maintenue par les sapeurs-pompiers. Le regroupement des personnes sinistrées au gymnase par la Protec soulage considérablement le dispositif incendie.',
+            type: 'info'
+          }
+        ];
+      } else if (isFlood) {
+        pool = [
+          {
+            source: 'Chef de Dispositif Protec',
+            text: `Échelon Protec sur place (${volsOnScene} intervenants). Prise de contact avec la mairie et ouverture du Centre d’Hébergement d’Urgence (CHU).`,
+            type: 'info'
+          },
+          {
+            source: 'Gestionnaire CHU Protec',
+            text: hasLogOnScene
+              ? 'Matériel logistique au contact : lits de camp déployés, distribution de vêtements secs et collations chaudes aux sinistrés.'
+              : 'Accueil au sec des personnes évacuées. En attente du véhicule logistique pour le montage des lits de camp.',
+            type: hasLogOnScene ? 'milestone' : 'info'
+          },
+          {
+            source: 'Équipe Pompage Protec',
+            text: 'Reconnaissance des caves et sous-sols prioritaires. Mise en batterie des motopompes sur les points bas accessibles.',
+            type: 'milestone'
+          }
+        ];
+      } else {
+        pool = [
+          {
+            source: 'Chef de Dispositif Protec',
+            text: `Moyens Protec arrivés sur place (${volsOnScene} intervenants engagés). Prise de contact avec le commandement et mise en place de la zone de soutien.`,
+            type: 'info'
+          },
+          {
+            source: 'Gestionnaire Terrain Protec',
+            text: 'Accueil des impliqués, soutien moral et distribution d’eau. En attente du vecteur VPSP pour les bilans sanitaires et soins.',
+            type: 'info'
+          },
+          {
+            source: 'Logistique Protec',
+            text: hasLogOnScene
+              ? 'Véhicule logistique sur les lieux : matériel déchargé et zone de soutien pleinement opérationnelle.'
+              : 'Zone d’accueil sécurisée. En attente du vecteur logistique pour compléter l’équipement.',
+            type: hasLogOnScene ? 'milestone' : 'info'
+          }
+        ];
+      }
     }
 
-    // 7. INTOXICATION COLLECTIVE / SANITAIRE / CANICULE / GRAND FROID
-    else if (
-      allText.includes('intoxication') || allText.includes('sanitaire') || allText.includes('canicule') ||
-      allText.includes('froid') || allText.includes('maraude') || allText.includes('monoxyde')
-    ) {
-      msgs = [
-        {
-          source: 'Régulation SAMU 15',
-          text: `Alerte sanitaire déclarée. Dispositif Protec actif (${volsCount} intervenants). Mise en sécurité des victimes et bilans vitaux prioritaires.`,
-          type: 'info'
-        },
-        {
-          source: 'Équipage VPSP Protec',
-          text: 'Mesures des paramètres vitaux (SpO2, TA, glycémie) et gestes d’urgence réalisés. Oxygénothérapie et surveillance rapprochée.',
-          type: 'milestone'
-        },
-        {
-          source: 'Commandement Terrain Protec',
-          text: 'Point de situation intermédiaire : personnes vulnérables orientées et hydratées. Noria sanitaire assurée vers le centre hospitalier.',
-          type: 'info'
-        },
-        {
-          source: 'Autorités Sanitaires',
-          text: 'Foyer de risque stabilisé. Prise en charge médicale et secouriste réussie pour l’ensemble des impliqués.',
-          type: 'success'
-        }
-      ];
-    }
-
-    // 8. DISPOSITIF PRÉVISIONNEL DE SECOURS (DPS) / RASSEMBLEMENT DE FOULE
-    else if (
-      allText.includes('dps') || allText.includes('concert') || allText.includes('sport') ||
-      allText.includes('match') || allText.includes('festival') || allText.includes('marathon') ||
-      allText.includes('fête') || allText.includes('manifestation')
-    ) {
-      msgs = [
-        {
-          source: 'PC Opérationnel DPS',
-          text: `Dispositif Prévisionnel de Secours en place (${volsCount} intervenants). Postes de secours ouverts et binômes patrouilleurs déployés.`,
-          type: 'info'
-        },
-        {
-          source: 'Binôme Patrouilleur',
-          text: 'Prise en charge d’un malaise dans le secteur public : transfert vers le poste de secours fixe pour mise en observation.',
-          type: 'info'
-        },
-        {
-          source: 'Chef de Dispositif Protec',
-          text: 'Point de situation intermédiaire : soins de petite traumatologie assurés et 1 bilan transmis au médecin régulateur SAMU.',
-          type: 'milestone'
-        },
-        {
-          source: 'Organisateur / PC Sécurité',
-          text: 'Événement clôturé et dispersion calme du public. Démontage méthodique des tentes et inventaire des lots opérationnels.',
-          type: 'success'
-        }
-      ];
-    }
-
-    // 9. SCÉNARIO GÉNÉRALISTE / SECOURS AUX POPULATIONS (JAMAIS DE POMPAGE NI D'INCOHÉRENCE)
+    // =========================================================================
+    // PHASE 4 : VPSP SUR LES LIEUX (hasVpspOnScene) - Pleine capacité opérationnelle
+    // =========================================================================
     else {
-      msgs = [
-        {
-          source: 'PC de Crise CODIS / Autorités',
-          text: `Dispositif Protec actif sur le secteur (${volsCount} intervenants engagés). Actions de soutien aux populations, bilans et sécurisation en cours.`,
-          type: 'info'
-        },
-        {
-          source: 'Commandement Terrain Protec',
-          text: 'Point de situation intermédiaire : accueil, premier secours et mise en sécurité des impliqués menés en coordination avec les secours.',
-          type: 'info'
-        },
-        {
-          source: 'Cadre d’Astreinte Protec',
-          text: 'Poursuite de la mission. Pensez à anticiper une rotation d’équipes pour préserver la condition physique des intervenants.',
-          type: 'alert'
-        },
-        {
-          source: 'Coordination Opérationnelle',
-          text: 'Objectifs de secours et de soutien pleinement atteints. Situation stabilisée sur l’ensemble du secteur.',
-          type: 'success'
-        }
-      ];
+      if (isFire) {
+        pool = [
+          {
+            source: 'Équipage VPSP / CAI',
+            text: 'VPSP positionné au gymnase : armement du point sanitaire. Prise en charge des personnes incommodées par les fumées sous oxygénothérapie normobarre. Bilans transmis au 15.',
+            type: 'milestone'
+          },
+          {
+            source: 'Chef de Dispositif Protec',
+            text: `Point de situation global : ${volsOnScene} intervenants Protec actifs. Tous les sinistrés sont au chaud, recensés et pris en charge au CAI.`,
+            type: 'info'
+          },
+          {
+            source: 'Soutien Sanitaire SDIS',
+            text: 'Point de réhabilitation opérationnel : réhydratation, collations énergétiques et surveillance physiologique fournies aux binômes sapeurs-pompiers.',
+            type: 'info'
+          },
+          {
+            source: 'Cellule de Crise Mairie',
+            text: 'Foyer principal circonscrit par les sapeurs-pompiers. Prise en charge des sinistrés achevée et relogements d’urgence organisés par la municipalité.',
+            type: 'success'
+          }
+        ];
+      } else if (isFlood) {
+        pool = [
+          {
+            source: 'Équipage VPSP Protec',
+            text: 'VPSP opérationnel au CHU : bilans de réchauffement pour les personnes en hypothermie légère et surveillance médicale rapprochée.',
+            type: 'milestone'
+          },
+          {
+            source: 'Gestionnaire CHU Protec',
+            text: hasLogOnScene
+              ? 'Capacité d’accueil du CHU saturée mais maîtrisée : tous les sinistrés disposent d’un lit de camp, repas chaud et kit d’hygiène.'
+              : 'Accueil des sinistrés stabilisé au sec. Soins de confort et soutien moral assurés.',
+            type: hasLogOnScene ? 'milestone' : 'info'
+          },
+          {
+            source: 'Équipe Pompage Protec',
+            text: 'Épuisement des locaux techniques et habitations inondées mené avec succès en liaison avec le SDIS.',
+            type: 'milestone'
+          },
+          {
+            source: 'Vigilance Crues & SIDPC',
+            text: 'Amorçage confirmé de la décrue. Poursuite du nettoyage et sécurisation des habitations. Dispositif en voie de stabilisation.',
+            type: 'success'
+          }
+        ];
+      } else if (isNovi || isCrash) {
+        pool = [
+          {
+            source: 'Médecin Chef PMA',
+            text: 'PMA armé. Équipages Protec intégrés en soutien au brancardage et surveillance continue des Urgences Relatives.',
+            type: 'info'
+          },
+          {
+            source: 'Équipage VPSP Protec',
+            text: 'VPSP engagé en noria d’évacuation : prise en charge d’une victime stabilisée sous surveillance scopée vers le Trauma Center.',
+            type: 'milestone'
+          },
+          {
+            source: 'Officier de Liaison Protec',
+            text: 'Point de situation intermédiaire : traçabilité SINUS assurée et prise en charge psychologique des familles au CAI.',
+            type: 'info'
+          },
+          {
+            source: 'Commandant des Opérations (COS)',
+            text: 'Toutes les victimes ont été évacuées vers les centres hospitaliers. Levée progressive du périmètre de désincarcération.',
+            type: 'success'
+          }
+        ];
+      } else if (isTrain) {
+        pool = [
+          {
+            source: 'Équipage VPSP Protec',
+            text: 'Point sanitaire VPSP ouvert en gare : bilans pour passagers déshydratés ou anxieux, soins de petite traumatologie et suivi.',
+            type: 'milestone'
+          },
+          {
+            source: 'Responsable CHU Protec',
+            text: hasLogOnScene
+              ? 'Lits de camp montés dans le hall de la gare. Distribution de repas et veille rassurante auprès des familles et personnes âgées.'
+              : 'Hall de la gare sécurisé. Ravitaillement et réconfort assurés en continu.',
+            type: hasLogOnScene ? 'milestone' : 'info'
+          },
+          {
+            source: 'Direction de Crise SNCF',
+            text: 'Autocars de substitution en rotation. Fin d’évacuation des voyageurs et retour progressif à la normale.',
+            type: 'success'
+          }
+        ];
+      } else if (isSearch) {
+        pool = [
+          {
+            source: 'Équipe Cyno / Pédestre Protec',
+            text: 'Ratissage méthodique des layons. Liaison permanente avec le PC Gendarmerie et balisage des zones explorées.',
+            type: 'info'
+          },
+          {
+            source: 'Commandement Gendarmerie',
+            text: 'Personne disparue localisée ! Consciente mais désorientée et en légère hypothermie. Équipage VPSP demandé au point de contact.',
+            type: 'milestone'
+          },
+          {
+            source: 'Équipage VPSP Protec',
+            text: 'Victime prise en charge dans le VPSP : réchauffement actif, bilan transmis au SAMU 15 et transport vers les urgences.',
+            type: 'milestone'
+          },
+          {
+            source: 'Commandement Gendarmerie',
+            text: 'Opération de recherche couronnée de succès. Fin de la battue et remerciements aux équipes bénévoles.',
+            type: 'success'
+          }
+        ];
+      } else {
+        pool = [
+          {
+            source: 'Équipage VPSP Protec',
+            text: 'VPSP opérationnel sur zone : bilans de santé, soins d’urgence et surveillance des impliqués coordonnés avec la régulation 15.',
+            type: 'milestone'
+          },
+          {
+            source: 'Commandement Terrain Protec',
+            text: `Point de situation intermédiaire : ${volsOnScene} secouristes en action. Sécurisation, accueil et premiers secours menés avec rigueur.`,
+            type: 'info'
+          },
+          {
+            source: 'Cadre d’Astreinte Protec',
+            text: 'Poursuite de la mission. Anticipez la relève des secouristes pour préserver leur condition physique si la crise se prolonge.',
+            type: 'alert'
+          },
+          {
+            source: 'Coordination Opérationnelle',
+            text: 'Objectifs de secours et de soutien pleinement atteints. Situation stabilisée sur l’ensemble du secteur.',
+            type: 'success'
+          }
+        ];
+      }
     }
 
-    return msgs[step % msgs.length] ? { ...msgs[step % msgs.length], time: timeStr, timestamp: Date.now() } : null;
+    if (!pool || pool.length === 0) return null;
+
+    // Sélection intelligente : trouver le premier message de la phase qui n'a pas encore été envoyé
+    const existingTexts = logs.map(l => (l.text || '').toLowerCase().trim());
+    let selected = pool.find(item => {
+      const t = (item.text || '').toLowerCase().trim();
+      return !existingTexts.includes(t);
+    });
+
+    // Si tous les messages de la phase actuelle ont déjà été envoyés, on émet une ambiance contextuelle sans doublon
+    if (!selected) {
+      if (!hasDeparted) {
+        selected = {
+          source: 'PC de Crise CODIS 18',
+          text: 'Situation toujours en cours sur zone. En attente de la confirmation d’engagement et de départ de vos effectifs Protec.',
+          type: 'info'
+        };
+      } else if (!hasAnyOnScene) {
+        selected = {
+          source: 'Vecteur Protec en transit',
+          text: 'Progression routière en cours vers le lieu du sinistre. Contact maintenu avec le commandement pour ETA précis.',
+          type: 'info'
+        };
+      } else if (!hasVpspOnScene) {
+        selected = {
+          source: 'Chef de Dispositif Protec',
+          text: 'Maintien du dispositif d’accueil et soutien moral sur place. En attente du vecteur sanitaire pour les bilans complémentaires.',
+          type: 'info'
+        };
+      } else {
+        selected = {
+          source: 'Commandement Terrain Protec',
+          text: 'Dispositif pleinement engagé sur le terrain. Surveillance continue des personnes accueillies et appui aux secours publics.',
+          type: 'info'
+        };
+      }
+      if (logs.length > 0 && (logs[0].text || '').toLowerCase().trim() === selected.text.toLowerCase().trim()) {
+        return null;
+      }
+    }
+
+    return {
+      ...selected,
+      time: timeStr,
+      timestamp: Date.now()
+    };
   },
 
   // Résolution finale de la crise par le CODIS
@@ -692,22 +968,21 @@ window.ProtecCriseLogistique = {
     });
 
     if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
-    game.showToast('Ordre de Clôture Reçu !', `Le CODIS annonce la fin de mission pour « ${mission.title} ». Rapatriement des équipes et libération automatique sous peu.`, 'green');
+    game.showToast('Accord COS Reçu !', `Le COS autorise la levée du dispositif pour « ${mission.title} ». Vous pouvez désormais clôturer le dispositif.`, 'green');
     game.saveGame();
     game.renderMissions();
-
-    // Auto-clôture de sécurité après 15 secondes pour garantir la libération des bénévoles et véhicules
-    setTimeout(() => {
-      if (mission && mission.status === 'ongoing' && mission.crisisCanClose) {
-        this.completeCrisisMission(game, mission.id);
-      }
-    }, 15000);
   },
 
   // Effectuer une rotation / relève d'équipage sur le sinistre
   performTeamRotation(game, missionId) {
     const mission = game.missions.find(m => m.id === missionId);
     if (!mission) return;
+
+    const myId = game.player?.id || 'usr_local';
+    if (mission.managerPlayerId && mission.managerPlayerId !== myId) {
+      game.showToast('Commandement Exclusif', `Seul le directeur de crise (${mission.managerPlayerName}) peut ordonner une relève d'équipe.`, 'orange');
+      return;
+    }
 
     // Trouver des bénévoles disponibles et frais au local
     const freshVols = game.volunteers.filter(v => 
@@ -1170,8 +1445,16 @@ window.ProtecCriseLogistique = {
   openCreateRearmamentModal(game) {
     const primaryStation = game.stations[0] || { id: 'station-1', name: 'Antenne Locale' };
     const stockPS = this.getStationStockPS(game, primaryStation.id);
-    const unrearmedVehs = (game.vehicles || []).filter(v => (v.armementLevel !== undefined && v.armementLevel < 100) || v.isRearmed === false || v.needsRearming);
-    const allCandidateVehs = unrearmedVehs.length > 0 ? unrearmedVehs : (game.vehicles || []);
+
+    // Règle métier : Seuls les engins contenant directement du "Matériel PS" (VPSP / Ambulances PS)
+    // sont réarmables en atelier PS au local. Un VTU ne possède pas directement de matériel PS (on réarme ses réassorts séparément).
+    // Tous les engins contenant du Matériel PS sont affichés, même à 100%.
+    const allCandidateVehs = (game.vehicles || []).filter(v => {
+      const t = (v.type || '').toUpperCase();
+      const n = (v.name || '').toUpperCase();
+      if (t === 'VTU' || t === 'VTP' || t === 'VL' || t === 'VLC' || t === 'LOG' || t === 'FOURGON') return false;
+      return t === 'VPSP' || t === 'AMBULANCE' || n.includes('VPSP') || v.hasPsEquipment === true;
+    });
 
     const modalId = 'rearm-workshop-modal';
     let modal = document.getElementById(modalId);
@@ -1214,26 +1497,28 @@ window.ProtecCriseLogistique = {
         </div>
 
         <p class="text-xs text-slate-600 leading-snug">
-          Sélectionnez les véhicules à reconditionner lors de cette mission atelier au local.
-          <br><strong>Barème horaire :</strong> ~1h par VPSP, ~30 min par VTU à charge complète.
+          Sélectionnez les véhicules contenant du matériel PS à reconditionner lors de cette mission atelier au local.
+          <br><strong>Barème horaire :</strong> ~1h par VPSP à charge complète (désinfection et réarmement consommables PS).
         </p>
 
-        <!-- Liste des véhicules à cocher -->
+        <!-- Liste des véhicules à cocher (contenants Matériel PS) -->
         <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
-          ${allCandidateVehs.map(v => {
-            const isVPSP = v.type === 'VPSP';
-            const duration = isVPSP ? 60 : 30;
+          ${allCandidateVehs.length === 0 ? `
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
+              Aucun véhicule sanitaire (VPSP) dans votre antenne. Les VTU sont réarmés via leurs réassorts de lots.
+            </div>
+          ` : allCandidateVehs.map(v => {
+            const duration = 60;
             const armement = v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100);
-            const needs = armement < 100 || v.needsRearming;
+            const needs = armement < 100 || v.needsRearming || v.isRearmed === false;
 
             return `
               <label class="p-3 rounded-2xl border ${needs ? 'bg-amber-50/60 border-amber-200 ring-1 ring-amber-100' : 'bg-white border-slate-200'} flex items-center justify-between gap-3 cursor-pointer hover:border-slate-300 transition">
                 <div class="flex items-center gap-3 min-w-0">
                   <input type="checkbox" name="rearm_veh_cb" value="${v.id}" ${needs ? 'checked' : ''} onchange="window.ProtecCriseLogistique.recalcRearmModalTotals()" class="w-4 h-4 rounded text-pc-blue focus:ring-pc-blue border-slate-300">
                   <div>
-                    <div class="font-black text-slate-900 text-xs flex items-center gap-1.5">
-                      <span>${v.name}</span>
-                      <span class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${isVPSP ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}">${v.type}</span>
+                    <div class="font-black text-slate-900 text-xs">
+                      ${v.name}
                     </div>
                     <div class="text-[10px] text-slate-500 font-semibold">
                       Armement actuel : <strong class="${armement < 100 ? 'text-amber-700' : 'text-emerald-700'}">${armement}%</strong> • Durée estimée : ${duration} min
@@ -1278,7 +1563,7 @@ window.ProtecCriseLogistique = {
     vehIds.forEach(id => {
       const v = allVehs.find(x => x.id === id);
       if (v) {
-        totalMinutes += (v.type === 'VPSP' ? 60 : 30);
+        totalMinutes += 60;
         const armement = v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100);
         totalMissingPS += Math.max(0, 100 - armement);
       }
@@ -1320,7 +1605,7 @@ window.ProtecCriseLogistique = {
     vehIds.forEach(id => {
       const v = allVehs.find(x => x.id === id);
       if (v) {
-        totalMinutes += (v.type === 'VPSP' ? 60 : 30);
+        totalMinutes += 60;
         const armement = v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100);
         totalMissingPS += Math.max(0, 100 - armement);
       }
@@ -1664,6 +1949,8 @@ window.ProtecCriseLogistique = {
       }
     }
 
+    if (!kitMismatchAlert && !hasUnrearmed) return '';
+
     return `
       <div class="space-y-2">
         <!-- Alerte Matériel Requis pour la mission -->
@@ -1697,20 +1984,6 @@ window.ProtecCriseLogistique = {
                 </div>
               `}
             </div>
-          </div>
-        ` : ''}
-
-        <!-- Jauge des places assises -->
-        ${assignedVehs.length > 0 ? `
-          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-            <div class="flex items-center gap-2">
-              <i data-lucide="truck" class="w-4 h-4 text-slate-500"></i>
-              <span class="font-bold text-slate-700">Capacité de transport de l'équipage :</span>
-            </div>
-            <span class="font-black px-2 py-0.5 rounded text-[10px] ${hasEnoughSeats ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800 animate-pulse'}">
-              ${hasEnoughSeats ? `✓ ${totalSeats} places pour ${registeredCount} secouriste(s)` : `⚠️ Manque ${missingSeats} place(s) (${totalSeats}/${registeredCount})`}
-            </span>
-          </div>
         ` : ''}
       </div>
     `;
@@ -1740,14 +2013,17 @@ window.ProtecCriseLogistique = {
 
           if (isManager) {
             return `
-              <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-slate-900 border border-emerald-500/50 shadow-md flex items-center justify-between gap-3 flex-wrap">
+              <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950 via-emerald-900 to-teal-950 border-2 border-emerald-500 shadow-md flex items-center justify-between gap-3 flex-wrap">
                 <div class="flex items-center gap-2.5">
-                  <div class="w-8 h-8 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center font-black">
+                  <div class="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-black shadow-xs">
                     <i data-lucide="shield-check" class="w-4 h-4"></i>
                   </div>
                   <div>
-                    <div class="text-xs font-black text-emerald-300">👑 Vous dirigez cette crise</div>
-                    <p class="text-[10.5px] text-slate-300">Commandement officiel de l'intervention.</p>
+                    <div class="text-xs font-black text-emerald-200 flex items-center gap-1.5">
+                      <i data-lucide="crown" class="w-3.5 h-3.5 text-amber-300"></i>
+                      <span>Commandement Établi • Vous dirigez cette crise</span>
+                    </div>
+                    <p class="text-[10.5px] text-emerald-100/80">Vous assurez la direction des opérations, le déploiement et la logistique.</p>
                   </div>
                 </div>
                 <button 
@@ -1761,16 +2037,23 @@ window.ProtecCriseLogistique = {
             `;
           } else if (hasOtherManager) {
             return `
-              <div class="p-3 rounded-2xl bg-indigo-950/60 border border-indigo-500/40 shadow-xs flex items-center justify-between gap-2.5">
-                <div class="flex items-center gap-2">
-                  <div class="w-8 h-8 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center">
+              <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 border-2 border-emerald-600/70 shadow-md flex items-center justify-between gap-3 flex-wrap">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-xl bg-emerald-600/30 text-emerald-400 flex items-center justify-center font-black">
                     <i data-lucide="user-check" class="w-4 h-4"></i>
                   </div>
                   <div>
-                    <div class="text-xs font-black text-indigo-300">Commandé par : ${mission.managerPlayerName || 'Directeur Allié'}</div>
-                    <p class="text-[10.5px] text-slate-400">Vous intervenez en renfort opérationnel.</p>
+                    <div class="text-xs font-black text-emerald-300 flex items-center gap-1.5">
+                      <i data-lucide="lock" class="w-3.5 h-3.5 text-emerald-400"></i>
+                      <span>Commandement Assuré par : ${mission.managerPlayerName || 'Directeur Allié'} (Non disponible)</span>
+                    </div>
+                    <p class="text-[10.5px] text-slate-300">Ce directeur coordonne les opérations. Vous ne pouvez intervenir qu'en répondant aux demandes de renfort.</p>
                   </div>
                 </div>
+                <span class="px-3 py-1.5 rounded-xl bg-emerald-900/80 text-emerald-200 border border-emerald-500/50 text-[11px] font-bold flex items-center gap-1.5">
+                  <i data-lucide="shield" class="w-3.5 h-3.5"></i>
+                  <span>En appui renfort</span>
+                </span>
               </div>
             `;
           } else {
@@ -1781,7 +2064,10 @@ window.ProtecCriseLogistique = {
                     <i data-lucide="alert-triangle" class="w-4 h-4"></i>
                   </div>
                   <div>
-                    <div class="text-xs font-black text-red-200">⚠️ Commandement de Crise Vacant</div>
+                    <div class="text-xs font-black text-red-200 flex items-center gap-1.5">
+                      <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-red-400"></i>
+                      <span>Commandement de Crise Vacant</span>
+                    </div>
                     <p class="text-[10.5px] text-slate-300">Prenez la direction de l'intervention.</p>
                   </div>
                 </div>
@@ -1816,24 +2102,78 @@ window.ProtecCriseLogistique = {
           </div>
         </div>
 
-        <!-- Boutons de Commandement : Relève d'Équipe & Clôture -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button onclick="window.ProtecCriseLogistique.performTeamRotation(window.game, '${mission.id}')" class="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-pc-blue to-indigo-600 hover:brightness-110 text-white text-xs font-black shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
-            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-            <span>🔄 Relève d'Équipe (Rotation)</span>
-          </button>
-          ${mission.crisisCanClose ? `
-            <button onclick="window.ProtecCriseLogistique.completeCrisisMission(window.game, '${mission.id}')" class="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white text-xs font-black shadow-lg animate-pulse transition flex items-center justify-center gap-1.5 cursor-pointer">
-              <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-              <span>🏁 Clôturer le Dispositif (Accord COS)</span>
-            </button>
-          ` : `
-            <button onclick="window.game.evacuateToNearestHospital('${mission.id}', '${mission.assignedCrew?.vehicles[0]?.id}')" class="py-2.5 px-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-black shadow transition flex items-center justify-center gap-1.5 cursor-pointer">
-              <i data-lucide="siren" class="w-4 h-4"></i>
-              <span>Évacuer Victime CH (Statut 4)</span>
-            </button>
-          `}
-        </div>
+        <!-- ACTIONS OPÉRATIONNELLES SELON LA GOUVERNANCE -->
+        ${(() => {
+          const myId = game.player?.id || 'usr_local';
+          const isManager = (mission.managerPlayerId === myId);
+          const hasOtherManager = (mission.managerPlayerId && !isManager);
+
+          if (hasOtherManager) {
+            // Un autre joueur a la main : afficher uniquement la réponse aux demandes de renfort
+            const missionRenforts = (game.renforts || []).filter(r => (r.missionId === mission.id || r.crisisId === mission.id) && r.status === 'open');
+            if (missionRenforts.length > 0) {
+              return `
+                <div class="p-3.5 rounded-2xl bg-indigo-50/90 dark:bg-indigo-950/50 border-2 border-indigo-400 dark:border-indigo-500/50 space-y-2.5 shadow-sm">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black uppercase text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                      <i data-lucide="radio" class="w-4 h-4 text-indigo-600 animate-pulse"></i>
+                      <span>Demandes de Renfort en Attente (${missionRenforts.length})</span>
+                    </span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-200 text-indigo-900 dark:bg-indigo-900/80 dark:text-indigo-200">Appui Sollicité</span>
+                  </div>
+                  <div class="space-y-2">
+                    ${missionRenforts.map(r => `
+                      <div class="p-3 rounded-xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-slate-700 flex items-center justify-between gap-3 shadow-2xs">
+                        <div class="min-w-0 flex-1">
+                          <strong class="text-xs font-black text-slate-900 dark:text-white block truncate">${r.title || 'Appel à renfort'}</strong>
+                          <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug mt-0.5">${r.desc || r.unitRequested || 'Moyens sollicités pour la crise'}</p>
+                          <span class="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 mt-1 block">Besoin : ${r.unitRequested || 'Équipage VPSP / Secouristes'}</span>
+                        </div>
+                        <button onclick="window.game.openEngageRenfortModal('${r.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-indigo-600 hover:brightness-110 text-white shadow-md active:scale-95 transition flex items-center gap-1.5 cursor-pointer shrink-0">
+                          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                          <span>Détacher Renfort</span>
+                        </button>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              `;
+            } else {
+              return `
+                <div class="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-slate-900 border border-emerald-300 dark:border-slate-700 text-center space-y-1">
+                  <div class="flex items-center justify-center gap-2 text-xs font-bold text-emerald-900 dark:text-emerald-300">
+                    <i data-lucide="shield" class="w-4 h-4 text-emerald-600"></i>
+                    <span>Soutien Opérationnel • Aucune demande de renfort en attente</span>
+                  </div>
+                  <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                    Le directeur aux commandes (<strong>${mission.managerPlayerName || 'Directeur Allié'}</strong>) n'a pas émis de demande de renfort pour le moment. Vous recevrez une notification dès qu'un appui sera sollicité.
+                  </p>
+                </div>
+              `;
+            }
+          }
+
+          // Le joueur local a la main (ou la crise est vacante) : afficher les commandes de gestion
+          return `
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button onclick="window.ProtecCriseLogistique.performTeamRotation(window.game, '${mission.id}')" class="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-pc-blue to-indigo-600 hover:brightness-110 text-white text-xs font-black shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                <span>Relève d'Équipe (Rotation)</span>
+              </button>
+              ${mission.crisisCanClose ? `
+                <button onclick="window.ProtecCriseLogistique.completeCrisisMission(window.game, '${mission.id}')" class="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white text-xs font-black shadow-lg animate-pulse transition flex items-center justify-center gap-1.5 cursor-pointer">
+                  <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                  <span>Clôturer le Dispositif (Accord COS)</span>
+                </button>
+              ` : `
+                <button onclick="window.game.evacuateToNearestHospital('${mission.id}', '${mission.assignedCrew?.vehicles[0]?.id}')" class="py-2.5 px-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-black shadow transition flex items-center justify-center gap-1.5 cursor-pointer">
+                  <i data-lucide="siren" class="w-4 h-4"></i>
+                  <span>Évacuer Victime CH (Statut 4)</span>
+                </button>
+              `}
+            </div>
+          `;
+        })()}
 
         <!-- Suivi Énergie, Fatigue et Stress des Équipiers en Direct -->
         <div class="space-y-2">
@@ -1997,6 +2337,12 @@ window.ProtecCriseLogistique = {
     if (!game) game = window.game;
     const mission = (game.missions || []).find(m => m.id === missionId);
     if (!mission) return;
+
+    const myId = game.player?.id || 'usr_local';
+    if (mission.managerPlayerId && mission.managerPlayerId !== myId) {
+      game.showToast('Commandement Exclusif', `Seul le directeur de crise (${mission.managerPlayerName}) peut clôturer cette intervention.`, 'orange');
+      return;
+    }
 
     // Délégation impérative au gestionnaire global pour assurer le retour routier physique des véhicules et équipages
     if (typeof game.completeMission === 'function') {
@@ -2693,7 +3039,7 @@ window.ProtecCriseLogistique = {
     this.logCrisisRadio(crisis, 'Commandement Opérationnel', `PRISE DE COMMANDEMENT : Le Directeur ${myName} prend officiellement la direction des opérations du PC Crise.`, 'success');
 
     game.showToast(
-      '🛡️ Commandement Établi',
+      'Commandement Établi',
       `Vous assurez désormais la direction des opérations sur « ${crisis.titre || crisis.title} ».`,
       'green',
       { type: 'crise', id: crisis.id }
@@ -2703,6 +3049,9 @@ window.ProtecCriseLogistique = {
     this.refreshPcCriseModalIfOpen(game);
     game.renderMissions();
     game.updateStatsUI();
+    if (game.selectedMissionId === crisis.id) {
+      game.openMissionDetails(crisis.id);
+    }
   },
 
   /**
@@ -2728,7 +3077,7 @@ window.ProtecCriseLogistique = {
     this.logCrisisRadio(crisis, 'Commandement Opérationnel', `PASSATION DE COMMANDEMENT : Le Directeur ${prevName} laisse la main. Le poste de commandement est vacant et disponible pour tout directeur du département.`, 'ordre');
 
     game.showToast(
-      '🤝 Commandement Cédé',
+      'Commandement Cédé',
       'Vous avez passé la main sur la gestion de cette crise. Un autre directeur peut désormais la reprendre.',
       'blue'
     );
@@ -2737,6 +3086,9 @@ window.ProtecCriseLogistique = {
     this.refreshPcCriseModalIfOpen(game);
     game.renderMissions();
     game.updateStatsUI();
+    if (game.selectedMissionId === crisis.id) {
+      game.openMissionDetails(crisis.id);
+    }
   },
 
   /**
@@ -3411,6 +3763,12 @@ window.ProtecCriseLogistique = {
     const crisis = (game.activeCrises || []).find(c => c.id === crisisId);
     if (!crisis) return;
 
+    const myId = game.player?.id || 'usr_local';
+    if (crisis.managerPlayerId && crisis.managerPlayerId !== myId) {
+      game.showToast('Commandement Exclusif', `Seul le directeur de crise (${crisis.managerPlayerName}) peut mobiliser les effectifs.`, 'orange');
+      return;
+    }
+
     crisis.mobilisation.deltaMaxMinutes = deltaMax;
     crisis.mobilisation.mode = mode;
 
@@ -3723,16 +4081,17 @@ window.ProtecCriseLogistique = {
 
               if (isManager) {
                 return `
-                  <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/80 via-slate-850 to-slate-900 border border-emerald-500/40 shadow-md flex items-center justify-between gap-3 flex-wrap">
+                  <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950 via-emerald-900 to-teal-950 border-2 border-emerald-500 shadow-md flex items-center justify-between gap-3 flex-wrap">
                     <div class="flex items-center gap-2.5">
-                      <div class="w-9 h-9 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center font-black">
+                      <div class="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-black shadow-xs">
                         <i data-lucide="shield-check" class="w-5 h-5"></i>
                       </div>
                       <div>
-                        <div class="text-xs font-black text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <span>👑 Vous dirigez cette crise (Commandement Officiel)</span>
+                        <div class="text-xs font-black text-emerald-200 uppercase tracking-wider flex items-center gap-1.5">
+                          <i data-lucide="crown" class="w-3.5 h-3.5 text-amber-300"></i>
+                          <span>Vous dirigez cette crise (Commandement Officiel)</span>
                         </div>
-                        <p class="text-[11px] text-slate-300">Vous arbitrez le déploiement des moyens et l'engagement des phases.</p>
+                        <p class="text-[11px] text-emerald-100/80">Vous arbitrez le déploiement des moyens et l'engagement des phases.</p>
                       </div>
                     </div>
                     <button 
@@ -3746,20 +4105,22 @@ window.ProtecCriseLogistique = {
                 `;
               } else if (hasOtherManager) {
                 return `
-                  <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-950/80 via-slate-850 to-slate-900 border border-indigo-500/40 shadow-md flex items-center justify-between gap-3 flex-wrap">
+                  <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 border-2 border-emerald-600/70 shadow-md flex items-center justify-between gap-3 flex-wrap">
                     <div class="flex items-center gap-2.5">
-                      <div class="w-9 h-9 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center font-black">
+                      <div class="w-9 h-9 rounded-xl bg-emerald-600/30 text-emerald-400 flex items-center justify-center font-black">
                         <i data-lucide="user-check" class="w-5 h-5"></i>
                       </div>
                       <div>
-                        <div class="text-xs font-black text-indigo-300 uppercase tracking-wider">
-                          Commandement assuré par : <strong>${crisis.managerPlayerName || 'Directeur Allié'}</strong>
+                        <div class="text-xs font-black text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <i data-lucide="lock" class="w-3.5 h-3.5 text-emerald-400"></i>
+                          <span>Commandement assuré par : <strong>${crisis.managerPlayerName || 'Directeur Allié'}</strong> (Non disponible)</span>
                         </div>
-                        <p class="text-[11px] text-slate-400">Ce directeur coordonne le PC Crise. Vous pouvez engager vos vecteurs et secouristes en appui.</p>
+                        <p class="text-[11px] text-slate-300">Ce directeur coordonne le PC Crise. Vous ne pouvez intervenir qu'en répondant aux demandes de renfort.</p>
                       </div>
                     </div>
-                    <span class="px-3 py-1 rounded-xl bg-indigo-900/60 text-indigo-200 border border-indigo-700/60 text-xs font-bold">
-                      En appui opérationnel
+                    <span class="px-3 py-1.5 rounded-xl bg-emerald-900/80 text-emerald-200 border border-emerald-500/50 text-xs font-bold flex items-center gap-1.5">
+                      <i data-lucide="shield" class="w-3.5 h-3.5"></i>
+                      <span>En appui renfort</span>
                     </span>
                   </div>
                 `;
@@ -3775,7 +4136,8 @@ window.ProtecCriseLogistique = {
                       </div>
                       <div>
                         <div class="text-xs font-black text-red-200 uppercase tracking-wider flex items-center gap-1.5">
-                          <span>⚠️ Poste de Commandement Vacant</span>
+                          <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-red-400"></i>
+                          <span>Poste de Commandement Vacant</span>
                           ${secondsLeft !== null ? `<span class="px-2 py-0.2 rounded bg-red-800 text-white text-[10px] font-mono">Chrono : ${secondsLeft}s</span>` : ''}
                         </div>
                         <p class="text-[11px] text-slate-300">
@@ -3820,43 +4182,94 @@ window.ProtecCriseLogistique = {
               </p>
             </div>
 
-            <!-- Liste des Sous-Missions de la Phase -->
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <h4 class="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <i data-lucide="truck" class="w-4 h-4 text-sky-400"></i>
-                  Vecteurs & Dispositifs Requis (${(currentPhase.sous_missions || []).length})
-                </h4>
-                <span class="text-[11px] text-slate-400">Cliquez pour armer et projeter</span>
-              </div>
+            <!-- SECTION ACTIONS / RENFORTS SELON LA GOUVERNANCE -->
+            ${(() => {
+              const myId = game.player?.id || 'usr_local';
+              const hasOtherManager = Boolean(crisis.managerPlayerId && crisis.managerPlayerId !== myId);
+              if (hasOtherManager) {
+                const missionRenforts = (game.renforts || []).filter(r => (r.missionId === crisis.id || r.crisisId === crisis.id) && r.status === 'open');
+                return `
+                  <div class="p-4 rounded-2xl bg-emerald-950/20 border-2 border-emerald-500/50 space-y-3">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                      <h4 class="text-xs font-black text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+                        Appui Inter-Antennes • Demandes de Renfort
+                      </h4>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-900/80 text-emerald-200 border border-emerald-600/50">
+                        ${missionRenforts.length} demande(s) en attente
+                      </span>
+                    </div>
+                    ${missionRenforts.length > 0 ? `
+                      <div class="space-y-2">
+                        ${missionRenforts.map(r => `
+                          <div class="p-3 rounded-xl bg-slate-900/90 border border-emerald-500/40 flex items-center justify-between gap-2 shadow-xs">
+                            <div>
+                              <div class="font-black text-white text-xs flex items-center gap-1.5">
+                                <i data-lucide="radio" class="w-3.5 h-3.5 text-pc-orange"></i>
+                                <span>${r.type === 'equipage' ? 'Renfort Équipage Secouriste' : (r.type === 'materiel' ? 'Renfort Matériel / Lot' : 'Renfort Vecteur')}</span>
+                              </div>
+                              <p class="text-[11px] text-slate-300 mt-0.5">${r.description || `Besoin : ${r.neededCount || 1} bénévole(s)`}</p>
+                            </div>
+                            <button onclick="window.game.openEngageRenfortModal('${r.id}')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow transition flex items-center gap-1 shrink-0 cursor-pointer">
+                              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                              <span>Détacher Renfort</span>
+                            </button>
+                          </div>
+                        `).join('')}
+                      </div>
+                    ` : `
+                      <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-700 text-center space-y-1">
+                        <div class="text-xs font-bold text-slate-300">Aucune demande de renfort en attente</div>
+                        <p class="text-[11px] text-slate-400">
+                          Le directeur aux commandes (${crisis.managerPlayerName || 'Directeur Allié'}) n'a pas émis de demande de renfort pour le moment.
+                        </p>
+                      </div>
+                    `}
+                  </div>
+                `;
+              }
 
-              ${(currentPhase.sous_missions || []).map(sub => this.renderSubMissionCard(game, crisis, sub)).join('')}
-            </div>
+              // Le joueur local a la main (ou crise vacante) : afficher les contrôles d'armement et mobilisation
+              return `
+                <!-- Liste des Sous-Missions de la Phase -->
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <i data-lucide="truck" class="w-4 h-4 text-sky-400"></i>
+                      Vecteurs & Dispositifs Requis (${(currentPhase.sous_missions || []).length})
+                    </h4>
+                    <span class="text-[11px] text-slate-400">Cliquez pour armer et projeter</span>
+                  </div>
 
-            <!-- Tableau de Bord Mobilisation Rapide -->
-            <div class="p-4 rounded-2xl bg-slate-800/60 border border-slate-700 space-y-3">
-              <div class="flex items-center justify-between">
-                <h4 class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <i data-lucide="users" class="w-4 h-4 text-emerald-400"></i>
-                  Mobilisation & Filtrage Delta Domicile-Base
-                </h4>
-                <span class="text-[10px] text-slate-400">Délai d'accès maximal</span>
-              </div>
+                  ${(currentPhase.sous_missions || []).map(sub => this.renderSubMissionCard(game, crisis, sub)).join('')}
+                </div>
 
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="text-xs text-slate-300 font-bold">Filtre Delta :</span>
-                ${[15, 30, 45, 60].map(delta => `
-                  <button onclick="window.ProtecCriseLogistique.mobilizeVolunteers(window.game, '${crisis.id}', ${delta}, 'ciblee')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition ${crisis.mobilisation.deltaMaxMinutes === delta ? 'bg-sky-500 text-white shadow' : 'bg-slate-700/80 text-slate-300 hover:bg-slate-700'}">
-                    ≤ ${delta} min
-                  </button>
-                `).join('')}
-                
-                <button onclick="window.ProtecCriseLogistique.mobilizeVolunteers(window.game, '${crisis.id}', 60, 'generale')" class="ml-auto px-3.5 py-1.5 rounded-xl text-xs font-black bg-red-600 hover:bg-red-500 text-white shadow-lg transition flex items-center gap-1.5">
-                  <i data-lucide="bell" class="w-3.5 h-3.5"></i>
-                  Mobilisation Générale
-                </button>
-              </div>
-            </div>
+                <!-- Tableau de Bord Mobilisation Rapide -->
+                <div class="p-4 rounded-2xl bg-slate-800/60 border border-slate-700 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <i data-lucide="users" class="w-4 h-4 text-emerald-400"></i>
+                      Mobilisation & Filtrage Delta Domicile-Base
+                    </h4>
+                    <span class="text-[10px] text-slate-400">Délai d'accès maximal</span>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs text-slate-300 font-bold">Filtre Delta :</span>
+                    ${[15, 30, 45, 60].map(delta => `
+                      <button onclick="window.ProtecCriseLogistique.mobilizeVolunteers(window.game, '${crisis.id}', ${delta}, 'ciblee')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition ${crisis.mobilisation.deltaMaxMinutes === delta ? 'bg-sky-500 text-white shadow' : 'bg-slate-700/80 text-slate-300 hover:bg-slate-700'}">
+                        ≤ ${delta} min
+                      </button>
+                    `).join('')}
+                    
+                    <button onclick="window.ProtecCriseLogistique.mobilizeVolunteers(window.game, '${crisis.id}', 60, 'generale')" class="ml-auto px-3.5 py-1.5 rounded-xl text-xs font-black bg-red-600 hover:bg-red-500 text-white shadow-lg transition flex items-center gap-1.5">
+                      <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+                      Mobilisation Générale
+                    </button>
+                  </div>
+                </div>
+              `;
+            })()}
 
           </div>
 
@@ -4028,6 +4441,12 @@ window.ProtecCriseLogistique = {
     if (!game) game = window.game;
     const crisis = (game.activeCrises || []).find(c => c.id === crisisId);
     if (!crisis) return;
+
+    const myId = game.player?.id || 'usr_local';
+    if (crisis.managerPlayerId && crisis.managerPlayerId !== myId) {
+      game.showToast('Commandement Exclusif', `Seul le directeur de crise (${crisis.managerPlayerName}) peut armer les sous-missions.`, 'orange');
+      return;
+    }
 
     const currentPhase = crisis.phases[crisis.currentPhaseIndex];
     if (!currentPhase) return;

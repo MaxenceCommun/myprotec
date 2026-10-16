@@ -2810,6 +2810,9 @@ window.ProtecLogistique = {
       return v.isBicycle || v.type === 'VELO' || (v.name || '').toLowerCase().includes('vélo') || (v.name || '').toLowerCase().includes('vtt');
     });
 
+    // S'il n'y a aucun véhicule logistique ni vélo, ne pas encombrer l'écran
+    if (logVehicles.length === 0 && bicycles.length === 0) return '';
+
     // Évaluation du transport des vélos
     const bikeTransportCheck = this.checkBicycleTransport(mission, game);
 
@@ -2978,15 +2981,23 @@ window.ProtecLogistique = {
     this.normalizeVehicle(veh);
     const types = Array.isArray(veh.types) ? veh.types : ['TP'];
 
+    const iconMap = {
+      LOG: 'package',
+      PS: 'stethoscope',
+      VPSP: 'ambulance',
+      TP: 'users'
+    };
+
     return `
       <div class="inline-flex items-center gap-1 flex-wrap">
         ${types.map(code => {
           const cap = this.CAPACITIES[code] || { code: code, label: code, badgeClass: 'bg-slate-100 text-slate-800 border-slate-300' };
           const extraInfo = (code === 'LOG') ? ` (${veh.capacity_log || 0} slots)` : '';
+          const iconName = iconMap[code] || 'tag';
           return `
-            <span class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border shadow-2xs ${cap.badgeClass}" title="${cap.label} : ${cap.desc}">
-              <span>${cap.icon || '🏷️'}</span>
-              <span class="ml-1 font-mono">${code}${extraInfo}</span>
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border shadow-2xs ${cap.badgeClass}" title="${cap.label} : ${cap.desc}">
+              <i data-lucide="${iconName}" class="w-3 h-3"></i>
+              <span class="font-mono">${code}${extraInfo}</span>
             </span>
           `;
         }).join('')}

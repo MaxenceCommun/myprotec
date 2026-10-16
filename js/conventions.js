@@ -8,6 +8,27 @@
  */
 
 window.ProtecConventions = {
+  isConventionInCooldown(conv, clock) {
+    if (!conv || !conv.cooldownUntilDate) return false;
+    if (!clock) return false;
+    const c = conv.cooldownUntilDate;
+    if (clock.year < c.year) return true;
+    if (clock.year > c.year) return false;
+    if (clock.month < c.month) return true;
+    if (clock.month > c.month) return false;
+    return clock.day < c.day;
+  },
+
+  getConventionCooldownRemainingText(conv, clock) {
+    if (!this.isConventionInCooldown(conv, clock)) return '';
+    const c = conv.cooldownUntilDate;
+    const currentDays = (clock.year * 365) + (clock.month * 30) + clock.day;
+    const targetDays = (c.year * 365) + (c.month * 30) + c.day;
+    const diffDays = Math.max(1, targetDays - currentDays);
+    const weeks = Math.ceil(diffDays / 7);
+    return `${weeks} sem. (${diffDays} j)`;
+  },
+
   formatRequestDate(conv) {
     if (!conv) return '';
     if (conv.lastRequestDate) return conv.lastRequestDate;
@@ -410,12 +431,24 @@ window.ProtecConventions = {
                     Décliner
                   </button>
                 </div>
-              ` : `
-                <button onclick="window.game.requestSamuConvention()" class="w-full px-3.5 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
-                  <span>📑</span>
-                  <span>${(game.samuConvention?.requestStatus === 'rejected' || game.samuConvention?.terminatedByAuthority) ? 'Renouveler la Demande au SAMU 15' : 'Déposer une Demande de Conventionnement SAMU 15'}</span>
-                </button>
-              `}
+              ` : (() => {
+                const isInCooldown = this.isConventionInCooldown(game.samuConvention, game.clock);
+                const cooldownText = this.getConventionCooldownRemainingText(game.samuConvention, game.clock);
+                if (isInCooldown) {
+                  return `
+                    <button disabled class="w-full px-3.5 py-1.5 rounded-xl bg-slate-100 border border-slate-300 text-slate-500 font-bold text-xs cursor-not-allowed flex items-center justify-center gap-1.5" title="Moratoire imposé par le SAMU 15 suite à rupture">
+                      <span>⏳</span>
+                      <span>Moratoire : carence ${cooldownText}</span>
+                    </button>
+                  `;
+                }
+                return `
+                  <button onclick="window.game.requestSamuConvention()" class="w-full px-3.5 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
+                    <span>📑</span>
+                    <span>${(game.samuConvention?.requestStatus === 'rejected' || game.samuConvention?.terminatedByAuthority) ? 'Renouveler la Demande au SAMU 15' : 'Déposer une Demande de Conventionnement SAMU 15'}</span>
+                  </button>
+                `;
+              })()}
             </div>
           </div>
 
@@ -514,12 +547,24 @@ window.ProtecConventions = {
                   <span>✍️</span>
                   <span>Convention Validée : Parapher & Activer (+350 €)</span>
                 </button>
-              ` : `
-                <button onclick="window.game.requestSdisConvention()" class="w-full px-3.5 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
-                  <span>📑</span>
-                  <span>${game.sdisConvention?.requestStatus === 'rejected' ? `Renouveler la Demande (${pompiersAuth.shortName})` : `Déposer une Demande de Conventionnement ${pompiersAuth.shortName}`}</span>
-                </button>
-              `}
+              ` : (() => {
+                const isInCooldown = this.isConventionInCooldown(game.sdisConvention, game.clock);
+                const cooldownText = this.getConventionCooldownRemainingText(game.sdisConvention, game.clock);
+                if (isInCooldown) {
+                  return `
+                    <button disabled class="w-full px-3.5 py-1.5 rounded-xl bg-slate-100 border border-slate-300 text-slate-500 font-bold text-xs cursor-not-allowed flex items-center justify-center gap-1.5" title="Moratoire suite à rupture de convention">
+                      <span>⏳</span>
+                      <span>Moratoire : carence ${cooldownText}</span>
+                    </button>
+                  `;
+                }
+                return `
+                  <button onclick="window.game.requestSdisConvention()" class="w-full px-3.5 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
+                    <span>📑</span>
+                    <span>${game.sdisConvention?.requestStatus === 'rejected' ? `Renouveler la Demande (${pompiersAuth.shortName})` : `Déposer une Demande de Conventionnement ${pompiersAuth.shortName}`}</span>
+                  </button>
+                `;
+              })()}
             </div>
           </div>
 

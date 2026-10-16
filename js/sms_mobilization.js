@@ -8,7 +8,7 @@ window.ProtecSmsMobilization = {
   CONSIGNES: {
     base_immediat: {
       id: 'base_immediat',
-      label: '⚡ Ralliement IMMÉDIAT à la base',
+      label: 'Ralliement IMMÉDIAT à la base',
       shortLabel: 'Départ immédiat vers la base',
       badgeClass: 'bg-red-600 text-white animate-pulse',
       icon: 'zap',
@@ -17,7 +17,7 @@ window.ProtecSmsMobilization = {
     },
     base_horaire: {
       id: 'base_horaire',
-      label: '⏱️ Rendez-vous à la base à heure précise',
+      label: 'Rendez-vous à la base à heure précise',
       shortLabel: 'RDV base à heure fixe',
       badgeClass: 'bg-indigo-600 text-white',
       icon: 'clock',
@@ -26,7 +26,7 @@ window.ProtecSmsMobilization = {
     },
     attente_domicile: {
       id: 'attente_domicile',
-      label: '🏠 Attendre à domicile en alerte (Dispo domicile)',
+      label: 'Attendre à domicile en alerte (Dispo domicile)',
       shortLabel: 'En veille à domicile',
       badgeClass: 'bg-blue-600 text-white',
       icon: 'home',
@@ -35,7 +35,7 @@ window.ProtecSmsMobilization = {
     },
     attente_appel: {
       id: 'attente_appel',
-      label: '📞 Attendre l\'appel direct de l\'astreinte',
+      label: 'Attendre l\'appel direct de l\'astreinte',
       shortLabel: 'Attente appel astreinte',
       badgeClass: 'bg-amber-600 text-white',
       icon: 'phone-call',
@@ -44,13 +44,24 @@ window.ProtecSmsMobilization = {
     },
     attente_consignes: {
       id: 'attente_consignes',
-      label: '⏳ Attendre consignes complémentaires (Évolution)',
+      label: 'Attendre consignes complémentaires (Évolution)',
       shortLabel: 'Attente consignes',
       badgeClass: 'bg-slate-700 text-white',
       icon: 'help-circle',
       smsText: 'Situation évolutive. Merci d\'indiquer votre créneau, consignes définitives à suivre.',
       volunteerReply: 'Bien reçu. En veille à l\'écoute des prochaines consignes opérationnelles.'
     }
+  },
+
+  // Objectifs & Missions terrain sélectionnables par choix
+  MISSION_OBJECTIVES: {
+    pma: { id: 'pma', label: 'Poste Médical Avancé (PMA)', text: 'Armement Poste Médical Avancé (PMA) et prise en charge des victimes', icon: 'stethoscope' },
+    evac: { id: 'evac', label: 'Évacuation & Noria Sanitaire', text: 'Noria d\'évacuation sanitaire VPSP vers les Urgences CHU', icon: 'ambulance' },
+    cai: { id: 'cai', label: 'Centre Accueil Impliqués (CAI)', text: 'Ouverture Centre d\'Accueil des Impliqués (CAI) et soutien médico-psychologique', icon: 'users' },
+    heberg: { id: 'heberg', label: 'Hébergement d\'Urgence (CHU)', text: 'Mise en place d\'un Centre d\'Hébergement d\'Urgence (CHU) et lits de camp', icon: 'bed' },
+    ravitaillement: { id: 'ravitaillement', label: 'Ravitaillement & Vivres', text: 'Distribution d\'eau, vivres et soutien matériel aux sinistrés', icon: 'coffee' },
+    logistique: { id: 'logistique', label: 'Éclairage & Soutien Log', text: 'Éclairage autonome, groupes électrogènes et pompage de secteur', icon: 'package' },
+    dps: { id: 'dps', label: 'Poste de Secours & Patrouilles', text: 'Poste de secours prévisionnel et surveillance par patrouilles binômes', icon: 'shield-check' }
   },
 
   // Profils / Compétences ciblées
@@ -85,14 +96,16 @@ window.ProtecSmsMobilization = {
       whatHappened = `Déclenchement d'urgence SAMU 15 / SDIS : ${mission.title}`;
     }
 
-    let pcMissions = 'Secours à personnes, bilans et prise en charge des victimes.';
-    if (isCrisis) {
-      pcMissions = 'Armement Poste Médical Avancé (PMA), évacuations et soutien des populations sinistrées.';
-    } else if (isMaraude) {
-      pcMissions = 'Tournée de maraude sociale, écoute active, distribution de couvertures et orientation 115.';
+    let defaultObjectiveKeys = ['pma', 'evac'];
+    if (isMaraude) {
+      defaultObjectiveKeys = ['cai', 'ravitaillement'];
     } else if (isPrealert) {
-      pcMissions = 'Pré-positionnement des agrès, reconnaissance et veille opérationnelle renforcée.';
+      defaultObjectiveKeys = ['pma', 'logistique'];
+    } else if (!isCrisis && !isUrgent) {
+      defaultObjectiveKeys = ['dps'];
     }
+
+    const pcMissions = defaultObjectiveKeys.map(k => this.MISSION_OBJECTIVES[k]?.text).filter(Boolean).join(' • ');
 
     let defaultConsigne = 'attente_domicile';
     if (isCrisis || (isUrgent && !isPrealert)) {
@@ -120,6 +133,7 @@ window.ProtecSmsMobilization = {
     return {
       whatHappened,
       pcMissions,
+      defaultObjectiveKeys,
       consigne: defaultConsigne,
       rdvTime: suggestedRdvTime,
       requiredSkill: (isCrisis || isUrgent) ? 'chauffeur' : 'tous',
@@ -127,7 +141,7 @@ window.ProtecSmsMobilization = {
     };
   },
 
-  // Génère le texte brut du SMS à partir de la configuration
+  // Génère le texte brut du SMS à partir de la configuration (sans emojis superflus)
   generateSmsBody(config) {
     const consigneObj = this.CONSIGNES[config.consigne] || this.CONSIGNES.attente_domicile;
     const skillLabel = this.SKILL_PROFILES[config.requiredSkill]?.label || 'Tous profils';
@@ -138,10 +152,10 @@ window.ProtecSmsMobilization = {
     }
 
     return `[PROTECTION CIVILE - ALERTE MISSION]\n` +
-      `📍 SITUATION : ${config.whatHappened}\n` +
-      `🛡️ MISSION PC : ${config.pcMissions}\n` +
-      `👥 BESOIN : ${config.targetCount} secouriste(s) [Profil : ${skillLabel}]\n` +
-      `⚠️ CONSIGNES : ${consigneDetail}\n` +
+      `SITUATION : ${config.whatHappened}\n` +
+      `MISSIONS PC : ${config.pcMissions}\n` +
+      `EFFECTIFS : ${config.targetCount} secouriste(s) [Profil : ${skillLabel}]\n` +
+      `CONSIGNES : ${consigneDetail}\n` +
       `\nRépondez "1" (DISPO) ou "2" (INDISPO).`;
   },
 
@@ -149,6 +163,13 @@ window.ProtecSmsMobilization = {
   openSmsModal(game, missionId, isUpdate = false) {
     const mission = game.missions.find(m => m.id === missionId);
     if (!mission) return;
+
+    const isCrisis = (mission.type === 'crise' || mission.isCrisis);
+    const myId = game.player?.id || 'usr_local';
+    if (isCrisis && mission.managerPlayerId && mission.managerPlayerId !== myId) {
+      game.showToast('Commandement Exclusif', `Seul le directeur de crise (${mission.managerPlayerName}) peut composer ou modifier les alertes SMS.`, 'orange');
+      return;
+    }
 
     const modal = document.getElementById('main-modal');
     const title = document.getElementById('modal-title');
@@ -168,6 +189,11 @@ window.ProtecSmsMobilization = {
       targetCount: defaults.targetCount
     };
 
+    // Objectifs sélectionnés actuels
+    this._currentObjectives = existing.selectedObjectives 
+      ? [...existing.selectedObjectives] 
+      : [...(defaults.defaultObjectiveKeys || ['pma', 'evac'])];
+
     const registeredCount = (mission.registeredVolunteers || []).length;
     const availableVols = game.volunteers.filter(v => 
       !mission.registeredVolunteers.includes(v.id) &&
@@ -175,11 +201,22 @@ window.ProtecSmsMobilization = {
       !v.isBurnout
     );
 
-    title.textContent = isUpdate ? '📱 Évolution de Situation - Mise à Jour des Consignes' : '📱 Composition & Diffusion SMS d\'Alerte';
+    title.textContent = isUpdate ? 'Évolution de Situation - Mise à Jour des Consignes' : 'Composition & Diffusion SMS d\'Alerte';
     subtitle.textContent = isUpdate 
       ? `Transmettez les nouveaux ordres aux ${registeredCount} secouriste(s) déjà mobilisé(s) et/ou recrutez des renforts` 
       : `Définissez les consignes opérationnelles transmises aux ${availableVols.length} secouriste(s) disponible(s)`;
     if (icon) icon.setAttribute('data-lucide', 'send');
+
+    // Situations prédéfinies pour choix en 1 clic
+    const situationChoices = [
+      { id: 'mission', label: defaults.whatHappened, shortLabel: 'Situation Mission', icon: 'radio' },
+      { id: 'inondations', label: 'Crues majeures & Inondations rapides avec mise en sécurité', shortLabel: 'Inondations / Crues', icon: 'cloud-rain' },
+      { id: 'seveso', label: 'Sinistre industriel SEVESO / Évacuation de secteur', shortLabel: 'SEVESO / Incendie', icon: 'flame' },
+      { id: 'samu', label: 'Urgence Sanitaire SAMU 15 / Départ Réflexe Immédiat', shortLabel: 'Urgence SAMU 15', icon: 'activity' },
+      { id: 'dps', label: 'Dispositif Prévisionnel de Secours d\'envergure', shortLabel: 'Dispositif DPS', icon: 'shield' },
+      { id: 'meteo', label: 'Vigilance Météo Orange / Tempête et intempéries', shortLabel: 'Alerte Météo', icon: 'wind' },
+      { id: 'cai_chu', label: 'Soutien aux sinistrés / Accueil et hébergement d\'urgence', shortLabel: 'Accueil Sinistrés', icon: 'life-buoy' }
+    ];
 
     body.innerHTML = `
       <div class="space-y-4 max-h-[78vh] overflow-y-auto pr-1">
@@ -188,45 +225,85 @@ window.ProtecSmsMobilization = {
         <div class="p-3 rounded-2xl bg-gradient-to-r from-pc-blue/10 via-indigo-50 to-amber-50 dark:from-pc-blue/20 dark:via-slate-800 dark:to-slate-800 border border-pc-blue/20 text-slate-800 dark:text-slate-200 text-xs space-y-1">
           <div class="flex items-center gap-2 font-black text-pc-blue dark:text-indigo-400">
             <i data-lucide="info" class="w-4 h-4"></i>
-            <span>Pilotage Autonome des Consignes</span>
+            <span>Pilotage Opérationnel par Choix</span>
           </div>
           <p class="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-            Ce message structure les consignes données aux bénévoles. Selon votre choix, ils convergeront automatiquement vers la base, attendront à domicile ou se tiendront prêts pour un horaire fixe, <strong>sans que vous ayez à intervenir manuellement sur chacun</strong>.
+            Construisez votre SMS en sélectionnant la <strong>situation</strong>, vos <strong>objectifs terrain</strong> et le <strong>mode d'action</strong>. Les bénévoles recevront leurs ordres et agiront en toute autonomie.
           </p>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          <!-- FORMULAIRE DE COMPOSITION (7 colonnes) -->
+          <!-- FORMULAIRE DE COMPOSITION PAR CHOIX (7 colonnes) -->
           <div class="lg:col-span-7 space-y-3.5">
             
-            <!-- 1. QUE SE PASSE-T-IL ? -->
-            <div class="space-y-1.5">
-              <label class="block text-xs font-black uppercase text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <span class="w-4 h-4 rounded-full bg-pc-blue text-white text-[9px] flex items-center justify-center font-mono">1</span>
-                <span>Que se passe-t-il ? (Contexte & Événement)</span>
+            <!-- 1. QUE SE PASSE-T-IL ? (SÉLECTION PAR CHOIX) -->
+            <div class="space-y-2">
+              <label class="block text-xs font-black uppercase text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                <span class="flex items-center gap-1.5">
+                  <span class="w-4 h-4 rounded-full bg-pc-blue text-white text-[9px] flex items-center justify-center font-mono">1</span>
+                  <span>Contexte & Situation Opérationnelle</span>
+                </span>
+                <span class="text-[10px] text-pc-blue font-bold font-mono">Choix en 1 clic</span>
               </label>
-              <input type="text" id="sms-what" value="${config.whatHappened.replace(/"/g, '&quot;')}" oninput="window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-pc-blue shadow-2xs">
-              <div class="flex items-center gap-1 flex-wrap">
-                <span class="text-[9px] text-slate-400 font-bold">Raccourcis rapides :</span>
-                <button type="button" onclick="document.getElementById('sms-what').value='Crues & Inondations rapides avec mise en sécurité'; window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 cursor-pointer">Inondations</button>
-                <button type="button" onclick="document.getElementById('sms-what').value='Sinistre industriel SEVESO / Évacuation de secteur'; window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 cursor-pointer">SEVESO</button>
-                <button type="button" onclick="document.getElementById('sms-what').value='Urgence Sanitaire SAMU 15 / Départ Réflexe Immédiat'; window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 cursor-pointer">SAMU 15</button>
-                <button type="button" onclick="document.getElementById('sms-what').value='Dispositif Prévisionnel de Secours d\'envergure'; window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 cursor-pointer">DPS</button>
+
+              <input type="hidden" id="sms-what" value="${config.whatHappened.replace(/"/g, '&quot;')}">
+
+              <!-- Affichage du contexte actif sélectionné -->
+              <div class="p-2.5 rounded-xl bg-pc-blue/10 dark:bg-pc-blue/20 border border-pc-blue/30 text-xs font-bold text-pc-blue dark:text-blue-300 flex items-center gap-2 shadow-2xs">
+                <i id="sms-what-icon" data-lucide="radio" class="w-4 h-4 shrink-0 text-pc-blue dark:text-blue-400"></i>
+                <span id="sms-what-text" class="truncate">${config.whatHappened}</span>
+              </div>
+
+              <!-- Grille des contextes cliquables -->
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5" id="sms-situation-buttons">
+                ${situationChoices.map(sit => {
+                  const isSelected = config.whatHappened === sit.label;
+                  return `
+                    <button type="button" 
+                      onclick="window.ProtecSmsMobilization.selectSituation('${mission.id}', '${sit.label.replace(/'/g, "\\'")}', '${sit.icon}', this)" 
+                      class="sms-sit-btn px-2.5 py-1.5 rounded-xl border text-[11px] font-bold text-left flex items-center gap-1.5 transition cursor-pointer ${isSelected ? 'bg-pc-blue text-white border-pc-blue shadow-xs' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-pc-blue/50'}">
+                      <i data-lucide="${sit.icon}" class="w-3.5 h-3.5 shrink-0"></i>
+                      <span class="truncate">${sit.shortLabel}</span>
+                    </button>
+                  `;
+                }).join('')}
               </div>
             </div>
 
-            <!-- 2. QUELLES SERONT LES MISSIONS DE LA PROTECTION CIVILE ? -->
-            <div class="space-y-1.5">
-              <label class="block text-xs font-black uppercase text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <span class="w-4 h-4 rounded-full bg-pc-blue text-white text-[9px] flex items-center justify-center font-mono">2</span>
-                <span>Missions de la Protection Civile sur le terrain</span>
+            <!-- 2. QUELLES SERONT LES MISSIONS DE LA PROTECTION CIVILE ? (CHOIX MULTIPLES) -->
+            <div class="space-y-2">
+              <label class="block text-xs font-black uppercase text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                <span class="flex items-center gap-1.5">
+                  <span class="w-4 h-4 rounded-full bg-pc-blue text-white text-[9px] flex items-center justify-center font-mono">2</span>
+                  <span>Missions de la Protection Civile (Cochez les objectifs)</span>
+                </span>
+                <span class="text-[10px] text-pc-blue font-bold font-mono">Objectifs terrain</span>
               </label>
-              <textarea id="sms-missions" rows="2" oninput="window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-pc-blue shadow-2xs leading-relaxed">${config.pcMissions}</textarea>
-              <div class="flex items-center gap-1 flex-wrap">
-                <span class="text-[9px] text-slate-400 font-bold">Suggestions :</span>
-                <button type="button" onclick="document.getElementById('sms-missions').value='Armement PMA, prise en charge des victimes et transport sanitaire CHU.'; window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 cursor-pointer">PMA / Soins</button>
-                <button type="button" onclick="document.getElementById('sms-missions').value='Ouverture Centre d\'Accueil Impliqués (CAI), soutien psycho et hébergement.'; window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 cursor-pointer">CAI / Hébergement</button>
-                <button type="button" onclick="document.getElementById('sms-missions').value='Poste de secours fixe, patrouilles binômes et bilans urgence.'; window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 cursor-pointer">Poste / PAPS</button>
+
+              <input type="hidden" id="sms-missions" value="${config.pcMissions.replace(/"/g, '&quot;')}">
+
+              <!-- Grille des objectifs opérationnels avec cases à cocher et icônes Lucide -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5" id="sms-objectives-grid">
+                ${Object.values(this.MISSION_OBJECTIVES).map(obj => {
+                  const isChecked = this._currentObjectives.includes(obj.id);
+                  return `
+                    <button type="button" 
+                      id="sms-obj-btn-${obj.id}"
+                      onclick="window.ProtecSmsMobilization.toggleObjective('${mission.id}', '${obj.id}')"
+                      class="sms-obj-btn p-2 rounded-xl border text-left flex items-start gap-2.5 transition cursor-pointer ${isChecked ? 'bg-pc-blue/10 dark:bg-pc-blue/20 border-pc-blue text-pc-blue dark:text-blue-300 ring-1 ring-pc-blue/30' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'}">
+                      <div class="mt-0.5 shrink-0">
+                        <i data-lucide="${obj.icon}" class="w-4 h-4 ${isChecked ? 'text-pc-blue dark:text-blue-400' : 'text-slate-400'}"></i>
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between">
+                          <span class="text-[11px] font-bold leading-tight">${obj.label}</span>
+                          <i data-lucide="${isChecked ? 'check-circle-2' : 'circle'}" class="check-indicator w-3.5 h-3.5 shrink-0 ml-1 ${isChecked ? 'text-pc-blue dark:text-blue-400' : 'text-slate-300 dark:text-slate-600'}"></i>
+                        </div>
+                        <p class="text-[9px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate">${obj.text}</p>
+                      </div>
+                    </button>
+                  `;
+                }).join('')}
               </div>
             </div>
 
@@ -244,6 +321,7 @@ window.ProtecSmsMobilization = {
                 ${Object.values(this.CONSIGNES).map(c => `
                   <label class="flex items-start gap-2.5 p-2 rounded-xl border cursor-pointer transition ${config.consigne === c.id ? 'bg-white dark:bg-slate-900 border-pc-blue ring-1 ring-pc-blue' : 'bg-white/60 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800'}">
                     <input type="radio" name="sms-consigne" value="${c.id}" ${config.consigne === c.id ? 'checked' : ''} onchange="window.ProtecSmsMobilization.onConsigneChanged('${mission.id}', this.value)" class="mt-0.5 text-pc-blue focus:ring-pc-blue">
+                    <i data-lucide="${c.icon}" class="w-4 h-4 mt-0.5 shrink-0 ${c.id === 'base_immediat' ? 'text-rose-500' : c.id === 'base_horaire' ? 'text-indigo-500' : c.id === 'attente_domicile' ? 'text-blue-500' : c.id === 'attente_appel' ? 'text-amber-500' : 'text-slate-500'}"></i>
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center justify-between">
                         <span class="text-xs font-black text-slate-900 dark:text-white">${c.label}</span>
@@ -255,9 +333,19 @@ window.ProtecSmsMobilization = {
               </div>
 
               <!-- Sélecteur d'heure si consigne RDV horaire -->
-              <div id="sms-rdv-box" class="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 ${config.consigne === 'base_horaire' ? '' : 'hidden'}">
-                <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Heure précise du RDV à la base :</span>
-                <input type="text" id="sms-rdv-time" value="${config.rdvTime}" oninput="window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" placeholder="Ex: 18h30" class="w-28 px-2.5 py-1 text-center font-bold text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+              <div id="sms-rdv-box" class="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2 ${config.consigne === 'base_horaire' ? '' : 'hidden'}">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Heure précise du RDV à la base :</span>
+                  <input type="text" id="sms-rdv-time" value="${config.rdvTime}" oninput="window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" placeholder="Ex: 18h30" class="w-24 px-2.5 py-1 text-center font-bold text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-[9px] text-slate-400 font-bold">Raccourcis :</span>
+                  <button type="button" onclick="window.ProtecSmsMobilization.setRdvPreset('${mission.id}', 30)" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100">Dans 30 min</button>
+                  <button type="button" onclick="window.ProtecSmsMobilization.setRdvPreset('${mission.id}', 60)" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100">Dans 1h</button>
+                  <button type="button" onclick="window.ProtecSmsMobilization.setRdvPreset('${mission.id}', 120)" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100">Dans 2h</button>
+                  <button type="button" onclick="window.ProtecSmsMobilization.setRdvPreset('${mission.id}', null, '19h00')" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100">19h00</button>
+                  <button type="button" onclick="window.ProtecSmsMobilization.setRdvPreset('${mission.id}', null, '07h00')" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100">07h00</button>
+                </div>
               </div>
             </div>
 
@@ -266,7 +354,7 @@ window.ProtecSmsMobilization = {
               <div class="space-y-1.5">
                 <label class="block text-xs font-black uppercase text-slate-700 dark:text-slate-300 flex items-center gap-1">
                   <span class="w-4 h-4 rounded-full bg-pc-blue text-white text-[9px] flex items-center justify-center font-mono">4</span>
-                  <span>Profils prioritaires</span>
+                  <span>Profil prioritaire</span>
                 </label>
                 <select id="sms-skill" onchange="window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="w-full px-2.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-pc-blue cursor-pointer">
                   ${Object.values(this.SKILL_PROFILES).map(p => `
@@ -280,9 +368,16 @@ window.ProtecSmsMobilization = {
                   <span class="w-4 h-4 rounded-full bg-pc-blue text-white text-[9px] flex items-center justify-center font-mono">5</span>
                   <span>Nombre recherché</span>
                 </label>
-                <div class="flex items-center gap-2">
-                  <input type="number" id="sms-target-count" min="1" max="40" value="${config.targetCount}" oninput="window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="w-24 px-2.5 py-2 text-center font-black text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
-                  <span class="text-[11px] font-semibold text-slate-500">secouriste(s)</span>
+                <div class="flex items-center gap-1.5">
+                  <button type="button" onclick="window.ProtecSmsMobilization.adjustTargetCount('${mission.id}', -1)" class="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white font-black text-sm flex items-center justify-center cursor-pointer">-</button>
+                  <input type="number" id="sms-target-count" min="1" max="40" value="${config.targetCount}" oninput="window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="w-16 px-2 py-1.5 text-center font-black text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                  <button type="button" onclick="window.ProtecSmsMobilization.adjustTargetCount('${mission.id}', 1)" class="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white font-black text-sm flex items-center justify-center cursor-pointer">+</button>
+                  <div class="flex items-center gap-1 ml-1">
+                    <button type="button" onclick="window.ProtecSmsMobilization.setTargetCount('${mission.id}', 2)" class="px-1.5 py-1 rounded text-[9px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer">2</button>
+                    <button type="button" onclick="window.ProtecSmsMobilization.setTargetCount('${mission.id}', 4)" class="px-1.5 py-1 rounded text-[9px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer">4</button>
+                    <button type="button" onclick="window.ProtecSmsMobilization.setTargetCount('${mission.id}', 6)" class="px-1.5 py-1 rounded text-[9px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer">6</button>
+                    <button type="button" onclick="window.ProtecSmsMobilization.setTargetCount('${mission.id}', 8)" class="px-1.5 py-1 rounded text-[9px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer">8</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -291,7 +386,8 @@ window.ProtecSmsMobilization = {
             ${isUpdate ? `
               <div class="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-500/40 space-y-2">
                 <label class="block text-xs font-black uppercase text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
-                  <span>🎯 Destinataires de cette mise à jour</span>
+                  <i data-lucide="target" class="w-3.5 h-3.5 text-amber-600"></i>
+                  <span>Destinataires de cette mise à jour</span>
                 </label>
                 <div class="space-y-1.5 text-xs">
                   <label class="flex items-center gap-2 cursor-pointer font-bold text-slate-800 dark:text-slate-200">
@@ -314,10 +410,14 @@ window.ProtecSmsMobilization = {
             
             <div class="w-full max-w-[320px] bg-slate-900 rounded-[32px] p-3 shadow-2xl border-4 border-slate-800 text-white flex flex-col justify-between space-y-3">
               <!-- Haut du smartphone -->
-              <div class="flex items-center justify-between text-[10px] text-slate-400 px-2 pt-1">
+              <div class="flex items-center justify-between text-[10px] text-slate-400 px-2 pt-1 font-mono">
                 <span>06:45</span>
-                <div class="w-16 h-3.5 bg-black rounded-full mx-auto"></div>
-                <span>5G 📶 100%</span>
+                <div class="w-14 h-3 bg-black rounded-full mx-auto"></div>
+                <div class="flex items-center gap-1.5 text-[9px]">
+                  <span>5G</span>
+                  <i data-lucide="wifi" class="w-2.5 h-2.5"></i>
+                  <i data-lucide="battery-charging" class="w-3 h-3 text-emerald-400"></i>
+                </div>
               </div>
 
               <!-- En-tête conversation -->
@@ -326,25 +426,37 @@ window.ProtecSmsMobilization = {
                   PC
                 </div>
                 <div class="font-extrabold text-xs text-white mt-1">PROTECTION CIVILE</div>
-                <div class="text-[9px] text-emerald-400 font-semibold">Diffusion Alerte Opérationnelle</div>
+                <div class="text-[9px] text-emerald-400 font-semibold flex items-center justify-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>Diffusion Alerte Opérationnelle</span>
+                </div>
               </div>
 
               <!-- Bulle de message SMS reçu -->
               <div class="p-3 rounded-2xl bg-slate-800 border border-slate-700 text-slate-100 text-[11px] leading-relaxed space-y-1.5 shadow-md">
                 <pre id="sms-preview-text" class="whitespace-pre-wrap font-sans font-medium text-[10px] leading-normal text-slate-200 select-all">${this.generateSmsBody(config)}</pre>
-                <div class="text-right text-[8px] text-slate-400 mono-num pt-1">Reçu à l'instant • SMS</div>
+                <div class="text-right text-[8px] text-slate-400 mono-num pt-1 flex items-center justify-end gap-1">
+                  <i data-lucide="check" class="w-2.5 h-2.5 text-slate-400"></i>
+                  <span>Reçu à l'instant • SMS</span>
+                </div>
               </div>
 
               <!-- Réponses types des bénévoles -->
-              <div class="p-2.5 rounded-xl bg-black/40 border border-white/10 space-y-1">
+              <div class="p-2.5 rounded-xl bg-black/40 border border-white/10 space-y-1.5">
                 <span class="text-[9px] font-bold text-slate-400 block uppercase">Réponses simulées des bénévoles :</span>
-                <div class="flex items-center gap-1.5 text-[9px] text-emerald-300 font-semibold">
-                  <span>✅ DISPO :</span>
-                  <span id="sms-preview-reply" class="italic truncate">${(this.CONSIGNES[config.consigne] || this.CONSIGNES.attente_domicile).volunteerReply}</span>
+                <div class="flex items-start gap-1.5 text-[9px] text-emerald-300 font-semibold">
+                  <i data-lucide="check-circle-2" class="w-3 h-3 text-emerald-400 shrink-0 mt-0.5"></i>
+                  <div class="min-w-0 flex-1">
+                    <span class="font-bold text-emerald-400">DISPO : </span>
+                    <span id="sms-preview-reply" class="italic">${(this.CONSIGNES[config.consigne] || this.CONSIGNES.attente_domicile).volunteerReply}</span>
+                  </div>
                 </div>
-                <div class="flex items-center gap-1.5 text-[9px] text-rose-300 font-semibold">
-                  <span>❌ INDISPO :</span>
-                  <span class="italic truncate">« Désolé, indisponible (Travail / Famille) »</span>
+                <div class="flex items-start gap-1.5 text-[9px] text-rose-300 font-semibold">
+                  <i data-lucide="x-circle" class="w-3 h-3 text-rose-400 shrink-0 mt-0.5"></i>
+                  <div class="min-w-0 flex-1">
+                    <span class="font-bold text-rose-400">INDISPO : </span>
+                    <span class="italic">« Désolé, indisponible (Travail / Famille) »</span>
+                  </div>
                 </div>
               </div>
 
@@ -356,7 +468,7 @@ window.ProtecSmsMobilization = {
 
         <!-- ACTIONS FOOTER -->
         <div class="pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
-          <button type="button" onclick="window.game.closeModal()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
+          <button type="button" onclick="window.game.closeModal()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition cursor-pointer">
             Annuler
           </button>
           <button type="button" onclick="window.ProtecSmsMobilization.submitSms('${mission.id}', ${isUpdate})" class="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light hover:brightness-110 text-white shadow-lg shadow-pc-blue/30 active:scale-95 transition flex items-center gap-2 cursor-pointer">
@@ -373,6 +485,104 @@ window.ProtecSmsMobilization = {
     if (window.lucide) window.lucide.createIcons();
   },
 
+  // Sélection du contexte opérationnel en 1 clic
+  selectSituation(missionId, text, iconName, btnEl) {
+    const hiddenWhat = document.getElementById('sms-what');
+    const whatText = document.getElementById('sms-what-text');
+    const whatIcon = document.getElementById('sms-what-icon');
+    if (hiddenWhat) hiddenWhat.value = text;
+    if (whatText) whatText.textContent = text;
+    if (whatIcon && iconName) whatIcon.setAttribute('data-lucide', iconName);
+
+    // Mettre à jour l'apparence des boutons de situation
+    const container = document.getElementById('sms-situation-buttons');
+    if (container) {
+      container.querySelectorAll('.sms-sit-btn').forEach(btn => {
+        btn.className = 'sms-sit-btn px-2.5 py-1.5 rounded-xl border text-[11px] font-bold text-left flex items-center gap-1.5 transition cursor-pointer bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-pc-blue/50';
+      });
+    }
+    if (btnEl) {
+      btnEl.className = 'sms-sit-btn px-2.5 py-1.5 rounded-xl border text-[11px] font-bold text-left flex items-center gap-1.5 transition cursor-pointer bg-pc-blue text-white border-pc-blue shadow-xs';
+    }
+
+    if (window.lucide) window.lucide.createIcons();
+    this.updateSmsPreview(missionId);
+  },
+
+  // Toggle d'un objectif de mission terrain (choix multiple par cartes)
+  toggleObjective(missionId, objKey) {
+    if (!Array.isArray(this._currentObjectives)) {
+      this._currentObjectives = ['pma', 'evac'];
+    }
+    const idx = this._currentObjectives.indexOf(objKey);
+    if (idx >= 0) {
+      if (this._currentObjectives.length > 1) {
+        this._currentObjectives.splice(idx, 1);
+      }
+    } else {
+      this._currentObjectives.push(objKey);
+    }
+
+    // Mettre à jour visuellement tous les boutons d'objectifs
+    Object.keys(this.MISSION_OBJECTIVES).forEach(k => {
+      const btn = document.getElementById(`sms-obj-btn-${k}`);
+      if (!btn) return;
+      const isChecked = this._currentObjectives.includes(k);
+      btn.className = `sms-obj-btn p-2 rounded-xl border text-left flex items-start gap-2.5 transition cursor-pointer ${isChecked ? 'bg-pc-blue/10 dark:bg-pc-blue/20 border-pc-blue text-pc-blue dark:text-blue-300 ring-1 ring-pc-blue/30' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'}`;
+      
+      const checkIcon = btn.querySelector('.check-indicator');
+      if (checkIcon) {
+        checkIcon.setAttribute('data-lucide', isChecked ? 'check-circle-2' : 'circle');
+        checkIcon.className = `check-indicator w-3.5 h-3.5 shrink-0 ml-1 ${isChecked ? 'text-pc-blue dark:text-blue-400' : 'text-slate-300 dark:text-slate-600'}`;
+      }
+    });
+
+    // Reconstituer le texte des missions
+    const texts = this._currentObjectives.map(k => this.MISSION_OBJECTIVES[k]?.text).filter(Boolean);
+    const hiddenMissions = document.getElementById('sms-missions');
+    if (hiddenMissions) {
+      hiddenMissions.value = texts.length > 0 ? texts.join(' • ') : 'Soutien opérationnel de la Protection Civile';
+    }
+
+    if (window.lucide) window.lucide.createIcons();
+    this.updateSmsPreview(missionId);
+  },
+
+  // Réglage rapide de l'heure du RDV
+  setRdvPreset(missionId, minutesFromNow, fixedHour) {
+    let timeStr = '18h30';
+    if (fixedHour) {
+      timeStr = fixedHour;
+    } else if (minutesFromNow) {
+      const d = new Date();
+      d.setMinutes(d.getMinutes() + minutesFromNow);
+      timeStr = `${String(d.getHours()).padStart(2, '0')}h${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+    const input = document.getElementById('sms-rdv-time');
+    if (input) {
+      input.value = timeStr;
+      this.updateSmsPreview(missionId);
+    }
+  },
+
+  // Ajustement rapide de l'effectif cible
+  setTargetCount(missionId, count) {
+    const input = document.getElementById('sms-target-count');
+    if (input) {
+      input.value = count;
+      this.updateSmsPreview(missionId);
+    }
+  },
+
+  adjustTargetCount(missionId, delta) {
+    const input = document.getElementById('sms-target-count');
+    if (!input) return;
+    let val = parseInt(input.value || '1', 10) + delta;
+    val = Math.max(1, Math.min(40, val));
+    input.value = val;
+    this.updateSmsPreview(missionId);
+  },
+
   // Changement de la consigne (affiche ou masque l'heure du RDV)
   onConsigneChanged(missionId, consigneId) {
     const rdvBox = document.getElementById('sms-rdv-box');
@@ -383,6 +593,7 @@ window.ProtecSmsMobilization = {
         rdvBox.classList.add('hidden');
       }
     }
+    if (window.lucide) window.lucide.createIcons();
     this.updateSmsPreview(missionId);
   },
 
@@ -434,6 +645,7 @@ window.ProtecSmsMobilization = {
     const config = {
       whatHappened: what,
       pcMissions: missions,
+      selectedObjectives: this._currentObjectives ? [...this._currentObjectives] : ['pma', 'evac'],
       consigne: consigne,
       rdvTime: rdvTime,
       requiredSkill: skill,
@@ -494,9 +706,9 @@ window.ProtecSmsMobilization = {
       });
 
       if (consigne === 'base_immediat' && transitionedCount > 0) {
-        game.showToast('🚨 Ordre d\'Évolution Transmis', `${transitionedCount} secouriste(s) font mouvement immédiatement vers la base d'antenne !`, 'green');
+        game.showToast('Ordre d\'Évolution Transmis', `${transitionedCount} secouriste(s) font mouvement immédiatement vers la base d'antenne !`, 'green');
       } else {
-        game.showToast('📱 Consigne Mise à Jour', `Consigne « ${this.CONSIGNES[consigne]?.shortLabel} » transmise aux secouristes inscrits.`, 'blue');
+        game.showToast('Consigne Mise à Jour', `Consigne « ${this.CONSIGNES[consigne]?.shortLabel} » transmise aux secouristes inscrits.`, 'blue');
       }
 
       if (recipientMode === 'registered_only') {
@@ -531,7 +743,7 @@ window.ProtecSmsMobilization = {
     mission.relancesCount = (mission.relancesCount || 0) + 1;
 
     const consigneObj = this.CONSIGNES[config.consigne] || this.CONSIGNES.attente_domicile;
-    game.showToast('Diffusion SMS Lancée 📱', `Message envoyé à ${unassignedVols.length} secouriste(s) [Consigne : ${consigneObj.shortLabel}].`, 'blue');
+    game.showToast('Diffusion SMS Lancée', `Message envoyé à ${unassignedVols.length} secouriste(s) [Consigne : ${consigneObj.shortLabel}].`, 'blue');
 
     let pendingResponses = unassignedVols.length;
 
@@ -565,7 +777,8 @@ window.ProtecSmsMobilization = {
       const stepMs = Math.round((2800 + Math.random() * 3800) * speedMod);
 
       if (idx === 0) {
-        cumulativeDelayMs = Math.round(2000 + Math.random() * 2000);
+        // Règle opérationnelle : Délai incompressible de 15 sec avant les premiers retours de message lors des alertes
+        cumulativeDelayMs = Math.round(15000 + Math.random() * 2500);
       } else {
         cumulativeDelayMs += stepMs;
       }
@@ -620,9 +833,9 @@ window.ProtecSmsMobilization = {
           });
 
           if (transitLaunched) {
-            game.showToast('🚗 SMS : DISPO & EN ROUTE !', `${vol.name} : « ${replyMsg} »`, 'green');
+            game.showToast('SMS : Dispo & En Route', `${vol.name} : « ${replyMsg} »`, 'green');
           } else {
-            game.showToast('📱 SMS Reçu : DISPO !', `${vol.name} (${vol.rank}) : « ${replyMsg} »`, 'green');
+            game.showToast('SMS Reçu : Dispo', `${vol.name} (${vol.rank}) : « ${replyMsg} »`, 'green');
           }
 
           setTimeout(() => {
@@ -638,7 +851,7 @@ window.ProtecSmsMobilization = {
               message: `Désolé, indisponible (${evalResult.rejectReason || 'Contrainte personnelle'})`,
               time: timeStr
             });
-            game.showToast('📱 SMS Reçu : Indispo', `${vol.name} : « Désolé, impossible (${evalResult.rejectReason || 'Contrainte'}) »`, 'slate');
+            game.showToast('SMS Reçu : Indisponible', `${vol.name} : « Désolé, impossible (${evalResult.rejectReason || 'Contrainte'}) »`, 'slate');
           }
         }
 
@@ -666,6 +879,38 @@ window.ProtecSmsMobilization = {
     const consigne = mission.smsConsigne || {};
     const consigneDef = this.CONSIGNES[consigne.consigne] || null;
     const history = mission.smsHistory || [];
+    const hasSmsActivity = Boolean(mission.smsCampaignActive || (mission.smsResponses && mission.smsResponses.length > 0) || (mission.smsHistory && mission.smsHistory.length > 0) || mission.smsConsigne);
+
+    const myId = game.player?.id || 'usr_local';
+    const isCrisis = (mission.type === 'crise' || mission.isCrisis);
+    const hasOtherManager = Boolean(isCrisis && mission.managerPlayerId && mission.managerPlayerId !== myId);
+
+    if (!hasSmsActivity) {
+      return `
+        <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-xl bg-pc-blue/10 dark:bg-pc-blue/30 text-pc-blue dark:text-blue-400 flex items-center justify-center">
+              <i data-lucide="message-square" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <span class="text-xs font-black uppercase text-slate-800 dark:text-white">Diffusion SMS & Consignes</span>
+              <p class="text-[10px] text-slate-500 dark:text-slate-400">Envoyez des consignes d'autonomie et mobilisez vos effectifs par SMS.</p>
+            </div>
+          </div>
+          ${hasOtherManager ? `
+            <span class="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 flex items-center gap-1 shrink-0">
+              <i data-lucide="shield-check" class="w-3 h-3 text-emerald-600"></i>
+              <span>Direction : ${mission.managerPlayerName || 'Directeur'}</span>
+            </span>
+          ` : `
+            <button type="button" onclick="window.ProtecSmsMobilization.openSmsModal(window.game, '${mission.id}', false)" class="px-3 py-1.5 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+              <span>Rédiger & Diffuser SMS</span>
+            </button>
+          `}
+        </div>
+      `;
+    }
 
     return `
       <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-white/10 text-xs space-y-3 shadow-2xs">
@@ -673,8 +918,8 @@ window.ProtecSmsMobilization = {
         <!-- EN-TÊTE DE LA SECTION SMS -->
         <div class="flex items-center justify-between flex-wrap gap-2">
           <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-xl bg-pc-blue/10 dark:bg-pc-blue/30 text-pc-blue dark:text-blue-400 flex items-center justify-center text-base font-bold">
-              📱
+            <div class="w-8 h-8 rounded-xl bg-pc-blue/10 dark:bg-pc-blue/30 text-pc-blue dark:text-blue-400 flex items-center justify-center">
+              <i data-lucide="message-square" class="w-4 h-4"></i>
             </div>
             <div>
               <div class="flex items-center gap-2">
@@ -691,10 +936,17 @@ window.ProtecSmsMobilization = {
 
           <!-- BOUTONS D'ACTION SMS -->
           <div class="flex items-center gap-1.5 ml-auto">
-            <button type="button" onclick="window.ProtecSmsMobilization.openSmsModal(window.game, '${mission.id}', ${Boolean(mission.smsConsigne)})" class="px-3 py-1.5 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs">
-              <i data-lucide="send" class="w-3.5 h-3.5"></i>
-              <span>${mission.smsConsigne ? '📱 Nouveau SMS / Évolution' : '📱 Rédiger & Diffuser SMS'}</span>
-            </button>
+            ${hasOtherManager ? `
+              <span class="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 flex items-center gap-1 shrink-0">
+                <i data-lucide="shield-check" class="w-3 h-3 text-emerald-600"></i>
+                <span>Direction : ${mission.managerPlayerName || 'Directeur'}</span>
+              </span>
+            ` : `
+              <button type="button" onclick="window.ProtecSmsMobilization.openSmsModal(window.game, '${mission.id}', ${Boolean(mission.smsConsigne)})" class="px-3 py-1.5 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                <span>${mission.smsConsigne ? 'Nouveau SMS / Évolution' : 'Rédiger & Diffuser SMS'}</span>
+              </button>
+            `}
           </div>
         </div>
 
@@ -732,8 +984,9 @@ window.ProtecSmsMobilization = {
               ${history.map((h, i) => `
                 <div class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1">
                   <div class="flex items-center justify-between text-[10px]">
-                    <span class="font-extrabold ${h.isUpdate ? 'text-amber-600 dark:text-amber-400' : 'text-pc-blue dark:text-indigo-400'}">
-                      ${h.isUpdate ? '⚡ Mise à Jour Consigne' : '📢 Alerte Initiale'} (${h.consigneLabel || 'Consigne'})
+                    <span class="font-extrabold flex items-center gap-1 ${h.isUpdate ? 'text-amber-600 dark:text-amber-400' : 'text-pc-blue dark:text-indigo-400'}">
+                      <i data-lucide="${h.isUpdate ? 'zap' : 'radio'}" class="w-3 h-3"></i>
+                      <span>${h.isUpdate ? 'Mise à Jour Consigne' : 'Alerte Initiale'} (${h.consigneLabel || 'Consigne'})</span>
                     </span>
                     <span class="mono-num text-slate-400 font-bold">${h.time}</span>
                   </div>
@@ -760,12 +1013,14 @@ window.ProtecSmsMobilization = {
               ${mission.smsResponses.map(r => `
                 <div class="p-2 rounded-xl border flex items-center justify-between text-xs ${r.isAvailable ? 'bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-500/30 text-slate-800 dark:text-white shadow-2xs' : 'bg-slate-100/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-500'}">
                   <div class="flex items-center gap-2 min-w-0 flex-1">
-                    <span class="text-sm shrink-0">${r.isAvailable ? '📱' : '✉️'}</span>
+                    <div class="w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${r.isAvailable ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}">
+                      <i data-lucide="${r.isAvailable ? 'check' : 'x'}" class="w-3.5 h-3.5"></i>
+                    </div>
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-1.5 flex-wrap">
                         <span class="font-bold text-slate-900 dark:text-white">${r.volunteerName}</span>
                         <span class="text-[9px] font-bold px-1.5 py-0.2 rounded ${r.isAvailable ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'}">
-                          ${r.isAvailable ? '✅ Dispo' : '❌ Indispo'}
+                          ${r.isAvailable ? 'Dispo' : 'Indispo'}
                         </span>
                         <span class="text-[9px] text-slate-400 font-semibold">${r.rank}</span>
                       </div>

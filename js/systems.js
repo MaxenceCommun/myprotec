@@ -110,6 +110,38 @@ window.ProtecSystems = {
   },
 
   // --- 2. TRAJET EN TEMPS RÉEL SUR ROUTE, AUTOROUTES & GYROPHARES ---
+  // Formatage du temps de trajet conforme aux exigences opérationnelles :
+  // - En heures et minutes si heure >= 1 (sans secondes), ex : "3h25"
+  // - En minutes et secondes si minutes >= 1 et heure == 0, ex : "6m25s"
+  // - En secondes si pas d'heure ni minute, ex : "12s"
+  formatTravelTime(totalSeconds) {
+    const sec = Math.max(0, Math.round(totalSeconds || 0));
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+
+    if (h > 0) {
+      return `${h}h${m.toString().padStart(2, '0')}`;
+    } else if (m > 0) {
+      return `${m}m${s.toString().padStart(2, '0')}s`;
+    } else {
+      return `${s}s`;
+    }
+  },
+
+  formatTravelDistance(kmVal) {
+    const num = Number(kmVal);
+    if (isNaN(num)) return `${kmVal}km`;
+    const rounded = Math.round(num * 10) / 10;
+    return (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + 'km';
+  },
+
+  formatTravelDistanceAndTime(distKmVal, totalSeconds) {
+    const distStr = this.formatTravelDistance(distKmVal);
+    const timeStr = this.formatTravelTime(totalSeconds);
+    return `${distStr} (${timeStr})`;
+  },
+
   haversineMeters(lat1, lon1, lat2, lon2) {
     const R = 6371000;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -383,7 +415,7 @@ window.ProtecSystems = {
         </div>
         <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName} (Mon Antenne)</div>
         <div style="color: #475569; font-size: 10px; margin-top: 1px;">${modeLabel}</div>
-        <div style="color: #0284c7; font-size: 10px; margin-top: 1px;">Vitesse : ${initialSpeedLabel} • Reste : <strong>${distKm.toFixed(1)} km</strong></div>
+        <div style="color: #0284c7; font-size: 10px; margin-top: 1px;">Vitesse : ${initialSpeedLabel} • Reste : <strong>${this.formatTravelDistance(distKm)}</strong> (${this.formatTravelTime(baseDurationSec)})</div>
         ${distHighwayKm > 0.3 ? `<div style="color: #0369a1; font-size: 9.5px; margin-top: 1px;">Tronçon : ${distUrbanKm.toFixed(1)} km urbain + <strong>${distHighwayKm.toFixed(1)} km autoroute</strong></div>` : ''}
         ${mission?.title ? `<div style="color: #334155; font-size: 10px; margin-top: 2px; font-weight: 600;">🎯 Mission : ${mission.title}</div>` : ''}
         <div style="margin-top: 5px; padding: 3px 6px; background: #eff6ff; color: #1d4ed8; border-radius: 6px; font-weight: 800; font-size: 9px; text-align: center; border: 1px solid #bfdbfe;">
@@ -580,7 +612,7 @@ window.ProtecSystems = {
           }
 
           if (t.isRemote) {
-            const remainingKm = (t.distKm * (1 - progress)).toFixed(1);
+            const remainingKm = Math.max(0, t.distKm * (1 - progress));
             const remainingSec = Math.max(1, Math.round((totalDurationSec - elapsedGameSec) / gameSpeed));
             t.marker.setTooltipContent(`
               <div style="font-family: inherit; font-size: 11px; line-height: 1.35;">
@@ -590,7 +622,7 @@ window.ProtecSystems = {
                 </div>
                 <div style="color: #4338ca; font-weight: 800; font-size: 11px;">Directeur : ${t.remotePlayerName || 'Directeur d’Antenne'}</div>
                 <div style="color: #64748b; font-size: 10px;">${t.remoteStationName || 'Antenne Partenaire'} (${t.remoteCity || ''})</div>
-                <div style="color: #0369a1; font-size: 10px; margin-top: 2px;">Vitesse : ~${t.speedKmh} km/h • Reste : <strong>${remainingKm} km</strong> (~${remainingSec}s)</div>
+                <div style="color: #0369a1; font-size: 10px; margin-top: 2px;">Vitesse : ~${t.speedKmh} km/h • Reste : <strong>${this.formatTravelDistance(remainingKm)}</strong> (${this.formatTravelTime(remainingSec)})</div>
                 <div style="color: ${t.isEmergency ? '#dc2626' : '#475569'}; font-weight: 700; font-size: 10px; margin-top: 2px;">
                   ${t.isEmergency ? '🚨 Départ Urgence' : 'Déplacement Secteur'} • ${t.missionTitle || 'Opérations'}
                 </div>
@@ -599,7 +631,7 @@ window.ProtecSystems = {
             continue;
           }
 
-          const remainingKm = (t.distKm * (1 - progress)).toFixed(1);
+          const remainingKm = Math.max(0, t.distKm * (1 - progress));
           const remainingSec = Math.max(1, Math.round((totalDurationSec - elapsedGameSec) / gameSpeed));
           const hospName = t.evacData?.hospital?.name || t.mission?.evacHospitalData?.hospital?.name || 'Urgences de Secteur';
           const specLabel = t.evacData?.specialtyInfo?.label || t.mission?.evacHospitalData?.specialtyInfo?.label || 'Urgences Générales';
@@ -637,7 +669,7 @@ window.ProtecSystems = {
               </div>
               <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stName} (Mon Antenne)</div>
               <div style="margin-top: 3px; margin-bottom: 3px;">${speedBadge}</div>
-              <div style="color: #475569; font-size: 10px; margin-top: 1px;">Trajet restant : <strong>${remainingKm} km</strong> (~${remainingSec}s)</div>
+              <div style="color: #475569; font-size: 10px; margin-top: 1px;">Trajet restant : <strong>${this.formatTravelDistance(remainingKm)}</strong> (${this.formatTravelTime(remainingSec)})</div>
               ${highwayDetail}
               ${t.mission?.title ? `<div style="color: #334155; font-size: 10px; margin-top: 2px; font-weight: 600;">🎯 Mission : ${t.mission.title}</div>` : ''}
               ${t.statusTarget === 4 ? statusBadgeText : `<div class="text-[9px] font-bold text-slate-500">${statusBadgeText}</div>`}
@@ -824,7 +856,7 @@ window.ProtecSystems = {
         </div>
         <div style="color: #4338ca; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName} (${cityName || 'Secteur'})</div>
         <div style="color: #475569; font-size: 10px;">👤 Directeur : ${playerName}</div>
-        <div style="color: #0369a1; font-size: 10px; margin-top: 1px;">Vitesse : ~${speedUrbanKmh} km/h • Reste : <strong>${distKm.toFixed(1)} km</strong></div>
+        <div style="color: #0369a1; font-size: 10px; margin-top: 1px;">Vitesse : ~${speedUrbanKmh} km/h • Reste : <strong>${this.formatTravelDistance(distKm)}</strong> (${this.formatTravelTime(baseDurationSec)})</div>
         <div style="color: ${isEmergency ? '#dc2626' : '#475569'}; font-weight: 700; font-size: 10px; margin-top: 2px;">
           ${isEmergency ? '🚨 Départ Urgence' : 'Déplacement Normal'} • ${data.missionTitle || 'Opérations'}
         </div>
@@ -2662,5 +2694,13 @@ window.calculerPositionActuelle = function(mission, tempsActuel) {
 
 window.creerTimelineUrgence = function(game, mission, crewVolunteers, vehicle, baseStation) {
   return window.ProtecConventions?.creerTimelineUrgence(game, mission, crewVolunteers, vehicle, baseStation);
+};
+
+window.formatTravelTime = function(sec) {
+  return window.ProtecSystems?.formatTravelTime(sec);
+};
+
+window.formatTravelDistance = function(km) {
+  return window.ProtecSystems?.formatTravelDistance(km);
 };
 
