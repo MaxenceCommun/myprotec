@@ -535,6 +535,31 @@ window.ProtecSupabase = {
         if (ecData) ecussonRecord = ecData;
       } catch (e) {}
 
+      // Auto-création dans ecussons si absent
+      if (!ecussonRecord) {
+        const cat = (window.ProtecEcussons?.catalog || window.ProtecEcussons?.FALLBACK_CATALOG || []);
+        const catBadge = cat.find(c => c.code === badgeCode || c.id === badgeCode) || (typeof badge === 'object' ? badge : null);
+        if (catBadge) {
+          try {
+            let catName = catBadge.categorie || catBadge.cat || 'specialite';
+            if (!['specialite', 'mission', 'departement', 'renfort'].includes(catName)) {
+              catName = 'renfort';
+            }
+            const { data: newEc } = await this.client.from('ecussons').insert({
+              code: badgeCode,
+              nom: catBadge.nom || catBadge.name || 'Écusson Officiel',
+              description: catBadge.description || catBadge.desc || 'Distinction de la Protection Civile',
+              categorie: catName,
+              rarete: catBadge.rarete || catBadge.rarity || 'rare',
+              badge_url: catBadge.imageUrl || catBadge.badge_url || null
+            }).select().maybeSingle();
+            if (newEc) ecussonRecord = newEc;
+          } catch (insErr) {
+            console.warn('Auto-création ecusson Supabase:', insErr);
+          }
+        }
+      }
+
       // 2. Mettre à jour game_saves
       if (isAll) {
         const { data: saves } = await this.client.from('game_saves').select('*');
@@ -568,10 +593,30 @@ window.ProtecSupabase = {
         }
       } else {
         const isUUID = typeof targetUserId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId);
-        let q = this.client.from('game_saves').select('*');
-        if (isUUID) q = q.eq('user_id', targetUserId);
-        else q = q.eq('username', targetUserId);
-        let { data: saveRecord } = await q.maybeSingle();
+        let saveRecord = null;
+
+        // Recherche résiliente par UUID puis par username
+        if (isUUID) {
+          const { data: byId } = await this.client.from('game_saves').select('*').eq('user_id', targetUserId).maybeSingle();
+          if (byId) saveRecord = byId;
+          else {
+            const { data: pl } = await this.client.from('players').select('username').eq('id', targetUserId).maybeSingle();
+            if (pl?.username) {
+              const { data: byUname } = await this.client.from('game_saves').select('*').eq('username', pl.username).maybeSingle();
+              if (byUname) saveRecord = byUname;
+            }
+          }
+        } else {
+          const { data: byUname } = await this.client.from('game_saves').select('*').eq('username', targetUserId).maybeSingle();
+          if (byUname) saveRecord = byUname;
+          else {
+            const { data: pl } = await this.client.from('players').select('id').eq('username', targetUserId).maybeSingle();
+            if (pl?.id) {
+              const { data: byId } = await this.client.from('game_saves').select('*').eq('user_id', pl.id).maybeSingle();
+              if (byId) saveRecord = byId;
+            }
+          }
+        }
 
         let sData = saveRecord?.save_data || {};
         if (!sData.localEcussons) sData.localEcussons = [];
@@ -583,6 +628,8 @@ window.ProtecSupabase = {
         if (saveRecord) {
           await this.client.from('game_saves').update({
             save_data: sData,
+            user_id: saveRecord.user_id || (isUUID ? targetUserId : null),
+            username: saveRecord.username || (!isUUID ? targetUserId : null),
             updated_at: new Date().toISOString()
           }).eq('id', saveRecord.id);
         } else {
@@ -605,6 +652,19 @@ window.ProtecSupabase = {
               updated_at: new Date().toISOString()
             }, { onConflict: 'antenne_id,ecusson_id' });
           } catch (e) {}
+
+          // Si le joueur a une station enregistrée dans alliance_stations, synchroniser aussi pour son ID de station
+          try {
+            const { data: st } = await this.client.from('alliance_stations').select('id').eq('player_id', targetUserId).maybeSingle();
+            if (st && st.id && st.id !== antId) {
+              await this.client.from('antenne_ecussons').upsert({
+                antenne_id: st.id,
+                ecusson_id: ecussonRecord.id,
+                quantite: newQty,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'antenne_id,ecusson_id' });
+            }
+          } catch (stErr) {}
         }
       }
 
@@ -1344,8 +1404,19 @@ window.ProtecSupabase = {
         antenneMessagesData: game.antenneMessagesData || null,
         platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(game.player, game)) || null,
         lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null,
-        localEcussons: game.localEcussons || []
+        localEcussons: (game.localEcussons && game.localEcussons.length > 0) ? game.localEcussons : (game.localEcussons || [])
       };
+
+      // Si le jeu n'a pas encore chargé les écussons mais que la sauvegarde en contient déjà, les préserver
+      if (!stateToSave.localEcussons || stateToSave.localEcussons.length === 0) {
+        try {
+          const { data: exSave } = await this.client.from('game_saves').select('save_data').eq('user_id', userId).maybeSingle();
+          if (exSave?.save_data?.localEcussons && exSave.save_data.localEcussons.length > 0) {
+            stateToSave.localEcussons = exSave.save_data.localEcussons;
+            game.localEcussons = exSave.save_data.localEcussons;
+          }
+        } catch (e) {}
+      }
 
       const payload = {
         user_id: userId,

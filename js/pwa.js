@@ -249,10 +249,21 @@ window.ProtecPWA = {
 
   // 6. Action d'installation
   async promptInstall() {
+    const isInstalled = this.isStandalone || 
+      window.matchMedia('(display-mode: standalone)').matches ||
+      navigator.standalone === true ||
+      localStorage.getItem('protec_pwa_installed') === 'true';
+
     // Si déjà installé
-    if (this.isStandalone) {
+    if (isInstalled) {
+      this.isStandalone = true;
+      this.updateUI();
       if (window.game && typeof window.game.showToast === 'function') {
         window.game.showToast('✅ MyProtec est déjà installé sur cet appareil.', 'info');
+      } else if (window.ProtecDialog) {
+        window.ProtecDialog.alert('MyProtec est déjà installé sur votre appareil.', 'Application Déjà Installée');
+      } else {
+        alert('MyProtec est déjà installé sur votre appareil.');
       }
       return;
     }
@@ -386,25 +397,27 @@ window.ProtecPWA = {
 
   // 8. Mise à jour de l'UI (boutons header)
   updateUI() {
-    const desktopBtn = document.getElementById('pwa-install-btn');
-    const mobileBtn = document.getElementById('pwa-install-btn-mobile');
+    const isInstalled = this.isStandalone || 
+      window.matchMedia('(display-mode: standalone)').matches ||
+      navigator.standalone === true ||
+      localStorage.getItem('protec_pwa_installed') === 'true';
 
-    const isInstalled = this.isStandalone || localStorage.getItem('protec_pwa_installed') === 'true';
+    const buttons = document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-mobile, .pwa-install-trigger');
 
-    // Si déjà installé en standalone ou enregistré, on retire définitivement les boutons
+    // Si déjà installé en standalone ou enregistré, masquer complètement les boutons
     if (isInstalled) {
-      if (desktopBtn) desktopBtn.remove();
-      if (mobileBtn) mobileBtn.remove();
+      buttons.forEach(btn => {
+        btn.style.display = 'none';
+        btn.classList.add('hidden');
+      });
       return;
     }
 
-    // Sinon, on affiche le bouton si le prompt est disponible ou sur iOS
-    if (desktopBtn) {
-      desktopBtn.classList.remove('hidden');
-    }
-    if (mobileBtn) {
-      mobileBtn.classList.remove('hidden');
-    }
+    // Sinon, afficher les boutons
+    buttons.forEach(btn => {
+      btn.style.display = '';
+      btn.classList.remove('hidden');
+    });
 
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
       try { window.lucide.createIcons(); } catch (e) {}

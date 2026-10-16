@@ -307,17 +307,17 @@ window.ProtecAuth = {
 
     if (this.currentUser && this.token) {
       userLabel.textContent = this.currentUser.username;
-      userLabel.className = 'text-xs font-bold text-pc-blue truncate max-w-[90px] sm:max-w-[120px]';
+      userLabel.className = 'text-xs font-bold text-pc-blue dark:text-sky-300 truncate max-w-[90px] sm:max-w-[120px]';
 
       if (statusIcon) {
-        statusIcon.className = 'w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center transition';
+        statusIcon.className = 'w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center transition';
       }
     } else {
       userLabel.textContent = 'Connexion';
-      userLabel.className = 'text-xs font-bold text-slate-700 truncate max-w-[90px] sm:max-w-[120px]';
+      userLabel.className = 'text-xs font-bold text-slate-700 dark:text-slate-200 truncate max-w-[90px] sm:max-w-[120px]';
 
       if (statusIcon) {
-        statusIcon.className = 'w-6 h-6 rounded-lg bg-pc-blue/10 text-pc-blue flex items-center justify-center transition';
+        statusIcon.className = 'w-6 h-6 rounded-lg bg-pc-blue/10 dark:bg-sky-950/40 text-pc-blue dark:text-sky-300 flex items-center justify-center transition';
       }
     }
 
@@ -856,7 +856,7 @@ window.ProtecAuth = {
 
               <!-- Encart Liaison Discord Officielle -->
               ${this.currentUser.discord ? `
-                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-blue-50/40 to-slate-50 border border-indigo-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-blue-50/40 to-slate-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-800 border border-indigo-200/80 dark:border-slate-700 flex items-center justify-between gap-3 shadow-2xs">
                   <div class="flex items-center gap-3 min-w-0">
                     <img src="${this.currentUser.discord.avatarUrl}" alt="Avatar Discord" class="w-9 h-9 rounded-full border-2 border-[#5865F2] object-cover shadow-xs shrink-0" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'" />
                     <div class="min-w-0">
@@ -872,7 +872,7 @@ window.ProtecAuth = {
                   </button>
                 </div>
               ` : `
-                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/70 via-blue-50/50 to-slate-50 border border-indigo-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/70 via-blue-50/50 to-slate-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-800 border border-indigo-200/80 dark:border-slate-700 flex items-center justify-between gap-3 shadow-2xs">
                   <div class="flex items-center gap-2.5 min-w-0">
                     <div class="w-8 h-8 rounded-xl bg-[#5865F2] text-white flex items-center justify-center shrink-0 shadow-xs">
                       <svg class="w-4 h-4 fill-current" viewBox="0 0 127.14 96.36">
@@ -1613,7 +1613,7 @@ window.ProtecAuth = {
       // Nouveau compte : état d'antenne vierge et remise à zéro pour démarrer l'implantation
       // Bonus de bienvenue parrainage (+1 500 €) si le code parrain était valide et certifié
       const hasReferralBonus = !!(data.refereeBonusGranted || (data.referralStatus && data.referralStatus.success));
-      const startingMoney = 15000 + (hasReferralBonus ? 1500 : 0);
+      const startingMoney = 40000 + (hasReferralBonus ? 1500 : 0);
 
       game.stations = [];
       game.vehicles = [];
@@ -1791,7 +1791,7 @@ window.ProtecAuth = {
 
       // 2. Synchronisation de redondance avec le serveur local
       if (this.token && !this.token.startsWith('supa-')) {
-        const moneyVal = (game.resources?.money !== undefined) ? game.resources.money : ((game.resources?.budget !== undefined) ? game.resources.budget : 15000);
+        const moneyVal = (game.resources?.money !== undefined) ? game.resources.money : ((game.resources?.budget !== undefined) ? game.resources.budget : 40000);
         if (game.resources) {
           game.resources.money = moneyVal;
           game.resources.budget = moneyVal;
@@ -1836,6 +1836,8 @@ window.ProtecAuth = {
           reputation_prefecture: game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50,
           reputation_villes: game.reputation_villes || {},
           departmentInfrastructures: game.departmentInfrastructures || {},
+          mealAllowancePerVolunteer: game.mealAllowancePerVolunteer || 15,
+          antenneMessagesData: game.antenneMessagesData || null,
           platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(this.currentUser, game)) || null,
           lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null
         };
@@ -1936,7 +1938,7 @@ window.ProtecAuth = {
 
       if (savedData.resources) {
         game.resources = savedData.resources;
-        const m = (game.resources.money !== undefined) ? game.resources.money : ((game.resources.budget !== undefined) ? game.resources.budget : 15000);
+        const m = (game.resources.money !== undefined) ? game.resources.money : ((game.resources.budget !== undefined) ? game.resources.budget : 40000);
         game.resources.money = m;
         game.resources.budget = m;
         game.resources.funds = m;
@@ -1964,9 +1966,17 @@ window.ProtecAuth = {
       if (savedData.logistics) game.logistics = savedData.logistics;
       if (savedData.weather) game.weather = savedData.weather;
       if (savedData.prefectureState) game.prefectureState = savedData.prefectureState;
+      if (savedData.mealAllowancePerVolunteer !== undefined) game.mealAllowancePerVolunteer = savedData.mealAllowancePerVolunteer;
+      if (savedData.antenneMessagesData) game.antenneMessagesData = savedData.antenneMessagesData;
       if (savedData.adRewards) {
         game.adRewards = savedData.adRewards;
         if (window.ProtecAds) window.ProtecAds.updateUI(game);
+      }
+      if (Array.isArray(savedData.localEcussons) && savedData.localEcussons.length > 0) {
+        game.localEcussons = savedData.localEcussons;
+        if (window.ProtecEcussons && typeof window.ProtecEcussons.loadPlayerEcussons === 'function') {
+          window.ProtecEcussons.loadPlayerEcussons();
+        }
       }
       if (savedData.rewards) {
         // Fusion intelligente pour ne jamais régresser sur une récompense réclamée récemment

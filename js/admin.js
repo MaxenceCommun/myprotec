@@ -3248,13 +3248,18 @@ window.ProtecAdmin = {
     if (success) {
       const targetUser = (this.usersCache || []).find(u => u.id === userId);
       const targetName = userId === 'all' ? 'tous les directeurs' : (targetUser?.username || 'le joueur');
-      const badgeTitle = badge.nom || badge.name || badgeCode;
       if (window.game) {
         window.game.showToast('Écusson Distribué !', `L'écusson « ${badgeTitle} » (x${qty}) a été remis à ${targetName}.`, 'green');
+      } else if (window.ProtecDialog) {
+        window.ProtecDialog.alert(`L'écusson « ${badgeTitle} » (x${qty}) a été remis à ${targetName}.`, 'Écusson Distribué !');
       }
       this.renderBadgeManagerModalContent();
     } else {
-      await window.ProtecDialog.alert('Erreur lors de l’attribution de l’écusson.', 'Erreur Écusson');
+      if (window.ProtecDialog) {
+        await window.ProtecDialog.alert('Erreur lors de l’attribution de l’écusson.', 'Erreur Écusson');
+      } else {
+        alert('Erreur lors de l’attribution de l’écusson.');
+      }
     }
   },
 

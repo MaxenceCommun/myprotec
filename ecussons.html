@@ -176,15 +176,18 @@
   <script src="js/landing.js"></script>
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       if (window.lucide) window.lucide.createIcons();
+      if (window.ProtecSupabase && typeof window.ProtecSupabase.init === 'function') {
+        window.ProtecSupabase.init();
+      }
       if (window.MyProtecLanding) {
         window.MyProtecLanding.initTooltip();
         window.MyProtecLanding.init3DTilt();
-        window.MyProtecLanding.syncLeaderboardWithDatabase().then(() => {
-          // Affichage de TOUTES les collections (limit = 0)
-          window.MyProtecLanding.renderShowcaseGrid('all', 0);
-        });
+        await window.MyProtecLanding.syncLeaderboardWithDatabase();
+        // Affichage de TOUTES les collections (limit = 0)
+        window.MyProtecLanding.renderShowcaseGrid('all', 0);
+        if (window.lucide) window.lucide.createIcons();
       }
     });
   </script>

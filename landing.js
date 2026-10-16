@@ -108,12 +108,13 @@ window.MyProtecLanding = {
       user = null;
     }
 
-    const isLoggedIn = !!(token && user);
+    const isLoggedIn = !!(token || user || window.ProtecAuth?.currentUser);
     const navActions = document.getElementById('landing-nav-actions');
     const heroActions = document.getElementById('landing-hero-actions');
 
     if (isLoggedIn) {
-      const username = user.username || 'Directeur';
+      const activeUser = user || window.ProtecAuth?.currentUser || {};
+      const username = activeUser.username || 'Directeur';
       const safeName = (function(str) {
         return String(str || '').replace(/[&<>"']/g, m => ({
           '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
@@ -122,15 +123,15 @@ window.MyProtecLanding = {
 
       if (navActions) {
         navActions.innerHTML = `
-          <div class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 border border-blue-200/80 text-xs font-bold text-[#002e6d]">
-            <i data-lucide="shield" class="w-3.5 h-3.5 text-[#0055b8]"></i>
+          <div class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 dark:bg-slate-800/90 border border-blue-200/80 dark:border-slate-700 text-xs font-bold text-[#002e6d] dark:text-blue-200 shadow-xs">
+            <i data-lucide="shield" class="w-3.5 h-3.5 text-[#0055b8] dark:text-blue-400"></i>
             <span class="truncate max-w-[130px]">${safeName}</span>
           </div>
           <button onclick="window.MyProtecLanding.enterGame()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-gradient-to-r from-[#0055b8] to-[#0284c7] hover:from-[#004494] hover:to-[#0270a8] shadow-md transition flex items-center gap-1.5 cursor-pointer">
             <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
             <span>Mon Antenne</span>
           </button>
-          <button onclick="window.ProtecAuth.logout(); window.MyProtecLanding.updateAuthButtonsState();" class="p-2 rounded-xl text-xs font-bold text-slate-500 hover:text-rose-600 bg-white hover:bg-rose-50 border border-slate-200 transition cursor-pointer" title="Se déconnecter">
+          <button onclick="window.ProtecAuth.logout(); window.MyProtecLanding.updateAuthButtonsState();" class="p-2 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 bg-white/80 dark:bg-slate-800/80 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-slate-200 dark:border-slate-700 transition cursor-pointer" title="Se déconnecter">
             <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
           </button>
         `;
@@ -143,7 +144,7 @@ window.MyProtecLanding = {
             <span>Accéder à mon Antenne</span>
             <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
           </button>
-          <button onclick="window.ProtecAuth.logout(); window.MyProtecLanding.updateAuthButtonsState();" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/85 hover:bg-white text-slate-700 hover:text-rose-600 font-extrabold text-sm border border-slate-200/90 shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+          <button onclick="window.ProtecAuth.logout(); window.MyProtecLanding.updateAuthButtonsState();" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-rose-600 dark:hover:text-rose-400 font-extrabold text-sm border border-slate-200/90 dark:border-slate-700 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
             <i data-lucide="log-out" class="w-4 h-4"></i>
             <span>Changer de compte</span>
           </button>
@@ -152,11 +153,11 @@ window.MyProtecLanding = {
     } else {
       if (navActions) {
         navActions.innerHTML = `
-          <button onclick="window.MyProtecLanding.openAuth('login')" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-700 hover:text-slate-950 bg-white/80 hover:bg-white border border-slate-200 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="user" class="w-3.5 h-3.5 text-slate-500"></i>
+          <button onclick="window.MyProtecLanding.openAuth('login')" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="user" class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400"></i>
             <span>Connexion</span>
           </button>
-          <button onclick="window.MyProtecLanding.openAuth('register')" class="px-4.5 py-2 rounded-xl text-xs font-black text-white bg-[#ff6600] hover:bg-[#e65c00] shadow-md transition flex items-center gap-1.5 cursor-pointer">
+          <button onclick="window.MyProtecLanding.handlePlayClick()" class="px-4.5 py-2 rounded-xl text-xs font-black text-white bg-[#ff6600] hover:bg-[#e65c00] shadow-md transition flex items-center gap-1.5 cursor-pointer">
             <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
             <span>Jouer</span>
           </button>
@@ -165,13 +166,13 @@ window.MyProtecLanding = {
 
       if (heroActions) {
         heroActions.innerHTML = `
-          <button onclick="window.MyProtecLanding.openAuth('register')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-[#ff6600] hover:bg-[#e65c00] text-white font-black text-sm shadow-xl hover:shadow-2xl transition flex items-center justify-center gap-2 cursor-pointer group">
+          <button onclick="window.MyProtecLanding.handlePlayClick()" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-[#ff6600] hover:bg-[#e65c00] text-white font-black text-sm shadow-xl hover:shadow-2xl transition flex items-center justify-center gap-2 cursor-pointer group">
             <i data-lucide="play" class="w-4 h-4 fill-current"></i>
             <span id="landing-hero-register-text">Jouer gratuitement</span>
             <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
           </button>
-          <button onclick="window.MyProtecLanding.openAuth('login')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/85 hover:bg-white text-slate-800 font-extrabold text-sm border border-slate-200/90 shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
-            <i data-lucide="log-in" class="w-4 h-4 text-[#0055b8]"></i>
+          <button onclick="window.MyProtecLanding.openAuth('login')" class="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white font-extrabold text-sm border border-slate-200/90 dark:border-slate-700 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
+            <i data-lucide="log-in" class="w-4 h-4 text-[#0055b8] dark:text-blue-400"></i>
             <span>Se connecter</span>
           </button>
         `;
@@ -181,6 +182,21 @@ window.MyProtecLanding = {
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
       window.lucide.createIcons();
     }
+  },
+
+  // Action unifiée du bouton Jouer (vers jeu.html si connecté, modal login/register si non connecté)
+  handlePlayClick() {
+    const token = localStorage.getItem('protec_auth_token');
+    let user = null;
+    try {
+      user = JSON.parse(localStorage.getItem('protec_user') || 'null');
+    } catch (e) {}
+    if (token || user || window.ProtecAuth?.currentUser) {
+      this.enterGame();
+      return;
+    }
+    const hasAccount = !!localStorage.getItem('protec_last_login_username') || !!localStorage.getItem('protec_user');
+    this.openAuth(hasAccount ? 'login' : 'register');
   },
 
   // Ouvrir le simulateur opérationnel en direct
@@ -341,20 +357,30 @@ window.MyProtecLanding = {
     const items = document.querySelectorAll('.pole-accordion-item');
     if (!items || items.length === 0) return;
 
+    const setExpanded = (activeItem) => {
+      items.forEach(el => {
+        if (el === activeItem) {
+          el.classList.add('is-expanded');
+        } else {
+          el.classList.remove('is-expanded');
+        }
+      });
+    };
+
     items.forEach((item, index) => {
-      // Sur mobile : clic pour déplier
-      item.addEventListener('click', () => {
-        items.forEach(el => {
-          if (el !== item) el.classList.remove('is-expanded');
-        });
-        item.classList.toggle('is-expanded');
+      // Au survol (curseur) sur desktop
+      item.addEventListener('mouseenter', () => {
+        setExpanded(item);
       });
 
-      // Déplier le premier pôle par défaut
-      if (index === 0) {
-        item.classList.add('is-expanded');
-      }
+      // Au clic (tactile / mobile)
+      item.addEventListener('click', () => {
+        setExpanded(item);
+      });
     });
+
+    // Par défaut, le 1er pôle est déplié
+    setExpanded(items[0]);
   },
 
   // Calcul du score de collection selon la somme des niveaux de rareté
@@ -370,24 +396,121 @@ window.MyProtecLanding = {
   // Synchronisation avec la base Supabase et la partie locale si existante
   async syncLeaderboardWithDatabase() {
     try {
-      // 1. Vérifier si une partie locale du joueur possède des écussons
-      const localRaw = localStorage.getItem('protec_save') || localStorage.getItem('myprotec_save') || localStorage.getItem('protec_save_game');
-      if (localRaw) {
-        const lSave = JSON.parse(localRaw);
-        const lEcussons = lSave.localEcussons || lSave.ecussons || [];
-        if (lEcussons.length > 0) {
-          const stationName = lSave.stations?.[0]?.name || lSave.player?.stationName || 'Mon Antenne';
-          const dept = lSave.stations?.[0]?.departmentCode || lSave.player?.departmentCode || '54';
-          const city = lSave.stations?.[0]?.city || lSave.player?.city || 'Nancy';
-          const playerName = lSave.player?.name || 'Directeur';
+      // 1. S'assurer de l'initialisation Supabase
+      if (window.ProtecSupabase) {
+        if (typeof window.ProtecSupabase.init === 'function' && !window.ProtecSupabase.client) {
+          window.ProtecSupabase.init();
+        }
+        for (let i = 0; i < 25; i++) {
+          if (window.ProtecSupabase.client) break;
+          await new Promise(r => setTimeout(r, 100));
+        }
+      }
 
-          // Transformer les écussons locaux
-          const catalog = window.ProtecEcussons?.catalog || [];
-          const badges = lEcussons.map(le => {
-            const catItem = catalog.find(c => c.code === (le.code || le.id) || c.id === (le.id || le.code)) || {};
-            let code = le.code || catItem.code;
-            let name = catItem.nom || le.name || 'Écusson';
-            let imgUrl = catItem.imageUrl || le.imageUrl;
+      // Catalogues officiels & de secours
+      const catalog = (window.ProtecEcussons?.catalog || window.ProtecEcussons?.FALLBACK_CATALOG || []);
+
+      // Indexation unifiée par Joueur / Antenne
+      const playerGroups = {}; // key = playerId
+
+      const getOrInitGroup = (pid, plHint = null, stHint = null) => {
+        if (!playerGroups[pid]) {
+          playerGroups[pid] = {
+            playerId: pid,
+            player: plHint,
+            station: stHint,
+            badgesMap: new Map()
+          };
+        } else {
+          if (!playerGroups[pid].player && plHint) playerGroups[pid].player = plHint;
+          if (!playerGroups[pid].station && stHint) playerGroups[pid].station = stHint;
+        }
+        return playerGroups[pid];
+      };
+
+      if (window.ProtecSupabase && window.ProtecSupabase.client) {
+        const [
+          { data: supaAntennes },
+          { data: supaStations },
+          { data: supaPlayers },
+          { data: supaSaves }
+        ] = await Promise.all([
+          window.ProtecSupabase.client.from('antenne_ecussons').select('antenne_id, quantite, ecusson:ecussons(*)').catch(() => ({ data: [] })),
+          window.ProtecSupabase.client.from('alliance_stations').select('id, player_id, player_name, station_name, city').catch(() => ({ data: [] })),
+          window.ProtecSupabase.client.from('players').select('id, username, station_name, city, department_code').catch(() => ({ data: [] })),
+          window.ProtecSupabase.client.from('game_saves').select('user_id, username, save_data').catch(() => ({ data: [] }))
+        ]);
+
+        const stationsMap = new Map();
+        (supaStations || []).forEach(s => {
+          if (s.id) stationsMap.set(s.id, s);
+          if (s.player_id && !stationsMap.has(s.player_id)) stationsMap.set(s.player_id, s);
+        });
+
+        const playersMap = new Map();
+        (supaPlayers || []).forEach(p => {
+          if (p.id) playersMap.set(p.id, p);
+          if (p.username) playersMap.set(p.username, p);
+        });
+
+        // A. Agréger les écussons depuis antenne_ecussons
+        (supaAntennes || []).forEach(item => {
+          const st = stationsMap.get(item.antenne_id);
+          const pl = playersMap.get(item.antenne_id) || (st?.player_id ? playersMap.get(st.player_id) : null);
+          const targetPid = pl?.id || st?.player_id || item.antenne_id;
+          const group = getOrInitGroup(targetPid, pl, st);
+
+          if (item.ecusson) {
+            const code = item.ecusson.code;
+            let name = item.ecusson.nom || 'Écusson';
+            let imgUrl = item.ecusson.badge_url || item.ecusson.imageUrl;
+
+            if (code === 'renf_fondateur' || (name && name.includes('Pionnier'))) {
+              name = 'Membre Fondateur';
+              imgUrl = 'images/badges/membre_fondateur.png';
+            } else if (code === 'dept_54') {
+              name = 'Protection Civile 54 • Meurthe-et-Moselle';
+              imgUrl = 'images/badges/badge_meurthe_et_moselle_54.png';
+            } else if (!imgUrl) {
+              const fb = catalog.find(f => f.code === code || f.id === code);
+              if (fb && (fb.imageUrl || fb.badge_url)) imgUrl = fb.imageUrl || fb.badge_url;
+            }
+
+            const qty = item.quantite || 1;
+            const existing = group.badgesMap.get(code);
+            if (existing) {
+              existing.quantite = Math.max(existing.quantite || 1, qty);
+            } else {
+              group.badgesMap.set(code, {
+                id: item.ecusson.id,
+                code: code,
+                name: name,
+                cat: item.ecusson.categorie || 'specialite',
+                rarity: item.ecusson.rarete || 'commun',
+                icon: item.ecusson.icon || 'shield',
+                imageUrl: imgUrl,
+                desc: item.ecusson.description || '',
+                quantite: qty
+              });
+            }
+          }
+        });
+
+        // B. Agréger les écussons depuis game_saves (sauvegardes cloud directes)
+        (supaSaves || []).forEach(s => {
+          const pl = (s.user_id ? playersMap.get(s.user_id) : null) || (s.username ? playersMap.get(s.username) : null);
+          const st = (s.user_id ? stationsMap.get(s.user_id) : null) || (pl?.id ? stationsMap.get(pl.id) : null);
+          const targetPid = s.user_id || pl?.id || s.username;
+          if (!targetPid) return;
+          const group = getOrInitGroup(targetPid, pl, st);
+
+          const locBadges = s.save_data?.localEcussons || s.save_data?.ecussons || [];
+          locBadges.forEach(lb => {
+            const code = lb.code || lb.id;
+            if (!code) return;
+            const catItem = catalog.find(c => c.code === code || c.id === code) || {};
+            let name = catItem.nom || lb.name || 'Écusson';
+            let imgUrl = catItem.imageUrl || catItem.badge_url || lb.imageUrl;
 
             if (code === 'renf_fondateur' || name.includes('Pionnier')) {
               name = 'Membre Fondateur';
@@ -397,155 +520,112 @@ window.MyProtecLanding = {
               imgUrl = 'images/badges/badge_meurthe_et_moselle_54.png';
             }
 
-            return {
-              id: le.id || le.code,
-              code: code,
-              name: name,
-              cat: catItem.categorie || le.cat || 'specialite',
-              rarity: catItem.rarete || le.rarity || 'commun',
-              icon: catItem.icon || le.icon || 'shield',
-              imageUrl: imgUrl,
-              desc: catItem.description || ''
-            };
+            const qty = lb.quantite || 1;
+            const existing = group.badgesMap.get(code);
+            if (existing) {
+              existing.quantite = Math.max(existing.quantite || 1, qty);
+            } else {
+              group.badgesMap.set(code, {
+                id: lb.id || code,
+                code: code,
+                name: name,
+                cat: catItem.categorie || lb.cat || 'specialite',
+                rarity: catItem.rarete || lb.rarity || 'commun',
+                icon: catItem.icon || lb.icon || 'shield',
+                imageUrl: imgUrl,
+                desc: catItem.description || lb.desc || '',
+                quantite: qty
+              });
+            }
           });
+        });
 
-          // Ajouter ou mettre à jour la vitrine du joueur dans le classement
-          const existingIdx = this.antennesShowcases.findIndex(a => a.id === 'player-station');
-          const playerShowcase = {
-            id: 'player-station',
-            name: stationName,
-            director: playerName,
-            department: `${city} (${dept})`,
-            badges: badges
-          };
+        // C. Convertir en showcases pour l'affichage
+        const dynamicList = [];
+        for (const [pid, grp] of Object.entries(playerGroups)) {
+          const badges = Array.from(grp.badgesMap.values());
+          if (badges.length === 0) continue;
 
-          if (existingIdx >= 0) {
-            this.antennesShowcases[existingIdx] = playerShowcase;
-          } else {
-            this.antennesShowcases.push(playerShowcase);
+          const pl = grp.player || playersMap.get(pid);
+          const st = grp.station || stationsMap.get(pid);
+
+          let stationName = st?.station_name || pl?.station_name;
+          if (!stationName || stationName === 'Antenne Locale' || stationName === 'Mon Antenne' || stationName.startsWith('station-')) {
+            const city = pl?.city || st?.city;
+            const dept = pl?.department_code;
+            if (city) stationName = `Antenne de ${city}`;
+            else if (dept) stationName = `Antenne Protection Civile (${dept})`;
+            else stationName = 'Antenne Protection Civile';
+          } else if (!stationName.toLowerCase().includes('antenne') && !stationName.toLowerCase().includes('protection civile')) {
+            stationName = `Antenne de ${stationName}`;
           }
+
+          const directorName = pl?.username || st?.player_name || 'Directeur d’Antenne';
+          const city = pl?.city || st?.city || '';
+          const dept = pl?.department_code || '';
+          let deptLabel = 'Réseau National';
+          if (city && dept) deptLabel = `${city} (${dept})`;
+          else if (city) deptLabel = city;
+          else if (dept) deptLabel = `Département ${dept}`;
+
+          dynamicList.push({
+            id: `supa-${pid}`,
+            antenneId: pid,
+            name: stationName,
+            director: directorName,
+            department: deptLabel,
+            badges: badges
+          });
+        }
+
+        if (dynamicList.length > 0) {
+          this.antennesShowcases = dynamicList;
         }
       }
 
-      // 2. Interroger Supabase si la table antenne_ecussons a des données
-      if (window.ProtecSupabase && window.ProtecSupabase.client) {
-        const [
-          { data: supaAntennes, error: errAntennes },
-          { data: supaStations },
-          { data: supaPlayers }
-        ] = await Promise.all([
-          window.ProtecSupabase.client.from('antenne_ecussons').select('antenne_id, quantite, ecusson:ecussons(*)'),
-          window.ProtecSupabase.client.from('alliance_stations').select('id, player_id, player_name, station_name, city').catch(() => ({ data: [] })),
-          window.ProtecSupabase.client.from('players').select('id, username, station_name, city, department_code').catch(() => ({ data: [] }))
-        ]);
+      // Fallback local si aucune antenne distante trouvée
+      if (this.antennesShowcases.length === 0) {
+        const localRaw = localStorage.getItem('protec_save') || localStorage.getItem('myprotec_save') || localStorage.getItem('protec_save_game');
+        if (localRaw) {
+          const lSave = JSON.parse(localRaw);
+          const lEcussons = lSave.localEcussons || lSave.ecussons || [];
+          if (lEcussons.length > 0) {
+            const stationName = lSave.stations?.[0]?.name || lSave.player?.stationName || 'Mon Antenne';
+            const dept = lSave.stations?.[0]?.departmentCode || lSave.player?.departmentCode || '54';
+            const city = lSave.stations?.[0]?.city || lSave.player?.city || 'Nancy';
+            const playerName = lSave.player?.name || 'Directeur';
 
-        if (!errAntennes && supaAntennes && supaAntennes.length > 0) {
-          // Indexation rapide des stations et profils directeurs
-          const stationsMap = new Map();
-          (supaStations || []).forEach(s => {
-            if (s.id) stationsMap.set(s.id, s);
-            if (s.player_id && !stationsMap.has(s.player_id)) stationsMap.set(s.player_id, s);
-          });
-
-          const playersMap = new Map();
-          (supaPlayers || []).forEach(p => {
-            if (p.id) playersMap.set(p.id, p);
-            if (p.username) playersMap.set(p.username, p);
-          });
-
-          // Profil utilisateur actuellement connecté (si présent)
-          let currentProfile = null;
-          try {
-            currentProfile = JSON.parse(localStorage.getItem('protec_user_profile') || '{}');
-          } catch (e) {}
-
-          // Grouper par antenne_id
-          const groups = {};
-          supaAntennes.forEach(item => {
-            if (!groups[item.antenne_id]) groups[item.antenne_id] = [];
-            if (item.ecusson) {
-              const code = item.ecusson.code;
-              let name = item.ecusson.nom || 'Écusson';
-              let imgUrl = item.ecusson.badge_url || item.ecusson.imageUrl;
-
-              if (code === 'renf_fondateur' || (name && name.includes('Pionnier'))) {
+            const badges = lEcussons.map(le => {
+              const catItem = catalog.find(c => c.code === (le.code || le.id) || c.id === (le.id || le.code)) || {};
+              let code = le.code || catItem.code;
+              let name = catItem.nom || le.name || 'Écusson';
+              let imgUrl = catItem.imageUrl || le.imageUrl;
+              if (code === 'renf_fondateur' || name.includes('Pionnier')) {
                 name = 'Membre Fondateur';
                 imgUrl = 'images/badges/membre_fondateur.png';
               } else if (code === 'dept_54') {
                 name = 'Protection Civile 54 • Meurthe-et-Moselle';
                 imgUrl = 'images/badges/badge_meurthe_et_moselle_54.png';
-              } else if (!imgUrl && window.ProtecEcussons?.FALLBACK_CATALOG) {
-                const fb = window.ProtecEcussons.FALLBACK_CATALOG.find(f => f.code === code);
-                if (fb && fb.imageUrl) imgUrl = fb.imageUrl;
               }
-
-              groups[item.antenne_id].push({
-                id: item.ecusson.id,
+              return {
+                id: le.id || le.code,
                 code: code,
                 name: name,
-                cat: item.ecusson.categorie,
-                rarity: item.ecusson.rarete,
-                icon: item.ecusson.icon || 'shield',
+                cat: catItem.categorie || le.cat || 'specialite',
+                rarity: catItem.rarete || le.rarity || 'commun',
+                icon: catItem.icon || le.icon || 'shield',
                 imageUrl: imgUrl,
-                desc: item.ecusson.description
-              });
-            }
-          });
-
-          // Mettre à jour les données réelles avec les vrais noms d'antenne et pseudos de joueurs
-          const dynamicList = [];
-          for (const [antId, bList] of Object.entries(groups)) {
-            const st = stationsMap.get(antId);
-            const pl = playersMap.get(antId) || (st?.player_id ? playersMap.get(st.player_id) : null);
-
-            // Vérifier aussi la session connectée locale si c'est le joueur en cours
-            const isCurrent = (currentProfile?.id === antId) || (currentProfile?.station_id === antId);
-            const effPl = pl || (isCurrent ? currentProfile : null);
-
-            // Résolution du nom de l'antenne
-            let stationName = st?.station_name || effPl?.station_name;
-            if (!stationName || stationName === 'Antenne Locale' || stationName === 'Mon Antenne' || stationName.startsWith('station-')) {
-              const city = effPl?.city || st?.city;
-              const dept = effPl?.department_code;
-              if (city) {
-                stationName = `Antenne de ${city}`;
-              } else if (dept) {
-                stationName = `Antenne Protection Civile (${dept})`;
-              } else {
-                stationName = 'Antenne Protection Civile';
-              }
-            } else if (!stationName.toLowerCase().includes('antenne') && !stationName.toLowerCase().includes('protection civile')) {
-              // Si le nom est juste une ville (ex: "Nancy"), on le rend plus valorisant
-              stationName = `Antenne de ${stationName}`;
-            }
-
-            // Pseudo du joueur / directeur
-            const directorName = effPl?.username || st?.player_name || 'Directeur d’Antenne';
-
-            // Ville et département
-            const city = effPl?.city || st?.city || '';
-            const dept = effPl?.department_code || '';
-            let deptLabel = 'Réseau National';
-            if (city && dept) {
-              deptLabel = `${city} (${dept})`;
-            } else if (city) {
-              deptLabel = city;
-            } else if (dept) {
-              deptLabel = `Département ${dept}`;
-            }
-
-            dynamicList.push({
-              id: `supa-${antId}`,
-              antenneId: antId,
-              name: stationName,
-              director: directorName,
-              department: deptLabel,
-              badges: bList
+                desc: catItem.description || ''
+              };
             });
-          }
 
-          if (dynamicList.length > 0) {
-            this.antennesShowcases = dynamicList;
+            this.antennesShowcases = [{
+              id: 'player-station',
+              name: stationName,
+              director: playerName,
+              department: `${city} (${dept})`,
+              badges: badges
+            }];
           }
         }
       }
@@ -773,14 +853,6 @@ window.MyProtecLanding = {
               }
             </p>
           </div>
-          ${!isSearchOrFilter ? `
-            <div class="pt-2">
-              <a href="jeu.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black bg-[#ff6600] hover:bg-[#e65c00] text-white shadow-md transition">
-                <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
-                <span>Prendre les Commandes</span>
-              </a>
-            </div>
-          ` : ''}
         </div>
       `;
       if (window.lucide) window.lucide.createIcons();

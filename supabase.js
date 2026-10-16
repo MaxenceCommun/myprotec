@@ -28,6 +28,7 @@ window.ProtecSupabase = {
         });
         this.isInitialized = true;
         this.checkConnection();
+        this.initMultiplayerRealtime(window.game || null);
         console.log('✅ Client Supabase PostgreSQL initialisé avec succès.');
       } else {
         // En attente du chargement du script CDN
@@ -210,6 +211,12 @@ window.ProtecSupabase = {
       const g = game || window.game;
       if (g && g.handleMultiplayerEvent && data) {
         g.handleMultiplayerEvent('admin_broadcast', data);
+      } else if (data && window.ProtecNotifications) {
+        window.ProtecNotifications.sendPushNotification(
+          data.title || '📢 Annonce Fédérale',
+          data.message || '',
+          { category: 'admin_broadcast', color: data.type || 'blue' }
+        );
       }
     });
 
@@ -228,6 +235,26 @@ window.ProtecSupabase = {
       const g = game || window.game;
       if (g && g.handleMultiplayerEvent && data) {
         g.handleMultiplayerEvent('admin_player_notification', data);
+      } else if (data && window.ProtecNotifications) {
+        // HORS CARTE (ex: sur index.html ou écran d'accueil avec session sauvegardée)
+        let currentUser = null;
+        try {
+          currentUser = window.ProtecAuth?.currentUser || JSON.parse(localStorage.getItem('protec_user_profile') || '{}');
+        } catch (e) {}
+
+        const isForMe = !data.targetUserId || data.targetUserId === 'all' ||
+                        (currentUser && (currentUser.id === data.targetUserId || currentUser.username === data.targetUserId));
+        if (isForMe) {
+          const title = data.title || '🔔 Notification Administrateur';
+          const msg = data.message || '';
+          window.ProtecNotifications.sendPushNotification(title, msg, {
+            category: data.category || 'admin-test',
+            color: data.type || 'orange'
+          });
+          if (window.ProtecNotifications.playAlertSound) {
+            window.ProtecNotifications.playAlertSound(title, msg, { color: data.type });
+          }
+        }
       }
     });
 
@@ -411,6 +438,56 @@ window.ProtecSupabase = {
     }
   },
 
+  // File d'attente Supabase pour les notifications des joueurs (réception différée)
+  async queuePlayerNotification(targetUserId, notifData) {
+    if (!this.client) return false;
+    try {
+      let query = this.client.from('game_saves').select('user_id, username, save_data');
+      if (targetUserId && targetUserId !== 'all') {
+        query = query.or(`user_id.eq.${targetUserId},username.eq.${targetUserId}`);
+      }
+      const { data: saves, error } = await query;
+      if (!error && saves && saves.length > 0) {
+        for (const save of saves) {
+          const sd = save.save_data || {};
+          const pending = Array.isArray(sd.pending_notifications) ? sd.pending_notifications : [];
+          pending.unshift({
+            ...notifData,
+            id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            created_at: new Date().toISOString()
+          });
+          sd.pending_notifications = pending.slice(0, 20);
+          await this.client.from('game_saves').update({ save_data: sd }).eq('user_id', save.user_id);
+        }
+        return true;
+      }
+    } catch (e) {
+      console.warn('Erreur file d\'attente notification Supabase:', e);
+    }
+    return false;
+  },
+
+  // Sauvegarde d'un abonnement Push W3C dans la table dédiée push_subscriptions
+  async savePushSubscription(subscription, userId) {
+    if (!this.client || !subscription || !subscription.endpoint) return false;
+    try {
+      const subJson = (typeof subscription.toJSON === 'function') ? subscription.toJSON() : subscription;
+      const { error } = await this.client.from('push_subscriptions').upsert({
+        endpoint: subscription.endpoint,
+        user_id: userId || null,
+        p256dh: subJson.keys?.p256dh || '',
+        auth: subJson.keys?.auth || '',
+        user_agent: navigator.userAgent,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'endpoint' });
+      return !error;
+    } catch (e) {
+      console.warn('Erreur savePushSubscription Supabase:', e);
+      return false;
+    }
+  },
+
+
   // Diffusion d'une attribution d'écusson en direct
   broadcastBadgeAwarded(data) {
     if (!this.realtimeChannel) return;
@@ -458,6 +535,31 @@ window.ProtecSupabase = {
         if (ecData) ecussonRecord = ecData;
       } catch (e) {}
 
+      // Auto-création dans ecussons si absent
+      if (!ecussonRecord) {
+        const cat = (window.ProtecEcussons?.catalog || window.ProtecEcussons?.FALLBACK_CATALOG || []);
+        const catBadge = cat.find(c => c.code === badgeCode || c.id === badgeCode) || (typeof badge === 'object' ? badge : null);
+        if (catBadge) {
+          try {
+            let catName = catBadge.categorie || catBadge.cat || 'specialite';
+            if (!['specialite', 'mission', 'departement', 'renfort'].includes(catName)) {
+              catName = 'renfort';
+            }
+            const { data: newEc } = await this.client.from('ecussons').insert({
+              code: badgeCode,
+              nom: catBadge.nom || catBadge.name || 'Écusson Officiel',
+              description: catBadge.description || catBadge.desc || 'Distinction de la Protection Civile',
+              categorie: catName,
+              rarete: catBadge.rarete || catBadge.rarity || 'rare',
+              badge_url: catBadge.imageUrl || catBadge.badge_url || null
+            }).select().maybeSingle();
+            if (newEc) ecussonRecord = newEc;
+          } catch (insErr) {
+            console.warn('Auto-création ecusson Supabase:', insErr);
+          }
+        }
+      }
+
       // 2. Mettre à jour game_saves
       if (isAll) {
         const { data: saves } = await this.client.from('game_saves').select('*');
@@ -491,10 +593,30 @@ window.ProtecSupabase = {
         }
       } else {
         const isUUID = typeof targetUserId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId);
-        let q = this.client.from('game_saves').select('*');
-        if (isUUID) q = q.eq('user_id', targetUserId);
-        else q = q.eq('username', targetUserId);
-        let { data: saveRecord } = await q.maybeSingle();
+        let saveRecord = null;
+
+        // Recherche résiliente par UUID puis par username
+        if (isUUID) {
+          const { data: byId } = await this.client.from('game_saves').select('*').eq('user_id', targetUserId).maybeSingle();
+          if (byId) saveRecord = byId;
+          else {
+            const { data: pl } = await this.client.from('players').select('username').eq('id', targetUserId).maybeSingle();
+            if (pl?.username) {
+              const { data: byUname } = await this.client.from('game_saves').select('*').eq('username', pl.username).maybeSingle();
+              if (byUname) saveRecord = byUname;
+            }
+          }
+        } else {
+          const { data: byUname } = await this.client.from('game_saves').select('*').eq('username', targetUserId).maybeSingle();
+          if (byUname) saveRecord = byUname;
+          else {
+            const { data: pl } = await this.client.from('players').select('id').eq('username', targetUserId).maybeSingle();
+            if (pl?.id) {
+              const { data: byId } = await this.client.from('game_saves').select('*').eq('user_id', pl.id).maybeSingle();
+              if (byId) saveRecord = byId;
+            }
+          }
+        }
 
         let sData = saveRecord?.save_data || {};
         if (!sData.localEcussons) sData.localEcussons = [];
@@ -506,6 +628,8 @@ window.ProtecSupabase = {
         if (saveRecord) {
           await this.client.from('game_saves').update({
             save_data: sData,
+            user_id: saveRecord.user_id || (isUUID ? targetUserId : null),
+            username: saveRecord.username || (!isUUID ? targetUserId : null),
             updated_at: new Date().toISOString()
           }).eq('id', saveRecord.id);
         } else {
@@ -513,7 +637,7 @@ window.ProtecSupabase = {
             user_id: isUUID ? targetUserId : null,
             username: isUUID ? null : targetUserId,
             save_data: sData,
-            funds: 15000,
+            funds: 40000,
             updated_at: new Date().toISOString()
           });
         }
@@ -528,6 +652,19 @@ window.ProtecSupabase = {
               updated_at: new Date().toISOString()
             }, { onConflict: 'antenne_id,ecusson_id' });
           } catch (e) {}
+
+          // Si le joueur a une station enregistrée dans alliance_stations, synchroniser aussi pour son ID de station
+          try {
+            const { data: st } = await this.client.from('alliance_stations').select('id').eq('player_id', targetUserId).maybeSingle();
+            if (st && st.id && st.id !== antId) {
+              await this.client.from('antenne_ecussons').upsert({
+                antenne_id: st.id,
+                ecusson_id: ecussonRecord.id,
+                quantite: newQty,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'antenne_id,ecusson_id' });
+            }
+          } catch (stErr) {}
         }
       }
 
@@ -625,7 +762,7 @@ window.ProtecSupabase = {
           departmentCode: p.department_code || '75',
           createdAt: p.created_at,
           lastLogin: p.last_login,
-          money: (sData?.resources?.money !== undefined) ? sData.resources.money : (s?.funds ?? 15000),
+          money: (sData?.resources?.money !== undefined) ? sData.resources.money : (s?.funds ?? 40000),
           volunteersCount: (sData?.volunteers?.length !== undefined) ? sData.volunteers.length : (s?.volunteers_count ?? 4),
           vehiclesCount: (sData?.vehicles?.length !== undefined) ? sData.vehicles.length : (s?.vehicles_count ?? 1),
           stationsCount: (sData?.stations?.length !== undefined) ? sData.stations.length : (s?.stations_count ?? 1),
@@ -684,7 +821,7 @@ window.ProtecSupabase = {
           user_id: isUUID ? playerId : null,
           username: updates.username || (saveRecord ? saveRecord.username : null),
           save_data: sData,
-          funds: updates.money !== undefined ? Number(updates.money) : (saveRecord?.funds ?? 15000),
+          funds: updates.money !== undefined ? Number(updates.money) : (saveRecord?.funds ?? 40000),
           updated_at: new Date().toISOString()
         }, { onConflict: isUUID ? 'user_id' : 'username' });
       }
@@ -1263,10 +1400,23 @@ window.ProtecSupabase = {
         reputation_prefecture: game.reputation_prefecture !== undefined ? game.reputation_prefecture : 50,
         reputation_villes: game.reputation_villes || {},
         departmentInfrastructures: game.departmentInfrastructures || {},
+        mealAllowancePerVolunteer: game.mealAllowancePerVolunteer || 15,
+        antenneMessagesData: game.antenneMessagesData || null,
         platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(game.player, game)) || null,
         lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null,
-        localEcussons: game.localEcussons || []
+        localEcussons: (game.localEcussons && game.localEcussons.length > 0) ? game.localEcussons : (game.localEcussons || [])
       };
+
+      // Si le jeu n'a pas encore chargé les écussons mais que la sauvegarde en contient déjà, les préserver
+      if (!stateToSave.localEcussons || stateToSave.localEcussons.length === 0) {
+        try {
+          const { data: exSave } = await this.client.from('game_saves').select('save_data').eq('user_id', userId).maybeSingle();
+          if (exSave?.save_data?.localEcussons && exSave.save_data.localEcussons.length > 0) {
+            stateToSave.localEcussons = exSave.save_data.localEcussons;
+            game.localEcussons = exSave.save_data.localEcussons;
+          }
+        } catch (e) {}
+      }
 
       const payload = {
         user_id: userId,

@@ -1972,6 +1972,12 @@ window.ProtecAuth = {
         game.adRewards = savedData.adRewards;
         if (window.ProtecAds) window.ProtecAds.updateUI(game);
       }
+      if (Array.isArray(savedData.localEcussons) && savedData.localEcussons.length > 0) {
+        game.localEcussons = savedData.localEcussons;
+        if (window.ProtecEcussons && typeof window.ProtecEcussons.loadPlayerEcussons === 'function') {
+          window.ProtecEcussons.loadPlayerEcussons();
+        }
+      }
       if (savedData.rewards) {
         // Fusion intelligente pour ne jamais régresser sur une récompense réclamée récemment
         if (!game.rewards) {
