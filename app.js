@@ -3272,149 +3272,220 @@ class ProtecGame {
   // --- GÉOLOCALISATION RÉALISTE DES MISSIONS & ÉVÉNEMENTS ---
   // Règle : Les missions doivent être réparties dans le département. Si plusieurs antennes sont implantées dans le département,
   // la mission est générée à proximité de l'antenne concernée (son bassin de vie).
-  calculateRealisticMissionLocation(baseStation = null, missionType = 'dps') {
-    const deptCode = this.currentDepartmentCode || this.player.departmentCode || '54';
+  // --- GÉOLOCALISATION RÉALISTE & COHÉRENTE DES MISSIONS (ANTI-EAU, ANTI-FORÊT, ANTI-AUTOROUTE, SPÉCIFIQUE GARE) ---
+  calculateRealisticMissionLocation(baseStation = null, missionType = 'dps', missionContext = null) {
+    const deptCode = this.currentDepartmentCode || this.player?.departmentCode || '54';
     const dept = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
     const stationsInDept = (this.stations || []).filter(s => s.departmentCode === deptCode || !s.departmentCode);
     const hasMultipleStations = stationsInDept.length > 1;
 
-    // Point d'ancrage principal
-    let base = baseStation || stationsInDept[0] || (dept ? { lat: dept.lat, lng: dept.lng } : { lat: 48.6921, lng: 6.1844 });
+    // Point d'ancrage principal (antenne locale)
+    let base = baseStation || stationsInDept[0] || (dept ? { lat: dept.lat, lng: dept.lng, city: dept.chefLieu } : { lat: 48.6921, lng: 6.1844, city: 'Nancy' });
 
-    // Pour une maraude sociale : toujours ancrer dans l'agglomération centrale de l'antenne
-    const isSocial = missionType === 'social';
+    // Analyse du contexte textuel de la mission pour adapter le lieu
+    const ctxText = (typeof missionContext === 'string'
+      ? missionContext
+      : (missionContext?.title || missionContext?.eventName || missionContext?.desc || missionType || '')).toLowerCase();
 
-    let minDistanceKm = 1.8;
-    let maxDistanceKm = 10.0;
+    const isSocial = missionType === 'social' || ctxText.includes('maraude');
+    const isSNCF = missionType === 'sncf' || ctxText.includes('sncf') || ctxText.includes('gare') || ctxText.includes('train') || ctxText.includes('rail') || ctxText.includes('caténaire') || ctxText.includes('voyageur');
+    const isSamuUrgent = missionType === 'samu';
+    const isPompiers = missionType === 'pompiers';
 
-    if (isSocial) {
-      // Maraude sociale : reste STRICTEMENT dans le périmètre urbain direct du centre-ville et gares (0.4 à 2.2 km)
-      minDistanceKm = 0.4;
-      maxDistanceKm = 2.2;
-    } else if (hasMultipleStations) {
-      // Plusieurs antennes dans le même département : la mission reste dans le secteur de proximité de cette antenne
-      if (missionType === 'samu' || missionType === 'pompiers') {
-        minDistanceKm = 1.2;
-        maxDistanceKm = 6.5; // Urgence réflexe de secteur
-      } else if (missionType === 'dps') {
-        minDistanceKm = 1.8;
-        maxDistanceKm = 13.0; // Postes de secours du bassin
-      } else {
-        minDistanceKm = 2.5;
-        maxDistanceKm = 18.0; // SNCF, météo, grandes crises
-      }
-    } else {
-      // Antenne UNIQUE dans le département : l'antenne couvre le territoire départemental
-      if (missionType === 'samu') {
-        minDistanceKm = 1.5;
-        maxDistanceKm = Math.random() < 0.65 ? 6.5 : 15.0;
-      } else if (missionType === 'pompiers') {
-        minDistanceKm = 1.5;
-        maxDistanceKm = Math.random() < 0.70 ? 7.5 : 16.0;
-      } else if (missionType === 'sncf') {
-        minDistanceKm = 1.0;
-        maxDistanceKm = 8.0; // En gare centrale / agglomération
-      } else if (missionType === 'dps') {
-        const roll = Math.random();
-        if (roll < 0.35) {
-          minDistanceKm = 2.0; maxDistanceKm = 7.5; // Urbain / agglomération
-        } else if (roll < 0.75) {
-          minDistanceKm = 7.5; maxDistanceKm = 20.0; // Villes moyennes du département
-        } else {
-          minDistanceKm = 18.0; maxDistanceKm = 35.0; // Grands rassemblements départementaux
-        }
-      } else {
-        // Météo / Crise Préfecture
-        minDistanceKm = 3.5;
-        maxDistanceKm = 35.0;
-      }
+    // Récupérer toutes les communes réelles du département
+    let communes = (window.ProtecDepartements && typeof window.ProtecDepartements.getCommunesForDepartment === 'function')
+      ? window.ProtecDepartements.getCommunesForDepartment(deptCode)
+      : [];
+
+    if (!communes || communes.length === 0) {
+      communes = [{ nom: base.city || (dept ? dept.chefLieu : 'Chef-Lieu'), cp: `${deptCode}000`, lat: base.lat, lng: base.lng }];
     }
 
-    // Points existants pour anti-collision / anti-agglutinement
-    const collisionThreshold = isSocial ? 0.35 : 1.2;
+    // Points existants pour éviter la superposition exacte
     const existingPoints = [
-      ...this.stations.map(s => ({ lat: s.lat, lng: s.lng, minDist: isSocial ? 0.3 : 1.0 })),
-      ...this.missions.map(m => ({ lat: m.lat, lng: m.lng, minDist: isSocial ? 0.35 : 1.3 })),
-      ...this.devis.map(d => ({ lat: d.lat, lng: d.lng, minDist: isSocial ? 0.35 : 1.3 }))
+      ...this.stations.map(s => ({ lat: s.lat, lng: s.lng })),
+      ...this.missions.map(m => ({ lat: m.lat, lng: m.lng })),
+      ...this.devis.map(d => ({ lat: d.lat, lng: d.lng }))
     ];
 
-    let bestCoord = null;
-    const maxTries = 40;
+    let targetCommune = null;
 
-    for (let tryIdx = 0; tryIdx < maxTries; tryIdx++) {
-      const angle = Math.random() * 2 * Math.PI;
-      const distKm = minDistanceKm + Math.random() * (maxDistanceKm - minDistanceKm);
+    if (isSocial) {
+      // 1. Maraude sociale : STRICTEMENT dans la ville de l'antenne (centre-ville, gare, mairie)
+      targetCommune = communes.find(c => c.nom.toLowerCase() === (base.city || '').toLowerCase()) || communes[0];
+    } else if (isSNCF) {
+      // 2. Mission ferroviaire SNCF : Priorité à une commune du secteur (gare urbaine)
+      const nearbyMajorCommunes = communes.filter(c => {
+        const d = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+          ? window.ProtecDepartements.calculateDistance(base.lat, base.lng, c.lat, c.lng)
+          : Math.hypot((c.lat - base.lat) * 111, (c.lng - base.lng) * 75);
+        return d <= 25;
+      });
+      targetCommune = nearbyMajorCommunes[Math.floor(Math.random() * nearbyMajorCommunes.length)] || communes[0];
+    } else if (isSamuUrgent || isPompiers) {
+      // 3. Urgence SAMU 15 / SDIS 18 : Secteur de premier départ réflexe (bassin de vie de l'antenne 1 à 12 km)
+      const nearby = communes.filter(c => {
+        const d = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+          ? window.ProtecDepartements.calculateDistance(base.lat, base.lng, c.lat, c.lng)
+          : Math.hypot((c.lat - base.lat) * 111, (c.lng - base.lng) * 75);
+        return d <= (hasMultipleStations ? 8.5 : 16.0);
+      });
+      targetCommune = nearby.length > 0 ? nearby[Math.floor(Math.random() * nearby.length)] : communes[0];
+    } else if (missionType === 'dps') {
+      // 4. Dispositif Prévisionnel de Secours (DPS)
+      const roll = Math.random();
+      const maxDist = roll < 0.60 ? 10.0 : (roll < 0.85 ? 20.0 : 35.0);
+      const candidates = communes.filter(c => {
+        const d = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+          ? window.ProtecDepartements.calculateDistance(base.lat, base.lng, c.lat, c.lng)
+          : Math.hypot((c.lat - base.lat) * 111, (c.lng - base.lng) * 75);
+        return d <= maxDist;
+      });
+      targetCommune = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : communes[0];
+    } else {
+      // Crises, météo, plans d'urgence
+      targetCommune = communes[Math.floor(Math.random() * communes.length)] || communes[0];
+    }
 
-      // 1 degré lat ~ 110.574 km
-      const deltaLat = (distKm / 110.574) * Math.cos(angle);
-      const latRad = (base.lat * Math.PI) / 180;
-      const kmPerLngDeg = 111.320 * Math.cos(latRad);
-      const deltaLng = (distKm / (kmPerLngDeg || 75)) * Math.sin(angle);
+    if (!targetCommune) {
+      targetCommune = { nom: base.city || 'Centre', cp: `${deptCode}000`, lat: base.lat, lng: base.lng };
+    }
 
-      const candLat = base.lat + deltaLat;
-      const candLng = base.lng + deltaLng;
+    // 5. ANCRAGE GARANTI DANS LE TISSU URBAIN HABITÉ DE LA COMMUNE (Anti-eau, anti-forêt, anti-autoroute)
+    // On part du centre habité de la commune et on applique un micro-décalage urbain maîtrisé de 70m à 320m.
+    let chosenLat = targetCommune.lat;
+    let chosenLng = targetCommune.lng;
 
-      // 1. Contrôle impératif : rester DANS les limites du département (bbox)
-      if (dept && dept.bbox) {
-        const [minLat, minLng, maxLat, maxLng] = dept.bbox;
-        const latMargin = (maxLat - minLat) * 0.03;
-        const lngMargin = (maxLng - minLng) * 0.03;
-        if (candLat < minLat + latMargin || candLat > maxLat - latMargin ||
-            candLng < minLng + lngMargin || candLng > maxLng - lngMargin) {
-          continue;
-        }
-      }
+    const microAngle = Math.random() * 2 * Math.PI;
+    const microDistKm = isSocial ? (0.05 + Math.random() * 0.15) : (0.08 + Math.random() * 0.24);
+    const latRad = (targetCommune.lat * Math.PI) / 180;
+    const kmPerLngDeg = 111.320 * Math.cos(latRad) || 75;
 
-      // 2. Contrôle anti-agglutinement avec les autres points
-      let collision = false;
-      for (const p of existingPoints) {
-        const dLat = (candLat - p.lat) * 110.574;
-        const dLng = (candLng - p.lng) * (kmPerLngDeg || 75);
-        const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-        if (dist < (p.minDist || collisionThreshold)) {
-          collision = true;
-          break;
-        }
-      }
+    const candLat = targetCommune.lat + (microDistKm / 110.574) * Math.cos(microAngle);
+    const candLng = targetCommune.lng + (microDistKm / kmPerLngDeg) * Math.sin(microAngle);
 
-      if (!collision) {
-        bestCoord = { lat: candLat, lng: candLng };
+    // Vérifier si collision exacte (< 80 mètres d'un marqueur existant)
+    let collision = false;
+    for (const p of existingPoints) {
+      const dKm = Math.hypot((candLat - p.lat) * 110.574, (candLng - p.lng) * kmPerLngDeg);
+      if (dKm < 0.08) {
+        collision = true;
         break;
       }
-
-      if (!bestCoord) {
-        bestCoord = { lat: candLat, lng: candLng };
-      }
     }
 
-    if (!bestCoord) {
-      bestCoord = { lat: base.lat + 0.015, lng: base.lng + 0.015 };
+    if (!collision) {
+      chosenLat = candLat;
+      chosenLng = candLng;
+    } else {
+      chosenLat = targetCommune.lat + (0.12 / 110.574) * Math.cos(microAngle + Math.PI / 2);
+      chosenLng = targetCommune.lng + (0.12 / kmPerLngDeg) * Math.sin(microAngle + Math.PI / 2);
     }
 
-    // Résolution instantanée de la commune la plus proche
-    const nearest = (window.ProtecDepartements && typeof window.ProtecDepartements.getNearestCommune === 'function')
-      ? window.ProtecDepartements.getNearestCommune(bestCoord.lat, bestCoord.lng, deptCode)
-      : null;
-    if (nearest) {
-      bestCoord.commune = nearest.nom;
-      bestCoord.postcode = nearest.cp;
+    // Sécurité bounding box du département
+    if (dept && dept.bbox) {
+      chosenLat = Math.max(dept.bbox[0] + 0.01, Math.min(dept.bbox[2] - 0.01, chosenLat));
+      chosenLng = Math.max(dept.bbox[1] + 0.01, Math.min(dept.bbox[3] - 0.01, chosenLng));
     }
 
-    return bestCoord;
+    return {
+      lat: parseFloat(chosenLat.toFixed(5)),
+      lng: parseFloat(chosenLng.toFixed(5)),
+      commune: targetCommune.nom,
+      postcode: targetCommune.cp,
+      isRealCommuneAnchor: true
+    };
   }
 
-  // Générateur d'adresse réaliste par défaut pour chaque mission
-  generateRealisticStreetAddress(city = 'Nancy', lat = null, lng = null) {
+  // Générateur d'adresse réaliste et cohérente selon le contexte de la mission (Gare, Berges/Quais, Stades, Écoles...)
+  generateRealisticStreetAddress(city = 'Nancy', lat = null, lng = null, missionContext = null) {
+    const ctxText = (typeof missionContext === 'string'
+      ? missionContext
+      : (missionContext?.title || missionContext?.eventName || missionContext?.origin || missionContext?.desc || '')).toLowerCase();
+
+    let seed = 0;
+    if (lat && lng) seed = Math.abs(Math.round((lat + lng) * 1000));
+    const num = (seed % 120) + 1 || Math.floor(Math.random() * 120) + 1;
+
+    // 1. Mission ferroviaire / SNCF / Gares
+    if (ctxText.includes('gare') || ctxText.includes('sncf') || ctxText.includes('train') || ctxText.includes('rail') || ctxText.includes('caténaire') || ctxText.includes('naufrag')) {
+      const gares = [
+        'Place de la Gare',
+        'Parvis de la Gare SNCF',
+        'Avenue de la Gare',
+        'Rue de la Gare',
+        'Boulevard de la Gare'
+      ];
+      return `${gares[seed % gares.length]}, ${city}`;
+    }
+
+    // 2. Inondations, crues, pompage, canot / nautique
+    if (ctxText.includes('inondation') || ctxText.includes('pompage') || ctxText.includes('crue') || ctxText.includes('eau') || ctxText.includes('submersion') || ctxText.includes('nautique')) {
+      const quais = [
+        'Quai des Berges',
+        'Promenade du Canal',
+        'Quai de la Meurthe',
+        'Chemin du Halage',
+        'Rue du Moulin',
+        'Allée des Prés Fluviaux'
+      ];
+      return `${quais[seed % quais.length]}, ${city}`;
+    }
+
+    // 3. Accident de la circulation / voie rapide / secours routier
+    if (ctxText.includes('accident') || ctxText.includes('carambolage') || ctxText.includes('collision') || ctxText.includes('secours routier')) {
+      const axes = [
+        'Rond-Point de l\'Europe',
+        'Route Nationale (Axe Principal)',
+        'Carrefour des Martyrs',
+        'Boulevard Circulaire Périphérique',
+        'Avenue de la Libération (D1083)'
+      ];
+      return `${axes[seed % axes.length]}, ${city}`;
+    }
+
+    // 4. Sport / Stades / Football / Rugby / Gymnase
+    if (ctxText.includes('stade') || ctxText.includes('foot') || ctxText.includes('rugby') || ctxText.includes('sport') || ctxText.includes('athlet') || ctxText.includes('gymnase') || ctxText.includes('tournoi')) {
+      const sports = [
+        'Complexe Sportif Municipal, Rue du Stade',
+        'Stade Municipal, Avenue des Sports',
+        'Gymnase des Écoles, Allée des Sports',
+        'Parc des Sports et Loisirs'
+      ];
+      return `${sports[seed % sports.length]}, ${city}`;
+    }
+
+    // 5. École / Kermesse / Fête / Jeunesse
+    if (ctxText.includes('école') || ctxText.includes('ecole') || ctxText.includes('kermesse') || ctxText.includes('collège') || ctxText.includes('lycée')) {
+      const ecoles = [
+        'Groupe Scolaire Pasteur, Rue des Écoles',
+        'École Municipale, Rue Jules Ferry',
+        'Place de la Mairie',
+        'Esplanade Jean Jaurès'
+      ];
+      return `${ecoles[seed % ecoles.length]}, ${city}`;
+    }
+
+    // 6. Maraude sociale / Sans-abri
+    if (ctxText.includes('maraude') || ctxText.includes('social') || ctxText.includes('précarité') || ctxText.includes('samu social')) {
+      const maraudeStreets = [
+        'Place de la Mairie',
+        'Parvis de la Gare Centrale',
+        'Rue de la République (Zone Piétonne)',
+        'Place du Marché',
+        'Rue Nationale'
+      ];
+      return `${maraudeStreets[seed % maraudeStreets.length]}, ${city}`;
+    }
+
+    // 7. Rues urbaines résidentielles réalistes standards
     const thoroughfares = [
       'Rue de la République', 'Avenue Jean Jaurès', 'Boulevard Victor Hugo', 'Rue Pasteur',
       'Rue Nationale', 'Boulevard Gambetta', 'Place de la Mairie', 'Rue des Fleurs',
       'Avenue de la Gare', 'Rue Saint-Jean', 'Boulevard de la Liberté', 'Rue des Écoles',
-      'Avenue du Général de Gaulle', 'Quai de la Meurthe', 'Rue de la Paix', 'Place Stanislas',
+      'Avenue du Général de Gaulle', 'Rue de la Paix', 'Place Stanislas',
       'Rue du Moulin', 'Boulevard Maréchal Foch', 'Allée du Parc', 'Esplanade Simone Veil'
     ];
-    let seed = 0;
-    if (lat && lng) seed = Math.abs(Math.round((lat + lng) * 1000));
-    const num = (seed % 140) + 1 || Math.floor(Math.random() * 140) + 1;
     const street = thoroughfares[(seed % thoroughfares.length) || Math.floor(Math.random() * thoroughfares.length)];
     return `${num} ${street}, ${city}`;
   }
@@ -3456,7 +3527,7 @@ class ProtecGame {
 
     if (!item.lat || !item.lng) return;
 
-    // 2. Affinage d'adresse officiel via API data.gouv (si réseau disponible)
+    // 2. Affinage d'adresse officiel via API data.gouv (avec filtre anti-incohérence autoroute / voie ferrée)
     try {
       fetch(`https://api-adresse.data.gouv.fr/reverse/?lon=${item.lng}&lat=${item.lat}`)
         .then(res => res.json())
@@ -3475,9 +3546,19 @@ class ProtecGame {
               item.sector = `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${city || currentCity})`;
               item.address = item.sector;
             } else if (props.label) {
-              item.address = props.label;
-              item.postcode = props.postcode;
-              item.street = props.name || props.street;
+              const rawLabel = props.label.toLowerCase();
+              const isAutoroute = rawLabel.includes('autoroute') || rawLabel.includes('a31') || rawLabel.includes('a4') || rawLabel.includes('échangeur');
+              const isRail = rawLabel.includes('voie ferrée') || rawLabel.includes('ligne sncf');
+              // Si ce n'est pas un accident de la route, interdire un label d'autoroute
+              if (isAutoroute && !item.title?.toLowerCase().includes('accident') && !item.title?.toLowerCase().includes('routier')) {
+                item.address = this.generateRealisticStreetAddress(city || currentCity, item.lat, item.lng, item.title);
+              } else if (isRail && !item.title?.toLowerCase().includes('sncf') && !item.title?.toLowerCase().includes('gare')) {
+                item.address = this.generateRealisticStreetAddress(city || currentCity, item.lat, item.lng, item.title);
+              } else {
+                item.address = props.label;
+                item.postcode = props.postcode;
+                item.street = props.name || props.street;
+              }
             }
           }
         })
@@ -3498,7 +3579,7 @@ class ProtecGame {
       } else {
         item.isSector = false;
         if (!item.address) {
-          item.address = this.generateRealisticStreetAddress(item.commune || cityName, item.lat, item.lng);
+          item.address = this.generateRealisticStreetAddress(item.commune || cityName, item.lat, item.lng, item.title || item.origin);
         }
       }
       if (item.lat && item.lng) {
@@ -3521,14 +3602,12 @@ class ProtecGame {
       const isMaraude = item.type === 'social' || item.category === 'Social' || (item.title && item.title.toLowerCase().includes('maraude'));
 
       if (isMaraude) {
-        // Distance à la base de l'antenne
         const distKm = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
           ? window.ProtecDepartements.calculateDistance(base.lat, base.lng, item.lat, item.lng)
           : Math.hypot((item.lat - base.lat) * 111, (item.lng - base.lng) * 75);
 
-        // Si la maraude a été générée trop loin (ex: perdue à Villey-Saint-Étienne à 18 km)
-        if (distKm > 3.5) {
-          const newCoords = this.calculateRealisticMissionLocation(base, 'social');
+        if (distKm > 3.0) {
+          const newCoords = this.calculateRealisticMissionLocation(base, 'social', item.title);
           item.lat = newCoords.lat;
           item.lng = newCoords.lng;
           changed = true;
@@ -3539,14 +3618,30 @@ class ProtecGame {
         item.sector = `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${city})`;
         item.address = item.sector;
       } else {
-        // Contrôle de cohérence de l'adresse avec la commune du marqueur sur la carte
-        if (window.ProtecDepartements && typeof window.ProtecDepartements.getNearestCommune === 'function') {
-          const nearest = window.ProtecDepartements.getNearestCommune(item.lat, item.lng, deptCode);
-          if (nearest) {
-            item.commune = nearest.nom;
-            item.postcode = nearest.cp;
-            if (!item.address || (!item.address.includes(nearest.nom) && !item.address.includes(nearest.cp))) {
-              item.address = this.generateRealisticStreetAddress(nearest.nom, item.lat, item.lng);
+        if (window.ProtecDepartements && typeof window.ProtecDepartements.getCommunesForDepartment === 'function') {
+          const communes = window.ProtecDepartements.getCommunesForDepartment(deptCode);
+          let targetC = item.commune ? communes.find(c => c.nom.toLowerCase() === item.commune.toLowerCase()) : null;
+
+          if (!targetC && window.ProtecDepartements.getNearestCommune) {
+            targetC = window.ProtecDepartements.getNearestCommune(item.lat, item.lng, deptCode);
+          }
+
+          if (targetC) {
+            item.commune = targetC.nom;
+            item.postcode = targetC.cp;
+
+            // Recalage si les coordonnées sont trop éloignées du centre habité (perdues en forêt, en eau ou sur autoroute)
+            const distFromCityKm = Math.hypot((item.lat - targetC.lat) * 111, (item.lng - targetC.lng) * 75);
+            if (distFromCityKm > 2.0) {
+              const microAngle = Math.random() * 2 * Math.PI;
+              const microDist = 0.10 + Math.random() * 0.20;
+              item.lat = parseFloat((targetC.lat + (microDist / 111) * Math.cos(microAngle)).toFixed(5));
+              item.lng = parseFloat((targetC.lng + (microDist / (111 * Math.cos(targetC.lat * Math.PI / 180))) * Math.sin(microAngle)).toFixed(5));
+              changed = true;
+            }
+
+            if (!item.address || (!item.address.includes(targetC.nom) && !item.address.includes(targetC.cp))) {
+              item.address = this.generateRealisticStreetAddress(targetC.nom, item.lat, item.lng, item.title || item.origin);
               changed = true;
             }
           }
@@ -3586,7 +3681,7 @@ class ProtecGame {
 
       if (tooClose) {
         const mType = isMaraude ? 'social' : (item.type || (item.scale ? 'dps' : 'dps'));
-        const newCoord = this.calculateRealisticMissionLocation(base, mType);
+        const newCoord = this.calculateRealisticMissionLocation(base, mType, { title: item.title || item.origin || '', desc: item.desc || '' });
         item.lat = newCoord.lat;
         item.lng = newCoord.lng;
         this.enrichMissionLocationWithCity(item);
@@ -3626,12 +3721,13 @@ class ProtecGame {
 
   _fallbackStarterDevis(centerLatLng) {
     const eventDate = this.createDateOffset(5, 10);
-    const coords = this.calculateRealisticMissionLocation({ lat: centerLatLng.lat, lng: centerLatLng.lng }, 'dps');
+    const eventName = 'Fête de Printemps & Brocante Municipale';
+    const coords = this.calculateRealisticMissionLocation({ lat: centerLatLng.lat, lng: centerLatLng.lng }, 'dps', { title: eventName, desc: 'Brocante Municipale' });
     const d = {
       id: `dev-${Date.now()}`,
       clientName: 'Comité des Fêtes & Mairie',
       clientType: 'municipalite',
-      eventName: 'Fête de Printemps & Brocante Municipale',
+      eventName: eventName,
       eventDate: eventDate,
       durationHours: 7,
       lat: coords.lat,
@@ -3904,7 +4000,7 @@ class ProtecGame {
     }
 
     const pick = eventsList[Math.floor(Math.random() * eventsList.length)];
-    const missionCoords = this.calculateRealisticMissionLocation(base, 'dps');
+    const missionCoords = this.calculateRealisticMissionLocation(base, 'dps', { title: pick.name || '', desc: pick.client || '' });
 
     // Réalisme IRL : La majorité des événements sont sollicités plusieurs semaines/mois à l'avance (2 à 10 semaines),
     // et environ 20% sont des urgences de dernière minute (2 à 5 jours : annulation d'une autre AASC ou orga tardive).
@@ -8415,7 +8511,7 @@ class ProtecGame {
     const scenarios = this.getAascPrealertScenarios(origin);
     const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
     const base = this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', departmentCode: deptCode };
-    const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf');
+    const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '' });
 
     // Calcul de l'heure estimée de déploiement (H+25 min dans l'horloge in-game)
     const curHour = this.clock?.hour !== undefined ? this.clock.hour : 14;
@@ -8792,7 +8888,7 @@ class ProtecGame {
             const scenarios = this.getAascPrealertScenarios(null);
             const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
             const base = this.stations[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', departmentCode: myDept };
-            const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf');
+            const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '' });
 
             const minutesAgo = Math.min(Math.floor(offlineHours * 30), Math.floor(Math.random() * 25) + 10);
             const spawnedTime = now - (minutesAgo * 60 * 1000);
@@ -23457,7 +23553,7 @@ class ProtecGame {
     if (filteredEmergencies.length === 0) filteredEmergencies = emergencies;
 
     const pick = filteredEmergencies[Math.floor(Math.random() * filteredEmergencies.length)];
-    const samuCoords = this.calculateRealisticMissionLocation(base, 'samu');
+    const samuCoords = this.calculateRealisticMissionLocation(base, 'samu', { title: pick.title || '', desc: pick.desc || '' });
 
     const reqVol = Math.min(Math.max(2, capacity.availableVolunteers || 3), 4);
     const ranks = ['PSE1', 'PSE2'];
@@ -23613,7 +23709,6 @@ class ProtecGame {
 
     this.lastRenfortRequestTime = now;
     const base = baseStation || this.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne Protection Civile' };
-    const samuCoords = this.calculateRealisticMissionLocation(base, 'samu');
 
     const renfortScenarios = [
       {
@@ -23637,6 +23732,7 @@ class ProtecGame {
     ];
 
     const pick = renfortScenarios[Math.floor(Math.random() * renfortScenarios.length)];
+    const samuCoords = this.calculateRealisticMissionLocation(base, 'samu', { title: pick.title, desc: pick.desc });
 
     const renfortMission = {
       id: `m-samu-renfort-${Date.now()}`,
@@ -24285,7 +24381,6 @@ class ProtecGame {
     }
 
     const base = this.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Caserne Pompiers' };
-    const sdisCoords = this.calculateRealisticMissionLocation(base, 'pompiers');
 
     const scenarios = [
       {
@@ -24347,6 +24442,7 @@ class ProtecGame {
     ];
 
     const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
+    const sdisCoords = this.calculateRealisticMissionLocation(base, 'pompiers', { title: pick.title, desc: pick.desc });
     const reward = this.sdisGarde.rewardIntervention || 380;
 
     const newSdis = {
@@ -24465,7 +24561,6 @@ class ProtecGame {
 
     this.lastRenfortRequestTime = now;
     const base = this.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Caserne Pompiers' };
-    const sdisCoords = this.calculateRealisticMissionLocation(base, 'pompiers');
     const pompAuth = this.getPompierAuthority(base?.departmentCode);
 
     const renfortScenarios = [
@@ -24484,6 +24579,7 @@ class ProtecGame {
     ];
 
     const pick = renfortScenarios[Math.floor(Math.random() * renfortScenarios.length)];
+    const sdisCoords = this.calculateRealisticMissionLocation(base, 'pompiers', { title: pick.title, desc: pick.desc });
 
     const renfortMission = {
       id: `m-sdis-renfort-${Date.now()}`,

@@ -264,11 +264,11 @@ window.ProtecNotifications = {
       weather: 'sound_notif'
     },
     alertSounds: {
-      samu: 'alerte_crise',
-      sdis: 'attention',
-      dps: 'info',
-      rh: 'notif',
-      weather: 'attention'
+      samu: 'alerte_crise.mp3',
+      sdis: 'attention.mp3',
+      dps: 'info.mp3',
+      rh: 'notif.mp3',
+      weather: 'attention.mp3'
     },
     samuAlerts: true,
     sdisAlerts: true,
@@ -277,6 +277,16 @@ window.ProtecNotifications = {
     weatherAlerts: true,
     inactivityEngagement: true
   },
+
+  // Liste officielle des sons réels disponibles en .mp3 dans /sons/
+  availableAlertSounds: [
+    { value: 'alerte_crise.mp3', key: 'alerte_crise', label: '🚨 alerte_crise.mp3', desc: 'Urgence & Crise' },
+    { value: 'attention.mp3', key: 'attention', label: '⚠️ attention.mp3', desc: '2-Tons Attention' },
+    { value: 'notif.mp3', key: 'notif', label: '📻 notif.mp3', desc: 'Bip Radio Secours' },
+    { value: 'info.mp3', key: 'info', label: 'ℹ️ info.mp3', desc: 'Carillon Information' },
+    { value: 'expire.mp3', key: 'expire', label: '⏱️ expire.mp3', desc: 'Tonalité Expiration' },
+    { value: 'erreur.mp3', key: 'erreur', label: '❌ erreur.mp3', desc: 'Signal d\'Erreur' }
+  ],
 
   alertCategoriesList: [
     {
@@ -334,22 +344,24 @@ window.ProtecNotifications = {
   getAlertSound(category) {
     const cat = (category === 'meteo') ? 'weather' : category;
     const defaults = {
-      samu: 'alerte_crise',
-      sdis: 'attention',
-      dps: 'info',
-      rh: 'notif',
-      weather: 'attention'
+      samu: 'alerte_crise.mp3',
+      sdis: 'attention.mp3',
+      dps: 'info.mp3',
+      rh: 'notif.mp3',
+      weather: 'attention.mp3'
     };
     if (this.config.alertSounds && this.config.alertSounds[cat]) {
-      return this.config.alertSounds[cat];
+      const val = this.config.alertSounds[cat];
+      return (typeof val === 'string' && val.endsWith('.mp3')) ? val : `${val}.mp3`;
     }
-    return defaults[cat] || 'info';
+    return defaults[cat] || 'info.mp3';
   },
 
   setAlertSound(category, soundKey) {
     const cat = (category === 'meteo') ? 'weather' : category;
     if (!this.config.alertSounds) this.config.alertSounds = {};
-    this.config.alertSounds[cat] = soundKey;
+    const normKey = (typeof soundKey === 'string' && soundKey.endsWith('.mp3')) ? soundKey : `${soundKey}.mp3`;
+    this.config.alertSounds[cat] = normKey;
     this.saveConfig();
   },
 
@@ -1563,8 +1575,8 @@ window.ProtecNotifications = {
 
               <label class="flex items-center justify-between p-3 rounded-2xl glass-card border border-slate-200 cursor-pointer">
                 <div>
-                  <span class="font-bold text-slate-800 block">Sonnerie d'Alerte (2-tons radio)</span>
-                  <span class="text-[11px] text-slate-500">Tonalité d'urgence lors d'un départ réflexe</span>
+                  <span class="font-bold text-slate-800 block">Tonalités & Sons d'Alerte (.mp3)</span>
+                  <span class="text-[11px] text-slate-500">Lecture des sons audio officiels (.mp3) lors des alertes et départs réflexes</span>
                 </div>
                 <input type="checkbox" id="notif-opt-sound" ${this.config.sound ? 'checked' : ''} onchange="window.ProtecNotifications.toggleConfig('sound', this.checked)" class="w-4 h-4 text-pc-blue rounded cursor-pointer" />
               </label>
@@ -1662,12 +1674,10 @@ window.ProtecNotifications = {
                           <select id="notif-sound-${cat.id}"
                             onchange="window.ProtecNotifications.setAlertSound('${cat.id}', this.value); window.ProtecNotifications.previewAlertSound(this.value);"
                             class="w-full text-[10.5px] font-semibold py-1 px-2 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-pc-blue focus:outline-none cursor-pointer">
-                            <option value="alerte_crise" ${sound === 'alerte_crise' ? 'selected' : ''}>🚨 Bip Urgence & Crise</option>
-                            <option value="attention" ${sound === 'attention' ? 'selected' : ''}>⚠️ 2-Tons Attention</option>
-                            <option value="notif" ${sound === 'notif' ? 'selected' : ''}>📻 Bip Radio Secours</option>
-                            <option value="info" ${sound === 'info' ? 'selected' : ''}>ℹ️ Carillon Information</option>
-                            <option value="expire" ${sound === 'expire' ? 'selected' : ''}>⏱️ Tonalité Expiration</option>
-                            <option value="erreur" ${sound === 'erreur' ? 'selected' : ''}>❌ Signal d'Erreur</option>
+                            ${this.availableAlertSounds.map(s => {
+                              const isSelected = (sound === s.value || sound === s.key || sound === s.value.replace('.mp3', ''));
+                              return `<option value="${s.value}" ${isSelected ? 'selected' : ''}>${s.label} (${s.desc})</option>`;
+                            }).join('')}
                           </select>
                           <button type="button"
                             onclick="window.ProtecNotifications.previewAlertSound(document.getElementById('notif-sound-${cat.id}').value)"

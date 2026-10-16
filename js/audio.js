@@ -22,7 +22,13 @@ window.ProtecAudio = {
     expire: 'sons/expire.mp3',
     erreur: 'sons/erreur.mp3',
     attention: 'sons/attention.mp3',
-    alerte_crise: 'sons/alerte_crise.mp3'
+    alerte_crise: 'sons/alerte_crise.mp3',
+    'notif.mp3': 'sons/notif.mp3',
+    'info.mp3': 'sons/info.mp3',
+    'expire.mp3': 'sons/expire.mp3',
+    'erreur.mp3': 'sons/erreur.mp3',
+    'attention.mp3': 'sons/attention.mp3',
+    'alerte_crise.mp3': 'sons/alerte_crise.mp3'
   },
 
   userInteracted: false,
@@ -48,13 +54,16 @@ window.ProtecAudio = {
     window.addEventListener('keydown', unlockHandler, { once: true, passive: true });
     window.addEventListener('click', unlockHandler, { once: true, passive: true });
 
-    // Préchargement léger des fichiers audio
+    // Préchargement léger des 6 fichiers audio mp3
     try {
-      Object.entries(this.files).forEach(([key, url]) => {
+      const baseKeys = ['notif', 'info', 'expire', 'erreur', 'attention', 'alerte_crise'];
+      baseKeys.forEach(key => {
+        const url = this.files[key];
         const a = new Audio();
         a.preload = 'auto';
         a.src = url;
         this.soundPool[key] = a;
+        this.soundPool[`${key}.mp3`] = a;
       });
     } catch (e) {
       console.warn('Préchargement audio non supporté:', e);
@@ -94,8 +103,9 @@ window.ProtecAudio = {
    * Joue un fichier audio mp3 avec gestion du mute, clonage pour lectures multiples et fallback
    */
   playFile(key) {
-    if (this.muted) return;
-    const url = this.files[key];
+    if (this.muted || !key) return;
+    const cleanKey = String(key).replace(/^sons\//, '').replace(/\.mp3$/, '');
+    const url = this.files[key] || this.files[cleanKey] || `sons/${cleanKey}.mp3`;
     if (!url) return;
 
     try {
@@ -107,13 +117,13 @@ window.ProtecAudio = {
         promise.catch(() => {
           // Si le navigateur bloque l'autoplay direct avant un premier clic, ne pas forcer Web Audio pour éviter les warnings
           if (this.userInteracted) {
-            this.playSyntheticFallback(key);
+            this.playSyntheticFallback(cleanKey);
           }
         });
       }
     } catch (e) {
       if (this.userInteracted) {
-        this.playSyntheticFallback(key);
+        this.playSyntheticFallback(cleanKey);
       }
     }
   },
@@ -433,6 +443,10 @@ window.ProtecAudio = {
   },
 
   playAlertChime() {
+    this.playFile('attention');
+  },
+
+  playAlertSound() {
     this.playFile('attention');
   },
 

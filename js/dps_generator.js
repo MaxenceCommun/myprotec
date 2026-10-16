@@ -341,9 +341,9 @@
       ? defaultFallback(communeName)
       : { name: `Lieu d’accueil de ${communeName}`, venue: `Complexe de ${communeName}` };
 
-    // Décalage géographique réaliste (1.5 à 5 km autour du centre de l'antenne)
+    // Décalage géographique réaliste (100m à 320m dans le tissu urbain habité, garanti hors eau et hors forêt)
     const angle = Math.random() * Math.PI * 2;
-    const distKm = 1.2 + Math.random() * 3.5;
+    const distKm = 0.10 + Math.random() * 0.22;
     const deltaLat = (distKm / 111) * Math.sin(angle);
     const deltaLng = (distKm / (111 * Math.cos(lat * Math.PI / 180))) * Math.cos(angle);
 
