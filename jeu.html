@@ -910,7 +910,7 @@
       <div class="space-y-1.5">
         <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Antenne</span>
         <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center">
-          <button onclick="window.game.closeMobileMenu(); window.game.openModule('locaux')" class="mobile-grid-btn group">
+          <button onclick="window.game.closeMobileMenu(); if(window.ProtecLocaux) window.ProtecLocaux.activeTab = 'plan'; window.game.openModule('locaux')" class="mobile-grid-btn group">
             <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
               <i data-lucide="layout-grid" class="w-4.5 h-4.5"></i>
             </div>

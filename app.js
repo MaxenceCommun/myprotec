@@ -1667,6 +1667,11 @@ class ProtecGame {
       }
     }
 
+    // Purge et archivage systématique : éliminer toute mission terminée du tableau actif
+    if (Array.isArray(this.missions)) {
+      this.missions = this.missions.filter(m => !this.isMissionTerminated(m));
+    }
+
     // Purge absolue de sécurité : aucun véhicule ni bénévole fictif/généré artificiellement comme renfort d'alliance
     if (Array.isArray(this.vehicles)) {
       this.vehicles = this.vehicles.filter(v => {
@@ -2461,6 +2466,18 @@ class ProtecGame {
     return null;
   }
 
+  isMissionTerminated(m) {
+    if (!m) return true;
+    const s = String(m.status || '').toLowerCase().trim();
+    if (['completed', 'termine', 'terminee', 'finished', 'cloture', 'cloturee', 'archive', 'archivee', 'cancelled', 'annule', 'annulee', 'carence'].includes(s)) {
+      return true;
+    }
+    if (m.isFinished || m.isCompleted || m.isTerminated || m.closed) {
+      return true;
+    }
+    return false;
+  }
+
   renderMissions() {
     // Initialisation paresseuse du groupe de clustering de marqueurs Leaflet
     if (!this.missionsClusterGroup && typeof L !== 'undefined' && typeof L.markerClusterGroup === 'function') {
@@ -2534,7 +2551,7 @@ class ProtecGame {
 
     this.missions.forEach(mission => {
       // Exclure formellement les missions et DPS terminés, clôturés, archivés ou annulés
-      if (['completed', 'termine', 'cloture', 'archive', 'cancelled', 'annule', 'carence'].includes(mission.status)) return;
+      if (this.isMissionTerminated(mission)) return;
 
       // Les gardes (SAMU/SDIS) sont gérées dans le planning et la modale de garde, elles ne doivent JAMAIS apparaître comme des marqueurs physiques sur la carte
       if (mission.isGarde || mission.type === 'garde_samu' || mission.isGuard || mission.category === 'garde') return;
@@ -4183,8 +4200,9 @@ class ProtecGame {
 
     // 1. PÔLE SECOURS & DPS (DPS validés, gardes SAMU/SDIS, missions planifiées hors maraude)
     const dpsMissions = (this.missions || []).filter(m => 
+      !this.isMissionTerminated(m) &&
       m.type !== 'social' && 
-      (m.status === 'planifie' || m.status === 'ongoing' || m.type === 'dps' || m.isPlanned)
+      (m.status === 'planifie' || m.status === 'ongoing' || m.isPlanned || (m.type === 'dps' && m.status !== 'completed'))
     );
     dpsMissions.forEach(m => {
       let eDate = m.eventDate;
@@ -4315,7 +4333,7 @@ class ProtecGame {
     });
 
     // 4. PÔLE ACTION SOCIALE (Maraudes & interventions solidaires)
-    const maraudeMissions = (this.missions || []).filter(m => m.type === 'social');
+    const maraudeMissions = (this.missions || []).filter(m => m.type === 'social' && !this.isMissionTerminated(m));
     maraudeMissions.forEach(m => {
       let eDate = m.eventDate;
       if (!eDate) {
@@ -10154,6 +10172,9 @@ class ProtecGame {
 
     // Démobilisation propre des éventuels renforts extérieurs engagés
     this.demobilizeMissionReinforcements(mission);
+
+    // Retrait immédiat de la mission terminée de la liste active pour ne plus jamais l'afficher
+    this.missions = (this.missions || []).filter(m => m.id !== mission.id && !this.isMissionTerminated(m));
 
     this.renderStations();
     this.renderMissions();
@@ -17245,6 +17266,8 @@ class ProtecGame {
       'batiment': 'locaux',
       'batiments': 'locaux',
       'locaux': 'locaux',
+      'plan': 'locaux',
+      'plan_batiment': 'locaux',
       'devis_dps': 'devis',
       'dps': 'planning',
       'apc_dep': 'apc',
@@ -19901,7 +19924,7 @@ class ProtecGame {
       const qualifiedVolunteers = this.volunteers.filter(v => ['CE', 'PSE2', 'PSE1'].includes(v.rank) && (v.status === 'dispo' || (isGuardActive && this.samuGarde.crewVolunteerIds.includes(v.id))));
       const currentVpsp = isGuardActive ? this.vehicles.find(v => v.id === this.samuGarde.vehicleId) : null;
       const currentCrew = isGuardActive ? this.volunteers.filter(v => this.samuGarde.crewVolunteerIds.includes(v.id)) : [];
-      const samuMissions = this.missions.filter(m => m.type === 'samu');
+      const samuMissions = (this.missions || []).filter(m => m.type === 'samu' && !this.isMissionTerminated(m));
 
       const deptCode = this.currentDepartmentCode || '54';
       const deptInfra = this.departmentInfrastructures?.[deptCode] || (window.ProtecHealthInfrastructures ? window.ProtecHealthInfrastructures.ensureDepartmentInfrastructures(this, deptCode) : null);
@@ -20242,7 +20265,7 @@ class ProtecGame {
       if (trustScore < 50) trustColor = 'text-red-700 bg-red-50 border-red-200';
       else if (trustScore < 75) trustColor = 'text-amber-700 bg-amber-50 border-amber-200';
 
-      const sdisMissions = this.missions.filter(m => m.type === 'pompiers');
+      const sdisMissions = (this.missions || []).filter(m => m.type === 'pompiers' && !this.isMissionTerminated(m));
 
       const deptCode = this.currentDepartmentCode || '54';
       const deptInfra = this.departmentInfrastructures?.[deptCode] || (window.ProtecHealthInfrastructures ? window.ProtecHealthInfrastructures.ensureDepartmentInfrastructures(this, deptCode) : null);
@@ -20483,7 +20506,7 @@ class ProtecGame {
         subtitle.textContent = 'Maraudes de nuit et écoute pour les personnes vulnérables';
         icon.setAttribute('data-lucide', 'heart-handshake');
 
-        const socialMissions = this.missions.filter(m => m.type === 'social');
+        const socialMissions = (this.missions || []).filter(m => m.type === 'social' && !this.isMissionTerminated(m));
         body.innerHTML = `
           <div class="space-y-4">
             <div class="p-4 rounded-2xl glass-card-purple text-xs text-purple-950">
@@ -20872,8 +20895,11 @@ class ProtecGame {
       if (window.ProtecAdvancedModals) {
         body.innerHTML = window.ProtecAdvancedModals.renderRewards(this);
       }
-    } else if (moduleKey === 'amenagement' || moduleKey === 'locaux') {
+    } else if (moduleKey === 'amenagement' || moduleKey === 'locaux' || moduleKey === 'plan' || moduleKey === 'plan_batiment') {
       if (window.ProtecLocaux) {
+        if (moduleKey === 'plan' || moduleKey === 'plan_batiment' || !window.ProtecLocaux.activeTab) {
+          window.ProtecLocaux.activeTab = 'plan';
+        }
         window.ProtecLocaux.renderModal(this);
       } else if (window.ProtecAdvancedModals) {
         title.textContent = 'Aménagement & Évolution du Local';
@@ -20903,7 +20929,7 @@ class ProtecGame {
       subtitle.textContent = 'Dispositif ORSEC, Cellule d’Accueil des Impliqués (CAI), SNCF et Postes Médicaux Avancés';
       icon.setAttribute('data-lucide', 'siren');
 
-      const crisisMissions = (this.missions || []).filter(m => m.type === 'crise' || m.isCumpCai || m.alertOrigin === 'sncf' || ['critique', 'haute'].includes(m.urgency));
+      const crisisMissions = (this.missions || []).filter(m => !this.isMissionTerminated(m) && (m.type === 'crise' || m.isCumpCai || m.alertOrigin === 'sncf' || ['critique', 'haute'].includes(m.urgency)));
       const hasCaiLot = window.ProtecEquipements?.hasEquipment(this, 'lot_soutien_psy');
       const hasPmaLot = window.ProtecEquipements?.hasEquipment(this, 'lot_secours_c');
       const aepVols = (this.volunteers || []).filter(v => (v.skills || []).some(s => s === 'aep1' || s === 'aep2'));
@@ -21952,7 +21978,7 @@ class ProtecGame {
 
     // Planning d'utilisation & missions de logistique / réarmement prévues
     const vehicleMissions = (this.missions || []).filter(m => {
-      if (m.status === 'terminee' || m.status === 'annulee') return false;
+      if (this.isMissionTerminated(m)) return false;
       // 1. Mission d'atelier de réarmement flotte
       if (m.isRearmamentWorkshop || m.type === 'rearmement') {
         return Array.isArray(m.targetVehicleIds) && m.targetVehicleIds.includes(v.id);
@@ -25193,7 +25219,7 @@ class ProtecGame {
   }
 
   updateMissionCounts() {
-    const activeMissions = (this.missions || []).filter(m => m && !['termine', 'archive', 'annule'].includes(m.status));
+    const activeMissions = (this.missions || []).filter(m => m && !this.isMissionTerminated(m));
 
     // 1. Décompte pour chaque filtre affiché dans la barre de filtres
     const dpsCount = activeMissions.filter(m => m.type === 'dps' || (!m.type && !m.isCrisis && m.category !== 'crise')).length;

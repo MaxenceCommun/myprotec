@@ -2616,30 +2616,31 @@ window.ProtecLocaux = {
         </div>
 
         <!-- Barre d'onglets du module -->
-        <div class="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold overflow-x-auto">
-          <button onclick="window.ProtecLocaux.setTab('modulaire', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${(this.activeTab === 'modulaire' || !this.activeTab) ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
-            <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>
-            Tableau de Bord Modulaire
-          </button>
-          <button onclick="window.ProtecLocaux.setTab('plan', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'plan' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
+        <div class="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold overflow-x-auto no-scrollbar flex-nowrap">
+          <button onclick="window.ProtecLocaux.setTab('plan', window.game)" class="px-3.5 py-2 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${(this.activeTab === 'plan' || !this.activeTab) ? 'bg-pc-blue text-white shadow-sm ring-2 ring-blue-400/40' : 'text-slate-600 hover:bg-slate-100'}">
             <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
-            Plan d’Architecte 2D ${ongoingWorksCount > 0 ? `(${ongoingWorksCount} chantier${ongoingWorksCount > 1 ? 's' : ''})` : ''}
+            <span>📐 Plan du Bâtiment 2D</span>
+            ${ongoingWorksCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full text-[9px] bg-amber-400 text-slate-900 font-black">${ongoingWorksCount}</span>` : ''}
           </button>
-          <button onclick="window.ProtecLocaux.setTab('securite', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'securite' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
+          <button onclick="window.ProtecLocaux.setTab('modulaire', window.game)" class="px-3.5 py-2 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'modulaire' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-blue-400/40' : 'text-slate-600 hover:bg-slate-100'}">
+            <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>
+            <span>Tableau de Bord Modulaire</span>
+          </button>
+          <button onclick="window.ProtecLocaux.setTab('securite', window.game)" class="px-3.5 py-2 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'securite' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-blue-400/40' : 'text-slate-600 hover:bg-slate-100'}">
             <i data-lucide="shield" class="w-3.5 h-3.5"></i>
-            Sécurité & Protection (${securityScore}%)
+            <span>Sécurité (${securityScore}%)</span>
           </button>
-          <button onclick="window.ProtecLocaux.setTab('catalogue', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'catalogue' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
+          <button onclick="window.ProtecLocaux.setTab('catalogue', window.game)" class="px-3.5 py-2 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'catalogue' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-blue-400/40' : 'text-slate-600 hover:bg-slate-100'}">
             <i data-lucide="building" class="w-3.5 h-3.5"></i>
-            Acheter un Bâtiment (${this.getDailyRealEstateOffers(game).length})
+            <span>Acheter (${this.getDailyRealEstateOffers(game).length})</span>
           </button>
-          <button onclick="window.ProtecLocaux.setTab('construction', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'construction' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
+          <button onclick="window.ProtecLocaux.setTab('construction', window.game)" class="px-3.5 py-2 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'construction' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-blue-400/40' : 'text-slate-600 hover:bg-slate-100'}">
             <i data-lucide="hammer" class="w-3.5 h-3.5"></i>
-            Construction Neuve Sur-Mesure
+            <span>Construction Neuve</span>
           </button>
-          <button onclick="window.ProtecLocaux.setTab('stock', window.game)" class="px-3.5 py-1.5 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'stock' ? 'bg-pc-blue text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}">
+          <button onclick="window.ProtecLocaux.setTab('stock', window.game)" class="px-3.5 py-2 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'stock' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-blue-400/40' : 'text-slate-600 hover:bg-slate-100'}">
             <i data-lucide="package" class="w-3.5 h-3.5"></i>
-            Réserve & Stock Social
+            <span>Stock Social</span>
           </button>
         </div>
 
@@ -2728,9 +2729,9 @@ window.ProtecLocaux = {
           </div>
         </div>
 
-        <!-- ZONE CENTRALE : PLAN 2D HAUTE DÉFINITION -->
-        <div class="relative w-full h-[460px] sm:h-[500px] rounded-3xl bg-[#0a0e17] border-2 border-slate-800 shadow-xl overflow-hidden select-none">
-          <canvas id="architect-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+        <!-- ZONE CENTRALE : PLAN 2D HAUTE DÉFINITION TACTILE -->
+        <div class="relative w-full h-[360px] sm:h-[480px] rounded-3xl bg-[#0a0e17] border-2 border-slate-800 shadow-xl overflow-hidden select-none">
+          <canvas id="architect-canvas" style="touch-action: none;" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
 
           <!-- Badge En direct -->
           <div class="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow text-xs font-bold text-white pointer-events-none">
@@ -3301,6 +3302,39 @@ window.ProtecLocaux = {
     if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
   },
 
+  updateContextBar(item) {
+    const contextBar = document.getElementById('canvas-context-bar');
+    if (!contextBar) return;
+
+    if (item) {
+      contextBar.innerHTML = `
+        <div class="flex items-center gap-2 flex-wrap justify-center text-xs">
+          <span class="flex items-center gap-1 font-bold text-amber-300">
+            <span>🛋️</span>
+            <span class="truncate max-w-[130px] sm:max-w-none"><strong>${item.name || item.label || 'Mobilier'}</strong></span>
+          </span>
+          <div class="h-3.5 w-[1px] bg-slate-700 hidden sm:block"></div>
+          <button type="button" onclick="window.ProtecLocaux.rotateSelectedItem()" class="px-2.5 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
+            <span>🔄</span> <span>Pivoter (90°)</span>
+          </button>
+          <button type="button" onclick="window.ProtecLocaux.deleteSelectedItem()" class="px-2.5 py-1 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
+            <span>🗑️</span> <span>Revendre (50%)</span>
+          </button>
+          <button type="button" onclick="window.ProtecLocaux.selectedFurnitureId = null; window.ProtecLocaux.updateContextBar(null); window.ProtecLocaux.renderArchitectScene();" class="px-2 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white font-bold text-[11px] transition cursor-pointer">
+            <span>✕</span>
+          </button>
+        </div>
+      `;
+    } else {
+      contextBar.innerHTML = `
+        <div class="flex items-center gap-1.5 text-slate-300 text-[10px] sm:text-[11px] font-medium text-center">
+          <span>👆</span>
+          <span><strong>1 doigt :</strong> déplacer • <strong>2 doigts :</strong> zoomer • Touchez un meuble ou une pièce</span>
+        </div>
+      `;
+    }
+  },
+
   rotateSelectedItem() {
     if (!this.selectedFurnitureId) return;
     const model = this.getArchitectModel();
@@ -3310,6 +3344,7 @@ window.ProtecLocaux = {
     const tmp = item.w;
     item.w = item.d;
     item.d = tmp;
+    this.updateContextBar(item);
     this.renderArchitectScene();
   },
 
@@ -3332,17 +3367,8 @@ window.ProtecLocaux = {
 
     model.furniture = (model.furniture || []).filter(f => f.id !== this.selectedFurnitureId);
     this.selectedFurnitureId = null;
+    this.updateContextBar(null);
     this.renderArchitectScene();
-
-    const contextBar = document.getElementById('canvas-context-bar');
-    if (contextBar) {
-      contextBar.innerHTML = `
-        <span class="text-slate-300 text-[11px] font-medium flex items-center gap-1.5">
-          <span>💡</span>
-          <span>Cliquez sur un meuble pour le déplacer (gratuit) ou pivoter [R] • Cliquez sur une pièce pour l'aménager</span>
-        </span>
-      `;
-    }
 
     const subpanel = document.getElementById('editor-subpanel');
     if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
@@ -3350,11 +3376,11 @@ window.ProtecLocaux = {
 
   // Rendu selon l'onglet actif
   renderActiveTabContent(game, station, premises, stats) {
-    if (this.activeTab === 'modulaire' || !this.activeTab) {
-      return this.renderModulaireTab(game, station, premises, stats);
-    }
-    if (this.activeTab === 'plan') {
+    if (this.activeTab === 'plan' || !this.activeTab) {
       return this.renderPlanTab(game, premises, stats);
+    }
+    if (this.activeTab === 'modulaire') {
+      return this.renderModulaireTab(game, station, premises, stats);
     }
     if (this.activeTab === 'securite') {
       return this.renderSecuriteTab(game, premises);
@@ -3468,62 +3494,60 @@ window.ProtecLocaux = {
         ` : ''}
 
         <!-- ========================================================================= -->
-        <!-- ZONE VISUALISEUR D'ARCHITECTE 2D / 3D TEMPS RÉEL (IDENTIQUE AU MODÈLE)    -->
+        <!-- ZONE VISUALISEUR D'ARCHITECTE 2D / 3D TEMPS RÉEL (ADAPTÉ SMARTPHONE & PC)  -->
         <!-- ========================================================================= -->
-        <div class="relative w-full h-[540px] sm:h-[600px] rounded-3xl bg-[#0b0f19] border-2 border-slate-800 shadow-2xl overflow-hidden select-none">
+        <div class="relative w-full h-[360px] sm:h-[480px] md:h-[580px] rounded-3xl bg-[#0b0f19] border-2 border-slate-800 shadow-2xl overflow-hidden select-none">
           
-          <!-- CANVAS PRINCIPAL HAUTE DÉFINITION -->
-          <canvas id="architect-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+          <!-- CANVAS PRINCIPAL HAUTE DÉFINITION TACTILE -->
+          <canvas id="architect-canvas" style="touch-action: none;" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
 
           <!-- 1. En-tête gauche : Badge Plan d'Architecte 2D -->
-          <div class="absolute top-3.5 left-3.5 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-lg text-xs font-bold text-white pointer-events-none">
-            <span class="text-blue-400 text-sm">📐</span>
-            <span>Plan d'Aménagement 2D</span>
+          <div class="absolute top-2.5 sm:top-3.5 left-2.5 sm:left-3.5 z-20 flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-lg text-[11px] sm:text-xs font-bold text-white pointer-events-none">
+            <span class="text-blue-400">📐</span>
+            <span>Plan 2D Bâtiment</span>
           </div>
 
-          <!-- 2. En-tête centre : Badge 2D -->
-          <div class="absolute top-3.5 left-1/2 -translate-x-1/2 z-20 flex items-center px-3.5 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-xl text-xs font-black text-slate-200 pointer-events-none">
-            <span class="text-blue-400 mr-1.5">📐</span> Plan d'Architecte 2D
-          </div>
-
-          <!-- 3. En-tête droite : Boutons + et { } -->
-          <div class="absolute top-3.5 right-3.5 z-20 flex items-center gap-2">
-            <button onclick="window.ProtecLocaux.showAddElementModal(window.game)" class="w-9 h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white border border-slate-700/80 flex items-center justify-center font-black text-lg shadow-lg transition active:scale-95" title="Ajouter un équipement ou mobilier">
+          <!-- 2. En-tête droite : Boutons + et { } -->
+          <div class="absolute top-2.5 sm:top-3.5 right-2.5 sm:right-3.5 z-20 flex items-center gap-1.5">
+            <button onclick="window.ProtecLocaux.showAddElementModal(window.game)" class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white border border-slate-700/80 flex items-center justify-center font-black text-lg shadow-lg transition active:scale-95 cursor-pointer" title="Ajouter un équipement ou mobilier">
               +
             </button>
-            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="w-9 h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-cyan-400 border border-slate-700/80 flex items-center justify-center font-mono font-bold text-sm shadow-lg transition active:scale-95" title="Fiche technique & cotes d'architecte">
+            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-cyan-400 border border-slate-700/80 flex items-center justify-center font-mono font-bold text-xs sm:text-sm shadow-lg transition active:scale-95 cursor-pointer" title="Fiche technique & cotes d'architecte">
               { }
             </button>
           </div>
 
-          <!-- 4. Barre d'outils latérale droite (Flottante sombre) -->
-          <div class="absolute top-1/2 -translate-y-1/2 right-3.5 z-20 flex flex-col items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-2xl">
+          <!-- 3. Barre d'outils latérale droite (Flottante sombre) -->
+          <div class="absolute top-1/2 -translate-y-1/2 right-2.5 sm:right-3.5 z-20 flex flex-col items-center gap-1.5 p-1 sm:p-1.5 rounded-2xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-2xl">
             <!-- Crayon / Éditer -->
-            <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="w-8 h-8 rounded-xl flex items-center justify-center transition ${this.isEditing ? 'bg-amber-500 text-white shadow-md animate-pulse' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" title="${isOwner ? 'Réaménager cloisons' : 'Aménagement interdit en location'}">
+            <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.isEditing ? 'bg-amber-500 text-white shadow-md animate-pulse' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" title="${isOwner ? 'Réaménager cloisons' : 'Aménagement interdit en location'}">
               ✏️
             </button>
             <!-- Aimant Snap / Magnétisme -->
-            <button onclick="window.ProtecLocaux.toggleMagnet()" class="w-8 h-8 rounded-xl flex items-center justify-center transition ${this.snapToGrid ? 'bg-blue-600 text-white shadow-md shadow-blue-500/50 ring-2 ring-blue-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" title="Magnétisme Grille (Snap)">
+            <button onclick="window.ProtecLocaux.toggleMagnet()" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.snapToGrid ? 'bg-blue-600 text-white shadow-md shadow-blue-500/50 ring-2 ring-blue-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" title="Magnétisme Grille (Snap)">
               🧲
             </button>
             <div class="w-5 h-[1px] bg-slate-700/80 my-0.5"></div>
             <!-- Zoom + -->
-            <button onclick="window.ProtecLocaux.zoomCamera(1.2)" class="w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center justify-center font-black text-base transition" title="Zoom avant">
+            <button onclick="window.ProtecLocaux.zoomCamera(1.2)" class="w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center justify-center font-black text-base transition cursor-pointer" title="Zoom avant">
               +
             </button>
             <!-- Zoom - -->
-            <button onclick="window.ProtecLocaux.zoomCamera(0.8)" class="w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center justify-center font-black text-base transition" title="Zoom arrière">
+            <button onclick="window.ProtecLocaux.zoomCamera(0.8)" class="w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center justify-center font-black text-base transition cursor-pointer" title="Zoom arrière">
               −
             </button>
             <!-- Centrer caméra -->
-            <button onclick="window.ProtecLocaux.resetCamera()" class="w-8 h-8 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-slate-800 flex items-center justify-center transition" title="Recentrer la vue">
+            <button onclick="window.ProtecLocaux.resetCamera()" class="w-8 h-8 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-slate-800 flex items-center justify-center transition cursor-pointer" title="Recentrer la vue">
               🎯
             </button>
           </div>
 
-          <!-- 5. Barre d'astuces contextuelle inférieure -->
-          <div class="absolute bottom-3.5 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 rounded-xl bg-slate-900/85 backdrop-blur border border-slate-700/70 shadow-xl text-[11px] font-semibold text-slate-300 pointer-events-none flex items-center gap-2 text-center whitespace-nowrap">
-            Clic pour sélectionner • Clic droit / Molette: Vue • [R] Pivoter (Gratuit) • Glisser: Déplacer (Gratuit)
+          <!-- 4. Barre contextuelle inférieure interactive (Mobile & Bureau) -->
+          <div id="canvas-context-bar" class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-2xl bg-slate-900/95 backdrop-blur border border-slate-700/80 shadow-2xl max-w-[94%] transition-all">
+            <div class="flex items-center gap-1.5 text-slate-300 text-[10px] sm:text-[11px] font-medium text-center">
+              <span>👆</span>
+              <span><strong>1 doigt :</strong> déplacer • <strong>2 doigts :</strong> zoomer • Touchez un meuble ou une pièce</span>
+            </div>
           </div>
 
         </div>
@@ -3699,6 +3723,7 @@ window.ProtecLocaux = {
             const roomsList = document.getElementById('starter-rooms-list');
             if (roomsList) roomsList.innerHTML = this.renderRoomsListHTML(model);
           }
+          this.updateContextBar(clickedFurniture);
           this.renderArchitectScene();
           return;
         }
@@ -3710,6 +3735,7 @@ window.ProtecLocaux = {
 
         if (clickedRoom) {
           this.selectedFurnitureId = null;
+          this.updateContextBar(null);
           this.selectRoom(clickedRoom.id);
           this.renderArchitectScene();
           return;
@@ -3718,6 +3744,7 @@ window.ProtecLocaux = {
 
       // 3. Clic dans le vide -> déplacement de la caméra (Pan)
       this.selectedFurnitureId = null;
+      this.updateContextBar(null);
       this.isDraggingCanvas = true;
       this.dragStart = { x: clientX, y: clientY };
       this.dragButton = button;
@@ -3809,6 +3836,9 @@ window.ProtecLocaux = {
       this.isDraggingCanvas = false;
     };
 
+    // Assurer le blocage des gestes parasites du navigateur
+    canvas.style.touchAction = 'none';
+
     // Souris
     canvas.addEventListener('mousedown', (e) => onPointerDown(e.clientX, e.clientY, e.button));
     window.addEventListener('mousemove', (e) => onPointerMove(e.clientX, e.clientY));
@@ -3832,20 +3862,78 @@ window.ProtecLocaux = {
       }
     });
 
-    // Tactile Mobile / Tablette
+    // Tactile Mobile / Tablette (Touch-action native bloquée, gestion 1 doigt et 2 doigts pinch-to-zoom)
+    let touchStartDist = 0;
+    let touchStartCenter = null;
+    let isPinchZoom = false;
+
     canvas.addEventListener('touchstart', (e) => {
       if (e.touches.length === 1) {
+        isPinchZoom = false;
+        e.preventDefault();
         onPointerDown(e.touches[0].clientX, e.touches[0].clientY, 0);
+      } else if (e.touches.length === 2) {
+        isPinchZoom = true;
+        e.preventDefault();
+        this.draggingFurniture = null;
+        this.isDraggingCanvas = false;
+        touchStartDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        touchStartCenter = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+        };
       }
-    }, { passive: true });
+    }, { passive: false });
 
     canvas.addEventListener('touchmove', (e) => {
-      if (e.touches.length === 1) {
+      if (e.touches.length === 1 && !isPinchZoom) {
+        e.preventDefault();
         onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
-      }
-    }, { passive: true });
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        const curDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const curCenter = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+        };
 
-    canvas.addEventListener('touchend', () => onPointerUp(), { passive: true });
+        if (touchStartDist > 0) {
+          const factor = curDist / touchStartDist;
+          const safeFactor = Math.max(0.88, Math.min(1.12, factor));
+          this.zoomCamera(safeFactor);
+
+          if (touchStartCenter) {
+            const dx = curCenter.x - touchStartCenter.x;
+            const dy = curCenter.y - touchStartCenter.y;
+            this.camera2D.panX += dx;
+            this.camera2D.panY += dy;
+          }
+          this.renderArchitectScene();
+        }
+
+        touchStartDist = curDist;
+        touchStartCenter = curCenter;
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+      if (e.touches.length === 0) {
+        isPinchZoom = false;
+        touchStartDist = 0;
+        touchStartCenter = null;
+        onPointerUp();
+      } else if (e.touches.length === 1) {
+        isPinchZoom = false;
+        touchStartDist = 0;
+        touchStartCenter = null;
+      }
+    }, { passive: false });
 
     // Redimensionnement de fenêtre
     window.addEventListener('resize', () => {

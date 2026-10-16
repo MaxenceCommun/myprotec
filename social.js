@@ -492,7 +492,7 @@ window.ProtecSocial = {
             </button>
           </div>
           <div class="text-xs font-bold text-slate-500 flex items-center gap-2">
-            <span>Maraudes actives : <strong>${(game.missions || []).filter(m => m.type === 'social').length}</strong></span>
+            <span>Maraudes actives : <strong>${(game.missions || []).filter(m => m.type === 'social' && !(game.isMissionTerminated ? game.isMissionTerminated(m) : ['completed', 'termine', 'terminee'].includes(m.status))).length}</strong></span>
           </div>
         </div>
 

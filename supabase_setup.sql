@@ -1270,9 +1270,17 @@ CREATE TABLE IF NOT EXISTS apc_departments (
   debts JSONB DEFAULT '{}'::jsonb,
   solidarity_fund JSONB DEFAULT '[]'::jsonb,
   last_processed_day INT DEFAULT NULL,
+  crisis_autonomous_requisition JSONB DEFAULT '{"title": "Engagement Autonome Inter-Antennes en Temps de Crise", "description": "Autoriser l''engagement en autonomie d''un engin avec équipage complet d''un confrère sans validation préalable, exclusivement lors des crises majeures.", "votes": {}}'::jsonb,
+  crisis_alert_strategy TEXT DEFAULT 'proche',
+  crisis_ack_timeout_seconds INT DEFAULT 45,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Mises à jour idempotentes pour tables apc_departments existantes
+ALTER TABLE apc_departments ADD COLUMN IF NOT EXISTS crisis_autonomous_requisition JSONB DEFAULT '{"title": "Engagement Autonome Inter-Antennes en Temps de Crise", "description": "Autoriser l''engagement en autonomie d''un engin avec équipage complet d''un confrère sans validation préalable, exclusivement lors des crises majeures.", "votes": {}}'::jsonb;
+ALTER TABLE apc_departments ADD COLUMN IF NOT EXISTS crisis_alert_strategy TEXT DEFAULT 'proche';
+ALTER TABLE apc_departments ADD COLUMN IF NOT EXISTS crisis_ack_timeout_seconds INT DEFAULT 45;
 
 CREATE INDEX IF NOT EXISTS idx_apc_dept_code ON apc_departments(department_code);
 
