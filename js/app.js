@@ -2588,33 +2588,54 @@ class ProtecGame {
 
       const isSncf = mission.alertOrigin === 'sncf' || (mission.title && mission.title.includes('SNCF'));
 
+      let iconName = 'shield-alert';
+      if (isSncf) iconName = 'train';
+      else if (mission.type === 'samu') iconName = 'activity';
+      else if (mission.type === 'pompiers') iconName = 'flame';
+      else if (mission.type === 'meteo') iconName = 'shield-alert';
+      else if (mission.type === 'social') iconName = 'heart-handshake';
+      else if (mission.type === 'crise') iconName = 'siren';
+
       let colorClass = 'bg-pc-blue';
       let pingClass = 'radar-ping-blue';
-      let iconName = 'shield-alert';
-
-      if (isSncf) { colorClass = 'bg-amber-600'; pingClass = 'radar-ping-orange'; iconName = 'train'; }
-      else if (mission.type === 'samu') { colorClass = 'bg-pc-orange'; pingClass = 'radar-ping-orange'; iconName = 'activity'; }
-      else if (mission.type === 'pompiers') { colorClass = 'bg-red-700'; pingClass = 'radar-ping-red'; iconName = 'flame'; }
-      else if (mission.type === 'meteo') { colorClass = 'bg-sky-700'; pingClass = 'radar-ping-blue'; iconName = 'shield-alert'; }
-      else if (mission.type === 'social') { colorClass = 'bg-purple-600'; pingClass = 'radar-ping-purple'; iconName = 'heart-handshake'; }
-      else if (mission.type === 'crise') { colorClass = 'bg-red-600'; pingClass = 'radar-ping-red'; iconName = 'siren'; }
-
       let badgeHtml = '';
-      if (mission.status === 'ongoing') {
-        badgeHtml = `<span class="badge-counter bg-emerald-500 animate-pulse">✓</span>`;
-      } else if (mission.status === 'prealerte') {
-        badgeHtml = `<span class="badge-counter bg-amber-500 animate-ping">${isSncf ? '🚂' : '⏳'}</span>`;
+
+      const isPrealerte = mission.status === 'prealerte' || mission.isPreAlert;
+      const isAlerte = mission.status === 'declenche' || mission.status === 'alerte' || mission.isAlert;
+
+      if (isPrealerte) {
+        // Préalerte : point orange et onde radar orange
+        colorClass = 'bg-amber-500';
         pingClass = 'radar-ping-orange';
-      } else if (mission.status === 'declenche') {
-        badgeHtml = `<span class="badge-counter bg-red-600 animate-pulse">!</span>`;
+        badgeHtml = `<span class="badge-counter bg-amber-500 text-amber-950 font-black animate-ping">${isSncf ? '🚂' : '⏳'}</span>`;
+      } else if (isAlerte) {
+        // Alerte déclenchée : point rouge et onde radar rouge
+        colorClass = 'bg-red-600';
         pingClass = 'radar-ping-red';
+        badgeHtml = `<span class="badge-counter bg-red-600 text-white font-black animate-pulse">!</span>`;
+      } else if (mission.status === 'ongoing') {
+        badgeHtml = `<span class="badge-counter bg-emerald-500 animate-pulse">✓</span>`;
+        if (isSncf) { colorClass = 'bg-amber-600'; pingClass = 'radar-ping-orange'; }
+        else if (mission.type === 'samu') { colorClass = 'bg-pc-orange'; pingClass = 'radar-ping-orange'; }
+        else if (mission.type === 'pompiers') { colorClass = 'bg-red-700'; pingClass = 'radar-ping-red'; }
+        else if (mission.type === 'meteo') { colorClass = 'bg-sky-700'; pingClass = 'radar-ping-blue'; }
+        else if (mission.type === 'social') { colorClass = 'bg-purple-600'; pingClass = 'radar-ping-purple'; }
+        else if (mission.type === 'crise') { colorClass = 'bg-red-600'; pingClass = 'radar-ping-red'; }
       } else if (mission.status === 'planifie') {
         const isComplete = (mission.registeredVolunteers?.length || 0) >= mission.requiredVolunteers;
         badgeHtml = `<span class="badge-counter ${isComplete ? 'bg-emerald-500' : 'bg-amber-500'}">${mission.registeredVolunteers?.length || 0}/${mission.requiredVolunteers}</span>`;
+        if (mission.type === 'social') { colorClass = 'bg-purple-600'; pingClass = 'radar-ping-purple'; }
+      } else {
+        if (isSncf) { colorClass = 'bg-amber-600'; pingClass = 'radar-ping-orange'; }
+        else if (mission.type === 'samu') { colorClass = 'bg-pc-orange'; pingClass = 'radar-ping-orange'; }
+        else if (mission.type === 'pompiers') { colorClass = 'bg-red-700'; pingClass = 'radar-ping-red'; }
+        else if (mission.type === 'meteo') { colorClass = 'bg-sky-700'; pingClass = 'radar-ping-blue'; }
+        else if (mission.type === 'social') { colorClass = 'bg-purple-600'; pingClass = 'radar-ping-purple'; }
+        else if (mission.type === 'crise') { colorClass = 'bg-red-600'; pingClass = 'radar-ping-red'; }
       }
 
-      // L'onde (radar-ping) n'apparaît QUE s'il manque quelque chose sur la mission (personnel, véhicule, rôle, etc.)
-      const needsAction = this.isMissionIncomplete(mission);
+      // L'onde (radar-ping) apparaît s'il s'agit d'une préalerte/alerte ou s'il manque des éléments
+      const needsAction = isPrealerte || isAlerte || this.isMissionIncomplete(mission);
       const activePingHtml = needsAction ? `<div class="${pingClass}"></div>` : '';
 
       const iconSvg = this.getMarkerIconSvg(iconName, 'w-4 h-4 text-white');
