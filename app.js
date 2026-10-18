@@ -10197,6 +10197,9 @@ class ProtecGame {
     if (window.ProtecContratsAnnuels && typeof window.ProtecContratsAnnuels.onMissionCompleted === 'function') {
       window.ProtecContratsAnnuels.onMissionCompleted(this, mission);
     }
+    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordMissionCompleted === 'function') {
+      window.ProtecAdvanced.recordMissionCompleted(this, mission);
+    }
 
     // Déclencheur officiel du palier de parrainage (1ère intervention terminée -> déblocage de la prime parrain)
     if (!this._firstMissionReferralChecked) {

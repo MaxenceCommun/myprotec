@@ -69,6 +69,7 @@ window.ProtecAdmin = {
     const tabEventsBtn = document.getElementById('admin-tab-events-btn');
     const tabReferralsBtn = document.getElementById('admin-tab-referrals-btn');
     const tabBalancingBtn = document.getElementById('admin-tab-balancing-btn');
+    const tabResetBtn = document.getElementById('admin-tab-reset-btn');
 
     const viewPlayers = document.getElementById('admin-view-players');
     const viewAnnouncements = document.getElementById('admin-view-announcements');
@@ -81,6 +82,7 @@ window.ProtecAdmin = {
     const viewEvents = document.getElementById('admin-view-events');
     const viewReferrals = document.getElementById('admin-view-referrals');
     const viewBalancing = document.getElementById('admin-view-balancing');
+    const viewReset = document.getElementById('admin-view-reset');
 
     const defaultClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer';
     const activeClass = 'px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer';
@@ -96,6 +98,7 @@ window.ProtecAdmin = {
     if (tabEventsBtn) tabEventsBtn.className = (tab === 'events' ? activeClass : defaultClass);
     if (tabReferralsBtn) tabReferralsBtn.className = (tab === 'parrainages' ? activeClass : defaultClass);
     if (tabBalancingBtn) tabBalancingBtn.className = (tab === 'balancing' ? activeClass : defaultClass);
+    if (tabResetBtn) tabResetBtn.className = (tab === 'reset' ? 'px-3 py-1.5 rounded-xl text-xs font-black bg-rose-600 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer ml-auto' : 'px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition flex items-center gap-1.5 cursor-pointer ml-auto');
 
     if (viewPlayers) viewPlayers.classList.toggle('hidden', tab !== 'joueurs');
     if (viewAnnouncements) viewAnnouncements.classList.toggle('hidden', tab !== 'annonces');
@@ -108,6 +111,7 @@ window.ProtecAdmin = {
     if (viewEvents) viewEvents.classList.toggle('hidden', tab !== 'events');
     if (viewReferrals) viewReferrals.classList.toggle('hidden', tab !== 'parrainages');
     if (viewBalancing) viewBalancing.classList.toggle('hidden', tab !== 'balancing');
+    if (viewReset) viewReset.classList.toggle('hidden', tab !== 'reset');
 
     if (tab === 'archives') {
       this.loadResetArchives();
@@ -1323,6 +1327,88 @@ window.ProtecAdmin = {
     } else {
       await window.ProtecDialog.alert('Erreur lors de la suppression.', 'Erreur Suppression');
     }
+  },
+
+  // Réinitialisation intégrale du jeu en entier (Wipe de tous les comptes et données de test)
+  async executeMasterReset() {
+    const input = document.getElementById('admin-master-reset-confirm-input');
+    const typed = (input?.value || '').trim().toUpperCase();
+
+    if (typed !== 'EFFACER TOUT LE JEU') {
+      if (window.game?.showToast) {
+        window.game.showToast('Validation requise', 'Veuillez saisir exactement la phrase « EFFACER TOUT LE JEU » pour confirmer.', 'orange');
+      } else {
+        alert('Validation requise : veuillez taper « EFFACER TOUT LE JEU ».');
+      }
+      return;
+    }
+
+    let doubleCheck = false;
+    if (window.ProtecDialog && typeof window.ProtecDialog.confirm === 'function') {
+      doubleCheck = await window.ProtecDialog.confirm(
+        "ATTENTION DANGER EXTRÊME :\n\nÊtes-vous absolument certain de vouloir effacer l'intégralité du jeu, TOUS les comptes joueurs et TOUTES les données (Supabase et BDD locale) ?\n\nCette action est irréversible !",
+        "Wipe Total du Jeu",
+        { isDestructive: true, confirmText: 'OUI, TOUT EFFACER', cancelText: 'Annuler' }
+      );
+    } else {
+      doubleCheck = confirm("ATTENTION DANGER EXTRÊME :\n\nÊtes-vous absolument certain de vouloir effacer l'intégralité du jeu, TOUS les comptes joueurs et TOUTES les données ?\n\nCette action est irréversible !");
+    }
+
+    if (!doubleCheck) return;
+
+    if (window.game?.showToast) {
+      window.game.showToast('Réinitialisation en cours...', 'Purge de la base locale et du cloud Supabase...', 'blue');
+    }
+
+    // 1. Purge des tables Supabase Cloud
+    if (window.ProtecSupabase && window.ProtecSupabase.client) {
+      const sb = window.ProtecSupabase.client;
+      const tables = [
+        'operational_log', 'server_events_log', 'fraud_logs', 'referral_logs',
+        'chat_messages', 'market_listings', 'active_formations', 'active_missions',
+        'antenne_ecussons', 'alliance_stations', 'game_saves', 'push_subscriptions', 'players'
+      ];
+      for (const t of tables) {
+        try {
+          await sb.from(t).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        } catch (errTable) {
+          console.warn(`Purge Supabase table ${t}:`, errTable);
+        }
+      }
+    }
+
+    // 2. Purge du serveur local Node (db.json et gameState mémoire)
+    let localSuccess = false;
+    try {
+      const res = await fetch('/api/admin/master-reset', {
+        method: 'POST',
+        headers: this.getAuthHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) localSuccess = true;
+      }
+    } catch (e) {
+      console.warn('Erreur /api/admin/master-reset:', e);
+    }
+
+    // 3. Purge totale du stockage navigateur
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (e) {}
+
+    // 4. Message de confirmation
+    if (window.ProtecDialog && typeof window.ProtecDialog.alert === 'function') {
+      await window.ProtecDialog.alert(
+        "Le jeu entier a été réinitialisé à zéro avec succès !\nTous les comptes, stations, véhicules et données ont été purgés.\nLe compte Admin par défaut a été réinitialisé.",
+        "Wipe Réussi"
+      );
+    } else {
+      alert("Le jeu entier a été réinitialisé à zéro avec succès !\nTous les comptes et données ont été purgés.");
+    }
+
+    window.location.href = 'jeu.html';
   },
 
   // =========================================================================
@@ -3440,6 +3526,9 @@ window.ProtecAdmin = {
           <button id="admin-tab-balancing-btn" onclick="window.ProtecAdmin.switchTab('balancing')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer" title="Gestion des probabilités et variables d'équilibrage du jeu">
             ⚙️ Équilibrage Gameplay
           </button>
+          <button id="admin-tab-reset-btn" onclick="window.ProtecAdmin.switchTab('reset')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition flex items-center gap-1.5 cursor-pointer ml-auto" title="Réinitialiser l'ensemble du jeu, des comptes et des données">
+            💣 Réinitialisation Complète
+          </button>
         </div>
 
         <!-- Vue 1 : Directeurs & Comptes -->
@@ -4312,6 +4401,71 @@ window.ProtecAdmin = {
 
         <!-- Vue : Équilibrage Gameplay (Tuning Live & Déclencheurs de Test) -->
         <div id="admin-view-balancing" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4 pr-1"></div>
+
+        <!-- Vue : Réinitialisation Globale du Jeu (Wipe Complet Test / Maintenance) -->
+        <div id="admin-view-reset" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
+          <div class="p-5 sm:p-6 rounded-3xl bg-rose-50/90 dark:bg-rose-950/40 border-2 border-rose-400 dark:border-rose-900 shadow-xl text-rose-950 dark:text-rose-100 space-y-4">
+            <div class="flex items-center gap-3 pb-3 border-b border-rose-200 dark:border-rose-900/60">
+              <div class="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center text-2xl font-black shadow-lg shadow-rose-600/30 flex-shrink-0">
+                💣
+              </div>
+              <div>
+                <h4 class="text-base sm:text-lg font-black text-rose-950 dark:text-rose-100 uppercase tracking-wide">
+                  Réinitialisation Globale du Jeu (Wipe Complet)
+                </h4>
+                <p class="text-xs text-rose-700 dark:text-rose-300 font-semibold">
+                  Purge totale de l'ensemble des comptes directeurs, des données multijoueur et de toutes les sauvegardes
+                </p>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-white/95 dark:bg-slate-900/80 border border-rose-200 dark:border-rose-800 text-xs text-slate-800 dark:text-slate-200 space-y-3 leading-relaxed shadow-xs">
+              <div class="flex items-center gap-2 text-rose-600 font-black text-xs uppercase tracking-wide">
+                <span>⚠️</span>
+                <span>Procédure de Maintenance Majeure & Remise à Blanc</span>
+              </div>
+              <p>
+                Cette commande supprime <strong>l'intégralité des données du jeu</strong> pour éliminer toute corruption de données ou de progression de test :
+              </p>
+              <ul class="list-disc list-inside space-y-1.5 text-[11px] text-slate-700 dark:text-slate-300 pl-1">
+                <li><strong>Tous les comptes directeurs inscrits</strong> sont supprimés (le compte <code>Admin</code> est immédiatement réinitialisé à neuf).</li>
+                <li><strong>Toutes les sauvegardes de parties</strong> (trésorerie, véhicules, bénévoles, missions, devis, contrats) sont purgées.</li>
+                <li><strong>Toutes les antennes locales</strong> sur la carte multijoueur (table <code>alliance_stations</code>) sont retirées.</li>
+                <li><strong>Toutes les données associées</strong> (logs de crise, écussons, parrainages, archives, marché d'occasion) sont effacées.</li>
+                <li><strong>Toutes les tables Cloud Supabase</strong> ainsi que la base locale (<code>db.json</code>) sont remises à zéro.</li>
+              </ul>
+              <div class="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-300 flex items-center gap-2">
+                <span>💡</span>
+                <span><strong>Après validation :</strong> le serveur sera réinitialisé et vous serez redirigé vers la page d'accueil avec un système 100% propre.</span>
+              </div>
+            </div>
+
+            <div class="space-y-2 pt-2 border-t border-rose-200 dark:border-rose-900/60">
+              <label class="block text-xs font-black text-rose-950 dark:text-rose-100">
+                Pour exécuter la réinitialisation TOTALE, veuillez taper exactement la phrase ci-dessous :
+              </label>
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] font-mono font-black text-rose-600 bg-rose-100 dark:bg-rose-900/50 px-2.5 py-1.5 rounded-lg border border-rose-300 select-all">EFFACER TOUT LE JEU</span>
+              </div>
+              <input 
+                type="text" 
+                id="admin-master-reset-confirm-input" 
+                placeholder="Tapez : EFFACER TOUT LE JEU"
+                class="w-full sm:w-96 px-3.5 py-2.5 rounded-xl border-2 border-rose-300 dark:border-rose-700 font-mono font-bold text-xs uppercase tracking-wider text-center focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs"
+              />
+            </div>
+
+            <div class="pt-2 flex items-center gap-3">
+              <button 
+                type="button" 
+                onclick="window.ProtecAdmin.executeMasterReset()"
+                class="px-5 py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white font-black text-xs sm:text-sm shadow-xl shadow-rose-600/30 transition flex items-center gap-2 cursor-pointer active:scale-95">
+                <span>💣</span>
+                <span>Confirmer le Wipe Total du Jeu</span>
+              </button>
+            </div>
+          </div>
+        </div>
 
       </div>
     `;

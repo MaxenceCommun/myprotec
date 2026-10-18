@@ -326,6 +326,19 @@ class Database {
       delete this.data.savedGames[userId];
     }
 
+    // Réinitialisation intégrale du profil utilisateur : suppression de l'antenne, du département et de la commune
+    if (this.data.users) {
+      const userKey = Object.keys(this.data.users).find(k => 
+        (userId && this.data.users[k].id === userId) || 
+        (username && k === username.toLowerCase())
+      );
+      if (userKey && this.data.users[userKey]) {
+        this.data.users[userKey].stationName = null;
+        this.data.users[userKey].departmentCode = null;
+        this.data.users[userKey].city = null;
+      }
+    }
+
     this.save();
     return archiveEntry;
   }
@@ -606,6 +619,39 @@ class Database {
 
     this.save();
     return { success: true, department: dept };
+  }
+
+  // --- RÉINITIALISATION GLOBALE DU JEU (WIPE COMPLET TEST / MAINTENANCE) ---
+  masterResetAllGameData() {
+    const backupSummary = {
+      timestamp: new Date().toISOString(),
+      previousUsersCount: Object.keys(this.data.users || {}).length,
+      previousSavesCount: Object.keys(this.data.savedGames || {}).length
+    };
+
+    // 1. Purge intégrale de toutes les tables et données
+    this.data.users = {};
+    this.data.sessions = {};
+    this.data.savedGames = {};
+    this.data.departments = {};
+    this.data.resetArchives = [];
+    this.data.referrals = {};
+    this.data.badgeOffers = [];
+    this.data.pushSubscriptions = {};
+
+    // 2. Recréer immédiatement le compte Administrateur par défaut propre et fonctionnel
+    this.ensureAdminUser();
+
+    // 3. Sauvegarder sur le disque
+    this.save();
+
+    return {
+      success: true,
+      message: 'Base de données réinitialisée intégralement avec succès. Tous les comptes et données ont été purgés.',
+      backupSummary,
+      adminRecreated: true,
+      timestamp: new Date().toISOString()
+    };
   }
 }
 

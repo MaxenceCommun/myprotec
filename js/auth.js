@@ -200,7 +200,7 @@ window.ProtecAuth = {
             // Charger directement la progression depuis Supabase
             await this.checkCloudSaveOnLogin(game);
 
-            if (game && typeof game.returnToMyAntenna === 'function') {
+            if (game && typeof game.returnToMyAntenna === 'function' && Array.isArray(game.stations) && game.stations.length > 0) {
               setTimeout(() => {
                 game.returnToMyAntenna(15, true);
               }, 300);
@@ -1037,7 +1037,7 @@ window.ProtecAuth = {
                 <div class="text-[11px] text-rose-900 dark:text-rose-200 leading-relaxed space-y-1.5 bg-white/70 dark:bg-slate-900/70 p-3 rounded-xl border border-rose-200/60 dark:border-rose-800/40">
                   <p class="font-extrabold text-rose-950 dark:text-rose-100">⚠️ Réinitialisation complète de l'antenne</p>
                   <p>
-                    Cette action réinitialise entièrement votre antenne à son état de départ : solde de trésorerie initial, suppression des véhicules et matériels achetés, libération des effectifs et remise à zéro des interventions.
+                    Cette action réinitialise entièrement votre antenne à son état de départ : <strong>suppression de la position géographique de l'antenne, de son nom et du département choisi</strong>, remise à zéro de la trésorerie et libération des effectifs. Vous pourrez recréer une antenne librement dans le département de votre choix.
                   </p>
                 </div>
 
@@ -1343,8 +1343,8 @@ window.ProtecAuth = {
       await this.checkCloudSaveOnLogin(game);
       this.closeAuthModal();
 
-      // Recentre et positionne immédiatement le joueur devant son antenne sur la carte
-      if (game && typeof game.returnToMyAntenna === 'function') {
+      // Recentre et positionne immédiatement le joueur devant son antenne sur la carte UNIQUEMENT s'il possède une antenne
+      if (game && typeof game.returnToMyAntenna === 'function' && Array.isArray(game.stations) && game.stations.length > 0) {
         setTimeout(() => {
           game.returnToMyAntenna(15, true);
         }, 300);
@@ -2086,7 +2086,7 @@ window.ProtecAuth = {
       if (window.ProtecSystems && window.ProtecSystems.updateWeatherAndDayNight) {
         window.ProtecSystems.updateWeatherAndDayNight(game);
       }
-      if (typeof game.returnToMyAntenna === 'function') {
+      if (typeof game.returnToMyAntenna === 'function' && Array.isArray(game.stations) && game.stations.length > 0) {
         setTimeout(() => game.returnToMyAntenna(15, true), 250);
       }
     } catch (err) {

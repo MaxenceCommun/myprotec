@@ -95,19 +95,37 @@ window.ProtecOnboarding = {
     if (this.currentStep === 1) {
       this.renderWizard();
     }
-    if (notify && this.game && typeof this.game.showToast === 'function') {
-      this.game.showToast('Équipe Régénérée 🎲', 'Une nouvelle composition d’équipiers diversifiée a été attribuée à l’antenne.', 'blue');
-    }
   },
 
-  // Initialisation du Tuto à 4 étapes
+  // Initialisation du Tuto à 4 étapes avec persistance et reprise transparente
   showWizard(game, options = {}) {
     this.game = game || window.game;
-    this.currentStep = 1;
     this.fnpcSigned = false;
 
-    // Générer une composition d'équipe fraîche et diversifiée à chaque ouverture
-    this.randomizeVolunteers(false);
+    // Récupération de la progression en cours si le tuto a été interrompu précédemment
+    let savedStep = 1;
+    let savedVolunteers = null;
+    let savedPlacement = null;
+    try {
+      const storedStep = localStorage.getItem('protec_onboarding_step');
+      if (storedStep) savedStep = parseInt(storedStep, 10) || 1;
+      const storedVols = localStorage.getItem('protec_onboarding_volunteers');
+      if (storedVols) savedVolunteers = JSON.parse(storedVols);
+      const storedPlacement = localStorage.getItem('protec_onboarding_placement');
+      if (storedPlacement) savedPlacement = JSON.parse(storedPlacement);
+    } catch (e) {}
+
+    // Restauration de l'équipe configurée ou génération unique initiale (SANS régénération intempestive)
+    if (Array.isArray(savedVolunteers) && savedVolunteers.length === 5) {
+      this.volunteersList = savedVolunteers;
+    } else if (!this.volunteersList || this.volunteersList.length !== 5) {
+      this.randomizeVolunteers(false);
+      try {
+        localStorage.setItem('protec_onboarding_volunteers', JSON.stringify(this.volunteersList));
+      } catch (e) {}
+    }
+
+    this.currentStep = Math.max(1, Math.min(4, options.step || savedStep || 1));
 
     let supaUser = null;
     try {
@@ -119,24 +137,34 @@ window.ProtecOnboarding = {
       || this.game?.player?.departmentCode 
       || this.game?.currentDepartmentCode 
       || localStorage.getItem('protec_department_code') 
-      || '54';
+      || '75';
 
     this.deptCode = String(chosenDept).trim();
     if (this.game?.player) this.game.player.departmentCode = this.deptCode;
     if (this.game) this.game.currentDepartmentCode = this.deptCode;
     localStorage.setItem('protec_department_code', this.deptCode);
 
+    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.deptCode) : null;
+    const defaultCity = deptInfo ? (deptInfo.chefLieu || deptInfo.name) : 'Locale';
+
     if (options.teamName) this.teamName = options.teamName;
     else if (this.game?.player?.stationName) this.teamName = this.game.player.stationName;
     else if (supaUser && (supaUser.stationName || supaUser.station_name)) this.teamName = supaUser.stationName || supaUser.station_name;
-    else this.teamName = localStorage.getItem('protec_station_name') || 'Antenne Protection Civile';
+    else if (localStorage.getItem('protec_station_name')) this.teamName = localStorage.getItem('protec_station_name');
+    else this.teamName = `Antenne de ${defaultCity}`;
 
-    // Position initiale sur la carte (centre géographique du département)
-    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.deptCode) : null;
-    this.placementData.lat = deptInfo ? deptInfo.lat : 48.75;
-    this.placementData.lng = deptInfo ? deptInfo.lng : 6.15;
-    this.placementData.city = deptInfo ? (deptInfo.chefLieu || deptInfo.name) : 'Lunéville';
-    this.placementData.citycode = this.deptCode;
+    // Position initiale sur la carte
+    if (savedPlacement && savedPlacement.lat && savedPlacement.lng) {
+      this.placementData.lat = savedPlacement.lat;
+      this.placementData.lng = savedPlacement.lng;
+      this.placementData.city = savedPlacement.city || (deptInfo ? (deptInfo.chefLieu || deptInfo.name) : 'Secteur Local');
+      this.placementData.citycode = savedPlacement.citycode || this.deptCode;
+    } else {
+      this.placementData.lat = deptInfo ? deptInfo.lat : 48.75;
+      this.placementData.lng = deptInfo ? deptInfo.lng : 6.15;
+      this.placementData.city = deptInfo ? (deptInfo.chefLieu || deptInfo.name) : 'Secteur Local';
+      this.placementData.citycode = this.deptCode;
+    }
     this.updatePlacementCoords(this.placementData.lat, this.placementData.lng);
 
     // Le bâtiment démarre TOTALEMENT VIDE avec les pièces de base prêtes à être configurées
@@ -168,6 +196,13 @@ window.ProtecOnboarding = {
       }
     }
     this.currentStep = Math.max(1, Math.min(4, step));
+    try {
+      localStorage.setItem('protec_onboarding_step', String(this.currentStep));
+      localStorage.setItem('protec_onboarding_volunteers', JSON.stringify(this.volunteersList));
+      if (this.placementData && this.placementData.lat) {
+        localStorage.setItem('protec_onboarding_placement', JSON.stringify(this.placementData));
+      }
+    } catch (e) {}
     this.renderWizard();
 
     // Si on arrive à l'étape 2, initialiser la carte Leaflet
@@ -265,18 +300,45 @@ window.ProtecOnboarding = {
       <div class="space-y-4">
         <div class="text-center space-y-1">
           <img src="logo_myprotec.png" alt="MyProtec" class="h-12 object-contain drop-shadow mx-auto" />
-          <h2 class="text-xl sm:text-2xl font-black text-slate-900">1. Présentation de votre Équipe de Base</h2>
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900">1. Fondation de l'Antenne & Équipe de Base</h2>
           <p class="text-xs text-slate-600 max-w-lg mx-auto">
-            Voici les 5 bénévoles constitutifs qui fondent votre antenne avec vous. Vous pouvez personnaliser leurs noms et avatars avant de démarrer.
+            Définissez le nom de votre antenne, son département de rattachement et découvrez vos 5 bénévoles constitutifs.
+          </p>
         </div>
 
-        <!-- En-tête de section avec bouton pour varier l'équipe -->
+        <!-- Encart de fondation : Nom de l'antenne & Choix du département -->
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/90 to-amber-50/70 border-2 border-pc-blue/30 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left shadow-xs">
+          <div>
+            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 mb-1 flex items-center gap-1.5">
+              <span>🏢</span>
+              <span>Nom officiel de votre Antenne</span>
+            </label>
+            <input 
+              type="text" 
+              id="onboarding-step1-station-name"
+              value="${(this.teamName || '').replace(/"/g, '&quot;')}" 
+              placeholder="Ex: Antenne de Nancy, Antenne Paris 15..."
+              oninput="window.ProtecOnboarding.updateTeamName(this.value)"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-black text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/40 shadow-2xs"
+            />
+          </div>
+          <div>
+            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 mb-1 flex items-center gap-1.5">
+              <span>📍</span>
+              <span>Département d'Implantation</span>
+            </label>
+            <select 
+              id="onboarding-step1-dept-select"
+              onchange="window.ProtecOnboarding.changeDepartment(this.value)"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/40 cursor-pointer shadow-2xs">
+              ${this.getDepartmentsList().map(d => `<option value="${d.code}" ${d.code === this.deptCode ? 'selected' : ''}>${d.code} - ${d.name} (${d.region})</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <!-- En-tête de section -->
         <div class="flex items-center justify-between px-1 pt-1">
           <span class="text-xs font-black text-slate-700 uppercase tracking-wide">Membres constitutifs (#1 à #5)</span>
-          <button type="button" onclick="window.ProtecOnboarding.randomizeVolunteers(true)" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 text-[11px] font-black transition flex items-center gap-1.5 shadow-2xs cursor-pointer border border-slate-200" title="Générer une autre composition d'équipe aléatoire">
-            <i data-lucide="shuffle" class="w-3.5 h-3.5 text-pc-blue"></i>
-            <span>🎲 Régénérer l'équipe</span>
-          </button>
         </div>
 
         <!-- Liste des 5 secouristes personnalisables -->
@@ -819,6 +881,36 @@ window.ProtecOnboarding = {
           </p>
         </div>
 
+        <!-- Encart interactif de configuration de l'antenne & département -->
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+          <div>
+            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 mb-1 flex items-center gap-1.5">
+              <span>🏢</span>
+              <span>Nom officiel de l'antenne</span>
+            </label>
+            <input 
+              type="text" 
+              id="onboarding-step2-station-name"
+              value="${(this.teamName || '').replace(/"/g, '&quot;')}" 
+              placeholder="Ex: Antenne de Nancy, Antenne Paris 15..."
+              oninput="window.ProtecOnboarding.updateTeamName(this.value)"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-black text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/40 shadow-2xs"
+            />
+          </div>
+          <div>
+            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 mb-1 flex items-center gap-1.5">
+              <span>📍</span>
+              <span>Département d'implantation</span>
+            </label>
+            <select 
+              id="onboarding-step2-dept-select"
+              onchange="window.ProtecOnboarding.changeDepartment(this.value)"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/40 cursor-pointer shadow-2xs">
+              ${this.getDepartmentsList().map(d => `<option value="${d.code}" ${d.code === this.deptCode ? 'selected' : ''}>${d.code} - ${d.name} (${d.region})</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
         <!-- Légende opérationnelle de la carte -->
         <div class="flex items-center justify-between flex-wrap gap-2 px-1 text-[11px]">
           <div class="flex items-center gap-3">
@@ -920,6 +1012,49 @@ window.ProtecOnboarding = {
       this.loadDepartementsGeoJSON(),
       this.loadExistingStations()
     ]);
+    this.geojsonData = geojsonData;
+    this.existingAllianceStations = existingStations;
+
+    // 1.1 Contrôle anti-collision territorial : Si la préfecture/chef-lieu est déjà occupée par un autre joueur
+    const minKm = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('minStationDistanceKm', 20) : 20;
+    const isCollidingWithOtherStation = (lat, lng) => {
+      if (!this.existingAllianceStations || this.existingAllianceStations.length === 0) return false;
+      return this.existingAllianceStations.some(st => {
+        const stLat = parseFloat(st.lat);
+        const stLng = parseFloat(st.lng);
+        if (isNaN(stLat) || isNaN(stLng)) return false;
+        const dist = window.ProtecDepartements ? window.ProtecDepartements.calculateDistance(lat, lng, stLat, stLng) : 999;
+        return dist < minKm;
+      });
+    };
+
+    let safeLat = initialLat;
+    let safeLng = initialLng;
+
+    if (isCollidingWithOtherStation(safeLat, safeLng)) {
+      // Trouver automatiquement un point conforme et libre dans le département
+      let foundSafe = false;
+      const stepDelta = 0.08; // ~8-9 km par pas
+      for (let r = 1; r <= 8 && !foundSafe; r++) {
+        const angles = [0, 45, 90, 135, 180, 225, 270, 315];
+        for (const angle of angles) {
+          const rad = angle * Math.PI / 180;
+          const candLat = initialLat + (r * stepDelta * Math.cos(rad));
+          const candLng = initialLng + (r * stepDelta * Math.sin(rad) * 1.35);
+          if (this.isPointInDepartment(candLat, candLng, this.deptCode) && !isCollidingWithOtherStation(candLat, candLng)) {
+            safeLat = candLat;
+            safeLng = candLng;
+            foundSafe = true;
+            break;
+          }
+        }
+      }
+      this.placementData.lat = safeLat;
+      this.placementData.lng = safeLng;
+      try {
+        localStorage.setItem('protec_onboarding_placement', JSON.stringify(this.placementData));
+      } catch (e) {}
+    }
 
     // 2. Application du masque inversé (extérieur du département grisé) et du contour départemental
     if (geojsonData && geojsonData.features) {
@@ -986,13 +1121,16 @@ window.ProtecOnboarding = {
       iconAnchor: [21, 21]
     });
 
-    this.step2Marker = L.marker([initialLat, initialLng], { 
+    this.step2Marker = L.marker([safeLat, safeLng], { 
       icon: markerIcon, 
       draggable: true,
       zIndexOffset: 1000 
     }).addTo(this.step2Map);
 
-    this.lastValidPosition = { lat: initialLat, lng: initialLng };
+    this.lastValidPosition = { lat: safeLat, lng: safeLng };
+    if (this.step2Map && (safeLat !== initialLat || safeLng !== initialLng)) {
+      this.step2Map.setView([safeLat, safeLng], this.step2Map.getZoom());
+    }
 
     // Gestion du drag du marqueur
     this.step2Marker.on('dragend', (e) => {
@@ -1031,7 +1169,7 @@ window.ProtecOnboarding = {
     }, 200);
 
     // Lancer la première vérification
-    this.updatePlacementCoords(initialLat, initialLng);
+    this.updatePlacementCoords(safeLat, safeLng);
   },
 
   async updatePlacementCoords(lat, lng) {
@@ -1084,20 +1222,234 @@ window.ProtecOnboarding = {
     this.updateValidationUI(validation);
   },
 
+  getDepartmentsList() {
+    if (window.ProtecAuth && typeof window.ProtecAuth.getDepartementsList === 'function') {
+      const l = window.ProtecAuth.getDepartementsList();
+      if (Array.isArray(l) && l.length > 0) return l;
+    }
+    if (window.ProtecDepartements && Array.isArray(window.ProtecDepartements.list) && window.ProtecDepartements.list.length > 0) {
+      return window.ProtecDepartements.list;
+    }
+    if (window.ProtecDepartements && Array.isArray(window.ProtecDepartements.DEPARTEMENTS_DATA) && window.ProtecDepartements.DEPARTEMENTS_DATA.length > 0) {
+      return window.ProtecDepartements.DEPARTEMENTS_DATA;
+    }
+    return [
+      { code: '01', name: 'Ain', region: 'Auvergne-Rhône-Alpes' },
+      { code: '13', name: 'Bouches-du-Rhône', region: 'PACA' },
+      { code: '33', name: 'Gironde', region: 'Nouvelle-Aquitaine' },
+      { code: '54', name: 'Meurthe-et-Moselle', region: 'Grand Est' },
+      { code: '59', name: 'Nord', region: 'Hauts-de-France' },
+      { code: '69', name: 'Rhône', region: 'Auvergne-Rhône-Alpes' },
+      { code: '75', name: 'Paris', region: 'Île-de-France' }
+    ];
+  },
+
+  updateTeamName(newName) {
+    this.teamName = (newName || '').trim();
+    if (this.game?.player) this.game.player.stationName = this.teamName;
+    try {
+      if (this.teamName) {
+        localStorage.setItem('protec_station_name', this.teamName);
+      } else {
+        localStorage.removeItem('protec_station_name');
+      }
+    } catch (e) {}
+
+    // Synchronisation en direct des champs dans les étapes 1 et 2 s'ils sont affichés
+    const inp1 = document.getElementById('onboarding-step1-station-name');
+    if (inp1 && inp1.value !== this.teamName) inp1.value = this.teamName;
+    const inp2 = document.getElementById('onboarding-step2-station-name');
+    if (inp2 && inp2.value !== this.teamName) inp2.value = this.teamName;
+  },
+
+  async changeDepartment(newDeptCode) {
+    if (!newDeptCode) return;
+    this.deptCode = String(newDeptCode).trim();
+    if (this.game?.player) this.game.player.departmentCode = this.deptCode;
+    if (this.game) this.game.currentDepartmentCode = this.deptCode;
+    try {
+      localStorage.setItem('protec_department_code', this.deptCode);
+    } catch (e) {}
+
+    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.deptCode) : null;
+    const defaultCity = deptInfo ? (deptInfo.chefLieu || deptInfo.name) : 'Locale';
+
+    // Si le nom était par défaut, suggérer le chef-lieu du nouveau département
+    if (!this.teamName || this.teamName === 'Antenne Protection Civile' || this.teamName.startsWith('Antenne de ')) {
+      this.teamName = `Antenne de ${defaultCity}`;
+      this.updateTeamName(this.teamName);
+    }
+
+    // Coordonnées de base du nouveau département
+    let targetLat = deptInfo ? deptInfo.lat : 48.75;
+    let targetLng = deptInfo ? deptInfo.lng : 6.15;
+    let targetCity = defaultCity;
+
+    // Contrôle territorial anti-collision : trouver une commune libre dans ce nouveau département
+    const minKm = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('minStationDistanceKm', 20) : 20;
+    if (Array.isArray(this.existingAllianceStations) && this.existingAllianceStations.length > 0) {
+      const isChefLieuOccupied = this.existingAllianceStations.some(st => {
+        const stLat = parseFloat(st.lat);
+        const stLng = parseFloat(st.lng);
+        if (isNaN(stLat) || isNaN(stLng)) return false;
+        const dist = window.ProtecDepartements ? window.ProtecDepartements.calculateDistance(targetLat, targetLng, stLat, stLng) : 999;
+        return dist < minKm;
+      });
+
+      if (isChefLieuOccupied && deptInfo && Array.isArray(deptInfo.communes)) {
+        for (const comm of deptInfo.communes) {
+          if (comm.lat && comm.lng) {
+            const hasConflict = this.existingAllianceStations.some(st => {
+              const stLat = parseFloat(st.lat);
+              const stLng = parseFloat(st.lng);
+              if (isNaN(stLat) || isNaN(stLng)) return false;
+              const dist = window.ProtecDepartements ? window.ProtecDepartements.calculateDistance(comm.lat, comm.lng, stLat, stLng) : 999;
+              return dist < minKm;
+            });
+            if (!hasConflict) {
+              targetLat = comm.lat;
+              targetLng = comm.lng;
+              targetCity = comm.name;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    this.placementData.lat = targetLat;
+    this.placementData.lng = targetLng;
+    this.placementData.city = targetCity;
+    this.placementData.citycode = this.deptCode;
+    try {
+      localStorage.setItem('protec_onboarding_placement', JSON.stringify(this.placementData));
+    } catch (e) {}
+
+    // Synchronisation des sélecteurs dans le DOM
+    const s1 = document.getElementById('onboarding-step1-dept-select');
+    if (s1 && s1.value !== this.deptCode) s1.value = this.deptCode;
+    const s2 = document.getElementById('onboarding-step2-dept-select');
+    if (s2 && s2.value !== this.deptCode) s2.value = this.deptCode;
+
+    // Si on est à l'étape 2 et que la carte est active, déplacer et recharger les calques
+    if (this.currentStep === 2 && this.step2Map) {
+      const targetZoom = deptInfo ? (deptInfo.zoom || 10) : 10;
+      this.step2Map.setView([targetLat, targetLng], targetZoom);
+      if (this.step2Marker) {
+        this.step2Marker.setLatLng([targetLat, targetLng]);
+      }
+      this.lastValidPosition = { lat: targetLat, lng: targetLng };
+      this.updatePlacementCoords(targetLat, targetLng);
+
+      // Recharger le masque inversé et le contour du nouveau département
+      if (this.maskLayer) {
+        this.step2Map.removeLayer(this.maskLayer);
+        this.maskLayer = null;
+      }
+      if (this.deptBorderLayer) {
+        this.step2Map.removeLayer(this.deptBorderLayer);
+        this.deptBorderLayer = null;
+      }
+
+      if (this.geojsonData && this.geojsonData.features) {
+        const feat = this.geojsonData.features.find(f => f.properties && f.properties.code === this.deptCode);
+        if (feat && feat.geometry) {
+          const worldOuter = [[90, -180], [90, 180], [-90, 180], [-90, -180]];
+          const holes = [];
+          const geom = feat.geometry;
+          if (geom.type === 'Polygon') {
+            holes.push(geom.coordinates[0].map(([lng, lat]) => [lat, lng]));
+          } else if (geom.type === 'MultiPolygon') {
+            geom.coordinates.forEach(poly => {
+              holes.push(poly[0].map(([lng, lat]) => [lat, lng]));
+            });
+          }
+
+          this.maskLayer = L.polygon([worldOuter, ...holes], {
+            color: '#090d16',
+            fillColor: '#090d16',
+            fillOpacity: 0.62,
+            weight: 0,
+            interactive: false
+          }).addTo(this.step2Map);
+
+          this.deptBorderLayer = L.geoJSON(feat, {
+            style: {
+              color: '#024589',
+              weight: 3.5,
+              fillColor: '#024589',
+              fillOpacity: 0.04,
+              dashArray: '3, 6',
+              lineCap: 'round',
+              interactive: false
+            }
+          }).addTo(this.step2Map);
+
+          try {
+            const b = this.deptBorderLayer.getBounds();
+            this.step2Map.fitBounds(b, { padding: [20, 20] });
+            this.step2Map.setMaxBounds(b.pad(0.40));
+          } catch (e) {}
+        }
+      }
+
+      const validation = await this.validatePlacement(targetLat, targetLng);
+      this.placementValidation = validation;
+      this.updateValidationUI(validation);
+    }
+  },
+
   resetMapPosition() {
     const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.deptCode) : null;
     if (!deptInfo) return;
 
-    this.placementData.lat = deptInfo.lat;
-    this.placementData.lng = deptInfo.lng;
+    let targetLat = deptInfo.lat;
+    let targetLng = deptInfo.lng;
+    let targetCity = deptInfo.chefLieu || deptInfo.name;
+
+    // Contrôle territorial anti-collision lors du recentrage
+    const minKm = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('minStationDistanceKm', 20) : 20;
+    if (Array.isArray(this.existingAllianceStations) && this.existingAllianceStations.length > 0) {
+      const isChefLieuOccupied = this.existingAllianceStations.some(st => {
+        const stLat = parseFloat(st.lat);
+        const stLng = parseFloat(st.lng);
+        if (isNaN(stLat) || isNaN(stLng)) return false;
+        const dist = window.ProtecDepartements ? window.ProtecDepartements.calculateDistance(targetLat, targetLng, stLat, stLng) : 999;
+        return dist < minKm;
+      });
+
+      if (isChefLieuOccupied && deptInfo && Array.isArray(deptInfo.communes)) {
+        for (const comm of deptInfo.communes) {
+          if (comm.lat && comm.lng) {
+            const hasConflict = this.existingAllianceStations.some(st => {
+              const stLat = parseFloat(st.lat);
+              const stLng = parseFloat(st.lng);
+              if (isNaN(stLat) || isNaN(stLng)) return false;
+              const dist = window.ProtecDepartements ? window.ProtecDepartements.calculateDistance(comm.lat, comm.lng, stLat, stLng) : 999;
+              return dist < minKm;
+            });
+            if (!hasConflict) {
+              targetLat = comm.lat;
+              targetLng = comm.lng;
+              targetCity = comm.name;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    this.placementData.lat = targetLat;
+    this.placementData.lng = targetLng;
+    this.placementData.city = targetCity;
 
     if (this.step2Map && this.step2Marker) {
-      this.step2Map.setView([deptInfo.lat, deptInfo.lng], deptInfo.zoom || 10);
-      this.step2Marker.setLatLng([deptInfo.lat, deptInfo.lng]);
+      this.step2Map.setView([targetLat, targetLng], deptInfo.zoom || 10);
+      this.step2Marker.setLatLng([targetLat, targetLng]);
     }
     const coordsEl = document.getElementById('step2-coords-label');
-    if (coordsEl) coordsEl.textContent = `${deptInfo.lat.toFixed(4)}, ${deptInfo.lng.toFixed(4)}`;
-    this.updatePlacementCoords(deptInfo.lat, deptInfo.lng);
+    if (coordsEl) coordsEl.textContent = `${targetLat.toFixed(4)}, ${targetLng.toFixed(4)}`;
+    this.updatePlacementCoords(targetLat, targetLng);
   },
 
   // -------------------------------------------------------------
@@ -1756,7 +2108,13 @@ window.ProtecOnboarding = {
       }
     }
 
-    // Fermer définitivement le modal d'onboarding
+    // Fermer définitivement le modal d'onboarding et nettoyer la persistance temporaire
+    try {
+      localStorage.removeItem('protec_onboarding_step');
+      localStorage.removeItem('protec_onboarding_volunteers');
+      localStorage.removeItem('protec_onboarding_placement');
+    } catch (e) {}
+
     const modal = document.getElementById('onboarding-modal');
     if (modal) {
       modal.classList.add('hidden');

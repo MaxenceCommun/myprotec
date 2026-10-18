@@ -1019,6 +1019,33 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Réinitialisation intégrale du jeu en entier (Wipe complet : tous les comptes et données)
+  if (url === '/api/admin/master-reset' && req.method === 'POST') {
+    const user = getAuthUser(req);
+    const adminKey = req.headers['x-admin-key'];
+    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+      return;
+    }
+
+    try {
+      // 1. Purge du gameState multijoueur en mémoire vive
+      if (typeof gameState !== 'undefined' && gameState) {
+        if (gameState.players) gameState.players = {};
+        if (gameState.missions) gameState.missions = {};
+        if (gameState.events) gameState.events = [];
+      }
+
+      // 2. Wipe complet dans la base de données locale
+      const result = db.masterResetAllGameData();
+      sendJson(res, 200, { success: true, result });
+    } catch (err) {
+      console.error('Erreur master-reset:', err);
+      sendJson(res, 500, { success: false, error: err.message });
+    }
+    return;
+  }
+
   // Alerte / Annonce globale diffusée à tous les joueurs
   if (url === '/api/admin/broadcast' && req.method === 'POST') {
     const user = getAuthUser(req);

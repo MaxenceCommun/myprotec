@@ -278,14 +278,14 @@ window.ProtecNotifications = {
     inactivityEngagement: true
   },
 
-  // Liste officielle des sons réels disponibles en .mp3 dans /sons/
+  // Liste officielle des sons réels disponibles
   availableAlertSounds: [
-    { value: 'alerte_crise.mp3', key: 'alerte_crise', label: '🚨 alerte_crise.mp3', desc: 'Urgence & Crise' },
-    { value: 'attention.mp3', key: 'attention', label: '⚠️ attention.mp3', desc: '2-Tons Attention' },
-    { value: 'notif.mp3', key: 'notif', label: '📻 notif.mp3', desc: 'Bip Radio Secours' },
-    { value: 'info.mp3', key: 'info', label: 'ℹ️ info.mp3', desc: 'Carillon Information' },
-    { value: 'expire.mp3', key: 'expire', label: '⏱️ expire.mp3', desc: 'Tonalité Expiration' },
-    { value: 'erreur.mp3', key: 'erreur', label: '❌ erreur.mp3', desc: 'Signal d\'Erreur' }
+    { value: 'alerte_crise.mp3', key: 'alerte_crise', label: '🚨 Alerte Crise', desc: 'Urgence & Crise' },
+    { value: 'attention.mp3', key: 'attention', label: '⚠️ Attention', desc: '2-Tons Attention' },
+    { value: 'notif.mp3', key: 'notif', label: '📻 Radio Secours', desc: 'Bip Radio Secours' },
+    { value: 'info.mp3', key: 'info', label: 'ℹ️ Information', desc: 'Carillon Information' },
+    { value: 'expire.mp3', key: 'expire', label: '⏱️ Expiration', desc: 'Tonalité Expiration' },
+    { value: 'erreur.mp3', key: 'erreur', label: '❌ Erreur', desc: 'Signal d\'Erreur' }
   ],
 
   alertCategoriesList: [
@@ -1575,8 +1575,8 @@ window.ProtecNotifications = {
 
               <label class="flex items-center justify-between p-3 rounded-2xl glass-card border border-slate-200 cursor-pointer">
                 <div>
-                  <span class="font-bold text-slate-800 block">Tonalités & Sons d'Alerte (.mp3)</span>
-                  <span class="text-[11px] text-slate-500">Lecture des sons audio officiels (.mp3) lors des alertes et départs réflexes</span>
+                  <span class="font-bold text-slate-800 block">Tonalités & Signaux d'Alerte</span>
+                  <span class="text-[11px] text-slate-500">Lecture des signaux sonores lors des alertes et départs réflexes</span>
                 </div>
                 <input type="checkbox" id="notif-opt-sound" ${this.config.sound ? 'checked' : ''} onchange="window.ProtecNotifications.toggleConfig('sound', this.checked)" class="w-4 h-4 text-pc-blue rounded cursor-pointer" />
               </label>

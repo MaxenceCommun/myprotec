@@ -1172,6 +1172,18 @@ window.ProtecAdvanced = {
   },
 
   // Helper date du jour au format ISO YYYY-MM-DD
+  // Catalogue officiel des récompenses de connexion consécutive (Cycle de 7 jours)
+  streakRewardsCatalog: [
+    { day: 1, title: 'Jour 1', money: 350, o2: 2, desc: '+350 € & 2 bouteilles d’Oxygène B5 de dotation', shortDesc: '350 € + 2x O2 B5', icon: '🎁' },
+    { day: 2, title: 'Jour 2', money: 500, dae: 2, rep: 15, desc: '+500 €, 2 paires d’électrodes DAE & +15 Réputation', shortDesc: '500 € + DAE + Rép.', icon: '⚡' },
+    { day: 3, title: 'Jour 3', money: 650, kits: 4, desc: '+650 € & 4 trousses complètes de soins SUAP d’urgence', shortDesc: '650 € + 4x Soins SUAP', icon: '🩹' },
+    { day: 4, title: 'Jour 4', money: 800, followers: 80, desc: '+800 € & +80 abonnés locaux (Notoriété & Communication)', shortDesc: '800 € + 80 Abonnés', icon: '📣' },
+    { day: 5, title: 'Jour 5', money: 1000, collars: 2, desc: '+1 000 € & 2 colliers cervicaux pédiatriques & adultes', shortDesc: '1 000 € + Colliers', icon: '⭐' },
+    { day: 6, title: 'Jour 6', money: 1500, rep: 25, desc: '+1 500 € & +25 points d’Agrément Préfectoral officiel', shortDesc: '1 500 € + 25 Agrément', icon: '🎖️' },
+    { day: 7, title: 'Jour 7', money: 3500, rep: 50, o2: 4, kits: 6, desc: '🏆 GRAND BONUS FÉDÉRAL JOUR 7 : +3 500 €, dotation complète & reconnaissance fédérale !', shortDesc: '3 500 € + Grand Lot Fédéral', icon: '🏆' }
+  ],
+
+  // Helper date du jour au format ISO YYYY-MM-DD
   getTodayDateKey(game) {
     if (game && game.clock && game.clock.year && game.clock.month !== undefined && game.clock.day) {
       const y = game.clock.year;
@@ -1198,85 +1210,114 @@ window.ProtecAdvanced = {
     return `${y}-${m}-${day}`;
   },
 
+  // Évaluation rigoureuse et en temps réel de la Série de Connexion Quotidienne :
+  // RÈGLE IMPÉRATIVE : La série exige une connexion TOUS LES JOURS sans interruption.
+  // Si le joueur ne s'est pas connecté hier -> la série est rompue et revient DIRECTEMENT au Jour 1 !
+  getStreakInfo(game) {
+    if (!game) return { streakDays: 1, targetClaimDay: 1, canClaim: false, alreadyClaimedToday: false, isBroken: false, hasAntenna: false };
+    const r = game.rewards = game.rewards || {};
+    const todayKey = this.getTodayDateKey(game);
+    const yesterdayKey = this.getYesterdayDateKey(game);
+    const lastClaimDate = r.lastDailyClaimDate;
+
+    let alreadyClaimedToday = (lastClaimDate === todayKey);
+    let isBroken = false;
+    let currentStreak = Number(r.streakDays) || 1;
+    let targetClaimDay = 1;
+
+    if (!lastClaimDate) {
+      // Première connexion / nouveau joueur
+      currentStreak = 1;
+      targetClaimDay = 1;
+      alreadyClaimedToday = false;
+    } else if (alreadyClaimedToday) {
+      // Déjà réclamé aujourd'hui
+      targetClaimDay = currentStreak;
+    } else if (lastClaimDate === yesterdayKey) {
+      // Connexion hier validée : série continue !
+      targetClaimDay = currentStreak >= 7 ? 1 : (currentStreak + 1);
+    } else {
+      // INTERRUPTION DÉTECTÉE : plus d'un jour sans réclamation !
+      // RETOUR STRICT ET IMMÉDIAT AU JOUR 1
+      isBroken = true;
+      currentStreak = 1;
+      targetClaimDay = 1;
+      r.streakDays = 1;
+      r.streakBroken = true;
+    }
+
+    const hasAntenna = Array.isArray(game.stations) && game.stations.length > 0;
+    const canClaim = hasAntenna && !alreadyClaimedToday;
+
+    return {
+      streakDays: currentStreak,
+      targetClaimDay: targetClaimDay,
+      canClaim: canClaim,
+      alreadyClaimedToday: alreadyClaimedToday,
+      isBroken: isBroken,
+      lastClaimDate: lastClaimDate,
+      todayKey: todayKey,
+      yesterdayKey: yesterdayKey,
+      hasAntenna: hasAntenna
+    };
+  },
+
   // Contrôle si la dotation quotidienne peut être réclamée
   canClaimDailyStreak(game) {
-    if (!game || !game.stations || game.stations.length === 0) return false;
-    const r = game.rewards || {};
-    const todayKey = this.getTodayDateKey(game);
-    if (r.lastDailyClaimDate) {
-      return r.lastDailyClaimDate !== todayKey;
-    }
-    if (r.lastDailyClaimDay !== undefined && r.lastDailyClaimDay !== null) {
-      const curDayNum = game.clock ? game.clock.day : new Date().getDate();
-      return r.lastDailyClaimDay !== curDayNum;
-    }
-    return true;
+    const info = this.getStreakInfo(game);
+    return info.canClaim;
   },
 
   // 2. Gestion des Récompenses Quotidiennes (Dotation Fédérale)
   claimDailyStreak(game) {
-    if (!game.stations || game.stations.length === 0) {
+    const info = this.getStreakInfo(game);
+
+    if (!info.hasAntenna) {
       game.showToast('Antenne Requise', 'Implantez d’abord votre antenne sur la carte pour recevoir votre dotation fédérale !', 'orange');
       return;
     }
 
-    if (!game.rewards) {
-      this.injectAdvancedState(game);
-    }
-
-    if (!this.canClaimDailyStreak(game)) {
+    if (!info.canClaim) {
       game.showToast('Déjà réclamé', 'Vous avez déjà reçu votre dotation quotidienne pour aujourd’hui ! Revenez demain.', 'blue');
       return;
     }
 
-    const todayKey = this.getTodayDateKey(game);
-    const yesterdayKey = this.getYesterdayDateKey(game);
-    const lastClaimDate = game.rewards.lastDailyClaimDate;
+    const claimDay = info.targetClaimDay;
+    const streakRewards = this.streakRewardsCatalog;
+    const pick = streakRewards[claimDay - 1] || streakRewards[0];
 
-    // Calcul de la série consécutive :
-    // Si la dernière dotation a été perçue hier : on avance dans la série (max 7)
-    // Si la dernière dotation date de plus d'1 jour ou première fois : on démarre au jour 1
-    let currentStreak = Number(game.rewards.streakDays) || 1;
-    if (lastClaimDate) {
-      if (lastClaimDate === yesterdayKey) {
-        currentStreak = currentStreak >= 7 ? 1 : (currentStreak + 1);
-      } else {
-        currentStreak = 1;
-      }
-    } else {
-      currentStreak = 1;
-    }
-
-    const streakRewards = [
-      { money: 300, desc: '+300 € & 2 bouteilles d’Oxygène B5 offertes', o2: 2 },
-      { money: 450, desc: '+450 € & 10 points d’Agrément Préfectoral', rep: 10 },
-      { money: 600, desc: '+600 € & 2 paires d’électrodes DAE', dae: 2 },
-      { money: 750, desc: '+750 € & +60 abonnés sur les réseaux', followers: 60 },
-      { money: 900, desc: '+900 € & 4 trousses de soins complètes', kits: 4 },
-      { money: 1200, desc: '+1 200 € & dotation équipement offerte', kits: 6 },
-      { money: 2500, desc: 'GRAND BONUS JOUR 7 : +2 500 € et reconnaissance fédérale !', rep: 30 }
-    ];
-
-    const pick = streakRewards[currentStreak - 1] || streakRewards[0];
+    // Attribution des dotations
     game.resources.money = (game.resources.money || 0) + pick.money;
     if (pick.o2 && game.logistics) game.logistics.oxygenBottles = (game.logistics.oxygenBottles || 0) + pick.o2;
     if (pick.dae && game.logistics) game.logistics.aedPads = (game.logistics.aedPads || 0) + pick.dae;
     if (pick.kits && game.logistics) game.logistics.woundKits = (game.logistics.woundKits || 0) + pick.kits;
+    if (pick.collars && game.logistics) game.logistics.cervicalCollars = (game.logistics.cervicalCollars || 0) + pick.collars;
     if (pick.followers) game.resources.followers = (game.resources.followers || 0) + pick.followers;
     if (pick.rep) game.resources.reputationScore = (game.resources.reputationScore || 0) + pick.rep;
 
     const curDayNum = game.clock ? game.clock.day : new Date().getDate();
     game.rewards.lastDailyClaimDay = curDayNum;
-    game.rewards.lastDailyClaimDate = todayKey;
+    game.rewards.lastDailyClaimDate = info.todayKey;
     game.rewards.lastDailyClaimTimestamp = Date.now();
-    game.rewards.streakDays = currentStreak;
+    game.rewards.streakDays = claimDay;
+    game.rewards.streakBroken = false;
 
     // PERSISTANCE LOCALE IMMÉDIATE (GARANTIE ZÉRO PERTE)
     this.saveRewardsLocally(game);
 
     game.updateStatsUI();
     game.saveGame(true);
-    game.showToast('Récompense Quotidienne Débloquée !', pick.desc, 'green');
+
+    game.showToast(
+      `🎁 Dotation Jour ${claimDay} Encaissée !`,
+      `${pick.desc}`,
+      'green'
+    );
+
+    // Effet sonore de validation
+    if (window.ProtecAudio && typeof window.ProtecAudio.playSuccess === 'function') {
+      window.ProtecAudio.playSuccess();
+    }
 
     // Rafraîchir la modale si ouverte
     if (game.currentModalKey === 'recompenses' && window.ProtecAdvancedModals) {
@@ -1292,58 +1333,133 @@ window.ProtecAdvanced = {
   detectAntennaTier(game) {
     if (!game.stations || game.stations.length === 0) return 1;
     const vehCount = (game.vehicles || []).length;
-    const convCount = (game.sncfConvention?.signed ? 1 : 0) + (game.cumpConvention?.signed ? 1 : 0) + (game.sdisGarde?.active ? 1 : 0);
     const completedMissions = (game.missions || []).filter(m => m.status === 'completed').length;
     const totalVolunteers = (game.volunteers || []).length;
 
-    // Palier 1 (Lancement d'antenne) : pas de convention AASC, pas de véhicule, ou moins de 2 missions
-    if (!game.aascConvention?.signed || vehCount === 0 || completedMissions < 2) {
+    // Palier 1 (Lancement d'antenne) : moins de 2 véhicules ou moins de 4 missions
+    if (vehCount < 2 || completedMissions < 4) {
       return 1;
     }
-    // Palier 3 (Grande Envergure / Rayonnement) : >= 8 missions terminées, >= 2 véhicules, >= 8 secouristes
-    if (completedMissions >= 8 && vehCount >= 2 && totalVolunteers >= 8) {
+    // Palier 3 (Grande Envergure / Rayonnement) : >= 15 missions terminées, >= 4 véhicules, >= 10 secouristes
+    if (completedMissions >= 15 && vehCount >= 4 && totalVolunteers >= 10) {
       return 3;
     }
     // Palier 2 (Développement / Consolidation)
     return 2;
   },
 
+  // Initialisation et garantie du suivi d'activité journalière & hebdomadaire
+  ensureActivityTracking(game) {
+    if (!game.rewards) return;
+    const todayKey = this.getTodayDateKey(game);
+    const curWeek = (window.ProtecMultiplayer && window.ProtecMultiplayer.getWeekKey) ? window.ProtecMultiplayer.getWeekKey(game.clock) : 'W';
+
+    if (!game.rewards.dailyActivity || game.rewards.dailyActivity.date !== todayKey) {
+      game.rewards.dailyActivity = {
+        date: todayKey,
+        missions: 0,
+        samu: 0,
+        formations: 0,
+        devis: 0,
+        recycles: 0
+      };
+    }
+    if (!game.rewards.weeklyActivity || game.rewards.weeklyActivity.week !== curWeek) {
+      game.rewards.weeklyActivity = {
+        week: curWeek,
+        missions: 0,
+        formations: 0,
+        devis: 0,
+        recycles: 0,
+        startVolunteerHours: game.grants?.totalVolunteerHours || 0
+      };
+    }
+  },
+
+  // Enregistrement des événements de jeu pour les objectifs
+  recordMissionCompleted(game, mission) {
+    if (!game || !game.rewards) return;
+    this.ensureActivityTracking(game);
+    game.rewards.dailyActivity.missions = (game.rewards.dailyActivity.missions || 0) + 1;
+    game.rewards.weeklyActivity.missions = (game.rewards.weeklyActivity.missions || 0) + 1;
+    if (mission && mission.type === 'samu') {
+      game.rewards.dailyActivity.samu = (game.rewards.dailyActivity.samu || 0) + 1;
+    }
+    this.updateTasksProgress(game);
+    this.saveRewardsLocally(game);
+  },
+
+  recordFormationCompleted(game, session) {
+    if (!game || !game.rewards) return;
+    this.ensureActivityTracking(game);
+    game.rewards.dailyActivity.formations = (game.rewards.dailyActivity.formations || 0) + 1;
+    game.rewards.weeklyActivity.formations = (game.rewards.weeklyActivity.formations || 0) + 1;
+    this.updateTasksProgress(game);
+    this.saveRewardsLocally(game);
+  },
+
+  recordDevisSigned(game, devis) {
+    if (!game || !game.rewards) return;
+    this.ensureActivityTracking(game);
+    game.rewards.dailyActivity.devis = (game.rewards.dailyActivity.devis || 0) + 1;
+    game.rewards.weeklyActivity.devis = (game.rewards.weeklyActivity.devis || 0) + 1;
+    this.updateTasksProgress(game);
+    this.saveRewardsLocally(game);
+  },
+
+  recordVolunteerRecycled(game, volunteer) {
+    if (!game || !game.rewards) return;
+    this.ensureActivityTracking(game);
+    game.rewards.dailyActivity.recycles = (game.rewards.dailyActivity.recycles || 0) + 1;
+    game.rewards.weeklyActivity.recycles = (game.rewards.weeklyActivity.recycles || 0) + 1;
+    this.updateTasksProgress(game);
+    this.saveRewardsLocally(game);
+  },
+
+  // Catalogue des Tâches Quotidiennes & Défis Hebdomadaires adaptés au jeu actuel :
+  // - Opérations & Secours (DPS, SAMU 15, Maraudes, NOVI)
+  // - Pôle Formations & Pédagogie (PSC1, SST, FC PSE, Devis B2B)
+  // - Logistique & Flotte (VPSP, VTU, Oxygène B5, DAE, trousses)
+  // - Bénévoles & Pôles (Recyclages au 31/12, rôles, montées en compétences)
   getTasksForTier(tier, isWeekly = false) {
     if (isWeekly) {
       if (tier === 1) {
         return [
-          { id: 'w-task-starter-recrut', title: 'Publier 1 offre de recrutement (Service Civique ou Salarié)', goal: 1, current: 0, reward: 500, done: false },
-          { id: 'w-task-starter-locaux', title: 'Aménager le local de secours sur le Plan 2D', goal: 1, current: 0, reward: 750, done: false }
+          { id: 'w-task-hours', title: 'Cumuler 10h de bénévolat d’intérêt public sur le terrain', goal: 10, current: 0, reward: 1200, done: false, icon: 'clock' },
+          { id: 'w-task-missions', title: 'Assurer 3 départs en missions de secours (DPS, SAMU ou urgence)', goal: 3, current: 0, reward: 1000, done: false, icon: 'shield-alert' },
+          { id: 'w-task-team', title: 'Pôles d’antenne : attribuer un rôle ou promouvoir 1 bénévole (PSE1/PSE2)', goal: 1, current: 0, reward: 800, done: false, icon: 'user-check' }
         ];
       } else if (tier === 2) {
         return [
-          { id: 'w-task-mid-hours', title: 'Cumuler 15h de bénévolat d’intérêt public', goal: 15, current: 0, reward: 1500, done: false },
-          { id: 'w-task-mid-qualif', title: 'Promouvoir ou qualifier 1 bénévole (PSE2, CE, permis)', goal: 1, current: 0, reward: 900, done: false }
+          { id: 'w-task-hours', title: 'Cumuler 25h d’engagement opérationnel de sécurité civile', goal: 25, current: 0, reward: 2500, done: false, icon: 'clock' },
+          { id: 'w-task-missions', title: 'Mener à bien 5 dispositifs prévisionnels de secours ou astreintes', goal: 5, current: 0, reward: 2000, done: false, icon: 'shield-alert' },
+          { id: 'w-task-team', title: 'Pédagogie & Maintien : certifier 2 formations ou recyclages (PSC, SST, FC PSE)', goal: 2, current: 0, reward: 1800, done: false, icon: 'graduation-cap' }
         ];
       } else {
         return [
-          { id: 'w-task-high-hours', title: 'Cumuler 40h de missions de sécurité civile', goal: 40, current: 0, reward: 3500, done: false },
-          { id: 'w-task-high-fleet', title: 'Maintenir la flotte (≥ 3 véhicules) 100% opérationnelle', goal: 1, current: 0, reward: 2500, done: false }
+          { id: 'w-task-hours', title: 'Cumuler 50h de missions de sécurité civile sur le département', goal: 50, current: 0, reward: 4500, done: false, icon: 'clock' },
+          { id: 'w-task-missions', title: 'Accomplir 8 missions opérationnelles (DPS majeurs, SAMU 15, NOVI/Météo)', goal: 8, current: 0, reward: 3800, done: false, icon: 'siren' },
+          { id: 'w-task-team', title: 'Rayonnement territorial : 3 formations certifiées ou devis B2B validés', goal: 3, current: 0, reward: 3200, done: false, icon: 'award' }
         ];
       }
     } else {
       if (tier === 1) {
         return [
-          { id: 'task-starter-aasc', title: 'Souscrire la Convention Préfectorale d’AASC', goal: 1, current: 0, reward: 800, done: false },
-          { id: 'task-starter-veh', title: 'Acquérir votre 1er véhicule opérationnel (VPSP ou VTU)', goal: 1, current: 0, reward: 600, done: false },
-          { id: 'task-starter-mat', title: 'Équiper l’antenne en matériel de secours (Boutique)', goal: 5, current: 0, reward: 400, done: false }
+          { id: 'task-daily-ops', title: 'Assurer au moins 1 départ en mission de secours ou DPS', goal: 1, current: 0, reward: 500, done: false, icon: 'ambulance' },
+          { id: 'task-daily-logi', title: 'Disposer d’au moins 1 véhicule opérationnel réarmé & prêt au départ', goal: 1, current: 0, reward: 400, done: false, icon: 'truck' },
+          { id: 'task-daily-pedago', title: 'Pôle Formation : organiser ou planifier 1 session (PSC, SST ou FC Recyclage)', goal: 1, current: 0, reward: 450, done: false, icon: 'graduation-cap' }
         ];
       } else if (tier === 2) {
         return [
-          { id: 'task-mid-missions', title: 'Assurer 2 départs en mission (DPS ou Secours)', goal: 2, current: 0, reward: 700, done: false },
-          { id: 'task-mid-devis', title: 'Valider 1 devis conforme au barème fédéral', goal: 1, current: 0, reward: 500, done: false },
-          { id: 'task-mid-flotte', title: 'Maintenir la flotte révisée & désinfectée', goal: 1, current: 0, reward: 450, done: false }
+          { id: 'task-daily-ops', title: 'Réaliser 2 missions opérationnelles (DPS, SAMU 15 ou Maraude sociale)', goal: 2, current: 0, reward: 800, done: false, icon: 'ambulance' },
+          { id: 'task-daily-logi', title: 'Vérifier la dotation consommables (≥ 4 unités : Oxygène, DAE ou Trousses)', goal: 4, current: 0, reward: 600, done: false, icon: 'package' },
+          { id: 'task-daily-pedago', title: 'Formations : traiter 1 devis B2B entreprise ou inscrire un bénévole en recyclage', goal: 1, current: 0, reward: 750, done: false, icon: 'file-text' }
         ];
       } else {
         return [
-          { id: 'task-high-missions', title: 'Assurer 4 missions de secours ou réquisitions préfectorales', goal: 4, current: 0, reward: 1800, done: false },
-          { id: 'task-high-garde', title: 'Armer une garde SDIS ou astreinte CUMP SAMU', goal: 1, current: 0, reward: 1400, done: false },
-          { id: 'task-high-pref', title: 'Accomplir 1 réquisition préfectorale AASC ou Plan d’Urgence', goal: 1, current: 0, reward: 2000, done: false }
+          { id: 'task-daily-ops', title: 'Réaliser 3 interventions opérationnelles (DPS, SAMU 15, Urgences ou Crises)', goal: 3, current: 0, reward: 1400, done: false, icon: 'siren' },
+          { id: 'task-daily-logi', title: 'Maintenir la flotte (≥ 2 véhicules) désinfectée, révisée et CT à jour', goal: 2, current: 0, reward: 1100, done: false, icon: 'shield-check' },
+          { id: 'task-daily-pedago', title: 'Maintien des compétences : 1 recyclage FC PSE ou session de formation certifiée', goal: 1, current: 0, reward: 1200, done: false, icon: 'award' }
         ];
       }
     }
@@ -1355,6 +1471,8 @@ window.ProtecAdvanced = {
     const todayKey = this.getTodayDateKey(game);
     const curWeek = (window.ProtecMultiplayer && window.ProtecMultiplayer.getWeekKey) ? window.ProtecMultiplayer.getWeekKey(game.clock) : 'W';
 
+    this.ensureActivityTracking(game);
+
     // 1. Initialisation des clés temporelles calendaires si absentes
     if (!game.rewards.lastDailyTaskResetDate) {
       game.rewards.lastDailyTaskResetDate = todayKey;
@@ -1364,7 +1482,7 @@ window.ProtecAdvanced = {
       game.rewards.lastWeeklyTaskResetWeek = curWeek;
     }
 
-    // 2. Renouvellement lors d'un nouveau jour calendaire réel (pas lors d'une simple réouverture)
+    // 2. Renouvellement lors d'un nouveau jour calendaire réel
     if (game.rewards.lastDailyTaskResetDate !== todayKey) {
       game.rewards.lastDailyTaskResetDate = todayKey;
       game.rewards.lastDailyTaskResetDay = game.clock ? game.clock.day : new Date().getDate();
@@ -1381,7 +1499,7 @@ window.ProtecAdvanced = {
       this.saveRewardsLocally(game);
     }
 
-    // 4. Passage de palier (uniquement si toutes les tâches en cours sont terminées ou si la liste est vide)
+    // 4. Initialisation ou passage de palier
     if (!game.rewards.dailyTasks || game.rewards.dailyTasks.length === 0) {
       game.rewards.tier = currentTier;
       game.rewards.dailyTasks = this.getTasksForTier(currentTier, false);
@@ -1409,86 +1527,96 @@ window.ProtecAdvanced = {
     }
 
     this.syncAdaptiveTasks(game);
+    this.ensureActivityTracking(game);
 
-    // Tâches quotidiennes
+    const act = game.rewards.dailyActivity || {};
+    const wAct = game.rewards.weeklyActivity || {};
+
+    // Progression des Tâches Quotidiennes
     (game.rewards.dailyTasks || []).forEach(t => {
-      // Si la tâche a déjà été réclamée, on préserve strictement son état
       if (t.done) {
         t.current = t.goal;
         return;
       }
 
-      // 1. Tâches de démarrage (Tier 1)
-      if (t.id === 'task-starter-aasc') {
-        t.current = (game.aascConvention?.signed) ? 1 : 0;
+      // 1. Départs en mission de secours / Opérations (Terrain)
+      if (t.id === 'task-daily-ops') {
+        const activeMissions = (game.missions || []).filter(m => m.status === 'ongoing').length;
+        const recordedMissions = act.missions || 0;
+        t.current = Math.min(t.goal, Math.max(recordedMissions, activeMissions));
+      }
+      // 2. Logistique & Flotte
+      else if (t.id === 'task-daily-logi') {
+        if (t.goal > 2) {
+          // Consommables d'urgence en stock
+          const o2 = game.logistics?.oxygenBottles || 0;
+          const dae = game.logistics?.aedPads || 0;
+          const kits = game.logistics?.woundKits || 0;
+          t.current = Math.min(t.goal, o2 + dae + kits);
+        } else {
+          // Véhicules prêts au départ
+          const readyVehs = (game.vehicles || []).filter(v => 
+            !v.isBrokenDown && !v.needsRearming && (v.mechanical || 100) >= 50 && v.ctStatus !== 'expire'
+          ).length;
+          t.current = Math.min(t.goal, readyVehs);
+        }
+      }
+      // 3. Pédagogie, Formations & Recyclages
+      else if (t.id === 'task-daily-pedago') {
+        const pedagoCount = (act.formations || 0) + (act.recycles || 0) + (act.devis || 0);
+        const hasSession = (game.sessionsFormation || []).some(s => s.status !== 'completed' || s.isCompleted);
+        const hasPendingB2B = (game.formationB2BProposals || []).some(p => p.status === 'accepted' || p.status === 'pending_quote');
+        const hasRecycledVols = (game.volunteers || []).some(v => v.lastRecycledYear === game.clock?.year);
+        t.current = Math.min(t.goal, Math.max(pedagoCount, hasSession ? 1 : 0, hasPendingB2B ? 1 : 0, hasRecycledVols ? 1 : 0));
+      }
+      // Rétrocompatibilité avec d'anciens IDs de tâches
+      else if (t.id === 'task-starter-aasc') {
+        t.current = game.aascConvention?.signed ? 1 : 0;
       } else if (t.id === 'task-starter-veh') {
         t.current = Math.min(t.goal, (game.vehicles || []).length);
       } else if (t.id === 'task-starter-mat') {
-        const st = game.stations[0];
-        const stockItems = Object.values(st?.stock || {}).reduce((sum, n) => sum + (Number(n) || 0), 0);
-        const logiItems = game.logistics ? ((game.logistics.oxygenBottles || 0) + (game.logistics.aedPads || 0) + (game.logistics.woundKits || 0) + (game.logistics.cervicalCollars || 0)) : 0;
-        t.current = Math.min(t.goal, Math.max(stockItems, logiItems));
-      } else if (t.id === 'task-starter-conv') {
-        const convSigned = (game.sncfConvention?.signed || game.cumpConvention?.signed || (game.sdisGarde?.active)) ? 1 : 0;
-        t.current = convSigned;
-      }
-      // 2. Tâches de développement (Tier 2 & génériques)
-      else if (t.id === 'task-mid-missions' || t.id === 'task-1') {
-        const activeOrDone = (game.missions || []).filter(m => ['ongoing', 'completed'].includes(m.status)).length;
-        t.current = Math.min(t.goal, (game.missionsLaunchedCount || 0) + activeOrDone);
-      } else if (t.id === 'task-mid-devis' || t.id === 'task-2') {
-        const signedCount = (game.devis || []).filter(d => d.status === 'signed').length;
-        t.current = Math.min(t.goal, signedCount);
-      } else if (t.id === 'task-mid-flotte' || t.id === 'task-3') {
-        const allVehs = (game.stations || []).flatMap(s => s.vehicles || []);
-        if (!allVehs || allVehs.length === 0) {
-          t.current = 0;
-        } else {
-          const cleanVehs = allVehs.filter(v => !v.isBrokenDown && !v.needsRearming && (v.mechanical || 100) >= 60);
-          t.current = (cleanVehs.length === allVehs.length) ? 1 : 0;
-        }
-      }
-      // 3. Tâches de grande envergure (Tier 3)
-      else if (t.id === 'task-high-missions') {
-        const completedCount = (game.missions || []).filter(m => m.status === 'completed').length;
-        t.current = Math.min(t.goal, completedCount);
-      } else if (t.id === 'task-high-garde') {
-        const sdisOrCump = ((game.sdisGarde && game.sdisGarde.active) || (game.cumpConvention && game.cumpConvention.signed)) ? 1 : 0;
-        t.current = sdisOrCump;
-      } else if (t.id === 'task-high-pref') {
-        const prefMissions = (game.missions || []).filter(m => m.type === 'meteo' && m.status === 'completed').length;
-        t.current = Math.min(t.goal, prefMissions);
+        const logiItems = game.logistics ? ((game.logistics.oxygenBottles || 0) + (game.logistics.aedPads || 0) + (game.logistics.woundKits || 0)) : 0;
+        t.current = Math.min(t.goal, logiItems);
+      } else if (t.id === 'task-mid-missions' || t.id === 'task-high-missions') {
+        t.current = Math.min(t.goal, (act.missions || 0));
       }
     });
 
-    // Défis hebdomadaires
+    // Progression des Défis Hebdomadaires
     (game.rewards.weeklyTasks || []).forEach(w => {
-      // Si le défi a déjà été réclamé, on préserve strictement son état
       if (w.done) {
         w.current = w.goal;
         return;
       }
 
-      // 1. Défis de démarrage (Tier 1)
-      if (w.id === 'w-task-starter-recrut') {
-        const hasOffer = ((game.jobOffers && game.jobOffers.length > 0) || (game.candidatures && game.candidatures.length > 0)) ? 1 : 0;
-        w.current = hasOffer;
-      } else if (w.id === 'w-task-starter-locaux') {
-        const arch = game.stations?.[0]?.premises?.architecture;
-        const hasLayout = (arch && ((arch.furniture && arch.furniture.length > 0) || (arch.rooms && arch.rooms.some(r => r.type !== 'libre')))) ? 1 : 0;
-        w.current = hasLayout;
+      // 1. Heures de bénévolat d'intérêt public
+      if (w.id === 'w-task-hours') {
+        const totalHours = Math.max(0, game.grants?.totalVolunteerHours || 0);
+        const startHours = wAct.startVolunteerHours || 0;
+        const weekHours = Math.max(0, totalHours - startHours);
+        // Si weekHours est 0 mais qu'il y a déjà des heures totales
+        w.current = Math.min(w.goal, Math.max(weekHours, Math.round(totalHours * 0.4)));
       }
-      // 2. Défis de développement & envergure
-      else if (w.id === 'w-task-mid-hours' || w.id === 'w-task-high-hours' || w.id === 'w-task-1') {
-        const hours = Math.max(0, game.grants?.totalVolunteerHours || 0);
-        w.current = Math.min(w.goal, hours);
-      } else if (w.id === 'w-task-mid-qualif' || w.id === 'w-task-2') {
-        const qualifiedCount = (game.volunteers || []).filter(v => (v.promotionsCount && v.promotionsCount > 0) || (v.acquiredSkills && v.acquiredSkills.length > 0) || (v.trainingHistory && v.trainingHistory.length > 0) || v.rank === 'CE' || v.rank === 'PSE2').length;
-        w.current = Math.min(w.goal, qualifiedCount);
-      } else if (w.id === 'w-task-high-fleet') {
-        const vehs = game.vehicles || [];
-        const isFleetReady = vehs.length >= 3 && vehs.every(v => !v.isBrokenDown && !v.needsRearming);
-        w.current = isFleetReady ? 1 : 0;
+      // 2. Missions opérationnelles accomplies
+      else if (w.id === 'w-task-missions') {
+        const weekMissions = wAct.missions || 0;
+        const totalDone = (game.missions || []).filter(m => m.status === 'completed').length;
+        w.current = Math.min(w.goal, Math.max(weekMissions, totalDone));
+      }
+      // 3. Pôle formation, recyclages et équipe
+      else if (w.id === 'w-task-team') {
+        const qualifiedCount = (game.volunteers || []).filter(v => 
+          (v.poleRoleId && v.poleRoleId !== '') || ['CE', 'CD', 'PSE2'].includes(v.rank) || (v.skills || []).includes('pse2')
+        ).length;
+        const pedagoTotal = (wAct.formations || 0) + (wAct.recycles || 0) + (wAct.devis || 0);
+        w.current = Math.min(w.goal, Math.max(pedagoTotal, qualifiedCount));
+      }
+      // Rétrocompatibilité anciens défis
+      else if (w.id === 'w-task-starter-recrut') {
+        const hasRecrut = ((game.jobOffers && game.jobOffers.length > 0) || (game.candidatures && game.candidatures.length > 0)) ? 1 : 0;
+        w.current = hasRecrut;
+      } else if (w.id === 'w-task-starter-locaux') {
+        w.current = 1;
       }
     });
   },

@@ -1870,6 +1870,9 @@ class ProtecGame {
       return;
     }
 
+    const playerId = this.player ? this.player.id : null;
+    const playerName = this.player ? this.player.name : null;
+
     // 1. Sauvegarde / Snapshot d'archive avant effacement (Protection intégrale)
     let currentSnapshot = null;
     try {
@@ -1877,6 +1880,7 @@ class ProtecGame {
         clock: this.clock,
         resources: this.resources,
         currentCityKey: this.currentCityKey,
+        currentDepartmentCode: this.currentDepartmentCode,
         stations: this.stations,
         vehicles: this.vehicles,
         volunteers: this.volunteers,
@@ -1884,6 +1888,8 @@ class ProtecGame {
         missions: this.missions,
         candidatures: this.candidatures,
         formations: this.formations,
+        annualContracts: this.annualContracts,
+        departmentInfrastructures: this.departmentInfrastructures,
         logistics: this.logistics,
         weather: this.weather,
         grants: this.grants,
@@ -1897,8 +1903,8 @@ class ProtecGame {
       // Archive d'urgence locale dans le localStorage
       localStorage.setItem('protec_backup_before_reset', JSON.stringify({
         date: new Date().toISOString(),
-        playerId: this.player.id,
-        playerName: this.player.name,
+        playerId: playerId,
+        playerName: playerName,
         snapshot: currentSnapshot
       }));
     } catch (err) {
@@ -1915,8 +1921,8 @@ class ProtecGame {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
-          playerId: this.player.id,
-          playerName: this.player.name,
+          playerId: playerId,
+          playerName: playerName,
           reason: 'Réinitialisation manuelle demandée par le joueur',
           snapshotData: currentSnapshot
         })
@@ -1925,18 +1931,102 @@ class ProtecGame {
       console.warn('Erreur envoi archive serveur:', err);
     }
 
-    // 3. Effacement de la sauvegarde Cloud Supabase et de la sauvegarde active locale
+    // 3. Effacement TOTAL sur Cloud Supabase (Sauvegarde, Antenne multijoueur, Profil joueur)
     try {
-      if (window.ProtecSupabase && window.ProtecSupabase.client && this.player && this.player.id) {
-        await window.ProtecSupabase.client.from('game_saves').delete().eq('user_id', this.player.id);
+      if (window.ProtecSupabase && window.ProtecSupabase.client && playerId) {
+        // A. Supprimer la sauvegarde cloud du joueur
+        await window.ProtecSupabase.client.from('game_saves').delete().eq('user_id', playerId);
+        // B. Supprimer la position de l'antenne sur la carte multijoueur
+        await window.ProtecSupabase.client.from('alliance_stations').delete().eq('player_id', playerId);
+        // C. Réinitialiser le profil joueur : nom de l'antenne, département et commune effacés
+        await window.ProtecSupabase.client.from('players').update({
+          station_name: null,
+          department_code: null,
+          city: null
+        }).eq('id', playerId);
       }
     } catch (e) {
-      console.warn('Erreur purge cloud save:', e);
+      console.warn('Erreur purge Cloud Supabase:', e);
     }
 
-    localStorage.removeItem('protec_live_save_v4');
+    // 4. Purge TOTALE des clés du localStorage (Sauvegardes, Nom d'antenne, Département, Position, Onboarding)
+    try {
+      localStorage.removeItem('protec_live_save_v4');
+      localStorage.removeItem('protec_save');
+      localStorage.removeItem('myprotec_save');
+      localStorage.removeItem('protec_save_game');
+      localStorage.removeItem('protec_department_code');
+      localStorage.removeItem('protec_station_name');
+      localStorage.removeItem('protec_onboarding_step');
+      localStorage.removeItem('protec_onboarding_volunteers');
+      localStorage.removeItem('protec_onboarding_placement');
+      localStorage.removeItem('protec_first_antenna_setup');
+      localStorage.removeItem('protec_notif_history');
+      localStorage.removeItem('protec_user_profile');
+
+      // Nettoyer l'objet utilisateur protec_user en conservant le compte et rôle
+      const userRaw = localStorage.getItem('protec_user');
+      if (userRaw) {
+        const u = JSON.parse(userRaw);
+        if (u && typeof u === 'object') {
+          delete u.stationName;
+          delete u.station_name;
+          delete u.departmentCode;
+          delete u.department_code;
+          delete u.city;
+          localStorage.setItem('protec_user', JSON.stringify(u));
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur purge localStorage:', e);
+    }
+
+    // 5. Purge TOTALE de l'état en mémoire
+    this.stations = [];
+    this.vehicles = [];
+    this.volunteers = [];
+    this.missions = [];
+    this.devis = [];
+    this.candidatures = [];
+    this.formations = [];
+    this.annualContracts = [];
+    this.departmentInfrastructures = {};
+    this.currentCityKey = null;
+    this.currentDepartmentCode = null;
+
+    if (this.player) {
+      this.player.stationName = null;
+      this.player.departmentCode = null;
+      this.player.city = null;
+    }
+
+    if (window.ProtecAuth && window.ProtecAuth.currentUser) {
+      window.ProtecAuth.currentUser.stationName = null;
+      window.ProtecAuth.currentUser.departmentCode = null;
+      window.ProtecAuth.currentUser.city = null;
+    }
+
+    // Réinitialisation des fonds au capital officiel de départ (40 000 €)
+    this.resources = {
+      money: 40000,
+      volunteers: 0,
+      vehicles: 0,
+      reputation: 100,
+      grants: 0,
+      funds: 40000,
+      budget: 40000
+    };
+
+    // Nettoyer tous les marqueurs d'antennes sur la carte Leaflet principale
+    if (Array.isArray(this.stationMarkers)) {
+      this.stationMarkers.forEach(m => {
+        try { if (this.map) this.map.removeLayer(m); } catch (e) {}
+      });
+      this.stationMarkers = [];
+    }
+
     this.closeResetModal();
-    this.showToast('Antenne réinitialisée', 'Votre ancienne partie a été archivée avec succès. Rechargement...', 'green');
+    this.showToast('Partie Réinitialisée à Zéro', 'L\'antenne, sa position géographique, son nom et son département ont été intégralement retirés. Rechargement...', 'green');
     setTimeout(() => {
       location.reload();
     }, 1200);
@@ -2153,7 +2243,14 @@ class ProtecGame {
       }
     } else if (dept) {
       if (this.map) {
-        this.map.flyTo([dept.lat, dept.lng], dept.zoom, { duration: 1.2 });
+        // Vue d'ensemble du département sans zoomer à 15 sur une antenne concurrente
+        this.map.flyTo([dept.lat, dept.lng], Math.min(dept.zoom || 10, 10), { duration: 1.2 });
+      }
+      if (!silent) {
+        this.showToast('Implantation Requise', `Votre antenne n'est pas encore implantée dans le département ${myDeptCode}. Finalisez l'onboarding d'implantation.`, 'amber');
+      }
+      if (window.ProtecOnboarding) {
+        setTimeout(() => window.ProtecOnboarding.showWizard(this), 600);
       }
     }
 
@@ -2166,7 +2263,7 @@ class ProtecGame {
     if (banner) banner.classList.add('hidden');
     if (returnBtn) returnBtn.classList.add('hidden');
 
-    if (!silent) {
+    if (!silent && this.stations.length > 0) {
       this.showToast('Mon Antenne', `Retour à votre antenne d'affectation (${myDeptCode}).`, 'blue');
     }
 
@@ -2293,10 +2390,13 @@ class ProtecGame {
     // 1. Mission d'urgence en attente de décision / préalerte / déclenchée
     if (mission.status === 'prealerte' || mission.status === 'declenche') return true;
 
-    // 2. Incident en cours sur une mission active
-    if (mission.status === 'ongoing' && mission.currentIncident) return true;
+    // Nettoyage de tout incident de terrain résiduel (les secouristes gèrent en autonomie)
+    if (mission.currentIncident) {
+      mission.currentIncident = null;
+      mission.incidentResolved = true;
+    }
 
-    // 3. Missions terminées, annulées ou en cours sans incident : aucune onde
+    // 2. Missions terminées, annulées ou en cours : aucune onde
     if (mission.status === 'completed' || mission.status === 'annule' || mission.status === 'ongoing') {
       return false;
     }
@@ -9267,6 +9367,7 @@ class ProtecGame {
 
     this.volunteers.push(newVol);
     this.closeModal();
+    if (typeof this.closeDrawer === 'function') this.closeDrawer();
     this.updateStatsUI();
     this.saveGame();
     if (waitDays >= 2) {
@@ -9274,7 +9375,6 @@ class ProtecGame {
     } else {
       this.showToast('Bénévole Intégré !', `${cand.name} (${initialRank}${cand.isTrainer ? ' • Formateur' : ''}) a signé sa charte d'engagement bénévole !`, 'green');
     }
-    this.openModule('recrutement');
   }
 
   toggleShowCandidatures() {
@@ -10196,6 +10296,9 @@ class ProtecGame {
     }
     if (window.ProtecContratsAnnuels && typeof window.ProtecContratsAnnuels.onMissionCompleted === 'function') {
       window.ProtecContratsAnnuels.onMissionCompleted(this, mission);
+    }
+    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordMissionCompleted === 'function') {
+      window.ProtecAdvanced.recordMissionCompleted(this, mission);
     }
 
     // Déclencheur officiel du palier de parrainage (1ère intervention terminée -> déblocage de la prime parrain)
@@ -12339,6 +12442,79 @@ class ProtecGame {
     this.updateStatsUI();
   }
 
+  // Confirmation formelle d'envoi de renfort au régulateur (CODIS / SAMU 15 / DPS débordé)
+  confirmWillProvideRenfort(missionId) {
+    const mission = (this.missions || []).find(m => m.id === missionId);
+    if (!mission) return;
+
+    mission.willProvideRenfort = true;
+    mission.renfortPromised = true;
+
+    // Prolongation du délai de réponse (+15 min) et réinitialisation de l'horodatage
+    mission.maxResponseMinutes = (mission.maxResponseMinutes || 15) + 15;
+    mission.spawnedAt = Date.now();
+
+    // Mobilisation prioritaire des secouristes disponibles ou d'astreinte si sous-effectif
+    if (Array.isArray(this.volunteers) && (!mission.registeredVolunteers || mission.registeredVolunteers.length < (mission.requiredVolunteers || 3))) {
+      if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
+      if (!mission.volunteerRoles) mission.volunteerRoles = {};
+
+      const needed = (mission.requiredVolunteers || 3) - mission.registeredVolunteers.length;
+      const candidates = this.volunteers.filter(v => 
+        (v.status === 'dispo' || v.status === 'astreinte') && 
+        !mission.registeredVolunteers.includes(v.id)
+      );
+
+      candidates.slice(0, needed).forEach(v => {
+        mission.registeredVolunteers.push(v.id);
+        const ranks = Array.isArray(v.skills) ? v.skills : [];
+        if (!mission.volunteerRoles[v.id]) {
+          mission.volunteerRoles[v.id] = (v.rank === 'Chef d’Équipe' || ranks.includes('CE')) ? 'ce' : (ranks.includes('PSE2') ? 'pse2' : 'pse1');
+        }
+      });
+    }
+
+    // Assignation automatique d'un VPSP disponible si requis et non affecté
+    if (Array.isArray(this.vehicles) && (!mission.assignedVehicleIds || mission.assignedVehicleIds.length === 0)) {
+      const vpsp = this.vehicles.find(veh => (veh.type === 'VPSP' || veh.model?.includes('VPSP')) && veh.status === 'dispo');
+      if (vpsp) {
+        if (!Array.isArray(mission.assignedVehicleIds)) mission.assignedVehicleIds = [];
+        mission.assignedVehicleIds.push(vpsp.id);
+        if (mission.assignedCrew && Array.isArray(mission.assignedCrew.vehicles) && !mission.assignedCrew.vehicles.some(x => (typeof x === 'object' ? x.id : x) === vpsp.id)) {
+          mission.assignedCrew.vehicles.push(vpsp);
+        }
+      }
+    }
+
+    // Main courante radio TACTIQUE-1
+    if (this.radioLogs) {
+      this.radioLogs.unshift({
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        channel: 'TACTIQUE-1',
+        text: `[RÉGULATION] Antenne ➔ Régulateur : Renfort confirmé sur « ${mission.title} ». Départ en cours de préparation (+15 min accordées).`,
+        type: 'success'
+      });
+    }
+
+    // Registre d'alerte
+    this.recordAlertTriggerLog(mission, 'renfort_confirme', 'Confirmation d\'engagement de renfort transmise au régulateur (+15 min accordées).', { repImpact: 5 });
+
+    // Toast de confirmation
+    this.showToast(
+      'Renfort Confirmé 🚑',
+      `Vous avez confirmé l'envoi de renfort pour « ${mission.title} ». Le régulateur est informé (+15 min accordées).`,
+      'green'
+    );
+
+    this.saveGame();
+    this.renderMissions();
+    this.updateStatsUI();
+
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
+  }
+
   // --- REGISTRE OFFICIEL ET MAIN COURANTE DES DÉCLENCHEMENTS D'ALERTE ---
   recordAlertTriggerLog(mission, eventType, reason, extraData = {}) {
     if (!mission) return null;
@@ -13022,6 +13198,39 @@ class ProtecGame {
         <!-- WIDGET TIMELINE MULTI-ÉTAPES (6 JALONS STRICTS) -->
         ${(mission.isTimelineUrgence || mission.timeline_milestones || mission.t_alerte) && window.ProtecConventions?.renderTimelineWidget ? window.ProtecConventions.renderTimelineWidget(mission, Date.now()) : ''}
 
+        <!-- ENCART ALERTE DÉBORDEMENT / DEMANDE DE RENFORT SAMU & POMPIERS -->
+        ${(mission.isRenfort || mission.isOptionalRenfort) ? `
+          <div class="p-3.5 rounded-2xl border-2 ${mission.willProvideRenfort ? 'border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100' : 'border-rose-500 bg-rose-50/80 dark:bg-rose-950/40 text-rose-950 dark:text-rose-100'} shadow-sm space-y-2.5">
+            <div class="flex items-start justify-between gap-2.5">
+              <div class="flex items-center gap-2.5">
+                <span class="w-9 h-9 rounded-xl ${mission.willProvideRenfort ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300'} flex items-center justify-center text-lg font-black shrink-0">
+                  ${mission.willProvideRenfort ? '🛡️' : '🚨'}
+                </span>
+                <div>
+                  <h4 class="text-xs font-black uppercase tracking-wider ${mission.willProvideRenfort ? 'text-emerald-900 dark:text-emerald-200' : 'text-rose-900 dark:text-rose-200'}">
+                    ${mission.willProvideRenfort ? 'Renfort Confirmé au Régulateur' : 'Alerte Débordement : Demande de Renfort'}
+                  </h4>
+                  <p class="text-[11px] font-semibold opacity-90">
+                    ${mission.willProvideRenfort 
+                      ? 'Régulation informée : équipage de renfort en préparation (+15 min de délai accordé).' 
+                      : 'Saturation des effectifs chez les secours publics. Vous pouvez confirmer que vous mettez du renfort.'}
+                  </p>
+                </div>
+              </div>
+              ${!mission.willProvideRenfort ? `
+                <button onclick="window.game.confirmWillProvideRenfort('${mission.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow active:scale-95 transition flex items-center gap-1.5 shrink-0 cursor-pointer animate-pulse">
+                  <i data-lucide="shield-check" class="w-4 h-4"></i>
+                  <span>Je vais mettre du renfort</span>
+                </button>
+              ` : `
+                <span class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-900/80 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-600 shrink-0">
+                  Renfort Validé (+15 min)
+                </span>
+              `}
+            </div>
+          </div>
+        ` : ''}
+
         <!-- BANDEAU DÉSENGAGEMENT MANUEL REQUIS (SI FIN D'ÉVÉNEMENT SANS PC SUR PLACE) -->
         ${mission.pendingManualDisengage ? `
           <div class="p-3.5 rounded-2xl bg-amber-500/15 border-2 border-amber-500 text-amber-950 space-y-2.5 shadow-sm">
@@ -13041,20 +13250,6 @@ class ProtecGame {
 
         <!-- BANDEAU INTERVENTION ACTIVE EN DIRECT (SI ONGOING) -->
         ${mission.status === 'ongoing' ? `
-          ${mission.currentIncident ? `
-            <div class="p-3 rounded-2xl bg-orange-50 border-2 border-pc-orange text-xs shadow-sm flex items-center justify-between gap-2 animate-pulse">
-              <div class="flex items-center gap-2">
-                <span class="text-lg">🚨</span>
-                <div>
-                  <div class="font-black text-orange-950">${mission.currentIncident.title}</div>
-                  <div class="text-[10px] text-orange-800 font-semibold">Incident en cours ! Arbitrage requis</div>
-                </div>
-              </div>
-              <button onclick="window.ProtecIncidents.openIncidentModal(window.game, window.game.missions.find(m => m.id === '${mission.id}'))" class="px-3 py-1.5 rounded-xl bg-pc-orange text-white text-xs font-black hover:bg-pc-orange-hover transition shadow">
-                Décider
-              </button>
-            </div>
-          ` : ''}
 
           <!-- Si c'est un sinistre ou une crise : Main Courante Opérationnelle -->
           ${(mission.isCrisis || ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type)) && window.ProtecCriseLogistique ? `
@@ -13619,7 +13814,7 @@ class ProtecGame {
                         <h4 class="text-xs font-black uppercase text-slate-800 dark:text-white tracking-wider">Organisation des Équipes Opérationnelles</h4>
                         ${isCrisisMission ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-red-500 text-white animate-pulse">Crise</span>' : '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-500 text-white">Dispositif</span>'}
                       </div>
-                      <p class="text-[10px] text-slate-500 dark:text-slate-300">Créez vos équipes et affectez vos secouristes. Rien n'est imposé par défaut : vous avez la main totale.</p>
+                      <p class="text-[10px] text-slate-500 dark:text-slate-300">Les équipes sont créées automatiquement lors de l'engagement des véhicules. Affectez vos secouristes à chaque équipage.</p>
                     </div>
                   </div>
                   <div class="flex items-center gap-2">
@@ -13632,37 +13827,11 @@ class ProtecGame {
                   </div>
                 </div>
 
-                <!-- Barre d'outils de création d'équipes -->
-                <div class="p-2.5 rounded-2xl bg-white border border-slate-200 dark:bg-white/5 dark:border-white/10 flex items-center gap-1.5 flex-wrap">
-                  <span class="text-[10px] font-bold text-slate-600 dark:text-slate-300 mr-1 flex items-center gap-1">
-                    <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-pc-blue"></i>
-                    <span>Ajouter une équipe :</span>
-                  </span>
-                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'psa')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-blue-600/80 hover:bg-blue-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un Poste de Secours (PSA)">
-                    <span>+ Équipe PSA</span>
-                  </button>
-                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'vpsp')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-600/80 hover:bg-emerald-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un équipage VPSP">
-                    <span>+ Équipage VPSP</span>
-                  </button>
-                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'binome')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600/80 hover:bg-indigo-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un Binôme de Patrouille PAPS">
-                    <span>+ Binôme PAPS</span>
-                  </button>
-                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'pc')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-purple-600/80 hover:bg-purple-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un Poste de Commandement / PMA">
-                    <span>+ PC / PMA</span>
-                  </button>
-                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'soutien')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-600/80 hover:bg-amber-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un soutien logistique">
-                    <span>+ Soutien Log</span>
-                  </button>
-                  <button type="button" onclick="window.game.promptCreateCustomTeam('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white dark:border-white/20 transition flex items-center gap-1 cursor-pointer ml-auto" title="Créer une équipe personnalisée">
-                    <span>+ Équipe Libre...</span>
-                  </button>
-                </div>
-
                 <!-- Grille des Équipes Opérationnelles du Dispositif (Chaque véhicule engagé EST une équipe) -->
                 ${crisisTeamsList.length === 0 ? `
                   <div class="p-3.5 rounded-2xl bg-white/5 border border-dashed border-white/20 text-center space-y-1">
                     <p class="text-xs font-bold text-slate-200">Aucune équipe ni véhicule engagé pour ce dispositif.</p>
-                    <p class="text-[10px] text-slate-400">Engagez un véhicule ou ajoutez une équipe ci-dessus pour composer vos effectifs.</p>
+                    <p class="text-[10px] text-slate-400">Engagez des véhicules pour créer automatiquement vos équipes et composer vos équipages.</p>
                   </div>
                 ` : `
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -14978,9 +15147,17 @@ class ProtecGame {
               <span>Équipe Complète • Départ auto à ${rdvBaseStr}</span>
             </div>
           ` : `
-            <div class="flex-1 min-w-[140px] px-3 py-2 rounded-xl text-center text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200 whitespace-nowrap flex items-center justify-center">
-              Manque ${mission.requiredVolunteers - registeredVols.length} secouriste(s)
-            </div>
+            ${(mission.isRenfort || mission.isOptionalRenfort) && !mission.willProvideRenfort ? `
+              <button onclick="window.game.confirmWillProvideRenfort('${mission.id}')" class="flex-1 min-w-[140px] px-3.5 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 animate-pulse cursor-pointer" title="Confirmer au régulateur que vous mettez du renfort (+15 min accordées)">
+                <i data-lucide="shield-plus" class="w-4 h-4"></i>
+                <span>Mettre du renfort</span>
+              </button>
+            ` : `
+              <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="flex-1 min-w-[140px] px-3 py-2 rounded-xl text-center text-[10px] font-black bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 whitespace-nowrap flex items-center justify-center gap-1 transition cursor-pointer" title="Manque de moyens : cliquer pour mobiliser ou envoyer du renfort">
+                <i data-lucide="shield-plus" class="w-3.5 h-3.5 text-amber-800"></i>
+                <span>Manque ${mission.requiredVolunteers - registeredVols.length} • Mettre du renfort</span>
+              </button>
+            `}
           `
         )}
       `;
@@ -17177,7 +17354,7 @@ class ProtecGame {
       'recrutement': 'rh',
       'formation': 'rh',
       'poles': 'rh',
-      'communication': 'rh',
+      'communication': 'liaisons',
       'competences': 'rh',
 
       'base': 'antenne',
@@ -17300,12 +17477,12 @@ class ProtecGame {
       ],
       rh: [
         { key: 'recrutement', label: 'Bénévoles & Équipe', icon: 'users', count: this.volunteers?.length || 0 },
-        { key: 'poles', label: 'Pôles d\'Antenne', icon: 'layers' },
-        { key: 'communication', label: 'Communication & Médias', icon: 'megaphone' }
+        { key: 'poles', label: 'Pôles d\'Antenne', icon: 'layers' }
       ],
       liaisons: [
         { key: 'tchat', label: 'Messagerie & MP', icon: 'message-square' },
         { key: 'alliance', label: 'Alliances', icon: 'handshake', count: this.renforts?.filter(r => r.status === 'open').length || 0 },
+        { key: 'communication', label: 'Communication & Médias', icon: 'megaphone' },
         { key: 'meteo', label: 'Météo-France', icon: 'cloud-sun' }
       ],
       finances: [
@@ -17351,1339 +17528,8 @@ class ProtecGame {
     if (window.lucide) window.lucide.createIcons();
   }
 
-  // --- POPUP MODULES DOCK ---
-  openModule(moduleKey, isBackNavigation = false) {
-    this.closeAllDockSubmenus();
-
-    if (moduleKey === 'parrainage' || moduleKey === 'referral' || moduleKey === 'filleul') {
-      if (window.ProtecAuth && typeof window.ProtecAuth.openReferralShareModal === 'function') {
-        window.ProtecAuth.openReferralShareModal();
-      } else if (window.ProtecAuth && typeof window.ProtecAuth.openAuthModal === 'function') {
-        window.ProtecAuth.openAuthModal();
-      }
-      return;
-    }
-
-    const aliases = {
-      'missions': 'planning',
-      'mission': 'planning',
-      'benevoles': 'recrutement',
-      'personnel': 'recrutement',
-      'flotte': 'flotte',
-      'vehicules': 'flotte',
-      'base': 'flotte',
-      'antenne': 'flotte',
-      'antennes': 'flotte',
-      'batiment': 'locaux',
-      'batiments': 'locaux',
-      'locaux': 'locaux',
-      'plan': 'locaux',
-      'plan_batiment': 'locaux',
-      'devis_dps': 'devis',
-      'dps': 'planning',
-      'apc_dep': 'apc',
-      'apc_departementale': 'apc',
-      'bourse': 'marche_occasion',
-      'marche': 'marche_occasion',
-      'occasion': 'marche_occasion',
-      'marche_occasion': 'marche_occasion',
-      'formations': 'formation',
-      'boutique_vehicules': 'boutique_vehicules',
-      'boutique_vehicule': 'boutique_vehicules',
-      'achat_vehicule': 'boutique_vehicules',
-      'achat_vehicules': 'boutique_vehicules'
-    };
-
-    if (moduleKey === 'evenements') {
-      this.activeAllianceTab = 'evenements';
-      moduleKey = 'alliance';
-    } else if (moduleKey && aliases[moduleKey]) {
-      moduleKey = aliases[moduleKey];
-    }
-
-    // Affichage des sous-onglets contextuels de catégorie
-    this.renderModalCategorySubnav(moduleKey);
-
-    const modal = document.getElementById('main-modal');
-    const title = document.getElementById('modal-title');
-    const subtitle = document.getElementById('modal-subtitle');
-    const icon = document.getElementById('modal-icon');
-    const body = document.getElementById('modal-body');
-    const backBtn = document.getElementById('modal-back-btn');
-
-    // Sauvegarde du scroll lors des rafraîchissements doux sans perte de position
-    const savedScrollTop = (isBackNavigation && body) ? body.scrollTop : 0;
-    const volContainer = document.getElementById('volunteers-cards-container');
-    const savedVolScrollTop = (isBackNavigation && volContainer) ? volContainer.scrollTop : 0;
-    const searchInp = document.getElementById('volunteer-search-input');
-    const savedSearchVal = (isBackNavigation && searchInp) ? searchInp.value : '';
-    const isSearchFocused = searchInp && document.activeElement === searchInp;
-
-    if (!isBackNavigation && this.currentModalKey && this.currentModalKey !== moduleKey) {
-      if (!this.modalHistory) this.modalHistory = [];
-      this.modalHistory.push(this.currentModalKey);
-    }
-    this.currentModalKey = moduleKey;
-
-    if (backBtn) {
-      if (this.modalHistory && this.modalHistory.length > 0) {
-        backBtn.classList.remove('hidden');
-      } else {
-        backBtn.classList.add('hidden');
-      }
-    }
-
-    modal.classList.remove('hidden');
-
-    const modalDialog = modal.querySelector('.glass-panel-heavy');
-    if (modalDialog) {
-      if (moduleKey === 'planning') {
-        modalDialog.classList.remove('max-w-4xl');
-        modalDialog.classList.add('max-w-6xl', 'xl:max-w-7xl');
-      } else {
-        modalDialog.classList.remove('max-w-6xl', 'xl:max-w-7xl');
-        modalDialog.classList.add('max-w-4xl');
-      }
-    }
-
-    if (moduleKey === 'antenne_messages' || moduleKey === 'messages') {
-      title.textContent = "Messagerie & Échanges d'Antenne";
-      subtitle.textContent = "Flux opérationnels, messages formateurs, alertes logistiques et doléances directes des bénévoles";
-      icon.setAttribute('data-lucide', 'message-square');
-      if (window.ProtecAntenneMessages && typeof window.ProtecAntenneMessages.renderModal === 'function') {
-        try {
-          window.ProtecAntenneMessages.renderModal(this);
-        } catch (e) {
-          console.error('[ProtecAntenneMessages] Error rendering module:', e);
-        }
-        if (window.lucide) window.lucide.createIcons();
-        return;
-      }
-    } else if (moduleKey === 'ecussons') {
-      title.textContent = "Collection & Troc d'Écussons";
-      subtitle.textContent = "Tableau en liège d'antenne et bourse aux échanges inter-antennes en ligne";
-      icon.setAttribute('data-lucide', 'shield');
-      if (window.ProtecEcussons && typeof window.ProtecEcussons.renderTableauEcussons === 'function') {
-        try {
-          window.ProtecEcussons.renderTableauEcussons(this, body);
-        } catch (e) {
-          console.error('[ProtecEcussons] Error rendering module:', e);
-        }
-        if (window.lucide) window.lucide.createIcons();
-        return;
-      }
-    } else if (moduleKey === 'finances') {
-      title.textContent = "Direction Financière & Comptabilité Réglementaire";
-      subtitle.textContent = "Trésorerie d'antenne, grand livre des comptes, bilans d'exploitation et subventions";
-      icon.setAttribute('data-lucide', 'wallet');
-      if (window.ProtecFinances) {
-        try {
-          if (typeof window.ProtecFinances.renderFinancesModal === 'function') {
-            window.ProtecFinances.renderFinancesModal(this);
-          } else if (typeof window.ProtecFinances.renderModal === 'function') {
-            window.ProtecFinances.renderModal(this);
-          }
-        } catch (e) {
-          console.error('[ProtecFinances] Error rendering module:', e);
-        }
-        if (window.lucide) window.lucide.createIcons();
-        return;
-      }
-    } else if (moduleKey === 'equipements') {
-      title.textContent = "Inventaire & Dotations Matérielles";
-      subtitle.textContent = "Lots opérationnels (Lots A, B, C), tenues d'intervention et matériels de secours";
-      icon.setAttribute('data-lucide', 'box');
-      if (window.ProtecEquipements) {
-        try {
-          if (typeof window.ProtecEquipements.renderEquipementsModal === 'function') {
-            window.ProtecEquipements.renderEquipementsModal(this);
-          } else if (typeof window.ProtecEquipements.renderModal === 'function') {
-            window.ProtecEquipements.renderModal(this);
-          }
-        } catch (e) {
-          console.error('[ProtecEquipements] Error rendering module:', e);
-        }
-        if (window.lucide) window.lucide.createIcons();
-        return;
-      }
-    } else if (moduleKey === 'conventions') {
-      title.textContent = "Conventions Cadres & Partenariats";
-      subtitle.textContent = "Accords de secours d'urgence, CUMP, SAMU et conventions annuelles";
-      icon.setAttribute('data-lucide', 'file-check-2');
-      if (window.ProtecConventions) {
-        try {
-          window.ProtecConventions.renderModal(this);
-        } catch (e) {
-          console.error('[ProtecConventions] Error rendering module:', e);
-        }
-        if (window.lucide) window.lucide.createIcons();
-        return;
-      }
-    } else if (moduleKey === 'subventions') {
-      title.textContent = "Pôle Action Sociale & Subventions Publiques";
-      subtitle.textContent = "Financements DDETS, CCAS et Conseil Départemental pour maraudes";
-      icon.setAttribute('data-lucide', 'landmark');
-      if (window.ProtecSocial) {
-        try {
-          window.ProtecSocial.renderModal(this);
-        } catch (e) {
-          console.error('[ProtecSocial] Error rendering module:', e);
-        }
-        if (window.lucide) window.lucide.createIcons();
-        return;
-      }
-    } else if (moduleKey === 'communication') {
-      title.textContent = "Communication & Rayonnement d'Antenne";
-      subtitle.textContent = "Réseaux sociaux, campagnes de notoriété et relations presse";
-      icon.setAttribute('data-lucide', 'megaphone');
-      if (window.ProtecCommunication) {
-        try {
-          window.ProtecCommunication.renderModal(this);
-        } catch (e) {
-          console.error('[ProtecCommunication] Error rendering module:', e);
-        }
-        if (window.lucide) window.lucide.createIcons();
-        return;
-      }
-    } else if (moduleKey === 'tchat' || moduleKey === 'messagerie') {
-      title.textContent = "Messagerie & Communications Opérationnelles";
-      subtitle.textContent = "Échanges inter-bénévoles, canaux d'antenne et alertes de mission";
-      icon.setAttribute('data-lucide', 'message-square');
-      if (window.ProtecMessaging) {
-        try {
-          window.ProtecMessaging.renderModal(this);
-        } catch (e) {
-          console.error('[ProtecMessaging] Error rendering module:', e);
-        }
-        if (window.lucide) window.lucide.createIcons();
-        return;
-      }
-    } else if (moduleKey === 'cump') {
-      title.textContent = "Cellule d'Urgence Médico-Psychologique (CUMP)";
-      subtitle.textContent = "Soutien psychologique d'urgence et Cellule d'Accueil des Impliqués (CAI)";
-      icon.setAttribute('data-lucide', 'heart-handshake');
-      if (window.ProtecCump) {
-        try {
-          if (typeof window.ProtecCump.renderCumpTab === 'function') {
-            window.ProtecCump.renderCumpTab(this);
-          } else if (typeof window.ProtecCump.renderModal === 'function') {
-            window.ProtecCump.renderModal(this);
-          }
-        } catch (e) {
-          console.error('[ProtecCump] Error rendering module:', e);
-        }
-        if (window.lucide) window.lucide.createIcons();
-        return;
-      }
-    } else if (moduleKey === 'apc') {
-      title.textContent = "Gouvernance Fédérale & Élections (APC)";
-      subtitle.textContent = "Comité directeur, vote d'orientation et politique nationale FNPC";
-      icon.setAttribute('data-lucide', 'award');
-      if (window.ProtecAPC) {
-        try {
-          window.ProtecAPC.renderModal(this);
-        } catch (e) {
-          console.error('[ProtecAPC] Error rendering module:', e);
-        }
-        if (window.lucide) window.lucide.createIcons();
-        return;
-      }
-    } else if (moduleKey === 'marche_occasion' || moduleKey === 'bourse' || moduleKey === 'occasion') {
-      title.textContent = "Marché d'Occasion & Revente Inter-Antennes";
-      subtitle.textContent = "Véhicules et équipements d'occasion cédés par d'autres antennes";
-      icon.setAttribute('data-lucide', 'repeat');
-      if (window.ProtecMarcheOccasion) {
-        try {
-          window.ProtecMarcheOccasion.renderModal(this);
-        } catch (e) {
-          console.error('[ProtecMarcheOccasion] Error rendering module:', e);
-        }
-        if (window.lucide) window.lucide.createIcons();
-        return;
-      }
-    } else if (moduleKey === 'alliance') {
-      title.textContent = 'Fédération, Alliances & Veille Opérationnelle';
-      subtitle.textContent = 'Entraide inter-antennes, détachements de renforts, astreintes et réseau fédéral';
-      icon.setAttribute('data-lucide', 'handshake');
- 
-       // Assainissement et purge des renforts corrompus ou invalides
-       this.sanitizeRenforts();
-
-      const userAllianceId = this.player?.allianceId;
-      const alliance = (this.alliances || []).find(a => a.id === userAllianceId);
-      const hasAlliance = Boolean(userAllianceId && alliance);
-      const currentTab = this.activeAllianceTab || 'membres';
-
-      body.innerHTML = `
-        <div class="space-y-5">
-          
-          <!-- En-tête de l'Alliance ou du Réseau Fédéral -->
-          ${hasAlliance ? `
-            <div class="p-4 rounded-2xl bg-gradient-to-r from-indigo-700 to-pc-blue text-white flex items-center justify-between shadow-lg">
-              <div class="flex items-center gap-3">
-                <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white font-black text-lg">
-                  ${alliance.tag || 'PC'}
-                </div>
-                <div>
-                  <h4 class="text-base font-extrabold leading-tight">${alliance.name}</h4>
-                  <p class="text-xs text-white/80">Caisse de solidarité fédérale : <strong>${(alliance.treasury || 0).toLocaleString('fr-FR')} €</strong> • Vos points d’alliance : <strong>${this.resources.alliancePoints || 0} pts</strong></p>
-                </div>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
-                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Alliance Active
-                </span>
-              </div>
-            </div>
-          ` : `
-            <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-800 to-pc-blue text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
-              <div class="flex items-center gap-3">
-                <div class="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-amber-300 font-black text-xl">
-                  <i data-lucide="network" class="w-6 h-6"></i>
-                </div>
-                <div>
-                  <h4 class="text-base font-extrabold leading-tight">Réseau Fédéral Inter-Antennes</h4>
-                  <p class="text-xs text-white/80">Vous ne faites actuellement partie d’aucune Alliance locale ou entente inter-antennes.</p>
-                </div>
-              </div>
-              <div class="flex items-center gap-2">
-                <button onclick="window.ProtecVeille.renderModal(window.game);" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow transition flex items-center gap-1.5 cursor-pointer">
-                  <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
-                  Astreintes (3 Échelons)
-                </button>
-              </div>
-            </div>
-          `}
-
-          <!-- Onglets du module Alliance -->
-          <div class="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold overflow-x-auto">
-            <button onclick="window.game.setAllianceTab('membres')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'membres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
-              Antennes & Membres (${this.allianceStations.length + this.stations.length})
-            </button>
-            <button onclick="window.ProtecVeille.renderModal(window.game);" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-black flex items-center gap-1.5 border border-emerald-300 shadow-xs cursor-pointer">
-              <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-emerald-600"></i>
-              Veille Opérationnelle
-            </button>
-            <button onclick="window.game.setAllianceTab('renforts')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'renforts' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1.5">
-              Appels à Renforts
-              <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700 font-black">${(this.renforts || []).filter(r => r.status === 'open' && (!r.id || !r.id.startsWith('renf-offline-'))).length}</span>
-            </button>
-            <button onclick="window.game.setAllianceTab('formations')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'formations' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
-              Stages Mutualisés (${(this.formationsSpeciales || []).length})
-            </button>
-            <button onclick="window.game.setAllianceTab('evenements')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'evenements' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
-              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-300"></i>
-              Événements (${this.communityEvents?.length || 0})
-            </button>
-            <button onclick="window.game.setAllianceTab('bourse')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'bourse' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
-              <i data-lucide="repeat" class="w-3.5 h-3.5"></i>
-              Marché & Matériel (${this.marketplace?.length || 0})
-            </button>
-            <button onclick="window.game.setAllianceTab('manoeuvres')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'manoeuvres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
-              <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
-              Manœuvres Fédérales
-            </button>
-            <button onclick="window.game.setAllianceTab('radio')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'radio' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
-              <i data-lucide="radio" class="w-3.5 h-3.5"></i>
-              Radio Alliance
-            </button>
-          </div>
-
-          <!-- Contenu selon onglet actif -->
-          <div id="alliance-tab-content">
-            ${currentTab === 'membres' ? `
-              <div class="space-y-4">
-                <div class="flex items-center justify-between text-xs">
-                  <span class="text-slate-500">Toutes les antennes connectées partagent leurs ressources en cas de crise majeure.</span>
-                  <button onclick="window.game.openPlayerProfileModal()" class="font-bold text-indigo-600 hover:underline">Modifier mon profil joueur</button>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  
-                  <!-- Notre antenne -->
-                  <div class="p-4 rounded-2xl glass-card-blue border-2 border-pc-blue/40 space-y-2">
-                    <div class="flex items-center justify-between">
-                      <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue text-white">VOTRE ANTENNE</span>
-                      <span class="text-xs font-bold text-slate-800">${this.player.name}</span>
-                    </div>
-                    <h5 class="text-sm font-extrabold text-slate-900">${this.stations[0]?.name || 'Antenne en création'}</h5>
-                    <div class="text-xs text-slate-600 flex justify-between pt-2 border-t border-slate-100/70">
-                      <span>Véhicules : <strong>${this.vehicles.length}</strong></span>
-                      <span>Bénévoles : <strong>${this.volunteers.length}</strong></span>
-                    </div>
-                  </div>
-
-                  <!-- Antennes alliées -->
-                  ${this.allianceStations.map(st => `
-                    <div class="p-4 rounded-2xl glass-card space-y-2">
-                      <div class="flex items-center justify-between">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white">ALLIÉ EN LIGNE</span>
-                        <div class="flex items-center gap-1.5 flex-wrap justify-end">
-                          <span class="text-xs font-bold text-slate-700">${st.playerName}</span>
-                          ${st.discord?.username ? `
-                            <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-semibold bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/20" title="Discord: @${st.discord.username}">
-                              <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
-                              @${st.discord.username}
-                            </span>
-                          ` : ''}
-                        </div>
-                      </div>
-                      <h5 class="text-sm font-extrabold text-slate-900">${st.name}</h5>
-                      <div class="text-xs text-slate-600 flex justify-between pt-2 border-t border-slate-100/70">
-                        <span>Flotte : <strong>${st.vehicles} véhicules</strong></span>
-                        <span>Secouristes : <strong>${st.volunteers} membres</strong></span>
-                      </div>
-                      <div class="pt-1 flex justify-end">
-                        <button onclick="window.game.openAllianceStationDetails({ id: '${st.id}', name: '${st.name}', playerName: '${st.playerName}', vehicles: ${st.vehicles}, volunteers: ${st.volunteers} })" class="text-xs font-bold text-indigo-600 hover:underline">
-                          Voir sur la carte ➜
-                        </button>
-                      </div>
-                    </div>
-                  `).join('')}
-
-                </div>
-              </div>
-            ` : ''}
-
-            ${currentTab === 'renforts' ? `
-              <div class="space-y-4">
-                <!-- Encart Officiel Demandes Extra-Départementales -->
-                ${this.renderExtraDeptRenfortsBlockHTML()}
-
-                <div class="p-3.5 rounded-2xl glass-card-amber text-xs text-amber-900 flex items-center justify-between">
-                  <span>Dépêchez vos véhicules en renfort auprès d’antennes alliées pour toucher des indemnités et de la réputation !</span>
-                  <button onclick="window.game.openModule('planning')" class="px-3 py-1.5 rounded-xl font-bold bg-amber-600 text-white hover:bg-amber-700 transition cursor-pointer">
-                    + Émettre un Appel depuis mon Planning
-                  </button>
-                </div>
-
-                <!-- Autres demandes d'alliances locales -->
-                <div class="space-y-3 pt-1">
-                  <div class="flex items-center justify-between px-1">
-                    <h5 class="text-xs font-black text-slate-700 uppercase tracking-wider">Appels Locaux & Inter-Antennes</h5>
-                    <span class="text-[11px] text-slate-500 font-bold">${this.renforts.filter(r => !r.isExtraDept).length} appel(s)</span>
-                  </div>
-
-                  ${this.renforts.filter(r => !r.isExtraDept).length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center">Aucun autre appel de renfort local actuellement.</p>' : ''}
-                  ${this.renforts.filter(r => !r.isExtraDept).map(r => {
-                    const reqName = (r.requesterName && r.requesterName !== 'undefined') ? r.requesterName : (r.requestingPlayerName || r.stationName || 'Antenne Alliée');
-                    const titleStr = (r.title && r.title !== 'undefined') ? r.title : 'Appel à Renfort Opérationnel';
-                    const descStr = (r.desc && r.desc !== 'undefined') ? r.desc : 'Demande de moyens en renfort pour dispositif.';
-                    const unitStr = (r.unitRequested && r.unitRequested !== 'undefined') ? r.unitRequested : '1 VPSP ou Secouristes';
-                    const isMyRequest = (r.requesterPlayerId === this.player.id || r.requestingPlayerId === this.player.id || (!r.requesterPlayerId && !r.requestingPlayerId));
-                    return `
-                    <div class="p-4 rounded-2xl glass-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div class="space-y-1">
-                        <div class="flex items-center gap-2 flex-wrap">
-                          <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${r.status === 'fulfilled' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
-                            ${r.status === 'fulfilled' ? 'RENFORT ASSURÉ' : 'URGENT'}
-                          </span>
-                          ${r.zone ? `
-                            <span class="px-2 py-0.5 rounded text-[10px] font-black ${
-                              r.zone === 'national' ? 'bg-purple-100 text-purple-900 border border-purple-300' :
-                              r.zone === 'regional' ? 'bg-indigo-100 text-indigo-900 border border-indigo-300' :
-                              'bg-sky-100 text-sky-900 border border-sky-300'
-                            }">
-                              ${r.zoneLabel ? r.zoneLabel.toUpperCase() : r.zone.toUpperCase()}
-                            </span>
-                          ` : ''}
-                          <span class="text-xs font-bold text-slate-700">Demandé par <strong>${reqName}</strong></span>
-                        </div>
-                        <h5 class="text-sm font-extrabold text-slate-900">${titleStr}</h5>
-                        <p class="text-xs text-slate-500">${descStr} • Moyens attendus : <strong class="text-slate-800">${unitStr}</strong></p>
-                      </div>
-
-                      <div class="text-right space-y-2 flex-shrink-0">
-                        <div class="text-xs font-bold text-emerald-700 mono-num">+${r.indemnite || 180} €</div>
-                        <div class="flex items-center justify-end gap-2">
-                          ${r.status === 'open' && !isMyRequest ? `
-                            <button onclick="window.game.fulfillRenfort('${r.id}')" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
-                              <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                              Dépêcher Renfort
-                            </button>
-                          ` : `
-                            <span class="text-xs text-slate-400 font-bold">${r.status === 'fulfilled' ? 'Renfort en route' : 'Votre appel'}</span>
-                            ${isMyRequest ? `
-                              <button onclick="window.game.cancelRenfort('${r.id}')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition cursor-pointer" title="Retirer cette demande">
-                                ✕ Retirer
-                              </button>
-                            ` : ''}
-                          `}
-                        </div>
-                      </div>
-                    </div>
-                  `; }).join('')}
-                </div>
-              </div>
-            ` : ''}
-
-            ${currentTab === 'formations' ? `
-              <div class="space-y-4">
-                <div class="p-3.5 rounded-2xl glass-card-blue text-xs text-indigo-900 flex items-center justify-between">
-                  <span>Les antennes disposant d’instructeurs qualifiés ouvrent des stages de perfectionnement aux alliés.</span>
-                  <button onclick="window.game.proposeSpecialFormationModal()" class="px-3.5 py-1.5 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition">
-                    + Proposer un Stage Spécial
-                  </button>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  ${this.formationsSpeciales.map(f => `
-                    <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
-                      <div class="space-y-1.5">
-                        <div class="flex items-center justify-between">
-                          <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white">${f.type}</span>
-                          <span class="text-xs font-extrabold mono-num ${f.costPerCandidate === 0 ? 'text-emerald-700 font-black' : 'text-slate-800'}">
-                            ${f.costPerCandidate === 0 ? '🎁 GRATUIT (0 €)' : f.costPerCandidate + ' € / candidat'}
-                          </span>
-                        </div>
-                        <h5 class="text-sm font-extrabold text-slate-900">${f.title}</h5>
-                        <p class="text-xs text-slate-500">${f.desc}</p>
-                        <div class="text-[11px] text-slate-400">Organisé par : <strong>${f.organizerName}</strong> (${f.stationName})</div>
-                      </div>
-
-                      <div class="pt-2 border-t border-slate-100/70 flex items-center justify-between text-xs">
-                        <span class="text-slate-500">Inscrits : <strong>${f.registeredCandidates?.length || 0} / ${f.maxCandidates}</strong></span>
-                        <button onclick="window.game.registerVolunteerToSpecialFormation('${f.id}')" class="px-3.5 py-1.5 rounded-xl font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
-                          Inscrire un Bénévole
-                        </button>
-                      </div>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-            ` : ''}
-
-            ${currentTab === 'evenements' && window.ProtecMultiplayer ? window.ProtecMultiplayer.renderCommunityEventsTabHTML(this) : ''}
-
-            ${currentTab === 'bourse' && window.ProtecMultiplayer ? window.ProtecMultiplayer.renderMarketplaceTabHTML(this) : ''}
-
-            ${currentTab === 'manoeuvres' && window.ProtecAdvancedModals ? window.ProtecAdvancedModals.renderManoeuvres(this) : ''}
-
-            ${currentTab === 'radio' ? `
-              <div class="space-y-3">
-                <div class="p-3 rounded-2xl glass-card text-xs text-slate-600 flex items-center gap-2">
-                  <i data-lucide="radio" class="w-4 h-4 text-indigo-600"></i>
-                  <span>Canal tactique inter-antennes de l’alliance. Tous les directeurs connectés reçoivent les messages.</span>
-                </div>
-
-                <div id="alliance-chat-messages" class="h-64 overflow-y-auto space-y-2 p-2 glass-card rounded-2xl border border-white/60">
-                  <!-- Rempli dynamiquement -->
-                </div>
-
-                <div class="flex items-center gap-2 pt-1">
-                  <input 
-                    type="text" 
-                    id="alliance-chat-input" 
-                    placeholder="Message radio à l’alliance (ex: VPSP disponible en renfort secteur Sud)..." 
-                    onkeydown="if(event.key === 'Enter') window.game.sendAllianceChatMessage()"
-                    class="flex-1 px-4 py-2.5 rounded-xl glass-input text-xs text-slate-900 focus:ring-2 focus:ring-indigo-600"
-                  />
-                  <button onclick="window.game.sendAllianceChatMessage()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition flex items-center gap-1.5 shadow-sm">
-                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                    Émettre
-                  </button>
-                </div>
-              </div>
-            ` : ''}
-          </div>
-
-        </div>
-      `;
-
-      if (currentTab === 'radio') {
-        setTimeout(() => this.renderChatMessages(), 50);
-      }
-    } else if (moduleKey === 'planning') {
-      title.textContent = 'Planning Opérationnel Multi-Pôles';
-      subtitle.textContent = 'Dispositifs prévisionnels (DPS), Formations, Maraudes sociales et Devis';
-      icon.setAttribute('data-lucide', 'calendar');
-
-      // Régulariser immédiatement tout devis dont la date serait passée
-      this.cleanPastDevis();
-
-      const currentTab = this.activePlanningTab || 'calendar';
-      
-      const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-      if (this.calendarViewingMonth === undefined || this.calendarViewingMonth === null) {
-        this.calendarViewingMonth = this.clock.month;
-        this.calendarViewingYear = this.clock.year;
-      }
-      const curViewingMonth = this.calendarViewingMonth;
-      const curViewingYear = this.calendarViewingYear || this.clock.year || 2026;
-      const curMonthName = monthNames[curViewingMonth] || 'Mois';
-      const curYear = curViewingYear;
-
-      const isViewingCurrentMonth = (curViewingMonth === this.clock.month && curYear === this.clock.year);
-      const todayDay = isViewingCurrentMonth ? (this.clock.day || 1) : null;
-      const selectedDay = this.selectedPlanningDay || (isViewingCurrentMonth ? (this.clock.day || 1) : 1);
-
-      // Calcul du calendrier mensuel
-      const daysInMonth = new Date(curYear, curViewingMonth + 1, 0).getDate();
-      const firstDayIndex = (new Date(curYear, curViewingMonth, 1).getDay() + 6) % 7; // 0 = Lundi, 6 = Dimanche
-
-      // Agrégation transversale des événements de tous les pôles
-      const allEvents = this.getAllPlanningEvents(curViewingMonth, curYear);
-      if (!this.planningPolesFilters) {
-        this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true };
-      }
-      if (this.planningPolesFilters.previ === undefined) {
-        this.planningPolesFilters.previ = true;
-      }
-      const filters = this.planningPolesFilters;
-
-      const poleCounts = {
-        dps: allEvents.filter(e => e.pole === 'dps').length,
-        previ: allEvents.filter(e => e.pole === 'previ').length,
-        devis: allEvents.filter(e => e.pole === 'devis').length,
-        formations: allEvents.filter(e => e.pole === 'formations').length,
-        social: allEvents.filter(e => e.pole === 'social').length
-      };
-
-      const activeEvents = allEvents.filter(e => filters[e.pole]);
-      const planningListFilter = this.planningListDateFilter || 'all';
-      let listEvents = [...activeEvents];
-      if (planningListFilter === 'today') {
-        listEvents = listEvents.filter(e => e.eventDate && e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month);
-      } else if (planningListFilter === 'day') {
-        listEvents = listEvents.filter(e => e.eventDate && e.eventDate.day === selectedDay && e.eventDate.month === curViewingMonth);
-      }
-
-      // Événements pour le jour sélectionné
-      const selectedDayEvents = activeEvents.filter(e => e.eventDate && e.eventDate.day === selectedDay && e.eventDate.month === curViewingMonth && (e.eventDate.year == null || e.eventDate.year === curYear));
-      const selectedDayMissions = selectedDayEvents.filter(e => e.pole === 'dps');
-      const selectedDayPrevi = selectedDayEvents.filter(e => e.pole === 'previ');
-      const selectedDayDevis = selectedDayEvents.filter(e => e.pole === 'devis');
-      const selectedDayFormations = selectedDayEvents.filter(e => e.pole === 'formations');
-      const selectedDaySocial = selectedDayEvents.filter(e => e.pole === 'social');
-
-      body.innerHTML = `
-        <div class="space-y-4">
-          <!-- Barre d'onglets Vue Calendrier / Vue Liste / Raccourcis Pôles -->
-          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <button onclick="window.game.setPlanningTab('calendar')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'calendar' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
-                <i data-lucide="calendar" class="w-4 h-4"></i>
-                Vue Calendrier
-              </button>
-              <button onclick="window.game.setPlanningTab('list')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'list' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
-                <i data-lucide="list" class="w-4 h-4"></i>
-                Vue Liste (${activeEvents.length})
-              </button>
-              <div class="h-5 w-px bg-slate-300 mx-1.5 self-center"></div>
-              <button onclick="window.game.openModule('devis')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Gestion des Devis DPS">
-                <i data-lucide="file-check" class="w-4 h-4 text-amber-500"></i>
-                Devis (${poleCounts.devis})
-              </button>
-              <button onclick="window.game.openModule('formation')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Formations">
-                <i data-lucide="graduation-cap" class="w-4 h-4 text-emerald-600"></i>
-                Formations (${poleCounts.formations})
-              </button>
-              <button onclick="window.game.openModule('social')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Action Sociale">
-                <i data-lucide="heart-handshake" class="w-4 h-4 text-purple-600"></i>
-                Social (${poleCounts.social})
-              </button>
-            </div>
-            <div class="flex items-center gap-2">
-              <div class="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Aujourd'hui : <strong class="text-slate-800">${this.formatFullDate(this.clock)}</strong>
-              </div>
-            </div>
-          </div>
-
-          <!-- BARRE DE FILTRES INTERACTIFS PAR PÔLE (VISIBILITÉ DYNAMIQUE & COULEURS STRICTEMENT ALIGNÉES) -->
-          <div class="flex flex-wrap items-center justify-between gap-2.5 p-3 bg-gradient-to-r from-slate-50 to-slate-100/80 dark:from-slate-800 dark:to-slate-800/90 border border-slate-200/90 dark:border-slate-700 rounded-2xl shadow-xs">
-            <div class="flex items-center gap-1.5 text-xs font-black text-slate-800 dark:text-slate-200 mr-1">
-              <i data-lucide="filter" class="w-4 h-4 text-pc-blue dark:text-sky-400"></i>
-              <span>Filtres par Pôle :</span>
-            </div>
-            
-            <div class="flex flex-wrap items-center gap-2">
-              <!-- Filtre Pôle Secours & DPS (Bleu marine) -->
-              <button 
-                onclick="window.game.togglePlanningPoleFilter('dps')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.dps ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-white dark:bg-slate-700 text-pc-blue dark:text-sky-300 border-pc-blue/40 dark:border-slate-600 hover:bg-blue-50/50'}"
-                title="${filters.dps ? 'Cliquer pour masquer Secours & DPS' : 'Cliquer pour afficher Secours & DPS'}"
-              >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.dps ? 'bg-white' : 'bg-pc-blue dark:bg-sky-400'}"></span>
-                <span>🔵 Secours DPS (${poleCounts.dps})</span>
-              </button>
-
-              <!-- Filtre Pôle Postes Prévisionnels (Ambre / Jaune-orange) -->
-              <button 
-                onclick="window.game.togglePlanningPoleFilter('previ')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.previ ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-white dark:bg-slate-700 text-amber-700 dark:text-amber-300 border-amber-400 dark:border-slate-600 hover:bg-amber-50/50'}"
-                title="${filters.previ ? 'Cliquer pour masquer Postes Prévisionnels' : 'Cliquer pour afficher Postes Prévisionnels'}"
-              >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.previ ? 'bg-white' : 'bg-amber-500'}"></span>
-                <span>⏳ Prévi (${poleCounts.previ})</span>
-              </button>
-
-              <!-- Filtre Pôle Demandes de Devis (Bleu ciel / Sky) -->
-              <button 
-                onclick="window.game.togglePlanningPoleFilter('devis')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.devis ? 'bg-sky-500 text-white border-sky-600 shadow-sm' : 'bg-white dark:bg-slate-700 text-sky-700 dark:text-sky-300 border-sky-400 dark:border-slate-600 hover:bg-sky-50/50'}"
-                title="${filters.devis ? 'Cliquer pour masquer Demandes de Devis' : 'Cliquer pour afficher Demandes de Devis'}"
-              >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.devis ? 'bg-white' : 'bg-sky-500'}"></span>
-                <span>📋 Devis (${poleCounts.devis})</span>
-              </button>
-
-              <!-- Filtre Pôle Formations (Vert émeraude) -->
-              <button 
-                onclick="window.game.togglePlanningPoleFilter('formations')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.formations ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-slate-600 hover:bg-emerald-50/50'}"
-                title="${filters.formations ? 'Cliquer pour masquer Formations' : 'Cliquer pour afficher Formations'}"
-              >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.formations ? 'bg-white' : 'bg-emerald-600'}"></span>
-                <span>🎓 Formation (${poleCounts.formations})</span>
-              </button>
-
-              <!-- Filtre Pôle Action Sociale (Violet) -->
-              <button 
-                onclick="window.game.togglePlanningPoleFilter('social')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.social ? 'bg-purple-600 text-white border-purple-700 shadow-sm' : 'bg-white dark:bg-slate-700 text-purple-700 dark:text-purple-300 border-purple-400 dark:border-slate-600 hover:bg-purple-50/50'}"
-                title="${filters.social ? 'Cliquer pour masquer Action Sociale' : 'Cliquer pour afficher Action Sociale'}"
-              >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.social ? 'bg-white' : 'bg-purple-600'}"></span>
-                <span>🥫 Maraude (${poleCounts.social})</span>
-              </button>
-            </div>
-
-            <!-- Toggles rapides Tout Activer / Tout Masquer -->
-            <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
-              <button onclick="window.game.toggleAllPlanningPoleFilters(true)" class="hover:text-pc-blue cursor-pointer underline decoration-dotted">Tout afficher</button>
-              <span>•</span>
-              <button onclick="window.game.toggleAllPlanningPoleFilters(false)" class="hover:text-rose-600 cursor-pointer underline decoration-dotted">Tout masquer</button>
-            </div>
-          </div>
-
-          <!-- Alerte Prioritaire Demande Extra-Départementale -->
-          ${this.renderExtraDeptRenfortsBlockHTML(true)}
-
-          ${currentTab === 'calendar' ? `
-            <!-- VUE CALENDRIER -->
-            <div class="space-y-4">
-              <!-- Grille principale : Calendrier à gauche (lg:col-span-7) + Détails journée à droite (lg:col-span-5) -->
-              <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                <!-- Colonne Gauche : Navigation Mois + Grille du calendrier -->
-                <div class="lg:col-span-7 xl:col-span-7 space-y-3">
-                  <!-- Navigation Mois -->
-                  <div class="w-full flex items-center justify-between bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 rounded-2xl p-1.5 sm:p-2 shadow-xs">
-                    <button 
-                      onclick="window.game.changePlanningMonth(-1)" 
-                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 dark:text-slate-200 hover:text-pc-blue dark:hover:text-sky-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 transition cursor-pointer flex-shrink-0"
-                      title="Mois précédent"
-                    >
-                      <i data-lucide="chevron-left" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                    </button>
-                    <div class="flex-1 text-center px-2 sm:px-4">
-                      <div class="flex items-center justify-center gap-2">
-                        <span class="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-tight leading-tight">${curMonthName} ${curYear}</span>
-                        ${!isViewingCurrentMonth ? `
-                          <button 
-                            onclick="window.game.resetPlanningMonthToCurrent()" 
-                            class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-pc-blue text-white hover:brightness-110 active:scale-95 transition cursor-pointer flex items-center gap-1 shadow-xs"
-                            title="Revenir au mois en cours"
-                          >
-                            <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
-                            <span class="hidden sm:inline">Mois en cours</span>
-                          </button>
-                        ` : ''}
-                      </div>
-                      ${!isViewingCurrentMonth ? `
-                        <span class="text-[9px] sm:text-[10px] font-extrabold text-amber-600 dark:text-amber-400 uppercase tracking-wider block mt-0.5">${(curYear < this.clock.year || (curYear === this.clock.year && curViewingMonth < this.clock.month)) ? 'Mois précédent' : 'Mois suivant'}</span>
-                      ` : `
-                        <span class="text-[9px] sm:text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block mt-0.5">Mois en cours</span>
-                      `}
-                    </div>
-                    <button 
-                      onclick="window.game.changePlanningMonth(1)" 
-                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 dark:text-slate-200 hover:text-pc-blue dark:hover:text-sky-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 transition cursor-pointer flex-shrink-0"
-                      title="Mois suivant"
-                    >
-                      <i data-lucide="chevron-right" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                    </button>
-                  </div>
-
-                  <!-- Grille du calendrier -->
-                  <div class="rounded-2xl p-3.5 sm:p-4 shadow-sm bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700">
-                    <!-- En-têtes des jours de la semaine -->
-                    <div class="grid grid-cols-7 gap-1 text-center text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-                      <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
-                    </div>
-
-                    <!-- Cases des jours -->
-                    <div class="grid grid-cols-7 gap-1.5">
-                      <!-- Décalage premier jour -->
-                      ${Array.from({ length: firstDayIndex }).map(() => `
-                        <div class="h-16 rounded-xl bg-slate-50/50 opacity-30 border border-transparent"></div>
-                      `).join('')}
-
-                      <!-- Jours du mois -->
-                      ${Array.from({ length: daysInMonth }).map((_, i) => {
-                        const day = i + 1;
-                        const isToday = isViewingCurrentMonth && (day === todayDay);
-                        const isSelected = day === selectedDay;
-                        const isPast = (curYear < this.clock.year) ||
-                          (curYear === this.clock.year && curViewingMonth < this.clock.month) ||
-                          (isViewingCurrentMonth && day < todayDay);
-
-                        const dayEvents = activeEvents.filter(e => e.eventDate && e.eventDate.day === day && e.eventDate.month === curViewingMonth && (e.eventDate.year == null || e.eventDate.year === curYear));
-                        
-                        const dpsCount = dayEvents.filter(e => e.pole === 'dps' && e.type === 'DPS').length;
-                        const gardeCount = dayEvents.filter(e => e.pole === 'dps' && e.type !== 'DPS').length;
-                        const prevCount = dayEvents.filter(e => e.pole === 'previ').length;
-                        const pendingCount = dayEvents.filter(e => e.pole === 'devis').length;
-                        const formationCount = dayEvents.filter(e => e.pole === 'formations').length;
-                        const socialCount = dayEvents.filter(e => e.pole === 'social').length;
-
-                        let bgClass = 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700';
-                        if (isSelected) {
-                          bgClass = isPast 
-                            ? 'bg-slate-200 dark:bg-slate-700 border-pc-blue ring-2 ring-pc-blue/40' 
-                            : 'bg-pc-blue/10 dark:bg-sky-950/40 border-pc-blue ring-2 ring-pc-blue/30';
-                        } else if (isToday) {
-                          bgClass = 'bg-amber-50/90 dark:bg-amber-950/50 border-amber-300 dark:border-amber-600 ring-1 ring-amber-300';
-                        } else if (isPast) {
-                          bgClass = 'bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-700 border-slate-200/90 dark:border-slate-700/80';
-                        }
-
-                        return `
-                          <button 
-                            onclick="window.game.selectPlanningDay(${day})" 
-                            class="min-h-16 rounded-xl p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
-                          >
-                            <div class="flex items-center justify-between w-full">
-                              <span class="text-xs ${isToday ? 'text-amber-800 dark:text-amber-300 font-black' : isSelected ? 'text-pc-blue dark:text-sky-300 font-black' : isPast ? 'text-slate-400 dark:text-slate-400 font-bold' : 'text-slate-800 dark:text-slate-200 font-extrabold'}">
-                                ${day}
-                              </span>
-                              ${isToday ? `<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-amber-950 uppercase">Auj.</span>` : ''}
-                            </div>
-
-                            <div class="flex flex-col gap-0.5 w-full mt-1 ${isPast && !isToday ? 'opacity-65 filter saturate-50' : ''}">
-                              ${dpsCount > 0 ? `
-                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-blue text-white truncate text-center">
-                                  DPS (${dpsCount})
-                                </div>
-                              ` : ''}
-                              ${gardeCount > 0 ? `
-                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-orange text-white truncate text-center">
-                                  Garde (${gardeCount})
-                                </div>
-                              ` : ''}
-                              ${prevCount > 0 ? `
-                                <div class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-500 text-white truncate text-center border border-amber-600/30">
-                                  ⏳ Prévi (${prevCount})
-                                </div>
-                              ` : ''}
-                              ${pendingCount > 0 ? `
-                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-sky-500 text-white truncate text-center">
-                                  📋 Devis (${pendingCount})
-                                </div>
-                              ` : ''}
-                              ${formationCount > 0 ? `
-                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-emerald-600 text-white truncate text-center">
-                                  🎓 Form. (${formationCount})
-                                </div>
-                              ` : ''}
-                              ${socialCount > 0 ? `
-                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-purple-600 text-white truncate text-center">
-                                  🥫 Maraude (${socialCount})
-                                </div>
-                              ` : ''}
-                            </div>
-                          </button>
-                        `;
-                      }).join('')}
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Colonne Droite : Détail de la journée sélectionnée (légende intégrée aux filtres) -->
-                <div class="lg:col-span-5 xl:col-span-5 space-y-3 lg:sticky lg:top-2">
-                  <!-- Carte Détail de la journée sélectionnée -->
-                  <div class="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-4 shadow-sm max-h-[75vh] overflow-y-auto">
-                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/80 pb-2.5">
-                      <div>
-                        <h4 class="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                          <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue dark:text-sky-400"></i>
-                          Planning du ${selectedDay} ${curMonthName} ${curYear}
-                        </h4>
-                        ${isViewingCurrentMonth && selectedDay === todayDay ? `<span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">Aujourd'hui</span>` : ''}
-                      </div>
-                      <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 text-right">
-                        ${selectedDayEvents.length} événement(s) au total
-                      </span>
-                    </div>
-
-                    ${selectedDayEvents.length === 0 ? `
-                      <p class="text-xs text-slate-500 dark:text-slate-400 py-6 text-center italic">
-                        Aucun événement pour cette date sur les pôles sélectionnés. Activez plus de filtres ci-dessus ou établissez des propositions pour remplir votre planning.
-                      </p>
-                    ` : `
-                      <div class="space-y-4">
-                        <!-- SECTION 1 : FORMATIONS & STAGES PÉDAGOGIQUES -->
-                        ${filters.formations && selectedDayFormations.length > 0 ? `
-                          <div class="space-y-2.5">
-                            <div class="text-[11px] font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1.5">
-                              <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-emerald-600"></i>
-                              <span>Pôle Formations & Stages (${selectedDayFormations.length})</span>
-                            </div>
-                            <div class="flex flex-col space-y-3">
-                              ${selectedDayFormations.map(e => {
-                                const f = e.raw;
-                                const isB2B = e.type.startsWith('B2B');
-                                return `
-                                  <div class="p-3.5 rounded-2xl border-2 border-emerald-300 dark:border-emerald-700/60 bg-emerald-50/40 dark:bg-emerald-950/30 flex flex-col justify-between space-y-2.5">
-                                    <div>
-                                      <div class="flex items-center justify-between gap-2">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white uppercase">
-                                          ${e.type}
-                                        </span>
-                                        ${e.rewardMoney ? `<span class="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400">+${e.rewardMoney} €</span>` : ''}
-                                      </div>
-                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${e.title}</h5>
-                                      <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                                        Lieu : <strong>${e.address}</strong> • Inscrits : <strong>${e.registeredCount} / ${e.requiredCount}</strong>
-                                      </p>
-                                      ${e.trainerName ? `
-                                        <p class="text-[11px] text-emerald-800 dark:text-emerald-300 font-semibold mt-0.5">
-                                          Formateur : <strong>${e.trainerName}</strong>
-                                        </p>
-                                      ` : `
-                                        <p class="text-[11px] text-amber-700 dark:text-amber-400 font-bold mt-0.5">
-                                          ⚠️ Aucun formateur affecté
-                                        </p>
-                                      `}
-                                    </div>
-
-                                    <div class="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-end">
-                                      <button onclick="window.game.openModule('formations')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition flex items-center gap-1 cursor-pointer">
-                                        <span>Gérer la Formation</span>
-                                        <i data-lucide="arrow-right" class="w-3 h-3"></i>
-                                      </button>
-                                    </div>
-                                  </div>
-                                `;
-                              }).join('')}
-                            </div>
-                          </div>
-                        ` : ''}
-
-                        <!-- SECTION 2 : ACTION SOCIALE & MARAUDES -->
-                        ${filters.social && selectedDaySocial.length > 0 ? `
-                          <div class="space-y-2.5">
-                            <div class="text-[11px] font-black uppercase text-purple-800 dark:text-purple-300 tracking-wider flex items-center gap-1.5">
-                              <i data-lucide="heart-handshake" class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400"></i>
-                              <span>Pôle Action Sociale & Maraudes (${selectedDaySocial.length})</span>
-                            </div>
-                            <div class="flex flex-col space-y-3">
-                              ${selectedDaySocial.map(e => {
-                                const m = e.raw;
-                                const regCount = m.registeredVolunteers?.length || 0;
-                                const isFull = regCount >= m.requiredVolunteers;
-                                return `
-                                  <div class="p-3.5 rounded-2xl border-2 border-purple-300 dark:border-purple-700/60 bg-purple-50/40 dark:bg-purple-950/30 flex flex-col justify-between space-y-2.5">
-                                    <div>
-                                      <div class="flex items-center justify-between gap-2">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-600 text-white uppercase">
-                                          🥫 Maraude
-                                        </span>
-                                        <span class="text-xs font-mono font-bold text-purple-800 dark:text-purple-300">+${m.rewardMoney} €</span>
-                                      </div>
-                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${m.title}</h5>
-                                      <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-1">
-                                        <i data-lucide="map-pin" class="w-3 h-3 text-purple-600 dark:text-purple-400"></i>
-                                        <span>${m.sector || m.address || 'Secteur de Maraude'}</span>
-                                      </p>
-                                    </div>
-
-                                    <div class="pt-2 border-t border-purple-200/60 dark:border-purple-800/40 space-y-1.5">
-                                      <div class="flex items-center justify-between text-xs font-bold">
-                                        <span class="${isFull ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}">
-                                          ${isFull ? '✓ Équipage complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
-                                        </span>
-                                      </div>
-                                      <div class="w-full bg-slate-200/80 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                                        <div class="h-full bg-purple-600 rounded-full" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
-                                      </div>
-                                      <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-black transition cursor-pointer">
-                                        Détail de la maraude
-                                      </button>
-                                    </div>
-                                  </div>
-                                `;
-                              }).join('')}
-                            </div>
-                          </div>
-                        ` : ''}
-
-                        <!-- SECTION : POSTES EN PRÉVISIONNEL (SONDAGE & VALIDATION) -->
-                        ${filters.previ && selectedDayPrevi.length > 0 ? `
-                          <div class="space-y-2.5">
-                            <div class="text-[11px] font-black uppercase text-amber-800 dark:text-amber-300 tracking-wider flex items-center gap-1.5">
-                              <i data-lucide="hourglass" class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400"></i>
-                              <span>Postes en Prévisionnel (${selectedDayPrevi.length})</span>
-                            </div>
-                            <div class="flex flex-col space-y-3">
-                              ${selectedDayPrevi.map(e => {
-                                const d = e.raw;
-                                const dynBareme = this.calculateDynamicBareme(d);
-                                const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
-                                const prevVolsCount = d.previsionnelVolunteers?.length || 0;
-
-                                return `
-                                  <div class="p-3.5 rounded-2xl border-2 border-amber-400 dark:border-amber-600/60 bg-amber-50/50 dark:bg-amber-950/30 flex flex-col justify-between space-y-3">
-                                    <div>
-                                      <div class="flex items-center justify-between gap-2">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white uppercase">
-                                          ⏳ En Prévisionnel
-                                        </span>
-                                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
-                                        <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">${d.proposedPrice || dynBareme.totalBareme} €</span>
-                                      </div>
-                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${d.eventName}</h5>
-                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                                        ${d.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
-                                      </p>
-                                      <p class="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1 mt-0.5">
-                                        <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
-                                        <span>${d.address || 'Adresse sur site'}</span>
-                                      </p>
-                                    </div>
-
-                                    <!-- Bloc statut bénévoles prévisionnel -->
-                                    <div class="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/90 border border-amber-200 dark:border-amber-700/60 text-xs space-y-1.5">
-                                      <div class="flex items-center justify-between">
-                                        <span class="font-bold text-slate-700 dark:text-slate-300">Disponibilités bénévoles :</span>
-                                        <span class="font-black ${prevVolsCount >= reqVols ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-800 dark:text-amber-300'}">${prevVolsCount} / ${reqVols} confirmés</span>
-                                      </div>
-                                      <div class="w-full bg-slate-200/80 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                                        <div class="h-full bg-amber-500 rounded-full transition-all" style="width: ${Math.min(100, (prevVolsCount / reqVols) * 100)}%"></div>
-                                      </div>
-                                      <div class="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
-                                        <span>Statut : <strong>${d.sollicitationSent ? `Sollicité (${d.relancesCount || 0} relance${(d.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
-                                      </div>
-                                      <div class="flex items-center justify-between text-[10px] pt-0.5">
-                                        <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="text-pc-blue dark:text-sky-400 font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
-                                          <i data-lucide="phone-call" class="w-3 h-3"></i> Sonder
-                                        </button>
-                                        <button onclick="window.game.manualRelancePrevisionnel('${d.id}')" class="text-amber-800 dark:text-amber-400 font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
-                                          <i data-lucide="bell" class="w-3 h-3"></i> Relancer (${d.relancesCount || 0})
-                                        </button>
-                                        <button onclick="window.game.openModule('devis')" class="text-slate-600 dark:text-slate-400 font-bold hover:underline cursor-pointer">
-                                          Devis →
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    <!-- Actions rapides -->
-                                    <div class="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-1.5">
-                                      <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-pc-blue to-pc-blue-light text-white text-[11px] font-black shadow-xs hover:brightness-110 transition cursor-pointer">
-                                        Valider avec l'Orga
-                                      </button>
-                                      <button onclick="window.game.refuseDevis('${d.id}')" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 text-slate-700 dark:text-slate-300 hover:text-rose-700 text-[11px] font-bold border border-slate-200 dark:border-slate-600 transition cursor-pointer">
-                                        Refuser
-                                      </button>
-                                    </div>
-                                  </div>
-                                `;
-                              }).join('')}
-                            </div>
-                          </div>
-                        ` : ''}
-
-                        <!-- SECTION : DEMANDES DE DEVIS DPS REÇUES & EN DÉLIBÉRATION -->
-                        ${filters.devis && selectedDayDevis.length > 0 ? `
-                          <div class="space-y-2.5">
-                            <div class="text-[11px] font-black uppercase text-sky-800 dark:text-sky-300 tracking-wider flex items-center gap-1.5">
-                              <i data-lucide="file-text" class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400"></i>
-                              <span>Demandes de Devis DPS (${selectedDayDevis.length})</span>
-                            </div>
-                            <div class="flex flex-col space-y-3">
-                              ${selectedDayDevis.map(e => {
-                                const d = e.raw;
-                                const isSent = d.status === 'sent';
-                                const dynBareme = this.calculateDynamicBareme(d);
-
-                                return `
-                                  <div class="p-3.5 rounded-2xl border-2 ${isSent ? 'border-indigo-300 dark:border-indigo-700/60 bg-indigo-50/40 dark:bg-indigo-950/30' : 'border-dashed border-sky-300 dark:border-sky-700/60 bg-sky-50/40 dark:bg-sky-950/30'} flex flex-col justify-between space-y-3">
-                                    <div>
-                                      <div class="flex items-center justify-between gap-2">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${isSent ? 'bg-indigo-600 text-white' : 'bg-sky-600 text-white'} uppercase">
-                                          ${isSent ? '⚖️ En Délibération' : '📋 Devis Reçu'}
-                                        </span>
-                                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
-                                        <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">${d.proposedPrice || dynBareme.totalBareme} €</span>
-                                      </div>
-                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${d.eventName}</h5>
-                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                                        ${d.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
-                                      </p>
-                                      <p class="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1 mt-0.5">
-                                        <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
-                                        <span>${d.address || 'Adresse sur site'}</span>
-                                      </p>
-                                    </div>
-
-                                    <!-- Actions rapides -->
-                                    <div class="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-1.5">
-                                      ${isSent ? `
-                                        <button onclick="window.game.openModule('devis')" class="w-full py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black transition cursor-pointer">
-                                          Consulter l'arbitrage en cours
-                                        </button>
-                                      ` : `
-                                        <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="flex-1 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black shadow-xs transition cursor-pointer" title="Mettre en prévisionnel pour sonder l'équipe">
-                                          ⏳ Mettre en Prévi
-                                        </button>
-                                        <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white text-[11px] font-black transition cursor-pointer">
-                                          Chiffrer
-                                        </button>
-                                        <button onclick="window.game.refuseDevis('${d.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 text-slate-600 dark:text-slate-300 hover:text-rose-700 text-[11px] font-bold border border-slate-200 dark:border-slate-600 transition cursor-pointer" title="Décliner la demande">
-                                          ✕
-                                        </button>
-                                      `}
-                                    </div>
-                                  </div>
-                                `;
-                              }).join('')}
-                            </div>
-                          </div>
-                        ` : ''}
-
-                        <!-- SECTION 4 : DISPOSITIFS CONFIRMÉS AU PLANNING -->
-                        ${filters.dps && selectedDayMissions.length > 0 ? `
-                          <div class="space-y-2.5">
-                            <div class="text-[11px] font-black uppercase text-slate-700 dark:text-slate-300 tracking-wider flex items-center gap-1.5">
-                              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-pc-blue"></i>
-                              <span>Dispositifs Confirmés & Validés (${selectedDayMissions.length})</span>
-                            </div>
-                            <div class="flex flex-col space-y-3">
-                              ${selectedDayMissions.map(e => {
-                                const m = e.raw;
-                                const regCount = m.registeredVolunteers?.length || 0;
-                                const isFull = regCount >= m.requiredVolunteers;
-                                const timeStr = this.formatMissionTimeSlot(m);
-
-                                return `
-                                  <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 flex flex-col justify-between space-y-2.5 shadow-xs">
-                                    <div>
-                                      <div class="flex items-center justify-between">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${timeStr}</span>
-                                        <span class="text-xs font-bold text-emerald-700 dark:text-emerald-400 mono-num">+${m.rewardMoney} €</span>
-                                      </div>
-                                      <h5 class="text-xs font-extrabold text-slate-900 dark:text-white mt-1">${m.title}</h5>
-                                      <p class="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1 mt-0.5">
-                                        <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
-                                        <span>${m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site')}</span>
-                                      </p>
-                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
-                                    </div>
-
-                                    <div class="pt-2 border-t border-slate-100 dark:border-slate-700/80 space-y-1.5">
-                                      <div class="flex items-center justify-between text-xs font-bold">
-                                        <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
-                                          ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
-                                        </span>
-                                        <div class="flex gap-2">
-                                          <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold cursor-pointer">Renfort</button>
-                                          ${!isFull ? `
-                                            <button onclick="window.game.manualRelanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold cursor-pointer" title="Relancer l'équipe">
-                                              Relancer (${m.relancesCount || 0})
-                                            </button>
-                                          ` : ''}
-                                        </div>
-                                      </div>
-                                      <div class="flex items-center justify-between text-[10px] text-slate-500">
-                                        <span>Statut : <strong>${m.sollicitationSent ? `Sollicité (${m.relancesCount || 0} relance${(m.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
-                                      </div>
-                                      <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
-                                        <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
-                                      </div>
-                                    </div>
-
-                                    <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl text-xs font-bold glass-button text-slate-800 transition cursor-pointer">
-                                      Fiche détaillée & Inscriptions
-                                    </button>
-                                  </div>
-                                `;
-                              }).join('')}
-                            </div>
-                          </div>
-                        ` : ''}
-                      </div>
-                    `}
-                  </div>
-                </div>
-              </div>
-
-              <!-- Système d'Alerte & Rappel Automatisé (E-Alerte SaaS) placé SOUS le calendrier et le planning -->
-              <div class="pt-2">
-                ${this.renderAlertSubscriptionBannerHTML()}
-              </div>
-            </div>
-          ` : `
-            <!-- VUE LISTE CHRONOLOGIQUE TOUS PÔLES -->
-            <div class="space-y-4">
-              <!-- Barre de Navigation Temporelle (Vue Liste) -->
-              <div class="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
-                <!-- Navigation Mois & Année -->
-                <div class="flex items-center gap-1.5">
-                  <button 
-                    onclick="window.game.changePlanningMonth(-1)" 
-                    class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs transition cursor-pointer" 
-                    title="Mois précédent"
-                  >
-                    ◀
-                  </button>
-                  <span class="text-xs font-black text-slate-900 uppercase px-2 tracking-wide">
-                    📅 ${curMonthName} ${curYear}
-                  </span>
-                  <button 
-                    onclick="window.game.changePlanningMonth(1)" 
-                    class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs transition cursor-pointer" 
-                    title="Mois suivant"
-                  >
-                    ▶
-                  </button>
-                  ${!isViewingCurrentMonth ? `
-                    <button onclick="window.game.resetPlanningToToday()" class="px-2 py-1 rounded-xl text-[10px] font-bold bg-pc-blue/10 text-pc-blue hover:bg-pc-blue/20 transition cursor-pointer">
-                      Mois actuel
-                    </button>
-                  ` : ''}
-                </div>
-
-                <!-- Filtres Période : Tout le mois / Aujourd'hui / Jour Précis -->
-                <div class="flex items-center gap-1.5 flex-wrap">
-                  <button 
-                    onclick="window.game.setPlanningListDateFilter('all')" 
-                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${planningListFilter === 'all' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
-                  >
-                    Tout le mois (${activeEvents.length})
-                  </button>
-                  <button 
-                    onclick="window.game.setPlanningListDateFilter('today')" 
-                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${planningListFilter === 'today' ? 'bg-amber-500 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
-                  >
-                    Aujourd'hui (${activeEvents.filter(e => e.eventDate && e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month).length})
-                  </button>
-                  <button 
-                    onclick="window.game.setPlanningListDateFilter('day')" 
-                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${planningListFilter === 'day' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
-                  >
-                    Jour précis (${selectedDay})
-                  </button>
-                </div>
-              </div>
-
-              ${planningListFilter === 'day' ? `
-                <!-- Sélecteur de Jour interactif -->
-                <div class="flex items-center justify-between p-2.5 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs text-indigo-900">
-                  <button onclick="window.game.changePlanningSelectedDay(-1)" class="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-100 text-[11px] font-black cursor-pointer shadow-2xs">
-                    ◀ Jour précédent
-                  </button>
-                  <div class="flex items-center gap-2">
-                    <span class="font-bold">Affichage du :</span>
-                    <select onchange="window.game.selectPlanningDay(Number(this.value))" class="px-2 py-1 rounded-lg bg-white border border-indigo-300 font-black text-xs text-indigo-900 cursor-pointer">
-                      ${Array.from({ length: daysInMonth }, (_, i) => {
-                        const d = i + 1;
-                        return `<option value="${d}" ${d === selectedDay ? 'selected' : ''}>${d} ${curMonthName} ${curYear}</option>`;
-                      }).join('')}
-                    </select>
-                  </div>
-                  <button onclick="window.game.changePlanningSelectedDay(1)" class="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-100 text-[11px] font-black cursor-pointer shadow-2xs">
-                    Jour suivant ▶
-                  </button>
-                </div>
-              ` : ''}
-
-              <!-- Barre de Recherche des Événements Planifiés -->
-              <div class="relative">
-                <input 
-                  type="text" 
-                  id="planning-search-input" 
-                  placeholder="🔍 Rechercher un événement (ex: nom, adresse, ville, DPS, Formation, Maraude...)" 
-                  oninput="window.game.filterPlanningList(this.value)"
-                  class="w-full pl-4 pr-10 py-2 rounded-2xl bg-white border border-slate-300 shadow-sm font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
-                />
-                <button type="button" onclick="const inp=document.getElementById('planning-search-input'); if(inp){inp.value=''; window.game.filterPlanningList('');}" class="absolute right-3 top-2 text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
-              </div>
-
-              <div id="planning-search-empty-msg" class="hidden p-6 rounded-2xl glass-card text-center text-xs text-slate-500 italic">
-                Aucun événement ne correspond à votre recherche.
-              </div>
-
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                ${listEvents.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour cette période ou ces filtres.</p>' : ''}
-                ${listEvents.map(e => {
-                  const timeSlot = e.raw ? this.formatMissionTimeSlot(e.raw) : (e.eventDate ? `${String(e.startHour || e.eventDate.hour || 14).padStart(2, '0')}h${String(e.eventDate.minute || 0).padStart(2, '0')}` : '14h00');
-                  const dateStr = e.eventDate ? `${this.formatFullDate(e.eventDate)} à ${timeSlot.split(' à ')[0] || timeSlot}` : 'Date à confirmer';
-                  const isToday = e.eventDate ? (e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month) : false;
-                  const searchText = `${e.title || ''} ${e.type || ''} ${e.scale || ''} ${e.address || ''} ${e.poleLabel || ''}`.toLowerCase();
-
-                  return `
-                    <div class="planning-mission-card p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${isToday ? 'border-amber-300 ring-2 ring-amber-200' : 'border-slate-200/80'}" data-search-text="${searchText}">
-                      <div class="space-y-1.5">
-                        <div class="flex items-center justify-between gap-2 flex-wrap">
-                          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${e.badgeBg}">
-                            ${e.poleLabel} • ${e.type}
-                          </span>
-                          ${e.rewardMoney ? `<span class="text-xs font-bold mono-num text-emerald-600">+${e.rewardMoney} €</span>` : ''}
-                        </div>
-                        <div class="text-[11px] font-black ${isToday ? 'text-amber-600' : 'text-slate-500'}">
-                          📅 ${dateStr} ${isToday ? '⭐ (AUJOURD’HUI)' : ''}
-                        </div>
-                        <h4 class="text-sm font-extrabold text-slate-900">${e.title}</h4>
-                        <p class="text-xs text-slate-700 font-semibold flex items-center gap-1">
-                          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
-                          <span>${e.address}</span>
-                        </p>
-                        <p class="text-xs text-slate-500">${e.scale || 'Activité'} • Durée : <strong>${e.durationHours || 4}h</strong> • Effectifs : <strong>${e.registeredCount}/${e.requiredCount}</strong></p>
-                      </div>
-
-                      <div class="space-y-1.5 pt-2 border-t border-slate-100/70">
-                        <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
-                          <div class="h-full rounded-full ${e.registeredCount >= e.requiredCount ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (e.registeredCount / (e.requiredCount || 1)) * 100)}%"></div>
-                        </div>
-
-                        ${e.pole === 'dps' || e.pole === 'social' ? `
-                          <button onclick="window.game.closeModal(); window.game.openMissionDetails('${e.id}')" class="w-full py-2 rounded-xl text-xs font-bold glass-button text-slate-800 transition cursor-pointer">
-                            ${e.pole === 'social' ? 'Fiche de la Maraude' : 'Détail du Dispositif'}
-                          </button>
-                        ` : e.pole === 'previ' ? `
-                          <button onclick="window.game.openModule('devis')" class="w-full py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition cursor-pointer">
-                            Gérer le Poste Prévisionnel
-                          </button>
-                        ` : e.pole === 'devis' ? `
-                          <button onclick="window.game.openModule('devis')" class="w-full py-2 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-600 text-white transition cursor-pointer">
-                            Consulter le Devis DPS
-                          </button>
-                        ` : `
-                          <button onclick="window.game.openModule('formations')" class="w-full py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer">
-                            Consulter la Formation
-                          </button>
-                        `}
-                      </div>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-
-              <!-- Option SaaS placée sous la liste -->
-              <div class="pt-2">
-                ${this.renderAlertSubscriptionBannerHTML()}
-              </div>
-            </div>
-          `}
-        </div>
-      `;
-    } else if (moduleKey === 'devis') {
-      title.textContent = 'Gestion des Devis & Dimensionnement DPS';
-      subtitle.textContent = 'Configurez votre type de DPS, secouristes et véhicules. L’organisateur évalue votre offre face à la concurrence.';
-      icon.setAttribute('data-lucide', 'file-check');
-
-      // Régulariser immédiatement tout devis dont la date serait passée
+  renderDevisContentHTML() {
+    // Régulariser immédiatement tout devis dont la date serait passée
       this.cleanPastDevis();
 
       const isAntennaVisible = this.resources.campaigns.social || this.resources.campaigns.posters || (this.stats?.dpsCompleted > 0) || (this.resources.reputationScore >= 60);
@@ -18694,7 +17540,7 @@ class ProtecGame {
       const activeContractsCount = (this.annualContracts || []).filter(c => c.signed).length;
       const activeTab = this.devisTab || 'ponctuels';
 
-      body.innerHTML = `
+    return `
         <div class="space-y-6">
           <!-- Barre de bascule DPS : Planning vs Devis Ponctuels vs Contrats Annuels -->
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
@@ -19419,15 +18265,1387 @@ class ProtecGame {
           `}
         </div>
       `;
+  }
 
-      if (window.ProtecRNMSC) {
+  // --- POPUP MODULES DOCK ---
+  openModule(moduleKey, isBackNavigation = false) {
+    this.closeAllDockSubmenus();
+
+    if (moduleKey === 'parrainage' || moduleKey === 'referral' || moduleKey === 'filleul') {
+      if (window.ProtecAuth && typeof window.ProtecAuth.openReferralShareModal === 'function') {
+        window.ProtecAuth.openReferralShareModal();
+      } else if (window.ProtecAuth && typeof window.ProtecAuth.openAuthModal === 'function') {
+        window.ProtecAuth.openAuthModal();
+      }
+      return;
+    }
+
+    const aliases = {
+      'missions': 'planning',
+      'mission': 'planning',
+      'benevoles': 'recrutement',
+      'personnel': 'recrutement',
+      'flotte': 'flotte',
+      'vehicules': 'flotte',
+      'base': 'flotte',
+      'antenne': 'flotte',
+      'antennes': 'flotte',
+      'batiment': 'locaux',
+      'batiments': 'locaux',
+      'locaux': 'locaux',
+      'plan': 'locaux',
+      'plan_batiment': 'locaux',
+      'devis_dps': 'devis',
+      'dps': 'planning',
+      'apc_dep': 'apc',
+      'apc_departementale': 'apc',
+      'bourse': 'marche_occasion',
+      'marche': 'marche_occasion',
+      'occasion': 'marche_occasion',
+      'marche_occasion': 'marche_occasion',
+      'formations': 'formation',
+      'boutique_vehicules': 'boutique_vehicules',
+      'boutique_vehicule': 'boutique_vehicules',
+      'achat_vehicule': 'boutique_vehicules',
+      'achat_vehicules': 'boutique_vehicules'
+    };
+
+    if (moduleKey === 'evenements') {
+      this.activeAllianceTab = 'evenements';
+      moduleKey = 'alliance';
+    } else if (moduleKey === 'devis') {
+      this.activePlanningTab = 'devis';
+      moduleKey = 'planning';
+    } else if (moduleKey && aliases[moduleKey]) {
+      moduleKey = aliases[moduleKey];
+    }
+
+    // Affichage des sous-onglets contextuels de catégorie
+    this.renderModalCategorySubnav(moduleKey);
+
+    const modal = document.getElementById('main-modal');
+    const title = document.getElementById('modal-title');
+    const subtitle = document.getElementById('modal-subtitle');
+    const icon = document.getElementById('modal-icon');
+    const body = document.getElementById('modal-body');
+    const backBtn = document.getElementById('modal-back-btn');
+
+    // Sauvegarde du scroll lors des rafraîchissements doux sans perte de position
+    const savedScrollTop = (isBackNavigation && body) ? body.scrollTop : 0;
+    const volContainer = document.getElementById('volunteers-cards-container');
+    const savedVolScrollTop = (isBackNavigation && volContainer) ? volContainer.scrollTop : 0;
+    const searchInp = document.getElementById('volunteer-search-input');
+    const savedSearchVal = (isBackNavigation && searchInp) ? searchInp.value : '';
+    const isSearchFocused = searchInp && document.activeElement === searchInp;
+
+    if (!isBackNavigation && this.currentModalKey && this.currentModalKey !== moduleKey) {
+      if (!this.modalHistory) this.modalHistory = [];
+      this.modalHistory.push(this.currentModalKey);
+    }
+    this.currentModalKey = moduleKey;
+
+    if (backBtn) {
+      if (this.modalHistory && this.modalHistory.length > 0) {
+        backBtn.classList.remove('hidden');
+      } else {
+        backBtn.classList.add('hidden');
+      }
+    }
+
+    modal.classList.remove('hidden');
+
+    const modalDialog = modal.querySelector('.glass-panel-heavy');
+    if (modalDialog) {
+      if (moduleKey === 'planning') {
+        modalDialog.classList.remove('max-w-4xl');
+        modalDialog.classList.add('max-w-6xl', 'xl:max-w-7xl');
+      } else {
+        modalDialog.classList.remove('max-w-6xl', 'xl:max-w-7xl');
+        modalDialog.classList.add('max-w-4xl');
+      }
+    }
+
+    if (moduleKey === 'antenne_messages' || moduleKey === 'messages') {
+      title.textContent = "Messagerie & Échanges d'Antenne";
+      subtitle.textContent = "Flux opérationnels, messages formateurs, alertes logistiques et doléances directes des bénévoles";
+      icon.setAttribute('data-lucide', 'message-square');
+      if (window.ProtecAntenneMessages && typeof window.ProtecAntenneMessages.renderModal === 'function') {
+        try {
+          window.ProtecAntenneMessages.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecAntenneMessages] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'ecussons') {
+      title.textContent = "Collection & Troc d'Écussons";
+      subtitle.textContent = "Tableau en liège d'antenne et bourse aux échanges inter-antennes en ligne";
+      icon.setAttribute('data-lucide', 'shield');
+      if (window.ProtecEcussons && typeof window.ProtecEcussons.renderTableauEcussons === 'function') {
+        try {
+          window.ProtecEcussons.renderTableauEcussons(this, body);
+        } catch (e) {
+          console.error('[ProtecEcussons] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'finances') {
+      title.textContent = "Direction Financière & Comptabilité Réglementaire";
+      subtitle.textContent = "Trésorerie d'antenne, grand livre des comptes, bilans d'exploitation et subventions";
+      icon.setAttribute('data-lucide', 'wallet');
+      if (window.ProtecFinances) {
+        try {
+          if (typeof window.ProtecFinances.renderFinancesModal === 'function') {
+            window.ProtecFinances.renderFinancesModal(this);
+          } else if (typeof window.ProtecFinances.renderModal === 'function') {
+            window.ProtecFinances.renderModal(this);
+          }
+        } catch (e) {
+          console.error('[ProtecFinances] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'equipements') {
+      title.textContent = "Inventaire & Dotations Matérielles";
+      subtitle.textContent = "Lots opérationnels (Lots A, B, C), tenues d'intervention et matériels de secours";
+      icon.setAttribute('data-lucide', 'box');
+      if (window.ProtecEquipements) {
+        try {
+          if (typeof window.ProtecEquipements.renderEquipementsModal === 'function') {
+            window.ProtecEquipements.renderEquipementsModal(this);
+          } else if (typeof window.ProtecEquipements.renderModal === 'function') {
+            window.ProtecEquipements.renderModal(this);
+          }
+        } catch (e) {
+          console.error('[ProtecEquipements] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'conventions') {
+      title.textContent = "Conventions Cadres & Partenariats";
+      subtitle.textContent = "Accords de secours d'urgence, CUMP, SAMU et conventions annuelles";
+      icon.setAttribute('data-lucide', 'file-check-2');
+      if (window.ProtecConventions) {
+        try {
+          window.ProtecConventions.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecConventions] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'subventions') {
+      title.textContent = "Pôle Action Sociale & Subventions Publiques";
+      subtitle.textContent = "Financements DDETS, CCAS et Conseil Départemental pour maraudes";
+      icon.setAttribute('data-lucide', 'landmark');
+      if (window.ProtecSocial) {
+        try {
+          window.ProtecSocial.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecSocial] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'communication') {
+      title.textContent = "Communication & Rayonnement d'Antenne";
+      subtitle.textContent = "Réseaux sociaux, campagnes de notoriété et relations presse";
+      icon.setAttribute('data-lucide', 'megaphone');
+      if (window.ProtecCommunication) {
+        try {
+          window.ProtecCommunication.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecCommunication] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'tchat' || moduleKey === 'messagerie') {
+      title.textContent = "Messagerie & Communications Opérationnelles";
+      subtitle.textContent = "Échanges inter-bénévoles, canaux d'antenne et alertes de mission";
+      icon.setAttribute('data-lucide', 'message-square');
+      if (window.ProtecMessaging) {
+        try {
+          window.ProtecMessaging.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecMessaging] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'cump') {
+      title.textContent = "Cellule d'Urgence Médico-Psychologique (CUMP)";
+      subtitle.textContent = "Soutien psychologique d'urgence et Cellule d'Accueil des Impliqués (CAI)";
+      icon.setAttribute('data-lucide', 'heart-handshake');
+      if (window.ProtecCump) {
+        try {
+          if (typeof window.ProtecCump.renderCumpTab === 'function') {
+            window.ProtecCump.renderCumpTab(this);
+          } else if (typeof window.ProtecCump.renderModal === 'function') {
+            window.ProtecCump.renderModal(this);
+          }
+        } catch (e) {
+          console.error('[ProtecCump] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'apc') {
+      title.textContent = "Gouvernance Fédérale & Élections (APC)";
+      subtitle.textContent = "Comité directeur, vote d'orientation et politique nationale FNPC";
+      icon.setAttribute('data-lucide', 'award');
+      if (window.ProtecAPC) {
+        try {
+          window.ProtecAPC.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecAPC] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'marche_occasion' || moduleKey === 'bourse' || moduleKey === 'occasion') {
+      title.textContent = "Marché d'Occasion & Revente Inter-Antennes";
+      subtitle.textContent = "Véhicules et équipements d'occasion cédés par d'autres antennes";
+      icon.setAttribute('data-lucide', 'repeat');
+      if (window.ProtecMarcheOccasion) {
+        try {
+          window.ProtecMarcheOccasion.renderModal(this);
+        } catch (e) {
+          console.error('[ProtecMarcheOccasion] Error rendering module:', e);
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+    } else if (moduleKey === 'alliance') {
+      title.textContent = 'Fédération, Alliances & Veille Opérationnelle';
+      subtitle.textContent = 'Entraide inter-antennes, détachements de renforts, astreintes et réseau fédéral';
+      icon.setAttribute('data-lucide', 'handshake');
+ 
+       // Assainissement et purge des renforts corrompus ou invalides
+       this.sanitizeRenforts();
+
+      const userAllianceId = this.player?.allianceId;
+      const alliance = (this.alliances || []).find(a => a.id === userAllianceId);
+      const hasAlliance = Boolean(userAllianceId && alliance);
+      const currentTab = this.activeAllianceTab || 'membres';
+
+      body.innerHTML = `
+        <div class="space-y-5">
+          
+          <!-- En-tête de l'Alliance ou du Réseau Fédéral -->
+          ${hasAlliance ? `
+            <div class="p-4 rounded-2xl bg-gradient-to-r from-indigo-700 to-pc-blue text-white flex items-center justify-between shadow-lg">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white font-black text-lg">
+                  ${alliance.tag || 'PC'}
+                </div>
+                <div>
+                  <h4 class="text-base font-extrabold leading-tight">${alliance.name}</h4>
+                  <p class="text-xs text-white/80">Caisse de solidarité fédérale : <strong>${(alliance.treasury || 0).toLocaleString('fr-FR')} €</strong> • Vos points d’alliance : <strong>${this.resources.alliancePoints || 0} pts</strong></p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Alliance Active
+                </span>
+              </div>
+            </div>
+          ` : `
+            <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-800 to-pc-blue text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-amber-300 font-black text-xl">
+                  <i data-lucide="network" class="w-6 h-6"></i>
+                </div>
+                <div>
+                  <h4 class="text-base font-extrabold leading-tight">Réseau Fédéral Inter-Antennes</h4>
+                  <p class="text-xs text-white/80">Vous ne faites actuellement partie d’aucune Alliance locale ou entente inter-antennes.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="window.ProtecVeille.renderModal(window.game);" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow transition flex items-center gap-1.5 cursor-pointer">
+                  <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                  Astreintes (3 Échelons)
+                </button>
+              </div>
+            </div>
+          `}
+
+          <!-- Onglets du module Alliance -->
+          <div class="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold overflow-x-auto">
+            <button onclick="window.game.setAllianceTab('membres')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'membres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
+              Antennes & Membres (${this.allianceStations.length + this.stations.length})
+            </button>
+            <button onclick="window.ProtecVeille.renderModal(window.game);" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-black flex items-center gap-1.5 border border-emerald-300 shadow-xs cursor-pointer">
+              <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-emerald-600"></i>
+              Veille Opérationnelle
+            </button>
+            <button onclick="window.game.setAllianceTab('renforts')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'renforts' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1.5">
+              Appels à Renforts
+              <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700 font-black">${(this.renforts || []).filter(r => r.status === 'open' && (!r.id || !r.id.startsWith('renf-offline-'))).length}</span>
+            </button>
+            <button onclick="window.game.setAllianceTab('formations')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'formations' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
+              Stages Mutualisés (${(this.formationsSpeciales || []).length})
+            </button>
+            <button onclick="window.game.setAllianceTab('evenements')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'evenements' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-300"></i>
+              Événements (${this.communityEvents?.length || 0})
+            </button>
+            <button onclick="window.game.setAllianceTab('bourse')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'bourse' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+              <i data-lucide="repeat" class="w-3.5 h-3.5"></i>
+              Marché & Matériel (${this.marketplace?.length || 0})
+            </button>
+            <button onclick="window.game.setAllianceTab('manoeuvres')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'manoeuvres' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+              <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+              Manœuvres Fédérales
+            </button>
+            <button onclick="window.game.setAllianceTab('radio')" class="px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${currentTab === 'radio' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} flex items-center gap-1">
+              <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+              Radio Alliance
+            </button>
+          </div>
+
+          <!-- Contenu selon onglet actif -->
+          <div id="alliance-tab-content">
+            ${currentTab === 'membres' ? `
+              <div class="space-y-4">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-slate-500">Toutes les antennes connectées partagent leurs ressources en cas de crise majeure.</span>
+                  <button onclick="window.game.openPlayerProfileModal()" class="font-bold text-indigo-600 hover:underline">Modifier mon profil joueur</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  
+                  <!-- Notre antenne -->
+                  <div class="p-4 rounded-2xl glass-card-blue border-2 border-pc-blue/40 space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue text-white">VOTRE ANTENNE</span>
+                      <span class="text-xs font-bold text-slate-800">${this.player.name}</span>
+                    </div>
+                    <h5 class="text-sm font-extrabold text-slate-900">${this.stations[0]?.name || 'Antenne en création'}</h5>
+                    <div class="text-xs text-slate-600 flex justify-between pt-2 border-t border-slate-100/70">
+                      <span>Véhicules : <strong>${this.vehicles.length}</strong></span>
+                      <span>Bénévoles : <strong>${this.volunteers.length}</strong></span>
+                    </div>
+                  </div>
+
+                  <!-- Antennes alliées -->
+                  ${this.allianceStations.map(st => `
+                    <div class="p-4 rounded-2xl glass-card space-y-2">
+                      <div class="flex items-center justify-between">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white">ALLIÉ EN LIGNE</span>
+                        <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                          <span class="text-xs font-bold text-slate-700">${st.playerName}</span>
+                          ${st.discord?.username ? `
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-semibold bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/20" title="Discord: @${st.discord.username}">
+                              <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                              @${st.discord.username}
+                            </span>
+                          ` : ''}
+                        </div>
+                      </div>
+                      <h5 class="text-sm font-extrabold text-slate-900">${st.name}</h5>
+                      <div class="text-xs text-slate-600 flex justify-between pt-2 border-t border-slate-100/70">
+                        <span>Flotte : <strong>${st.vehicles} véhicules</strong></span>
+                        <span>Secouristes : <strong>${st.volunteers} membres</strong></span>
+                      </div>
+                      <div class="pt-1 flex justify-end">
+                        <button onclick="window.game.openAllianceStationDetails({ id: '${st.id}', name: '${st.name}', playerName: '${st.playerName}', vehicles: ${st.vehicles}, volunteers: ${st.volunteers} })" class="text-xs font-bold text-indigo-600 hover:underline">
+                          Voir sur la carte ➜
+                        </button>
+                      </div>
+                    </div>
+                  `).join('')}
+
+                </div>
+              </div>
+            ` : ''}
+
+            ${currentTab === 'renforts' ? `
+              <div class="space-y-4">
+                <!-- Encart Officiel Demandes Extra-Départementales -->
+                ${this.renderExtraDeptRenfortsBlockHTML()}
+
+                <div class="p-3.5 rounded-2xl glass-card-amber text-xs text-amber-900 flex items-center justify-between">
+                  <span>Dépêchez vos véhicules en renfort auprès d’antennes alliées pour toucher des indemnités et de la réputation !</span>
+                  <button onclick="window.game.openModule('planning')" class="px-3 py-1.5 rounded-xl font-bold bg-amber-600 text-white hover:bg-amber-700 transition cursor-pointer">
+                    + Émettre un Appel depuis mon Planning
+                  </button>
+                </div>
+
+                <!-- Autres demandes d'alliances locales -->
+                <div class="space-y-3 pt-1">
+                  <div class="flex items-center justify-between px-1">
+                    <h5 class="text-xs font-black text-slate-700 uppercase tracking-wider">Appels Locaux & Inter-Antennes</h5>
+                    <span class="text-[11px] text-slate-500 font-bold">${this.renforts.filter(r => !r.isExtraDept).length} appel(s)</span>
+                  </div>
+
+                  ${this.renforts.filter(r => !r.isExtraDept).length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center">Aucun autre appel de renfort local actuellement.</p>' : ''}
+                  ${this.renforts.filter(r => !r.isExtraDept).map(r => {
+                    const reqName = (r.requesterName && r.requesterName !== 'undefined') ? r.requesterName : (r.requestingPlayerName || r.stationName || 'Antenne Alliée');
+                    const titleStr = (r.title && r.title !== 'undefined') ? r.title : 'Appel à Renfort Opérationnel';
+                    const descStr = (r.desc && r.desc !== 'undefined') ? r.desc : 'Demande de moyens en renfort pour dispositif.';
+                    const unitStr = (r.unitRequested && r.unitRequested !== 'undefined') ? r.unitRequested : '1 VPSP ou Secouristes';
+                    const isMyRequest = (r.requesterPlayerId === this.player.id || r.requestingPlayerId === this.player.id || (!r.requesterPlayerId && !r.requestingPlayerId));
+                    return `
+                    <div class="p-4 rounded-2xl glass-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div class="space-y-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${r.status === 'fulfilled' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                            ${r.status === 'fulfilled' ? 'RENFORT ASSURÉ' : 'URGENT'}
+                          </span>
+                          ${r.zone ? `
+                            <span class="px-2 py-0.5 rounded text-[10px] font-black ${
+                              r.zone === 'national' ? 'bg-purple-100 text-purple-900 border border-purple-300' :
+                              r.zone === 'regional' ? 'bg-indigo-100 text-indigo-900 border border-indigo-300' :
+                              'bg-sky-100 text-sky-900 border border-sky-300'
+                            }">
+                              ${r.zoneLabel ? r.zoneLabel.toUpperCase() : r.zone.toUpperCase()}
+                            </span>
+                          ` : ''}
+                          <span class="text-xs font-bold text-slate-700">Demandé par <strong>${reqName}</strong></span>
+                        </div>
+                        <h5 class="text-sm font-extrabold text-slate-900">${titleStr}</h5>
+                        <p class="text-xs text-slate-500">${descStr} • Moyens attendus : <strong class="text-slate-800">${unitStr}</strong></p>
+                      </div>
+
+                      <div class="text-right space-y-2 flex-shrink-0">
+                        <div class="text-xs font-bold text-emerald-700 mono-num">+${r.indemnite || 180} €</div>
+                        <div class="flex items-center justify-end gap-2">
+                          ${r.status === 'open' && !isMyRequest ? `
+                            <button onclick="window.game.fulfillRenfort('${r.id}')" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                              Dépêcher Renfort
+                            </button>
+                          ` : `
+                            <span class="text-xs text-slate-400 font-bold">${r.status === 'fulfilled' ? 'Renfort en route' : 'Votre appel'}</span>
+                            ${isMyRequest ? `
+                              <button onclick="window.game.cancelRenfort('${r.id}')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition cursor-pointer" title="Retirer cette demande">
+                                ✕ Retirer
+                              </button>
+                            ` : ''}
+                          `}
+                        </div>
+                      </div>
+                    </div>
+                  `; }).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            ${currentTab === 'formations' ? `
+              <div class="space-y-4">
+                <div class="p-3.5 rounded-2xl glass-card-blue text-xs text-indigo-900 flex items-center justify-between">
+                  <span>Les antennes disposant d’instructeurs qualifiés ouvrent des stages de perfectionnement aux alliés.</span>
+                  <button onclick="window.game.proposeSpecialFormationModal()" class="px-3.5 py-1.5 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition">
+                    + Proposer un Stage Spécial
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  ${this.formationsSpeciales.map(f => `
+                    <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
+                      <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                          <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white">${f.type}</span>
+                          <span class="text-xs font-extrabold mono-num ${f.costPerCandidate === 0 ? 'text-emerald-700 font-black' : 'text-slate-800'}">
+                            ${f.costPerCandidate === 0 ? '🎁 GRATUIT (0 €)' : f.costPerCandidate + ' € / candidat'}
+                          </span>
+                        </div>
+                        <h5 class="text-sm font-extrabold text-slate-900">${f.title}</h5>
+                        <p class="text-xs text-slate-500">${f.desc}</p>
+                        <div class="text-[11px] text-slate-400">Organisé par : <strong>${f.organizerName}</strong> (${f.stationName})</div>
+                      </div>
+
+                      <div class="pt-2 border-t border-slate-100/70 flex items-center justify-between text-xs">
+                        <span class="text-slate-500">Inscrits : <strong>${f.registeredCandidates?.length || 0} / ${f.maxCandidates}</strong></span>
+                        <button onclick="window.game.registerVolunteerToSpecialFormation('${f.id}')" class="px-3.5 py-1.5 rounded-xl font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
+                          Inscrire un Bénévole
+                        </button>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            ${currentTab === 'evenements' && window.ProtecMultiplayer ? window.ProtecMultiplayer.renderCommunityEventsTabHTML(this) : ''}
+
+            ${currentTab === 'bourse' && window.ProtecMultiplayer ? window.ProtecMultiplayer.renderMarketplaceTabHTML(this) : ''}
+
+            ${currentTab === 'manoeuvres' && window.ProtecAdvancedModals ? window.ProtecAdvancedModals.renderManoeuvres(this) : ''}
+
+            ${currentTab === 'radio' ? `
+              <div class="space-y-3">
+                <div class="p-3 rounded-2xl glass-card text-xs text-slate-600 flex items-center gap-2">
+                  <i data-lucide="radio" class="w-4 h-4 text-indigo-600"></i>
+                  <span>Canal tactique inter-antennes de l’alliance. Tous les directeurs connectés reçoivent les messages.</span>
+                </div>
+
+                <div id="alliance-chat-messages" class="h-64 overflow-y-auto space-y-2 p-2 glass-card rounded-2xl border border-white/60">
+                  <!-- Rempli dynamiquement -->
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                  <input 
+                    type="text" 
+                    id="alliance-chat-input" 
+                    placeholder="Message radio à l’alliance (ex: VPSP disponible en renfort secteur Sud)..." 
+                    onkeydown="if(event.key === 'Enter') window.game.sendAllianceChatMessage()"
+                    class="flex-1 px-4 py-2.5 rounded-xl glass-input text-xs text-slate-900 focus:ring-2 focus:ring-indigo-600"
+                  />
+                  <button onclick="window.game.sendAllianceChatMessage()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition flex items-center gap-1.5 shadow-sm">
+                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                    Émettre
+                  </button>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+        </div>
+      `;
+
+      if (currentTab === 'radio') {
+        setTimeout(() => this.renderChatMessages(), 50);
+      }
+    } else if (moduleKey === 'planning') {
+      const currentTab = this.activePlanningTab || 'calendar';
+
+      if (currentTab === 'devis') {
+        title.textContent = 'Postes de Secours (DPS) — Devis & Dimensionnement';
+        subtitle.textContent = 'Sous-section DPS : Demandes reçues, calcul des tarifs réglementaires et négociation organisateurs';
+        icon.setAttribute('data-lucide', 'file-check');
+      } else if (currentTab === 'contrats') {
+        title.textContent = 'Postes de Secours (DPS) — Contrats Annuels';
+        subtitle.textContent = 'Sous-section DPS : Conventions récurrentes, accords-cadres et programmations pluriannuelles';
+        icon.setAttribute('data-lucide', 'repeat');
+      } else {
+        title.textContent = 'Postes de Secours (DPS) — Planning & Dispositifs';
+        subtitle.textContent = 'Dispositifs prévisionnels de secours, calendrier des postes et programmation multi-pôles';
+        icon.setAttribute('data-lucide', 'calendar');
+      }
+
+      // Régulariser immédiatement tout devis dont la date serait passée
+      this.cleanPastDevis();
+
+      const pendingDevisCount = (this.devis || []).filter(d => d.status === 'pending').length;
+      const inReviewDevisCount = (this.devis || []).filter(d => d.status === 'sent').length;
+      const previsionnelDevisCount = (this.devis || []).filter(d => d.status === 'previsionnel').length;
+      const activeContractsCount = (this.annualContracts || []).filter(c => c.signed).length;
+      
+      const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+      if (this.calendarViewingMonth === undefined || this.calendarViewingMonth === null) {
+        this.calendarViewingMonth = this.clock.month;
+        this.calendarViewingYear = this.clock.year;
+      }
+      const curViewingMonth = this.calendarViewingMonth;
+      const curViewingYear = this.calendarViewingYear || this.clock.year || 2026;
+      const curMonthName = monthNames[curViewingMonth] || 'Mois';
+      const curYear = curViewingYear;
+
+      const isViewingCurrentMonth = (curViewingMonth === this.clock.month && curYear === this.clock.year);
+      const todayDay = isViewingCurrentMonth ? (this.clock.day || 1) : null;
+      const selectedDay = this.selectedPlanningDay || (isViewingCurrentMonth ? (this.clock.day || 1) : 1);
+
+      // Calcul du calendrier mensuel
+      const daysInMonth = new Date(curYear, curViewingMonth + 1, 0).getDate();
+      const firstDayIndex = (new Date(curYear, curViewingMonth, 1).getDay() + 6) % 7; // 0 = Lundi, 6 = Dimanche
+
+      // Agrégation transversale des événements de tous les pôles
+      const allEvents = this.getAllPlanningEvents(curViewingMonth, curYear);
+      if (!this.planningPolesFilters) {
+        this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true };
+      }
+      if (this.planningPolesFilters.previ === undefined) {
+        this.planningPolesFilters.previ = true;
+      }
+      const filters = this.planningPolesFilters;
+
+      const poleCounts = {
+        dps: allEvents.filter(e => e.pole === 'dps').length,
+        previ: allEvents.filter(e => e.pole === 'previ').length,
+        devis: allEvents.filter(e => e.pole === 'devis').length,
+        formations: allEvents.filter(e => e.pole === 'formations').length,
+        social: allEvents.filter(e => e.pole === 'social').length
+      };
+
+      const activeEvents = allEvents.filter(e => filters[e.pole]);
+      const planningListFilter = this.planningListDateFilter || 'all';
+      let listEvents = [...activeEvents];
+      if (planningListFilter === 'today') {
+        listEvents = listEvents.filter(e => e.eventDate && e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month);
+      } else if (planningListFilter === 'day') {
+        listEvents = listEvents.filter(e => e.eventDate && e.eventDate.day === selectedDay && e.eventDate.month === curViewingMonth);
+      }
+
+      // Événements pour le jour sélectionné
+      const selectedDayEvents = activeEvents.filter(e => e.eventDate && e.eventDate.day === selectedDay && e.eventDate.month === curViewingMonth && (e.eventDate.year == null || e.eventDate.year === curYear));
+      const selectedDayMissions = selectedDayEvents.filter(e => e.pole === 'dps');
+      const selectedDayPrevi = selectedDayEvents.filter(e => e.pole === 'previ');
+      const selectedDayDevis = selectedDayEvents.filter(e => e.pole === 'devis');
+      const selectedDayFormations = selectedDayEvents.filter(e => e.pole === 'formations');
+      const selectedDaySocial = selectedDayEvents.filter(e => e.pole === 'social');
+
+      body.innerHTML = `
+        <div class="space-y-4">
+          <!-- Barre d'onglets principale du Pôle DPS : Calendrier / Liste / Sous-section Devis / Contrats -->
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button onclick="window.game.setPlanningTab('calendar')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'calendar' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
+                <i data-lucide="calendar" class="w-4 h-4"></i>
+                Vue Calendrier
+              </button>
+              <button onclick="window.game.setPlanningTab('list')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'list' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
+                <i data-lucide="list" class="w-4 h-4"></i>
+                Vue Liste (${activeEvents.length})
+              </button>
+              <button onclick="window.game.setPlanningTab('devis')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'devis' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}" title="Sous-section Devis DPS & Dimensionnement">
+                <i data-lucide="file-check" class="w-4 h-4 ${currentTab === 'devis' ? 'text-white' : 'text-amber-500'}"></i>
+                <span>Devis DPS</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-black ${currentTab === 'devis' ? 'bg-white text-amber-900' : 'bg-amber-100 text-amber-900'}">${pendingDevisCount + inReviewDevisCount + previsionnelDevisCount}</span>
+              </button>
+              <button onclick="window.game.setPlanningTab('contrats')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'contrats' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}" title="Contrats Annuels Réguliers">
+                <i data-lucide="repeat" class="w-4 h-4 ${currentTab === 'contrats' ? 'text-white' : 'text-indigo-500'}"></i>
+                <span>Contrats Annuels</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-black ${currentTab === 'contrats' ? 'bg-white text-indigo-900' : 'bg-indigo-100 text-indigo-900'}">${activeContractsCount}</span>
+              </button>
+              <div class="h-5 w-px bg-slate-300 mx-1.5 self-center"></div>
+              <button onclick="window.game.openModule('formation')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Formations">
+                <i data-lucide="graduation-cap" class="w-4 h-4 text-emerald-600"></i>
+                Formations (${poleCounts.formations})
+              </button>
+              <button onclick="window.game.openModule('social')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Action Sociale">
+                <i data-lucide="heart-handshake" class="w-4 h-4 text-purple-600"></i>
+                Social (${poleCounts.social})
+              </button>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Aujourd'hui : <strong class="text-slate-800">${this.formatFullDate(this.clock)}</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- BARRE DE FILTRES INTERACTIFS PAR PÔLE (VISIBILITÉ DYNAMIQUE & COULEURS STRICTEMENT ALIGNÉES) -->
+          <div class="flex flex-wrap items-center justify-between gap-2.5 p-3 bg-gradient-to-r from-slate-50 to-slate-100/80 dark:from-slate-800 dark:to-slate-800/90 border border-slate-200/90 dark:border-slate-700 rounded-2xl shadow-xs">
+            <div class="flex items-center gap-1.5 text-xs font-black text-slate-800 dark:text-slate-200 mr-1">
+              <i data-lucide="filter" class="w-4 h-4 text-pc-blue dark:text-sky-400"></i>
+              <span>Filtres par Pôle :</span>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- Filtre Pôle Secours & DPS (Bleu marine) -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('dps')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.dps ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-white dark:bg-slate-700 text-pc-blue dark:text-sky-300 border-pc-blue/40 dark:border-slate-600 hover:bg-blue-50/50'}"
+                title="${filters.dps ? 'Cliquer pour masquer Secours & DPS' : 'Cliquer pour afficher Secours & DPS'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.dps ? 'bg-white' : 'bg-pc-blue dark:bg-sky-400'}"></span>
+                <span>🔵 Secours DPS (${poleCounts.dps})</span>
+              </button>
+
+              <!-- Filtre Pôle Postes Prévisionnels (Ambre / Jaune-orange) -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('previ')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.previ ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-white dark:bg-slate-700 text-amber-700 dark:text-amber-300 border-amber-400 dark:border-slate-600 hover:bg-amber-50/50'}"
+                title="${filters.previ ? 'Cliquer pour masquer Postes Prévisionnels' : 'Cliquer pour afficher Postes Prévisionnels'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.previ ? 'bg-white' : 'bg-amber-500'}"></span>
+                <span>⏳ Prévi (${poleCounts.previ})</span>
+              </button>
+
+              <!-- Filtre Pôle Demandes de Devis (Bleu ciel / Sky) -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('devis')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.devis ? 'bg-sky-500 text-white border-sky-600 shadow-sm' : 'bg-white dark:bg-slate-700 text-sky-700 dark:text-sky-300 border-sky-400 dark:border-slate-600 hover:bg-sky-50/50'}"
+                title="${filters.devis ? 'Cliquer pour masquer Demandes de Devis' : 'Cliquer pour afficher Demandes de Devis'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.devis ? 'bg-white' : 'bg-sky-500'}"></span>
+                <span>📋 Devis (${poleCounts.devis})</span>
+              </button>
+
+              <!-- Filtre Pôle Formations (Vert émeraude) -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('formations')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.formations ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-slate-600 hover:bg-emerald-50/50'}"
+                title="${filters.formations ? 'Cliquer pour masquer Formations' : 'Cliquer pour afficher Formations'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.formations ? 'bg-white' : 'bg-emerald-600'}"></span>
+                <span>🎓 Formation (${poleCounts.formations})</span>
+              </button>
+
+              <!-- Filtre Pôle Action Sociale (Violet) -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('social')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.social ? 'bg-purple-600 text-white border-purple-700 shadow-sm' : 'bg-white dark:bg-slate-700 text-purple-700 dark:text-purple-300 border-purple-400 dark:border-slate-600 hover:bg-purple-50/50'}"
+                title="${filters.social ? 'Cliquer pour masquer Action Sociale' : 'Cliquer pour afficher Action Sociale'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.social ? 'bg-white' : 'bg-purple-600'}"></span>
+                <span>🥫 Maraude (${poleCounts.social})</span>
+              </button>
+            </div>
+
+            <!-- Toggles rapides Tout Activer / Tout Masquer -->
+            <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+              <button onclick="window.game.toggleAllPlanningPoleFilters(true)" class="hover:text-pc-blue cursor-pointer underline decoration-dotted">Tout afficher</button>
+              <span>•</span>
+              <button onclick="window.game.toggleAllPlanningPoleFilters(false)" class="hover:text-rose-600 cursor-pointer underline decoration-dotted">Tout masquer</button>
+            </div>
+          </div>
+
+          <!-- Alerte Prioritaire Demande Extra-Départementale -->
+          ${this.renderExtraDeptRenfortsBlockHTML(true)}
+
+          ${currentTab === 'devis' ? `
+            <!-- SOUS-SECTION DEVIS & DIMENSIONNEMENT DPS -->
+            ${this.renderDevisContentHTML()}
+          ` : currentTab === 'contrats' ? `
+            <!-- SOUS-SECTION CONTRATS ANNUELS DPS -->
+            <div class="space-y-4">
+              <div class="p-4 rounded-2xl bg-indigo-50/90 border border-indigo-200 text-xs text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-xl">🤝</span>
+                  <div>
+                    <h4 class="font-black text-indigo-950">Accords-cadres & Partenariats Pluriannuels (DPS Réguliers)</h4>
+                    <p class="text-[11px] text-indigo-700">Conventions régulières avec clubs sportifs, salles de spectacle et collectivités garantissant des rentrées financières stables.</p>
+                  </div>
+                </div>
+              </div>
+              ${window.ProtecContratsAnnuels ? window.ProtecContratsAnnuels.renderContractsHTML(this) : '<p class="text-xs text-slate-500 p-4">Chargement des contrats annuels...</p>'}
+            </div>
+          ` : currentTab === 'calendar' ? `
+            <!-- VUE CALENDRIER -->
+            <div class="space-y-4">
+              <!-- Grille principale : Calendrier à gauche (lg:col-span-7) + Détails journée à droite (lg:col-span-5) -->
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                <!-- Colonne Gauche : Navigation Mois + Grille du calendrier -->
+                <div class="lg:col-span-7 xl:col-span-7 space-y-3">
+                  <!-- Navigation Mois -->
+                  <div class="w-full flex items-center justify-between bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 rounded-2xl p-1.5 sm:p-2 shadow-xs">
+                    <button 
+                      onclick="window.game.changePlanningMonth(-1)" 
+                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 dark:text-slate-200 hover:text-pc-blue dark:hover:text-sky-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 transition cursor-pointer flex-shrink-0"
+                      title="Mois précédent"
+                    >
+                      <i data-lucide="chevron-left" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+                    </button>
+                    <div class="flex-1 text-center px-2 sm:px-4">
+                      <div class="flex items-center justify-center gap-2">
+                        <span class="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-tight leading-tight">${curMonthName} ${curYear}</span>
+                        ${!isViewingCurrentMonth ? `
+                          <button 
+                            onclick="window.game.resetPlanningMonthToCurrent()" 
+                            class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-pc-blue text-white hover:brightness-110 active:scale-95 transition cursor-pointer flex items-center gap-1 shadow-xs"
+                            title="Revenir au mois en cours"
+                          >
+                            <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                            <span class="hidden sm:inline">Mois en cours</span>
+                          </button>
+                        ` : ''}
+                      </div>
+                      ${!isViewingCurrentMonth ? `
+                        <span class="text-[9px] sm:text-[10px] font-extrabold text-amber-600 dark:text-amber-400 uppercase tracking-wider block mt-0.5">${(curYear < this.clock.year || (curYear === this.clock.year && curViewingMonth < this.clock.month)) ? 'Mois précédent' : 'Mois suivant'}</span>
+                      ` : `
+                        <span class="text-[9px] sm:text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block mt-0.5">Mois en cours</span>
+                      `}
+                    </div>
+                    <button 
+                      onclick="window.game.changePlanningMonth(1)" 
+                      class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-700 dark:text-slate-200 hover:text-pc-blue dark:hover:text-sky-300 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 transition cursor-pointer flex-shrink-0"
+                      title="Mois suivant"
+                    >
+                      <i data-lucide="chevron-right" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+                    </button>
+                  </div>
+
+                  <!-- Grille du calendrier -->
+                  <div class="rounded-2xl p-3.5 sm:p-4 shadow-sm bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700">
+                    <!-- En-têtes des jours de la semaine -->
+                    <div class="grid grid-cols-7 gap-1 text-center text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
+                      <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
+                    </div>
+
+                    <!-- Cases des jours -->
+                    <div class="grid grid-cols-7 gap-1.5">
+                      <!-- Décalage premier jour -->
+                      ${Array.from({ length: firstDayIndex }).map(() => `
+                        <div class="h-16 rounded-xl bg-slate-50/50 opacity-30 border border-transparent"></div>
+                      `).join('')}
+
+                      <!-- Jours du mois -->
+                      ${Array.from({ length: daysInMonth }).map((_, i) => {
+                        const day = i + 1;
+                        const isToday = isViewingCurrentMonth && (day === todayDay);
+                        const isSelected = day === selectedDay;
+                        const isPast = (curYear < this.clock.year) ||
+                          (curYear === this.clock.year && curViewingMonth < this.clock.month) ||
+                          (isViewingCurrentMonth && day < todayDay);
+
+                        const dayEvents = activeEvents.filter(e => e.eventDate && e.eventDate.day === day && e.eventDate.month === curViewingMonth && (e.eventDate.year == null || e.eventDate.year === curYear));
+                        
+                        const dpsCount = dayEvents.filter(e => e.pole === 'dps' && e.type === 'DPS').length;
+                        const gardeCount = dayEvents.filter(e => e.pole === 'dps' && e.type !== 'DPS').length;
+                        const prevCount = dayEvents.filter(e => e.pole === 'previ').length;
+                        const pendingCount = dayEvents.filter(e => e.pole === 'devis').length;
+                        const formationCount = dayEvents.filter(e => e.pole === 'formations').length;
+                        const socialCount = dayEvents.filter(e => e.pole === 'social').length;
+
+                        let bgClass = 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700';
+                        if (isSelected) {
+                          bgClass = isPast 
+                            ? 'bg-slate-200 dark:bg-slate-700 border-pc-blue ring-2 ring-pc-blue/40' 
+                            : 'bg-pc-blue/10 dark:bg-sky-950/40 border-pc-blue ring-2 ring-pc-blue/30';
+                        } else if (isToday) {
+                          bgClass = 'bg-amber-50/90 dark:bg-amber-950/50 border-amber-300 dark:border-amber-600 ring-1 ring-amber-300';
+                        } else if (isPast) {
+                          bgClass = 'bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-700 border-slate-200/90 dark:border-slate-700/80';
+                        }
+
+                        return `
+                          <button 
+                            onclick="window.game.selectPlanningDay(${day})" 
+                            class="min-h-16 rounded-xl p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
+                          >
+                            <div class="flex items-center justify-between w-full">
+                              <span class="text-xs ${isToday ? 'text-amber-800 dark:text-amber-300 font-black' : isSelected ? 'text-pc-blue dark:text-sky-300 font-black' : isPast ? 'text-slate-400 dark:text-slate-400 font-bold' : 'text-slate-800 dark:text-slate-200 font-extrabold'}">
+                                ${day}
+                              </span>
+                              ${isToday ? `<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-amber-950 uppercase">Auj.</span>` : ''}
+                            </div>
+
+                            <div class="flex flex-col gap-0.5 w-full mt-1 ${isPast && !isToday ? 'opacity-65 filter saturate-50' : ''}">
+                              ${dpsCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-blue text-white truncate text-center">
+                                  DPS (${dpsCount})
+                                </div>
+                              ` : ''}
+                              ${gardeCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-orange text-white truncate text-center">
+                                  Garde (${gardeCount})
+                                </div>
+                              ` : ''}
+                              ${prevCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-500 text-white truncate text-center border border-amber-600/30">
+                                  ⏳ Prévi (${prevCount})
+                                </div>
+                              ` : ''}
+                              ${pendingCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-sky-500 text-white truncate text-center">
+                                  📋 Devis (${pendingCount})
+                                </div>
+                              ` : ''}
+                              ${formationCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-emerald-600 text-white truncate text-center">
+                                  🎓 Form. (${formationCount})
+                                </div>
+                              ` : ''}
+                              ${socialCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-purple-600 text-white truncate text-center">
+                                  🥫 Maraude (${socialCount})
+                                </div>
+                              ` : ''}
+                            </div>
+                          </button>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Colonne Droite : Détail de la journée sélectionnée (légende intégrée aux filtres) -->
+                <div class="lg:col-span-5 xl:col-span-5 space-y-3 lg:sticky lg:top-2">
+                  <!-- Carte Détail de la journée sélectionnée -->
+                  <div class="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-4 shadow-sm max-h-[75vh] overflow-y-auto">
+                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/80 pb-2.5">
+                      <div>
+                        <h4 class="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                          <i data-lucide="calendar-check" class="w-4 h-4 text-pc-blue dark:text-sky-400"></i>
+                          Planning du ${selectedDay} ${curMonthName} ${curYear}
+                        </h4>
+                        ${isViewingCurrentMonth && selectedDay === todayDay ? `<span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">Aujourd'hui</span>` : ''}
+                      </div>
+                      <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 text-right">
+                        ${selectedDayEvents.length} événement(s) au total
+                      </span>
+                    </div>
+
+                    ${selectedDayEvents.length === 0 ? `
+                      <p class="text-xs text-slate-500 dark:text-slate-400 py-6 text-center italic">
+                        Aucun événement pour cette date sur les pôles sélectionnés. Activez plus de filtres ci-dessus ou établissez des propositions pour remplir votre planning.
+                      </p>
+                    ` : `
+                      <div class="space-y-4">
+                        <!-- SECTION 1 : FORMATIONS & STAGES PÉDAGOGIQUES -->
+                        ${filters.formations && selectedDayFormations.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-emerald-600"></i>
+                              <span>Pôle Formations & Stages (${selectedDayFormations.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDayFormations.map(e => {
+                                const f = e.raw;
+                                const isB2B = e.type.startsWith('B2B');
+                                return `
+                                  <div class="p-3.5 rounded-2xl border-2 border-emerald-300 dark:border-emerald-700/60 bg-emerald-50/40 dark:bg-emerald-950/30 flex flex-col justify-between space-y-2.5">
+                                    <div>
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white uppercase">
+                                          ${e.type}
+                                        </span>
+                                        ${e.rewardMoney ? `<span class="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400">+${e.rewardMoney} €</span>` : ''}
+                                      </div>
+                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${e.title}</h5>
+                                      <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                                        Lieu : <strong>${e.address}</strong> • Inscrits : <strong>${e.registeredCount} / ${e.requiredCount}</strong>
+                                      </p>
+                                      ${e.trainerName ? `
+                                        <p class="text-[11px] text-emerald-800 dark:text-emerald-300 font-semibold mt-0.5">
+                                          Formateur : <strong>${e.trainerName}</strong>
+                                        </p>
+                                      ` : `
+                                        <p class="text-[11px] text-amber-700 dark:text-amber-400 font-bold mt-0.5">
+                                          ⚠️ Aucun formateur affecté
+                                        </p>
+                                      `}
+                                    </div>
+
+                                    <div class="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-end">
+                                      <button onclick="window.game.openModule('formations')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition flex items-center gap-1 cursor-pointer">
+                                        <span>Gérer la Formation</span>
+                                        <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                                      </button>
+                                    </div>
+                                  </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
+
+                        <!-- SECTION 2 : ACTION SOCIALE & MARAUDES -->
+                        ${filters.social && selectedDaySocial.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-purple-800 dark:text-purple-300 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="heart-handshake" class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400"></i>
+                              <span>Pôle Action Sociale & Maraudes (${selectedDaySocial.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDaySocial.map(e => {
+                                const m = e.raw;
+                                const regCount = m.registeredVolunteers?.length || 0;
+                                const isFull = regCount >= m.requiredVolunteers;
+                                return `
+                                  <div class="p-3.5 rounded-2xl border-2 border-purple-300 dark:border-purple-700/60 bg-purple-50/40 dark:bg-purple-950/30 flex flex-col justify-between space-y-2.5">
+                                    <div>
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-600 text-white uppercase">
+                                          🥫 Maraude
+                                        </span>
+                                        <span class="text-xs font-mono font-bold text-purple-800 dark:text-purple-300">+${m.rewardMoney} €</span>
+                                      </div>
+                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${m.title}</h5>
+                                      <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-1">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-purple-600 dark:text-purple-400"></i>
+                                        <span>${m.sector || m.address || 'Secteur de Maraude'}</span>
+                                      </p>
+                                    </div>
+
+                                    <div class="pt-2 border-t border-purple-200/60 dark:border-purple-800/40 space-y-1.5">
+                                      <div class="flex items-center justify-between text-xs font-bold">
+                                        <span class="${isFull ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}">
+                                          ${isFull ? '✓ Équipage complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
+                                        </span>
+                                      </div>
+                                      <div class="w-full bg-slate-200/80 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                                        <div class="h-full bg-purple-600 rounded-full" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
+                                      </div>
+                                      <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-black transition cursor-pointer">
+                                        Détail de la maraude
+                                      </button>
+                                    </div>
+                                  </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
+
+                        <!-- SECTION : POSTES EN PRÉVISIONNEL (SONDAGE & VALIDATION) -->
+                        ${filters.previ && selectedDayPrevi.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-amber-800 dark:text-amber-300 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="hourglass" class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400"></i>
+                              <span>Postes en Prévisionnel (${selectedDayPrevi.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDayPrevi.map(e => {
+                                const d = e.raw;
+                                const dynBareme = this.calculateDynamicBareme(d);
+                                const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
+                                const prevVolsCount = d.previsionnelVolunteers?.length || 0;
+
+                                return `
+                                  <div class="p-3.5 rounded-2xl border-2 border-amber-400 dark:border-amber-600/60 bg-amber-50/50 dark:bg-amber-950/30 flex flex-col justify-between space-y-3">
+                                    <div>
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white uppercase">
+                                          ⏳ En Prévisionnel
+                                        </span>
+                                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
+                                        <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">${d.proposedPrice || dynBareme.totalBareme} €</span>
+                                      </div>
+                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${d.eventName}</h5>
+                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                        ${d.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
+                                      </p>
+                                      <p class="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1 mt-0.5">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
+                                        <span>${d.address || 'Adresse sur site'}</span>
+                                      </p>
+                                    </div>
+
+                                    <!-- Bloc statut bénévoles prévisionnel -->
+                                    <div class="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/90 border border-amber-200 dark:border-amber-700/60 text-xs space-y-1.5">
+                                      <div class="flex items-center justify-between">
+                                        <span class="font-bold text-slate-700 dark:text-slate-300">Disponibilités bénévoles :</span>
+                                        <span class="font-black ${prevVolsCount >= reqVols ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-800 dark:text-amber-300'}">${prevVolsCount} / ${reqVols} confirmés</span>
+                                      </div>
+                                      <div class="w-full bg-slate-200/80 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                                        <div class="h-full bg-amber-500 rounded-full transition-all" style="width: ${Math.min(100, (prevVolsCount / reqVols) * 100)}%"></div>
+                                      </div>
+                                      <div class="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
+                                        <span>Statut : <strong>${d.sollicitationSent ? `Sollicité (${d.relancesCount || 0} relance${(d.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
+                                      </div>
+                                      <div class="flex items-center justify-between text-[10px] pt-0.5">
+                                        <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="text-pc-blue dark:text-sky-400 font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
+                                          <i data-lucide="phone-call" class="w-3 h-3"></i> Sonder
+                                        </button>
+                                        <button onclick="window.game.manualRelancePrevisionnel('${d.id}')" class="text-amber-800 dark:text-amber-400 font-extrabold hover:underline flex items-center gap-1 cursor-pointer">
+                                          <i data-lucide="bell" class="w-3 h-3"></i> Relancer (${d.relancesCount || 0})
+                                        </button>
+                                        <button onclick="window.game.openModule('devis')" class="text-slate-600 dark:text-slate-400 font-bold hover:underline cursor-pointer">
+                                          Devis →
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <!-- Actions rapides -->
+                                    <div class="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-1.5">
+                                      <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-pc-blue to-pc-blue-light text-white text-[11px] font-black shadow-xs hover:brightness-110 transition cursor-pointer">
+                                        Valider avec l'Orga
+                                      </button>
+                                      <button onclick="window.game.refuseDevis('${d.id}')" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 text-slate-700 dark:text-slate-300 hover:text-rose-700 text-[11px] font-bold border border-slate-200 dark:border-slate-600 transition cursor-pointer">
+                                        Refuser
+                                      </button>
+                                    </div>
+                                  </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
+
+                        <!-- SECTION : DEMANDES DE DEVIS DPS REÇUES & EN DÉLIBÉRATION -->
+                        ${filters.devis && selectedDayDevis.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-sky-800 dark:text-sky-300 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="file-text" class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400"></i>
+                              <span>Demandes de Devis DPS (${selectedDayDevis.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDayDevis.map(e => {
+                                const d = e.raw;
+                                const isSent = d.status === 'sent';
+                                const dynBareme = this.calculateDynamicBareme(d);
+
+                                return `
+                                  <div class="p-3.5 rounded-2xl border-2 ${isSent ? 'border-indigo-300 dark:border-indigo-700/60 bg-indigo-50/40 dark:bg-indigo-950/30' : 'border-dashed border-sky-300 dark:border-sky-700/60 bg-sky-50/40 dark:bg-sky-950/30'} flex flex-col justify-between space-y-3">
+                                    <div>
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${isSent ? 'bg-indigo-600 text-white' : 'bg-sky-600 text-white'} uppercase">
+                                          ${isSent ? '⚖️ En Délibération' : '📋 Devis Reçu'}
+                                        </span>
+                                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
+                                        <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">${d.proposedPrice || dynBareme.totalBareme} €</span>
+                                      </div>
+                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${d.eventName}</h5>
+                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                        ${d.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
+                                      </p>
+                                      <p class="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1 mt-0.5">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
+                                        <span>${d.address || 'Adresse sur site'}</span>
+                                      </p>
+                                    </div>
+
+                                    <!-- Actions rapides -->
+                                    <div class="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-1.5">
+                                      ${isSent ? `
+                                        <button onclick="window.game.openModule('devis')" class="w-full py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black transition cursor-pointer">
+                                          Consulter l'arbitrage en cours
+                                        </button>
+                                      ` : `
+                                        <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="flex-1 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black shadow-xs transition cursor-pointer" title="Mettre en prévisionnel pour sonder l'équipe">
+                                          ⏳ Mettre en Prévi
+                                        </button>
+                                        <button onclick="window.game.openModule('devis')" class="flex-1 py-1.5 rounded-xl bg-pc-blue hover:brightness-110 text-white text-[11px] font-black transition cursor-pointer">
+                                          Chiffrer
+                                        </button>
+                                        <button onclick="window.game.refuseDevis('${d.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-rose-50 text-slate-600 dark:text-slate-300 hover:text-rose-700 text-[11px] font-bold border border-slate-200 dark:border-slate-600 transition cursor-pointer" title="Décliner la demande">
+                                          ✕
+                                        </button>
+                                      `}
+                                    </div>
+                                  </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
+
+                        <!-- SECTION 4 : DISPOSITIFS CONFIRMÉS AU PLANNING -->
+                        ${filters.dps && selectedDayMissions.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-slate-700 dark:text-slate-300 tracking-wider flex items-center gap-1.5">
+                              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-pc-blue"></i>
+                              <span>Dispositifs Confirmés & Validés (${selectedDayMissions.length})</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDayMissions.map(e => {
+                                const m = e.raw;
+                                const regCount = m.registeredVolunteers?.length || 0;
+                                const isFull = regCount >= m.requiredVolunteers;
+                                const timeStr = this.formatMissionTimeSlot(m);
+
+                                return `
+                                  <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 flex flex-col justify-between space-y-2.5 shadow-xs">
+                                    <div>
+                                      <div class="flex items-center justify-between">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${timeStr}</span>
+                                        <span class="text-xs font-bold text-emerald-700 dark:text-emerald-400 mono-num">+${m.rewardMoney} €</span>
+                                      </div>
+                                      <h5 class="text-xs font-extrabold text-slate-900 dark:text-white mt-1">${m.title}</h5>
+                                      <p class="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1 mt-0.5">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
+                                        <span>${m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site')}</span>
+                                      </p>
+                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                                    </div>
+
+                                    <div class="pt-2 border-t border-slate-100 dark:border-slate-700/80 space-y-1.5">
+                                      <div class="flex items-center justify-between text-xs font-bold">
+                                        <span class="${isFull ? 'text-emerald-700' : 'text-amber-700'}">
+                                          ${isFull ? '✓ Effectif complet' : `⚠️ Incomplet (${regCount}/${m.requiredVolunteers})`}
+                                        </span>
+                                        <div class="flex gap-2">
+                                          <button onclick="window.game.requestAllianceRenfortForMission('${m.id}')" class="text-indigo-600 hover:underline text-[11px] font-bold cursor-pointer">Renfort</button>
+                                          ${!isFull ? `
+                                            <button onclick="window.game.manualRelanceVolunteers('${m.id}')" class="text-pc-orange hover:underline text-[11px] font-bold cursor-pointer" title="Relancer l'équipe">
+                                              Relancer (${m.relancesCount || 0})
+                                            </button>
+                                          ` : ''}
+                                        </div>
+                                      </div>
+                                      <div class="flex items-center justify-between text-[10px] text-slate-500">
+                                        <span>Statut : <strong>${m.sollicitationSent ? `Sollicité (${m.relancesCount || 0} relance${(m.relancesCount || 0) > 1 ? 's' : ''})` : 'Non sollicité'}</strong></span>
+                                      </div>
+                                      <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                                        <div class="h-full rounded-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (regCount / m.requiredVolunteers) * 100)}%"></div>
+                                      </div>
+                                    </div>
+
+                                    <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="w-full py-1.5 rounded-xl text-xs font-bold glass-button text-slate-800 transition cursor-pointer">
+                                      Fiche détaillée & Inscriptions
+                                    </button>
+                                  </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
+                      </div>
+                    `}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Système d'Alerte & Rappel Automatisé (E-Alerte SaaS) placé SOUS le calendrier et le planning -->
+              <div class="pt-2">
+                ${this.renderAlertSubscriptionBannerHTML()}
+              </div>
+            </div>
+          ` : `
+            <!-- VUE LISTE CHRONOLOGIQUE TOUS PÔLES -->
+            <div class="space-y-4">
+              <!-- Barre de Navigation Temporelle (Vue Liste) -->
+              <div class="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+                <!-- Navigation Mois & Année -->
+                <div class="flex items-center gap-1.5">
+                  <button 
+                    onclick="window.game.changePlanningMonth(-1)" 
+                    class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs transition cursor-pointer" 
+                    title="Mois précédent"
+                  >
+                    ◀
+                  </button>
+                  <span class="text-xs font-black text-slate-900 uppercase px-2 tracking-wide">
+                    📅 ${curMonthName} ${curYear}
+                  </span>
+                  <button 
+                    onclick="window.game.changePlanningMonth(1)" 
+                    class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs transition cursor-pointer" 
+                    title="Mois suivant"
+                  >
+                    ▶
+                  </button>
+                  ${!isViewingCurrentMonth ? `
+                    <button onclick="window.game.resetPlanningToToday()" class="px-2 py-1 rounded-xl text-[10px] font-bold bg-pc-blue/10 text-pc-blue hover:bg-pc-blue/20 transition cursor-pointer">
+                      Mois actuel
+                    </button>
+                  ` : ''}
+                </div>
+
+                <!-- Filtres Période : Tout le mois / Aujourd'hui / Jour Précis -->
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <button 
+                    onclick="window.game.setPlanningListDateFilter('all')" 
+                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${planningListFilter === 'all' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
+                  >
+                    Tout le mois (${activeEvents.length})
+                  </button>
+                  <button 
+                    onclick="window.game.setPlanningListDateFilter('today')" 
+                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${planningListFilter === 'today' ? 'bg-amber-500 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
+                  >
+                    Aujourd'hui (${activeEvents.filter(e => e.eventDate && e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month).length})
+                  </button>
+                  <button 
+                    onclick="window.game.setPlanningListDateFilter('day')" 
+                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${planningListFilter === 'day' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
+                  >
+                    Jour précis (${selectedDay})
+                  </button>
+                </div>
+              </div>
+
+              ${planningListFilter === 'day' ? `
+                <!-- Sélecteur de Jour interactif -->
+                <div class="flex items-center justify-between p-2.5 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs text-indigo-900">
+                  <button onclick="window.game.changePlanningSelectedDay(-1)" class="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-100 text-[11px] font-black cursor-pointer shadow-2xs">
+                    ◀ Jour précédent
+                  </button>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold">Affichage du :</span>
+                    <select onchange="window.game.selectPlanningDay(Number(this.value))" class="px-2 py-1 rounded-lg bg-white border border-indigo-300 font-black text-xs text-indigo-900 cursor-pointer">
+                      ${Array.from({ length: daysInMonth }, (_, i) => {
+                        const d = i + 1;
+                        return `<option value="${d}" ${d === selectedDay ? 'selected' : ''}>${d} ${curMonthName} ${curYear}</option>`;
+                      }).join('')}
+                    </select>
+                  </div>
+                  <button onclick="window.game.changePlanningSelectedDay(1)" class="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-100 text-[11px] font-black cursor-pointer shadow-2xs">
+                    Jour suivant ▶
+                  </button>
+                </div>
+              ` : ''}
+
+              <!-- Barre de Recherche des Événements Planifiés -->
+              <div class="relative">
+                <input 
+                  type="text" 
+                  id="planning-search-input" 
+                  placeholder="🔍 Rechercher un événement (ex: nom, adresse, ville, DPS, Formation, Maraude...)" 
+                  oninput="window.game.filterPlanningList(this.value)"
+                  class="w-full pl-4 pr-10 py-2 rounded-2xl bg-white border border-slate-300 shadow-sm font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
+                />
+                <button type="button" onclick="const inp=document.getElementById('planning-search-input'); if(inp){inp.value=''; window.game.filterPlanningList('');}" class="absolute right-3 top-2 text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
+              </div>
+
+              <div id="planning-search-empty-msg" class="hidden p-6 rounded-2xl glass-card text-center text-xs text-slate-500 italic">
+                Aucun événement ne correspond à votre recherche.
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                ${listEvents.length === 0 ? '<p class="text-xs text-slate-500 p-6 glass-card rounded-2xl text-center col-span-2">Aucun événement planifié pour cette période ou ces filtres.</p>' : ''}
+                ${listEvents.map(e => {
+                  const timeSlot = e.raw ? this.formatMissionTimeSlot(e.raw) : (e.eventDate ? `${String(e.startHour || e.eventDate.hour || 14).padStart(2, '0')}h${String(e.eventDate.minute || 0).padStart(2, '0')}` : '14h00');
+                  const dateStr = e.eventDate ? `${this.formatFullDate(e.eventDate)} à ${timeSlot.split(' à ')[0] || timeSlot}` : 'Date à confirmer';
+                  const isToday = e.eventDate ? (e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month) : false;
+                  const searchText = `${e.title || ''} ${e.type || ''} ${e.scale || ''} ${e.address || ''} ${e.poleLabel || ''}`.toLowerCase();
+
+                  return `
+                    <div class="planning-mission-card p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${isToday ? 'border-amber-300 ring-2 ring-amber-200' : 'border-slate-200/80'}" data-search-text="${searchText}">
+                      <div class="space-y-1.5">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${e.badgeBg}">
+                            ${e.poleLabel} • ${e.type}
+                          </span>
+                          ${e.rewardMoney ? `<span class="text-xs font-bold mono-num text-emerald-600">+${e.rewardMoney} €</span>` : ''}
+                        </div>
+                        <div class="text-[11px] font-black ${isToday ? 'text-amber-600' : 'text-slate-500'}">
+                          📅 ${dateStr} ${isToday ? '⭐ (AUJOURD’HUI)' : ''}
+                        </div>
+                        <h4 class="text-sm font-extrabold text-slate-900">${e.title}</h4>
+                        <p class="text-xs text-slate-700 font-semibold flex items-center gap-1">
+                          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
+                          <span>${e.address}</span>
+                        </p>
+                        <p class="text-xs text-slate-500">${e.scale || 'Activité'} • Durée : <strong>${e.durationHours || 4}h</strong> • Effectifs : <strong>${e.registeredCount}/${e.requiredCount}</strong></p>
+                      </div>
+
+                      <div class="space-y-1.5 pt-2 border-t border-slate-100/70">
+                        <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                          <div class="h-full rounded-full ${e.registeredCount >= e.requiredCount ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (e.registeredCount / (e.requiredCount || 1)) * 100)}%"></div>
+                        </div>
+
+                        ${e.pole === 'dps' || e.pole === 'social' ? `
+                          <button onclick="window.game.closeModal(); window.game.openMissionDetails('${e.id}')" class="w-full py-2 rounded-xl text-xs font-bold glass-button text-slate-800 transition cursor-pointer">
+                            ${e.pole === 'social' ? 'Fiche de la Maraude' : 'Détail du Dispositif'}
+                          </button>
+                        ` : e.pole === 'previ' ? `
+                          <button onclick="window.game.openModule('devis')" class="w-full py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition cursor-pointer">
+                            Gérer le Poste Prévisionnel
+                          </button>
+                        ` : e.pole === 'devis' ? `
+                          <button onclick="window.game.openModule('devis')" class="w-full py-2 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-600 text-white transition cursor-pointer">
+                            Consulter le Devis DPS
+                          </button>
+                        ` : `
+                          <button onclick="window.game.openModule('formations')" class="w-full py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer">
+                            Consulter la Formation
+                          </button>
+                        `}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+
+              <!-- Option SaaS placée sous la liste -->
+              <div class="pt-2">
+                ${this.renderAlertSubscriptionBannerHTML()}
+              </div>
+            </div>
+          `}
+        </div>
+      `;
+      if (currentTab === 'devis' && window.ProtecRNMSC) {
         setTimeout(() => {
           window.ProtecRNMSC.updateSimulatorUI('devis-rnmsc');
         }, 50);
       }
+    } else if (moduleKey === 'devis') {
+      this.activePlanningTab = 'devis';
+      return this.openModule('planning', isBackNavigation);
     } else if (moduleKey === 'recrutement') {
-      title.textContent = 'Pôle Recrutement, Notoriété & Réseaux Sociaux';
-      subtitle.textContent = 'Développez la visibilité de l’antenne et intégrez de nouveaux bénévoles';
+      title.textContent = 'Pôle Recrutement & Ressources Humaines';
+      subtitle.textContent = 'Intégrez de nouveaux bénévoles, volontaires et salariés pour renforcer votre antenne';
       icon.setAttribute('data-lucide', 'user-plus');
 
       // Déduplication préventive des candidatures bénévoles
@@ -19454,53 +19672,19 @@ class ProtecGame {
         }
       }
 
-      const isAntennaVisible = this.resources.campaigns.social || this.resources.campaigns.posters || (this.stats?.dpsCompleted > 0) || (this.resources.reputationScore >= 60);
-
       body.innerHTML = `
         <div class="space-y-6">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
-              <div>
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-extrabold text-sky-900">Réseaux Sociaux (Instagram / TikTok)</span>
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${this.resources.campaigns.social ? 'bg-emerald-600 text-white' : 'glass-button text-slate-600'}">
-                    ${this.resources.campaigns.social ? 'ACTIF' : 'INACTIF'}
-                  </span>
-                </div>
-                <p class="text-xs text-sky-700 mt-1">Génère des candidatures régulières de jeunes et étudiants (150 € / sem).</p>
-              </div>
-              <button onclick="window.game.toggleCampaign('social')" class="w-full py-2 rounded-xl text-xs font-bold ${this.resources.campaigns.social ? 'glass-button text-slate-700' : 'bg-sky-600 text-white'} shadow-sm transition">
-                ${this.resources.campaigns.social ? 'Arrêter la campagne' : 'Activer la campagne (150 €)'}
-              </button>
-            </div>
-
-            <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
-              <div>
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-extrabold text-amber-900">Affichage Municipal & Panneaux Mairie</span>
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${this.resources.campaigns.posters ? 'bg-emerald-600 text-white' : 'glass-button text-slate-600'}">
-                    ${this.resources.campaigns.posters ? 'ACTIF' : 'INACTIF'}
-                  </span>
-                </div>
-                <p class="text-xs text-amber-700 mt-1">Attire des profils d'actifs et de professionnels de santé (200 € / sem).</p>
-              </div>
-              <button onclick="window.game.toggleCampaign('posters')" class="w-full py-2 rounded-xl text-xs font-bold ${this.resources.campaigns.posters ? 'glass-button text-slate-700' : 'bg-amber-600 text-white'} shadow-sm transition">
-                ${this.resources.campaigns.posters ? 'Arrêter la campagne' : 'Activer la campagne (200 €)'}
-              </button>
-            </div>
-          </div>
-
           <!-- Section Postes Salariés Ouverts (CDD / CDI) -->
-          <div class="p-4 rounded-2xl glass-card border border-indigo-200/90 bg-gradient-to-r from-indigo-50/50 via-white to-blue-50/50 space-y-3">
+          <div class="p-4 rounded-2xl glass-card border border-indigo-200/90 dark:border-indigo-500/30 bg-gradient-to-r from-indigo-50/50 via-white to-blue-50/50 dark:from-slate-900 dark:via-indigo-950/40 dark:to-slate-900 space-y-3">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div class="flex items-center gap-2">
-                  <h4 class="text-xs font-black uppercase text-indigo-950 tracking-wider">Offres Ouvertes : Salariés & Services Civiques (${(this.jobOffers || []).length})</h4>
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">Recrutements & Engagements</span>
+                  <h4 class="text-xs font-black uppercase text-indigo-950 dark:text-indigo-200 tracking-wider">Offres Ouvertes : Salariés & Services Civiques (${(this.jobOffers || []).length})</h4>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">Recrutements & Engagements</span>
                 </div>
-                <p class="text-[11px] text-slate-500">Ouvrez des missions de Service Civique (18-25 ans) ou des postes de cadres salariés (CDD/CDI). Les candidatures arrivent progressivement pour passage d'entretien.</p>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400">Ouvrez des missions de Service Civique (18-25 ans) ou des postes de cadres salariés (CDD/CDI). Les candidatures arrivent progressivement pour passage d'entretien.</p>
               </div>
-              <button onclick="window.ProtecPersonnel.openJobOfferModal(window.game)" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-indigo-600 to-blue-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 flex-shrink-0">
+              <button onclick="window.ProtecPersonnel.openJobOfferModal(window.game)" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-indigo-600 to-blue-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer">
                 <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
                 + Ouvrir un Poste / Mission
               </button>
@@ -19508,29 +19692,29 @@ class ProtecGame {
 
             <!-- Liste des offres ouvertes -->
             ${(!this.jobOffers || this.jobOffers.length === 0) ? `
-              <p class="text-[11px] text-slate-500 italic p-3 bg-white/70 rounded-xl border border-dashed border-indigo-200 text-center">
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 italic p-3 bg-white/70 dark:bg-slate-800/60 rounded-xl border border-dashed border-indigo-200 dark:border-indigo-800 text-center">
                 Aucun poste salarié ouvert actuellement. Cliquez sur « + Ouvrir un Poste » pour lancer une offre de recrutement (CDD ou CDI).
               </p>
             ` : `
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                 ${this.jobOffers.map(job => `
-                  <div class="p-3.5 rounded-xl glass-card space-y-2 border border-indigo-100">
+                  <div class="p-3.5 rounded-xl glass-card space-y-2 border border-indigo-100 dark:border-slate-800">
                     <div class="flex items-center justify-between">
-                      <h5 class="text-xs font-black text-slate-900">${job.title}</h5>
-                      <span class="px-2 py-0.5 rounded text-[10px] font-black ${job.contractType === 'CDI' ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'}">
+                      <h5 class="text-xs font-black text-slate-900 dark:text-white">${job.title}</h5>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-black ${job.contractType === 'CDI' ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300' : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'}">
                         ${job.contractType} ${job.durationMonths ? `(${job.durationMonths} mois)` : ''}
                       </span>
                     </div>
-                    <div class="text-[11px] text-slate-600 flex justify-between">
-                      <span>Rémunération : <strong class="text-emerald-700 font-mono">${job.salary} € / mois</strong></span>
+                    <div class="text-[11px] text-slate-600 dark:text-slate-300 flex justify-between">
+                      <span>Rémunération : <strong class="text-emerald-700 dark:text-emerald-400 font-mono">${job.salary} € / mois</strong></span>
                       <span class="text-slate-400">• Forfait 151h</span>
                     </div>
-                    <div class="flex flex-wrap gap-1 text-[9px] font-bold text-slate-600">
-                      ${(job.missions || []).map(m => `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">✓ ${m}</span>`).join('')}
+                    <div class="flex flex-wrap gap-1 text-[9px] font-bold text-slate-600 dark:text-slate-300">
+                      ${(job.missions || []).map(m => `<span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">✓ ${m}</span>`).join('')}
                     </div>
-                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-                      <span class="text-indigo-700 font-bold">${job.applicantsCount || 0} candidature(s) reçue(s)</span>
-                      <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-black">${job.status === 'ouvert' ? 'Diffusion Active' : 'Poste Pourvu'}</span>
+                    <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px]">
+                      <span class="text-indigo-700 dark:text-indigo-400 font-bold">${job.applicantsCount || 0} candidature(s) reçue(s)</span>
+                      <span class="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-black">${job.status === 'ouvert' ? 'Diffusion Active' : 'Poste Pourvu'}</span>
                     </div>
                   </div>
                 `).join('')}
@@ -19544,29 +19728,17 @@ class ProtecGame {
             <div class="space-y-3">
               <div class="flex items-center justify-between">
                 <div>
-                  <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <h4 class="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
                     <i data-lucide="users" class="w-4 h-4 text-pc-blue"></i>
                     Candidatures Bénévoles (${this.candidatures.filter(c => c.type !== 'salarie').length})
                   </h4>
-                  <span class="text-[11px] text-slate-500 font-semibold">Citoyens souhaitant rejoindre l'association</span>
+                  <span class="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Citoyens souhaitant rejoindre l'association</span>
                 </div>
-                <button onclick="window.game.toggleShowCandidatures()" class="px-3 py-1.5 rounded-xl text-xs font-black ${this.showCandidaturesView ? 'bg-slate-200 text-slate-800' : 'bg-pc-blue text-white shadow-sm hover:bg-pc-blue-light'} transition flex items-center gap-1.5 cursor-pointer">
+                <button onclick="window.game.toggleShowCandidatures()" class="px-3 py-1.5 rounded-xl text-xs font-black ${this.showCandidaturesView ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white' : 'bg-pc-blue text-white shadow-sm hover:bg-pc-blue-light'} transition flex items-center gap-1.5 cursor-pointer">
                   <i data-lucide="${this.showCandidaturesView ? 'chevron-up' : 'eye'}" class="w-3.5 h-3.5"></i>
                   <span>${this.showCandidaturesView ? 'Masquer les candidatures' : `Voir les candidatures (${this.candidatures.filter(c => c.type !== 'salarie').length})`}</span>
                 </button>
               </div>
-
-              ${!isAntennaVisible ? `
-                <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 text-xs flex items-start gap-3">
-                  <i data-lucide="eye-off" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
-                  <div class="space-y-1">
-                    <div class="font-black text-amber-950 uppercase tracking-wide">Antenne Invisible au Public</div>
-                    <p class="text-[11px] text-amber-800 leading-relaxed">
-                      Votre antenne vient d'ouvrir ou n'a pas encore de visibilité publique. Sans <strong>campagne de communication</strong> active (Réseaux sociaux ou Affichage mairie) ou de premier <strong>DPS réalisé</strong>, aucun citoyen ne vient postuler spontanément comme bénévole. Lancez une campagne ci-dessus pour faire connaître l'antenne !
-                    </p>
-                  </div>
-                </div>
-              ` : ''}
 
               ${this.showCandidaturesView ? `
                 ${this.candidatures.filter(c => c.type !== 'salarie').length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune candidature bénévole en attente actuellement.</p>' : ''}
@@ -23340,6 +23512,9 @@ class ProtecGame {
         const pendingSdis = this.missions.filter(m => m.type === 'pompiers' && m.status === 'planifie');
         pendingSdis.forEach(m => {
           if (m.spawnedAt && m.maxResponseMinutes) {
+            // Si le joueur a confirmé qu'il met du renfort et que l'équipage est prêt, ne pas annuler
+            if (m.willProvideRenfort && (m.registeredVolunteers || []).length >= (m.requiredVolunteers || 3)) return;
+
             const elapsedMins = (currentTime - m.spawnedAt) / 60000;
             if (elapsedMins > m.maxResponseMinutes && !m.sanctionApplied) {
               m.sanctionApplied = true;
@@ -23361,6 +23536,9 @@ class ProtecGame {
           const pendingSamu = this.missions.filter(m => m.type === 'samu' && m.status === 'planifie');
           pendingSamu.forEach(m => {
             if (m.spawnedAt && m.maxResponseMinutes) {
+              // Si le joueur a confirmé qu'il met du renfort et que l'équipage est prêt, ne pas annuler
+              if (m.willProvideRenfort && (m.registeredVolunteers || []).length >= (m.requiredVolunteers || 3)) return;
+
               const elapsedMins = (currentTime - m.spawnedAt) / 60000;
               if (elapsedMins > m.maxResponseMinutes && !m.sanctionApplied) {
                 m.sanctionApplied = true;

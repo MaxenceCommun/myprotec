@@ -696,6 +696,9 @@ window.ProtecFormations = {
 
     if (won) {
       proposal.status = 'accepted';
+      if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordDevisSigned === 'function') {
+        window.ProtecAdvanced.recordDevisSigned(game, proposal);
+      }
       game.showToast(
         'Devis Signé ! 🎉',
         `L’entreprise « ${proposal.client_name} » a accepté votre devis de ${proposal.proposed_price.toLocaleString('fr-FR')} € ! Affectez votre formateur et planifiez la session.`,
@@ -1813,6 +1816,9 @@ window.ProtecFormations = {
       if (!session.registeredCandidates.includes(vol.id)) {
         session.registeredCandidates.push(vol.id);
         vol.registeredSessionId = session.id;
+        if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordVolunteerRecycled === 'function') {
+          window.ProtecAdvanced.recordVolunteerRecycled(game, vol);
+        }
         game.saveGame();
         if (window.ProtecAudio) window.ProtecAudio.playClickSound();
         game.showToast('Inscription Recyclage Validée', `${vol.name} est inscrit(e) à la session « ${session.title} » pour renouveler ses compétences.`, 'green');
@@ -1857,6 +1863,9 @@ window.ProtecFormations = {
         if (!Array.isArray(session.registeredCandidates)) session.registeredCandidates = [];
         session.registeredCandidates.push(v.id);
         v.registeredSessionId = session.id;
+        if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordVolunteerRecycled === 'function') {
+          window.ProtecAdvanced.recordVolunteerRecycled(game, v);
+        }
         count++;
       }
     });
@@ -2168,6 +2177,10 @@ window.ProtecFormations = {
 
     const summaryText = attendeeParts.join(', ');
     const msg = `Formation validée avec succès : ${summaryText} ! (+${repGain} réputation)${totalRevenue > 0 ? ` (+${totalRevenue} €)` : ''}${tierNotice}`;
+
+    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordFormationCompleted === 'function') {
+      window.ProtecAdvanced.recordFormationCompleted(game, session);
+    }
 
     game.showToast('Session Validée & Certifiée ! 🎓', msg, 'green');
     this.renderModal(game);

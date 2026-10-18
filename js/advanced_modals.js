@@ -9,20 +9,20 @@ window.ProtecAdvancedModals = {
       window.ProtecAdvanced.updateTasksProgress(game);
     }
     const r = game.rewards || { streakDays: 1, dailyTasks: [], weeklyTasks: [] };
-    const hasAntenna = game.stations && game.stations.length > 0;
-    const today = game.clock.day;
-    const canClaimStreak = window.ProtecAdvanced && typeof window.ProtecAdvanced.canClaimDailyStreak === 'function'
-      ? window.ProtecAdvanced.canClaimDailyStreak(game)
-      : (hasAntenna && (r.lastDailyClaimDay !== today));
+    const streakInfo = window.ProtecAdvanced && typeof window.ProtecAdvanced.getStreakInfo === 'function'
+      ? window.ProtecAdvanced.getStreakInfo(game)
+      : { streakDays: Number(r.streakDays) || 1, targetClaimDay: 1, canClaim: true, alreadyClaimedToday: false, isBroken: false, hasAntenna: true };
 
-    const streakList = [
-      { day: 1, title: 'Jour 1', gift: '300 € + O2', icon: '🎁' },
-      { day: 2, title: 'Jour 2', gift: '450 € + Agrément', icon: '🎖️' },
-      { day: 3, title: 'Jour 3', gift: '600 € + DAE', icon: '⚡' },
-      { day: 4, title: 'Jour 4', gift: '750 € + Notoriété', icon: '📣' },
-      { day: 5, title: 'Jour 5', gift: '900 € + Soins', icon: '🩹' },
-      { day: 6, title: 'Jour 6', gift: '1 200 € + Dotation', icon: '⭐' },
-      { day: 7, title: 'Jour 7', gift: '2 500 € + FÉDÉRAL', icon: '🏆' }
+    const hasAntenna = streakInfo.hasAntenna;
+    const canClaimStreak = streakInfo.canClaim;
+    const streakList = window.ProtecAdvanced?.streakRewardsCatalog || [
+      { day: 1, title: 'Jour 1', shortDesc: '350 € + 2x O2 B5', icon: '🎁' },
+      { day: 2, title: 'Jour 2', shortDesc: '500 € + DAE + Rép.', icon: '⚡' },
+      { day: 3, title: 'Jour 3', shortDesc: '650 € + 4x Soins SUAP', icon: '🩹' },
+      { day: 4, title: 'Jour 4', shortDesc: '800 € + 80 Abonnés', icon: '📣' },
+      { day: 5, title: 'Jour 5', shortDesc: '1 000 € + Colliers', icon: '⭐' },
+      { day: 6, title: 'Jour 6', shortDesc: '1 500 € + 25 Agrément', icon: '🎖️' },
+      { day: 7, title: 'Jour 7', shortDesc: '3 500 € + Grand Lot Fédéral', icon: '🏆' }
     ];
 
     return `
@@ -37,67 +37,134 @@ window.ProtecAdvancedModals = {
           </div>
         ` : ''}
 
-        <!-- Bandeau Dotation Quotidienne -->
-        <div class="p-5 rounded-2xl bg-gradient-to-r from-rose-500 via-pink-600 to-purple-600 text-white shadow-xl space-y-3">
-          <div class="flex items-center justify-between">
+        <!-- Bandeau Dotation Quotidienne & Série Consécutive -->
+        <div class="p-5 rounded-3xl bg-gradient-to-r from-rose-500 via-pink-600 to-purple-600 text-white shadow-xl space-y-3.5 relative overflow-hidden">
+          <!-- Effet lumineux d'arrière-plan -->
+          <div class="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
             <div>
-              <span class="text-xs font-black uppercase tracking-wider text-rose-200">Série de Connexion Quotidienne</span>
-              <h3 class="text-lg font-black mt-0.5">Série en cours : Jour ${r.streakDays || 1} / 7</h3>
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] font-black uppercase tracking-wider text-rose-200">Dotation Fédérale & Assiduité</span>
+                ${streakInfo.isBroken ? `
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-400 text-slate-950 shadow-xs animate-pulse">Série interrompue</span>
+                ` : streakInfo.alreadyClaimedToday ? `
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-400 text-slate-950 shadow-xs">À jour ✓</span>
+                ` : `
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-yellow-300 text-slate-950 shadow-xs">Dotation prête !</span>
+                `}
+              </div>
+              <h3 class="text-lg font-black mt-0.5 flex items-center gap-2">
+                <span>Série de Connexion : Jour ${streakInfo.targetClaimDay} / 7</span>
+                <span class="text-xs font-medium text-white/80">(${streakInfo.streakDays} jour(s) validé(s))</span>
+              </h3>
             </div>
-            <button onclick="window.ProtecAdvanced.claimDailyStreak(window.game)" class="px-5 py-2.5 rounded-xl font-black text-xs ${canClaimStreak ? 'bg-white text-rose-600 hover:bg-rose-50 shadow-lg animate-bounce' : 'bg-white/30 text-white cursor-not-allowed'} transition">
-              ${canClaimStreak ? '🎁 Réclamer mon Cadeau' : (!hasAntenna ? '📍 Antenne requise' : 'Déjà réclamé aujourd’hui ✓')}
+
+            <button onclick="window.ProtecAdvanced.claimDailyStreak(window.game)" 
+              class="px-5 py-2.5 rounded-2xl font-black text-xs transition shadow-lg cursor-pointer flex items-center justify-center gap-2 ${canClaimStreak ? 'bg-white text-rose-600 hover:bg-rose-50 hover:scale-105 animate-bounce ring-4 ring-white/30' : 'bg-white/30 text-white/90 cursor-not-allowed'}"
+              ${!canClaimStreak ? 'disabled' : ''}>
+              ${canClaimStreak 
+                ? `🎁 Réclamer la Dotation du Jour ${streakInfo.targetClaimDay}` 
+                : (!hasAntenna ? '📍 Antenne requise' : `✓ Déjà réclamé aujourd’hui (Revenez demain)`)}
             </button>
           </div>
 
+          <!-- Alerte explicative si la série a été rompue pour cause d'absence hier -->
+          ${streakInfo.isBroken ? `
+            <div class="p-3 bg-black/25 backdrop-blur-xs border border-amber-300/50 rounded-2xl flex items-center gap-2.5 text-xs text-amber-100">
+              <span class="text-xl shrink-0">⚠️</span>
+              <div>
+                <strong class="text-amber-300">Série interrompue :</strong> Vous ne vous êtes pas connecté hier. La série de connexion quotidienne exige une assiduité quotidienne sans interruption pour atteindre le bonus du Jour 7. Votre série est repartie au <strong>Jour 1</strong> !
+              </div>
+            </div>
+          ` : streakInfo.alreadyClaimedToday ? `
+            <div class="p-2.5 bg-black/20 backdrop-blur-xs rounded-xl flex items-center gap-2 text-xs text-emerald-200 font-semibold">
+              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-300 shrink-0"></i>
+              <span>Dotation quotidienne récupérée ! Revenez demain pour franchir le <strong>Jour ${(streakInfo.streakDays >= 7) ? 1 : (streakInfo.streakDays + 1)}</strong>.</span>
+            </div>
+          ` : `
+            <div class="p-2.5 bg-black/20 backdrop-blur-xs rounded-xl flex items-center gap-2 text-xs text-rose-100">
+              <i data-lucide="flame" class="w-4 h-4 text-yellow-300 shrink-0 animate-pulse"></i>
+              <span>Série consécutive en cours ! Connectez-vous chaque jour pour débloquer le Super Bonus Fédéral du Jour 7.</span>
+            </div>
+          `}
+
           <!-- Paliers des 7 jours -->
-          <div class="grid grid-cols-4 sm:grid-cols-7 gap-2 pt-2">
+          <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 pt-1">
             ${streakList.map(s => {
-              const isPast = (r.streakDays || 1) > s.day;
-              const isCurrent = (r.streakDays || 1) === s.day;
+              const isClaimedPast = s.day < streakInfo.targetClaimDay || (streakInfo.alreadyClaimedToday && s.day <= streakInfo.targetClaimDay);
+              const isTargetToday = (s.day === streakInfo.targetClaimDay) && !streakInfo.alreadyClaimedToday;
+              const isFuture = s.day > streakInfo.targetClaimDay;
 
               return `
-                <div class="p-2 rounded-xl text-center text-xs flex flex-col justify-between ${isCurrent ? 'bg-white text-slate-900 shadow-md ring-2 ring-yellow-300' : (isPast ? 'bg-white/20 text-white/90' : 'bg-black/20 text-white/60')}">
-                  <span class="text-[10px] font-bold">${s.title}</span>
-                  <span class="text-xl my-1">${s.icon}</span>
-                  <span class="text-[9px] font-extrabold truncate">${s.gift}</span>
+                <div class="p-2.5 rounded-2xl text-center text-xs flex flex-col justify-between transition-all duration-200 ${
+                  isTargetToday 
+                    ? 'bg-white text-slate-900 shadow-xl ring-4 ring-yellow-300 scale-105 font-black' 
+                    : isClaimedPast 
+                      ? 'bg-white/20 text-white border border-white/30' 
+                      : 'bg-black/25 text-white/60 border border-white/10'
+                }">
+                  <div class="flex items-center justify-between text-[10px] font-bold">
+                    <span>${s.title}</span>
+                    ${isClaimedPast ? '<span class="text-emerald-300 text-xs font-black">✓</span>' : (isTargetToday ? '<span class="text-rose-600 text-[9px] font-black animate-pulse">PRÊT</span>' : '<span class="text-white/40 text-[9px]">🔒</span>')}
+                  </div>
+                  <span class="text-2xl my-1.5">${s.icon}</span>
+                  <span class="text-[9.5px] leading-tight font-extrabold line-clamp-2">${s.shortDesc || s.gift}</span>
                 </div>
               `;
             }).join('')}
           </div>
         </div>
 
-        <!-- Objectifs Quotidiens -->
+        <!-- Objectifs Quotidiens (Missions du Jour) -->
         <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Objectifs du Jour (Missions 24h)</h4>
-            <span class="text-[11px] text-slate-400">Renouvelés chaque jour simulé</span>
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <i data-lucide="target" class="w-4 h-4 text-pc-blue"></i>
+                <span>Objectifs du Jour (Missions 24h)</span>
+              </h4>
+              <p class="text-[11px] text-slate-500">Missions opérationnelles, logistique et formations renouvelées chaque jour.</p>
+            </div>
+            <span class="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-600 font-bold text-[10px] border border-slate-200">
+              📅 Renouvellement à minuit
+            </span>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            ${r.dailyTasks.map(t => {
+            ${(r.dailyTasks || []).map(t => {
               const cur = t.current || 0;
               const pct = Math.min(100, Math.round((cur / t.goal) * 100));
               const canClaim = !t.done && (cur >= t.goal);
 
               return `
-                <div class="p-3.5 rounded-2xl glass-card space-y-2 flex flex-col justify-between border ${canClaim ? 'border-emerald-300 ring-1 ring-emerald-300' : 'border-slate-200'}">
-                  <div>
-                    <div class="flex justify-between items-center text-xs">
-                      <span class="font-bold text-slate-800">${t.title}</span>
-                      <span class="font-mono font-extrabold text-emerald-600">+${t.reward} €</span>
+                <div class="p-4 rounded-3xl glass-card space-y-3 flex flex-col justify-between border transition ${canClaim ? 'border-emerald-400 ring-2 ring-emerald-300/40 bg-emerald-50/20' : 'border-slate-200/90'}">
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-start gap-2">
+                      <div class="flex items-start gap-2">
+                        <div class="w-7 h-7 rounded-xl ${canClaim || t.done ? 'bg-emerald-100 text-emerald-800' : 'bg-pc-blue/10 text-pc-blue'} flex items-center justify-center shrink-0 text-xs font-black">
+                          <i data-lucide="${t.icon || 'shield'}" class="w-4 h-4"></i>
+                        </div>
+                        <span class="font-extrabold text-xs text-slate-800 leading-snug">${t.title}</span>
+                      </div>
+                      <span class="font-mono font-black text-emerald-700 text-xs shrink-0 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">+${t.reward} €</span>
                     </div>
-                    <div class="flex items-center justify-between text-[10px] text-slate-400 mt-1">
-                      <span>Progression</span>
-                      <span class="font-bold text-slate-600 font-mono">${cur} / ${t.goal}</span>
-                    </div>
-                    <div class="w-full bg-slate-200/60 h-2 rounded-full overflow-hidden mt-1">
-                      <div class="${t.done || canClaim ? 'bg-emerald-500' : 'bg-pc-blue'} h-full rounded-full transition-all duration-300" style="width: ${t.done ? '100%' : pct + '%'}"></div>
+
+                    <div class="space-y-1 pt-1">
+                      <div class="flex items-center justify-between text-[10px] text-slate-500 font-semibold">
+                        <span>Progression</span>
+                        <span class="font-black text-slate-700 font-mono">${cur} / ${t.goal}</span>
+                      </div>
+                      <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200/60">
+                        <div class="${t.done || canClaim ? 'bg-emerald-500' : 'bg-pc-blue'} h-full rounded-full transition-all duration-300" style="width: ${t.done ? '100%' : pct + '%'}"></div>
+                      </div>
                     </div>
                   </div>
+
                   <button onclick="window.ProtecAdvanced.claimTaskReward(window.game, '${t.id}', false)" 
-                    class="w-full py-1.5 rounded-xl text-xs font-bold transition ${t.done ? 'bg-slate-200/60 text-slate-400 cursor-not-allowed' : (canClaim ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow animate-bounce' : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed')}"
+                    class="w-full py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${t.done ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' : (canClaim ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md animate-bounce' : 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed')}"
                     ${!canClaim && !t.done ? 'disabled' : ''}>
-                    ${t.done ? 'Accompli ✓' : (canClaim ? 'Réclamer (+ ' + t.reward + ' €)' : 'En cours (' + cur + '/' + t.goal + ')')}
+                    ${t.done ? 'Accompli ✓' : (canClaim ? '🎁 Réclamer Récompense' : `En cours (${cur}/${t.goal})`)}
                   </button>
                 </div>
               `;
@@ -107,29 +174,53 @@ window.ProtecAdvancedModals = {
 
         <!-- Défis Hebdomadaires -->
         <div class="space-y-3">
-          <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Défis de la Semaine</h4>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            ${r.weeklyTasks.map(w => {
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <i data-lucide="award" class="w-4 h-4 text-purple-600"></i>
+                <span>Défis de la Semaine (Engagement de Sécurité Civile)</span>
+              </h4>
+              <p class="text-[11px] text-slate-500">Objectifs de fond récompensant le rayonnement et le volume d’activité de l’antenne.</p>
+            </div>
+            <span class="px-2.5 py-1 rounded-xl bg-purple-50 text-purple-800 font-bold text-[10px] border border-purple-200">
+              ⚡ Bonus hebdomadaires
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            ${(r.weeklyTasks || []).map(w => {
               const cur = w.current || 0;
               const pct = Math.min(100, Math.round((cur / w.goal) * 100));
               const canClaim = !w.done && (cur >= w.goal);
 
               return `
-                <div class="p-4 rounded-2xl glass-card flex items-center justify-between gap-4 border ${canClaim ? 'border-emerald-300 ring-1 ring-emerald-300' : 'border-slate-200'}">
-                  <div class="flex-1 space-y-1.5">
-                    <span class="text-xs font-bold text-slate-800 block">${w.title}</span>
-                    <div class="flex items-center justify-between text-[11px] text-slate-500">
-                      <span>Progression : <strong class="font-mono text-slate-700">${cur} / ${w.goal}</strong></span>
-                      <span>Gain : <strong class="text-emerald-700 font-mono">+${w.reward} €</strong></span>
+                <div class="p-4 rounded-3xl glass-card flex flex-col justify-between gap-3 border transition ${canClaim ? 'border-emerald-400 ring-2 ring-emerald-300/40 bg-emerald-50/20' : 'border-slate-200/90'}">
+                  <div class="space-y-2">
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="flex items-start gap-2">
+                        <div class="w-7 h-7 rounded-xl ${canClaim || w.done ? 'bg-emerald-100 text-emerald-800' : 'bg-purple-100 text-purple-800'} flex items-center justify-center shrink-0 text-xs font-black">
+                          <i data-lucide="${w.icon || 'star'}" class="w-4 h-4"></i>
+                        </div>
+                        <span class="text-xs font-extrabold text-slate-800 leading-snug">${w.title}</span>
+                      </div>
+                      <span class="text-xs font-mono font-black text-purple-800 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200 shrink-0">+${w.reward} €</span>
                     </div>
-                    <div class="w-full bg-slate-200/60 h-2 rounded-full overflow-hidden">
-                      <div class="${w.done || canClaim ? 'bg-emerald-500' : 'bg-pc-blue'} h-full rounded-full transition-all duration-300" style="width: ${w.done ? '100%' : pct + '%'}"></div>
+
+                    <div class="space-y-1 pt-1">
+                      <div class="flex items-center justify-between text-[10px] text-slate-500 font-semibold">
+                        <span>Progression</span>
+                        <span class="font-black text-slate-700 font-mono">${cur} / ${w.goal}</span>
+                      </div>
+                      <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200/60">
+                        <div class="${w.done || canClaim ? 'bg-emerald-500' : 'bg-purple-600'} h-full rounded-full transition-all duration-300" style="width: ${w.done ? '100%' : pct + '%'}"></div>
+                      </div>
                     </div>
                   </div>
+
                   <button onclick="window.ProtecAdvanced.claimTaskReward(window.game, '${w.id}', true)" 
-                    class="px-4 py-2 rounded-xl text-xs font-extrabold transition flex-shrink-0 ${w.done ? 'bg-slate-200/60 text-slate-400 cursor-not-allowed' : (canClaim ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow animate-bounce' : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed')}"
+                    class="w-full py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 ${w.done ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' : (canClaim ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md animate-bounce' : 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed')}"
                     ${!canClaim && !w.done ? 'disabled' : ''}>
-                    ${w.done ? 'Validé ✓' : (canClaim ? 'Réclamer (+ ' + w.reward + ' €)' : 'En cours (' + cur + '/' + w.goal + ')')}
+                    ${w.done ? 'Validé ✓' : (canClaim ? '🎁 Réclamer Récompense' : `En cours (${cur}/${w.goal})`)}
                   </button>
                 </div>
               `;

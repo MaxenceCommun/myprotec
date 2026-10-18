@@ -130,6 +130,10 @@ window.ProtecSmsMobilization = {
     const reqCount = mission.requiredVolunteers || 4;
     const neededCount = Math.max(1, reqCount - regCount);
 
+    const maxDepartureDelayMinutes = mission.smsConsigne?.maxDepartureDelayMinutes !== undefined
+      ? mission.smsConsigne.maxDepartureDelayMinutes
+      : (mission.maxDepartureDelayMinutes !== undefined ? mission.maxDepartureDelayMinutes : (isCrisis || isUrgent ? 20 : 30));
+
     return {
       whatHappened,
       pcMissions,
@@ -137,7 +141,8 @@ window.ProtecSmsMobilization = {
       consigne: defaultConsigne,
       rdvTime: suggestedRdvTime,
       requiredSkill: (isCrisis || isUrgent) ? 'chauffeur' : 'tous',
-      targetCount: neededCount
+      targetCount: neededCount,
+      maxDepartureDelayMinutes
     };
   },
 
@@ -151,10 +156,16 @@ window.ProtecSmsMobilization = {
       consigneDetail = `Rendez-vous à la base d'antenne fixé à ${config.rdvTime} pour armement et briefing.`;
     }
 
+    const maxDelay = parseInt(config.maxDepartureDelayMinutes, 10);
+    const delayLine = (maxDelay && maxDelay > 0)
+      ? `DÉLAI DÉPART MAX : Présentation sous ${maxDelay} min max (trajet domicile ➔ base)\n`
+      : '';
+
     return `[PROTECTION CIVILE - ALERTE MISSION]\n` +
       `SITUATION : ${config.whatHappened}\n` +
       `MISSIONS PC : ${config.pcMissions}\n` +
       `EFFECTIFS : ${config.targetCount} secouriste(s) [Profil : ${skillLabel}]\n` +
+      delayLine +
       `CONSIGNES : ${consigneDetail}\n` +
       `\nRépondez "1" (DISPO) ou "2" (INDISPO).`;
   },
@@ -186,7 +197,8 @@ window.ProtecSmsMobilization = {
       consigne: isUpdate ? (existing.consigne === 'attente_domicile' ? 'base_immediat' : existing.consigne) : (existing.consigne || defaults.consigne),
       rdvTime: existing.rdvTime || defaults.rdvTime,
       requiredSkill: existing.requiredSkill || defaults.requiredSkill,
-      targetCount: defaults.targetCount
+      targetCount: defaults.targetCount,
+      maxDepartureDelayMinutes: existing.maxDepartureDelayMinutes !== undefined ? existing.maxDepartureDelayMinutes : defaults.maxDepartureDelayMinutes
     };
 
     // Objectifs sélectionnés actuels
@@ -347,6 +359,39 @@ window.ProtecSmsMobilization = {
                   <button type="button" onclick="window.ProtecSmsMobilization.setRdvPreset('${mission.id}', null, '07h00')" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100">07h00</button>
                 </div>
               </div>
+            </div>
+
+            <!-- 3bis. DÉLAI MAXIMUM DE DÉPART (TRAJET DOMICILE ➔ BASE) -->
+            <div class="space-y-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+              <label class="block text-xs font-black uppercase text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                <span class="flex items-center gap-1.5">
+                  <span class="w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] flex items-center justify-center font-mono">⏱️</span>
+                  <span>Délai maximum de départ (Trajet Domicile ➔ Base)</span>
+                </span>
+                <span class="text-[10px] text-amber-600 dark:text-amber-400 font-bold font-mono">Contrôle de trajet</span>
+              </label>
+
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-xs text-slate-600 dark:text-slate-300">Temps max pour rallier la base :</span>
+                <div class="flex items-center gap-1.5">
+                  <input type="number" id="sms-max-delay" min="0" max="180" step="5" value="${config.maxDepartureDelayMinutes || 0}" oninput="window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" class="w-20 px-2.5 py-1 text-center font-black text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                  <span class="text-xs font-bold text-slate-500">min</span>
+                </div>
+              </div>
+
+              <!-- Raccourcis délai max -->
+              <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                <span class="text-[9px] text-slate-400 font-bold">Raccourcis :</span>
+                <button type="button" onclick="window.ProtecSmsMobilization.setMaxDelayPreset('${mission.id}', 10)" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100">10 min</button>
+                <button type="button" onclick="window.ProtecSmsMobilization.setMaxDelayPreset('${mission.id}', 15)" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100">15 min</button>
+                <button type="button" onclick="window.ProtecSmsMobilization.setMaxDelayPreset('${mission.id}', 20)" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100">20 min</button>
+                <button type="button" onclick="window.ProtecSmsMobilization.setMaxDelayPreset('${mission.id}', 30)" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100">30 min</button>
+                <button type="button" onclick="window.ProtecSmsMobilization.setMaxDelayPreset('${mission.id}', 45)" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100">45 min</button>
+                <button type="button" onclick="window.ProtecSmsMobilization.setMaxDelayPreset('${mission.id}', 0)" class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-500 cursor-pointer hover:bg-slate-300">Illimité (0)</button>
+              </div>
+              <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                ℹ️ Avant de répondre disponible, chaque bénévole vérifie si son trajet domicile ➔ base respecte ce délai. Modifiable à tout moment selon l'évolution de la situation.
+              </p>
             </div>
 
             <!-- 4. COMPÉTENCES & EFFECTIFS REQUIS -->
@@ -565,6 +610,67 @@ window.ProtecSmsMobilization = {
     }
   },
 
+  // Réglage rapide du délai maximum de départ
+  setMaxDelayPreset(missionId, minutes) {
+    const input = document.getElementById('sms-max-delay');
+    if (input) {
+      input.value = minutes;
+      this.updateSmsPreview(missionId);
+    }
+  },
+
+  // Modification rapide du délai maximum de départ à tout moment en fonction de l'évolution de la situation
+  quickEditMaxDelay(missionId) {
+    const game = window.game;
+    if (!game) return;
+    const mission = game.missions.find(m => m.id === missionId);
+    if (!mission) return;
+
+    const currentDelay = mission.smsConsigne?.maxDepartureDelayMinutes !== undefined
+      ? mission.smsConsigne.maxDepartureDelayMinutes
+      : (mission.maxDepartureDelayMinutes !== undefined ? mission.maxDepartureDelayMinutes : 20);
+
+    const inputVal = prompt(
+      `MODIFICATION DU DÉLAI MAXIMUM DE DÉPART (Évolution de situation) :\n\nIndiquez le délai maximum en minutes (trajet domicile ➔ base) exigé pour cette mission :\n(0 pour aucun délai / illimité)`,
+      currentDelay > 0 ? String(currentDelay) : '20'
+    );
+
+    if (inputVal === null) return; // Annulé
+
+    const parsedDelay = Math.max(0, parseInt(inputVal.trim(), 10) || 0);
+
+    if (!mission.smsConsigne) mission.smsConsigne = {};
+    mission.smsConsigne.maxDepartureDelayMinutes = parsedDelay;
+    mission.maxDepartureDelayMinutes = parsedDelay;
+
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const delayLabel = parsedDelay > 0 ? `${parsedDelay} min max` : 'Illimité (sans contrainte)';
+
+    if (!Array.isArray(mission.smsHistory)) mission.smsHistory = [];
+    mission.smsHistory.unshift({
+      time: timeStr,
+      isUpdate: true,
+      consigne: mission.smsConsigne.consigne || 'attente_domicile',
+      consigneLabel: `Ajustement Délai Départ : ${delayLabel}`,
+      targetCount: mission.smsConsigne.targetCount || 1,
+      text: `[ÉVOLUTION OPÉRATIONNELLE]\nDélai maximum de départ (trajet domicile ➔ base) réajusté à : ${delayLabel}.`
+    });
+
+    game.showToast(
+      'Délai de Départ Modifié',
+      `Le délai maximum a été ajusté à ${delayLabel} en direct.`,
+      'blue'
+    );
+
+    game.saveGame();
+    game.renderMissions();
+    game.updateStatsUI();
+    if (game.selectedMissionId === mission.id) {
+      game.openMissionDetails(mission.id);
+    }
+  },
+
   // Ajustement rapide de l'effectif cible
   setTargetCount(missionId, count) {
     const input = document.getElementById('sms-target-count');
@@ -605,6 +711,7 @@ window.ProtecSmsMobilization = {
     const rdvTime = document.getElementById('sms-rdv-time')?.value || '18h30';
     const skill = document.getElementById('sms-skill')?.value || 'tous';
     const count = parseInt(document.getElementById('sms-target-count')?.value || '1', 10);
+    const maxDelay = parseInt(document.getElementById('sms-max-delay')?.value || '0', 10);
 
     const config = {
       whatHappened: what,
@@ -612,7 +719,8 @@ window.ProtecSmsMobilization = {
       consigne: consigne,
       rdvTime: rdvTime,
       requiredSkill: skill,
-      targetCount: count
+      targetCount: count,
+      maxDepartureDelayMinutes: maxDelay
     };
 
     const previewEl = document.getElementById('sms-preview-text');
@@ -641,6 +749,7 @@ window.ProtecSmsMobilization = {
     const skill = document.getElementById('sms-skill')?.value || 'tous';
     const targetCount = parseInt(document.getElementById('sms-target-count')?.value || '4', 10);
     const recipientMode = document.querySelector('input[name="sms-recipients"]:checked')?.value || 'all_available';
+    const maxDepartureDelayMinutes = parseInt(document.getElementById('sms-max-delay')?.value || '0', 10);
 
     const config = {
       whatHappened: what,
@@ -650,7 +759,8 @@ window.ProtecSmsMobilization = {
       rdvTime: rdvTime,
       requiredSkill: skill,
       targetCount: targetCount,
-      recipientMode: recipientMode
+      recipientMode: recipientMode,
+      maxDepartureDelayMinutes: maxDepartureDelayMinutes
     };
 
     // Fermer la modale
@@ -658,6 +768,7 @@ window.ProtecSmsMobilization = {
 
     // Enregistrer la consigne active sur la mission
     mission.smsConsigne = config;
+    mission.maxDepartureDelayMinutes = maxDepartureDelayMinutes;
 
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -795,8 +906,20 @@ window.ProtecSmsMobilization = {
         if (!currentMission) return;
         if (['completed', 'canceled_favorable'].includes(currentMission.status)) return;
 
+        // 1. S'assurer que le secouriste a ses données de résidence et temps de ralliement
+        if (window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
+          window.ProtecPersonnel.ensureVolunteerResidence(vol, game);
+        }
+
+        // 2. Calcul du trajet entre le domicile et la Base avant de répondre disponible
+        const isOnBase = Boolean(vol.onBase || vol.status === 'sdis_caserne' || vol.status === 'poste');
+        const rallyMinutes = isOnBase ? 0 : (vol.temps_ralliement_minutes !== undefined ? vol.temps_ralliement_minutes : (vol.temps_trajet_base_minutes !== undefined ? vol.temps_trajet_base_minutes : 12));
+
+        const maxDelay = config.maxDepartureDelayMinutes !== undefined ? parseInt(config.maxDepartureDelayMinutes, 10) : 0;
+        const delayRespected = (maxDelay <= 0) || (rallyMinutes <= maxDelay);
+
         const isFull = (currentMission.registeredVolunteers || []).length >= (currentMission.requiredVolunteers || 1);
-        const willAccept = !isFull && evalResult.isAvailable;
+        const willAccept = !isFull && evalResult.isAvailable && delayRespected;
         const now = new Date();
         const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
         if (!Array.isArray(currentMission.smsResponses)) currentMission.smsResponses = [];
@@ -813,13 +936,25 @@ window.ProtecSmsMobilization = {
           if (config.consigne === 'base_immediat') {
             const transit = game.initVolunteerCrisisTransit(currentMission, vol.id);
             transitLaunched = true;
-            replyMsg = `Présent(e) ! Je pars immédiatement de chez moi vers la base (trajet ~${transit?.rallyMinutes || 10} min).`;
+            if (maxDelay > 0) {
+              replyMsg = `Présent(e) ! Trajet domicile ➔ base estimé à ${rallyMinutes} min (délai respecté ≤ ${maxDelay} min). Je quitte mon domicile immédiatement.`;
+            } else {
+              replyMsg = `Présent(e) ! Je pars immédiatement de chez moi vers la base (trajet ~${transit?.rallyMinutes || rallyMinutes} min).`;
+            }
           } else if (config.consigne === 'base_horaire') {
-            replyMsg = `Présent(e) ! Bien noté pour le rendez-vous à la base à ${config.rdvTime}. Je serai là.`;
+            if (maxDelay > 0) {
+              replyMsg = `Présent(e) ! Trajet base à ${rallyMinutes} min (conforme au délai max de ${maxDelay} min). RDV bien noté à ${config.rdvTime}.`;
+            } else {
+              replyMsg = `Présent(e) ! Bien noté pour le rendez-vous à la base à ${config.rdvTime}. Je serai là.`;
+            }
           } else if (config.consigne === 'attente_domicile') {
-            replyMsg = `Présent(e) ! Je reste chez moi en veille réflexe, téléphone à portée.`;
+            replyMsg = maxDelay > 0
+              ? `Présent(e) ! En veille réflexe chez moi (trajet base à ${rallyMinutes} min, délai ≤ ${maxDelay} min OK). Téléphone à portée.`
+              : `Présent(e) ! Je reste chez moi en veille réflexe, téléphone à portée.`;
           } else if (config.consigne === 'attente_appel') {
-            replyMsg = `Disponible ! J'attends l'appel direct de l'astreinte si retenu(e).`;
+            replyMsg = maxDelay > 0
+              ? `Disponible ! J'attends l'appel de l'astreinte (trajet base : ${rallyMinutes} min ≤ ${maxDelay} min).`
+              : `Disponible ! J'attends l'appel direct de l'astreinte si retenu(e).`;
           }
 
           currentMission.smsResponses.unshift({
@@ -827,6 +962,7 @@ window.ProtecSmsMobilization = {
             volunteerName: vol.name,
             rank: vol.rank || 'Secouriste',
             isAvailable: true,
+            rallyMinutes: rallyMinutes,
             consigne: config.consigne,
             message: replyMsg,
             time: timeStr
@@ -842,12 +978,26 @@ window.ProtecSmsMobilization = {
             game.checkEnginProgressNotification(currentMission);
           }, 900);
         } else if (!isFull) {
-          if (Math.random() < 0.75) {
+          // Si le bénévole est disponible mais que son trajet dépasse le délai maximum imposé
+          if (evalResult.isAvailable && !delayRespected) {
+            const rejectMsg = `Délai impossible : domicile à ${rallyMinutes} min de la base (délai max exigé : ${maxDelay} min)`;
             currentMission.smsResponses.unshift({
               volunteerId: vol.id,
               volunteerName: vol.name,
               rank: vol.rank || 'Secouriste',
               isAvailable: false,
+              rallyMinutes: rallyMinutes,
+              message: rejectMsg,
+              time: timeStr
+            });
+            game.showToast('SMS : Délai Dépassé', `${vol.name} : « ${rejectMsg} »`, 'orange');
+          } else if (Math.random() < 0.75) {
+            currentMission.smsResponses.unshift({
+              volunteerId: vol.id,
+              volunteerName: vol.name,
+              rank: vol.rank || 'Secouriste',
+              isAvailable: false,
+              rallyMinutes: rallyMinutes,
               message: `Désolé, indisponible (${evalResult.rejectReason || 'Contrainte personnelle'})`,
               time: timeStr
             });
@@ -950,11 +1100,11 @@ window.ProtecSmsMobilization = {
           </div>
         </div>
 
-        <!-- BADGE DE LA CONSIGNE ACTIVE -->
+        <!-- BADGE DE LA CONSIGNE ACTIVE ET DÉLAI MAXIMUM -->
         ${consigneDef ? `
           <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between flex-wrap gap-2">
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-bold text-slate-600 dark:text-slate-300">Consigne active transmise :</span>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs font-bold text-slate-600 dark:text-slate-300">Consigne active :</span>
               <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black ${consigneDef.badgeClass}">
                 ${consigneDef.label}
               </span>
@@ -962,6 +1112,19 @@ window.ProtecSmsMobilization = {
                 <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-100 text-indigo-900 border border-indigo-200">
                   RDV : ${consigne.rdvTime}
                 </span>
+              ` : ''}
+
+              <!-- Badge du délai maximum de départ -->
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${consigne.maxDepartureDelayMinutes > 0 ? 'bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'} flex items-center gap-1">
+                <i data-lucide="clock" class="w-3 h-3 text-amber-600"></i>
+                <span>Délai départ : ${consigne.maxDepartureDelayMinutes > 0 ? `${consigne.maxDepartureDelayMinutes} min max` : 'Illimité'}</span>
+              </span>
+
+              ${!hasOtherManager ? `
+                <button type="button" onclick="window.ProtecSmsMobilization.quickEditMaxDelay('${mission.id}')" title="Ajuster le délai max de départ en fonction de l'évolution" class="px-2 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-600 hover:bg-amber-50 cursor-pointer flex items-center gap-1">
+                  <i data-lucide="sliders-horizontal" class="w-2.5 h-2.5"></i>
+                  <span>Ajuster délai</span>
+                </button>
               ` : ''}
             </div>
             <div class="text-[10px] text-slate-500 dark:text-slate-400 italic">

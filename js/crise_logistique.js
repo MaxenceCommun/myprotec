@@ -2178,7 +2178,7 @@ window.ProtecCriseLogistique = {
         <!-- Suivi Énergie, Fatigue et Stress des Équipiers en Direct -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <h4 class="text-xs font-extrabold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
               <i data-lucide="activity" class="w-3.5 h-3.5 text-pc-orange"></i>
               État Physiologique des Équipiers sur le Terrain
             </h4>
@@ -2193,11 +2193,11 @@ window.ProtecCriseLogistique = {
               const isStressed = stress > 65;
 
               return `
-                <div class="p-2.5 rounded-2xl glass-card border border-slate-200/80 flex items-center justify-between text-xs hover:shadow-sm transition">
+                <div class="p-2.5 rounded-2xl glass-card border border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs hover:shadow-sm transition">
                   <div class="flex items-center gap-2">
                     ${game.getVolunteerAvatarHTML(v, 'w-7 h-7 text-xs')}
                     <div>
-                      <div class="font-bold text-slate-800 leading-tight">${v.name}</div>
+                      <div class="font-bold text-slate-800 dark:text-white leading-tight">${v.name}</div>
                       <div class="text-[9px] text-slate-400 font-semibold">${v.rank || 'Secouriste'} • Exp. ${v.experience || 30}%</div>
                     </div>
                   </div>
@@ -2205,26 +2205,26 @@ window.ProtecCriseLogistique = {
                   <div class="flex items-center gap-3">
                     <!-- Jauge Énergie -->
                     <div class="text-right">
-                      <div class="text-[9px] font-bold ${isTired ? 'text-rose-600 animate-pulse' : 'text-slate-500'}">
+                      <div class="text-[9px] font-bold ${isTired ? 'text-rose-600 dark:text-rose-400 animate-pulse' : 'text-slate-500 dark:text-slate-400'}">
                         Énergie: ${energy}%
                       </div>
-                      <div class="w-14 bg-slate-200 h-1.5 rounded-full overflow-hidden mt-0.5">
+                      <div class="w-14 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden mt-0.5">
                         <div class="h-full rounded-full ${isTired ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${energy}%"></div>
                       </div>
                     </div>
 
                     <!-- Jauge Stress -->
                     <div class="text-right">
-                      <div class="text-[9px] font-bold ${isStressed ? 'text-amber-600 animate-pulse' : 'text-slate-500'}">
+                      <div class="text-[9px] font-bold ${isStressed ? 'text-amber-600 dark:text-amber-400 animate-pulse' : 'text-slate-500 dark:text-slate-400'}">
                         Stress: ${stress}%
                       </div>
-                      <div class="w-14 bg-slate-200 h-1.5 rounded-full overflow-hidden mt-0.5">
+                      <div class="w-14 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden mt-0.5">
                         <div class="h-full rounded-full ${isStressed ? 'bg-amber-500' : 'bg-pc-blue'}" style="width: ${stress}%"></div>
                       </div>
                     </div>
 
                     <!-- Bouton Retrait / Repos -->
-                    <button onclick="window.ProtecCriseLogistique.withdrawVolunteer(window.game, '${mission.id}', '${v.id}')" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-700 text-slate-600 font-black text-[10px] transition" title="Désengager immédiatement ce secouriste et le renvoyer au repos">
+                    <button onclick="window.ProtecCriseLogistique.withdrawVolunteer(window.game, '${mission.id}', '${v.id}')" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-700 text-slate-600 dark:bg-slate-800 dark:hover:bg-rose-950/80 dark:hover:text-rose-200 dark:text-slate-300 font-black text-[10px] transition cursor-pointer" title="Désengager immédiatement ce secouriste et le renvoyer au repos">
                       🛑 Retirer
                     </button>
                   </div>
@@ -2245,7 +2245,7 @@ window.ProtecCriseLogistique = {
           return `
             <div class="space-y-2">
               <div class="flex items-center justify-between">
-                <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <h4 class="text-xs font-extrabold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                   <i data-lucide="truck" class="w-3.5 h-3.5 text-pc-blue"></i>
                   Vecteurs & Véhicules Engagés (${assignedVehs.length})
                 </h4>
@@ -2259,24 +2259,24 @@ window.ProtecCriseLogistique = {
                   const kitName = veh.logKit && this.LOG_KITS[veh.logKit] ? this.LOG_KITS[veh.logKit].shortName : (veh.type === 'VPSP' ? 'Armement Sanitaire' : 'Standard');
 
                   return `
-                    <div class="p-2.5 rounded-2xl glass-card border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs hover:shadow-xs transition">
+                    <div class="p-2.5 rounded-2xl glass-card border border-slate-200/90 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs hover:shadow-xs transition">
                       <div class="flex items-center gap-2.5">
                         <div class="w-9 h-9 rounded-xl bg-pc-blue/10 border border-pc-blue/20 flex items-center justify-center shrink-0">
                           <i data-lucide="${veh.type === 'VPSP' ? 'ambulance' : 'truck'}" class="w-4 h-4 text-pc-blue"></i>
                         </div>
                         <div>
                           <div class="flex items-center gap-2">
-                            <span class="font-extrabold text-slate-900">${veh.name}</span>
-                            <span class="px-2 py-0.5 rounded text-[9.5px] font-black bg-slate-100 text-slate-700 border border-slate-200">${veh.type}</span>
-                            <span class="px-2 py-0.5 rounded text-[9px] font-bold ${isRearmed ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">
+                            <span class="font-extrabold text-slate-900 dark:text-white">${veh.name}</span>
+                            <span class="px-2 py-0.5 rounded text-[9.5px] font-black bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">${veh.type}</span>
+                            <span class="px-2 py-0.5 rounded text-[9px] font-bold ${isRearmed ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800' : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'}">
                               ${isRearmed ? '✓ Armé' : '⚠️ Non réarmé'}
                             </span>
                           </div>
-                          <div class="text-[10px] text-slate-500 font-medium flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <div class="text-[10px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5 mt-0.5 flex-wrap">
                             <span>Équipage (${crew.length}) :</span>
-                            <strong class="text-slate-700">${crew.map(c => c.name).join(', ') || 'Aucun équipier à bord'}</strong>
+                            <strong class="text-slate-700 dark:text-slate-200">${crew.map(c => c.name).join(', ') || 'Aucun équipier à bord'}</strong>
                             <span>•</span>
-                            <span class="text-sky-700 font-semibold">${kitName}</span>
+                            <span class="text-sky-700 dark:text-sky-400 font-semibold">${kitName}</span>
                           </div>
                         </div>
                       </div>
@@ -2285,7 +2285,7 @@ window.ProtecCriseLogistique = {
                         <button 
                           type="button" 
                           onclick="window.game.toggleMissionVehicle('${mission.id}', '${veh.id}')" 
-                          class="w-full sm:w-auto px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 border border-rose-300 font-black text-[11px] transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer" 
+                          class="w-full sm:w-auto px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 border border-rose-300 dark:bg-rose-950/60 dark:hover:bg-rose-900/80 dark:text-rose-200 dark:border-rose-800 font-black text-[11px] transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer" 
                           title="Désengager immédiatement ce véhicule et son équipage pour les faire rentrer à la base">
                           <i data-lucide="corner-down-left" class="w-3.5 h-3.5"></i>
                           <span>🛑 Désengager (Retour Base)</span>
@@ -2302,27 +2302,27 @@ window.ProtecCriseLogistique = {
         <!-- MAIN COURANTE OPÉRATIONNELLE CHRONOLOGIQUE -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <h4 class="text-xs font-extrabold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
               <i data-lucide="radio" class="w-3.5 h-3.5 text-pc-blue"></i>
               Main Courante des transmissions
             </h4>
             <span class="text-[10px] font-mono text-pc-blue font-bold animate-pulse">● EN DIRECT</span>
           </div>
 
-          <div class="space-y-2 max-h-64 overflow-y-auto pr-1 bg-slate-50/70 p-3 rounded-2xl border border-slate-200/80">
+          <div class="space-y-2 max-h-64 overflow-y-auto pr-1 bg-slate-50/70 dark:bg-slate-900/90 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800">
             ${logs.length === 0 ? `
               <div class="text-center text-slate-400 text-xs py-4">Attente des premiers messages radio...</div>
             ` : logs.map(l => {
-              const borderCol = l.type === 'success' ? 'border-l-4 border-l-emerald-500 bg-emerald-50/50' : 
-                               (l.type === 'alert' ? 'border-l-4 border-l-rose-500 bg-rose-50/50' : 
-                               (l.type === 'milestone' ? 'border-l-4 border-l-pc-blue bg-blue-50/50' : 'border-l-4 border-l-slate-400 bg-white'));
+              const borderCol = l.type === 'success' ? 'border-l-4 border-l-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/30 border-slate-200/60 dark:border-emerald-900/40' : 
+                               (l.type === 'alert' ? 'border-l-4 border-l-rose-500 bg-rose-50/60 dark:bg-rose-950/30 border-slate-200/60 dark:border-rose-900/40' : 
+                               (l.type === 'milestone' ? 'border-l-4 border-l-pc-blue bg-blue-50/60 dark:bg-blue-950/30 border-slate-200/60 dark:border-blue-900/40' : 'border-l-4 border-l-slate-400 dark:border-l-slate-500 bg-white dark:bg-slate-800/90 border-slate-200/60 dark:border-slate-700/80'));
               return `
-                <div class="p-2.5 rounded-xl border border-slate-200/60 ${borderCol} text-xs space-y-0.5 shadow-sm">
+                <div class="p-2.5 rounded-xl border ${borderCol} text-xs space-y-0.5 shadow-sm">
                   <div class="flex items-center justify-between">
-                    <span class="font-extrabold text-slate-800 text-[11px]">${l.source || 'PC Opérationnel'}</span>
-                    <span class="text-[9px] font-mono text-slate-400">${l.time}</span>
+                    <span class="font-extrabold text-slate-900 dark:text-white text-[11px]">${l.source || 'PC Opérationnel'}</span>
+                    <span class="text-[9px] font-mono text-slate-400 dark:text-slate-400">${l.time}</span>
                   </div>
-                  <p class="text-[11px] text-slate-600 leading-snug">${l.text}</p>
+                  <p class="text-[11px] text-slate-600 dark:text-slate-200 leading-snug">${l.text}</p>
                 </div>
               `;
             }).join('')}

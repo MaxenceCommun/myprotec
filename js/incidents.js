@@ -554,21 +554,27 @@ window.ProtecIncidents = {
     if (ongoing.length === 0) return;
 
     ongoing.forEach(m => {
-      // 1. Détection prioritaire du manque de personnel / sous-dimensionnement
+      // Nettoyage systématique de tout arbitrage médical résiduel :
+      // Sur le terrain, les secouristes et chefs d'équipe prennent les décisions de secours, pas le gestionnaire.
+      if (m.currentIncident) {
+        m.currentIncident = null;
+        m.incidentResolved = true;
+      }
+
+      // 1. Détection du manque de personnel / sous-dimensionnement (décision du directeur d'antenne pour renforts)
       this.checkUnderstaffedAlert(game, m);
 
-      // Si la mission a déjà un incident non résolu, on ne le duplique pas
-      if (m.currentIncident) return;
+      // Si la mission a déjà eu son aléa opérationnel géré en autonomie, on ne le duplique pas
       if (m.incidentResolved) return;
 
-      // Calcul de probabilité réaliste (environ 1 incident toutes les 4-8 missions)
-      // On déclenche quand la mission a dépassé 25% et avant 85% de sa durée
+      // Calcul de probabilité réaliste (environ 1 aléa toutes les 5-8 missions)
+      // Déclenchement quand la mission a dépassé 25% et avant 85% de sa durée
       if (!m.startedAt || !m.durationSeconds) return;
       const elapsed = (Date.now() - m.startedAt) / 1000;
       const progressRatio = elapsed / m.durationSeconds;
 
       if (progressRatio > 0.25 && progressRatio < 0.85) {
-        // Chance de survenue (environ 0.8% par cycle de 5 secondes = ~15% de chance sur la mission entière)
+        // Chance de survenue par cycle
         if (Math.random() < 0.008) {
           this.triggerIncident(game, m);
         }
@@ -576,7 +582,7 @@ window.ProtecIncidents = {
     });
   },
 
-  // Déclencher un incident
+  // Prise en charge autonome d'un aléa de terrain par les secouristes sur place
   triggerIncident(game, mission) {
     const catalog = this.incidentsCatalog;
     let incidentData = null;
@@ -607,76 +613,62 @@ window.ProtecIncidents = {
       incidentData = catalog[Math.floor(Math.random() * catalog.length)];
     }
 
-    mission.currentIncident = {
-      ...incidentData,
-      triggeredAt: Date.now()
-    };
+    // Les secouristes sur place (PSE1, PSE2, Chef d'équipe) prennent la décision opérationnelle
+    // de manière 100% autonome en lien avec la régulation SAMU 15.
+    const chosenAction = (incidentData.choices && incidentData.choices.length > 0) 
+      ? incidentData.choices[0] 
+      : { outcome: 'Prise en charge réalisée selon les référentiels de secours.', rewardXp: 50 };
 
-    // Envoyer la notification smartphone / PC
-    const notifTitle = `🚨 ALERTE INCIDENT : ${mission.title}`;
-    const notifBody = `${incidentData.title} survenue en cours d’intervention. Décision requise !`;
-    this.sendSystemNotification(notifTitle, notifBody, `incident-${mission.id}`);
+    // 1. Attribution d'expérience aux secouristes engagés sur la mission
+    if (mission.assignedCrew && mission.assignedCrew.volunteers && mission.assignedCrew.volunteers.length > 0) {
+      const xpShare = Math.round((chosenAction.rewardXp || 60) / mission.assignedCrew.volunteers.length);
+      mission.assignedCrew.volunteers.forEach(vId => {
+        const vol = (game.volunteers || []).find(v => v.id === vId);
+        if (vol) vol.exp = (vol.exp || 10) + xpShare;
+      });
+    }
 
-    // Afficher toast en jeu
-    game.showToast(
-      `Incident en Mission : ${incidentData.title}`,
-      `Alerte sur « ${mission.title} ». Cliquez pour arbitrer l’incident.`,
-      'orange'
-    );
+    // 2. Consommation matérielle si applicable et disponible
+    if (chosenAction.costSupply && game.logistics && game.logistics[chosenAction.costSupply] !== undefined) {
+      if (game.logistics[chosenAction.costSupply] >= (chosenAction.costQty || 1)) {
+        game.logistics[chosenAction.costSupply] -= (chosenAction.costQty || 1);
+      }
+    }
 
-    // Ajouter log radio
+    // 3. Notoriété pour la bonne prise en charge
+    if (chosenAction.rewardReputation) {
+      if (game.resources.reputationScore !== undefined) {
+        game.resources.reputationScore = Math.min(100, game.resources.reputationScore + chosenAction.rewardReputation);
+      }
+    }
+
+    // 4. Transmission radio informative sur TACTIQUE-1 (Zéro popup bloquante pour le gestionnaire)
     if (game.radioLogs) {
       game.radioLogs.unshift({
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         channel: 'TACTIQUE-1',
-        text: `[INCIDENT] ${mission.title} : ${incidentData.title}. Chef d’équipe demande arbitrage.`,
-        type: 'alert'
+        text: `[INFO TERRAIN] ${mission.title} : ${incidentData.title} géré par l'équipage sur place. ${chosenAction.outcome || 'Bilan transmis au SAMU 15.'}`,
+        type: 'info'
       });
     }
 
-    // Ouvrir la modale d'arbitrage
-    this.openIncidentModal(game, mission);
-    game.updateStatsUI();
+    // Clôture immédiate de l'incident : aucune action requise du directeur d'antenne
+    mission.currentIncident = null;
+    mission.incidentResolved = true;
+
+    // Fermeture de sécurité de toute modale éventuelle
+    this.closeIncidentModal();
+    if (typeof game.saveGame === 'function') game.saveGame();
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
   },
 
-  // Ouvrir la modale interactive d'incident
+  // Fermeture et neutralisation de la modale d'arbitrage clinique (les secouristes gèrent seuls)
   openIncidentModal(game, mission) {
-    const incident = mission.currentIncident;
-    if (!incident) return;
-
-    let modal = document.getElementById('incident-modal');
-    if (!modal) {
-      this.createIncidentModalDOM();
-      modal = document.getElementById('incident-modal');
+    if (mission) {
+      mission.currentIncident = null;
+      mission.incidentResolved = true;
     }
-
-    const titleEl = document.getElementById('incident-title');
-    const missionNameEl = document.getElementById('incident-mission-name');
-    const descEl = document.getElementById('incident-desc');
-    const choicesContainer = document.getElementById('incident-choices-container');
-
-    if (titleEl) titleEl.textContent = incident.title;
-    if (missionNameEl) missionNameEl.textContent = `Mission : ${mission.title} (${mission.type.toUpperCase()})`;
-    if (descEl) descEl.textContent = incident.desc;
-
-    if (choicesContainer) {
-      choicesContainer.innerHTML = incident.choices.map((c, idx) => `
-        <button onclick="window.ProtecIncidents.resolveIncident(window.game, '${mission.id}', ${idx})" 
-          class="w-full text-left p-3.5 rounded-2xl glass-card hover:border-pc-orange hover:bg-orange-50/50 transition border border-slate-200/80 group">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-extrabold text-slate-800 group-hover:text-pc-orange transition flex items-center gap-2.5">
-              <span class="w-6 h-6 rounded-full bg-pc-orange/15 text-pc-orange flex items-center justify-center text-[11px] font-black flex-shrink-0">${idx + 1}</span>
-              <span>${c.text}</span>
-            </span>
-            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-pc-orange group-hover:translate-x-0.5 transition flex-shrink-0"></i>
-          </div>
-        </button>
-      `).join('');
-    }
-
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    if (window.lucide) window.lucide.createIcons();
+    this.closeIncidentModal();
   },
 
   // Résolution de l'incident
@@ -755,33 +747,14 @@ window.ProtecIncidents = {
   closeIncidentModal() {
     const modal = document.getElementById('incident-modal');
     if (modal) {
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
+      modal.remove();
     }
   },
 
   createIncidentModalDOM() {
-    if (document.getElementById('incident-modal')) return;
-    const div = document.createElement('div');
-    div.id = 'incident-modal';
-    div.className = 'hidden fixed inset-0 z-[60] items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in';
-    div.innerHTML = `
-      <div class="w-full max-w-lg rounded-3xl glass-panel-heavy border-2 border-pc-orange p-6 shadow-2xl relative text-left">
-        <div class="flex items-center gap-3 pb-3 border-b border-slate-200 mb-4">
-          <div class="w-10 h-10 rounded-2xl bg-orange-100 text-pc-orange flex items-center justify-center font-bold">
-            <i data-lucide="alert-octagon" class="w-5 h-5 animate-pulse"></i>
-          </div>
-          <div>
-            <h3 id="incident-title" class="text-base font-black text-slate-900 leading-tight">Incident Opérationnel</h3>
-            <p id="incident-mission-name" class="text-xs text-pc-orange font-bold">Mission en cours</p>
-          </div>
-        </div>
-        <p id="incident-desc" class="text-xs text-slate-700 font-medium mb-4 leading-relaxed"></p>
-        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Décision du Directeur des Secours :</div>
-        <div id="incident-choices-container" class="space-y-2 mb-4"></div>
-      </div>
-    `;
-    document.body.appendChild(div);
+    // Neutralisé : les décisions cliniques et gestes de premiers secours sont pris directement par les secouristes sur place
+    const modal = document.getElementById('incident-modal');
+    if (modal) modal.remove();
   },
 
   // Détection du sous-dimensionnement en cours de mission
@@ -877,18 +850,18 @@ window.ProtecIncidents = {
     }
 
     modal.innerHTML = `
-      <div class="w-full max-w-lg rounded-3xl bg-white border-2 border-rose-500 shadow-2xl p-6 text-left space-y-4 animate-in zoom-in-95 duration-150">
+      <div class="w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border-2 border-rose-500 shadow-2xl p-6 text-left space-y-4 animate-in zoom-in-95 duration-150 text-slate-900 dark:text-white">
         <!-- En-tête alerte -->
-        <div class="flex items-center gap-3 pb-3 border-b border-slate-100">
-          <div class="w-11 h-11 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0 shadow-xs">
+        <div class="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div class="w-11 h-11 rounded-2xl bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center flex-shrink-0 shadow-xs">
             <i data-lucide="siren" class="w-6 h-6 animate-pulse"></i>
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 uppercase tracking-wider animate-pulse">Urgence Terrain</span>
-              <span class="text-[10px] font-bold text-slate-500">Radio TACTIQUE-1</span>
+              <span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 uppercase tracking-wider animate-pulse">Urgence Terrain</span>
+              <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400">Radio TACTIQUE-1</span>
             </div>
-            <h3 class="text-base font-black text-slate-955 leading-tight mt-0.5 truncate">Poste Débordé : Renforts Requis</h3>
+            <h3 class="text-base font-black text-slate-900 dark:text-white leading-tight mt-0.5 truncate">Poste Débordé : Renforts Requis</h3>
           </div>
         </div>
 
@@ -906,41 +879,58 @@ window.ProtecIncidents = {
           </p>
         </div>
 
-        <div class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+        <div class="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
           Arbitrage du Directeur des Secours :
         </div>
 
-        <!-- Choix 1 : Détachement d'astreinte interne -->
-        <button onclick="window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'interne')"
-          class="w-full text-left p-4 rounded-2xl border-2 border-indigo-200 bg-indigo-50/40 hover:bg-indigo-100/60 hover:border-indigo-400 transition cursor-pointer group space-y-1.5 shadow-xs">
+        <!-- Choix 1 : Annoncer et mettre immédiatement du renfort -->
+        <button onclick="window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'renfort_immediat')"
+          class="w-full text-left p-4 rounded-2xl border-2 border-emerald-300 dark:border-emerald-600/70 bg-emerald-50/60 dark:bg-emerald-950/40 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/50 hover:border-emerald-500 transition cursor-pointer group space-y-1.5 shadow-xs">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black text-indigo-950 group-hover:text-indigo-800 flex items-center gap-2">
-              <span class="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">1</span>
+            <span class="text-xs font-black text-emerald-950 dark:text-emerald-200 group-hover:text-emerald-900 dark:group-hover:text-white flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">1</span>
+              <span>Annoncer et envoyer du renfort immédiatement (Départ en route)</span>
+            </span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-emerald-500 group-hover:translate-x-1 transition flex-shrink-0"></i>
+          </div>
+          <div class="text-[11px] text-emerald-900/90 dark:text-emerald-300/90 pl-8 space-y-0.5">
+            <p>• Transmet l'ordre radio : « Renforts annoncés et en cours d'acheminement ».</p>
+            <p class="font-bold text-emerald-800 dark:text-emerald-300">🚑 Engager un équipage de renfort : comble le manque de moyens et rassure le Chef de Dispositif.</p>
+            <p class="font-bold text-teal-700 dark:text-teal-400">🛡️ Débordement maîtrisé : le stress des secouristes chute et la mission est sécurisée.</p>
+          </div>
+        </button>
+
+        <!-- Choix 2 : Détachement d'astreinte interne -->
+        <button onclick="window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'interne')"
+          class="w-full text-left p-4 rounded-2xl border-2 border-indigo-200 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-950/40 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/50 hover:border-indigo-400 transition cursor-pointer group space-y-1.5 shadow-xs">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black text-indigo-950 dark:text-indigo-200 group-hover:text-indigo-800 dark:group-hover:text-white flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">2</span>
               <span>Détacher mes secouristes locaux d'astreinte</span>
             </span>
             <i data-lucide="chevron-right" class="w-4 h-4 text-indigo-400 group-hover:translate-x-1 transition flex-shrink-0"></i>
           </div>
-          <div class="text-[11px] text-indigo-900/90 pl-8 space-y-0.5">
+          <div class="text-[11px] text-indigo-900/90 dark:text-indigo-300/90 pl-8 space-y-0.5">
             <p>• Mobilise des secouristes disponibles ou d'astreinte de votre propre antenne sur le dispositif.</p>
-            <p class="font-bold text-indigo-700">📋 Mobilisation interne : sollicitation de vos effectifs locaux pour combler le sous-effectif.</p>
-            <p class="font-bold text-emerald-700">🛡️ Continuité opérationnelle : l'antenne maintient son autonomie et assure le dispositif.</p>
+            <p class="font-bold text-indigo-700 dark:text-indigo-300">📋 Mobilisation interne : sollicitation de vos effectifs locaux pour combler le sous-effectif.</p>
+            <p class="font-bold text-emerald-700 dark:text-emerald-400">🛡️ Continuité opérationnelle : l'antenne maintient son autonomie et assure le dispositif.</p>
           </div>
         </button>
 
-        <!-- Choix 2 : Demande de Renforts aux autres directeurs réels (FNPC) -->
+        <!-- Choix 3 : Demande de Renforts aux autres directeurs réels (FNPC) -->
         <button onclick="window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'alliance')"
-          class="w-full text-left p-4 rounded-2xl border-2 border-blue-200 bg-blue-50/40 hover:bg-blue-100/60 hover:border-blue-400 transition cursor-pointer group space-y-1.5 shadow-xs">
+          class="w-full text-left p-4 rounded-2xl border-2 border-blue-200 dark:border-blue-700 bg-blue-50/40 dark:bg-blue-950/40 hover:bg-blue-100/60 dark:hover:bg-blue-900/50 hover:border-blue-400 transition cursor-pointer group space-y-1.5 shadow-xs">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black text-blue-950 group-hover:text-blue-800 flex items-center gap-2">
-              <span class="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">2</span>
+            <span class="text-xs font-black text-blue-950 dark:text-blue-200 group-hover:text-blue-800 dark:group-hover:text-white flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">3</span>
               <span>Demander des renforts aux antennes alliées (Réseau FNPC)</span>
             </span>
             <i data-lucide="chevron-right" class="w-4 h-4 text-blue-400 group-hover:translate-x-1 transition flex-shrink-0"></i>
           </div>
-          <div class="text-[11px] text-blue-900/90 pl-8 space-y-0.5">
+          <div class="text-[11px] text-blue-900/90 dark:text-blue-300/90 pl-8 space-y-0.5">
             <p>• Diffuse un appel en direct à tous les directeurs réels connectés (département / zone de défense).</p>
-            <p class="font-bold text-blue-700">🤝 Solidarité inter-antennes : seuls de vrais véhicules et confrères sont envoyés.</p>
-            <p class="font-bold text-emerald-700">🌐 Aucun renfort fictif : mobilisation transparente du réseau fédéral.</p>
+            <p class="font-bold text-blue-700 dark:text-blue-300">🤝 Solidarité inter-antennes : seuls de vrais véhicules et confrères sont envoyés.</p>
+            <p class="font-bold text-emerald-700 dark:text-emerald-400">🌐 Aucun renfort fictif : mobilisation transparente du réseau fédéral.</p>
           </div>
         </button>
       </div>
@@ -960,7 +950,57 @@ window.ProtecIncidents = {
       .map(id => game.volunteers.find(v => v.id === id))
       .filter(Boolean);
 
-    if (choice === 'interne') {
+    if (choice === 'renfort_immediat') {
+      // 1. Déploiement de renforts prioritaires (bénévoles dispo ou en astreinte)
+      const availableVols = (game.volunteers || []).filter(v => 
+        (v.status === 'dispo' || v.status === 'astreinte') && 
+        !mission.assignedCrew?.volunteers?.includes(v.id) &&
+        !mission.registeredVolunteers?.includes(v.id)
+      );
+      const reinforcedVols = availableVols.slice(0, 2);
+
+      reinforcedVols.forEach(v => {
+        v.status = 'mission';
+        if (!mission.assignedCrew.volunteers.includes(v.id)) {
+          mission.assignedCrew.volunteers.push(v.id);
+        }
+        if (!mission.registeredVolunteers.includes(v.id)) {
+          mission.registeredVolunteers.push(v.id);
+        }
+        v.motivation = Math.min(100, (v.motivation || 70) + 10);
+      });
+
+      // Soulagement immédiat de l'équipe sur place face au débordement
+      crewVols.forEach(v => {
+        v.stress = Math.max(0, (v.stress || 50) - 25);
+        v.motivation = Math.min(100, (v.motivation || 70) + 8);
+        v.humeur = Math.min(100, (v.humeur || 70) + 12);
+      });
+
+      // Bonus réputation pour excellente réactivité face au débordement
+      game.resources.reputationScore = Math.min(100, (game.resources.reputationScore || 50) + 6);
+
+      mission.understaffChoice = 'renfort_immediat';
+      mission.understaffResolved = true;
+      mission.renfortEngaged = true;
+
+      const namesText = reinforcedVols.length > 0 ? reinforcedVols.map(v => v.name).join(' & ') : 'Équipage de renfort d’astreinte';
+
+      game.showToast(
+        'Renforts Immédiats Engagés 🚑',
+        `Ordre transmis : ${namesText} en route vers « ${mission.title} ». Débordement maîtrisé !`,
+        'green'
+      );
+
+      if (game.radioLogs) {
+        game.radioLogs.unshift({
+          time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          channel: 'TACTIQUE-1',
+          text: `[RADIO - RENFORT EN ROUTE] Directeur ➔ Chef de Dispositif « ${mission.title} » : Renforts confirmés et en transit immédiat. Tenez vos positions, le soutien arrive !`,
+          type: 'success'
+        });
+      }
+    } else if (choice === 'interne') {
       // Déploiement de renforts internes
       const availableVols = (game.volunteers || []).filter(v => 
         v.status === 'dispo' && 

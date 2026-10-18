@@ -617,6 +617,25 @@ window.ProtecLogistique = {
         }
       });
     }
+
+    // Dotation opérationnelle initiale en lots et matériels (RNMSC Protection Civile)
+    const defaultLots = {
+      caisse_rearmement: 3,
+      lot_secours_a: 2,
+      lot_secours_b: 2,
+      lot_secours_c: 1,
+      lot_hebergement: 2,
+      lot_ravitaillement: 2,
+      lot_eclairage: 1,
+      lot_pompage: 1,
+      lot_tronconnage: 1,
+      sac_pedestre: 2
+    };
+    Object.entries(defaultLots).forEach(([lotId, defQty]) => {
+      if (station.stock[lotId] === undefined) {
+        station.stock[lotId] = defQty;
+      }
+    });
   },
 
   syncToGlobalLogistics(game) {
@@ -2047,25 +2066,21 @@ window.ProtecLogistique = {
     // Vérifier disponibilité en stock
     const availableInStock = station.stock[itemId] || 0;
     const catItem = this.CATALOG.find(i => i.id === itemId);
+    const comp = this.getLotComposition(itemId);
+    const itemSlots = comp?.slots || catItem?.slots || 1;
 
     if (availableInStock <= 0) {
-      // Proposer d'acheter l'item directement si caisse de réarmement
-      if (itemId === 'caisse_rearmement') {
-        const cost = catItem ? catItem.price : 60;
-        if (game.resources.money < cost) {
-          game.showToast('Stock épuisé', `Aucune caisse de réarmement au local et trésorerie insuffisante (${cost} € requise).`, 'orange');
-          return;
-        }
-        game.resources.money -= cost;
-        station.stock[itemId] = 1;
-        game.showToast('Caisse achetée 🛒', `1 Caisse de réarmement achetée pour ${cost} € et ajoutée au stock.`, 'teal');
-      } else {
-        game.showToast('Stock épuisé', `Aucun exemplaire de « ${catItem?.name || itemId} » disponible au local. Commandez-en à la Centrale d'Achats.`, 'orange');
+      const cost = catItem ? catItem.price : (itemId === 'caisse_rearmement' ? 60 : 250);
+      if (game.resources.money < cost) {
+        game.showToast('Stock épuisé ⚠️', `Aucun exemplaire de « ${comp?.title || catItem?.name || itemId} » au local et trésorerie insuffisante (${cost} € requise).`, 'orange');
         return;
       }
+      game.resources.money -= cost;
+      station.stock[itemId] = 1;
+      game.showToast('Matériel acheté 🛒', `1 « ${comp?.title || catItem?.name || itemId} » acheté pour ${cost} € et ajouté au stock de l'antenne.`, 'teal');
     }
 
-    const check = this.canLoadInVehicle(veh, catItem || { slots: 1 });
+    const check = this.canLoadInVehicle(veh, { slots: itemSlots });
     if (!check.can) {
       game.showToast('Chargement impossible ⚠️', check.reason, 'orange');
       return;
@@ -2077,18 +2092,19 @@ window.ProtecLogistique = {
     // Embarquer l'item dans le véhicule LOG
     const loadedEntry = {
       id: itemId,
-      name: catItem?.name || itemId,
-      shortName: catItem?.name ? catItem.name.split('(')[0].trim() : itemId,
-      slots: catItem?.slots || 1,
+      name: comp?.title || catItem?.name || itemId,
+      shortName: comp?.title ? comp.title.split('(')[0].trim() : (catItem?.name ? catItem.name.split('(')[0].trim() : itemId),
+      slots: itemSlots,
       types: catItem?.types || (itemId === 'caisse_rearmement' ? ['LOG'] : ['PS']),
       consumables: 100,
       maxConsumables: 100,
-      isLot: !!catItem?.isLot,
-      isCaisseRearm: itemId === 'caisse_rearmement'
+      isLot: true,
+      isCaisseRearm: itemId === 'caisse_rearmement',
+      itemsList: comp?.items || []
     };
 
     veh.loadedItems.push(loadedEntry);
-    game.showToast('Matériel chargé 📦', `« ${loadedEntry.name} » (${loadedEntry.slots} slot(s)) embarqué dans ${veh.name}.`, 'green');
+    game.showToast('Matériel chargé 📦', `« ${loadedEntry.shortName} » (${loadedEntry.slots} slot(s)) embarqué dans ${veh.name}.`, 'green');
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
 
     game.saveGame();
@@ -2834,6 +2850,244 @@ window.ProtecLogistique = {
   },
 
   // =========================================================================
+  // 9. RÉFÉRENTIEL ULTRA-RÉALISTE DU MATÉRIEL & LOTS DE LA PROTECTION CIVILE
+  // =========================================================================
+
+  LOT_COMPOSITIONS: {
+    caisse_rearmement: {
+      id: 'caisse_rearmement',
+      title: 'Caisse de Réarmement Opérationnel (Kit de Réassort)',
+      shortName: 'Caisse Réarmement',
+      standard: 'RNMSC - Réassort Consommables',
+      category: 'Soins & Réarmement',
+      slots: 1,
+      price: 60,
+      icon: 'archive',
+      badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-700',
+      desc: 'Caisse Eurobox normée de consommables d’avance pour réapprovisionner les sacs de secours et VPSP.',
+      items: [
+        { icon: '🩹', name: 'Compresses stériles 10x10 cm', qty: 10 },
+        { icon: '🩹', name: 'Bandes extensibles Velpeau 10 cm', qty: 6 },
+        { icon: '🩸', name: 'Garrots tourniquets tactiques CAT Gen 7', qty: 2 },
+        { icon: '🩹', name: 'Pansements compressifs d’urgence israéliens', qty: 4 },
+        { icon: '🫁', name: 'Masques O2 haute concentration avec tubulure', qty: 3 },
+        { icon: '🧴', name: 'Flacon antiseptique chlorhexidine 250 ml', qty: 1 },
+        { icon: '🛡️', name: 'Colliers cervicaux pédiatriques & adultes', qty: 2 },
+        { icon: '✨', name: 'Couvertures de survie isothermes or/argent', qty: 4 },
+        { icon: '🧤', name: 'Paires de gants nitrile stériles usage unique', qty: 10 },
+        { icon: '🗑️', name: 'Sacs étanches DASRI déchets de soins', qty: 2 }
+      ]
+    },
+    lot_secours_a: {
+      id: 'lot_secours_a',
+      title: 'Lot A - Secours à Personne Standard (Sac d’Urgence Vitale)',
+      shortName: 'Lot A Secours PS',
+      standard: 'RNMSC FNPC - Dotation VPSP / DPS',
+      category: 'Premiers Secours & Urgence Vitale',
+      slots: 2,
+      price: 850,
+      icon: 'briefcase-medical',
+      badgeClass: 'bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-700',
+      desc: 'Dotation d’équipier secouriste indispensable pour la réanimation et la prise en charge immédiate.',
+      items: [
+        { icon: '🫁', name: 'Bouteille Oxygène Médical 5L (200 bar) + manodétendeur', qty: 1 },
+        { icon: '⚡', name: 'Défibrillateur Automatisé DAE + 2 paires électrodes', qty: 1 },
+        { icon: '💨', name: 'Insufflateur manuel BAVU adulte & enfant + 3 masques', qty: 1 },
+        { icon: '🩺', name: 'Kit Diagnostic (Tensiomètre, Stéthoscope, Oxymètre SpO2, Glycémie)', qty: 1 },
+        { icon: '🩸', name: 'Kit Hémorragie (1 Garrot tourniquet CAT, 2 pansements israéliens)', qty: 1 },
+        { icon: '🧪', name: 'Aspirateur de mucosités manuel d’urgence + sondes', qty: 1 },
+        { icon: '🛡️', name: 'Pack Colliers Cervicaux multipostures (Adulte + Pédiatrique)', qty: 2 },
+        { icon: '🔥', name: 'Trousse Brûlures Water-Jel & pansements hydrogel', qty: 1 },
+        { icon: '✨', name: 'Couvertures de survie isothermes', qty: 2 },
+        { icon: '✂️', name: 'Lampe pupillaire diagnostic & ciseaux Gesco', qty: 1 }
+      ]
+    },
+    lot_secours_b: {
+      id: 'lot_secours_b',
+      title: 'Lot B - Traumatologie, Immobilisation & Relevage',
+      shortName: 'Lot B Traumatologie',
+      standard: 'RNMSC FNPC - Dotation VPSP / DPS-ME',
+      category: 'Traumatologie & Évacuation',
+      slots: 2,
+      price: 1250,
+      icon: 'stretch-horizontal',
+      badgeClass: 'bg-indigo-50 text-indigo-800 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-200 dark:border-indigo-700',
+      desc: 'Équipements complets d’immobilisation osseuse, rachidienne et extraction pour traumatismes lourds.',
+      items: [
+        { icon: '🛌', name: 'Matelas Immobilisateur à Dépression (MID Coquille) + pompe', qty: 1 },
+        { icon: '📏', name: 'Plan Dur spinal radio-transparent + Sangles araignée', qty: 1 },
+        { icon: '🔒', name: 'Immobilisateur de tête (Head-Blocks latéraux multipositions)', qty: 1 },
+        { icon: '🦴', name: 'Pack Attelles modelables aluform & dépression (Bras & Jambes)', qty: 4 },
+        { icon: '🪑', name: 'Chaise de transport d’escalier pliable avec chenilles alu', qty: 1 },
+        { icon: '🥄', name: 'Brancard cuillère / de relevage sécable alu', qty: 1 },
+        { icon: '🩹', name: 'Attelle de traction fémorale / sangle pelvienne SAM Sling', qty: 1 },
+        { icon: '📐', name: 'Écharpes triangulaires de maintien de membre', qty: 4 }
+      ]
+    },
+    lot_secours_c: {
+      id: 'lot_secours_c',
+      title: 'Lot C - Poste de Secours Fixe & Structure Modulaire 16m²',
+      shortName: 'Lot C Poste Fixe',
+      standard: 'RNMSC FNPC - Poste Médical Avancé & DPS',
+      category: 'Structure & Accueil Soins',
+      slots: 3,
+      price: 1750,
+      icon: 'tent',
+      badgeClass: 'bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/40 dark:text-purple-200 dark:border-purple-700',
+      desc: 'Poste de soins autonome sous tente gonflable avec lits brancards, régulation SINUS et éclairage.',
+      items: [
+        { icon: '⛺', name: 'Tente gonflable de secours 16 m² avec armature & gonfleur électrique', qty: 1 },
+        { icon: '🛏️', name: 'Brancards pliables de soins sur tréteaux d’examen médical', qty: 2 },
+        { icon: '💡', name: 'Rampe d’éclairage de poste LED 220V/12V avec trépied télescopique', qty: 1 },
+        { icon: '📋', name: 'Table pliante de secrétariat & régulation SINUS', qty: 1 },
+        { icon: '🪑', name: 'Chaises pliantes d’attente victimes et témoins', qty: 4 },
+        { icon: '📁', name: 'Mallette Fiches Médicales de l’Avant (FMA) & Main Courante', qty: 1 },
+        { icon: '🌡️', name: 'Chauffage soufflant d’appoint électrique de tente', qty: 1 },
+        { icon: '🗑️', name: 'Poubelles à pédale étanches DASRI & Déchets ménagers', qty: 2 }
+      ]
+    },
+    lot_hebergement: {
+      id: 'lot_hebergement',
+      title: 'Lot Hébergement d’Urgence CAREP (Soutien aux Populations)',
+      shortName: 'Lot Hébergement CAREP',
+      standard: 'Sécurité Civile - Plan Communal de Sauvegarde (PCS)',
+      category: 'Action Sociale & Hébergement',
+      slots: 3,
+      price: 2100,
+      icon: 'bed-double',
+      badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700',
+      desc: 'Matériels complets pour armer en urgence un centre d’accueil des sinistrés et personnes évacuées.',
+      items: [
+        { icon: '🛏️', name: 'Lits de camp métalliques pliables type PICOT armée', qty: 10 },
+        { icon: '🧶', name: 'Couvertures polaires lavables étiquetées Protection Civile', qty: 15 },
+        { icon: '🧼', name: 'Trousses d’hygiène de première urgence (brosse, savon, dentifrice, serviette)', qty: 10 },
+        { icon: '🚪', name: 'Paravents d’intimité & cloisons amovibles de dignité', qty: 2 },
+        { icon: '🍼', name: 'Kits petite enfance d’urgence (couches, lingettes, biberons dosés)', qty: 2 },
+        { icon: '📝', name: 'Kit administratif accueil sinistrés (fiches CAREP, badges)', qty: 1 }
+      ]
+    },
+    lot_ravitaillement: {
+      id: 'lot_ravitaillement',
+      title: 'Caisse Ravitaillement & Soutien Opérationnel',
+      shortName: 'Caisse Ravitaillement',
+      standard: 'Logistique Soutien des Troupes & Bénévoles',
+      category: 'Ravitaillement & Énergie Humaine',
+      slots: 1,
+      price: 1350,
+      icon: 'utensils',
+      badgeClass: 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-700',
+      desc: 'Boissons chaudes, eau fraîche et collations pour préserver le moral et l’énergie des intervenants.',
+      items: [
+        { icon: '💧', name: 'Bouteilles d’eau minérale plate 50 cl (bouchon sport)', qty: 24 },
+        { icon: '☕', name: 'Percolateur / Thermos inox café & eau chaude 5L', qty: 1 },
+        { icon: '🫖', name: 'Boîte de thé, café soluble, chocolat chaud, sucres & gobelets', qty: 1 },
+        { icon: '🍫', name: 'Barres de céréales énergétiques & compotes gourdes', qty: 20 },
+        { icon: '🍪', name: 'Paquets de biscuits secs & fruits secs revigorants', qty: 10 },
+        { icon: '🧻', name: 'Rouleau sacs poubelle 50L & lingettes nettoyantes', qty: 1 }
+      ]
+    },
+    lot_eclairage: {
+      id: 'lot_eclairage',
+      title: 'Lot Éclairage de Crise & Énergie Autonome',
+      shortName: 'Lot Éclairage & Énergie',
+      standard: 'Pôle Technique & Crise Nocturne',
+      category: 'Énergie & Éclairage Chantier',
+      slots: 2,
+      price: 1600,
+      icon: 'lightbulb',
+      badgeClass: 'bg-yellow-50 text-yellow-800 border-yellow-300 dark:bg-yellow-950/40 dark:text-yellow-200 dark:border-yellow-700',
+      desc: 'Source électrique autonome et projecteurs de forte puissance pour illuminer la zone d’intervention.',
+      items: [
+        { icon: '⚡', name: 'Groupe électrogène insonorisé 3.0 kVA inverter + nourrice 10L', qty: 1 },
+        { icon: '💡', name: 'Mât d’éclairage télescopique LED 360° (20 000 lumens, h: 3m)', qty: 1 },
+        { icon: '🔦', name: 'Projecteurs d’appoint LED 50W sur accus portatifs', qty: 2 },
+        { icon: '🔌', name: 'Enrouleurs électriques de chantier 25m étanches IP44', qty: 2 },
+        { icon: '🧰', name: 'Blocs multiprises étanches et adaptateurs industriels', qty: 2 }
+      ]
+    },
+    lot_pompage: {
+      id: 'lot_pompage',
+      title: 'Lot Épuisement & Pompage Eaux Chargées (Inondations)',
+      shortName: 'Lot Épuisement Inondation',
+      standard: 'Mission ORSEC Inondations & Crues',
+      category: 'Secours Inondation & Pompage',
+      slots: 3,
+      price: 1850,
+      icon: 'waves',
+      badgeClass: 'bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950/40 dark:text-sky-200 dark:border-sky-700',
+      desc: 'Matériels gros débit pour évacuer les eaux d’inondation dans les caves, parkings et habitations.',
+      items: [
+        { icon: '🌊', name: 'Motopompe thermique gros débit (60 m³/h) raccords DSP', qty: 1 },
+        { icon: '🚰', name: 'Tuyaux d’aspiration armés 5m avec crépine à clapet', qty: 2 },
+        { icon: '🚒', name: 'Tuyaux de refoulement professionnels 70 mm x 20 m', qty: 4 },
+        { icon: '⚡', name: 'Pompes électriques vide-caves submersibles 230V', qty: 2 },
+        { icon: '🧹', name: 'Raclettes à eau industrielles larges & seaux 15L', qty: 4 }
+      ]
+    },
+    lot_tronconnage: {
+      id: 'lot_tronconnage',
+      title: 'Lot Tronçonnage & Dégagement Voirie (Tempêtes)',
+      shortName: 'Lot Tronçonnage Voirie',
+      standard: 'Secours Routiers & Dégagement Crise',
+      category: 'Dégagement & Tronçonnage',
+      slots: 2,
+      price: 1450,
+      icon: 'axe',
+      badgeClass: 'bg-orange-50 text-orange-800 border-orange-300 dark:bg-orange-950/40 dark:text-orange-200 dark:border-orange-700',
+      desc: 'Matériels thermiques et équipements de protection individuelle pour dégager les voies obstruées.',
+      items: [
+        { icon: '🪚', name: 'Tronçonneuses thermiques (guide 45 cm et 50 cm) + chaînes secours', qty: 2 },
+        { icon: '🛡️', name: 'Pantalons et manchettes anti-coupure Classe 2 (EPI bûcheron)', qty: 2 },
+        { icon: '👷', name: 'Casques forestiers avec visière grillagée & coquilles antibruit', qty: 2 },
+        { icon: '⛓️', name: 'Tire-fort de débardage 1.6T + câble acier 20m + élingues', qty: 1 },
+        { icon: '⛽', name: 'Bidon combiné carburant 2T (5L) + huile de chaîne (2.5L)', qty: 1 },
+        { icon: '🪓', name: 'Hachette, merlin d’abattage & coins d’ébranchage', qty: 1 }
+      ]
+    },
+    sac_pedestre: {
+      id: 'sac_pedestre',
+      title: 'Sacoche Binôme Secouriste Pédestre (Patrouille Foule)',
+      shortName: 'Sacoche Binôme Pédestre',
+      standard: 'RNMSC - Équipe Pédestre / PAPS Mobile',
+      category: 'Secours Itinérant & Mobilité',
+      slots: 1,
+      price: 320,
+      icon: 'backpack',
+      badgeClass: 'bg-teal-50 text-teal-800 border-teal-300 dark:bg-teal-950/40 dark:text-teal-200 dark:border-teal-700',
+      desc: 'Sac d’intervention ultra-compact pour binôme circulant à pied au cœur des rassemblements denses.',
+      items: [
+        { icon: '🎒', name: 'Sacoche d’épaule compacte Cordura haute visibilité', qty: 1 },
+        { icon: '⚡', name: 'Défibrillateur semi-automatique DAE compact de poche', qty: 1 },
+        { icon: '🩸', name: 'Garrot tourniquet hémostatique CAT + Pansements israéliens', qty: 2 },
+        { icon: '🩹', name: 'Pochettes de pansements et compresses stériles', qty: 6 },
+        { icon: '🧴', name: 'Spray antiseptique dermo-nettoyant chlorhexidine', qty: 1 },
+        { icon: '✨', name: 'Couvertures de survie isothermes', qty: 2 },
+        { icon: '🧤', name: 'Paires de gants nitrile à usage unique', qty: 4 }
+      ]
+    }
+  },
+
+  getLotComposition(itemId) {
+    if (!itemId) return null;
+    if (this.LOT_COMPOSITIONS && this.LOT_COMPOSITIONS[itemId]) {
+      return this.LOT_COMPOSITIONS[itemId];
+    }
+    const catItem = (this.CATALOG || []).find(i => i.id === itemId);
+    if (catItem) {
+      return {
+        id: catItem.id,
+        title: catItem.name,
+        shortName: catItem.name.split('(')[0].trim(),
+        slots: catItem.slots || 1,
+        items: [
+          { icon: '📦', name: catItem.name, qty: 1 }
+        ]
+      };
+    }
+    return null;
+  },
+
+  // =========================================================================
   // 9. SECTION UI : ARMEMENT & CHARGEMENT LOGISTIQUE AVANT DÉPART MISSION
   // =========================================================================
 
@@ -2864,37 +3118,38 @@ window.ProtecLogistique = {
     const bikeTransportCheck = this.checkBicycleTransport(mission, game);
 
     return `
-      <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3.5">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-xs">
+      <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-xs">
               📦
             </div>
             <div>
-              <h4 class="text-xs font-black text-slate-900 uppercase tracking-wide">
-                Armement Logistique & Capacité des Véhicules
+              <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
+                <span>Armement Logistique & Matériels Embarqués</span>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-300 dark:border-amber-600">Norme RNMSC</span>
               </h4>
-              <p class="text-[10px] text-slate-500">
-                Seuls les véhicules disposant du tag <strong>LOG</strong> peuvent embarquer des lots, caisses de réarmement et vélos.
+              <p class="text-[10px] text-slate-500 dark:text-slate-400">
+                Dotations opérationnelles officielles de la Protection Civile. Gestion des volumes et inventaire unitaire.
               </p>
             </div>
           </div>
-          <span class="text-[10px] font-bold text-slate-500">
-            ${logVehicles.length} véhicule(s) LOG engagé(s)
+          <span class="text-[10px] font-extrabold px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            ${logVehicles.length} véhicule(s) porteur(s) LOG
           </span>
         </div>
 
         <!-- Alerte transport VTT si concerné -->
         ${bicycles.length > 0 ? (
           bikeTransportCheck.valid ? `
-            <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs font-bold flex items-center gap-2.5 shadow-2xs">
+            <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 text-xs font-bold flex items-center gap-2.5 shadow-2xs">
               <span class="text-lg">🚲</span>
               <div>
                 <strong>VTT Secours Prêt au Transport :</strong> Le vélo est sécurisé dans un véhicule LOG (encombrement 1 slot). Il sera déployé à l'arrivée sur zone.
               </div>
             </div>
           ` : `
-            <div class="p-3 rounded-xl bg-rose-50 border-2 border-rose-400 text-rose-950 text-xs font-black flex items-center gap-2.5 animate-pulse shadow-xs">
+            <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-400 dark:border-rose-600 text-rose-950 dark:text-rose-200 text-xs font-black flex items-center gap-2.5 animate-pulse shadow-xs">
               <span class="text-xl">⚠️</span>
               <div>
                 <strong>Avertissement Transport VTT :</strong> ${bikeTransportCheck.reason}
@@ -2904,7 +3159,7 @@ window.ProtecLogistique = {
         ) : ''}
 
         <!-- Détail de chaque véhicule engagé -->
-        <div class="space-y-3">
+        <div class="space-y-4">
           ${assignedVehs.map(veh => {
             this.normalizeVehicle(veh);
             const isLog = (veh.types || []).includes('LOG');
@@ -2913,104 +3168,245 @@ window.ProtecLogistique = {
             const freeSlots = Math.max(0, capLog - usedSlots);
             const consumables = Math.round(veh.consumables !== undefined ? veh.consumables : 100);
 
+            // Construction visuelle des jauges de slots
+            const slotVisuals = [];
+            for (let s = 1; s <= capLog; s++) {
+              const isOccupied = s <= usedSlots;
+              slotVisuals.push(`
+                <div class="flex-1 h-2 rounded-full ${isOccupied ? 'bg-amber-500 shadow-2xs' : 'bg-slate-200 dark:bg-slate-700'}" title="Slot ${s}/${capLog} : ${isOccupied ? 'Occupé' : 'Libre'}"></div>
+              `);
+            }
+
             return `
-              <div class="p-3.5 rounded-xl border ${isLog ? 'border-amber-200 bg-amber-50/40' : 'border-slate-200 bg-slate-50/60'} space-y-2.5">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div class="p-4 rounded-2xl border ${isLog ? 'border-amber-300 dark:border-amber-600/70 bg-gradient-to-b from-amber-50/50 via-white to-amber-50/20 dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-900' : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60'} space-y-3.5 shadow-xs">
+                
+                <!-- En-tête du véhicule & capacité -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-amber-200/80 dark:border-amber-600/30">
                   <div class="flex items-center gap-2.5">
-                    <span class="text-xl">${isLog ? '🚐' : (veh.type === 'VPSP' ? '🚑' : (veh.isBicycle ? '🚲' : '🚗'))}</span>
+                    <span class="text-2xl">${isLog ? '🚐' : (veh.type === 'VPSP' ? '🚑' : (veh.isBicycle ? '🚲' : '🚗'))}</span>
                     <div>
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        <strong class="text-xs text-slate-900">${veh.name}</strong>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <strong class="text-sm font-black text-slate-900 dark:text-white">${veh.name}</strong>
                         ${this.getVehicleCapabilitiesBadgesHTML(veh)}
                       </div>
-                      <div class="text-[10px] text-slate-500 mt-0.5">
+                      <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
                         ${veh.model || veh.type} • 
-                        ${isLog ? `Capacité LOG : <strong class="text-amber-900">${usedSlots} / ${capLog} slots occupés</strong>` : '<span class="text-slate-400 italic">Strictement dotation native (Capacité LOG : 0)</span>'}
+                        ${isLog 
+                          ? `Capacité LOG : <strong class="text-amber-900 dark:text-amber-300 font-black">${usedSlots} / ${capLog} slots occupés</strong> (${freeSlots} libre${freeSlots > 1 ? 's' : ''})` 
+                          : '<span class="text-slate-400 italic">Dotation native secourisme (0 slot logistique)</span>'}
                       </div>
                     </div>
                   </div>
 
-                  <!-- Jauge Consommables -->
-                  <div class="flex items-center gap-2 sm:justify-end">
-                    <span class="text-[10px] font-bold text-slate-600">Jauge Soins :</span>
-                    <div class="w-20 bg-slate-200 h-2 rounded-full overflow-hidden border border-slate-300">
-                      <div class="h-full rounded-full ${consumables > 40 ? 'bg-emerald-500' : (consumables > 15 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${consumables}%"></div>
+                  <!-- Jauges Soins & Slots -->
+                  <div class="flex items-center gap-3 sm:justify-end flex-wrap">
+                    ${isLog ? `
+                      <div class="flex flex-col gap-1 w-24">
+                        <div class="flex items-center justify-between text-[9px] font-black uppercase text-amber-900 dark:text-amber-300">
+                          <span>Slots LOG</span>
+                          <span>${usedSlots}/${capLog}</span>
+                        </div>
+                        <div class="flex items-center gap-0.5">
+                          ${slotVisuals.join('')}
+                        </div>
+                      </div>
+                    ` : ''}
+
+                    <div class="flex items-center gap-2">
+                      <span class="text-[10px] font-extrabold text-slate-600 dark:text-slate-300">Jauge Soins :</span>
+                      <div class="w-16 bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden border border-slate-300 dark:border-slate-600">
+                        <div class="h-full rounded-full ${consumables > 40 ? 'bg-emerald-500' : (consumables > 15 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${consumables}%"></div>
+                      </div>
+                      <span class="font-mono font-black text-xs ${consumables > 40 ? 'text-emerald-700 dark:text-emerald-400' : (consumables > 15 ? 'text-amber-700 dark:text-amber-400' : 'text-red-700 dark:text-red-400')}">${consumables}%</span>
                     </div>
-                    <span class="font-mono font-black text-xs ${consumables > 40 ? 'text-emerald-700' : (consumables > 15 ? 'text-amber-700' : 'text-red-700')}">${consumables}%</span>
                   </div>
                 </div>
 
                 ${isLog ? `
-                  <!-- Espace de chargement pour véhicule LOG -->
-                  <div class="pt-2 border-t border-amber-200/80 space-y-2">
+                  <!-- 1. MATÉRIELS ET LOTS ACTUELLEMENT EMBARQUÉS À BORD -->
+                  <div class="space-y-2">
                     <div class="flex items-center justify-between text-[11px]">
-                      <span class="font-black text-amber-950 uppercase text-[10px]">
-                        Matériels & Lots Embarqués (${(veh.loadedItems || []).length})
+                      <span class="font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                        <i data-lucide="package-check" class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400"></i>
+                        <span>Matériels & Lots Embarqués à Bord (${(veh.loadedItems || []).length})</span>
                       </span>
-                      <span class="text-[10px] font-bold ${freeSlots > 0 ? 'text-emerald-700' : 'text-amber-800'}">
-                        ${freeSlots} slot(s) libre(s)
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-lg ${freeSlots > 0 ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200' : 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200'}">
+                        ${freeSlots} slot(s) disponible(s)
                       </span>
                     </div>
 
-                    <!-- Items actuellement dans le véhicule -->
                     ${(veh.loadedItems || []).length > 0 ? `
-                      <div class="flex flex-wrap gap-1.5">
-                        ${veh.loadedItems.map((it, idx) => `
-                          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-bold bg-white border border-amber-300 text-slate-800 shadow-2xs">
-                            <span>${it.isVehicle ? '🚲' : (it.isCaisseRearm ? '📦' : '🧰')}</span>
-                            <span>${it.shortName || it.name} (${it.slots} slot)</span>
-                            ${it.consumables !== undefined ? `<span class="text-[9px] font-mono px-1 rounded bg-slate-100">${Math.round(it.consumables)}%</span>` : ''}
-                            <button 
-                              type="button" 
-                              onclick="window.ProtecLogistique.unloadItemFromVehicle('${mission.id}', '${veh.id}', ${idx})" 
-                              class="text-rose-500 hover:text-rose-700 font-black ml-0.5 cursor-pointer" 
-                              title="Décharger et ranger au local">✕</button>
-                          </span>
-                        `).join('')}
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        ${veh.loadedItems.map((it, idx) => {
+                          const comp = this.getLotComposition(it.id);
+                          const itemsList = it.itemsList || comp?.items || [];
+
+                          return `
+                            <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-amber-300/80 dark:border-amber-600/40 shadow-2xs space-y-2 text-left">
+                              <div class="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-1.5">
+                                <div class="flex items-center gap-2 min-w-0">
+                                  <span class="text-base">${it.isVehicle ? '🚲' : (it.isCaisseRearm ? '📦' : '🧰')}</span>
+                                  <div class="min-w-0">
+                                    <div class="font-black text-xs text-slate-900 dark:text-white truncate">
+                                      ${it.shortName || it.name}
+                                    </div>
+                                    <div class="text-[10px] text-slate-500 dark:text-slate-400 font-bold">
+                                      Encombrement : <strong class="text-amber-900 dark:text-amber-300">${it.slots} slot(s)</strong> • Prêt à l'emploi (100%)
+                                    </div>
+                                  </div>
+                                </div>
+                                <button 
+                                  type="button" 
+                                  onclick="window.ProtecLogistique.unloadItemFromVehicle('${mission.id}', '${veh.id}', ${idx})" 
+                                  class="px-2 py-1 rounded-lg text-[10px] font-black bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 transition cursor-pointer flex items-center gap-1 shrink-0" 
+                                  title="Décharger ce lot et le restituer au local de l'antenne">
+                                  <span>✕ Décharger</span>
+                                </button>
+                              </div>
+
+                              <!-- Visuel détaillé des quantités de chaque élément embarqué -->
+                              <div class="space-y-1">
+                                <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400 block">
+                                  Inventaire Embarqué à Bord :
+                                </span>
+                                <div class="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-0.5">
+                                  ${itemsList.map(item => `
+                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-50/70 dark:bg-slate-900/80 text-slate-800 dark:text-slate-200 border border-amber-200 dark:border-slate-700">
+                                      <span>${item.icon || '📦'}</span>
+                                      <strong class="text-amber-800 dark:text-amber-300">${item.qty}x</strong>
+                                      <span class="truncate max-w-[140px]">${item.name}</span>
+                                    </span>
+                                  `).join('')}
+                                </div>
+                              </div>
+                            </div>
+                          `;
+                        }).join('')}
                       </div>
                     ` : `
-                      <div class="text-[10.5px] text-slate-500 italic p-1.5 bg-white/70 rounded-lg">
-                        Aucun lot ni caisse chargée. Cliquez ci-dessous pour armer ce véhicule.
+                      <div class="text-xs text-slate-500 dark:text-slate-400 italic p-3 bg-white/70 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-center">
+                        Aucun lot ni caisse chargée dans le véhicule. Sélectionnez ci-dessous les dotations de la Protection Civile à embarquer.
                       </div>
                     `}
+                  </div>
 
-                    <!-- Boutons de chargement rapide -->
-                    <div class="flex items-center gap-1.5 flex-wrap pt-1">
-                      <button 
-                        type="button" 
-                        onclick="window.ProtecLogistique.loadItemToVehicle('${mission.id}', '${veh.id}', 'caisse_rearmement')"
-                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1">
-                        <span>+ Caisse Réarmement (1 slot)</span>
-                      </button>
+                  <!-- 2. MATÉRIELS ET LOTS DISPONIBLES AU CHARGEMENT (AVEC COMPOSITION ET QUANTITÉS VISIBLES) -->
+                  <div class="pt-2 border-t border-amber-200/80 dark:border-amber-600/30 space-y-2.5">
+                    <div class="flex items-center justify-between flex-wrap gap-1">
+                      <span class="font-black text-slate-900 dark:text-white uppercase text-[10.5px] flex items-center gap-1.5">
+                        <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-pc-blue"></i>
+                        <span>Matériels & Lots Opérationnels Disponibles au Local d'Antenne :</span>
+                      </span>
+                      <span class="text-[10px] text-slate-500 dark:text-slate-400">
+                        Cliquez pour embarquer selon vos besoins terrain
+                      </span>
+                    </div>
 
-                      <button 
-                        type="button" 
-                        onclick="window.ProtecLogistique.loadItemToVehicle('${mission.id}', '${veh.id}', 'lot_secours_a')"
-                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue hover:bg-blue-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1">
-                        <span>+ Lot A Secours (2 slots)</span>
-                      </button>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      ${Object.entries(this.LOT_COMPOSITIONS).map(([lotKey, lot]) => {
+                        const inStock = station.stock[lotKey] || 0;
+                        const canFit = freeSlots >= lot.slots;
 
-                      <button 
-                        type="button" 
-                        onclick="window.ProtecLogistique.loadItemToVehicle('${mission.id}', '${veh.id}', 'lot_secours_b')"
-                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1">
-                        <span>+ Lot B Traumatologie (2 slots)</span>
-                      </button>
+                        return `
+                          <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-2.5 text-left flex flex-col justify-between hover:border-pc-blue/60 transition">
+                            
+                            <!-- En-tête lot -->
+                            <div class="space-y-1">
+                              <div class="flex items-start justify-between gap-2">
+                                <div class="flex items-center gap-2 min-w-0">
+                                  <span class="w-7 h-7 rounded-lg ${lot.badgeClass} flex items-center justify-center text-sm font-black shrink-0">
+                                    <i data-lucide="${lot.icon || 'package'}" class="w-3.5 h-3.5"></i>
+                                  </span>
+                                  <div class="min-w-0">
+                                    <h5 class="text-xs font-black text-slate-900 dark:text-white leading-tight truncate">
+                                      ${lot.shortName}
+                                    </h5>
+                                    <div class="text-[9.5px] text-slate-500 dark:text-slate-400 font-bold truncate">
+                                      ${lot.standard}
+                                    </div>
+                                  </div>
+                                </div>
+                                <span class="px-2 py-0.5 rounded-lg text-[9.5px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 shrink-0">
+                                  ${lot.slots} slot${lot.slots > 1 ? 's' : ''}
+                                </span>
+                              </div>
 
-                      <button 
-                        type="button" 
-                        onclick="window.ProtecLogistique.loadItemToVehicle('${mission.id}', '${veh.id}', 'lot_hebergement')"
-                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1">
-                        <span>+ Lot Hébergement (3 slots)</span>
-                      </button>
+                              <div class="flex items-center justify-between text-[10px] pt-0.5">
+                                <span class="px-2 py-0.5 rounded-md font-black ${inStock > 0 ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700' : 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-300 dark:border-amber-700'}">
+                                  ${inStock > 0 ? `📦 Stock local : ${inStock} disponible(s)` : `⚠️ 0 au local (${lot.price} € à l'achat)`}
+                                </span>
+                                <span class="text-slate-400 dark:text-slate-500 font-semibold text-[9px]">${lot.category}</span>
+                              </div>
+                            </div>
 
+                            <!-- VISUEL SUR LA QUANTITÉ DE CHAQUE ÉLÉMENT COMPOSANT LE LOT -->
+                            <div class="space-y-1 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                              <span class="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                                Composition & Quantités Unitaires :
+                              </span>
+                              <div class="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-0.5">
+                                ${lot.items.map(it => `
+                                  <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs">
+                                    <span>${it.icon}</span>
+                                    <strong class="text-indigo-600 dark:text-indigo-400">${it.qty}x</strong>
+                                    <span class="truncate max-w-[130px]">${it.name}</span>
+                                  </span>
+                                `).join('')}
+                              </div>
+                            </div>
+
+                            <!-- Bouton d'embarquement -->
+                            <div class="pt-1">
+                              ${canFit ? `
+                                <button 
+                                  type="button" 
+                                  onclick="window.ProtecLogistique.loadItemToVehicle('${mission.id}', '${veh.id}', '${lotKey}')"
+                                  class="w-full py-1.5 px-3 rounded-xl text-xs font-black ${inStock > 0 ? 'bg-pc-blue hover:bg-pc-blue-light text-white shadow-xs' : 'bg-teal-600 hover:bg-teal-700 text-white shadow-xs'} transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                  <span>${inStock > 0 ? `Embarquer dans ${veh.name} (${lot.slots} slot${lot.slots > 1 ? 's' : ''})` : `Acheter & Embarquer (${lot.price} €)`}</span>
+                                </button>
+                              ` : `
+                                <button 
+                                  type="button" 
+                                  disabled 
+                                  class="w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 cursor-not-allowed flex items-center justify-center gap-1">
+                                  <span>Capacité restante insuffisante (${freeSlots}/${capLog} libre${freeSlots > 1 ? 's' : ''})</span>
+                                </button>
+                              `}
+                            </div>
+                          </div>
+                        `;
+                      }).join('')}
+
+                      <!-- Vélos VTT secours si concerné -->
                       ${bicycles.filter(b => !b.transportedBy).map(b => `
-                        <button 
-                          type="button" 
-                          onclick="window.ProtecLogistique.loadBicycleToVehicle('${mission.id}', '${veh.id}', '${b.id}')"
-                          class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1">
-                          <span>+ Embarquer ${b.name} (1 slot)</span>
-                        </button>
+                        <div class="p-3.5 rounded-2xl bg-teal-50/60 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 shadow-2xs space-y-2 text-left flex flex-col justify-between">
+                          <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                              <span class="text-xl">🚲</span>
+                              <div>
+                                <h5 class="text-xs font-black text-slate-900 dark:text-white">${b.name}</h5>
+                                <div class="text-[10px] text-teal-800 dark:text-teal-300 font-bold">VTT d'Intervention Rapide • 1 slot LOG</div>
+                              </div>
+                            </div>
+                            <span class="px-2 py-0.5 rounded text-[9px] font-black bg-teal-600 text-white">1 slot</span>
+                          </div>
+                          <div class="p-2 rounded-xl bg-white dark:bg-slate-900 text-[10px] text-slate-600 dark:text-slate-300">
+                            Equipé d'une sacoche de premiers secours et d'un DAE compact pour progression rapide en milieu piétonnier.
+                          </div>
+                          ${freeSlots >= 1 ? `
+                            <button 
+                              type="button" 
+                              onclick="window.ProtecLogistique.loadBicycleToVehicle('${mission.id}', '${veh.id}', '${b.id}')"
+                              class="w-full py-1.5 px-3 rounded-xl text-xs font-black bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition cursor-pointer flex items-center justify-center gap-1">
+                              <span>+ Embarquer ${b.name} (1 slot)</span>
+                            </button>
+                          ` : `
+                            <button disabled class="w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-slate-100 text-slate-400 cursor-not-allowed">
+                              Capacité restante insuffisante
+                            </button>
+                          `}
+                        </div>
                       `).join('')}
                     </div>
                   </div>
