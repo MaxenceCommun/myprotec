@@ -56,6 +56,60 @@ window.ProtecAdmin = {
     await this.loadAdminData(game);
   },
 
+  // Amorçage du premier administrateur (quand aucun admin n'existe encore)
+  async promoteFirstAdmin(targetUsername = null) {
+    const username = targetUsername || window.ProtecAuth?.currentUser?.username || window.game?.player?.name;
+    if (!username) {
+      console.error('❌ Erreur : Veuillez spécifier votre pseudo (ex: window.ProtecAdmin.promoteFirstAdmin("MonPseudo")) ou vous connecter d\'abord.');
+      if (window.game?.showToast) window.game.showToast('Erreur Admin', 'Veuillez spécifier votre pseudo ou vous connecter d\'abord.', 'red');
+      return false;
+    }
+
+    try {
+      if (!window.ProtecSupabase || !window.ProtecSupabase.client) {
+        console.error('❌ Supabase n\'est pas encore initialisé.');
+        return false;
+      }
+
+      // Mettre à jour le joueur ciblé dans la table players
+      const { data, error } = await window.ProtecSupabase.client
+        .from('players')
+        .update({ role: 'admin', is_admin: true })
+        .ilike('username', username)
+        .select();
+
+      if (error) {
+        console.error('❌ Erreur Supabase lors de la promotion admin :', error);
+        if (window.game?.showToast) window.game.showToast('Erreur BDD', error.message || 'Impossible de mettre à jour le compte en base.', 'red');
+        return false;
+      }
+
+      // Mettre à jour la session locale immédiatement
+      if (window.ProtecAuth && window.ProtecAuth.currentUser) {
+        window.ProtecAuth.currentUser.role = 'admin';
+        window.ProtecAuth.currentUser.isAdmin = true;
+      }
+      if (window.game && window.game.player) {
+        window.game.player.role = 'admin';
+        window.game.player.isAdmin = true;
+      }
+
+      // Mettre à jour l'interface pour faire apparaître les boutons du Panel Admin
+      if (window.ProtecAuth && typeof window.ProtecAuth.updateAuthUI === 'function') {
+        window.ProtecAuth.updateAuthUI();
+      }
+
+      console.log(`🎉 SUCCÈS : Le joueur "${username}" est désormais ADMINISTRATEUR officiel !`);
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast('🛡️ Droits Administrateurs Activés', `Félicitations ${username}, votre compte dispose désormais des accès Administrateur complets !`, 'indigo');
+      }
+      return true;
+    } catch (e) {
+      console.error('❌ Exception promoteFirstAdmin:', e);
+      return false;
+    }
+  },
+
   switchTab(tab) {
     this.activeTab = tab;
     const tabPlayersBtn = document.getElementById('admin-tab-players-btn');
