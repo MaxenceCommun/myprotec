@@ -699,10 +699,13 @@ class ProtecGame {
 
     // Détection de l'hébergement Cloud / PWA statique (pour éviter les erreurs 404 de /api/state)
     const isCloudStatic = typeof window !== 'undefined' && (
+      window.location.hostname.includes('myprotec.fr') ||
       window.location.hostname.includes('render.com') ||
       window.location.hostname.includes('github.io') ||
       window.location.hostname.includes('vercel.app') ||
-      window.location.protocol === 'file:'
+      window.location.hostname.includes('netlify.app') ||
+      window.location.protocol === 'file:' ||
+      (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
     );
 
     if (isCloudStatic) {
@@ -26639,18 +26642,24 @@ window.ProtecWebPush = {
    * Requis par registration.pushManager.subscribe({ applicationServerKey })
    */
   urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding)
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
+    if (!base64String || typeof base64String !== 'string') return new Uint8Array();
+    try {
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
 
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
 
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    } catch (e) {
+      console.warn('[WebPush] Décodage Base64 fallback sécurisé:', e?.message);
+      return new Uint8Array();
     }
-    return outputArray;
   },
 
   /**
@@ -26659,11 +26668,9 @@ window.ProtecWebPush = {
    */
   async registerServiceWorker() {
     if (!('serviceWorker' in navigator)) {
-      console.warn('[WebPush] Les Service Workers ne sont pas supportés par ce navigateur.');
       return null;
     }
     if (!('PushManager' in window)) {
-      console.warn('[WebPush] PushManager n\'est pas disponible sur ce navigateur (sur iOS, installez d\'abord la PWA sur l\'écran d\'accueil).');
       return null;
     }
 
@@ -26671,7 +26678,6 @@ window.ProtecWebPush = {
       const swUrl = new URL('sw.js', window.location.href).href;
       const swScope = new URL('./', window.location.href).pathname;
       const registration = await navigator.serviceWorker.register(swUrl, { scope: swScope });
-      console.log('✅ [WebPush] Service Worker enregistré avec succès sur le scope :', registration.scope);
       this.swRegistration = registration;
 
       if (registration.waiting) {
@@ -26680,30 +26686,30 @@ window.ProtecWebPush = {
 
       return registration;
     } catch (error) {
-      console.error('[WebPush] Erreur enregistrement sw.js :', error);
       return null;
     }
   },
 
   /**
-   * Récupération de la clé publique VAPID depuis le backend
+   * Récupération de la clé publique VAPID officielle W3C
    */
   async getVapidPublicKey() {
     if (this.vapidPublicKey) return this.vapidPublicKey;
-    try {
-      const res = await fetch('/api/push/vapid-public-key');
-      if (res.ok) {
-        const json = await res.json();
-        if (json && json.publicKey) {
-          this.vapidPublicKey = json.publicKey;
-          return this.vapidPublicKey;
+    // Clé publique officielle W3C valide P-256
+    const OFFICIAL_KEY = window.ProtecNotifications?.vapidPublicKey || 'BKLdj5RykkIOWRhAriMzfKsYON-juKOqSvFCclSz6zgr0CRZdLlQOhfd9nAwmXZZjsNMJU-pl5Csy4Yg-c6mHe0';
+    if (window.game && window.game.isBackendOnline) {
+      try {
+        const res = await fetch('/api/push/vapid-public-key');
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.publicKey) {
+            this.vapidPublicKey = json.publicKey;
+            return this.vapidPublicKey;
+          }
         }
-      }
-    } catch (e) {
-      console.warn('[WebPush] Erreur récupération clé VAPID depuis le backend, utilisation fallback.');
+      } catch (e) {}
     }
-    // Clé publique de secours W3C
-    this.vapidPublicKey = 'BJW6ttC4n_VYHyGsEvIu2UU1z_p95G4Wf1dD2924z_A_mZ3r_m4wQ5T_6x9z_P2m1k0j9';
+    this.vapidPublicKey = OFFICIAL_KEY;
     return this.vapidPublicKey;
   },
 
@@ -26846,14 +26852,32 @@ window.ProtecWebPush = {
     // Persistance miroir dans Supabase si disponible
     if (window.ProtecSupabase?.client) {
       try {
-        await window.ProtecSupabase.client.from('push_subscriptions').upsert({
-          endpoint: data.endpoint,
+        const endpointUrl = data.endpoint;
+        const { data: existing } = await window.ProtecSupabase.client
+          .from('push_subscriptions')
+          .select('id')
+          .eq('endpoint', endpointUrl)
+          .maybeSingle();
+
+        const payload = {
+          endpoint: endpointUrl,
           user_id: (data.user_id && data.user_id !== 'local') ? data.user_id : null,
           p256dh: data.p256dh,
           auth: data.auth,
           user_agent: navigator.userAgent,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'endpoint' });
+        };
+
+        if (existing && existing.id) {
+          await window.ProtecSupabase.client
+            .from('push_subscriptions')
+            .update(payload)
+            .eq('id', existing.id);
+        } else {
+          await window.ProtecSupabase.client
+            .from('push_subscriptions')
+            .insert(payload);
+        }
         console.log('✅ [WebPush] Abonnement synchronisé dans la table Supabase push_subscriptions.');
       } catch (eSupa) {
         console.warn('[WebPush] Erreur sauvegarde Supabase push_subscriptions :', eSupa);

@@ -366,20 +366,44 @@ window.ProtecAPC = {
           last_processed_day: apc.lastProcessedDay,
           updated_at: new Date().toISOString()
         };
-        const res = await window.ProtecSupabase.client
+        // Recherche d'un enregistrement existant sans dépendre d'une contrainte ON CONFLICT stricte
+        const { data: existing } = await window.ProtecSupabase.client
           .from('apc_departments')
-          .upsert(payload, { onConflict: 'department_code' });
-        if (res && res.error) {
-          // Si les colonnes n'existent pas encore dans Supabase, retirer les champs spécifiques pour persister le reste sans erreur
-          delete payload.crisis_autonomous_requisition;
-          delete payload.crisis_alert_strategy;
-          delete payload.crisis_ack_timeout_seconds;
-          await window.ProtecSupabase.client
+          .select('id')
+          .eq('department_code', apc.departmentCode)
+          .maybeSingle();
+
+        if (existing && existing.id) {
+          const res = await window.ProtecSupabase.client
             .from('apc_departments')
-            .upsert(payload, { onConflict: 'department_code' });
+            .update(payload)
+            .eq('id', existing.id);
+
+          if (res && res.error) {
+            delete payload.crisis_autonomous_requisition;
+            delete payload.crisis_alert_strategy;
+            delete payload.crisis_ack_timeout_seconds;
+            await window.ProtecSupabase.client
+              .from('apc_departments')
+              .update(payload)
+              .eq('id', existing.id);
+          }
+        } else {
+          const res = await window.ProtecSupabase.client
+            .from('apc_departments')
+            .insert(payload);
+
+          if (res && res.error) {
+            delete payload.crisis_autonomous_requisition;
+            delete payload.crisis_alert_strategy;
+            delete payload.crisis_ack_timeout_seconds;
+            await window.ProtecSupabase.client
+              .from('apc_departments')
+              .insert(payload);
+          }
         }
       } catch (e) {
-        console.warn('Avertissement upsert APC Supabase:', e);
+        console.warn('Avertissement sauvegarde APC Supabase:', e);
       }
     }
   },

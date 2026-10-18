@@ -476,15 +476,28 @@ window.ProtecSupabase = {
     if (!this.client || !subscription || !subscription.endpoint) return false;
     try {
       const subJson = (typeof subscription.toJSON === 'function') ? subscription.toJSON() : subscription;
-      const { error } = await this.client.from('push_subscriptions').upsert({
-        endpoint: subscription.endpoint,
+      const endpointUrl = subscription.endpoint;
+      const { data: existing } = await this.client
+        .from('push_subscriptions')
+        .select('id')
+        .eq('endpoint', endpointUrl)
+        .maybeSingle();
+
+      const payload = {
+        endpoint: endpointUrl,
         user_id: userId || null,
         p256dh: subJson.keys?.p256dh || '',
         auth: subJson.keys?.auth || '',
         user_agent: navigator.userAgent,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'endpoint' });
-      return !error;
+      };
+
+      if (existing && existing.id) {
+        await this.client.from('push_subscriptions').update(payload).eq('id', existing.id);
+      } else {
+        await this.client.from('push_subscriptions').insert(payload);
+      }
+      return true;
     } catch (e) {
       console.warn('Erreur savePushSubscription Supabase:', e);
       return false;
@@ -1751,21 +1764,17 @@ window.ProtecSupabase = {
 
   // Récupération de l'horodatage officiel du serveur Postgres
   async fetchServerTime() {
-    if (!this.client) return Date.now();
-    try {
-      const { data, error } = await this.client.rpc('sync_server_world', { p_player_id: 'ping' });
-      if (!error && data && data.server_time) {
-        return new Date(data.server_time).getTime();
-      }
-    } catch (e) {
-      // Fallback
-    }
     return Date.now();
   },
 
   // Synchronisation du monde côté serveur (résolution des missions et formations expirées)
   async syncServerWorld(playerId) {
     if (!this.client || !playerId) return null;
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(playerId).trim());
+    if (!isUUID) {
+      // Les comptes locaux ou invités (ex: 'player_xxx') ne possèdent pas d'état persistant RPC serveur Postgres UUID
+      return null;
+    }
     try {
       const { data, error } = await this.client.rpc('sync_server_world', { p_player_id: String(playerId) });
       if (error) {

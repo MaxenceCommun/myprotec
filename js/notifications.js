@@ -96,13 +96,15 @@ window.ProtecNotifications = {
 
       // 3. Clé VAPID officielle W3C (synchronisée avec le serveur Protec)
       let vapidPublicKey = 'BKLdj5RykkIOWRhAriMzfKsYON-juKOqSvFCclSz6zgr0CRZdLlQOhfd9nAwmXZZjsNMJU-pl5Csy4Yg-c6mHe0';
-      try {
-        const keyRes = await fetch('/api/push/key');
-        if (keyRes.ok) {
-          const keyData = await keyRes.json();
-          if (keyData.publicKey) vapidPublicKey = keyData.publicKey;
-        }
-      } catch (e) {}
+      if (window.game && window.game.isBackendOnline) {
+        try {
+          const keyRes = await fetch('/api/push/key');
+          if (keyRes.ok) {
+            const keyData = await keyRes.json();
+            if (keyData.publicKey) vapidPublicKey = keyData.publicKey;
+          }
+        } catch (e) {}
+      }
 
       this.vapidPublicKey = vapidPublicKey;
       const convertedVapidKey = this.urlBase64ToUint8Array(vapidPublicKey);
@@ -158,14 +160,32 @@ window.ProtecNotifications = {
       if (window.ProtecSupabase?.client) {
         try {
           const subJson = (typeof subscription.toJSON === 'function') ? subscription.toJSON() : subscription;
-          await window.ProtecSupabase.client.from('push_subscriptions').upsert({
-            endpoint: subscription.endpoint,
+          const endpointUrl = subscription.endpoint;
+          const { data: existing } = await window.ProtecSupabase.client
+            .from('push_subscriptions')
+            .select('id')
+            .eq('endpoint', endpointUrl)
+            .maybeSingle();
+
+          const payload = {
+            endpoint: endpointUrl,
             user_id: (playerId && playerId !== 'local') ? playerId : null,
             p256dh: subJson.keys?.p256dh || '',
             auth: subJson.keys?.auth || '',
             user_agent: navigator.userAgent,
             updated_at: new Date().toISOString()
-          }, { onConflict: 'endpoint' });
+          };
+
+          if (existing && existing.id) {
+            await window.ProtecSupabase.client
+              .from('push_subscriptions')
+              .update(payload)
+              .eq('id', existing.id);
+          } else {
+            await window.ProtecSupabase.client
+              .from('push_subscriptions')
+              .insert(payload);
+          }
           log('Abonnement synchronisé dans la table Supabase push_subscriptions.');
         } catch (eSupa) {
           console.warn('[WebPush] Erreur Supabase push_subscriptions:', eSupa);
