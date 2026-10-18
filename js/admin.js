@@ -2875,8 +2875,8 @@ window.ProtecAdmin = {
       sound: payload.sound !== false,
       vibrate: payload.vibrate !== false,
       push: payload.push !== false,
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/badge-monochrome.png',
+      icon: 'https://myprotec.fr/badge-monochrome.png',
+      badge: 'https://myprotec.fr/badge-monochrome.png',
       data: { url: '/jeu.html', category: payload.category || 'admin-test' },
       timestamp: Date.now()
     };
@@ -2914,8 +2914,8 @@ window.ProtecAdmin = {
             user_id: targetUserId && targetUserId !== 'all' ? targetUserId : undefined,
             title: defaultPayload.title,
             body: defaultPayload.message,
-            icon: '/icons/icon-192x192.png',
-            badge: '/icons/badge-monochrome.png',
+            icon: 'https://myprotec.fr/badge-monochrome.png',
+            badge: 'https://myprotec.fr/badge-monochrome.png',
             data: { url: '/jeu.html' }
           })
         });

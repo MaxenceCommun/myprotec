@@ -26,7 +26,11 @@ class ProtecGame {
       supaUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
     } catch (e) {}
 
-    let savedPlayerId = (supaUser && supaUser.id) || null;
+    let savedPlayerId = (supaUser && supaUser.id) || localStorage.getItem('protec_player_id');
+    if (!savedPlayerId) {
+      savedPlayerId = 'player_' + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem('protec_player_id', savedPlayerId);
+    }
 
     let initialAllianceId = (supaUser && supaUser.allianceId) || localStorage.getItem('protec_alliance_id') || null;
     if (initialAllianceId === 'alliance-fnpc') {
@@ -45,6 +49,9 @@ class ProtecGame {
       deptRole: localStorage.getItem('protec_dept_role') || 'antenne_principale',
       role: (supaUser && supaUser.role) || 'directeur'
     };
+
+    // Identifiants de renforts émis par ce joueur (anti-boucle d'alerte)
+    this.mySentRenfortIds = new Set();
 
     // Calendrier et Horloge Opérationnelle (Synchronisée sur l'heure réelle dès l'instanciation)
     const nowInit = new Date();
@@ -513,12 +520,15 @@ class ProtecGame {
 
     // 1. GARDE CONVENTIONNÉE SAMU 15 (Le créneau global de garde au planning)
     if (mission.isGarde || mission.type === 'garde_samu' || mission.category === 'garde') {
+      const isSigned = Boolean(this.samuConvention?.signed);
       return {
         kind: 'garde_samu',
         typeTitle: 'Garde Conventionnée SAMU 15',
         scaleLabel: mission.scale || 'Vecteur VPSP (1 CE + 1 PSE2 + 1 PSE1)',
         interlocutorLabel: 'Régulation Médicale',
         interlocutorName: mission.clientName || 'SAMU 15 • Centre de Régulation des Appels',
+        agreementStatus: isSigned ? 'Convention Cadre SAMU 15 Active ✓' : 'Garde ponctuelle sans convention cadre',
+        rewardLabel: isSigned ? 'Indemnisation conventionnée (SAMU 15) :' : 'Indemnité horaire d’astreinte sanitaire :',
         rdvLabel: '🏢 Début de Garde',
         startLabel: '⚡ Veille Active Base',
         endLabel: '🏁 Fin de Garde',
@@ -535,12 +545,15 @@ class ProtecGame {
 
     // 2. INTERVENTION D'URGENCE SAMU 15 (Départ réflexe / réquisition d'une mission de secours)
     if (mission.type === 'samu') {
+      const isSigned = Boolean(this.samuConvention?.signed);
       return {
         kind: 'samu',
         typeTitle: 'Intervention d’Urgence SAMU 15',
         scaleLabel: mission.scale || 'Départ Réflexe VPSP',
         interlocutorLabel: 'Régulation Médicale',
         interlocutorName: mission.clientName || 'SAMU 15 • Régulation Médicale Départementale',
+        agreementStatus: isSigned ? 'Convention Partenariale SAMU 15 Active ✓' : 'Réquisition d’urgence SAMU 15 (Hors convention)',
+        rewardLabel: isSigned ? 'Forfait conventionné SAMU 15 :' : 'Indemnité légale de réquisition SAMU 15 :',
         rdvLabel: '🚨 Départ Réflexe',
         startLabel: '📍 Arrivée sur les Lieux',
         endLabel: '🏥 Évacuation / Clôture',
@@ -557,12 +570,15 @@ class ProtecGame {
 
     // 3. GARDE OU MISSION SDIS / SAPEURS-POMPIERS
     if (mission.type === 'pompiers') {
+      const isSigned = Boolean(this.sdisConvention?.signed);
       return {
         kind: 'pompiers',
         typeTitle: 'Mission SDIS / Pompiers',
         scaleLabel: mission.scale || 'Renfort Sanitaire SDIS',
         interlocutorLabel: 'Commandement SDIS',
         interlocutorName: mission.clientName || 'CTA-CODIS 18/112 • Sapeurs-Pompiers',
+        agreementStatus: isSigned ? 'Convention Partenariale SDIS Active ✓' : 'Réquisition d’urgence SDIS (Hors convention)',
+        rewardLabel: isSigned ? 'Indemnisation conventionnée SDIS :' : 'Indemnité de réquisition SDIS :',
         rdvLabel: '🚒 Départ Caserne',
         startLabel: '📍 Sur les Lieux',
         endLabel: '🏁 Fin d’Intervention',
@@ -585,6 +601,8 @@ class ProtecGame {
         scaleLabel: mission.scale || 'Équipe Mobile d’Urgence Sociale',
         interlocutorLabel: 'Coordination Sociale',
         interlocutorName: mission.clientName || 'SIAO 115 • Samu Social / DDETS',
+        agreementStatus: mission.funderName ? `Convention Sociale (${mission.funderName})` : 'Action bénévole de solidarité',
+        rewardLabel: 'Subvention / Forfait maraude :',
         rdvLabel: '☕ Départ Maraude',
         startLabel: '📍 Début de Tournée',
         endLabel: '🏁 Fin de Tournée',
@@ -601,12 +619,42 @@ class ProtecGame {
 
     // 5. SOUTIEN AUX POPULATIONS / CRISE MAJEURE
     if (mission.isCrisis || mission.type === 'crise') {
+      const authLow = (mission.authorityLabel || mission.authority || mission.title || '').toLowerCase();
+      let authLabel = 'Autorité de Crise';
+      let authName = mission.clientName || mission.authorityLabel || 'Préfecture (COD) • Mairie (PCC)';
+      let legalStatus = 'Réquisition Préfectorale d’Urgence (Plan ORSEC)';
+      let rewLabel = 'Indemnité légale de soutien de crise (État) :';
+
+      if (authLow.includes('gendarmerie')) {
+        authLabel = 'Autorité Judiciaire & Gendarmerie';
+        authName = mission.authorityLabel || 'Gendarmerie Nationale (Commandement de Groupement)';
+        legalStatus = 'Réquisition d’Autorité Publique (Art. 74-1 CPP)';
+        rewLabel = 'Indemnité légale d’acte de réquisition (Gendarmerie) :';
+      } else if (authLow.includes('police')) {
+        authLabel = 'Autorité de Police';
+        authName = mission.authorityLabel || 'Préfecture de Police (DSPAP / DOPC)';
+        legalStatus = 'Réquisition Préfecture de Police (Art. 74-1 CPP)';
+        rewLabel = 'Indemnité légale d’acte de réquisition (Police) :';
+      } else if (authLow.includes('sncf')) {
+        authLabel = 'Direction de Crise SNCF';
+        authName = 'SNCF Voyageurs • Direction de Crise';
+        legalStatus = this.sncfConvention?.signed ? 'Convention Nationale SNCF Active ✓' : 'Assistance d’Urgence Voyageurs (Sans convention)';
+        rewLabel = this.sncfConvention?.signed ? 'Indemnisation conventionnée SNCF :' : 'Indemnité d’intervention exceptionnelle SNCF :';
+      } else if (authLow.includes('pompiers') || authLow.includes('bspp') || authLow.includes('codis')) {
+        authLabel = 'Commandement des Secours';
+        authName = mission.authorityLabel || 'Commandement des Sapeurs-Pompiers';
+        legalStatus = 'Réquisition Opérationnelle de Secours (Pompiers)';
+        rewLabel = 'Indemnité de renfort d’urgence (Pompiers) :';
+      }
+
       return {
         kind: 'crise',
         typeTitle: 'Mission de Crise & Soutien aux Populations',
         scaleLabel: mission.scale || 'Détachement d’Urgence & de Crise',
-        interlocutorLabel: 'Autorité de Crise',
-        interlocutorName: mission.clientName || 'Préfecture (COD) • Mairie (PCC)',
+        interlocutorLabel: authLabel,
+        interlocutorName: authName,
+        agreementStatus: legalStatus,
+        rewardLabel: rewLabel,
         rdvLabel: '🚨 Mobilisation Base',
         startLabel: '📍 Déploiement Terrain',
         endLabel: '🏁 Clôture Dispositif',
@@ -622,12 +670,15 @@ class ProtecGame {
     }
 
     // 6. DPS ÉVÉNEMENTIEL (Poste de secours classique)
+    const isDpsSigned = Boolean(mission.status === 'ongoing' || mission.hasConvention || mission.isConventionSigned);
     return {
       kind: 'dps',
       typeTitle: 'Poste de Secours (DPS)',
       scaleLabel: `Dispositif Prévisionnel de Secours (${mission.scale || 'DPS'})`,
       interlocutorLabel: 'Organisateur / Client',
       interlocutorName: mission.clientName || 'Organisateur de l’événement',
+      agreementStatus: isDpsSigned ? 'Convention DPS & Devis Signés ✓' : 'Devis prévisionnel organisateur',
+      rewardLabel: 'Indemnisation conventionnée (Devis Organisateur) :',
       rdvLabel: '🚗 RDV Base',
       startLabel: '📍 Début du Poste',
       endLabel: '🏁 Fin du Dispositif',
@@ -648,10 +699,13 @@ class ProtecGame {
 
     // Détection de l'hébergement Cloud / PWA statique (pour éviter les erreurs 404 de /api/state)
     const isCloudStatic = typeof window !== 'undefined' && (
+      window.location.hostname.includes('myprotec.fr') ||
       window.location.hostname.includes('render.com') ||
       window.location.hostname.includes('github.io') ||
       window.location.hostname.includes('vercel.app') ||
-      window.location.protocol === 'file:'
+      window.location.hostname.includes('netlify.app') ||
+      window.location.protocol === 'file:' ||
+      (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
     );
 
     if (isCloudStatic) {
@@ -873,7 +927,7 @@ class ProtecGame {
 
   handleMultiplayerEvent(type, data) {
     if (type === 'renfort_requested') {
-      if (data.requesterPlayerId !== this.player.id) {
+      if (!this.isMyRenfortRequest(data)) {
         this.handleRemoteRenfortCreated(data);
       }
     } else if (type === 'department_crisis_alert') {
@@ -1525,12 +1579,184 @@ class ProtecGame {
     }
   }
 
+  // ============================================================================
+  // SÉCURISATION DU STOCKAGE LOCAL (LOCALSTORAGE / SESSIONSTORAGE) ET GESTION DU QUOTA
+  // ============================================================================
+
+  /**
+   * Écriture sécurisée dans un Storage avec détection QuotaExceededError,
+   * purge automatique des données non essentielles et sauvegarde d'urgence.
+   */
+  safeStorageSet(storage, key, value, isCritical = false) {
+    if (!storage) return false;
+    try {
+      storage.setItem(key, value);
+      return true;
+    } catch (err) {
+      const isQuotaExceeded = (
+        err.name === 'QuotaExceededError' ||
+        err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+        err.code === 22 ||
+        err.code === 1014
+      );
+
+      if (isQuotaExceeded) {
+        console.warn(`[Storage] QuotaExceededError interceptée pour "${key}". Lancement de la purge automatique des historiques et caches...`);
+        this.purgeNonEssentialStorage();
+
+        // Deuxième essai après purge
+        try {
+          storage.setItem(key, value);
+          console.log(`[Storage] Sauvegarde réussie après purge pour "${key}".`);
+          return true;
+        } catch (retryErr) {
+          console.warn(`[Storage] Échec persistant après purge pour "${key}".`, retryErr.message || retryErr);
+          if (isCritical) {
+            this.saveCriticalStateOnly(storage, key);
+          }
+        }
+      } else {
+        console.warn(`[Storage] Erreur écriture "${key}":`, err.message || err);
+      }
+      return false;
+    }
+  }
+
+  safeLocalStorageSet(key, value, isCritical = false) {
+    return this.safeStorageSet(window.localStorage, key, value, isCritical);
+  }
+
+  safeSessionStorageSet(key, value, isCritical = false) {
+    return this.safeStorageSet(window.sessionStorage, key, value, isCritical);
+  }
+
+  /**
+   * Purge automatique des données et historiques non essentiels pour libérer l'espace localStorage / sessionStorage
+   */
+  purgeNonEssentialStorage() {
+    try {
+      // 1. Réduire drastiquement les tableaux d'historique en mémoire
+      if (Array.isArray(this.financesHistory)) {
+        this.financesHistory = this.financesHistory.slice(0, 15);
+      }
+      if (Array.isArray(this.alertTriggerLogs)) {
+        this.alertTriggerLogs = this.alertTriggerLogs.slice(0, 15);
+      }
+      if (Array.isArray(this.radioLogs)) {
+        this.radioLogs = this.radioLogs.slice(0, 15);
+      }
+      if (Array.isArray(this.history)) {
+        this.history = this.history.slice(-15);
+      }
+      if (Array.isArray(this.missions)) {
+        const active = this.missions.filter(m => m.status !== 'completed' && m.status !== 'canceled');
+        const closed = this.missions.filter(m => m.status === 'completed' || m.status === 'canceled').slice(-10);
+        this.missions = [...active, ...closed];
+      }
+
+      // 2. Nettoyer ou tronquer l'historique des notifications
+      if (window.ProtecNotifications && Array.isArray(window.ProtecNotifications.history)) {
+        window.ProtecNotifications.history = window.ProtecNotifications.history.slice(0, 15);
+        try {
+          localStorage.setItem('protec_notif_history', JSON.stringify(window.ProtecNotifications.history));
+        } catch (e) {
+          try { localStorage.removeItem('protec_notif_history'); } catch (ign) {}
+        }
+      }
+
+      // 3. Purger les clés de cache secondaires et obsolètes
+      const nonEssentialKeys = [
+        'protec_offline_queue',
+        'protec_platform_stats',
+        'protec_last_device',
+        'protec_backup_before_reset',
+        'protec_market_local_listings'
+      ];
+      nonEssentialKeys.forEach(k => {
+        try { localStorage.removeItem(k); } catch (e) {}
+      });
+
+      console.info('[Storage] Purge d\'espace terminée avec succès.');
+    } catch (purgeErr) {
+      console.warn('[Storage] Erreur pendant la purge automatique :', purgeErr);
+    }
+  }
+
+  /**
+   * Sauvegarde de secours ultra-minimale ne contenant que l'état critique (trésorerie, statut véhicules, effectifs, stations)
+   */
+  saveCriticalStateOnly(storage, key) {
+    try {
+      const moneyVal = (this.resources?.money !== undefined) ? this.resources.money : 40000;
+      const criticalPayload = {
+        _isCriticalFallback: true,
+        savedAt: Date.now(),
+        money: moneyVal,
+        resources: {
+          money: moneyVal,
+          budget: moneyVal,
+          funds: moneyVal,
+          reputationScore: this.resources?.reputationScore || 0
+        },
+        stations: (this.stations || []).map(s => ({
+          id: s.id,
+          name: s.name,
+          city: s.city,
+          lat: s.lat,
+          lng: s.lng,
+          level: s.level
+        })),
+        vehicles: (this.vehicles || []).map(v => ({
+          id: v.id,
+          name: v.name,
+          type: v.type,
+          status: v.status,
+          stationId: v.stationId,
+          lat: v.lat,
+          lng: v.lng
+        })),
+        volunteers: (this.volunteers || []).map(v => ({
+          id: v.id,
+          name: v.name,
+          rank: v.rank,
+          status: v.status,
+          stationId: v.stationId
+        }))
+      };
+      storage.setItem(key, JSON.stringify(criticalPayload));
+      console.warn(`[Storage] État critique minimal sauvegardé d'urgence sous "${key}".`);
+    } catch (critErr) {
+      console.error('[Storage] Impossible de sauvegarder même l\'état critique minimal :', critErr);
+    }
+  }
+
   save() {
     this.saveGame();
   }
 
   saveGame(forceInstant = false) {
     try {
+      // 0. Limitation automatique et proactive des tableaux d'historique (max 50 éléments)
+      if (Array.isArray(this.financesHistory) && this.financesHistory.length > 50) {
+        this.financesHistory = this.financesHistory.slice(0, 50);
+      }
+      if (Array.isArray(this.alertTriggerLogs) && this.alertTriggerLogs.length > 50) {
+        this.alertTriggerLogs = this.alertTriggerLogs.slice(0, 50);
+      }
+      if (Array.isArray(this.radioLogs) && this.radioLogs.length > 50) {
+        this.radioLogs = this.radioLogs.slice(0, 50);
+      }
+      if (Array.isArray(this.history) && this.history.length > 50) {
+        this.history = this.history.slice(-50);
+      }
+      if (Array.isArray(this.missions)) {
+        const active = this.missions.filter(m => m.status !== 'completed' && m.status !== 'canceled');
+        const closed = this.missions.filter(m => m.status === 'completed' || m.status === 'canceled');
+        if (closed.length > 50) {
+          this.missions = [...active, ...closed.slice(-50)];
+        }
+      }
+
       // 1. Synchronisation stricte de l'argent dans resources
       const moneyVal = (this.resources?.money !== undefined) ? this.resources.money : ((this.resources?.budget !== undefined) ? this.resources.budget : 40000);
       if (this.resources) {
@@ -1541,46 +1767,42 @@ class ProtecGame {
 
       // 2. Cache instantané local de secours (Zéro perte de données en cas de reload immédiat)
       if (this.stations && this.stations.length > 0) {
-        try {
-          const cacheData = {
-            money: moneyVal,
-            stations: this.stations,
-            vehicles: this.vehicles,
-            volunteers: this.volunteers,
-            missions: this.missions,
-            devis: this.devis,
-            aascConvention: this.aascConvention,
-            samuConvention: this.samuConvention,
-            sdisConvention: this.sdisConvention,
-            sncfConvention: this.sncfConvention,
-            cumpConvention: this.cumpConvention,
-            conventionRequests: this.conventionRequests,
-            financesHistory: this.financesHistory || [],
-            alertSubscription: this.alertSubscription,
-            rewards: this.rewards,
-            alertTriggerLogs: this.alertTriggerLogs || [],
-            departmentInfrastructures: this.departmentInfrastructures || {},
-            mealAllowancePerVolunteer: this.mealAllowancePerVolunteer || 15,
-            antenneMessagesData: this.antenneMessagesData || null,
-            poles: this.poles || null,
-            roleRequests: this.roleRequests || [],
-            rolesAccessMode: this.rolesAccessMode || 'validation',
-            autoFormationActive: this.autoFormationActive !== undefined ? this.autoFormationActive : true,
-            autoLogisticsActive: this.autoLogisticsActive !== undefined ? this.autoLogisticsActive : true,
-            savedAt: Date.now()
-          };
-          sessionStorage.setItem('myprotec_instant_cache', JSON.stringify(cacheData));
-        } catch (ce) {}
+        const cacheData = {
+          money: moneyVal,
+          stations: this.stations,
+          vehicles: this.vehicles,
+          volunteers: this.volunteers,
+          missions: this.missions,
+          devis: this.devis,
+          aascConvention: this.aascConvention,
+          samuConvention: this.samuConvention,
+          sdisConvention: this.sdisConvention,
+          sncfConvention: this.sncfConvention,
+          cumpConvention: this.cumpConvention,
+          conventionRequests: this.conventionRequests,
+          financesHistory: this.financesHistory || [],
+          alertSubscription: this.alertSubscription,
+          rewards: this.rewards,
+          alertTriggerLogs: this.alertTriggerLogs || [],
+          departmentInfrastructures: this.departmentInfrastructures || {},
+          mealAllowancePerVolunteer: this.mealAllowancePerVolunteer || 15,
+          antenneMessagesData: this.antenneMessagesData || null,
+          poles: this.poles || null,
+          roleRequests: this.roleRequests || [],
+          rolesAccessMode: this.rolesAccessMode || 'validation',
+          autoFormationActive: this.autoFormationActive !== undefined ? this.autoFormationActive : true,
+          autoLogisticsActive: this.autoLogisticsActive !== undefined ? this.autoLogisticsActive : true,
+          savedAt: Date.now()
+        };
+        this.safeSessionStorageSet('myprotec_instant_cache', JSON.stringify(cacheData), true);
       }
 
       // Persistance locale de secours des récompenses pour zéro perte
       if (this.rewards) {
-        try {
-          localStorage.setItem('protec_rewards_save', JSON.stringify({
-            rewards: this.rewards,
-            savedAt: Date.now()
-          }));
-        } catch (re) {}
+        this.safeLocalStorageSet('protec_rewards_save', JSON.stringify({
+          rewards: this.rewards,
+          savedAt: Date.now()
+        }), true);
       }
 
       // 3. La sauvegarde est transmise directement et fidèlement à la BDD
@@ -1870,6 +2092,9 @@ class ProtecGame {
       return;
     }
 
+    const playerId = this.player ? this.player.id : null;
+    const playerName = this.player ? this.player.name : null;
+
     // 1. Sauvegarde / Snapshot d'archive avant effacement (Protection intégrale)
     let currentSnapshot = null;
     try {
@@ -1877,6 +2102,7 @@ class ProtecGame {
         clock: this.clock,
         resources: this.resources,
         currentCityKey: this.currentCityKey,
+        currentDepartmentCode: this.currentDepartmentCode,
         stations: this.stations,
         vehicles: this.vehicles,
         volunteers: this.volunteers,
@@ -1884,6 +2110,8 @@ class ProtecGame {
         missions: this.missions,
         candidatures: this.candidatures,
         formations: this.formations,
+        annualContracts: this.annualContracts,
+        departmentInfrastructures: this.departmentInfrastructures,
         logistics: this.logistics,
         weather: this.weather,
         grants: this.grants,
@@ -1897,8 +2125,8 @@ class ProtecGame {
       // Archive d'urgence locale dans le localStorage
       localStorage.setItem('protec_backup_before_reset', JSON.stringify({
         date: new Date().toISOString(),
-        playerId: this.player.id,
-        playerName: this.player.name,
+        playerId: playerId,
+        playerName: playerName,
         snapshot: currentSnapshot
       }));
     } catch (err) {
@@ -1915,8 +2143,8 @@ class ProtecGame {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
-          playerId: this.player.id,
-          playerName: this.player.name,
+          playerId: playerId,
+          playerName: playerName,
           reason: 'Réinitialisation manuelle demandée par le joueur',
           snapshotData: currentSnapshot
         })
@@ -1925,18 +2153,102 @@ class ProtecGame {
       console.warn('Erreur envoi archive serveur:', err);
     }
 
-    // 3. Effacement de la sauvegarde Cloud Supabase et de la sauvegarde active locale
+    // 3. Effacement TOTAL sur Cloud Supabase (Sauvegarde, Antenne multijoueur, Profil joueur)
     try {
-      if (window.ProtecSupabase && window.ProtecSupabase.client && this.player && this.player.id) {
-        await window.ProtecSupabase.client.from('game_saves').delete().eq('user_id', this.player.id);
+      if (window.ProtecSupabase && window.ProtecSupabase.client && playerId) {
+        // A. Supprimer la sauvegarde cloud du joueur
+        await window.ProtecSupabase.client.from('game_saves').delete().eq('user_id', playerId);
+        // B. Supprimer la position de l'antenne sur la carte multijoueur
+        await window.ProtecSupabase.client.from('alliance_stations').delete().eq('player_id', playerId);
+        // C. Réinitialiser le profil joueur : nom de l'antenne, département et commune effacés
+        await window.ProtecSupabase.client.from('players').update({
+          station_name: null,
+          department_code: null,
+          city: null
+        }).eq('id', playerId);
       }
     } catch (e) {
-      console.warn('Erreur purge cloud save:', e);
+      console.warn('Erreur purge Cloud Supabase:', e);
     }
 
-    localStorage.removeItem('protec_live_save_v4');
+    // 4. Purge TOTALE des clés du localStorage (Sauvegardes, Nom d'antenne, Département, Position, Onboarding)
+    try {
+      localStorage.removeItem('protec_live_save_v4');
+      localStorage.removeItem('protec_save');
+      localStorage.removeItem('myprotec_save');
+      localStorage.removeItem('protec_save_game');
+      localStorage.removeItem('protec_department_code');
+      localStorage.removeItem('protec_station_name');
+      localStorage.removeItem('protec_onboarding_step');
+      localStorage.removeItem('protec_onboarding_volunteers');
+      localStorage.removeItem('protec_onboarding_placement');
+      localStorage.removeItem('protec_first_antenna_setup');
+      localStorage.removeItem('protec_notif_history');
+      localStorage.removeItem('protec_user_profile');
+
+      // Nettoyer l'objet utilisateur protec_user en conservant le compte et rôle
+      const userRaw = localStorage.getItem('protec_user');
+      if (userRaw) {
+        const u = JSON.parse(userRaw);
+        if (u && typeof u === 'object') {
+          delete u.stationName;
+          delete u.station_name;
+          delete u.departmentCode;
+          delete u.department_code;
+          delete u.city;
+          localStorage.setItem('protec_user', JSON.stringify(u));
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur purge localStorage:', e);
+    }
+
+    // 5. Purge TOTALE de l'état en mémoire
+    this.stations = [];
+    this.vehicles = [];
+    this.volunteers = [];
+    this.missions = [];
+    this.devis = [];
+    this.candidatures = [];
+    this.formations = [];
+    this.annualContracts = [];
+    this.departmentInfrastructures = {};
+    this.currentCityKey = null;
+    this.currentDepartmentCode = null;
+
+    if (this.player) {
+      this.player.stationName = null;
+      this.player.departmentCode = null;
+      this.player.city = null;
+    }
+
+    if (window.ProtecAuth && window.ProtecAuth.currentUser) {
+      window.ProtecAuth.currentUser.stationName = null;
+      window.ProtecAuth.currentUser.departmentCode = null;
+      window.ProtecAuth.currentUser.city = null;
+    }
+
+    // Réinitialisation des fonds au capital officiel de départ (40 000 €)
+    this.resources = {
+      money: 40000,
+      volunteers: 0,
+      vehicles: 0,
+      reputation: 100,
+      grants: 0,
+      funds: 40000,
+      budget: 40000
+    };
+
+    // Nettoyer tous les marqueurs d'antennes sur la carte Leaflet principale
+    if (Array.isArray(this.stationMarkers)) {
+      this.stationMarkers.forEach(m => {
+        try { if (this.map) this.map.removeLayer(m); } catch (e) {}
+      });
+      this.stationMarkers = [];
+    }
+
     this.closeResetModal();
-    this.showToast('Antenne réinitialisée', 'Votre ancienne partie a été archivée avec succès. Rechargement...', 'green');
+    this.showToast('Partie Réinitialisée à Zéro', 'L\'antenne, sa position géographique, son nom et son département ont été intégralement retirés. Rechargement...', 'green');
     setTimeout(() => {
       location.reload();
     }, 1200);
@@ -1957,84 +2269,123 @@ class ProtecGame {
     this.startAntennaPlacement();
   }
 
+  /**
+   * Chargement sécurisé des contours vectoriels GeoJSON des départements
+   * Résistant aux blocages CORS, au protocole file:// et au mode hors-ligne
+   */
+  async loadDepartementsGeoJSON() {
+    if (window._cachedDepartementsGeoJSON) return window._cachedDepartementsGeoJSON;
+    try {
+      const res = await fetch('data/departements-version-simplifiee.geojson');
+      if (res && res.ok) {
+        const data = await res.json();
+        window._cachedDepartementsGeoJSON = data;
+        return data;
+      } else {
+        console.warn(`[GeoJSON] Réponse inattendue (HTTP ${res?.status}) pour data/departements-version-simplifiee.geojson.`);
+      }
+    } catch (e) {
+      console.warn('[GeoJSON] Contours départementaux indisponibles (mode local / hors-ligne) :', e?.message || e);
+    }
+
+    if (!this._geoJsonErrorNotified) {
+      this._geoJsonErrorNotified = true;
+      if (typeof this.showToast === 'function') {
+        this.showToast(
+          'Mode Dégradé Cartographique 🗺️',
+          'Les contours géographiques vectoriels sont indisponibles hors-ligne. Affichage sécurisé sur le secteur 54 (Meurthe-et-Moselle).',
+          'amber',
+          5000
+        );
+      }
+    }
+    return null;
+  }
+
   initMap() {
     window.ProtecLoader?.setProgress(75, 'Déploiement du système cartographique...', 'Cartographie');
-    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.currentDepartmentCode) : null;
-    let centerLat = deptInfo ? deptInfo.lat : 48.8566;
-    let centerLng = deptInfo ? deptInfo.lng : 2.3522;
-    let initialZoom = deptInfo ? deptInfo.zoom : 11;
+
+    // 1. Résolution des coordonnées avec département 54 / Meurthe-et-Moselle par défaut
+    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.currentDepartmentCode || '54') : null;
+    let centerLat = deptInfo ? deptInfo.lat : 48.6921; // Département 54 (Meurthe-et-Moselle / Nancy) par défaut
+    let centerLng = deptInfo ? deptInfo.lng : 6.1844;
+    let initialZoom = deptInfo ? (deptInfo.zoom || 11) : 11;
 
     // Si le joueur possède une antenne, centrer immédiatement la caméra devant ses locaux (zoom 15)
     if (this.stations && this.stations.length > 0 && this.stations[0].lat && this.stations[0].lng) {
-      centerLat = this.stations[0].lat;
-      centerLng = this.stations[0].lng;
+      centerLat = Number(this.stations[0].lat);
+      centerLng = Number(this.stations[0].lng);
       initialZoom = 15;
     }
 
-    this.map = L.map('map', {
-      center: [centerLat, centerLng],
-      zoom: initialZoom,
-      zoomControl: false
-    });
+    try {
+      this.map = L.map('map', {
+        center: [centerLat, centerLng],
+        zoom: initialZoom,
+        zoomControl: false
+      });
 
-    L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+      L.control.zoom({ position: 'bottomright' }).addTo(this.map);
 
-    const isEffectiveDark = window.ProtecTheme ? window.ProtecTheme.isEffectiveDark() : false;
+      const isEffectiveDark = window.ProtecTheme ? window.ProtecTheme.isEffectiveDark() : false;
 
-    this.baseLayers = {
-      light: L.layerGroup([
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-          attribution: 'Tiles &copy; Esri',
-          maxNativeZoom: 16,
-          maxZoom: 19
-        }),
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-          attribution: '',
-          maxNativeZoom: 16,
+      this.baseLayers = {
+        light: L.layerGroup([
+          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri',
+            maxNativeZoom: 16,
+            maxZoom: 19
+          }),
+          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '',
+            maxNativeZoom: 16,
+            maxZoom: 19
+          })
+        ]),
+        dark: L.layerGroup([
+          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri',
+            maxNativeZoom: 16,
+            maxZoom: 19
+          }),
+          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '',
+            maxNativeZoom: 16,
+            maxZoom: 19
+          })
+        ]),
+        osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
           maxZoom: 19
         })
-      ]),
-      dark: L.layerGroup([
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-          attribution: 'Tiles &copy; Esri',
-          maxNativeZoom: 16,
-          maxZoom: 19
-        }),
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-          attribution: '',
-          maxNativeZoom: 16,
-          maxZoom: 19
-        })
-      ]),
-      osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19
-      })
-    };
+      };
 
-    if (isEffectiveDark) {
-      this.baseLayers.dark.addTo(this.map);
-    } else {
-      this.baseLayers.light.addTo(this.map);
+      if (isEffectiveDark) {
+        this.baseLayers.dark.addTo(this.map);
+      } else {
+        this.baseLayers.light.addTo(this.map);
+      }
+
+      this.layerControl = L.control.layers({
+        'Mode Sombre (Gris foncé)': this.baseLayers.dark,
+        'Mode Clair (Épuré)': this.baseLayers.light,
+        'Rues (OpenStreetMap)': this.baseLayers.osm
+      }, null, { position: 'bottomright' }).addTo(this.map);
+
+      this.map.on('baselayerchange', (e) => {
+        this.userCustomLayerLocked = (e.layer === this.baseLayers.osm);
+      });
+
+      // Écouteur réactif pour basculer automatiquement la carte selon le thème (Clair / Sombre)
+      window.addEventListener('protec-theme-changed', (e) => {
+        this.updateMapTheme(e.detail ? e.detail.isDark : false);
+      });
+
+      // Initialisation du sélecteur départemental desktop
+      this.populateDepartmentSelector();
+    } catch (mapErr) {
+      console.warn('[Cartographie] Erreur d\'initialisation Leaflet encapsulée (mode résilient actif) :', mapErr);
     }
-
-    this.layerControl = L.control.layers({
-      'Mode Sombre (Gris foncé)': this.baseLayers.dark,
-      'Mode Clair (Épuré)': this.baseLayers.light,
-      'Rues (OpenStreetMap)': this.baseLayers.osm
-    }, null, { position: 'bottomright' }).addTo(this.map);
-
-    this.map.on('baselayerchange', (e) => {
-      this.userCustomLayerLocked = (e.layer === this.baseLayers.osm);
-    });
-
-    // Écouteur réactif pour basculer automatiquement la carte selon le thème (Clair / Sombre)
-    window.addEventListener('protec-theme-changed', (e) => {
-      this.updateMapTheme(e.detail ? e.detail.isDark : false);
-    });
-
-    // Initialisation du sélecteur départemental desktop
-    this.populateDepartmentSelector();
 
     this.map.on('click', (e) => {
       // Ignorer si un marqueur (mission, événement, renfort, antenne) vient d'être cliqué
@@ -2153,7 +2504,14 @@ class ProtecGame {
       }
     } else if (dept) {
       if (this.map) {
-        this.map.flyTo([dept.lat, dept.lng], dept.zoom, { duration: 1.2 });
+        // Vue d'ensemble du département sans zoomer à 15 sur une antenne concurrente
+        this.map.flyTo([dept.lat, dept.lng], Math.min(dept.zoom || 10, 10), { duration: 1.2 });
+      }
+      if (!silent) {
+        this.showToast('Implantation Requise', `Votre antenne n'est pas encore implantée dans le département ${myDeptCode}. Finalisez l'onboarding d'implantation.`, 'amber');
+      }
+      if (window.ProtecOnboarding) {
+        setTimeout(() => window.ProtecOnboarding.showWizard(this), 600);
       }
     }
 
@@ -2166,7 +2524,7 @@ class ProtecGame {
     if (banner) banner.classList.add('hidden');
     if (returnBtn) returnBtn.classList.add('hidden');
 
-    if (!silent) {
+    if (!silent && this.stations.length > 0) {
       this.showToast('Mon Antenne', `Retour à votre antenne d'affectation (${myDeptCode}).`, 'blue');
     }
 
@@ -2293,10 +2651,13 @@ class ProtecGame {
     // 1. Mission d'urgence en attente de décision / préalerte / déclenchée
     if (mission.status === 'prealerte' || mission.status === 'declenche') return true;
 
-    // 2. Incident en cours sur une mission active
-    if (mission.status === 'ongoing' && mission.currentIncident) return true;
+    // Nettoyage de tout incident de terrain résiduel (les secouristes gèrent en autonomie)
+    if (mission.currentIncident) {
+      mission.currentIncident = null;
+      mission.incidentResolved = true;
+    }
 
-    // 3. Missions terminées, annulées ou en cours sans incident : aucune onde
+    // 2. Missions terminées, annulées ou en cours : aucune onde
     if (mission.status === 'completed' || mission.status === 'annule' || mission.status === 'ongoing') {
       return false;
     }
@@ -2309,16 +2670,32 @@ class ProtecGame {
       // A. Manque de personnel
       if (regCount < reqCount) return true;
 
-      // B. Véhicules requis par le devis non affectés
+      // B. Moyens opérationnels requis (PS, LOG, TP, HR) non couverts
       if (Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) {
-        const assignedVehs = (mission.assignedVehicleIds || []).map(id => this.vehicles.find(v => v.id === id)).filter(Boolean);
-        const pool = [...assignedVehs];
-        const missing = mission.requiredVehicles.some(reqType => {
-          const idx = pool.findIndex(v => v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit)));
-          if (idx >= 0) { pool.splice(idx, 1); return false; }
-          return true;
-        });
-        if (missing) return true;
+        // Règle formelle : les VL simples ne sont JAMAIS requises (uniquement VLHR sur terrain escarpé)
+        const effectiveReqs = mission.requiredVehicles.filter(t => t !== 'VL');
+        if (effectiveReqs.length > 0) {
+          const coverage = this.checkMissionMoyensCoverage ? this.checkMissionMoyensCoverage(mission) : null;
+          if (coverage) {
+            if (!coverage.psSatisfied || !coverage.logSatisfied || !coverage.hrSatisfied) return true;
+          } else {
+            const assignedVehs = (mission.assignedVehicleIds || []).map(id => this.vehicles.find(v => v.id === id)).filter(Boolean);
+            const pool = [...assignedVehs];
+            const missing = effectiveReqs.some(reqType => {
+              const idx = pool.findIndex(v => {
+                if (v.type === reqType) return true;
+                if (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit)) return true;
+                if ((reqType === 'VTU' || reqType === 'LOG') && ((v.types && v.types.includes('LOG')) || v.capacity_log > 0)) return true;
+                if ((reqType === 'VPSP' || reqType === 'PS') && ((v.types && v.types.includes('PS')) || v.type === 'VPSP')) return true;
+                if (reqType === 'VLHR' && (v.type === 'VLHR' || (v.types && v.types.includes('HR')) || v.is4x4)) return true;
+                return false;
+              });
+              if (idx >= 0) { pool.splice(idx, 1); return false; }
+              return true;
+            });
+            if (missing) return true;
+          }
+        }
       }
 
       // C. Rôles non affectés aux secouristes inscrits
@@ -2368,15 +2745,52 @@ class ProtecGame {
     return false;
   }
 
+  // Détermine de manière exhaustive et absolue si une demande de renfort émane du joueur lui-même
+  isMyRenfortRequest(renfort) {
+    if (!renfort || typeof renfort !== 'object') return false;
+
+    // 1. Tag explicite ou mémorisé localement
+    if (renfort.isMine) return true;
+    if (this.mySentRenfortIds && (this.mySentRenfortIds.has(renfort.id) || this.mySentRenfortIds.has(String(renfort.id)))) return true;
+
+    // 2. Identifiant joueur (Local, Supabase ou Auth)
+    const myId = String(this.player?.id || window.ProtecAuth?.currentUser?.id || localStorage.getItem('protec_player_id') || '').trim();
+    const reqId = String(renfort.requesterPlayerId || renfort.requestingPlayerId || renfort.senderPlayerId || renfort.senderId || '').trim();
+    if (myId && reqId && myId === reqId) {
+      return true;
+    }
+
+    // 3. Rapprochement direct par la mission concernée (Critère 100% infaillible pour les missions du joueur)
+    if (renfort.missionId) {
+      const isMyMission = (this.missions || []).some(m => String(m.id) === String(renfort.missionId)) ||
+                          (this.devis || []).some(d => String(d.id) === String(renfort.missionId));
+      if (isMyMission) return true;
+    }
+
+    // 4. Rapprochement par le nom de l'antenne demandeuse
+    if (renfort.stationName && this.stations && this.stations.length > 0) {
+      const renfStation = String(renfort.stationName).trim().toLowerCase();
+      const isMyStation = this.stations.some(s => s.name && s.name.trim().toLowerCase() === renfStation);
+      if (isMyStation) return true;
+    }
+
+    // 5. Rapprochement par le nom du directeur
+    const myName = String(this.player?.name || window.ProtecAuth?.currentUser?.username || localStorage.getItem('protec_player_name') || '').trim().toLowerCase();
+    const reqName = String(renfort.requesterName || renfort.requestingPlayerName || '').trim().toLowerCase();
+    if (myName && reqName && myName === reqName && myName !== 'directeur d’antenne' && myName !== 'antenne locale') {
+      return true;
+    }
+
+    return false;
+  }
+
   // Détermine avec précision si une demande de renfort d'un autre joueur est accessible pour le joueur courant
   isRenfortAccessibleForPlayer(renfort) {
     if (!renfort || typeof renfort !== 'object') return false;
     if (renfort.status !== 'open') return false;
 
-    // 1. Uniquement les demandes d'un AUTRE joueur (ne pas afficher son propre appel comme un renfort allié)
-    const myPlayerId = String(this.player?.id || '');
-    const requesterId = String(renfort.requesterPlayerId || renfort.requestingPlayerId || '');
-    if (myPlayerId && requesterId && myPlayerId === requesterId) {
+    // 1. Uniquement les demandes d'un AUTRE joueur (ne JAMAIS afficher son propre appel comme un renfort allié à pourvoir)
+    if (this.isMyRenfortRequest(renfort)) {
       return false;
     }
 
@@ -3035,15 +3449,18 @@ class ProtecGame {
         newStation.vehicles = [];
       }
 
-      // 2. ZÉRO MATÉRIEL AU DÉPART (stock vierge)
+      // 2. ZÉRO MATÉRIEL AU DÉPART (inventaire totalement vide)
       newStation.stock = {};
+      newStation.stockMaterielsPS = 0;
+      this.stockMaterielsPS = 0;
       this.logistics = { oxygenBottles: 0, aedPads: 0, woundKits: 0, cervicalCollars: 0 };
 
-      // Dotation initiale de trésorerie (40 000 €)
+      // Dotation initiale de trésorerie (40 000 € net)
       if (this.resources) {
         this.resources.money = 40000;
         this.resources.budget = 40000;
         this.resources.funds = 40000;
+        this.resources._money = 40000;
       }
 
       // 3. CONVENTION FONDATRICE AASC (Octroyée dès l'affiliation FNPC lors du tutoriel)
@@ -3361,6 +3778,73 @@ class ProtecGame {
 
     let targetCommune = null;
 
+    // Détection de l'environnement géographique spécifique
+    const isParisArea = ['75', '92', '93', '94'].includes(String(deptCode));
+    const isParisIntramuros = String(deptCode) === '75';
+    const targetEnv = (typeof missionContext === 'object' && missionContext?.targetEnvironment) ? missionContext.targetEnvironment : '';
+    const isForestSearch = targetEnv === 'bois_paris' || targetEnv === 'foret_province' || targetEnv === 'paris_urban_parks' ||
+      ctxText.includes('forêt') || ctxText.includes('foret') || ctxText.includes('bois') || ctxText.includes('battue') || ctxText.includes('disparu');
+
+    // 0. GÉOLOCALISATION PARISIENNE RÉALISTE : Bois de Boulogne / Vincennes ou Parcs Urbains
+    if (isParisIntramuros && (targetEnv === 'bois_paris' || ctxText.includes('bois de boulogne') || ctxText.includes('bois de vincennes') || (isForestSearch && targetEnv !== 'paris_urban_parks'))) {
+      const parisWoods = [
+        { nom: 'Bois de Boulogne (Cascades & Lacs)', cp: '75016', lat: 48.8624, lng: 2.2492 },
+        { nom: 'Bois de Boulogne (Allée de la Reine Marguerite)', cp: '75016', lat: 48.8672, lng: 2.2415 },
+        { nom: 'Bois de Vincennes (Route de la Pyramide)', cp: '75012', lat: 48.8283, lng: 2.4331 },
+        { nom: 'Bois de Vincennes (Lac Daumesnil)', cp: '75012', lat: 48.8315, lng: 2.4145 }
+      ];
+      const pickWood = parisWoods[Math.floor(Math.random() * parisWoods.length)];
+      const jLat = pickWood.lat + (Math.random() - 0.5) * 0.005;
+      const jLng = pickWood.lng + (Math.random() - 0.5) * 0.007;
+      return {
+        lat: parseFloat(jLat.toFixed(5)),
+        lng: parseFloat(jLng.toFixed(5)),
+        commune: pickWood.nom,
+        postcode: pickWood.cp,
+        targetEnvironment: 'bois_paris',
+        isRealCommuneAnchor: true
+      };
+    }
+
+    if (isParisIntramuros && (targetEnv === 'paris_urban_parks' || ctxText.includes('parc') || ctxText.includes('square') || ctxText.includes('berges'))) {
+      const parisParks = [
+        { nom: 'Parc des Buttes-Chaumont', cp: '75019', lat: 48.8809, lng: 2.3828 },
+        { nom: 'Parc Montsouris', cp: '75014', lat: 48.8222, lng: 2.3385 },
+        { nom: 'Jardin des Tuileries & Berges', cp: '75001', lat: 48.8635, lng: 2.3275 },
+        { nom: 'Parc de Bercy', cp: '75012', lat: 48.8355, lng: 2.3812 },
+        { nom: 'Parc de la Villette', cp: '75019', lat: 48.8932, lng: 2.3904 }
+      ];
+      const pickPark = parisParks[Math.floor(Math.random() * parisParks.length)];
+      const jLat = pickPark.lat + (Math.random() - 0.5) * 0.003;
+      const jLng = pickPark.lng + (Math.random() - 0.5) * 0.004;
+      return {
+        lat: parseFloat(jLat.toFixed(5)),
+        lng: parseFloat(jLng.toFixed(5)),
+        commune: pickPark.nom,
+        postcode: pickPark.cp,
+        targetEnvironment: 'paris_urban_parks',
+        isRealCommuneAnchor: true
+      };
+    }
+
+    if (isParisIntramuros && (targetEnv === 'seine_paris' || ctxText.includes('seine') || ctxText.includes('crue'))) {
+      const seineQuais = [
+        { nom: 'Voie Georges Pompidou (Berges de Seine)', cp: '75004', lat: 48.8542, lng: 2.3571 },
+        { nom: 'Quai de la Tournelle', cp: '75005', lat: 48.8504, lng: 2.3533 },
+        { nom: 'Quai de Bercy', cp: '75012', lat: 48.8341, lng: 2.3795 },
+        { nom: 'Quai de Grenelle', cp: '75015', lat: 48.8508, lng: 2.2842 }
+      ];
+      const pickSeine = seineQuais[Math.floor(Math.random() * seineQuais.length)];
+      return {
+        lat: parseFloat(pickSeine.lat.toFixed(5)),
+        lng: parseFloat(pickSeine.lng.toFixed(5)),
+        commune: `Paris (${pickSeine.nom})`,
+        postcode: pickSeine.cp,
+        targetEnvironment: 'seine_paris',
+        isRealCommuneAnchor: true
+      };
+    }
+
     if (isSocial) {
       // 1. Maraude sociale : STRICTEMENT dans la ville de l'antenne (centre-ville, gare, mairie)
       targetCommune = communes.find(c => c.nom.toLowerCase() === (base.city || '').toLowerCase()) || communes[0];
@@ -3402,13 +3886,15 @@ class ProtecGame {
       targetCommune = { nom: base.city || 'Centre', cp: `${deptCode}000`, lat: base.lat, lng: base.lng };
     }
 
-    // 5. ANCRAGE GARANTI DANS LE TISSU URBAIN HABITÉ DE LA COMMUNE (Anti-eau, anti-forêt, anti-autoroute)
-    // On part du centre habité de la commune et on applique un micro-décalage urbain maîtrisé de 70m à 320m.
+    // 5. ANCRAGE GARANTI DANS LE TISSU HABITÉ OU EN PÉRIPHÉRIE BOISÉE
+    // En milieu rural/province pour une battue en forêt, on s'écarte de 1.2 à 2.8 km du centre bourg vers les sous-bois.
     let chosenLat = targetCommune.lat;
     let chosenLng = targetCommune.lng;
 
     const microAngle = Math.random() * 2 * Math.PI;
-    const microDistKm = isSocial ? (0.05 + Math.random() * 0.15) : (0.08 + Math.random() * 0.24);
+    const microDistKm = isForestSearch
+      ? (1.20 + Math.random() * 1.60)
+      : (isSocial ? (0.05 + Math.random() * 0.15) : (0.08 + Math.random() * 0.24));
     const latRad = (targetCommune.lat * Math.PI) / 180;
     const kmPerLngDeg = 111.320 * Math.cos(latRad) || 75;
 
@@ -3444,11 +3930,12 @@ class ProtecGame {
       lng: parseFloat(chosenLng.toFixed(5)),
       commune: targetCommune.nom,
       postcode: targetCommune.cp,
+      targetEnvironment: targetEnv || (isForestSearch ? 'foret_province' : null),
       isRealCommuneAnchor: true
     };
   }
 
-  // Générateur d'adresse réaliste et cohérente selon le contexte de la mission (Gare, Berges/Quais, Stades, Écoles...)
+  // Générateur d'adresse réaliste et cohérente selon le contexte de la mission (Gare, Berges/Quais, Stades, Écoles, Forêts...)
   generateRealisticStreetAddress(city = 'Nancy', lat = null, lng = null, missionContext = null) {
     const ctxText = (typeof missionContext === 'string'
       ? missionContext
@@ -3457,9 +3944,47 @@ class ProtecGame {
     let seed = 0;
     if (lat && lng) seed = Math.abs(Math.round((lat + lng) * 1000));
     const num = (seed % 120) + 1 || Math.floor(Math.random() * 120) + 1;
+    const isParisContext = city && (city.toLowerCase().includes('paris') || city.startsWith('75') || city.includes('bois de'));
+
+    // 0. Recherche de personne disparue / Forêt / Bois / Battue / Massif
+    if (ctxText.includes('forêt') || ctxText.includes('foret') || ctxText.includes('bois') || ctxText.includes('battue') || ctxText.includes('massif') || ctxText.includes('disparu') || ctxText.includes('recherche')) {
+      if (isParisContext) {
+        const adressesParisWoods = [
+          'Route de la Grande Cascade (Bois de Boulogne), 75016 Paris',
+          'Allée de la Reine Marguerite (Bois de Boulogne), 75016 Paris',
+          'Route de la Pyramide (Bois de Vincennes), 75012 Paris',
+          'Route de Ceinture du Lac Daumesnil (Bois de Vincennes), 75012 Paris',
+          'Carrefour des Cascades (Bois de Boulogne), 75016 Paris',
+          'Allée des Buttes-Chaumont, 75019 Paris',
+          'Voie Georges Pompidou (Berges de Seine), 75001 Paris'
+        ];
+        return adressesParisWoods[seed % adressesParisWoods.length];
+      }
+      const forestStreets = [
+        'Route Forestière du Chêne Brûlé',
+        'Chemin des Gardes Forestiers',
+        'Carrefour de la Forêt Domaniale',
+        'Allée des Sous-Bois',
+        'Sentier des Crêtes & Massif Boisé',
+        'Chemin Rural du Val des Bois',
+        'Route Départementale D14 (Lisière du Massif Forestier)'
+      ];
+      return `${forestStreets[seed % forestStreets.length]}, ${city}`;
+    }
 
     // 1. Mission ferroviaire / SNCF / Gares
     if (ctxText.includes('gare') || ctxText.includes('sncf') || ctxText.includes('train') || ctxText.includes('rail') || ctxText.includes('caténaire') || ctxText.includes('naufrag')) {
+      if (isParisContext) {
+        const garesParis = [
+          'Parvis de la Gare de Lyon, 75012 Paris',
+          'Place de la Gare du Nord, 75010 Paris',
+          'Place de la Gare Montparnasse, 75015 Paris',
+          'Place de la Gare Saint-Lazare, 75008 Paris',
+          'Place de la Gare de l’Est, 75010 Paris',
+          'Place de la Gare d’Austerlitz, 75013 Paris'
+        ];
+        return garesParis[seed % garesParis.length];
+      }
       const gares = [
         'Place de la Gare',
         'Parvis de la Gare SNCF',
@@ -3472,6 +3997,16 @@ class ProtecGame {
 
     // 2. Inondations, crues, pompage, canot / nautique
     if (ctxText.includes('inondation') || ctxText.includes('pompage') || ctxText.includes('crue') || ctxText.includes('eau') || ctxText.includes('submersion') || ctxText.includes('nautique')) {
+      if (isParisContext) {
+        const quaisParis = [
+          'Voie Georges Pompidou (Berges de Seine), 75004 Paris',
+          'Quai de la Tournelle, 75005 Paris',
+          'Quai de Bercy, 75012 Paris',
+          'Port de Solférino (Berges de Seine), 75007 Paris',
+          'Quai de Grenelle, 75015 Paris'
+        ];
+        return quaisParis[seed % quaisParis.length];
+      }
       const quais = [
         'Quai des Berges',
         'Promenade du Canal',
@@ -3483,8 +4018,18 @@ class ProtecGame {
       return `${quais[seed % quais.length]}, ${city}`;
     }
 
-    // 3. Accident de la circulation / voie rapide / secours routier
-    if (ctxText.includes('accident') || ctxText.includes('carambolage') || ctxText.includes('collision') || ctxText.includes('secours routier')) {
+    // 3. Accident de la circulation / voie rapide / secours routier / périphérique
+    if (ctxText.includes('accident') || ctxText.includes('carambolage') || ctxText.includes('collision') || ctxText.includes('secours routier') || ctxText.includes('périphérique')) {
+      if (isParisContext) {
+        const axesParis = [
+          'Boulevard Périphérique Extérieur (Porte de Saint-Cloud), 75016 Paris',
+          'Boulevard Périphérique Intérieur (Porte de Bagnolet), 75020 Paris',
+          'Boulevard Périphérique Extérieur (Porte d’Italie), 75013 Paris',
+          'Boulevard Périphérique Intérieur (Porte de la Chapelle), 75018 Paris',
+          'Boulevard des Maréchaux (Boulevard Masséna), 75013 Paris'
+        ];
+        return axesParis[seed % axesParis.length];
+      }
       const axes = [
         'Rond-Point de l\'Europe',
         'Route Nationale (Axe Principal)',
@@ -3519,6 +4064,16 @@ class ProtecGame {
 
     // 6. Maraude sociale / Sans-abri
     if (ctxText.includes('maraude') || ctxText.includes('social') || ctxText.includes('précarité') || ctxText.includes('samu social')) {
+      if (isParisContext) {
+        const maraudeParis = [
+          'Place de la République, 75011 Paris',
+          'Parvis de la Gare de Lyon, 75012 Paris',
+          'Place de la Bastille, 75011 Paris',
+          'Place de l’Hôtel de Ville, 75004 Paris',
+          'Place de Stalingrad, 75019 Paris'
+        ];
+        return maraudeParis[seed % maraudeParis.length];
+      }
       const maraudeStreets = [
         'Place de la Mairie',
         'Parvis de la Gare Centrale',
@@ -3597,11 +4152,10 @@ class ProtecGame {
               item.sector = `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${city || currentCity})`;
               item.address = item.sector;
             } else if (props.label) {
-              const rawLabel = props.label.toLowerCase();
-              const isAutoroute = rawLabel.includes('autoroute') || rawLabel.includes('a31') || rawLabel.includes('a4') || rawLabel.includes('échangeur');
-              const isRail = rawLabel.includes('voie ferrée') || rawLabel.includes('ligne sncf');
-              // Si ce n'est pas un accident de la route, interdire un label d'autoroute
-              if (isAutoroute && !item.title?.toLowerCase().includes('accident') && !item.title?.toLowerCase().includes('routier')) {
+              // Protection des adresses spécifiques de bois, parcs, berges et forêts
+              if (item.targetEnvironment === 'bois_paris' || item.targetEnvironment === 'paris_urban_parks' || item.targetEnvironment === 'seine_paris' || item.targetEnvironment === 'foret_province' || (item.address && (item.address.includes('Bois de') || item.address.includes('Route Forestière') || item.address.includes('Carrefour de la Forêt')))) {
+                // Conserver l'adresse forestière / boisée réaliste déjà attribuée
+              } else if (isAutoroute && !item.title?.toLowerCase().includes('accident') && !item.title?.toLowerCase().includes('routier')) {
                 item.address = this.generateRealisticStreetAddress(city || currentCity, item.lat, item.lng, item.title);
               } else if (isRail && !item.title?.toLowerCase().includes('sncf') && !item.title?.toLowerCase().includes('gare')) {
                 item.address = this.generateRealisticStreetAddress(city || currentCity, item.lat, item.lng, item.title);
@@ -5510,85 +6064,268 @@ class ProtecGame {
       this.toggleMissionVehicle(missionId, vId);
     }
   }
-  // Fonctions opérationnelles par autorité pour les véhicules engagés
+  // Fonctions opérationnelles par autorité pour les véhicules engagés (adaptées à la mission et aux moyens)
   getAvailableVehicleFunctions(mission, veh) {
     if (!mission) return ['Mission Générale'];
     const origin = (((mission.alertOrigin || '') + ' ' + (mission.authority || '')).toLowerCase());
     const type = (mission.type || '').toLowerCase();
     const title = (mission.title || '').toLowerCase();
+    const desc = (mission.desc || mission.scenarioText || '').toLowerCase();
     const vehType = (veh && veh.type ? veh.type.toUpperCase() : '');
+
+    const isLog = veh && ((veh.types && veh.types.includes('LOG')) || (veh.functions && veh.functions.includes('LOG')) || ['VTU', 'FLIT', 'VAHU', 'VST', 'VTL'].includes(vehType) || Boolean(veh.capacity_log && veh.capacity_log > 0));
+    const isPS = veh && (vehType === 'VPSP' || (veh.types && veh.types.includes('PS')) || (veh.functions && veh.functions.includes('PS')));
+    const isHR = veh && (vehType === 'VLHR' || (veh.types && veh.types.includes('HR')) || (veh.functions && veh.functions.includes('HR')) || veh.is4x4 || veh.isAllTerrain);
+    const isPCM = veh && (vehType === 'PCM' || veh.isCommandement || veh.hasCommandementKit);
+
+    const authPrefix = mission.authorityLabel 
+      ? mission.authorityLabel.split('(')[0].replace(/Plan.*|Direction.*/i, '').trim().toUpperCase()
+      : (origin.includes('gendarmerie') ? 'GENDARMERIE' : origin.includes('police') ? 'POLICE' : origin.includes('samu') ? 'SAMU 15' : origin.includes('sdis') ? 'SDIS 18' : 'PRÉFECTURE');
 
     let tasks = [];
 
-    if (origin.includes('sncf') || type.includes('sncf') || title.includes('sncf') || title.includes('gare') || title.includes('ferroviaire')) {
+    // 1. SI LA MISSION DÉFINIT SES PROPRES TÂCHES (Cas des crises / alertes AASC)
+    if (Array.isArray(mission.assignedMissions) && mission.assignedMissions.length > 0) {
+      tasks = mission.assignedMissions.map(m => `${authPrefix} - ${m}`);
+
+      // Complément cohérent et valorisant selon le type du véhicule
+      if (isPS && !tasks.some(t => t.toLowerCase().includes('vpsp') || t.toLowerCase().includes('sanitaire') || t.toLowerCase().includes('évacuation') || t.toLowerCase().includes('soin'))) {
+        tasks.unshift(`${authPrefix} - Soutien Sanitaire & Évacuation (VPSP)`);
+      }
+      if (isLog && !tasks.some(t => t.toLowerCase().includes('logistique') || t.toLowerCase().includes('matériel') || t.toLowerCase().includes('éclairage'))) {
+        tasks.push(`${authPrefix} - Acheminement Lots & Matériel Logistique`);
+      }
+      if (isHR && !tasks.some(t => t.toLowerCase().includes('4x4') || t.toLowerCase().includes('tout-terrain') || t.toLowerCase().includes('escarpé'))) {
+        tasks.unshift(`${authPrefix} - Reconnaissance Tout-Terrain & Accès Difficiles (4x4)`);
+      }
+      if (isPCM && !tasks.some(t => t.toLowerCase().includes('commandement') || t.toLowerCase().includes('pcm') || t.toLowerCase().includes('coordination'))) {
+        tasks.unshift(`${authPrefix} - Poste de Commandement & Transmissions (PCM)`);
+      }
+      return tasks;
+    }
+
+    // 2. TÂCHES PAR TYPE DE SCÉNARIO SPÉCIFIQUE
+    if (title.includes('recherche') || title.includes('disparition') || desc.includes('battue') || desc.includes('recherche de personne')) {
       tasks = [
-        'SNCF - Prise en charge naufragés du rail',
-        'SNCF - Distribution de vivres & bouteilles',
-        'SNCF - Montage & armement CHU Gare',
-        'SNCF - Évacuation Sanitaire & Navette Gare',
-        'SNCF - Soutien Médico-Psychologique (CUMP)',
-        'SNCF - Éclairage autonome & Servitudes',
-        'SNCF - Poste de Liaison Gare'
+        `${authPrefix} - Battue pédestre & ratissage de secteur`,
+        `${authPrefix} - Surveillance & reconnaissance aérienne (Drone)`,
+        `${authPrefix} - Appui Cynotechnique de quête et pistage`,
+        `${authPrefix} - Poste de coordination & transmissions`
       ];
-    } else if (origin.includes('samu') || type === 'samu' || title.includes('samu') || title.includes('15')) {
+      if (isPS) tasks.unshift(`${authPrefix} - Soutien Sanitaire & Évacuation d'Urgence (VPSP)`);
+      if (isLog) tasks.push(`${authPrefix} - Acheminement matériel de ratissage & éclairage`);
+      if (isHR) tasks.unshift(`${authPrefix} - Reconnaissance Tout-Terrain / Zone escarpée (4x4)`);
+    } else if (title.includes('crue') || title.includes('inondation') || desc.includes('submersion') || desc.includes('inondé')) {
+      tasks = [
+        `${authPrefix} - Armement Centre d'Hébergement d'Urgence (CHU)`,
+        `${authPrefix} - Mise en sécurité & sauvetage des riverains`,
+        `${authPrefix} - Soutien logistique & pompage d'urgence`,
+        `${authPrefix} - Noria d'acheminement des sinistrés vers le CHU`
+      ];
+      if (isPS) tasks.unshift(`${authPrefix} - Évacuation Sanitaire & Premiers Soins (VPSP)`);
+    } else if (origin.includes('sncf') || type.includes('sncf') || title.includes('sncf') || title.includes('gare') || title.includes('ferroviaire')) {
+      tasks = [
+        'SNCF - Prise en charge naufragés du rail & CHU',
+        'SNCF - Distribution de vivres & ravitaillement',
+        'SNCF - Éclairage autonome & servitudes de crise',
+        'SNCF - Soutien Médico-Psychologique (CUMP)'
+      ];
+      if (isPS) tasks.unshift('SNCF - Évacuation Sanitaire & Soins (VPSP)');
+    } else if (origin.includes('samu') || type === 'samu' || title.includes('samu') || title.includes('15') || title.includes('novi') || title.includes('carambolage')) {
       tasks = [
         'SAMU 15 - Évacuation Sanitaire d\'Urgence (Noria VPSP)',
-        'SAMU 15 - Prise en charge Détresse Vitale',
         'SAMU 15 - Armement Poste Médical Avancé (PMA)',
-        'SAMU 15 - Soutien Sanitaire & Premiers Soins',
-        'SAMU 15 - Rapatriement Sanitaire d\'Urgence',
-        'SAMU 15 - Liaison Régulation Médicale 15'
+        'SAMU 15 - Prise en charge Détresse Vitale',
+        'SAMU 15 - Soutien Sanitaire & Premiers Soins'
       ];
     } else if (origin.includes('sdis') || origin.includes('pompier') || type === 'pompiers' || title.includes('sdis') || title.includes('18') || title.includes('incendie')) {
       tasks = [
         'SDIS 18 - Soutien Sanitaire aux Pompiers (3SP)',
         'SDIS 18 - Noria d\'Évacuation Blessés (VPSP)',
         'SDIS 18 - Épuisement des Eaux & Motopompes',
-        'SDIS 18 - Éclairage & Balisage de Secteur',
-        'SDIS 18 - Ravitaillement & Vivres des Équipes',
-        'SDIS 18 - Poste de Commandement de Secteur'
-      ];
-    } else if (mission.isCrisis || type === 'crise' || title.includes('novi') || title.includes('orsec') || origin.includes('prefecture') || origin.includes('etat')) {
-      tasks = [
-        'PRÉFECTURE - Centre d\'Hébergement d\'Urgence (CHU)',
-        'PRÉFECTURE - Centre d\'Accueil des Impliqués (CAI)',
-        'PRÉFECTURE - Poste de Commandement Mobile (PCM)',
-        'PRÉFECTURE - Noria d\'Évacuation Sanitaire (VPSP)',
-        'PRÉFECTURE - Soutien Logistique & Éclairage Fort',
-        'PRÉFECTURE - Ravitaillement de la Population',
-        'PRÉFECTURE - Navette Évacuation Population'
+        'SDIS 18 - Éclairage & Balisage de Secteur'
       ];
     } else if (type === 'social' || origin.includes('115') || title.includes('maraude')) {
       tasks = [
         '115 SOCIAL - Maraude & Écoute de Rue',
-        '115 SOCIAL - Distribution Vestimentaire & Couvertures',
-        '115 SOCIAL - Ravitaillement Vivres & Boissons Chaudes',
-        '115 SOCIAL - Orientation & Mise à l\'Abri CHRS',
-        '115 SOCIAL - Évacuation & Soins Sanitaires VPSP'
+        '115 SOCIAL - Distribution Vestimentaire & Vivres',
+        '115 SOCIAL - Orientation & Mise à l\'Abri CHRS'
       ];
+      if (isPS) tasks.unshift('115 SOCIAL - Évacuation & Soins Sanitaires VPSP');
     } else {
       tasks = [
         'DPS - Poste de Secours Fixe (PAP)',
         'DPS - Évacuation Sanitaire d\'Urgence (VPSP)',
         'DPS - Patrouille & Binôme de Secteur',
-        'DPS - Commandement de Dispositif',
-        'DPS - Ravitaillement & Vivres Bénévoles',
-        'DPS - Liaison & Logistique Matériel'
+        'DPS - Commandement de Dispositif'
       ];
+      if (isLog) tasks.push('DPS - Liaison & Logistique Matériel');
     }
 
     if (vehType === 'VPSP' && !tasks.some(t => t.includes('VPSP') || t.includes('Évacuation') || t.includes('Sanitaire'))) {
       tasks.unshift('Évacuation Sanitaire / Soins (VPSP)');
     } else if (vehType === 'PCM' && !tasks.some(t => t.includes('Commandement') || t.includes('PCM'))) {
       tasks.unshift('Poste de Commandement Mobile (PCM)');
-    } else if ((vehType === 'VTU' || vehType === 'VTL') && !tasks.some(t => t.includes('Logistique') || t.includes('Vivres') || t.includes('CHU') || t.includes('Matériel'))) {
+    } else if (isLog && !tasks.some(t => t.includes('Logistique') || t.includes('Vivres') || t.includes('Matériel'))) {
       tasks.unshift('Logistique & Matériel d\'Intervention');
     }
 
     return tasks;
   }
 
-  // Affectation d'un véhicule à une fonction / tâche opérationnelle demandée par l\'autorité
+  // Détermination des besoins opérationnels par types de moyens (PS, LOG, TP, HR...)
+  getMissionRequiredNeeds(mission) {
+    if (!mission) return { needsPS: false, reqPSCount: 0, reqLogKits: 0, reqSeats: 2, needsHR: false, needsDrone: false, needsCyno: false };
+
+    const title = (mission.title || '').toLowerCase();
+    const desc = (mission.desc || mission.scenarioText || '').toLowerCase();
+    const type = (mission.type || '').toLowerCase();
+    const scale = (mission.scale || '').toUpperCase();
+    const isCrisis = mission.isCrisis || type === 'crise';
+
+    let needsPS = false;
+    let reqPSCount = 0;
+    let reqLogKits = 0;
+    let reqSeats = mission.requiredVolunteers || (scale.includes('GE') ? 12 : scale.includes('ME') ? 8 : 4);
+    let needsHR = false;
+    let needsDrone = false;
+    let needsCyno = false;
+
+    // Détection terrain escarpé / massif forestier
+    const isTerrainEscarpé = title.includes('escarpé') || desc.includes('escarpé') || (title.includes('forêt') && !title.includes('paris')) || desc.includes('massif forestier');
+    if (isTerrainEscarpé) needsHR = true;
+
+    if (isCrisis) {
+      if (mission.requiredAssets) {
+        if (mission.requiredAssets.vpsp > 0) {
+          needsPS = true;
+          reqPSCount = mission.requiredAssets.vpsp;
+        }
+        if (mission.requiredAssets.drone) needsDrone = true;
+        if (mission.requiredAssets.cyno > 0) needsCyno = true;
+        reqLogKits = mission.requiredAssets.vtu || (mission.requiredAssets.chu_places > 0 ? 2 : 1);
+      } else {
+        if (title.includes('recherche')) {
+          needsPS = false; // Pas d'ambulance obligatoire au départ d'une recherche pédestre
+          reqLogKits = 1;  // 1 kit matériel de recherche & éclairage (transportable dans n'importe quel véhicule LOG)
+          needsDrone = desc.includes('drone');
+          needsCyno = desc.includes('cyno') || desc.includes('chien');
+        } else if (title.includes('crue') || title.includes('inondation')) {
+          needsPS = true;
+          reqPSCount = 1;
+          reqLogKits = 2; // Kit pompage + kit accueil
+        } else if (title.includes('novi') || title.includes('carambolage') || title.includes('attentat')) {
+          needsPS = true;
+          reqPSCount = 2;
+          reqLogKits = 1; // Lot PMA
+        } else {
+          reqLogKits = 1;
+        }
+      }
+    } else {
+      // Dispositifs Prévisionnels de Secours (DPS)
+      if (Array.isArray(mission.requiredVehicles)) {
+        reqPSCount = mission.requiredVehicles.filter(v => v === 'VPSP').length;
+        if (reqPSCount > 0) needsPS = true;
+        // La logistique est comptée en kits nécessaires
+        reqLogKits = mission.requiredVehicles.filter(v => v === 'VTU' || v === 'LOG').length;
+      }
+      if (scale.includes('GE')) {
+        needsPS = true;
+        reqPSCount = Math.max(reqPSCount, 2);
+        reqLogKits = Math.max(reqLogKits, 2); // Lot A + Lot B
+      } else if (scale.includes('ME')) {
+        needsPS = true;
+        reqPSCount = Math.max(reqPSCount, 1);
+        reqLogKits = Math.max(reqLogKits, 1); // Lot A
+      } else if (scale.includes('PE')) {
+        needsPS = true;
+        reqPSCount = Math.max(reqPSCount, 1);
+      }
+    }
+
+    if (needsPS && reqPSCount === 0) reqPSCount = 1;
+
+    return {
+      needsPS,
+      reqPSCount,
+      reqLogKits,
+      reqSeats,
+      needsHR,
+      needsDrone,
+      needsCyno
+    };
+  }
+
+  // Vérification de la couverture des moyens pour une mission (souple et modulaire)
+  checkMissionMoyensCoverage(mission) {
+    const needs = this.getMissionRequiredNeeds(mission);
+    const assignedVehs = (mission.assignedVehicleIds || [])
+      .map(id => this.vehicles.find(v => v.id === id))
+      .filter(Boolean);
+
+    // 1. Couverture Sanitaire (PS)
+    const psVehiclesCount = assignedVehs.filter(v => 
+      v.type === 'VPSP' || 
+      (v.types && v.types.includes('PS')) || 
+      (v.functions && v.functions.includes('PS'))
+    ).length;
+    const psSatisfied = !needs.needsPS || psVehiclesCount >= (needs.reqPSCount || 1);
+
+    // 2. Couverture Logistique (LOG) : capacité de chargement en slots LOG
+    // Règle du jeu : 1 véhicule LOG (ex: VTU de 6 slots) transporte plusieurs kits logistiques !
+    const totalLogSlots = assignedVehs.reduce((sum, v) => {
+      const isLog = (v.types && v.types.includes('LOG')) || 
+                    (v.functions && v.functions.includes('LOG')) || 
+                    ['VTU', 'FLIT', 'VAHU', 'VST', 'VTL', 'VALOG'].includes(v.type) || 
+                    Boolean(v.capacity_log && v.capacity_log > 0);
+      if (!isLog) return sum;
+      const cap = v.capacity_log !== undefined ? v.capacity_log : (window.ProtecAdvancedModals?.getVehicleLogCapacity(v) || 6);
+      return sum + cap;
+    }, 0);
+    const logSatisfied = needs.reqLogKits === 0 || totalLogSlots >= needs.reqLogKits;
+
+    // 3. Couverture Transport Personnel (TP) : places assises
+    const totalSeats = assignedVehs.reduce((sum, v) => {
+      return sum + (v.seatsCount || v.capacity || (v.type === 'VPSP' ? 3 : v.type === 'VTP' ? 9 : 4));
+    }, 0);
+    const effectiveVolsCount = (mission.registeredVolunteers || []).length;
+    // Si aucun véhicule n'est requis au devis/scénario et aucun véhicule engagé : poste à pied d'œuvre (satisfait)
+    const tpSatisfied = (assignedVehs.length === 0 && !needs.needsPS && needs.reqLogKits === 0 && !needs.needsHR) || totalSeats >= effectiveVolsCount;
+
+    // 4. Couverture Hors-Route (HR / 4x4)
+    const hasHRVehicle = assignedVehs.some(v => 
+      v.type === 'VLHR' || 
+      (v.types && v.types.includes('HR')) || 
+      (v.functions && v.functions.includes('HR')) || 
+      v.isAllTerrain || 
+      v.is4x4
+    );
+    const hrSatisfied = !needs.needsHR || hasHRVehicle;
+
+    return {
+      needs,
+      assignedVehs,
+      psVehiclesCount,
+      psSatisfied,
+      totalLogSlots,
+      logSatisfied,
+      totalSeats,
+      tpSatisfied,
+      hasHRVehicle,
+      hrSatisfied,
+      isComplete: psSatisfied && logSatisfied && tpSatisfied && hrSatisfied
+    };
+  }
+
+  // Vérifie si une mission a des moyens matériels/véhicules manquants
+  hasMissingVehicles(mission) {
+    if (!mission) return false;
+    const cov = this.checkMissionMoyensCoverage(mission);
+    return !cov.isComplete;
+  }
+
+  // Affectation d'un véhicule à une fonction / tâche opérationnelle demandée par l'autorité
   setVehicleMissionFunction(missionId, vehicleId, functionName) {
     const mission = (this.missions || []).find(m => m.id === missionId);
     if (!mission) return;
@@ -5615,7 +6352,7 @@ class ProtecGame {
   }
 
 
-  // Affectation automatique libre de tous les véhicules requis disponibles
+  // Affectation automatique intelligente par types de moyens (PS, LOG, TP, HR...)
   autoAssignVehiclesToMission(missionId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
@@ -5629,56 +6366,87 @@ class ProtecGame {
       (m.assignedCrew?.vehicles || []).forEach(v => busyVehicleIds.add(v.id || v));
     });
 
-    const requiredTypes = Array.isArray(mission.requiredVehicles) ? [...mission.requiredVehicles] : [];
     let assignedCount = 0;
+    const isAvail = (v) => v && (v.status === 'dispo' || v.status === 'sdis_caserne') && !busyVehicleIds.has(v.id) && !mission.assignedVehicleIds.includes(v.id) && !v.isUnavailable && !v.isUnderRepair;
 
-    // 1. Pour chaque type requis dans le devis, engager un véhicule adéquat non encore engagé
-    requiredTypes.forEach(reqType => {
-      // Vérifier si un véhicule de ce type est déjà engagé et disponible
-      const currentAssignedOfType = mission.assignedVehicleIds.filter(id => {
-        const v = this.vehicles.find(veh => veh.id === id);
-        return v && (v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit)));
-      });
+    let cov = this.checkMissionMoyensCoverage(mission);
 
-      // Si le besoin en ce type n'est pas encore totalement couvert par les véhicules déjà engagés
-      const totalReqOfType = requiredTypes.filter(t => t === reqType).length;
-      if (currentAssignedOfType.length < totalReqOfType) {
-        const match = this.vehicles.find(v =>
-          (v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit))) &&
-          (v.status === 'dispo' || v.status === 'sdis_caserne') &&
-          !busyVehicleIds.has(v.id) &&
-          !mission.assignedVehicleIds.includes(v.id)
-        );
-
-        if (match) {
-          mission.assignedVehicleIds.push(match.id);
+    // 1. Couverture Sanitaire (PS / VPSP)
+    if (cov.needs.needsPS && !cov.psSatisfied) {
+      const neededPS = (cov.needs.reqPSCount || 1) - (cov.psVehiclesCount || 0);
+      for (let i = 0; i < neededPS; i++) {
+        const matchPS = this.vehicles.find(v => isAvail(v) && (v.type === 'VPSP' || (v.types && v.types.includes('PS')) || (v.functions && v.functions.includes('PS'))));
+        if (matchPS) {
+          mission.assignedVehicleIds.push(matchPS.id);
           assignedCount++;
         }
       }
-    });
+      cov = this.checkMissionMoyensCoverage(mission);
+    }
 
-    // 2. Si les bénévoles inscrits manquent de places assises, ajouter un véhicule de transport disponible (VTP, VL, VTU)
-    const currentVehs = mission.assignedVehicleIds.map(id => this.vehicles.find(v => v.id === id)).filter(Boolean);
-    const totalCapacity = currentVehs.reduce((sum, v) => sum + (v.seatsCount || v.capacity || (v.type === 'VPSP' ? 3 : v.type === 'VTP' ? 9 : 4)), 0);
-    const registeredCount = (mission.registeredVolunteers || []).length;
-
-    if (totalCapacity < registeredCount) {
-      const extraTransport = this.vehicles.find(v =>
-        ['VTP', 'VL', 'VTU'].includes(v.type) &&
-        (v.status === 'dispo' || v.status === 'sdis_caserne') &&
-        !busyVehicleIds.has(v.id) &&
-        !mission.assignedVehicleIds.includes(v.id)
-      );
-      if (extraTransport) {
-        mission.assignedVehicleIds.push(extraTransport.id);
+    // 2. Couverture Hors-Route (HR / 4x4)
+    if (cov.needs.needsHR && !cov.hrSatisfied) {
+      const matchHR = this.vehicles.find(v => isAvail(v) && (v.type === 'VLHR' || (v.types && v.types.includes('HR')) || (v.functions && v.functions.includes('HR')) || v.isAllTerrain || v.is4x4));
+      if (matchHR) {
+        mission.assignedVehicleIds.push(matchHR.id);
         assignedCount++;
+      }
+      cov = this.checkMissionMoyensCoverage(mission);
+    }
+
+    // 3. Couverture Logistique (LOG - Kits & Matériel) : 1 véhicule logistique (ex: VTU de 6 slots) transporte l'ensemble des kits
+    if (cov.needs.reqLogKits > 0 && !cov.logSatisfied) {
+      // Trier par plus grande capacité logistique pour minimiser le nombre de véhicules
+      const logVehicles = this.vehicles
+        .filter(v => isAvail(v) && ((v.types && v.types.includes('LOG')) || (v.functions && v.functions.includes('LOG')) || ['VTU', 'FLIT', 'VAHU', 'VST', 'VTL'].includes(v.type) || Boolean(v.capacity_log && v.capacity_log > 0)))
+        .sort((a, b) => ((b.capacity_log || 6) - (a.capacity_log || 6)));
+
+      for (const logVeh of logVehicles) {
+        mission.assignedVehicleIds.push(logVeh.id);
+        assignedCount++;
+        cov = this.checkMissionMoyensCoverage(mission);
+        if (cov.logSatisfied) break;
+      }
+    }
+
+    // 4. Commandement (PCM si requis au devis)
+    const requiresPCM = (mission.requiredVehicles || []).includes('PCM');
+    const hasPCM = mission.assignedVehicleIds.some(id => {
+      const v = this.vehicles.find(veh => veh.id === id);
+      return v && (v.type === 'PCM' || v.isCommandement || v.hasCommandementKit || (v.functions && v.functions.includes('PCM')));
+    });
+    if (requiresPCM && !hasPCM) {
+      const matchPCM = this.vehicles.find(v => isAvail(v) && (v.type === 'PCM' || v.isCommandement || v.hasCommandementKit || (v.functions && v.functions.includes('PCM'))));
+      if (matchPCM) {
+        mission.assignedVehicleIds.push(matchPCM.id);
+        assignedCount++;
+      }
+      cov = this.checkMissionMoyensCoverage(mission);
+    }
+
+    // 5. Acheminement du Personnel (TP : places assises pour secouristes inscrits)
+    const registeredCount = (mission.registeredVolunteers || []).length;
+    let currentCapacity = mission.assignedVehicleIds.map(id => this.vehicles.find(v => v.id === id)).filter(Boolean)
+      .reduce((sum, v) => sum + (v.seatsCount || v.capacity || (v.type === 'VPSP' ? 3 : v.type === 'VTP' ? 9 : 4)), 0);
+
+    if (currentCapacity < registeredCount) {
+      // Trier par plus grande capacité de transport (VTP d'abord, puis VTU, puis VL)
+      const transportVehicles = this.vehicles
+        .filter(v => isAvail(v))
+        .sort((a, b) => ((b.seatsCount || b.capacity || 4) - (a.seatsCount || a.capacity || 4)));
+
+      for (const tpVeh of transportVehicles) {
+        mission.assignedVehicleIds.push(tpVeh.id);
+        assignedCount++;
+        currentCapacity += (tpVeh.seatsCount || tpVeh.capacity || (tpVeh.type === 'VPSP' ? 3 : tpVeh.type === 'VTP' ? 9 : 4));
+        if (currentCapacity >= registeredCount) break;
       }
     }
 
     if (assignedCount > 0) {
-      this.showToast('Véhicules Affectés ⚡', `${assignedCount} véhicule(s) ont été engagés sur le dispositif.`, 'green');
+      this.showToast('Véhicules Affectés ⚡', `${assignedCount} véhicule(s) ont été engagés pour couvrir les besoins opérationnels.`, 'green');
     } else {
-      this.showToast('Affectation Véhicules', 'Tous les besoins sont déjà couverts ou aucun autre véhicule disponible.', 'slate');
+      this.showToast('Affectation Véhicules', 'Tous les besoins opérationnels sont déjà couverts ou aucun autre véhicule disponible.', 'slate');
     }
     this.openMissionDetails(missionId);
     this.saveGame();
@@ -8364,8 +9132,43 @@ class ProtecGame {
 
   // --- SCÉNARIOS OFFICIELS ET RÉALISTES DE PRÉALERTE / VEILLE OPÉRATIONNELLE AASC ---
   getAascPrealertScenarios(origin = null) {
-    const scenarios = [
-      {
+    const deptCode = String(this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '75');
+    const isParisArea = ['75', '92', '93', '94'].includes(deptCode);
+    const isParisIntramuros = deptCode === '75';
+
+    let scenarios = [];
+
+    // 1. Incendie / Évacuation
+    if (isParisArea) {
+      scenarios.push({
+        id: 'feu_immeuble_paris',
+        origin: 'pompiers',
+        authority: 'bspp',
+        authorityLabel: 'BSPP (CTAU 18-112 Paris)',
+        authorityBadgeBg: 'bg-red-50 text-red-800 border-red-300',
+        title: 'Feu d’Immeuble Haussmannien R+5 & Évacuations Massives',
+        scenarioText: 'Important incendie d’immeuble d’habitation collectif haussmannien en cours (R+5). La Brigade de Sapeurs-Pompiers de Paris (BSPP) procède à des sauvetages par échelles aériennes et au déploiement de lances. Plus de 90 résidents évacués se trouvent regroupés sur la voie publique, choqués et en tenue de nuit. Le CTAU BSPP préalerte la Protection Civile de Paris pour l’ouverture et l’armement immédiat d’un Centre d’Accueil des Impliqués (CAI) en gymnase municipal et soutien sanitaire.',
+        assignedMissions: [
+          'Ouverture et tenue d’un CAI en gymnase parisien',
+          'Soutien Sanitaire & Bilans secouristes des impliqués',
+          'Ravitaillement d’urgence & distribution de couvertures de survie'
+        ],
+        requiredAssets: {
+          vpsp: 1,
+          vtu: 1,
+          vtp: 1,
+          chu_places: 60,
+          pma: false,
+          cyno: 0,
+          drone: false
+        },
+        requiredVolunteers: 8,
+        requiredVehicles: ['VPSP', 'VTU', 'VTP'],
+        rewardMoney: 620,
+        rewardReputation: 35
+      });
+    } else {
+      scenarios.push({
         id: 'feu_immeuble',
         origin: 'codis',
         authority: 'codis',
@@ -8391,15 +9194,19 @@ class ProtecGame {
         requiredVehicles: ['VPSP', 'VTU', 'VTP'],
         rewardMoney: 580,
         rewardReputation: 35
-      },
-      {
+      });
+    }
+
+    // 2. Mission ferroviaire SNCF (Conditionnée STRICTEMENT à la signature de la convention SNCF)
+    if (this.sncfConvention?.signed || origin === 'sncf') {
+      scenarios.push({
         id: 'tgv_bloque',
         origin: 'sncf',
         authority: 'sncf',
         authorityLabel: 'SNCF (Direction Nationale de Crise)',
         authorityBadgeBg: 'bg-purple-50 text-purple-800 border-purple-300',
         title: 'Crise Ferroviaire : Prise en Charge Voyageurs & CHU en Gare (TGV Bloqué en Ligne)',
-        scenarioText: 'Rupture d’alimentation caténaire sur la ligne à grande vitesse (LGV) en amont. Le TGV 6742 est immobilisé en pleine voie hors agglomération avec 640 passagers sans électricité ni chauffage. Les navettes et bus d’acheminement rapatrient les voyageurs par vagues successives vers la gare centrale. La direction de crise SNCF sollicite la Protection Civile pour l’accueil en gare, le montage d’un Centre d’Hébergement d’Urgence (CHU 50 lits) et la distribution d’eau et de vivres.',
+        scenarioText: 'Rupture d’alimentation caténaire sur la ligne à grande vitesse (LGV) en amont. Le TGV 6742 est immobilisé en pleine voie avec 640 passagers sans électricité ni chauffage. Les navettes et bus rapatrient les voyageurs par vagues successives vers la gare centrale. La direction de crise SNCF sollicite la Protection Civile pour l’accueil en gare, le montage d’un Centre d’Hébergement d’Urgence (CHU 50 lits) et la distribution d’eau et de vivres.',
         assignedMissions: [
           'Montage et tenue d’un CHU en gare centrale (50 lits)',
           'Distribution massive d’eau et collations d’urgence',
@@ -8418,15 +9225,83 @@ class ProtecGame {
         requiredVehicles: ['VPSP', 'VTU'],
         rewardMoney: 540,
         rewardReputation: 35
-      },
-      {
+      });
+    }
+
+    // 3. Recherche de personne vulnérable (adaptée à la topographie réelle)
+    if (isParisIntramuros) {
+      // Scénario A : Massifs boisés parisiens (Bois de Boulogne / Bois de Vincennes)
+      scenarios.push({
+        id: 'recherche_bois_paris',
+        origin: 'prefecture',
+        authority: 'police',
+        authorityLabel: 'Préfecture de Police (DSPAP / DOPC)',
+        authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
+        title: 'Recherche de Personne Vulnérable (Bois de Boulogne / Vincennes)',
+        targetEnvironment: 'bois_paris',
+        scenarioText: 'Disparition très inquiétante d’une personne vulnérable désorientée signalée dans les massifs boisés du Bois de Boulogne / Vincennes à la tombée de la nuit. Les effectifs de la Préfecture de Police et la brigade canine sont déployés. La Préfecture de Police réquisitionne en urgence la Protection Civile de Paris (Art. 74-1 CPP) pour armer une chaîne de battue pédestre coordonnée avec télépilote drone thermique et équipes cynotechniques de quête.',
+        assignedMissions: [
+          'Chaîne de ratissage et battue de recherche pédestre en sous-bois',
+          'Surveillance et reconnaissance aérienne par Drone thermique',
+          'Appui d’une équipe Cynotechnique de quête et sauvetage'
+        ],
+        requiredAssets: {
+          vpsp: 0,
+          vtu: 1,
+          vtp: 0,
+          chu_places: 0,
+          pma: false,
+          cyno: 1,
+          drone: true
+        },
+        requiredVolunteers: 6,
+        requiredVehicles: ['VTU'],
+        rewardMoney: 510,
+        rewardReputation: 35
+      });
+      // Scénario B : Parcs urbains et berges de Seine
+      scenarios.push({
+        id: 'recherche_parcs_paris',
+        origin: 'prefecture',
+        authority: 'police',
+        authorityLabel: 'Préfecture de Police (DSPAP)',
+        authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
+        title: 'Recherche de Personne Disparue en Milieu Urbain (Parcs & Berges)',
+        targetEnvironment: 'paris_urban_parks',
+        scenarioText: 'Disparition inquiétante en milieu urbain dense. Les patrouilles de la Préfecture de Police quadrillent les abords des grands parcs et des quais de Seine. La Préfecture de Police réquisitionne la Protection Civile pour inspecter systématiquement les parcs publics fermés, les berges de Seine et les recoins isolés avec équipes pédestres et drone.',
+        assignedMissions: [
+          'Reconnaissance pédestre des quais et parcs publics',
+          'Surveillance des berges par drone avec caméra thermique',
+          'Équipe cynotechnique de pistage'
+        ],
+        requiredAssets: {
+          vpsp: 0,
+          vtu: 1,
+          vtp: 0,
+          chu_places: 0,
+          pma: false,
+          cyno: 1,
+          drone: true
+        },
+        requiredVolunteers: 6,
+        requiredVehicles: ['VTU'],
+        rewardMoney: 490,
+        rewardReputation: 35
+      });
+    } else {
+      // Province ou Petite Couronne
+      const isPetiteCouronne = ['92', '93', '94'].includes(deptCode);
+      scenarios.push({
         id: 'recherche_foret',
         origin: 'prefecture',
-        authority: 'prefecture',
-        authorityLabel: 'Préfecture (SIDPC / Gendarmerie)',
+        authority: isPetiteCouronne ? 'police' : 'gendarmerie',
+        authorityLabel: isPetiteCouronne ? 'Préfecture de Police (DSPAP / DOPC)' : 'Gendarmerie Nationale (Réquisition CPP)',
         authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-        title: 'Recherche de Personne Vulnérable en Zone Boisée',
-        scenarioText: 'Disparition très inquiétante d’une personne âgée désorientée depuis plus de 6 heures aux abords d’un massif forestier escarpé. Le peloton de gendarmerie et les sapeurs-pompiers sont déjà déployés en phase initiale. La Préfecture active la veille opérationnelle AASC pour mobiliser une équipe de battue pédestre renforcée, un télépilote drone à caméra thermique et un vecteur cynotechnique.',
+        title: isPetiteCouronne ? 'Recherche de Personne Vulnérable en Milieu Boisé' : 'Recherche de Personne Vulnérable en Zone Boisée',
+        targetEnvironment: isPetiteCouronne ? 'bois_paris' : 'foret_province',
+        scenarioText: isPetiteCouronne
+          ? 'Disparition très inquiétante d’une personne âgée désorientée dans les parcs boisés et berges du secteur. Les effectifs de Police sont mobilisés. La Préfecture de Police requiert la Protection Civile pour une battue pédestre renforcée, drone thermique et équipe cynotechnique.'
+          : 'Disparition très inquiétante d’une personne âgée désorientée depuis plus de 6 heures aux abords d’un massif forestier escarpé. Le peloton de gendarmerie et les sapeurs-pompiers sont déjà déployés. La Gendarmerie réquisitionne l’AASC (Art. 74-1 CPP) pour mobiliser une équipe de battue pédestre renforcée, un télépilote drone à caméra thermique et un vecteur cynotechnique.',
         assignedMissions: [
           'Chaîne de ratissage et battue de recherche pédestre',
           'Surveillance et reconnaissance aérienne par Drone',
@@ -8435,18 +9310,51 @@ class ProtecGame {
         requiredAssets: {
           vpsp: 0,
           vtu: 1,
-          vtp: 1,
+          vtp: 0,
           chu_places: 0,
           pma: false,
           cyno: 1,
           drone: true
         },
         requiredVolunteers: 6,
-        requiredVehicles: ['VTU', 'VL'],
+        requiredVehicles: isPetiteCouronne ? ['VTU'] : ['VLHR'],
         rewardMoney: 490,
         rewardReputation: 35
-      },
-      {
+      });
+    }
+
+    // 4. Inondations / Crues
+    if (isParisIntramuros) {
+      scenarios.push({
+        id: 'crue_seine_paris',
+        origin: 'prefecture',
+        authority: 'prefecture',
+        authorityLabel: 'Préfecture de Police (Plan Vigicrues Seine)',
+        authorityBadgeBg: 'bg-sky-50 text-sky-800 border-sky-300',
+        title: 'Crue Majeure de la Seine : Évacuations & Hébergement d’Urgence',
+        targetEnvironment: 'seine_paris',
+        scenarioText: 'Crue majeure de la Seine atteignant le seuil d’alerte avec submersion des voies sur berges et caves inondées. La Préfecture de Police active le plan d’urgence inondation et réquisitionne la Protection Civile de Paris pour l’armement d’un Centre d’Hébergement d’Urgence (CHU 80 lits) en gymnase municipal et l’accueil des sinistrés évacués.',
+        assignedMissions: [
+          'Gestion d’un Centre d’Hébergement d’Urgence (CHU 80 lits)',
+          'Soutien logistique de crise & groupes électrogènes',
+          'Noria d’acheminement des riverains vers le CHU'
+        ],
+        requiredAssets: {
+          vpsp: 2,
+          vtu: 2,
+          vtp: 1,
+          chu_places: 80,
+          pma: true,
+          cyno: 0,
+          drone: true
+        },
+        requiredVolunteers: 10,
+        requiredVehicles: ['VPSP', 'VTU', 'VTP'],
+        rewardMoney: 720,
+        rewardReputation: 40
+      });
+    } else {
+      scenarios.push({
         id: 'inondation_lotissements',
         origin: 'prefecture',
         authority: 'prefecture',
@@ -8472,8 +9380,40 @@ class ProtecGame {
         requiredVehicles: ['VPSP', 'VTU', 'VTP'],
         rewardMoney: 680,
         rewardReputation: 40
-      },
-      {
+      });
+    }
+
+    // 5. Accident NOVI
+    if (isParisArea) {
+      scenarios.push({
+        id: 'accident_peripherique',
+        origin: 'samu',
+        authority: 'samu',
+        authorityLabel: 'SAMU de Paris (Centre 15 / Plan NOVI)',
+        authorityBadgeBg: 'bg-rose-50 text-rose-800 border-rose-300',
+        title: 'Carambolage Multiple sur le Boulevard Périphérique (Plan NOVI)',
+        scenarioText: 'Grave carambolage impliquant un autocar et plusieurs véhicules de tourisme sur le Boulevard Périphérique extérieur. Nombreuses victimes en cours de tri médical par le SAMU 75 et la BSPP. Le SAMU de Paris déclenche la Protection Civile pour prépositionner des VPSP sanitaires, monter un Poste Médical Avancé (PMA) et assurer les norias d’évacuation vers les hôpitaux de l’AP-HP.',
+        assignedMissions: [
+          'Soutien Sanitaire et Grande Noria d’évacuation vers hôpitaux AP-HP',
+          'Montage et armement d’un Poste Médical Avancé (PMA)',
+          'Accueil et prise en charge des victimes légères / impliqués'
+        ],
+        requiredAssets: {
+          vpsp: 2,
+          vtu: 1,
+          vtp: 0,
+          chu_places: 20,
+          pma: true,
+          cyno: 0,
+          drone: false
+        },
+        requiredVolunteers: 8,
+        requiredVehicles: ['VPSP', 'VTU'],
+        rewardMoney: 680,
+        rewardReputation: 40
+      });
+    } else {
+      scenarios.push({
         id: 'accident_novi',
         origin: 'samu',
         authority: 'samu',
@@ -8499,8 +9439,8 @@ class ProtecGame {
         requiredVehicles: ['VPSP', 'VTU'],
         rewardMoney: 640,
         rewardReputation: 40
-      }
-    ];
+      });
+    }
 
     if (origin) {
       const filtered = scenarios.filter(s => s.origin === origin);
@@ -8563,7 +9503,7 @@ class ProtecGame {
     const scenarios = this.getAascPrealertScenarios(origin);
     const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
     const base = this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', departmentCode: deptCode };
-    const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '' });
+    const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '', targetEnvironment: pick.targetEnvironment });
 
     // Calcul de l'heure estimée de déploiement (H+25 min dans l'horloge in-game)
     const curHour = this.clock?.hour !== undefined ? this.clock.hour : 14;
@@ -8585,6 +9525,7 @@ class ProtecGame {
       requiredAssets: pick.requiredAssets,
       lat: coords.lat,
       lng: coords.lng,
+      targetEnvironment: pick.targetEnvironment || null,
       scale: `${pick.authorityLabel} (${pick.requiredVolunteers} secouristes requis)`,
       eventDate: { ...this.clock, hour: curHour, minute: curMin },
       durationSeconds: 45 * 60,
@@ -8612,7 +9553,7 @@ class ProtecGame {
       preMobilisationActive: false,
       registeredVolunteers: [],
       assignedCrew: { volunteers: [], vehicles: [] },
-      address: this.generateRealisticStreetAddress(base.city || 'Paris', coords.lat, coords.lng, pick.title || pick.origin),
+      address: this.generateRealisticStreetAddress(coords.commune || base.city || 'Paris', coords.lat, coords.lng, { title: pick.title || pick.origin, desc: pick.scenarioText, targetEnvironment: pick.targetEnvironment }),
       isSector: false,
       departmentCode: base.departmentCode || deptCode
     };
@@ -8940,7 +9881,7 @@ class ProtecGame {
             const scenarios = this.getAascPrealertScenarios(null);
             const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
             const base = this.stations[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', departmentCode: myDept };
-            const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '' });
+            const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '', targetEnvironment: pick.targetEnvironment });
 
             const minutesAgo = Math.min(Math.floor(offlineHours * 30), Math.floor(Math.random() * 25) + 10);
             const spawnedTime = now - (minutesAgo * 60 * 1000);
@@ -8958,6 +9899,7 @@ class ProtecGame {
               requiredAssets: pick.requiredAssets,
               lat: coords.lat,
               lng: coords.lng,
+              targetEnvironment: pick.targetEnvironment || null,
               scale: `${pick.authorityLabel} (${pick.requiredVolunteers} secouristes requis)`,
               eventDate: { ...this.clock },
               durationSeconds: 45 * 60,
@@ -8980,7 +9922,7 @@ class ProtecGame {
               preMobilisationActive: true,
               registeredVolunteers: [],
               assignedCrew: { volunteers: [], vehicles: [] },
-              address: this.generateRealisticStreetAddress(pick.title, coords.lat, coords.lng),
+              address: this.generateRealisticStreetAddress(coords.commune || base.city || 'Paris', coords.lat, coords.lng, { title: pick.title, origin: pick.origin, desc: pick.scenarioText, targetEnvironment: pick.targetEnvironment }),
               isSector: false,
               departmentCode: myDept
             };
@@ -9267,6 +10209,7 @@ class ProtecGame {
 
     this.volunteers.push(newVol);
     this.closeModal();
+    if (typeof this.closeDrawer === 'function') this.closeDrawer();
     this.updateStatsUI();
     this.saveGame();
     if (waitDays >= 2) {
@@ -9274,7 +10217,6 @@ class ProtecGame {
     } else {
       this.showToast('Bénévole Intégré !', `${cand.name} (${initialRank}${cand.isTrainer ? ' • Formateur' : ''}) a signé sa charte d'engagement bénévole !`, 'green');
     }
-    this.openModule('recrutement');
   }
 
   toggleShowCandidatures() {
@@ -12342,6 +13284,79 @@ class ProtecGame {
     this.updateStatsUI();
   }
 
+  // Confirmation formelle d'envoi de renfort au régulateur (CODIS / SAMU 15 / DPS débordé)
+  confirmWillProvideRenfort(missionId) {
+    const mission = (this.missions || []).find(m => m.id === missionId);
+    if (!mission) return;
+
+    mission.willProvideRenfort = true;
+    mission.renfortPromised = true;
+
+    // Prolongation du délai de réponse (+15 min) et réinitialisation de l'horodatage
+    mission.maxResponseMinutes = (mission.maxResponseMinutes || 15) + 15;
+    mission.spawnedAt = Date.now();
+
+    // Mobilisation prioritaire des secouristes disponibles ou d'astreinte si sous-effectif
+    if (Array.isArray(this.volunteers) && (!mission.registeredVolunteers || mission.registeredVolunteers.length < (mission.requiredVolunteers || 3))) {
+      if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
+      if (!mission.volunteerRoles) mission.volunteerRoles = {};
+
+      const needed = (mission.requiredVolunteers || 3) - mission.registeredVolunteers.length;
+      const candidates = this.volunteers.filter(v => 
+        (v.status === 'dispo' || v.status === 'astreinte') && 
+        !mission.registeredVolunteers.includes(v.id)
+      );
+
+      candidates.slice(0, needed).forEach(v => {
+        mission.registeredVolunteers.push(v.id);
+        const ranks = Array.isArray(v.skills) ? v.skills : [];
+        if (!mission.volunteerRoles[v.id]) {
+          mission.volunteerRoles[v.id] = (v.rank === 'Chef d’Équipe' || ranks.includes('CE')) ? 'ce' : (ranks.includes('PSE2') ? 'pse2' : 'pse1');
+        }
+      });
+    }
+
+    // Assignation automatique d'un VPSP disponible si requis et non affecté
+    if (Array.isArray(this.vehicles) && (!mission.assignedVehicleIds || mission.assignedVehicleIds.length === 0)) {
+      const vpsp = this.vehicles.find(veh => (veh.type === 'VPSP' || veh.model?.includes('VPSP')) && veh.status === 'dispo');
+      if (vpsp) {
+        if (!Array.isArray(mission.assignedVehicleIds)) mission.assignedVehicleIds = [];
+        mission.assignedVehicleIds.push(vpsp.id);
+        if (mission.assignedCrew && Array.isArray(mission.assignedCrew.vehicles) && !mission.assignedCrew.vehicles.some(x => (typeof x === 'object' ? x.id : x) === vpsp.id)) {
+          mission.assignedCrew.vehicles.push(vpsp);
+        }
+      }
+    }
+
+    // Main courante radio TACTIQUE-1
+    if (this.radioLogs) {
+      this.radioLogs.unshift({
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        channel: 'TACTIQUE-1',
+        text: `[RÉGULATION] Antenne ➔ Régulateur : Renfort confirmé sur « ${mission.title} ». Départ en cours de préparation (+15 min accordées).`,
+        type: 'success'
+      });
+    }
+
+    // Registre d'alerte
+    this.recordAlertTriggerLog(mission, 'renfort_confirme', 'Confirmation d\'engagement de renfort transmise au régulateur (+15 min accordées).', { repImpact: 5 });
+
+    // Toast de confirmation
+    this.showToast(
+      'Renfort Confirmé 🚑',
+      `Vous avez confirmé l'envoi de renfort pour « ${mission.title} ». Le régulateur est informé (+15 min accordées).`,
+      'green'
+    );
+
+    this.saveGame();
+    this.renderMissions();
+    this.updateStatsUI();
+
+    if (this.selectedMissionId === missionId) {
+      this.openMissionDetails(missionId);
+    }
+  }
+
   // --- REGISTRE OFFICIEL ET MAIN COURANTE DES DÉCLENCHEMENTS D'ALERTE ---
   recordAlertTriggerLog(mission, eventType, reason, extraData = {}) {
     if (!mission) return null;
@@ -12834,14 +13849,8 @@ class ProtecGame {
       this.missionDetailActiveTab = 'info';
     }
 
-    // Indicateur s'il manque des véhicules
-    const assignedVehsForCheck = (mission.assignedVehicleIds || []).map(id => this.vehicles.find(v => v.id === id)).filter(Boolean);
-    const poolForCheck = [...assignedVehsForCheck];
-    const hasMissingVehicles = Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0 && mission.requiredVehicles.some(reqType => {
-      const idx = poolForCheck.findIndex(v => v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit)));
-      if (idx >= 0) { poolForCheck.splice(idx, 1); return false; }
-      return true;
-    });
+    // Indicateur s'il manque des moyens ou véhicules
+    const hasMissingVehicles = this.hasMissingVehicles(mission);
 
     // Liste des identifiants des véhicules déjà assignés (déclarée en début de méthode)
 
@@ -13025,6 +14034,39 @@ class ProtecGame {
         <!-- WIDGET TIMELINE MULTI-ÉTAPES (6 JALONS STRICTS) -->
         ${(mission.isTimelineUrgence || mission.timeline_milestones || mission.t_alerte) && window.ProtecConventions?.renderTimelineWidget ? window.ProtecConventions.renderTimelineWidget(mission, Date.now()) : ''}
 
+        <!-- ENCART ALERTE DÉBORDEMENT / DEMANDE DE RENFORT SAMU & POMPIERS -->
+        ${(mission.isRenfort || mission.isOptionalRenfort) ? `
+          <div class="p-3.5 rounded-2xl border-2 ${mission.willProvideRenfort ? 'border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100' : 'border-rose-500 bg-rose-50/80 dark:bg-rose-950/40 text-rose-950 dark:text-rose-100'} shadow-sm space-y-2.5">
+            <div class="flex items-start justify-between gap-2.5">
+              <div class="flex items-center gap-2.5">
+                <span class="w-9 h-9 rounded-xl ${mission.willProvideRenfort ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300'} flex items-center justify-center text-lg font-black shrink-0">
+                  ${mission.willProvideRenfort ? '🛡️' : '🚨'}
+                </span>
+                <div>
+                  <h4 class="text-xs font-black uppercase tracking-wider ${mission.willProvideRenfort ? 'text-emerald-900 dark:text-emerald-200' : 'text-rose-900 dark:text-rose-200'}">
+                    ${mission.willProvideRenfort ? 'Renfort Confirmé au Régulateur' : 'Alerte Débordement : Demande de Renfort'}
+                  </h4>
+                  <p class="text-[11px] font-semibold opacity-90">
+                    ${mission.willProvideRenfort 
+                      ? 'Régulation informée : équipage de renfort en préparation (+15 min de délai accordé).' 
+                      : 'Saturation des effectifs chez les secours publics. Vous pouvez confirmer que vous mettez du renfort.'}
+                  </p>
+                </div>
+              </div>
+              ${!mission.willProvideRenfort ? `
+                <button onclick="window.game.confirmWillProvideRenfort('${mission.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow active:scale-95 transition flex items-center gap-1.5 shrink-0 cursor-pointer animate-pulse">
+                  <i data-lucide="shield-check" class="w-4 h-4"></i>
+                  <span>Je vais mettre du renfort</span>
+                </button>
+              ` : `
+                <span class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-900/80 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-600 shrink-0">
+                  Renfort Validé (+15 min)
+                </span>
+              `}
+            </div>
+          </div>
+        ` : ''}
+
         <!-- BANDEAU DÉSENGAGEMENT MANUEL REQUIS (SI FIN D'ÉVÉNEMENT SANS PC SUR PLACE) -->
         ${mission.pendingManualDisengage ? `
           <div class="p-3.5 rounded-2xl bg-amber-500/15 border-2 border-amber-500 text-amber-950 space-y-2.5 shadow-sm">
@@ -13044,20 +14086,6 @@ class ProtecGame {
 
         <!-- BANDEAU INTERVENTION ACTIVE EN DIRECT (SI ONGOING) -->
         ${mission.status === 'ongoing' ? `
-          ${mission.currentIncident ? `
-            <div class="p-3 rounded-2xl bg-orange-50 border-2 border-pc-orange text-xs shadow-sm flex items-center justify-between gap-2 animate-pulse">
-              <div class="flex items-center gap-2">
-                <span class="text-lg">🚨</span>
-                <div>
-                  <div class="font-black text-orange-950">${mission.currentIncident.title}</div>
-                  <div class="text-[10px] text-orange-800 font-semibold">Incident en cours ! Arbitrage requis</div>
-                </div>
-              </div>
-              <button onclick="window.ProtecIncidents.openIncidentModal(window.game, window.game.missions.find(m => m.id === '${mission.id}'))" class="px-3 py-1.5 rounded-xl bg-pc-orange text-white text-xs font-black hover:bg-pc-orange-hover transition shadow">
-                Décider
-              </button>
-            </div>
-          ` : ''}
 
           <!-- Si c'est un sinistre ou une crise : Main Courante Opérationnelle -->
           ${(mission.isCrisis || ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type)) && window.ProtecCriseLogistique ? `
@@ -13371,7 +14399,7 @@ class ProtecGame {
                 <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                   <span class="text-[9px] uppercase font-black text-slate-400 block">${term.interlocutorLabel}</span>
                   <strong class="text-xs font-extrabold text-slate-900 block mt-0.5 truncate">${mission.clientName || term.interlocutorName}</strong>
-                  <span class="text-[10px] text-slate-500 block">Accord conventionnel validé</span>
+                  <span class="text-[10px] font-semibold text-slate-500 block truncate" title="${term.agreementStatus}">${term.agreementStatus}</span>
                 </div>
               </div>
 
@@ -13481,18 +14509,25 @@ class ProtecGame {
                   <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
                   <h4 class="text-xs font-black text-slate-900 uppercase">Logistique & Vecteurs</h4>
                 </div>
-                <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${assignedVehIds.length >= ((mission.requiredVehicles || []).length || 1) ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
-                  ${assignedVehIds.length} / ${(mission.requiredVehicles || []).length || 1} véhicule(s)
+                <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${!hasMissingVehicles ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                  ${assignedVehIds.length} véhicule(s) mobilisé(s) ${!hasMissingVehicles ? '✓' : '⚠️'}
                 </span>
               </div>
 
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span class="text-[9px] uppercase font-black text-slate-400 block">Vecteurs Requis</span>
+                  <span class="text-[9px] uppercase font-black text-slate-400 block">Moyens Opérationnels Requis</span>
                   <div class="flex items-center gap-1 mt-1 flex-wrap">
-                    ${(mission.requiredVehicles && mission.requiredVehicles.length > 0) ? mission.requiredVehicles.map(vType => `
-                      <span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-pc-blue border border-blue-200">${vType}</span>
-                    `).join('') : '<span class="text-[10px] text-slate-500">Poste fixe (aucun)</span>'}
+                    ${(() => {
+                      const cov = this.checkMissionMoyensCoverage(mission);
+                      const tags = [];
+                      if (cov.needs.needsPS) tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-pc-blue border border-blue-200">🚑 PS</span>');
+                      if (cov.needs.reqLogKits > 0) tags.push(`<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200">📦 LOG (${cov.needs.reqLogKits} kit${cov.needs.reqLogKits > 1 ? 's' : ''})</span>`);
+                      if (cov.needs.needsHR) tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">🏔️ HR 4x4</span>');
+                      if ((mission.requiredVehicles || []).includes('PCM')) tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200">📡 PCM</span>');
+                      if (tags.length === 0) return '<span class="text-[10px] text-slate-500">Poste fixe / Pédestre</span>';
+                      return tags.join('');
+                    })()}
                   </div>
                 </div>
                 <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -13529,11 +14564,11 @@ class ProtecGame {
               </span>
             </div>
 
-            <!-- Indemnisation conventionnée -->
+            <!-- Indemnisation & Rémunération Légale -->
             <div class="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between text-xs">
               <span class="text-emerald-800 font-bold flex items-center gap-1.5">
                 <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
-                <span>Indemnisation conventionnée (Devis Organisateur) :</span>
+                <span>${term.rewardLabel || 'Indemnisation de la mission :'}</span>
               </span>
               <span class="font-black text-emerald-950 mono-num text-sm">+${mission.rewardMoney} €</span>
             </div>
@@ -13622,7 +14657,7 @@ class ProtecGame {
                         <h4 class="text-xs font-black uppercase text-slate-800 dark:text-white tracking-wider">Organisation des Équipes Opérationnelles</h4>
                         ${isCrisisMission ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-red-500 text-white animate-pulse">Crise</span>' : '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-500 text-white">Dispositif</span>'}
                       </div>
-                      <p class="text-[10px] text-slate-500 dark:text-slate-300">Créez vos équipes et affectez vos secouristes. Rien n'est imposé par défaut : vous avez la main totale.</p>
+                      <p class="text-[10px] text-slate-500 dark:text-slate-300">Les équipes sont créées automatiquement lors de l'engagement des véhicules. Affectez vos secouristes à chaque équipage.</p>
                     </div>
                   </div>
                   <div class="flex items-center gap-2">
@@ -13635,37 +14670,11 @@ class ProtecGame {
                   </div>
                 </div>
 
-                <!-- Barre d'outils de création d'équipes -->
-                <div class="p-2.5 rounded-2xl bg-white border border-slate-200 dark:bg-white/5 dark:border-white/10 flex items-center gap-1.5 flex-wrap">
-                  <span class="text-[10px] font-bold text-slate-600 dark:text-slate-300 mr-1 flex items-center gap-1">
-                    <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-pc-blue"></i>
-                    <span>Ajouter une équipe :</span>
-                  </span>
-                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'psa')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-blue-600/80 hover:bg-blue-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un Poste de Secours (PSA)">
-                    <span>+ Équipe PSA</span>
-                  </button>
-                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'vpsp')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-600/80 hover:bg-emerald-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un équipage VPSP">
-                    <span>+ Équipage VPSP</span>
-                  </button>
-                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'binome')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600/80 hover:bg-indigo-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un Binôme de Patrouille PAPS">
-                    <span>+ Binôme PAPS</span>
-                  </button>
-                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'pc')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-purple-600/80 hover:bg-purple-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un Poste de Commandement / PMA">
-                    <span>+ PC / PMA</span>
-                  </button>
-                  <button type="button" onclick="window.game.addMissionTeamPreset('${mission.id}', 'soutien')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-600/80 hover:bg-amber-600 text-white transition flex items-center gap-1 cursor-pointer" title="Créer un soutien logistique">
-                    <span>+ Soutien Log</span>
-                  </button>
-                  <button type="button" onclick="window.game.promptCreateCustomTeam('${mission.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white dark:border-white/20 transition flex items-center gap-1 cursor-pointer ml-auto" title="Créer une équipe personnalisée">
-                    <span>+ Équipe Libre...</span>
-                  </button>
-                </div>
-
                 <!-- Grille des Équipes Opérationnelles du Dispositif (Chaque véhicule engagé EST une équipe) -->
                 ${crisisTeamsList.length === 0 ? `
                   <div class="p-3.5 rounded-2xl bg-white/5 border border-dashed border-white/20 text-center space-y-1">
                     <p class="text-xs font-bold text-slate-200">Aucune équipe ni véhicule engagé pour ce dispositif.</p>
-                    <p class="text-[10px] text-slate-400">Engagez un véhicule ou ajoutez une équipe ci-dessus pour composer vos effectifs.</p>
+                    <p class="text-[10px] text-slate-400">Engagez des véhicules pour créer automatiquement vos équipes et composer vos équipages.</p>
                   </div>
                 ` : `
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -14270,8 +15279,8 @@ class ProtecGame {
                 <span>Matériel</span>
               </button>
               <button type="button" onclick="window.game.setMissionDetailLogistiqueSubTab('consommable')" class="flex-1 py-1.5 px-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${logistiqueSubTab === 'consommable' ? 'bg-white text-pc-blue shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
-                <i data-lucide="briefcase-medical" class="w-3.5 h-3.5"></i>
-                <span>Consommable</span>
+                <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+                <span>Consommables</span>
               </button>
             </div>
 
@@ -14310,52 +15319,107 @@ class ProtecGame {
                     </div>
                   </div>
 
-                  <!-- Récapitulatif visuel des vecteurs demandés -->
+                  <!-- Récapitulatif visuel des besoins opérationnels par types de moyens (PS, LOG, TP, HR...) -->
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     ${(() => {
-                      const requiredTypes = Array.isArray(mission.requiredVehicles) ? mission.requiredVehicles : [];
-                      if (requiredTypes.length === 0) {
-                        return `
-                          <div class="col-span-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
-                            <span>🚶</span>
-                            <span>${isCrisisMission ? "Dispositif à pied d'œuvre (aucun véhicule imposé). Vous pouvez engager librement vos engins pour acheminer vos bénévoles." : "Dispositif pédestre / poste fixe (aucun véhicule requis au devis)."}</span>
-                          </div>
-                        `;
-                      }
+                      const cov = this.checkMissionMoyensCoverage(mission);
+                      const needs = cov.needs;
+                      const cards = [];
 
-                      const reqCounts = {};
-                      requiredTypes.forEach(t => reqCounts[t] = (reqCounts[t] || 0) + 1);
-
-                      const assignedVehs = (mission.assignedVehicleIds || [])
-                        .map(id => this.vehicles.find(v => v.id === id))
-                        .filter(Boolean);
-
-                      const assignedCounts = {};
-                      assignedVehs.forEach(v => {
-                        assignedCounts[v.type] = (assignedCounts[v.type] || 0) + 1;
-                      });
-
-                      return Object.entries(reqCounts).map(([type, reqCount]) => {
-                        const engagedCount = assignedCounts[type] || 0;
-                        const isSatisfied = engagedCount >= reqCount;
-
-                        return `
+                      // 1. Moyen Sanitaire (PS / VPSP)
+                      if (needs.needsPS) {
+                        const isSatisfied = cov.psSatisfied;
+                        cards.push(`
                           <div class="p-2.5 rounded-xl border ${isSatisfied ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950' : 'bg-amber-50/80 border-amber-300 text-amber-950'} flex items-center justify-between gap-3 shadow-2xs">
                             <div class="flex items-center gap-2.5 min-w-0">
-                              <span class="text-xl shrink-0">${type === 'VPSP' ? '🚑' : type === 'PCM' ? '📡' : type === 'VTU' ? '🚐' : type === 'VTP' ? '🚌' : '🚗'}</span>
+                              <span class="text-xl shrink-0">🚑</span>
                               <div class="min-w-0">
-                                <div class="text-xs font-black truncate">${type}</div>
-                                <div class="text-[10px] font-semibold text-slate-600">${reqCount} ${isCrisisMission ? "requis pour la mission" : "requis au devis"}</div>
+                                <div class="text-xs font-black truncate">Secours Sanitaire (PS)</div>
+                                <div class="text-[10px] font-semibold text-slate-600">${needs.reqPSCount} VPSP ou vecteur sanitaire ${isCrisisMission ? "requis par l'autorité" : "requis au devis"}</div>
                               </div>
                             </div>
                             <div class="shrink-0">
                               <span class="px-2 py-0.5 rounded-lg text-xs font-black whitespace-nowrap shadow-2xs ${isSatisfied ? 'bg-emerald-200 text-emerald-900 border border-emerald-300' : 'bg-amber-200 text-amber-900 border border-amber-300'}">
-                                ${engagedCount} / ${reqCount} ${isSatisfied ? '✓' : '⚠️'}
+                                ${cov.psVehiclesCount} / ${needs.reqPSCount} ${isSatisfied ? '✓' : '⚠️'}
                               </span>
                             </div>
                           </div>
+                        `);
+                      }
+
+                      // 2. Capacité Logistique (LOG - Kits & Matériel)
+                      if (needs.reqLogKits > 0) {
+                        const isSatisfied = cov.logSatisfied;
+                        cards.push(`
+                          <div class="p-2.5 rounded-xl border ${isSatisfied ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950' : 'bg-amber-50/80 border-amber-300 text-amber-950'} flex items-center justify-between gap-3 shadow-2xs">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                              <span class="text-xl shrink-0">📦</span>
+                              <div class="min-w-0">
+                                <div class="text-xs font-black truncate">Kits & Matériel (LOG)</div>
+                                <div class="text-[10px] font-semibold text-slate-600">${needs.reqLogKits} kit(s) requis (1 véhicule LOG de 6 slots transporte l'ensemble)</div>
+                              </div>
+                            </div>
+                            <div class="shrink-0">
+                              <span class="px-2 py-0.5 rounded-lg text-xs font-black whitespace-nowrap shadow-2xs ${isSatisfied ? 'bg-emerald-200 text-emerald-900 border border-emerald-300' : 'bg-amber-200 text-amber-900 border border-amber-300'}">
+                                ${cov.totalLogSlots} slots LOG / ${needs.reqLogKits} kit(s) ${isSatisfied ? '✓' : '⚠️'}
+                              </span>
+                            </div>
+                          </div>
+                        `);
+                      }
+
+                      // 3. Franchissement Hors-Route (HR 4x4)
+                      if (needs.needsHR) {
+                        const isSatisfied = cov.hrSatisfied;
+                        cards.push(`
+                          <div class="p-2.5 rounded-xl border ${isSatisfied ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950' : 'bg-amber-50/80 border-amber-300 text-amber-950'} flex items-center justify-between gap-3 shadow-2xs">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                              <span class="text-xl shrink-0">🏔️</span>
+                              <div class="min-w-0">
+                                <div class="text-xs font-black truncate">Hors-Route 4x4 (HR)</div>
+                                <div class="text-[10px] font-semibold text-slate-600">Terrain escarpé / hors-piste (VLHR ou 4x4 requis)</div>
+                              </div>
+                            </div>
+                            <div class="shrink-0">
+                              <span class="px-2 py-0.5 rounded-lg text-xs font-black whitespace-nowrap shadow-2xs ${isSatisfied ? 'bg-emerald-200 text-emerald-900 border border-emerald-300' : 'bg-amber-200 text-amber-900 border border-amber-300'}">
+                                ${cov.hasHRVehicle ? '1 / 1 ✓' : '0 / 1 ⚠️'}
+                              </span>
+                            </div>
+                          </div>
+                        `);
+                      }
+
+                      // 4. Commandement (PCM si spécifiquement requis au devis)
+                      if ((mission.requiredVehicles || []).includes('PCM')) {
+                        const hasPCM = cov.assignedVehs.some(v => v.type === 'PCM' || v.isCommandement || v.hasCommandementKit || (v.functions && v.functions.includes('PCM')));
+                        cards.push(`
+                          <div class="p-2.5 rounded-xl border ${hasPCM ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950' : 'bg-amber-50/80 border-amber-300 text-amber-950'} flex items-center justify-between gap-3 shadow-2xs">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                              <span class="text-xl shrink-0">📡</span>
+                              <div class="min-w-0">
+                                <div class="text-xs font-black truncate">Poste de Commandement (PCM)</div>
+                                <div class="text-[10px] font-semibold text-slate-600">Véhicule de commandement PCM requis</div>
+                              </div>
+                            </div>
+                            <div class="shrink-0">
+                              <span class="px-2 py-0.5 rounded-lg text-xs font-black whitespace-nowrap shadow-2xs ${hasPCM ? 'bg-emerald-200 text-emerald-900 border border-emerald-300' : 'bg-amber-200 text-amber-900 border border-amber-300'}">
+                                ${hasPCM ? '1 / 1 ✓' : '0 / 1 ⚠️'}
+                              </span>
+                            </div>
+                          </div>
+                        `);
+                      }
+
+                      if (cards.length === 0) {
+                        return `
+                          <div class="col-span-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
+                            <span>🚶</span>
+                            <span>${isCrisisMission ? "Dispositif à pied d'œuvre (aucun véhicule imposé). Vous pouvez engager librement vos engins pour acheminer vos bénévoles et votre matériel." : "Dispositif pédestre / poste fixe (aucun véhicule requis au devis)."}</span>
+                          </div>
                         `;
-                      }).join('');
+                      }
+
+                      return cards.join('');
                     })()}
                   </div>
 
@@ -14792,37 +15856,166 @@ class ProtecGame {
                 </div>
               </div>
             ` : `
-              <!-- SOUS-ONGLET CONSOMMABLE (eProtec STYLE) -->
+              <!-- SOUS-ONGLET CONSOMMABLES (JAUGES VÉHICULES ET KITS DE RÉARMEMENT) -->
               <div class="space-y-3">
-                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
-                  <div class="flex items-center justify-between">
+                <!-- EN-TÊTE CONSOMMABLES -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1.5">
+                  <div class="flex items-center justify-between flex-wrap gap-2">
                     <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
-                      <i data-lucide="briefcase-medical" class="w-4 h-4 text-pc-blue"></i>
-                      <span>Consommables Sanitaires de Mission</span>
+                      <i data-lucide="archive" class="w-4 h-4 text-pc-blue"></i>
+                      <span>Consommables</span>
                     </span>
                     <span class="font-black text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 text-xs">
-                      ${mission.consumableCost || 30} € prévus
+                      ${mission.consumableCost || 30} € prévus au devis
                     </span>
                   </div>
+                  <p class="text-[10px] text-slate-500 font-medium">
+                    Suivi global des jauges de consommables de vos véhicules engagés et réserve de kits de réarmement.
+                  </p>
+                </div>
 
-                  <div class="grid grid-cols-2 gap-2 text-xs">
-                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <strong class="block font-bold text-slate-800">Pansements & Compresses</strong>
-                      <span class="text-[10px] text-slate-500">Compresses stériles 10x10, bandes de gaze, sparadrap</span>
-                    </div>
-                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <strong class="block font-bold text-slate-800">Protection & Hygiène</strong>
-                      <span class="text-[10px] text-slate-500">Gants nitrile (S, M, L), masques FFP2, gel hydroalcoolique</span>
-                    </div>
-                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <strong class="block font-bold text-slate-800">Désinfection & Lavage</strong>
-                      <span class="text-[10px] text-slate-500">Dosettes de sérum physiologique, antiseptique dermo</span>
-                    </div>
-                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <strong class="block font-bold text-slate-800">Hémorragie & Urgence</strong>
-                      <span class="text-[10px] text-slate-500">Garrots tourniquets tactiques, coussins hémostatiques</span>
-                    </div>
+                <!-- 1. JAUGES DE CHAQUE VÉHICULE ENGAGÉ -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+                  <div class="flex items-center justify-between">
+                    <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <i data-lucide="gauge" class="w-3.5 h-3.5 text-pc-blue"></i>
+                      <span>Jauge de consommables par véhicule</span>
+                    </h5>
+                    ${(() => {
+                      const assignedVehs = (mission.assignedVehicleIds || [])
+                        .map(id => this.vehicles.find(v => v.id === id))
+                        .filter(Boolean);
+                      const hasLowVeh = assignedVehs.some(v => (v.consumables !== undefined ? v.consumables : 100) < 100);
+                      const missionStation = (this.stations || []).find(s => s.id === mission.stationId) || this.stations?.[0];
+                      if (assignedVehs.length > 0 && hasLowVeh && missionStation) {
+                        return `
+                          <button type="button" onclick="window.ProtecLogistique?.rearmAllVehicles(window.game, '${missionStation.id}'); window.game.openMissionDetails('${mission.id}');" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1 cursor-pointer shadow-xs">
+                            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                            <span>Réarmer les véhicules</span>
+                          </button>
+                        `;
+                      }
+                      return '';
+                    })()}
                   </div>
+
+                  ${(() => {
+                    const assignedVehs = (mission.assignedVehicleIds || [])
+                      .map(id => this.vehicles.find(v => v.id === id))
+                      .filter(Boolean);
+
+                    if (assignedVehs.length === 0) {
+                      return `
+                        <div class="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center space-y-2">
+                          <p class="text-xs text-slate-500 italic">Aucun véhicule n'est encore engagé sur cette mission.</p>
+                          <button type="button" onclick="window.game.setMissionDetailLogistiqueSubTab('vehicule')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-pc-blue text-white shadow-2xs hover:bg-pc-blue/90 transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <i data-lucide="truck" class="w-3.5 h-3.5"></i>
+                            <span>Affecter un véhicule pour suivre sa jauge</span>
+                          </button>
+                        </div>
+                      `;
+                    }
+
+                    return `
+                      <div class="space-y-2">
+                        ${assignedVehs.map(v => {
+                          const val = Math.round(v.consumables !== undefined ? v.consumables : (v.armementLevel || 100));
+                          const isFull = val >= 100;
+                          const barColor = val > 40 ? 'bg-emerald-500' : (val > 15 ? 'bg-amber-500' : 'bg-rose-500');
+                          const textColor = val > 40 ? 'text-emerald-700' : (val > 15 ? 'text-amber-700' : 'text-rose-700');
+
+                          return `
+                            <div class="p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white transition flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                              <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                <div class="w-10 h-10 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0">
+                                  <img src="${v.image || window.game.getVehicleImage(v.type)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='🚑'" />
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                  <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-extrabold text-xs text-slate-900">${v.name}</span>
+                                    <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">${v.type || 'VPSP'}</span>
+                                    <span class="text-[9px] font-bold px-1.5 py-0.2 rounded ${isFull ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
+                                      ${isFull ? 'OPE (100%)' : `Non OPE (${val}%)`}
+                                    </span>
+                                  </div>
+                                  <!-- Jauge de consommables -->
+                                  <div class="flex items-center gap-2 mt-1.5">
+                                    <span class="text-[10px] font-bold text-slate-500 shrink-0">Jauge :</span>
+                                    <div class="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden max-w-xs">
+                                      <div class="h-full rounded-full transition-all duration-300 ${barColor}" style="width: ${val}%"></div>
+                                    </div>
+                                    <span class="font-mono font-bold text-xs ${textColor}">${val}%</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                                ${!isFull ? `
+                                  <button type="button" onclick="window.ProtecLogistique?.rearmVehicleSingle(window.game, '${v.id}'); window.game.openMissionDetails('${mission.id}');" class="px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1 cursor-pointer shadow-xs">
+                                    <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                                    <span>Réarmer</span>
+                                  </button>
+                                ` : `
+                                  <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                                    <i data-lucide="check" class="w-3 h-3"></i>
+                                    <span>Complet</span>
+                                  </span>
+                                `}
+                              </div>
+                            </div>
+                          `;
+                        }).join('')}
+                      </div>
+                    `;
+                  })()}
+                </div>
+
+                <!-- 2. KITS DE RÉARMEMENT -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+                  <div class="flex items-center justify-between">
+                    <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <i data-lucide="package-check" class="w-3.5 h-3.5 text-pc-blue"></i>
+                      <span>Kit de réarmement</span>
+                    </h5>
+                    ${(() => {
+                      const st = (this.stations || []).find(s => s.id === mission.stationId) || this.stations?.[0];
+                      const caisseCount = st?.stock?.caisse_rearmement || 0;
+                      return `
+                        <span class="px-2 py-0.5 rounded-lg text-xs font-black ${caisseCount > 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
+                          ${caisseCount} kit(s) disponible(s)
+                        </span>
+                      `;
+                    })()}
+                  </div>
+
+                  ${(() => {
+                    const st = (this.stations || []).find(s => s.id === mission.stationId) || this.stations?.[0];
+                    const caisseCount = st?.stock?.caisse_rearmement || 0;
+                    const availablePS = st?.stockMaterielsPS || 0;
+
+                    return `
+                      <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div class="space-y-1 min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span class="text-base">📦</span>
+                            <span class="font-extrabold text-slate-900">Kit de Réarmement Opérationnel</span>
+                            <span class="text-[10px] text-slate-500 font-semibold">• Réassort complet à 100%</span>
+                          </div>
+                          <p class="text-[10px] text-slate-500 leading-relaxed">
+                            Permet de remonter la jauge de consommables d'un véhicule de secours à 100% en un clic.
+                            ${availablePS > 0 ? `<span class="text-emerald-700 font-bold block mt-0.5">Réserve locale PS complémentaire : ${availablePS}%</span>` : ''}
+                          </p>
+                        </div>
+
+                        <div class="flex items-center gap-2 shrink-0">
+                          <button type="button" onclick="window.ProtecLogistique?.buyRearmKit(window.game, '${st?.id}'); window.game.openMissionDetails('${mission.id}');" class="px-3 py-1.5 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue/90 text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap">
+                            <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i>
+                            <span>Acheter 1 kit (60 €)</span>
+                          </button>
+                        </div>
+                      </div>
+                    `;
+                  })()}
                 </div>
               </div>
             `}
@@ -14981,9 +16174,17 @@ class ProtecGame {
               <span>Équipe Complète • Départ auto à ${rdvBaseStr}</span>
             </div>
           ` : `
-            <div class="flex-1 min-w-[140px] px-3 py-2 rounded-xl text-center text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200 whitespace-nowrap flex items-center justify-center">
-              Manque ${mission.requiredVolunteers - registeredVols.length} secouriste(s)
-            </div>
+            ${(mission.isRenfort || mission.isOptionalRenfort) && !mission.willProvideRenfort ? `
+              <button onclick="window.game.confirmWillProvideRenfort('${mission.id}')" class="flex-1 min-w-[140px] px-3.5 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 animate-pulse cursor-pointer" title="Confirmer au régulateur que vous mettez du renfort (+15 min accordées)">
+                <i data-lucide="shield-plus" class="w-4 h-4"></i>
+                <span>Mettre du renfort</span>
+              </button>
+            ` : `
+              <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="flex-1 min-w-[140px] px-3 py-2 rounded-xl text-center text-[10px] font-black bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 whitespace-nowrap flex items-center justify-center gap-1 transition cursor-pointer" title="Manque de moyens : cliquer pour mobiliser ou envoyer du renfort">
+                <i data-lucide="shield-plus" class="w-3.5 h-3.5 text-amber-800"></i>
+                <span>Manque ${mission.requiredVolunteers - registeredVols.length} • Mettre du renfort</span>
+              </button>
+            `}
           `
         )}
       `;
@@ -15317,16 +16518,23 @@ class ProtecGame {
 
     const needed = mission.requiredVolunteers - (mission.registeredVolunteers?.length || 0);
     const renfortData = {
-      requesterPlayerId: this.player.id,
-      requesterName: this.player.name,
-      allianceId: this.player.allianceId,
+      id: `renf-${Date.now()}`,
+      isMine: true,
+      requesterPlayerId: this.player?.id || 'directeur-local',
+      requesterName: this.player?.name || 'Directeur d’Antenne',
+      allianceId: this.player?.allianceId,
       allianceTag: 'UFSC',
       missionId: mission.id,
+      departmentCode: String(mission.departmentCode || this.stations?.[0]?.departmentCode || '54'),
+      stationName: this.stations?.[0]?.name || 'Antenne Locale',
       title: `Renfort pour ${mission.title}`,
       desc: `Dispositif prévu le ${this.formatShortDate(mission.eventDate)}. Besoin urgent de ${needed} secouriste(s) ou VPSP.`,
       unitRequested: `${needed} secouristes ou VPSP`,
       indemnite: 200
     };
+
+    if (!this.mySentRenfortIds) this.mySentRenfortIds = new Set();
+    this.mySentRenfortIds.add(renfortData.id);
 
     fetch('/api/alliances/renfort/request', {
       method: 'POST',
@@ -15334,12 +16542,13 @@ class ProtecGame {
       body: JSON.stringify(renfortData)
     }).then(res => res.json()).then(data => {
       const saved = Object.assign({}, renfortData, (data && data.renfort) || {});
+      saved.isMine = true;
+      this.mySentRenfortIds.add(saved.id);
       this.renforts.unshift(saved);
       this.sanitizeRenforts();
       this.showToast('Appel à Renfort Diffusé', `Tous les directeurs d’antennes alliés ont reçu votre appel de détresse !`, 'green');
       this.updateStatsUI();
     }).catch(() => {
-      renfortData.id = `renf-${Date.now()}`;
       this.renforts.unshift(renfortData);
       this.sanitizeRenforts();
       this.showToast('Appel à Renfort Diffusé', `Alerte transmise sur la fréquence fédérale !`, 'green');
@@ -16936,7 +18145,23 @@ class ProtecGame {
   // Traitement d'un nouveau renfort créé à distance en temps réel
   handleRemoteRenfortCreated(newRenfort) {
     if (!newRenfort || !newRenfort.id) return;
-    if (newRenfort.requesterPlayerId && this.player?.id && String(newRenfort.requesterPlayerId) === String(this.player.id)) return;
+
+    // RÈGLE ABSOLUE : Ne JAMAIS s'envoyer d'alerte, de son ou de notification à soi-même
+    // lors de ses propres demandes de renfort, même si l'on fait partie du département !
+    if (this.isMyRenfortRequest(newRenfort)) {
+      if (!this.renforts) this.renforts = [];
+      const existingIdx = this.renforts.findIndex(r => r.id === newRenfort.id);
+      if (existingIdx !== -1) {
+        Object.assign(this.renforts[existingIdx], newRenfort);
+      } else {
+        newRenfort.isMine = true;
+        this.renforts.unshift(newRenfort);
+      }
+      this.ensureRenfortCoordinates(newRenfort);
+      this.renderMissions();
+      this.updateStatsUI();
+      return;
+    }
     if (!this.renforts) this.renforts = [];
 
     const existingIdx = this.renforts.findIndex(r => r.id === newRenfort.id);
@@ -17180,7 +18405,7 @@ class ProtecGame {
       'recrutement': 'rh',
       'formation': 'rh',
       'poles': 'rh',
-      'communication': 'rh',
+      'communication': 'liaisons',
       'competences': 'rh',
 
       'base': 'antenne',
@@ -17303,12 +18528,12 @@ class ProtecGame {
       ],
       rh: [
         { key: 'recrutement', label: 'Bénévoles & Équipe', icon: 'users', count: this.volunteers?.length || 0 },
-        { key: 'poles', label: 'Pôles d\'Antenne', icon: 'layers' },
-        { key: 'communication', label: 'Communication & Médias', icon: 'megaphone' }
+        { key: 'poles', label: 'Pôles d\'Antenne', icon: 'layers' }
       ],
       liaisons: [
         { key: 'tchat', label: 'Messagerie & MP', icon: 'message-square' },
         { key: 'alliance', label: 'Alliances', icon: 'handshake', count: this.renforts?.filter(r => r.status === 'open').length || 0 },
+        { key: 'communication', label: 'Communication & Médias', icon: 'megaphone' },
         { key: 'meteo', label: 'Météo-France', icon: 'cloud-sun' }
       ],
       finances: [
@@ -17352,6 +18577,756 @@ class ProtecGame {
     `;
 
     if (window.lucide) window.lucide.createIcons();
+  }
+
+  renderDevisContentHTML() {
+    // Régulariser immédiatement tout devis dont la date serait passée
+      this.cleanPastDevis();
+
+      const isAntennaVisible = this.resources.campaigns.social || this.resources.campaigns.posters || (this.stats?.dpsCompleted > 0) || (this.resources.reputationScore >= 60);
+      const pendingDevis = this.devis.filter(d => d.status === 'pending');
+      const previsionnelDevis = this.devis.filter(d => d.status === 'previsionnel');
+      const inReviewDevis = this.devis.filter(d => d.status === 'sent');
+      const treatedDevis = this.devis.filter(d => ['signed', 'rejected_competition', 'rejected_security', 'rejected_budget', 'expired', 'declined', 'lost_option'].includes(d.status));
+      const activeContractsCount = (this.annualContracts || []).filter(c => c.signed).length;
+      const activeTab = this.devisTab || 'ponctuels';
+
+    return `
+        <div class="space-y-6">
+          <!-- Barre de bascule DPS : Planning vs Devis Ponctuels vs Contrats Annuels -->
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div class="flex items-center gap-2">
+              <button onclick="window.game.openModule('planning')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 cursor-pointer">
+                <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
+                Vue Calendrier DPS
+              </button>
+              <button onclick="window.game.devisTab = 'ponctuels'; window.game.openModule('devis', true);" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${activeTab === 'ponctuels' ? 'bg-amber-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'} cursor-pointer">
+                <i data-lucide="file-check" class="w-4 h-4"></i>
+                Devis & Prévisionnels (${pendingDevis.length + previsionnelDevis.length + inReviewDevis.length})
+              </button>
+              <button onclick="window.game.devisTab = 'contrats'; window.game.openModule('devis', true);" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${activeTab === 'contrats' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'} cursor-pointer">
+                <i data-lucide="repeat" class="w-4 h-4"></i>
+                Contrats Annuels Réguliers (${activeContractsCount})
+              </button>
+            </div>
+            <div class="text-xs text-slate-600 font-bold flex items-center gap-2">
+              ${activeTab === 'ponctuels' ? `
+                <span><strong>${pendingDevis.length}</strong> nouveau(x)</span>
+                ${previsionnelDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 font-extrabold">⏳ ${previsionnelDevis.length} prévisionnel(s)</span>` : ''}
+                ${inReviewDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-300 font-extrabold">⚖️ ${inReviewDevis.length} délibération</span>` : ''}
+              ` : `
+                <span class="px-2.5 py-0.5 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-300 font-black">Accords-cadres & Partenariats pluriannuels</span>
+              `}
+            </div>
+          </div>
+
+          ${activeTab === 'contrats' ? `
+            <div class="space-y-4">
+              ${window.ProtecContratsAnnuels ? window.ProtecContratsAnnuels.renderContractsHTML(this) : '<p class="text-xs text-slate-500 p-4">Chargement des contrats annuels...</p>'}
+            </div>
+          ` : `
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <!-- Colonne Gauche : Liste des Devis & Dossiers (7 colonnes sur 12) -->
+            <div class="lg:col-span-7 xl:col-span-7 space-y-5 min-w-0">
+              <div class="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/80 text-xs text-amber-950 dark:text-amber-100 space-y-2 shadow-xs">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold flex items-center gap-1.5 text-amber-950 dark:text-amber-200">
+                    <i data-lucide="scale" class="w-4 h-4 text-amber-600 dark:text-amber-400"></i>
+                    Barème Réglementaire & Négociation DPS (RNMSC)
+                  </span>
+                  <span class="text-[11px] font-bold text-amber-900 dark:text-amber-200 bg-amber-200/90 dark:bg-amber-900/60 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-700">Mise en Concurrence Active</span>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-slate-800 dark:text-slate-200">
+                  <div class="p-2 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700/60 rounded-xl shadow-2xs">Vacation secouriste : <strong class="text-amber-950 dark:text-amber-300 font-black">18,00 €/h</strong></div>
+                  <div class="p-2 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700/60 rounded-xl shadow-2xs">VPSP : <strong class="text-amber-950 dark:text-amber-300 font-black">110,00 €</strong></div>
+                  <div class="p-2 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700/60 rounded-xl shadow-2xs">Matériel & DSA : <strong class="text-amber-950 dark:text-amber-300 font-black">35 à 120 €</strong></div>
+                  <div class="p-2 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700/60 rounded-xl shadow-2xs">Frais convention : <strong class="text-amber-950 dark:text-amber-300 font-black">40,00 €</strong></div>
+                </div>
+                <p class="text-[11px] text-amber-900 dark:text-amber-200 font-medium italic">
+                  <strong>💡 Nouveauté Gestion :</strong> Vous pouvez <strong>mettre en prévisionnel</strong> un événement pour bloquer la date et sonder vos bénévoles avant de vous engager. En cas de délai court (urgence J-2 à J-5), les organisateurs acceptent des tarifs supérieurs. Vous pouvez également <strong>décliner</strong> poliment une demande sans pénalité.
+                </p>
+              </div>
+
+          <!-- Section Devis en Cours d'Étude & Délibération (Temps Réel) -->
+          ${inReviewDevis.length > 0 ? `
+            <div class="space-y-3 p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/90 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="relative flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-600"></span>
+                  </span>
+                  <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wider">Devis en Cours d’Étude & Délibération (${inReviewDevis.length})</h4>
+                </div>
+                <span class="text-[10px] font-extrabold text-indigo-700 bg-indigo-100/90 px-2.5 py-0.5 rounded-lg border border-indigo-200">
+                  Instruction & Sécurité RNMSC
+                </span>
+              </div>
+              <p class="text-[11px] text-indigo-800 leading-relaxed">
+                Les organisateurs délibèrent et consultent la commission de sécurité (RNMSC) tout en comparant votre proposition aux associations concurrentes agréées (Croix-Rouge, etc.). Le verdict sera rendu dès clôture de l’instruction.
+              </p>
+
+              <div class="space-y-3 pt-1">
+                ${inReviewDevis.map(d => {
+                  return `
+                    <div class="p-4 rounded-xl bg-white border border-indigo-100 shadow-sm space-y-3" id="devis-card-review-${d.id}">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white">${d.eventName}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">Offre transmise : ${d.proposedPrice || 250} €</span>
+                          </div>
+                          <p class="text-xs text-slate-700 mt-1">
+                            Dispositif proposé : <strong>${d.configuredScale || d.scale || 'DPS-PE'}</strong> (${d.configuredVolunteers || 4} secouristes • Moyens : <strong>${this.formatDevisVehiclesSummary(d)}</strong>)
+                          </p>
+                          <p class="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
+                            <span>${d.address || (d.lat && d.lng ? `Point GPS: ${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}` : 'Adresse sur site')}</span>
+                          </p>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs font-black text-indigo-800">
+                            <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                            En cours d'étude
+                          </span>
+                        </div>
+                      </div>
+
+                      <!-- Mention sobre d'instruction sans compte à rebours visible -->
+                      <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-1.5">
+                          <i data-lucide="clock" class="w-3.5 h-3.5 text-indigo-600"></i>
+                          <span>Dossier transmis. L'organisateur examine les offres reçues des associations concurrentes.</span>
+                        </span>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide shrink-0">Instruction</span>
+                      </div>
+
+                      <!-- Bouton de relance téléphonique organisateur -->
+                      <div class="flex items-center justify-between pt-1 border-t border-indigo-50 text-[11px]">
+                        <span class="text-indigo-800 font-medium">L'organisateur étudie les devis reçus des AASC concurrentes.</span>
+                        ${d.relanceDone ? `
+                          <span class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold border border-emerald-200 text-[10px] flex items-center gap-1">
+                            ✓ Relancé par téléphone (Délai raccourci)
+                          </span>
+                        ` : `
+                          <button onclick="window.game.relancerOrganisateurDevis('${d.id}')" class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] shadow-sm transition flex items-center gap-1.5" title="Téléphoner à l'organisateur pour raccourcir son temps de délibération">
+                            <span>📞 Relancer l'organisateur</span>
+                          </button>
+                        `}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- SECTION DES DEVIS EN PRÉVISIONNEL (OPTION RÉSERVÉE PAR LE JOUEUR) -->
+          ${previsionnelDevis.length > 0 ? `
+            <div class="space-y-3 p-4 rounded-2xl bg-amber-50/80 border-2 border-amber-300 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">⏳</span>
+                  <h4 class="text-xs font-black text-amber-950 uppercase tracking-wider">Dispositifs en Prévisionnel (${previsionnelDevis.length})</h4>
+                </div>
+                <span class="text-[10px] font-extrabold text-amber-900 bg-amber-200/80 px-2.5 py-0.5 rounded-lg border border-amber-400/40">
+                  Option Réservée • Date Bloquée à l'Agenda
+                </span>
+              </div>
+              <p class="text-[11px] text-amber-800 leading-relaxed">
+                Ces événements sont actuellement réservés à titre d'option. Sondez vos bénévoles pour vous assurer que l'effectif sera réuni avant de confirmer la convention officielle avec l'organisateur.
+              </p>
+
+              <div class="space-y-4 pt-1">
+                ${previsionnelDevis.map(d => {
+                  const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
+                  const confirmedVols = d.previsionnelVolunteers || [];
+                  const isFull = confirmedVols.length >= reqVols;
+                  const dateStr = this.formatFullDate(d.eventDate);
+                  const dynamicBareme = this.calculateDynamicBareme(d);
+                  const responses = d.previsionnelResponses || {};
+                  const responsesList = Object.values(responses);
+                  const dispoCount = responsesList.filter(r => r.status === 'dispo').length;
+                  const indispoCount = responsesList.filter(r => r.status === 'indispo').length;
+                  const pendingCount = responsesList.filter(r => r.status === 'pending').length;
+
+                  return `
+                    <div class="p-4 rounded-2xl bg-white border border-amber-300 shadow-sm space-y-3" id="devis-previ-${d.id}">
+                      <div class="flex items-start justify-between">
+                        <div>
+                          <div class="flex items-center gap-2 flex-wrap">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white">${d.eventName}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">⏳ En Prévisionnel</span>
+                            ${d.sollicitationSent ? `
+                              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-pc-blue border border-blue-300">
+                                Statut : Sollicité (${d.relancesCount || 0} relance${(d.relancesCount || 0) > 1 ? 's' : ''})
+                              </span>
+                            ` : `
+                              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">Statut : Non sollicité</span>
+                            `}
+                            ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
+                          </div>
+                          <h4 class="text-sm font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
+                          <p class="text-xs text-slate-600">
+                            Date : <strong>${dateStr} (${d.eventDate?.dayName || 'Date'})</strong> • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
+                          </p>
+                          <p class="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
+                            <span>${d.address || 'Adresse sur site'}</span>
+                          </p>
+                        </div>
+                        <div class="text-right">
+                          <span class="text-[10px] text-slate-400 font-bold uppercase block">Barème Prévu</span>
+                          <span class="text-sm font-black mono-num text-slate-800">${d.proposedPrice || dynamicBareme.totalBareme} €</span>
+                        </div>
+                      </div>
+
+                      <!-- Encart Risque de Perte d'Option (Concurrence) -->
+                      <div class="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                          <span class="text-base flex-shrink-0">⚠️</span>
+                          <div>
+                            <span class="font-extrabold text-amber-950 block">Option Non Garantie face à la concurrence</span>
+                            <span class="text-[11px] text-amber-800">L'organisateur consulte en parallèle d'autres associations. Plus vous tardez à confirmer, plus il risque de signer ailleurs.</span>
+                          </div>
+                        </div>
+                        <div class="text-right flex-shrink-0 pl-2">
+                          <span class="text-[10px] uppercase font-bold text-amber-800 block">Risque Perte</span>
+                          <span class="px-2.5 py-0.5 rounded-lg bg-amber-600 text-white font-black text-xs shadow-xs">
+                            ${Math.round((d.riskRate || 0.15) * 100)} %
+                          </span>
+                        </div>
+                      </div>
+
+                      <!-- Sondage Bénévoles -->
+                      <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                        <div class="flex items-center justify-between text-xs font-bold">
+                          <span class="text-slate-700">Effectif confirmé par sondage :</span>
+                          <span class="${isFull ? 'text-emerald-700 font-black' : 'text-amber-800 font-black'}">
+                            ${confirmedVols.length} / ${reqVols} secouristes requis
+                          </span>
+                        </div>
+                        <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                          <div class="h-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full transition-all" style="width: ${Math.min(100, (confirmedVols.length / reqVols) * 100)}%"></div>
+                        </div>
+
+                        ${responsesList.length > 0 ? `
+                          <div class="flex items-center gap-3 text-[11px] text-slate-600 pt-1">
+                            <span class="text-emerald-700 font-bold">✓ ${dispoCount} disponible(s)</span>
+                            <span class="text-slate-500">✕ ${indispoCount} indisponible(s)</span>
+                            ${pendingCount > 0 ? `<span class="text-amber-700 font-bold animate-pulse">⏳ ${pendingCount} en attente...</span>` : ''}
+                          </div>
+                        ` : ''}
+                      </div>
+
+                      <!-- Actions du Prévisionnel -->
+                      <div class="pt-1 flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-white hover:bg-slate-100 text-pc-blue border border-pc-blue/30 shadow-xs flex items-center gap-1.5 transition cursor-pointer">
+                            <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
+                            ${d.sondageEnCours ? 'Sondage en cours...' : '📱 Sonder'}
+                          </button>
+                          <button onclick="window.game.manualRelancePrevisionnel('${d.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1.5 transition cursor-pointer" title="Envoyer une relance aux bénévoles">
+                            <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+                            <span>Relancer (${d.relancesCount || 0})</span>
+                          </button>
+                          <button onclick="window.ProtecMessaging ? window.ProtecMessaging.openForMission('${d.id}', window.game) : null" class="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 border border-slate-200 transition flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="message-square" class="w-3.5 h-3.5 text-pc-blue"></i>
+                            <span>Messagerie</span>
+                          </button>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                          <button onclick="window.game.submitCustomDevis('${d.id}')" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-emerald-500 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                            Valider la Présence & Envoyer Devis
+                          </button>
+                          <button onclick="window.game.refuseDevis('${d.id}')" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 transition cursor-pointer">
+                            ✕ Annuler l'Option
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Demandes reçues avec configurateur personnalisé -->
+          <div class="space-y-4">
+            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Demandes Reçues des Organisateurs (${pendingDevis.length})</h4>
+
+            ${!isAntennaVisible ? `
+              <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 text-xs flex items-start gap-3">
+                <i data-lucide="eye-off" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
+                <div class="space-y-1">
+                  <div class="font-black text-amber-950 uppercase tracking-wide">Antenne Invisible au Public</div>
+                  <p class="text-[11px] text-amber-800 leading-relaxed">
+                    Votre antenne vient d'ouvrir ou manque de notoriété. Sans <strong>campagne de communication</strong> active (Réseaux sociaux ou Affichage mairie) ou de premier <strong>DPS réalisé</strong>, les organisateurs d'événements ne connaissent pas votre existence et ne peuvent pas vous envoyer de demandes de devis.
+                  </p>
+                </div>
+              </div>
+            ` : ''}
+
+            ${pendingDevis.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune nouvelle demande en attente. Vos dossiers en cours et options sont affichés ci-dessus.</p>' : ''}
+            
+            ${pendingDevis.map(d => {
+              // Règle opérationnelle : aucun pré-remplissage automatique des moyens ni du prix
+              if (d.configuredScale === undefined) d.configuredScale = '';
+              if (d.configuredVolunteers === undefined) d.configuredVolunteers = 0;
+              if (d.configuredCE === undefined) d.configuredCE = 0;
+              if (d.configuredCP === undefined) d.configuredCP = 0;
+              if (!Array.isArray(d.configuredVehicles)) d.configuredVehicles = [];
+              if (!Array.isArray(d.configuredLots)) d.configuredLots = [];
+
+              const dateStr = this.formatFullDate(d.eventDate);
+              const opSalarie = this.getQualifiedOpSalarie();
+
+              return `
+                <div class="p-5 rounded-2xl glass-card space-y-4 border border-slate-200/80 shadow-sm" id="devis-card-${d.id}">
+                  <!-- En-tête de la demande -->
+                  <div class="flex items-start justify-between">
+                    <div>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${d.eventName}</span>
+                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3} (Annulation autre AASC)</span>` : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">📅 Planification J-${d.daysAhead || 30}</span>`}
+                      </div>
+                      <h4 class="text-base font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
+                      <p class="text-xs text-slate-500">
+                        Date : <strong>${dateStr} (${d.eventDate?.dayName || 'Date'})</strong> • Durée du poste : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong>
+                      </p>
+                      <p class="text-xs text-slate-700 font-semibold flex items-center gap-1 mt-1">
+                        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
+                        <span>Lieu : <strong class="text-slate-900">${d.address || (d.lat && d.lng ? `Point GPS: ${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}` : 'Adresse sur site')}</strong></span>
+                      </p>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-[10px] text-slate-400 font-bold uppercase block">Dimensionnement</span>
+                      <span class="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-800 font-black text-xs border border-slate-200">Saisie Manuelle</span>
+                      ${d.risScore ? `<span class="block text-[10px] text-emerald-700 font-extrabold mt-1">RIS calculé : ${d.risScore}</span>` : ''}
+                    </div>
+                  </div>
+
+                  <!-- 1. DONNÉES DU RASSEMBLEMENT (DÉDUCTION DU RISQUE ET DES BESOINS) -->
+                  <div class="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-black text-sky-950 uppercase tracking-wide flex items-center gap-1.5">
+                        <i data-lucide="info" class="w-4 h-4 text-sky-600"></i>
+                        Données de l'Événement & Configuration du Site
+                      </span>
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <button type="button" onclick="if(window.ProtecRNMSC) window.ProtecRNMSC.loadDevisIntoSimulator('${d.id}')" class="text-[10px] font-black text-pc-blue dark:text-sky-300 bg-white/95 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 px-2.5 py-1 rounded-lg border border-sky-300 dark:border-sky-600 shadow-2xs transition cursor-pointer flex items-center gap-1 hover:scale-105 active:scale-95" title="Injecter les données de cette demande directement dans le Calculateur RIS à droite">
+                          <span>📐 Tester dans le RIS</span>
+                        </button>
+                        <span class="text-[10px] font-bold text-sky-700 dark:text-sky-300 bg-white/60 dark:bg-slate-800/80 px-2 py-0.5 rounded-lg border border-sky-200 dark:border-sky-700/60 hidden sm:inline-block">
+                          Analyse Risque RNMSC
+                        </span>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-700">
+                      <div class="p-2 bg-white rounded-xl border border-sky-100">
+                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Public attendu (N)</span>
+                        <strong class="text-slate-900">${this.formatRoundedPublic(d.publicCount)}</strong>
+                      </div>
+                      <div class="p-2 bg-white rounded-xl border border-sky-100">
+                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Configuration du site</span>
+                        <strong class="text-slate-900">${d.environment || (d.eventName.toLowerCase().includes('trail') || d.eventName.toLowerCase().includes('cross') ? 'Plein air / Relief' : 'Enclos / Salle')}</strong>
+                      </div>
+                      <div class="p-2 bg-white rounded-xl border border-sky-100">
+                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Accès Secours Extérieurs</span>
+                        <strong class="text-slate-900">${d.emergencyAccess || (d.isLastMinute ? '< 10 min (Centre-ville)' : '10 à 20 min')}</strong>
+                      </div>
+                      <div class="p-2 bg-white rounded-xl border border-sky-100">
+                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Durée du dispositif</span>
+                        <strong class="text-slate-900">${this.formatHoursAndMinutes(d.durationHours)}</strong>
+                      </div>
+                      <div class="p-2 bg-white rounded-xl border border-sky-100 col-span-2 sm:col-span-4 flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                          <span class="text-sm">${d.mealsProvidedByOrganizer ? '🍽️' : '🥪'}</span>
+                          <span class="text-slate-700 font-bold text-[10px]">Restauration secouristes :</span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${d.mealsProvidedByOrganizer ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}">
+                          ${d.mealsProvidedByOrganizer ? 'Prise en charge par l’organisateur (0€ NDF)' : `À la charge antenne (Forfait NDF : ${this.mealAllowancePerVolunteer || 15}€/repas)`}
+                        </span>
+                      </div>
+                    </div>
+                    <p class="text-[10px] text-sky-800 italic">
+                      ℹ️ <strong>Règle Opérationnelle :</strong> Déduisez les moyens humains (secouristes, encadrement CE/CP), les vecteurs (VPSP/VL/VPS) et le matériel (Lot A/B) nécessaires selon le risque. Le barème réglementaire minimum reste masqué pour le joueur et sera audité à la validation.
+                    </p>
+                  </div>
+
+                  <!-- 2. OPTION AUTO-REMPLISSAGE OPÉRATIONNEL -->
+                  ${(() => {
+                    if (opSalarie) {
+                      return `
+                        <div class="p-3 rounded-2xl bg-indigo-50/90 border border-indigo-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                          <div class="flex items-center gap-2">
+                            <span class="text-lg">✨</span>
+                            <div>
+                              <span class="text-xs font-black text-indigo-950 block">Recommandation Pôle Opérationnel Débloquée</span>
+                              <span class="text-[10px] text-indigo-700">Votre permanent qualifié <strong>${opSalarie.name} (${opSalarie.rank})</strong> peut pré-remplir le dimensionnement strictement conforme aux grilles RNMSC.</span>
+                            </div>
+                          </div>
+                          <button onclick="window.game.applyOpSalarieRecommendation('${d.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer">
+                            <i data-lucide="wand-2" class="w-3.5 h-3.5"></i>
+                            <span>Appliquer Recommandation Conforme</span>
+                          </button>
+                        </div>
+                      `;
+                    } else {
+                      return `
+                        <div class="p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-[11px] flex items-center gap-2">
+                          <span>🔒</span>
+                          <span><strong>Auto-remplissage conforme verrouillé :</strong> Aucun salarié permanent qualifié (CE/CP/CD) n'est affecté au Pôle Opérationnel. Vous devez dimensionner vous-même le dispositif.</span>
+                        </div>
+                      `;
+                    }
+                  })()}
+
+                  <!-- 3. PARAMÉTRAGE MANUEL PAR LE JOUEUR -->
+                  <div class="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3.5">
+                    <div class="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center justify-between">
+                      <span>🛠️ Moyens Engagés (Saisie Manuelle)</span>
+                      <span class="text-[10px] text-slate-400 font-bold lowercase">Paramétré par la direction</span>
+                    </div>
+
+                    <!-- Type de Dispositif -->
+                    <div>
+                      <label class="block text-[11px] font-bold text-slate-600 mb-1">Type de dispositif (RNMSC) :</label>
+                      <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
+                        <button onclick="window.game.updateDevisScale('${d.id}', 'PAPS')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'PAPS' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
+                          PAPS (2 sec.)
+                        </button>
+                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-PE')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-PE' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
+                          DPS-PE (3-6 sec.)
+                        </button>
+                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-ME')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-ME' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
+                          DPS-ME (7-12 sec.)
+                        </button>
+                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-GE')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-GE' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
+                          DPS-GE (13+ sec.)
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Moyens humains : Secouristes (Semaine / Week-end si multi-jours), CE, CP -->
+                    ${d.isMultiDays ? `
+                      <div class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
+                        <div class="flex items-center justify-between text-xs font-black text-indigo-950">
+                          <span>📅 Poste Étalé sur un Mois (${d.durationDays || 28} jours de présence)</span>
+                          <span class="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-200">Dimensionnement Différencié</span>
+                        </div>
+                        <p class="text-[11px] text-indigo-800 leading-tight">
+                          L'affluence varie fortement entre semaine et week-end. Ajustez les effectifs par vacation pour optimiser votre rentabilité et mobiliser vos bénévoles au bon moment.
+                        </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          <!-- Semaine : Lundi au Vendredi -->
+                          <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
+                            <div class="flex items-center justify-between mb-1">
+                              <label class="text-[11px] font-bold text-slate-700">💼 Semaine (Lun - Ven) :</label>
+                              <span class="text-[10px] font-extrabold text-slate-500">${d.weekdayDaysCount || 20} j • ${d.weekdayHours || 6}h/j</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                              <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                                <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekday !== undefined && d.configuredVolunteersWeekday !== null) ? d.configuredVolunteersWeekday : Math.max(2, Math.round((d.requiredVolunteers || 4) * 0.5))}" onchange="window.game.setDevisWeekdayVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
+                                <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
+                              </div>
+                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
+                            </div>
+                          </div>
+
+                          <!-- Week-end : Samedi et Dimanche -->
+                          <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
+                            <div class="flex items-center justify-between mb-1">
+                              <label class="text-[11px] font-bold text-slate-700">🎉 Week-end (Sam - Dim) :</label>
+                              <span class="text-[10px] font-extrabold text-amber-600 font-bold">${d.weekendDaysCount || 8} j • ${d.weekendHours || 10}h/j</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                              <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                                <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekend !== undefined && d.configuredVolunteersWeekend !== null) ? d.configuredVolunteersWeekend : (d.requiredVolunteers || 4)}" onchange="window.game.setDevisWeekendVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
+                                <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
+                              </div>
+                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- Encadrement CE & CP pour multi-jours -->
+                        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-indigo-100">
+                          <div class="p-2 bg-white rounded-xl border border-slate-200">
+                            <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
+                            <div class="flex items-center gap-1">
+                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">-</button>
+                              <input type="number" min="0" max="99" value="${d.configuredCE || 0}" onchange="window.game.setDevisCE('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="flex-1 min-w-0 text-center text-xs font-black text-amber-600 bg-slate-50 border border-slate-300 rounded py-0.5 focus:bg-white focus:outline-none" />
+                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">+</button>
+                            </div>
+                          </div>
+                          <div class="p-2 bg-white rounded-xl border border-slate-200">
+                            <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
+                            <div class="flex items-center gap-1">
+                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">-</button>
+                              <input type="number" min="0" max="50" value="${d.configuredCP || 0}" onchange="window.game.setDevisCP('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="flex-1 min-w-0 text-center text-xs font-black text-indigo-600 bg-slate-50 border border-slate-300 rounded py-0.5 focus:bg-white focus:outline-none" />
+                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">+</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ` : `
+                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                        <!-- Secouristes / Équipiers -->
+                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
+                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Secouristes Totaux :</label>
+                          <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="window.game.adjustDevisVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                              <input type="number" min="0" max="999" value="${d.configuredVolunteers || 0}" onchange="window.game.setDevisVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
+                            </div>
+                            <button type="button" onclick="window.game.adjustDevisVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
+                          </div>
+                        </div>
+
+                        <!-- Chefs d'Équipe (CE) -->
+                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
+                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
+                          <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                              <input type="number" min="0" max="99" value="${d.configuredCE || 0}" onchange="window.game.setDevisCE('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
+                            </div>
+                            <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
+                          </div>
+                        </div>
+
+                        <!-- Chefs de Poste (CP) -->
+                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
+                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
+                          <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                              <input type="number" min="0" max="50" value="${d.configuredCP || 0}" onchange="window.game.setDevisCP('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-indigo-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
+                            </div>
+                            <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
+                          </div>
+                        </div>
+                      </div>
+                    `}
+
+                    <!-- Moyens matériels & vecteurs : Véhicules et Lots -->
+                    <div class="space-y-3 pt-1">
+                      <!-- Véhicules proposés au client (Compteurs par type) -->
+                      <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                          <label class="block text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                            Véhicules proposés au devis (Cochez les types puis réglez le nombre) :
+                          </label>
+                          <span class="text-[10px] font-black text-pc-blue dark:text-sky-300 bg-blue-50 dark:bg-sky-950/60 px-2.5 py-0.5 rounded-lg border border-blue-200 dark:border-sky-500/40 self-start sm:self-auto">
+                            Moyens : <strong>${this.formatDevisVehiclesSummary(d)}</strong>
+                          </span>
+                        </div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400">
+                          Cochez les catégories de véhicules souhaitées pour le dispositif puis ajustez le nombre exact avec les compteurs <strong>-</strong> et <strong>+</strong> ou saisissez-le directement au clavier.
+                        </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-1">
+                          ${[
+                            { type: 'VPSP', name: 'VPSP (Secours à Personnes)', funcBadge: 'PS', emoji: '🚑' },
+                            { type: 'VTU', name: 'VTU (Logistique & Appui)', funcBadge: 'TU / LOG', emoji: '🚚' },
+                            { type: 'VL', name: 'VL (Liaison & Commandement)', funcBadge: 'LIAISON / CMD', emoji: '🚗' },
+                            { type: 'VTP', name: 'VTP (Transport de Personnel)', funcBadge: 'TP', emoji: '🚐' },
+                            { type: 'VLHR', name: 'Véhicule Hors Route VLHR', funcBadge: 'HR / 4x4', emoji: '🚙' },
+                            { type: 'MOTO', name: 'Moto Secours MPS', funcBadge: 'PS', emoji: '🏍️' },
+                            { type: 'VELO', name: 'Patrouille Vélo / VTT', funcBadge: 'PS', emoji: '🚲' },
+                            { type: 'QUAD', name: 'Quad Tout-Terrain', funcBadge: 'HR / PS', emoji: '🚜' },
+                            { type: 'DRONE', name: 'Télépilote Drone', funcBadge: 'RECO', emoji: '🛸' }
+                          ].map(vItem => {
+                            const counts = this.ensureDevisVehicleCounts(d);
+                            const count = counts[vItem.type] || 0;
+                            const isChecked = count > 0;
+                            return `
+                              <div class="p-2 rounded-xl border transition flex items-center justify-between gap-1.5 ${isChecked ? 'bg-indigo-50/80 dark:bg-indigo-950/60 border-pc-blue dark:border-indigo-500 shadow-2xs ring-1 ring-pc-blue/30' : 'bg-slate-50/70 dark:bg-slate-700/60 border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'}">
+                                <label class="flex items-center gap-2 cursor-pointer select-none flex-1 min-w-0">
+                                  <input 
+                                    type="checkbox" 
+                                    ${isChecked ? 'checked' : ''} 
+                                    onchange="window.game.toggleDevisVehicleType('${d.id}', '${vItem.type}')" 
+                                    class="w-4 h-4 rounded text-pc-blue accent-pc-blue cursor-pointer shrink-0"
+                                  />
+                                  <span class="text-xs font-extrabold text-slate-800 dark:text-slate-100 truncate">${vItem.emoji} ${vItem.name}</span>
+                                  ${vItem.funcBadge ? `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-mono font-black bg-slate-200/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 shrink-0">${vItem.funcBadge}</span>` : ''}
+                                </label>
+                                ${isChecked ? `
+                                  <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-slate-800 px-1 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-700 shadow-2xs">
+                                    <button 
+                                      type="button" 
+                                      onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', -1)" 
+                                      class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">-</button>
+                                    <input 
+                                      type="number" 
+                                      min="0" 
+                                      max="50" 
+                                      value="${count}" 
+                                      onchange="window.game.setDevisVehicleCount('${d.id}', '${vItem.type}', this.value)" 
+                                      onkeydown="if(event.key==='Enter')this.blur()" 
+                                      class="w-9 text-center font-black text-xs text-pc-blue dark:text-sky-300 mono-num bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded py-0.5 px-0.5 focus:bg-white dark:focus:bg-slate-800 focus:outline-none" 
+                                    />
+                                    <button 
+                                      type="button" 
+                                      onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', 1)" 
+                                      class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">+</button>
+                                  </div>
+                                ` : ''}
+                              </div>
+                            `;
+                          }).join('')}
+                        </div>
+                      </div>
+
+                      <!-- Lots matériels engagés -->
+                      <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2">
+                        <label class="block text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">Lots matériels engagés :</label>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
+                          ${[
+                            { id: 'lot_a', name: 'Lot A (Secours/PMA)' },
+                            { id: 'lot_b', name: 'Lot B (Trauma)' },
+                            { id: 'dae', name: 'DAE & Oxygène' },
+                            { id: 'tente', name: 'Tente / Abri PMA' }
+                          ].map(lot => {
+                            const isSelected = (d.configuredLots || []).includes(lot.id);
+                            return `
+                              <button type="button" onclick="window.game.toggleDevisLot('${d.id}', '${lot.id}')" class="p-2 rounded-xl text-xs font-bold transition text-center cursor-pointer border ${isSelected ? 'bg-amber-600 text-white border-amber-600 shadow-xs' : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'}">
+                                ${isSelected ? '✓ ' : ''}${lot.name}
+                              </button>
+                            `;
+                          }).join('')}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 4. SAISIE DU DEVIS / TARIF FACTURÉ & ACTIONS -->
+                  ${(() => {
+                    const dynBareme = this.calculateDynamicBareme(d);
+                    if (d.proposedPrice === undefined || d.proposedPrice === null) {
+                      d.proposedPrice = dynBareme.totalBareme;
+                    }
+                    return `
+                      <div class="p-4 rounded-xl glass-card space-y-3">
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-3">
+                          <div class="flex-1">
+                            <div class="flex items-center justify-between mb-1">
+                              <label class="block text-xs font-extrabold text-slate-800">Votre Devis / Tarif Facturé à l'Organisateur (€) :</label>
+                              <span class="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                Calcul Automatique Réalisé
+                              </span>
+                            </div>
+                            <div class="relative rounded-xl shadow-sm">
+                              <input 
+                                type="number" 
+                                id="devis-price-input-${d.id}" 
+                                value="${d.proposedPrice !== undefined && d.proposedPrice !== null ? d.proposedPrice : dynBareme.totalBareme}" 
+                                placeholder="Tarif proposé en €"
+                                min="50" 
+                                max="100000"
+                                step="10"
+                                oninput="window.game.setDevisPriceManual('${d.id}', this.value)"
+                                class="w-full px-3.5 py-2.5 rounded-xl glass-input font-mono font-extrabold text-base text-slate-900 focus:ring-2 focus:ring-pc-blue"
+                              />
+                              <span class="absolute right-3.5 top-2.5 text-slate-400 font-bold">€</span>
+                            </div>
+                            <div class="flex items-center justify-between text-[11px] text-slate-500 mt-1.5 flex-wrap gap-1">
+                              <span>Total calculé : <strong class="text-slate-800">${dynBareme.totalBareme.toLocaleString('fr-FR')} €</strong></span>
+                              <span class="text-[10px] text-slate-400 font-medium">Personnel : ${dynBareme.personnelCost.toLocaleString('fr-FR')} € • Véhicules : ${dynBareme.vehicleCost.toLocaleString('fr-FR')} € • Matériel/Frais : ${(dynBareme.matCost + dynBareme.adminCost).toLocaleString('fr-FR')} €</span>
+                            </div>
+                          </div>
+
+                          <div class="flex items-center gap-2 pt-1 flex-wrap">
+                            <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="px-4 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95 transition flex items-center gap-1.5 cursor-pointer" title="Bloquer la date comme option et sonder les bénévoles avant de signer">
+                              <span>⏳ Mettre en Prévi</span>
+                            </button>
+                            <button onclick="window.game.submitCustomDevis('${d.id}')" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center gap-1.5 cursor-pointer">
+                              <i data-lucide="send" class="w-4 h-4"></i>
+                              <span>Soumettre l'Offre</span>
+                            </button>
+                            <button onclick="window.game.refuseDevis('${d.id}')" class="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 transition cursor-pointer" title="Refuser cette demande de devis">
+                              <span>✕ Refuser</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                  })()}
+                </div>
+              `;
+            }).join('')}
+          </div>
+
+          <!-- Section Historique des Dernières Décisions Organisateur -->
+          ${treatedDevis.length > 0 ? `
+            <div class="space-y-3 pt-2 border-t border-slate-200/80">
+              <div class="flex items-center justify-between">
+                <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <i data-lucide="archive" class="w-4 h-4 text-slate-500"></i>
+                  Historique Récent des Conventions & Décisions (${treatedDevis.length})
+                </h4>
+                <span class="text-[10px] text-slate-400 font-bold">5 derniers dossiers</span>
+              </div>
+              <div class="space-y-2">
+                ${treatedDevis.slice(-5).reverse().map(d => {
+                  let badge = '';
+                  let motif = '';
+                  if (d.status === 'signed') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Convention Signée</span>';
+                    motif = `Offre de ${d.proposedPrice || 250} € retenue face aux concurrents ! Dispositif ajouté à votre calendrier.`;
+                  } else if (d.status === 'declined') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300">✕ Décliné par l’Antenne</span>';
+                    motif = `Vous avez refusé la prise en charge de cet événement.`;
+                  } else if (d.status === 'rejected_competition') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">Offre Non Retenue</span>';
+                    motif = `L’organisateur a préféré retenir une association concurrente pour cette édition.`;
+                  } else if (d.status === 'rejected_security') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-red-100 text-red-800 border border-red-300">Rejet RNMSC</span>';
+                    motif = `Sous-dimensionnement sécuritaire refusé par la commission de sécurité.`;
+                  } else if (d.status === 'rejected_budget') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-800 border border-orange-300">Hors Budget</span>';
+                    motif = `Tarif ou dimensionnement jugé disproportionné par rapport au rassemblement.`;
+                  } else if (d.status === 'expired') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300">Expiré</span>';
+                    motif = `Délai de réponse dépassé sans soumission de devis de votre part.`;
+                  } else if (d.status === 'lost_option') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300">Option Perdue (Concurrence)</span>';
+                    motif = `L'organisateur a finalement validé avec une association concurrente pendant que le dossier restait en prévisionnel.`;
+                  }
+
+                  return `
+                    <div class="p-3 rounded-xl glass-card flex items-center justify-between text-xs border border-slate-200/80">
+                      <div>
+                        <div class="font-extrabold text-slate-800 flex items-center gap-2">
+                          <span>${d.eventName}</span>
+                          ${badge}
+                        </div>
+                        <p class="text-[11px] text-slate-500 mt-0.5">${motif}</p>
+                      </div>
+                      <div class="text-right text-[11px] font-mono font-bold text-slate-700">
+                        ${d.proposedPrice ? d.proposedPrice + ' €' : ''}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+            </div>
+
+            <!-- Colonne Droite Fixe / Sticky : Calculateur du Ratio Intervenants Secouristes (RIS) (5 colonnes sur 12) -->
+            <div class="lg:col-span-5 xl:col-span-5 lg:sticky lg:top-0 space-y-3 z-10 min-w-0">
+              ${window.ProtecRNMSC ? window.ProtecRNMSC.renderRNMSCSimulatorCardHTML('devis-rnmsc') : ''}
+            </div>
+          </div>
+          `}
+        </div>
+      `;
   }
 
   // --- POPUP MODULES DOCK ---
@@ -17400,6 +19375,9 @@ class ProtecGame {
     if (moduleKey === 'evenements') {
       this.activeAllianceTab = 'evenements';
       moduleKey = 'alliance';
+    } else if (moduleKey === 'devis') {
+      this.activePlanningTab = 'devis';
+      moduleKey = 'planning';
     } else if (moduleKey && aliases[moduleKey]) {
       moduleKey = aliases[moduleKey];
     }
@@ -17897,14 +19875,29 @@ class ProtecGame {
         setTimeout(() => this.renderChatMessages(), 50);
       }
     } else if (moduleKey === 'planning') {
-      title.textContent = 'Planning Opérationnel Multi-Pôles';
-      subtitle.textContent = 'Dispositifs prévisionnels (DPS), Formations, Maraudes sociales et Devis';
-      icon.setAttribute('data-lucide', 'calendar');
+      const currentTab = this.activePlanningTab || 'calendar';
+
+      if (currentTab === 'devis') {
+        title.textContent = 'Postes de Secours (DPS) — Devis & Dimensionnement';
+        subtitle.textContent = 'Sous-section DPS : Demandes reçues, calcul des tarifs réglementaires et négociation organisateurs';
+        icon.setAttribute('data-lucide', 'file-check');
+      } else if (currentTab === 'contrats') {
+        title.textContent = 'Postes de Secours (DPS) — Contrats Annuels';
+        subtitle.textContent = 'Sous-section DPS : Conventions récurrentes, accords-cadres et programmations pluriannuelles';
+        icon.setAttribute('data-lucide', 'repeat');
+      } else {
+        title.textContent = 'Postes de Secours (DPS) — Planning & Dispositifs';
+        subtitle.textContent = 'Dispositifs prévisionnels de secours, calendrier des postes et programmation multi-pôles';
+        icon.setAttribute('data-lucide', 'calendar');
+      }
 
       // Régulariser immédiatement tout devis dont la date serait passée
       this.cleanPastDevis();
 
-      const currentTab = this.activePlanningTab || 'calendar';
+      const pendingDevisCount = (this.devis || []).filter(d => d.status === 'pending').length;
+      const inReviewDevisCount = (this.devis || []).filter(d => d.status === 'sent').length;
+      const previsionnelDevisCount = (this.devis || []).filter(d => d.status === 'previsionnel').length;
+      const activeContractsCount = (this.annualContracts || []).filter(c => c.signed).length;
       
       const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
       if (this.calendarViewingMonth === undefined || this.calendarViewingMonth === null) {
@@ -17961,7 +19954,7 @@ class ProtecGame {
 
       body.innerHTML = `
         <div class="space-y-4">
-          <!-- Barre d'onglets Vue Calendrier / Vue Liste / Raccourcis Pôles -->
+          <!-- Barre d'onglets principale du Pôle DPS : Calendrier / Liste / Sous-section Devis / Contrats -->
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
             <div class="flex items-center gap-1.5 flex-wrap">
               <button onclick="window.game.setPlanningTab('calendar')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'calendar' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}">
@@ -17972,11 +19965,17 @@ class ProtecGame {
                 <i data-lucide="list" class="w-4 h-4"></i>
                 Vue Liste (${activeEvents.length})
               </button>
-              <div class="h-5 w-px bg-slate-300 mx-1.5 self-center"></div>
-              <button onclick="window.game.openModule('devis')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Gestion des Devis DPS">
-                <i data-lucide="file-check" class="w-4 h-4 text-amber-500"></i>
-                Devis (${poleCounts.devis})
+              <button onclick="window.game.setPlanningTab('devis')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'devis' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}" title="Sous-section Devis DPS & Dimensionnement">
+                <i data-lucide="file-check" class="w-4 h-4 ${currentTab === 'devis' ? 'text-white' : 'text-amber-500'}"></i>
+                <span>Devis DPS</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-black ${currentTab === 'devis' ? 'bg-white text-amber-900' : 'bg-amber-100 text-amber-900'}">${pendingDevisCount + inReviewDevisCount + previsionnelDevisCount}</span>
               </button>
+              <button onclick="window.game.setPlanningTab('contrats')" class="px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${currentTab === 'contrats' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 cursor-pointer'}" title="Contrats Annuels Réguliers">
+                <i data-lucide="repeat" class="w-4 h-4 ${currentTab === 'contrats' ? 'text-white' : 'text-indigo-500'}"></i>
+                <span>Contrats Annuels</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-black ${currentTab === 'contrats' ? 'bg-white text-indigo-900' : 'bg-indigo-100 text-indigo-900'}">${activeContractsCount}</span>
+              </button>
+              <div class="h-5 w-px bg-slate-300 mx-1.5 self-center"></div>
               <button onclick="window.game.openModule('formation')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Formations">
                 <i data-lucide="graduation-cap" class="w-4 h-4 text-emerald-600"></i>
                 Formations (${poleCounts.formations})
@@ -18064,7 +20063,24 @@ class ProtecGame {
           <!-- Alerte Prioritaire Demande Extra-Départementale -->
           ${this.renderExtraDeptRenfortsBlockHTML(true)}
 
-          ${currentTab === 'calendar' ? `
+          ${currentTab === 'devis' ? `
+            <!-- SOUS-SECTION DEVIS & DIMENSIONNEMENT DPS -->
+            ${this.renderDevisContentHTML()}
+          ` : currentTab === 'contrats' ? `
+            <!-- SOUS-SECTION CONTRATS ANNUELS DPS -->
+            <div class="space-y-4">
+              <div class="p-4 rounded-2xl bg-indigo-50/90 border border-indigo-200 text-xs text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-xl">🤝</span>
+                  <div>
+                    <h4 class="font-black text-indigo-950">Accords-cadres & Partenariats Pluriannuels (DPS Réguliers)</h4>
+                    <p class="text-[11px] text-indigo-700">Conventions régulières avec clubs sportifs, salles de spectacle et collectivités garantissant des rentrées financières stables.</p>
+                  </div>
+                </div>
+              </div>
+              ${window.ProtecContratsAnnuels ? window.ProtecContratsAnnuels.renderContractsHTML(this) : '<p class="text-xs text-slate-500 p-4">Chargement des contrats annuels...</p>'}
+            </div>
+          ` : currentTab === 'calendar' ? `
             <!-- VUE CALENDRIER -->
             <div class="space-y-4">
               <!-- Grille principale : Calendrier à gauche (lg:col-span-7) + Détails journée à droite (lg:col-span-5) -->
@@ -18681,756 +20697,17 @@ class ProtecGame {
           `}
         </div>
       `;
-    } else if (moduleKey === 'devis') {
-      title.textContent = 'Gestion des Devis & Dimensionnement DPS';
-      subtitle.textContent = 'Configurez votre type de DPS, secouristes et véhicules. L’organisateur évalue votre offre face à la concurrence.';
-      icon.setAttribute('data-lucide', 'file-check');
-
-      // Régulariser immédiatement tout devis dont la date serait passée
-      this.cleanPastDevis();
-
-      const isAntennaVisible = this.resources.campaigns.social || this.resources.campaigns.posters || (this.stats?.dpsCompleted > 0) || (this.resources.reputationScore >= 60);
-      const pendingDevis = this.devis.filter(d => d.status === 'pending');
-      const previsionnelDevis = this.devis.filter(d => d.status === 'previsionnel');
-      const inReviewDevis = this.devis.filter(d => d.status === 'sent');
-      const treatedDevis = this.devis.filter(d => ['signed', 'rejected_competition', 'rejected_security', 'rejected_budget', 'expired', 'declined', 'lost_option'].includes(d.status));
-      const activeContractsCount = (this.annualContracts || []).filter(c => c.signed).length;
-      const activeTab = this.devisTab || 'ponctuels';
-
-      body.innerHTML = `
-        <div class="space-y-6">
-          <!-- Barre de bascule DPS : Planning vs Devis Ponctuels vs Contrats Annuels -->
-          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-            <div class="flex items-center gap-2">
-              <button onclick="window.game.openModule('planning')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 cursor-pointer">
-                <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
-                Vue Calendrier DPS
-              </button>
-              <button onclick="window.game.devisTab = 'ponctuels'; window.game.openModule('devis', true);" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${activeTab === 'ponctuels' ? 'bg-amber-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'} cursor-pointer">
-                <i data-lucide="file-check" class="w-4 h-4"></i>
-                Devis & Prévisionnels (${pendingDevis.length + previsionnelDevis.length + inReviewDevis.length})
-              </button>
-              <button onclick="window.game.devisTab = 'contrats'; window.game.openModule('devis', true);" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${activeTab === 'contrats' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'} cursor-pointer">
-                <i data-lucide="repeat" class="w-4 h-4"></i>
-                Contrats Annuels Réguliers (${activeContractsCount})
-              </button>
-            </div>
-            <div class="text-xs text-slate-600 font-bold flex items-center gap-2">
-              ${activeTab === 'ponctuels' ? `
-                <span><strong>${pendingDevis.length}</strong> nouveau(x)</span>
-                ${previsionnelDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 font-extrabold">⏳ ${previsionnelDevis.length} prévisionnel(s)</span>` : ''}
-                ${inReviewDevis.length > 0 ? `<span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-300 font-extrabold">⚖️ ${inReviewDevis.length} délibération</span>` : ''}
-              ` : `
-                <span class="px-2.5 py-0.5 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-300 font-black">Accords-cadres & Partenariats pluriannuels</span>
-              `}
-            </div>
-          </div>
-
-          ${activeTab === 'contrats' ? `
-            <div class="space-y-4">
-              ${window.ProtecContratsAnnuels ? window.ProtecContratsAnnuels.renderContractsHTML(this) : '<p class="text-xs text-slate-500 p-4">Chargement des contrats annuels...</p>'}
-            </div>
-          ` : `
-
-          <div class="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-xs text-amber-950 space-y-2 shadow-xs">
-            <div class="flex items-center justify-between">
-              <span class="font-extrabold flex items-center gap-1.5 text-amber-950">
-                <i data-lucide="scale" class="w-4 h-4 text-amber-600"></i>
-                Barème Réglementaire & Négociation DPS (RNMSC)
-              </span>
-              <span class="text-[11px] font-bold text-amber-900 bg-amber-200/90 px-2 py-0.5 rounded-lg border border-amber-300">Mise en Concurrence Active</span>
-            </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-slate-800">
-              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Vacation secouriste : <strong class="text-amber-950 font-black">18,00 €/h</strong></div>
-              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">VPSP : <strong class="text-amber-950 font-black">110,00 €</strong></div>
-              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Matériel & DSA : <strong class="text-amber-950 font-black">35 à 120 €</strong></div>
-              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Frais convention : <strong class="text-amber-950 font-black">40,00 €</strong></div>
-            </div>
-            <p class="text-[11px] text-amber-900 font-medium italic">
-              <strong>💡 Nouveauté Gestion :</strong> Vous pouvez <strong>mettre en prévisionnel</strong> un événement pour bloquer la date et sonder vos bénévoles avant de vous engager. En cas de délai court (urgence J-2 à J-5), les organisateurs acceptent des tarifs supérieurs. Vous pouvez également <strong>décliner</strong> poliment une demande sans pénalité.
-            </p>
-          </div>
-
-          <!-- Grille Officielle d'Évaluation des Risques RNMSC dans la page Devis -->
-          ${window.ProtecRNMSC ? window.ProtecRNMSC.renderRNMSCSimulatorCardHTML('devis-rnmsc') : ''}
-
-          <!-- Section Devis en Cours d'Étude & Délibération (Temps Réel) -->
-          ${inReviewDevis.length > 0 ? `
-            <div class="space-y-3 p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/90 shadow-sm">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <span class="relative flex h-3 w-3">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-600"></span>
-                  </span>
-                  <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wider">Devis en Cours d’Étude & Délibération (${inReviewDevis.length})</h4>
-                </div>
-                <span class="text-[10px] font-extrabold text-indigo-700 bg-indigo-100/90 px-2.5 py-0.5 rounded-lg border border-indigo-200">
-                  Instruction & Sécurité RNMSC
-                </span>
-              </div>
-              <p class="text-[11px] text-indigo-800 leading-relaxed">
-                Les organisateurs délibèrent et consultent la commission de sécurité (RNMSC) tout en comparant votre proposition aux associations concurrentes agréées (Croix-Rouge, etc.). Le verdict sera rendu dès clôture de l’instruction.
-              </p>
-
-              <div class="space-y-3 pt-1">
-                ${inReviewDevis.map(d => {
-                  return `
-                    <div class="p-4 rounded-xl bg-white border border-indigo-100 shadow-sm space-y-3" id="devis-card-review-${d.id}">
-                      <div class="flex items-start justify-between gap-3">
-                        <div>
-                          <div class="flex items-center gap-2">
-                            <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white">${d.eventName}</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">Offre transmise : ${d.proposedPrice || 250} €</span>
-                          </div>
-                          <p class="text-xs text-slate-700 mt-1">
-                            Dispositif proposé : <strong>${d.configuredScale || d.scale || 'DPS-PE'}</strong> (${d.configuredVolunteers || 4} secouristes • Moyens : <strong>${this.formatDevisVehiclesSummary(d)}</strong>)
-                          </p>
-                          <p class="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                            <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
-                            <span>${d.address || (d.lat && d.lng ? `Point GPS: ${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}` : 'Adresse sur site')}</span>
-                          </p>
-                        </div>
-                        <div class="text-right flex-shrink-0">
-                          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs font-black text-indigo-800">
-                            <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                            En cours d'étude
-                          </span>
-                        </div>
-                      </div>
-
-                      <!-- Mention sobre d'instruction sans compte à rebours visible -->
-                      <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center justify-between gap-2">
-                        <span class="flex items-center gap-1.5">
-                          <i data-lucide="clock" class="w-3.5 h-3.5 text-indigo-600"></i>
-                          <span>Dossier transmis. L'organisateur examine les offres reçues des associations concurrentes.</span>
-                        </span>
-                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide shrink-0">Instruction</span>
-                      </div>
-
-                      <!-- Bouton de relance téléphonique organisateur -->
-                      <div class="flex items-center justify-between pt-1 border-t border-indigo-50 text-[11px]">
-                        <span class="text-indigo-800 font-medium">L'organisateur étudie les devis reçus des AASC concurrentes.</span>
-                        ${d.relanceDone ? `
-                          <span class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold border border-emerald-200 text-[10px] flex items-center gap-1">
-                            ✓ Relancé par téléphone (Délai raccourci)
-                          </span>
-                        ` : `
-                          <button onclick="window.game.relancerOrganisateurDevis('${d.id}')" class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] shadow-sm transition flex items-center gap-1.5" title="Téléphoner à l'organisateur pour raccourcir son temps de délibération">
-                            <span>📞 Relancer l'organisateur</span>
-                          </button>
-                        `}
-                      </div>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-            </div>
-          ` : ''}
-
-          <!-- SECTION DES DEVIS EN PRÉVISIONNEL (OPTION RÉSERVÉE PAR LE JOUEUR) -->
-          ${previsionnelDevis.length > 0 ? `
-            <div class="space-y-3 p-4 rounded-2xl bg-amber-50/80 border-2 border-amber-300 shadow-sm">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <span class="text-base">⏳</span>
-                  <h4 class="text-xs font-black text-amber-950 uppercase tracking-wider">Dispositifs en Prévisionnel (${previsionnelDevis.length})</h4>
-                </div>
-                <span class="text-[10px] font-extrabold text-amber-900 bg-amber-200/80 px-2.5 py-0.5 rounded-lg border border-amber-400/40">
-                  Option Réservée • Date Bloquée à l'Agenda
-                </span>
-              </div>
-              <p class="text-[11px] text-amber-800 leading-relaxed">
-                Ces événements sont actuellement réservés à titre d'option. Sondez vos bénévoles pour vous assurer que l'effectif sera réuni avant de confirmer la convention officielle avec l'organisateur.
-              </p>
-
-              <div class="space-y-4 pt-1">
-                ${previsionnelDevis.map(d => {
-                  const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
-                  const confirmedVols = d.previsionnelVolunteers || [];
-                  const isFull = confirmedVols.length >= reqVols;
-                  const dateStr = this.formatFullDate(d.eventDate);
-                  const dynamicBareme = this.calculateDynamicBareme(d);
-                  const responses = d.previsionnelResponses || {};
-                  const responsesList = Object.values(responses);
-                  const dispoCount = responsesList.filter(r => r.status === 'dispo').length;
-                  const indispoCount = responsesList.filter(r => r.status === 'indispo').length;
-                  const pendingCount = responsesList.filter(r => r.status === 'pending').length;
-
-                  return `
-                    <div class="p-4 rounded-2xl bg-white border border-amber-300 shadow-sm space-y-3" id="devis-previ-${d.id}">
-                      <div class="flex items-start justify-between">
-                        <div>
-                          <div class="flex items-center gap-2 flex-wrap">
-                            <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white">${d.eventName}</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">⏳ En Prévisionnel</span>
-                            ${d.sollicitationSent ? `
-                              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-pc-blue border border-blue-300">
-                                Statut : Sollicité (${d.relancesCount || 0} relance${(d.relancesCount || 0) > 1 ? 's' : ''})
-                              </span>
-                            ` : `
-                              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">Statut : Non sollicité</span>
-                            `}
-                            ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
-                          </div>
-                          <h4 class="text-sm font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
-                          <p class="text-xs text-slate-600">
-                            Date : <strong>${dateStr} (${d.eventDate?.dayName || 'Date'})</strong> • Durée : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong> • Public : <strong>${d.publicCount}</strong>
-                          </p>
-                          <p class="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
-                            <span>${d.address || 'Adresse sur site'}</span>
-                          </p>
-                        </div>
-                        <div class="text-right">
-                          <span class="text-[10px] text-slate-400 font-bold uppercase block">Barème Prévu</span>
-                          <span class="text-sm font-black mono-num text-slate-800">${d.proposedPrice || dynamicBareme.totalBareme} €</span>
-                        </div>
-                      </div>
-
-                      <!-- Encart Risque de Perte d'Option (Concurrence) -->
-                      <div class="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                          <span class="text-base flex-shrink-0">⚠️</span>
-                          <div>
-                            <span class="font-extrabold text-amber-950 block">Option Non Garantie face à la concurrence</span>
-                            <span class="text-[11px] text-amber-800">L'organisateur consulte en parallèle d'autres associations. Plus vous tardez à confirmer, plus il risque de signer ailleurs.</span>
-                          </div>
-                        </div>
-                        <div class="text-right flex-shrink-0 pl-2">
-                          <span class="text-[10px] uppercase font-bold text-amber-800 block">Risque Perte</span>
-                          <span class="px-2.5 py-0.5 rounded-lg bg-amber-600 text-white font-black text-xs shadow-xs">
-                            ${Math.round((d.riskRate || 0.15) * 100)} %
-                          </span>
-                        </div>
-                      </div>
-
-                      <!-- Sondage Bénévoles -->
-                      <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                        <div class="flex items-center justify-between text-xs font-bold">
-                          <span class="text-slate-700">Effectif confirmé par sondage :</span>
-                          <span class="${isFull ? 'text-emerald-700 font-black' : 'text-amber-800 font-black'}">
-                            ${confirmedVols.length} / ${reqVols} secouristes requis
-                          </span>
-                        </div>
-                        <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                          <div class="h-full ${isFull ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full transition-all" style="width: ${Math.min(100, (confirmedVols.length / reqVols) * 100)}%"></div>
-                        </div>
-
-                        ${responsesList.length > 0 ? `
-                          <div class="flex items-center gap-3 text-[11px] text-slate-600 pt-1">
-                            <span class="text-emerald-700 font-bold">✓ ${dispoCount} disponible(s)</span>
-                            <span class="text-slate-500">✕ ${indispoCount} indisponible(s)</span>
-                            ${pendingCount > 0 ? `<span class="text-amber-700 font-bold animate-pulse">⏳ ${pendingCount} en attente...</span>` : ''}
-                          </div>
-                        ` : ''}
-                      </div>
-
-                      <!-- Actions du Prévisionnel -->
-                      <div class="pt-1 flex flex-wrap items-center justify-between gap-2">
-                        <div class="flex items-center gap-2 flex-wrap">
-                          <button onclick="window.game.sonderDisponibilitesPrevisionnel('${d.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-white hover:bg-slate-100 text-pc-blue border border-pc-blue/30 shadow-xs flex items-center gap-1.5 transition cursor-pointer">
-                            <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
-                            ${d.sondageEnCours ? 'Sondage en cours...' : '📱 Sonder'}
-                          </button>
-                          <button onclick="window.game.manualRelancePrevisionnel('${d.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1.5 transition cursor-pointer" title="Envoyer une relance aux bénévoles">
-                            <i data-lucide="bell" class="w-3.5 h-3.5"></i>
-                            <span>Relancer (${d.relancesCount || 0})</span>
-                          </button>
-                          <button onclick="window.ProtecMessaging ? window.ProtecMessaging.openForMission('${d.id}', window.game) : null" class="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 border border-slate-200 transition flex items-center gap-1 cursor-pointer">
-                            <i data-lucide="message-square" class="w-3.5 h-3.5 text-pc-blue"></i>
-                            <span>Messagerie</span>
-                          </button>
-                        </div>
-
-                        <div class="flex items-center gap-2">
-                          <button onclick="window.game.submitCustomDevis('${d.id}')" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-emerald-500 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
-                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
-                            Valider la Présence & Envoyer Devis
-                          </button>
-                          <button onclick="window.game.refuseDevis('${d.id}')" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 transition cursor-pointer">
-                            ✕ Annuler l'Option
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-            </div>
-          ` : ''}
-
-          <!-- Demandes reçues avec configurateur personnalisé -->
-          <div class="space-y-4">
-            <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Demandes Reçues des Organisateurs (${pendingDevis.length})</h4>
-
-            ${!isAntennaVisible ? `
-              <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 text-xs flex items-start gap-3">
-                <i data-lucide="eye-off" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
-                <div class="space-y-1">
-                  <div class="font-black text-amber-950 uppercase tracking-wide">Antenne Invisible au Public</div>
-                  <p class="text-[11px] text-amber-800 leading-relaxed">
-                    Votre antenne vient d'ouvrir ou manque de notoriété. Sans <strong>campagne de communication</strong> active (Réseaux sociaux ou Affichage mairie) ou de premier <strong>DPS réalisé</strong>, les organisateurs d'événements ne connaissent pas votre existence et ne peuvent pas vous envoyer de demandes de devis.
-                  </p>
-                </div>
-              </div>
-            ` : ''}
-
-            ${pendingDevis.length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune nouvelle demande en attente. Vos dossiers en cours et options sont affichés ci-dessus.</p>' : ''}
-            
-            ${pendingDevis.map(d => {
-              // Règle opérationnelle : aucun pré-remplissage automatique des moyens ni du prix
-              if (d.configuredScale === undefined) d.configuredScale = '';
-              if (d.configuredVolunteers === undefined) d.configuredVolunteers = 0;
-              if (d.configuredCE === undefined) d.configuredCE = 0;
-              if (d.configuredCP === undefined) d.configuredCP = 0;
-              if (!Array.isArray(d.configuredVehicles)) d.configuredVehicles = [];
-              if (!Array.isArray(d.configuredLots)) d.configuredLots = [];
-
-              const dateStr = this.formatFullDate(d.eventDate);
-              const opSalarie = this.getQualifiedOpSalarie();
-
-              return `
-                <div class="p-5 rounded-2xl glass-card space-y-4 border border-slate-200/80 shadow-sm" id="devis-card-${d.id}">
-                  <!-- En-tête de la demande -->
-                  <div class="flex items-start justify-between">
-                    <div>
-                      <div class="flex items-center gap-2 flex-wrap">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${d.eventName}</span>
-                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3} (Annulation autre AASC)</span>` : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">📅 Planification J-${d.daysAhead || 30}</span>`}
-                      </div>
-                      <h4 class="text-base font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
-                      <p class="text-xs text-slate-500">
-                        Date : <strong>${dateStr} (${d.eventDate?.dayName || 'Date'})</strong> • Durée du poste : <strong>${this.formatHoursAndMinutes(d.durationHours)}</strong>
-                      </p>
-                      <p class="text-xs text-slate-700 font-semibold flex items-center gap-1 mt-1">
-                        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-pc-blue flex-shrink-0"></i>
-                        <span>Lieu : <strong class="text-slate-900">${d.address || (d.lat && d.lng ? `Point GPS: ${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}` : 'Adresse sur site')}</strong></span>
-                      </p>
-                    </div>
-                    <div class="text-right">
-                      <span class="text-[10px] text-slate-400 font-bold uppercase block">Dimensionnement</span>
-                      <span class="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-800 font-black text-xs border border-slate-200">Saisie Manuelle</span>
-                      ${d.risScore ? `<span class="block text-[10px] text-emerald-700 font-extrabold mt-1">RIS calculé : ${d.risScore}</span>` : ''}
-                    </div>
-                  </div>
-
-                  <!-- 1. DONNÉES DU RASSEMBLEMENT (DÉDUCTION DU RISQUE ET DES BESOINS) -->
-                  <div class="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-2">
-                    <div class="flex items-center justify-between">
-                      <span class="text-xs font-black text-sky-950 uppercase tracking-wide flex items-center gap-1.5">
-                        <i data-lucide="info" class="w-4 h-4 text-sky-600"></i>
-                        Données de l'Événement & Configuration du Site
-                      </span>
-                      <span class="text-[10px] font-bold text-sky-700 bg-white/80 px-2 py-0.5 rounded-lg border border-sky-200">
-                        Analyse Risque & Barème RNMSC
-                      </span>
-                    </div>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-700">
-                      <div class="p-2 bg-white rounded-xl border border-sky-100">
-                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Public attendu (N)</span>
-                        <strong class="text-slate-900">${this.formatRoundedPublic(d.publicCount)}</strong>
-                      </div>
-                      <div class="p-2 bg-white rounded-xl border border-sky-100">
-                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Configuration du site</span>
-                        <strong class="text-slate-900">${d.environment || (d.eventName.toLowerCase().includes('trail') || d.eventName.toLowerCase().includes('cross') ? 'Plein air / Relief' : 'Enclos / Salle')}</strong>
-                      </div>
-                      <div class="p-2 bg-white rounded-xl border border-sky-100">
-                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Accès Secours Extérieurs</span>
-                        <strong class="text-slate-900">${d.emergencyAccess || (d.isLastMinute ? '< 10 min (Centre-ville)' : '10 à 20 min')}</strong>
-                      </div>
-                      <div class="p-2 bg-white rounded-xl border border-sky-100">
-                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Durée du dispositif</span>
-                        <strong class="text-slate-900">${this.formatHoursAndMinutes(d.durationHours)}</strong>
-                      </div>
-                      <div class="p-2 bg-white rounded-xl border border-sky-100 col-span-2 sm:col-span-4 flex items-center justify-between">
-                        <div class="flex items-center gap-1.5">
-                          <span class="text-sm">${d.mealsProvidedByOrganizer ? '🍽️' : '🥪'}</span>
-                          <span class="text-slate-700 font-bold text-[10px]">Restauration secouristes :</span>
-                        </div>
-                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${d.mealsProvidedByOrganizer ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}">
-                          ${d.mealsProvidedByOrganizer ? 'Prise en charge par l’organisateur (0€ NDF)' : `À la charge antenne (Forfait NDF : ${this.mealAllowancePerVolunteer || 15}€/repas)`}
-                        </span>
-                      </div>
-                    </div>
-                    <p class="text-[10px] text-sky-800 italic">
-                      ℹ️ <strong>Règle Opérationnelle :</strong> Déduisez les moyens humains (secouristes, encadrement CE/CP), les vecteurs (VPSP/VL/VPS) et le matériel (Lot A/B) nécessaires selon le risque. Le barème réglementaire minimum reste masqué pour le joueur et sera audité à la validation.
-                    </p>
-                  </div>
-
-                  <!-- 2. OPTION AUTO-REMPLISSAGE OPÉRATIONNEL -->
-                  ${(() => {
-                    if (opSalarie) {
-                      return `
-                        <div class="p-3 rounded-2xl bg-indigo-50/90 border border-indigo-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-                          <div class="flex items-center gap-2">
-                            <span class="text-lg">✨</span>
-                            <div>
-                              <span class="text-xs font-black text-indigo-950 block">Recommandation Pôle Opérationnel Débloquée</span>
-                              <span class="text-[10px] text-indigo-700">Votre permanent qualifié <strong>${opSalarie.name} (${opSalarie.rank})</strong> peut pré-remplir le dimensionnement strictement conforme aux grilles RNMSC.</span>
-                            </div>
-                          </div>
-                          <button onclick="window.game.applyOpSalarieRecommendation('${d.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer">
-                            <i data-lucide="wand-2" class="w-3.5 h-3.5"></i>
-                            <span>Appliquer Recommandation Conforme</span>
-                          </button>
-                        </div>
-                      `;
-                    } else {
-                      return `
-                        <div class="p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-[11px] flex items-center gap-2">
-                          <span>🔒</span>
-                          <span><strong>Auto-remplissage conforme verrouillé :</strong> Aucun salarié permanent qualifié (CE/CP/CD) n'est affecté au Pôle Opérationnel. Vous devez dimensionner vous-même le dispositif.</span>
-                        </div>
-                      `;
-                    }
-                  })()}
-
-                  <!-- 3. PARAMÉTRAGE MANUEL PAR LE JOUEUR -->
-                  <div class="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3.5">
-                    <div class="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center justify-between">
-                      <span>🛠️ Moyens Engagés (Saisie Manuelle)</span>
-                      <span class="text-[10px] text-slate-400 font-bold lowercase">Paramétré par la direction</span>
-                    </div>
-
-                    <!-- Type de Dispositif -->
-                    <div>
-                      <label class="block text-[11px] font-bold text-slate-600 mb-1">Type de dispositif (RNMSC) :</label>
-                      <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
-                        <button onclick="window.game.updateDevisScale('${d.id}', 'PAPS')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'PAPS' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
-                          PAPS (2 sec.)
-                        </button>
-                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-PE')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-PE' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
-                          DPS-PE (3-6 sec.)
-                        </button>
-                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-ME')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-ME' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
-                          DPS-ME (7-12 sec.)
-                        </button>
-                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-GE')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-GE' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
-                          DPS-GE (13+ sec.)
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Moyens humains : Secouristes (Semaine / Week-end si multi-jours), CE, CP -->
-                    ${d.isMultiDays ? `
-                      <div class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
-                        <div class="flex items-center justify-between text-xs font-black text-indigo-950">
-                          <span>📅 Poste Étalé sur un Mois (${d.durationDays || 28} jours de présence)</span>
-                          <span class="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-200">Dimensionnement Différencié</span>
-                        </div>
-                        <p class="text-[11px] text-indigo-800 leading-tight">
-                          L'affluence varie fortement entre semaine et week-end. Ajustez les effectifs par vacation pour optimiser votre rentabilité et mobiliser vos bénévoles au bon moment.
-                        </p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                          <!-- Semaine : Lundi au Vendredi -->
-                          <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
-                            <div class="flex items-center justify-between mb-1">
-                              <label class="text-[11px] font-bold text-slate-700">💼 Semaine (Lun - Ven) :</label>
-                              <span class="text-[10px] font-extrabold text-slate-500">${d.weekdayDaysCount || 20} j • ${d.weekdayHours || 6}h/j</span>
-                            </div>
-                            <div class="flex items-center gap-1.5">
-                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
-                              <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                                <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekday !== undefined && d.configuredVolunteersWeekday !== null) ? d.configuredVolunteersWeekday : Math.max(2, Math.round((d.requiredVolunteers || 4) * 0.5))}" onchange="window.game.setDevisWeekdayVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
-                                <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
-                              </div>
-                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
-                            </div>
-                          </div>
-
-                          <!-- Week-end : Samedi et Dimanche -->
-                          <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
-                            <div class="flex items-center justify-between mb-1">
-                              <label class="text-[11px] font-bold text-slate-700">🎉 Week-end (Sam - Dim) :</label>
-                              <span class="text-[10px] font-extrabold text-amber-600 font-bold">${d.weekendDaysCount || 8} j • ${d.weekendHours || 10}h/j</span>
-                            </div>
-                            <div class="flex items-center gap-1.5">
-                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
-                              <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                                <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekend !== undefined && d.configuredVolunteersWeekend !== null) ? d.configuredVolunteersWeekend : (d.requiredVolunteers || 4)}" onchange="window.game.setDevisWeekendVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
-                                <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
-                              </div>
-                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
-                            </div>
-                          </div>
-                        </div>
-
-                        <!-- Encadrement CE & CP pour multi-jours -->
-                        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-indigo-100">
-                          <div class="p-2 bg-white rounded-xl border border-slate-200">
-                            <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
-                            <div class="flex items-center gap-1">
-                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">-</button>
-                              <input type="number" min="0" max="99" value="${d.configuredCE || 0}" onchange="window.game.setDevisCE('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="flex-1 min-w-0 text-center text-xs font-black text-amber-600 bg-slate-50 border border-slate-300 rounded py-0.5 focus:bg-white focus:outline-none" />
-                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">+</button>
-                            </div>
-                          </div>
-                          <div class="p-2 bg-white rounded-xl border border-slate-200">
-                            <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
-                            <div class="flex items-center gap-1">
-                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">-</button>
-                              <input type="number" min="0" max="50" value="${d.configuredCP || 0}" onchange="window.game.setDevisCP('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="flex-1 min-w-0 text-center text-xs font-black text-indigo-600 bg-slate-50 border border-slate-300 rounded py-0.5 focus:bg-white focus:outline-none" />
-                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">+</button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ` : `
-                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                        <!-- Secouristes / Équipiers -->
-                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Secouristes Totaux :</label>
-                          <div class="flex items-center gap-1.5">
-                            <button type="button" onclick="window.game.adjustDevisVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
-                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                              <input type="number" min="0" max="999" value="${d.configuredVolunteers || 0}" onchange="window.game.setDevisVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
-                            </div>
-                            <button type="button" onclick="window.game.adjustDevisVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
-                          </div>
-                        </div>
-
-                        <!-- Chefs d'Équipe (CE) -->
-                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
-                          <div class="flex items-center gap-1.5">
-                            <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
-                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                              <input type="number" min="0" max="99" value="${d.configuredCE || 0}" onchange="window.game.setDevisCE('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
-                            </div>
-                            <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
-                          </div>
-                        </div>
-
-                        <!-- Chefs de Poste (CP) -->
-                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
-                          <div class="flex items-center gap-1.5">
-                            <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
-                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                              <input type="number" min="0" max="50" value="${d.configuredCP || 0}" onchange="window.game.setDevisCP('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-indigo-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                            </div>
-                            <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
-                          </div>
-                        </div>
-                      </div>
-                    `}
-
-                    <!-- Moyens matériels & vecteurs : Véhicules et Lots -->
-                    <div class="space-y-3 pt-1">
-                      <!-- Véhicules proposés au client (Compteurs par type) -->
-                      <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                          <label class="block text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-                            Véhicules proposés au devis (Cochez les types puis réglez le nombre) :
-                          </label>
-                          <span class="text-[10px] font-black text-pc-blue dark:text-sky-300 bg-blue-50 dark:bg-sky-950/60 px-2.5 py-0.5 rounded-lg border border-blue-200 dark:border-sky-500/40 self-start sm:self-auto">
-                            Moyens : <strong>${this.formatDevisVehiclesSummary(d)}</strong>
-                          </span>
-                        </div>
-                        <p class="text-[10px] text-slate-500 dark:text-slate-400">
-                          Cochez les catégories de véhicules souhaitées pour le dispositif puis ajustez le nombre exact avec les compteurs <strong>-</strong> et <strong>+</strong> ou saisissez-le directement au clavier.
-                        </p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-1">
-                          ${[
-                            { type: 'VPSP', name: 'VPSP (Secours à Personnes)', funcBadge: 'PS', emoji: '🚑' },
-                            { type: 'VTU', name: 'VTU (Logistique & Appui)', funcBadge: 'TU / LOG', emoji: '🚚' },
-                            { type: 'VL', name: 'VL (Liaison & Commandement)', funcBadge: 'LIAISON / CMD', emoji: '🚗' },
-                            { type: 'VTP', name: 'VTP (Transport de Personnel)', funcBadge: 'TP', emoji: '🚐' },
-                            { type: 'VLHR', name: 'Véhicule Hors Route VLHR', funcBadge: 'HR / 4x4', emoji: '🚙' },
-                            { type: 'MOTO', name: 'Moto Secours MPS', funcBadge: 'PS', emoji: '🏍️' },
-                            { type: 'VELO', name: 'Patrouille Vélo / VTT', funcBadge: 'PS', emoji: '🚲' },
-                            { type: 'QUAD', name: 'Quad Tout-Terrain', funcBadge: 'HR / PS', emoji: '🚜' },
-                            { type: 'DRONE', name: 'Télépilote Drone', funcBadge: 'RECO', emoji: '🛸' }
-                          ].map(vItem => {
-                            const counts = this.ensureDevisVehicleCounts(d);
-                            const count = counts[vItem.type] || 0;
-                            const isChecked = count > 0;
-                            return `
-                              <div class="p-2 rounded-xl border transition flex items-center justify-between gap-1.5 ${isChecked ? 'bg-indigo-50/80 dark:bg-indigo-950/60 border-pc-blue dark:border-indigo-500 shadow-2xs ring-1 ring-pc-blue/30' : 'bg-slate-50/70 dark:bg-slate-700/60 border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'}">
-                                <label class="flex items-center gap-2 cursor-pointer select-none flex-1 min-w-0">
-                                  <input 
-                                    type="checkbox" 
-                                    ${isChecked ? 'checked' : ''} 
-                                    onchange="window.game.toggleDevisVehicleType('${d.id}', '${vItem.type}')" 
-                                    class="w-4 h-4 rounded text-pc-blue accent-pc-blue cursor-pointer shrink-0"
-                                  />
-                                  <span class="text-xs font-extrabold text-slate-800 dark:text-slate-100 truncate">${vItem.emoji} ${vItem.name}</span>
-                                  ${vItem.funcBadge ? `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-mono font-black bg-slate-200/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 shrink-0">${vItem.funcBadge}</span>` : ''}
-                                </label>
-                                ${isChecked ? `
-                                  <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-slate-800 px-1 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-700 shadow-2xs">
-                                    <button 
-                                      type="button" 
-                                      onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', -1)" 
-                                      class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">-</button>
-                                    <input 
-                                      type="number" 
-                                      min="0" 
-                                      max="50" 
-                                      value="${count}" 
-                                      onchange="window.game.setDevisVehicleCount('${d.id}', '${vItem.type}', this.value)" 
-                                      onkeydown="if(event.key==='Enter')this.blur()" 
-                                      class="w-9 text-center font-black text-xs text-pc-blue dark:text-sky-300 mono-num bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded py-0.5 px-0.5 focus:bg-white dark:focus:bg-slate-800 focus:outline-none" 
-                                    />
-                                    <button 
-                                      type="button" 
-                                      onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', 1)" 
-                                      class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">+</button>
-                                  </div>
-                                ` : ''}
-                              </div>
-                            `;
-                          }).join('')}
-                        </div>
-                      </div>
-
-                      <!-- Lots matériels engagés -->
-                      <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2">
-                        <label class="block text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">Lots matériels engagés :</label>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
-                          ${[
-                            { id: 'lot_a', name: 'Lot A (Secours/PMA)' },
-                            { id: 'lot_b', name: 'Lot B (Trauma)' },
-                            { id: 'dae', name: 'DAE & Oxygène' },
-                            { id: 'tente', name: 'Tente / Abri PMA' }
-                          ].map(lot => {
-                            const isSelected = (d.configuredLots || []).includes(lot.id);
-                            return `
-                              <button type="button" onclick="window.game.toggleDevisLot('${d.id}', '${lot.id}')" class="p-2 rounded-xl text-xs font-bold transition text-center cursor-pointer border ${isSelected ? 'bg-amber-600 text-white border-amber-600 shadow-xs' : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'}">
-                                ${isSelected ? '✓ ' : ''}${lot.name}
-                              </button>
-                            `;
-                          }).join('')}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 4. SAISIE DU DEVIS / TARIF FACTURÉ & ACTIONS -->
-                  ${(() => {
-                    const dynBareme = this.calculateDynamicBareme(d);
-                    if (d.proposedPrice === undefined || d.proposedPrice === null) {
-                      d.proposedPrice = dynBareme.totalBareme;
-                    }
-                    return `
-                      <div class="p-4 rounded-xl glass-card space-y-3">
-                        <div class="flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-3">
-                          <div class="flex-1">
-                            <div class="flex items-center justify-between mb-1">
-                              <label class="block text-xs font-extrabold text-slate-800">Votre Devis / Tarif Facturé à l'Organisateur (€) :</label>
-                              <span class="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                Calcul Automatique Réalisé
-                              </span>
-                            </div>
-                            <div class="relative rounded-xl shadow-sm">
-                              <input 
-                                type="number" 
-                                id="devis-price-input-${d.id}" 
-                                value="${d.proposedPrice !== undefined && d.proposedPrice !== null ? d.proposedPrice : dynBareme.totalBareme}" 
-                                placeholder="Tarif proposé en €"
-                                min="50" 
-                                max="100000"
-                                step="10"
-                                oninput="window.game.setDevisPriceManual('${d.id}', this.value)"
-                                class="w-full px-3.5 py-2.5 rounded-xl glass-input font-mono font-extrabold text-base text-slate-900 focus:ring-2 focus:ring-pc-blue"
-                              />
-                              <span class="absolute right-3.5 top-2.5 text-slate-400 font-bold">€</span>
-                            </div>
-                            <div class="flex items-center justify-between text-[11px] text-slate-500 mt-1.5 flex-wrap gap-1">
-                              <span>Total calculé : <strong class="text-slate-800">${dynBareme.totalBareme.toLocaleString('fr-FR')} €</strong></span>
-                              <span class="text-[10px] text-slate-400 font-medium">Personnel : ${dynBareme.personnelCost.toLocaleString('fr-FR')} € • Véhicules : ${dynBareme.vehicleCost.toLocaleString('fr-FR')} € • Matériel/Frais : ${(dynBareme.matCost + dynBareme.adminCost).toLocaleString('fr-FR')} €</span>
-                            </div>
-                          </div>
-
-                          <div class="flex items-center gap-2 pt-1 flex-wrap">
-                            <button onclick="window.game.setDevisPrevisionnel('${d.id}')" class="px-4 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95 transition flex items-center gap-1.5 cursor-pointer" title="Bloquer la date comme option et sonder les bénévoles avant de signer">
-                              <span>⏳ Mettre en Prévi</span>
-                            </button>
-                            <button onclick="window.game.submitCustomDevis('${d.id}')" class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center gap-1.5 cursor-pointer">
-                              <i data-lucide="send" class="w-4 h-4"></i>
-                              <span>Soumettre l'Offre</span>
-                            </button>
-                            <button onclick="window.game.refuseDevis('${d.id}')" class="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 transition cursor-pointer" title="Refuser cette demande de devis">
-                              <span>✕ Refuser</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    `;
-                  })()}
-                </div>
-              `;
-            }).join('')}
-          </div>
-
-          <!-- Section Historique des Dernières Décisions Organisateur -->
-          ${treatedDevis.length > 0 ? `
-            <div class="space-y-3 pt-2 border-t border-slate-200/80">
-              <div class="flex items-center justify-between">
-                <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <i data-lucide="archive" class="w-4 h-4 text-slate-500"></i>
-                  Historique Récent des Conventions & Décisions (${treatedDevis.length})
-                </h4>
-                <span class="text-[10px] text-slate-400 font-bold">5 derniers dossiers</span>
-              </div>
-              <div class="space-y-2">
-                ${treatedDevis.slice(-5).reverse().map(d => {
-                  let badge = '';
-                  let motif = '';
-                  if (d.status === 'signed') {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Convention Signée</span>';
-                    motif = `Offre de ${d.proposedPrice || 250} € retenue face aux concurrents ! Dispositif ajouté à votre calendrier.`;
-                  } else if (d.status === 'declined') {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300">✕ Décliné par l’Antenne</span>';
-                    motif = `Vous avez refusé la prise en charge de cet événement.`;
-                  } else if (d.status === 'rejected_competition') {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">Offre Non Retenue</span>';
-                    motif = `L’organisateur a préféré retenir une association concurrente pour cette édition.`;
-                  } else if (d.status === 'rejected_security') {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-red-100 text-red-800 border border-red-300">Rejet RNMSC</span>';
-                    motif = `Sous-dimensionnement sécuritaire refusé par la commission de sécurité.`;
-                  } else if (d.status === 'rejected_budget') {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-800 border border-orange-300">Hors Budget</span>';
-                    motif = `Tarif ou dimensionnement jugé disproportionné par rapport au rassemblement.`;
-                  } else if (d.status === 'expired') {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300">Expiré</span>';
-                    motif = `Délai de réponse dépassé sans soumission de devis de votre part.`;
-                  } else if (d.status === 'lost_option') {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300">Option Perdue (Concurrence)</span>';
-                    motif = `L'organisateur a finalement validé avec une association concurrente pendant que le dossier restait en prévisionnel.`;
-                  }
-
-                  return `
-                    <div class="p-3 rounded-xl glass-card flex items-center justify-between text-xs border border-slate-200/80">
-                      <div>
-                        <div class="font-extrabold text-slate-800 flex items-center gap-2">
-                          <span>${d.eventName}</span>
-                          ${badge}
-                        </div>
-                        <p class="text-[11px] text-slate-500 mt-0.5">${motif}</p>
-                      </div>
-                      <div class="text-right text-[11px] font-mono font-bold text-slate-700">
-                        ${d.proposedPrice ? d.proposedPrice + ' €' : ''}
-                      </div>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-            </div>
-          ` : ''}
-          `}
-        </div>
-      `;
-
-      if (window.ProtecRNMSC) {
+      if (currentTab === 'devis' && window.ProtecRNMSC) {
         setTimeout(() => {
           window.ProtecRNMSC.updateSimulatorUI('devis-rnmsc');
         }, 50);
       }
+    } else if (moduleKey === 'devis') {
+      this.activePlanningTab = 'devis';
+      return this.openModule('planning', isBackNavigation);
     } else if (moduleKey === 'recrutement') {
-      title.textContent = 'Pôle Recrutement, Notoriété & Réseaux Sociaux';
-      subtitle.textContent = 'Développez la visibilité de l’antenne et intégrez de nouveaux bénévoles';
+      title.textContent = 'Pôle Recrutement & Ressources Humaines';
+      subtitle.textContent = 'Intégrez de nouveaux bénévoles, volontaires et salariés pour renforcer votre antenne';
       icon.setAttribute('data-lucide', 'user-plus');
 
       // Déduplication préventive des candidatures bénévoles
@@ -19457,53 +20734,19 @@ class ProtecGame {
         }
       }
 
-      const isAntennaVisible = this.resources.campaigns.social || this.resources.campaigns.posters || (this.stats?.dpsCompleted > 0) || (this.resources.reputationScore >= 60);
-
       body.innerHTML = `
         <div class="space-y-6">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
-              <div>
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-extrabold text-sky-900">Réseaux Sociaux (Instagram / TikTok)</span>
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${this.resources.campaigns.social ? 'bg-emerald-600 text-white' : 'glass-button text-slate-600'}">
-                    ${this.resources.campaigns.social ? 'ACTIF' : 'INACTIF'}
-                  </span>
-                </div>
-                <p class="text-xs text-sky-700 mt-1">Génère des candidatures régulières de jeunes et étudiants (150 € / sem).</p>
-              </div>
-              <button onclick="window.game.toggleCampaign('social')" class="w-full py-2 rounded-xl text-xs font-bold ${this.resources.campaigns.social ? 'glass-button text-slate-700' : 'bg-sky-600 text-white'} shadow-sm transition">
-                ${this.resources.campaigns.social ? 'Arrêter la campagne' : 'Activer la campagne (150 €)'}
-              </button>
-            </div>
-
-            <div class="p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3">
-              <div>
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-extrabold text-amber-900">Affichage Municipal & Panneaux Mairie</span>
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${this.resources.campaigns.posters ? 'bg-emerald-600 text-white' : 'glass-button text-slate-600'}">
-                    ${this.resources.campaigns.posters ? 'ACTIF' : 'INACTIF'}
-                  </span>
-                </div>
-                <p class="text-xs text-amber-700 mt-1">Attire des profils d'actifs et de professionnels de santé (200 € / sem).</p>
-              </div>
-              <button onclick="window.game.toggleCampaign('posters')" class="w-full py-2 rounded-xl text-xs font-bold ${this.resources.campaigns.posters ? 'glass-button text-slate-700' : 'bg-amber-600 text-white'} shadow-sm transition">
-                ${this.resources.campaigns.posters ? 'Arrêter la campagne' : 'Activer la campagne (200 €)'}
-              </button>
-            </div>
-          </div>
-
           <!-- Section Postes Salariés Ouverts (CDD / CDI) -->
-          <div class="p-4 rounded-2xl glass-card border border-indigo-200/90 bg-gradient-to-r from-indigo-50/50 via-white to-blue-50/50 space-y-3">
+          <div class="p-4 rounded-2xl glass-card border border-indigo-200/90 dark:border-indigo-500/30 bg-gradient-to-r from-indigo-50/50 via-white to-blue-50/50 dark:from-slate-900 dark:via-indigo-950/40 dark:to-slate-900 space-y-3">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div class="flex items-center gap-2">
-                  <h4 class="text-xs font-black uppercase text-indigo-950 tracking-wider">Offres Ouvertes : Salariés & Services Civiques (${(this.jobOffers || []).length})</h4>
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">Recrutements & Engagements</span>
+                  <h4 class="text-xs font-black uppercase text-indigo-950 dark:text-indigo-200 tracking-wider">Offres Ouvertes : Salariés & Services Civiques (${(this.jobOffers || []).length})</h4>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">Recrutements & Engagements</span>
                 </div>
-                <p class="text-[11px] text-slate-500">Ouvrez des missions de Service Civique (18-25 ans) ou des postes de cadres salariés (CDD/CDI). Les candidatures arrivent progressivement pour passage d'entretien.</p>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400">Ouvrez des missions de Service Civique (18-25 ans) ou des postes de cadres salariés (CDD/CDI). Les candidatures arrivent progressivement pour passage d'entretien.</p>
               </div>
-              <button onclick="window.ProtecPersonnel.openJobOfferModal(window.game)" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-indigo-600 to-blue-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 flex-shrink-0">
+              <button onclick="window.ProtecPersonnel.openJobOfferModal(window.game)" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-indigo-600 to-blue-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer">
                 <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
                 + Ouvrir un Poste / Mission
               </button>
@@ -19511,29 +20754,29 @@ class ProtecGame {
 
             <!-- Liste des offres ouvertes -->
             ${(!this.jobOffers || this.jobOffers.length === 0) ? `
-              <p class="text-[11px] text-slate-500 italic p-3 bg-white/70 rounded-xl border border-dashed border-indigo-200 text-center">
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 italic p-3 bg-white/70 dark:bg-slate-800/60 rounded-xl border border-dashed border-indigo-200 dark:border-indigo-800 text-center">
                 Aucun poste salarié ouvert actuellement. Cliquez sur « + Ouvrir un Poste » pour lancer une offre de recrutement (CDD ou CDI).
               </p>
             ` : `
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                 ${this.jobOffers.map(job => `
-                  <div class="p-3.5 rounded-xl glass-card space-y-2 border border-indigo-100">
+                  <div class="p-3.5 rounded-xl glass-card space-y-2 border border-indigo-100 dark:border-slate-800">
                     <div class="flex items-center justify-between">
-                      <h5 class="text-xs font-black text-slate-900">${job.title}</h5>
-                      <span class="px-2 py-0.5 rounded text-[10px] font-black ${job.contractType === 'CDI' ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'}">
+                      <h5 class="text-xs font-black text-slate-900 dark:text-white">${job.title}</h5>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-black ${job.contractType === 'CDI' ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300' : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'}">
                         ${job.contractType} ${job.durationMonths ? `(${job.durationMonths} mois)` : ''}
                       </span>
                     </div>
-                    <div class="text-[11px] text-slate-600 flex justify-between">
-                      <span>Rémunération : <strong class="text-emerald-700 font-mono">${job.salary} € / mois</strong></span>
+                    <div class="text-[11px] text-slate-600 dark:text-slate-300 flex justify-between">
+                      <span>Rémunération : <strong class="text-emerald-700 dark:text-emerald-400 font-mono">${job.salary} € / mois</strong></span>
                       <span class="text-slate-400">• Forfait 151h</span>
                     </div>
-                    <div class="flex flex-wrap gap-1 text-[9px] font-bold text-slate-600">
-                      ${(job.missions || []).map(m => `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">✓ ${m}</span>`).join('')}
+                    <div class="flex flex-wrap gap-1 text-[9px] font-bold text-slate-600 dark:text-slate-300">
+                      ${(job.missions || []).map(m => `<span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">✓ ${m}</span>`).join('')}
                     </div>
-                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-                      <span class="text-indigo-700 font-bold">${job.applicantsCount || 0} candidature(s) reçue(s)</span>
-                      <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-black">${job.status === 'ouvert' ? 'Diffusion Active' : 'Poste Pourvu'}</span>
+                    <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px]">
+                      <span class="text-indigo-700 dark:text-indigo-400 font-bold">${job.applicantsCount || 0} candidature(s) reçue(s)</span>
+                      <span class="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-black">${job.status === 'ouvert' ? 'Diffusion Active' : 'Poste Pourvu'}</span>
                     </div>
                   </div>
                 `).join('')}
@@ -19547,29 +20790,17 @@ class ProtecGame {
             <div class="space-y-3">
               <div class="flex items-center justify-between">
                 <div>
-                  <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <h4 class="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
                     <i data-lucide="users" class="w-4 h-4 text-pc-blue"></i>
                     Candidatures Bénévoles (${this.candidatures.filter(c => c.type !== 'salarie').length})
                   </h4>
-                  <span class="text-[11px] text-slate-500 font-semibold">Citoyens souhaitant rejoindre l'association</span>
+                  <span class="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Citoyens souhaitant rejoindre l'association</span>
                 </div>
-                <button onclick="window.game.toggleShowCandidatures()" class="px-3 py-1.5 rounded-xl text-xs font-black ${this.showCandidaturesView ? 'bg-slate-200 text-slate-800' : 'bg-pc-blue text-white shadow-sm hover:bg-pc-blue-light'} transition flex items-center gap-1.5 cursor-pointer">
+                <button onclick="window.game.toggleShowCandidatures()" class="px-3 py-1.5 rounded-xl text-xs font-black ${this.showCandidaturesView ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white' : 'bg-pc-blue text-white shadow-sm hover:bg-pc-blue-light'} transition flex items-center gap-1.5 cursor-pointer">
                   <i data-lucide="${this.showCandidaturesView ? 'chevron-up' : 'eye'}" class="w-3.5 h-3.5"></i>
                   <span>${this.showCandidaturesView ? 'Masquer les candidatures' : `Voir les candidatures (${this.candidatures.filter(c => c.type !== 'salarie').length})`}</span>
                 </button>
               </div>
-
-              ${!isAntennaVisible ? `
-                <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 text-xs flex items-start gap-3">
-                  <i data-lucide="eye-off" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
-                  <div class="space-y-1">
-                    <div class="font-black text-amber-950 uppercase tracking-wide">Antenne Invisible au Public</div>
-                    <p class="text-[11px] text-amber-800 leading-relaxed">
-                      Votre antenne vient d'ouvrir ou n'a pas encore de visibilité publique. Sans <strong>campagne de communication</strong> active (Réseaux sociaux ou Affichage mairie) ou de premier <strong>DPS réalisé</strong>, aucun citoyen ne vient postuler spontanément comme bénévole. Lancez une campagne ci-dessus pour faire connaître l'antenne !
-                    </p>
-                  </div>
-                </div>
-              ` : ''}
 
               ${this.showCandidaturesView ? `
                 ${this.candidatures.filter(c => c.type !== 'salarie').length === 0 ? '<p class="text-xs text-slate-500 p-4 glass-card rounded-2xl text-center">Aucune candidature bénévole en attente actuellement.</p>' : ''}
@@ -22648,7 +23879,8 @@ class ProtecGame {
   // --- GESTIONNAIRE DE TEMPS RÉEL (1 SECONDE = 1 SECONDE RÉELLE) ---
   startSimulationClock() {
     setInterval(() => {
-      const serverOffset = this.serverTimeOffset || 0;
+      try {
+        const serverOffset = this.serverTimeOffset || 0;
       const now = new Date(Date.now() + serverOffset);
       this.clock.hour = now.getHours();
       this.clock.minute = now.getMinutes();
@@ -23343,6 +24575,9 @@ class ProtecGame {
         const pendingSdis = this.missions.filter(m => m.type === 'pompiers' && m.status === 'planifie');
         pendingSdis.forEach(m => {
           if (m.spawnedAt && m.maxResponseMinutes) {
+            // Si le joueur a confirmé qu'il met du renfort et que l'équipage est prêt, ne pas annuler
+            if (m.willProvideRenfort && (m.registeredVolunteers || []).length >= (m.requiredVolunteers || 3)) return;
+
             const elapsedMins = (currentTime - m.spawnedAt) / 60000;
             if (elapsedMins > m.maxResponseMinutes && !m.sanctionApplied) {
               m.sanctionApplied = true;
@@ -23364,6 +24599,9 @@ class ProtecGame {
           const pendingSamu = this.missions.filter(m => m.type === 'samu' && m.status === 'planifie');
           pendingSamu.forEach(m => {
             if (m.spawnedAt && m.maxResponseMinutes) {
+              // Si le joueur a confirmé qu'il met du renfort et que l'équipage est prêt, ne pas annuler
+              if (m.willProvideRenfort && (m.registeredVolunteers || []).length >= (m.requiredVolunteers || 3)) return;
+
               const elapsedMins = (currentTime - m.spawnedAt) / 60000;
               if (elapsedMins > m.maxResponseMinutes && !m.sanctionApplied) {
                 m.sanctionApplied = true;
@@ -23598,11 +24836,12 @@ class ProtecGame {
             const volCountEl = document.getElementById('prealert-vols-count');
             if (volCountEl) volCountEl.textContent = `${cur.registeredVolunteers?.length || 0} / ${cur.requiredVolunteers || 1} secouristes prêts`;
             const barEl = document.getElementById('prealert-vols-bar');
-            if (barEl) barEl.style.width = `${Math.min(100, Math.round(((cur.registeredVolunteers?.length || 0) / (cur.requiredVolunteers || 1)) * 100))}%`;
           }
         }
       }
-
+    } catch (clockErr) {
+      console.warn('[SimulationClock] Erreur interceptée dans la boucle de simulation (jeu préservé du gel) :', clockErr);
+    }
     }, 1000);
   }
 
@@ -25612,18 +26851,24 @@ window.ProtecWebPush = {
    * Requis par registration.pushManager.subscribe({ applicationServerKey })
    */
   urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding)
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
+    if (!base64String || typeof base64String !== 'string') return new Uint8Array();
+    try {
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
 
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
 
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    } catch (e) {
+      console.warn('[WebPush] Décodage Base64 fallback sécurisé:', e?.message);
+      return new Uint8Array();
     }
-    return outputArray;
   },
 
   /**
@@ -25632,11 +26877,9 @@ window.ProtecWebPush = {
    */
   async registerServiceWorker() {
     if (!('serviceWorker' in navigator)) {
-      console.warn('[WebPush] Les Service Workers ne sont pas supportés par ce navigateur.');
       return null;
     }
     if (!('PushManager' in window)) {
-      console.warn('[WebPush] PushManager n\'est pas disponible sur ce navigateur (sur iOS, installez d\'abord la PWA sur l\'écran d\'accueil).');
       return null;
     }
 
@@ -25644,7 +26887,6 @@ window.ProtecWebPush = {
       const swUrl = new URL('sw.js', window.location.href).href;
       const swScope = new URL('./', window.location.href).pathname;
       const registration = await navigator.serviceWorker.register(swUrl, { scope: swScope });
-      console.log('✅ [WebPush] Service Worker enregistré avec succès sur le scope :', registration.scope);
       this.swRegistration = registration;
 
       if (registration.waiting) {
@@ -25653,30 +26895,30 @@ window.ProtecWebPush = {
 
       return registration;
     } catch (error) {
-      console.error('[WebPush] Erreur enregistrement sw.js :', error);
       return null;
     }
   },
 
   /**
-   * Récupération de la clé publique VAPID depuis le backend
+   * Récupération de la clé publique VAPID officielle W3C
    */
   async getVapidPublicKey() {
     if (this.vapidPublicKey) return this.vapidPublicKey;
-    try {
-      const res = await fetch('/api/push/vapid-public-key');
-      if (res.ok) {
-        const json = await res.json();
-        if (json && json.publicKey) {
-          this.vapidPublicKey = json.publicKey;
-          return this.vapidPublicKey;
+    // Clé publique officielle W3C valide P-256
+    const OFFICIAL_KEY = window.ProtecNotifications?.vapidPublicKey || 'BKLdj5RykkIOWRhAriMzfKsYON-juKOqSvFCclSz6zgr0CRZdLlQOhfd9nAwmXZZjsNMJU-pl5Csy4Yg-c6mHe0';
+    if (window.game && window.game.isBackendOnline) {
+      try {
+        const res = await fetch('/api/push/vapid-public-key');
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.publicKey) {
+            this.vapidPublicKey = json.publicKey;
+            return this.vapidPublicKey;
+          }
         }
-      }
-    } catch (e) {
-      console.warn('[WebPush] Erreur récupération clé VAPID depuis le backend, utilisation fallback.');
+      } catch (e) {}
     }
-    // Clé publique de secours W3C
-    this.vapidPublicKey = 'BJW6ttC4n_VYHyGsEvIu2UU1z_p95G4Wf1dD2924z_A_mZ3r_m4wQ5T_6x9z_P2m1k0j9';
+    this.vapidPublicKey = OFFICIAL_KEY;
     return this.vapidPublicKey;
   },
 
@@ -25762,14 +27004,6 @@ window.ProtecWebPush = {
         });
       }
 
-      if (window.game && typeof window.game.showToast === 'function') {
-        window.game.showToast(
-          'Notifications Actives 📲',
-          'Vous recevrez désormais les alertes de secours même lorsque l’application est totalement fermée !',
-          'green'
-        );
-      }
-
       return subscription;
     } catch (err) {
       console.error('[WebPush] Erreur lors de la souscription push :', err);
@@ -25783,54 +27017,57 @@ window.ProtecWebPush = {
    * 5. Envoi de l'objet subscription au backend via requête POST dédiée
    */
   async sendSubscriptionToBackend(data) {
-    try {
-      const res = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          endpoint: data.endpoint,
-          p256dh: data.p256dh,
-          auth: data.auth,
-          user_id: data.user_id,
-          username: data.username,
-          userAgent: data.userAgent || navigator.userAgent,
-          subscription: {
+    if (this.isBackendOnline) {
+      try {
+        const res = await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
             endpoint: data.endpoint,
-            keys: {
-              p256dh: data.p256dh,
-              auth: data.auth
+            p256dh: data.p256dh,
+            auth: data.auth,
+            user_id: data.user_id,
+            username: data.username,
+            userAgent: data.userAgent || navigator.userAgent,
+            subscription: {
+              endpoint: data.endpoint,
+              keys: {
+                p256dh: data.p256dh,
+                auth: data.auth
+              }
             }
-          }
-        })
-      });
+          })
+        });
 
-      if (res.ok) {
-        const result = await res.json();
-        console.log('✅ [WebPush] Abonnement enregistré avec succès par le backend :', result);
-      } else {
-        console.warn('[WebPush] Réponse serveur inattendue lors de l\'enregistrement :', res.status);
-      }
-    } catch (e) {
-      console.warn('[WebPush] Impossible de joindre le backend Node.js (mode local ou hors ligne) :', e.message);
+        if (res.ok) {
+          const result = await res.json();
+          console.log('✅ [WebPush] Abonnement enregistré avec succès par le backend :', result);
+        }
+      } catch (e) {}
     }
 
-    // Persistance miroir dans Supabase si disponible
-    if (window.ProtecSupabase?.client) {
+    // Persistance dans Supabase game_saves
+    if (window.ProtecSupabase?.client && data.user_id && data.user_id !== 'local') {
       try {
-        await window.ProtecSupabase.client.from('push_subscriptions').upsert({
-          endpoint: data.endpoint,
-          user_id: (data.user_id && data.user_id !== 'local') ? data.user_id : null,
-          p256dh: data.p256dh,
-          auth: data.auth,
-          user_agent: navigator.userAgent,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'endpoint' });
-        console.log('✅ [WebPush] Abonnement synchronisé dans la table Supabase push_subscriptions.');
-      } catch (eSupa) {
-        console.warn('[WebPush] Erreur sauvegarde Supabase push_subscriptions :', eSupa);
-      }
+        window.ProtecSupabase.client.from('game_saves').select('save_data').eq('user_id', data.user_id).maybeSingle().then(({ data: rowData }) => {
+          if (rowData) {
+            const sd = rowData.save_data || {};
+            sd.push_subscription = {
+              endpoint: data.endpoint,
+              keys: {
+                p256dh: data.p256dh,
+                auth: data.auth
+              }
+            };
+            sd.push_updated_at = new Date().toISOString();
+            window.ProtecSupabase.client.from('game_saves').update({ save_data: sd }).eq('user_id', data.user_id).then(() => {
+              console.log('✅ [WebPush] Abonnement synchronisé dans la sauvegarde Supabase.');
+            });
+          }
+        });
+      } catch (eSupa) {}
     }
   },
 

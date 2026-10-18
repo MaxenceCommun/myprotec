@@ -319,8 +319,8 @@ async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
     title: payloadObject.title || '🚨 ALERTE MYPROTEC',
     body: payloadObject.body || payloadObject.message || 'Nouvelle notification opérationnelle !',
     message: payloadObject.message || payloadObject.body || 'Nouvelle notification opérationnelle !',
-    icon: payloadObject.icon || '/icons/icon-192x192.png',
-    badge: payloadObject.badge || '/icons/badge-monochrome.png',
+    icon: payloadObject.icon || 'https://myprotec.fr/badge-monochrome.png',
+    badge: payloadObject.badge || 'https://myprotec.fr/badge-monochrome.png',
     data: Object.assign({ url: '/jeu.html', category: payloadObject.category || 'alert' }, payloadObject.data || {}),
     vibrate: payloadObject.vibrate || [500, 200, 500, 200, 500],
     tag: payloadObject.tag || `protec-alert-${Date.now()}`
@@ -2357,8 +2357,8 @@ async function checkAndDispatchCloudPushQueue() {
         const result = await sendSingleWebPush(sub, {
           title: notif.title || '🚨 ALERTE MYPROTEC',
           body: notif.body || notif.message || 'Nouvelle alerte opérationnelle reçue.',
-          icon: notif.icon || '/icons/icon-192x192.png',
-          badge: notif.badge || '/icons/badge-monochrome.png',
+          icon: notif.icon || 'https://myprotec.fr/badge-monochrome.png',
+          badge: notif.badge || 'https://myprotec.fr/badge-monochrome.png',
           vibrate: [500, 200, 500, 200, 500],
           data: { url: '/jeu.html', category: notif.category || 'alert' }
         });

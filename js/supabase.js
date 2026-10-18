@@ -461,6 +461,82 @@ window.ProtecSupabase = {
             created_at: new Date().toISOString()
           });
           sd.pending_notifications = pending.slice(0, 20);
+
+          // Si la notification correspond à une alerte d'urgence, alerte opérationnelle ou test :
+          // Créer la VRAIE mission opérationnelle dans la partie pour que le joueur l'ait immédiatement sur sa carte !
+          const isFinanceType = notifData.category === 'finances' || String(notifData.title || '').includes('Devis');
+          const isSamuType = String(notifData.title || '').includes('SAMU') || notifData.category === 'samu' || notifData.category === 'urgences';
+          const isPompierType = String(notifData.title || '').includes('Pompiers') || notifData.category === 'pompiers' || notifData.category === 'sdis';
+
+          if (isFinanceType) {
+            if (!Array.isArray(sd.devis)) sd.devis = [];
+            const devisId = `devis_${Date.now()}`;
+            sd.devis.unshift({
+              id: devisId,
+              title: notifData.title?.replace(/^[💶🚨🔔\s]+/, '') || 'Convention Sécurité DPS',
+              city: sd.stations?.[0]?.city || 'Nancy',
+              amount: 14500,
+              requiredVehicles: ['VPSP'],
+              requiredVolunteers: 4,
+              status: 'en_attente',
+              createdAt: Date.now()
+            });
+          } else {
+            if (!Array.isArray(sd.missions)) sd.missions = [];
+            const station = (sd.stations && sd.stations[0]) || { lat: 48.6921, lng: 6.1844, name: 'Antenne Protection Civile', city: 'Nancy', departmentCode: '54' };
+            const mLat = Number(station.lat || 48.6921) + (Math.random() - 0.5) * 0.04;
+            const mLng = Number(station.lng || 6.1844) + (Math.random() - 0.5) * 0.04;
+            const mId = isSamuType ? `samu_${Date.now()}` : (isPompierType ? `sdis_${Date.now()}` : `urg_${Date.now()}`);
+
+            const realMission = {
+              id: mId,
+              type: isSamuType ? 'samu' : (isPompierType ? 'pompiers' : 'dps'),
+              category: 'urgences',
+              title: notifData.title?.replace(/^[🚨🔔🚑🚒⚠️🏆📢\s]+/, '') || (isSamuType ? 'Détresse Respiratoire à Domicile' : 'Intervention Prioritaire'),
+              desc: notifData.message || notifData.body || 'Mission d’urgence régulée. VPSP demandé immédiatement sur les lieux.',
+              lat: mLat,
+              lng: mLng,
+              city: station.city || 'Secteur Opérationnel',
+              departmentCode: station.departmentCode || '54',
+              address: `Secteur ${station.city || 'Antenne'} (Régulation Opérationnelle)`,
+              status: 'planifie',
+              progress: 0,
+              requiredVehicles: ['VPSP'],
+              requiredVolunteers: 3,
+              requiredRanks: ['PSE1', 'PSE2'],
+              registeredVolunteers: [],
+              assignedCrew: { volunteers: [], vehicles: [] },
+              rewardMoney: 350,
+              rewardReputation: 45,
+              durationSeconds: 1200,
+              durationHours: "0.3",
+              createdAt: Date.now(),
+              spawnedAt: Date.now()
+            };
+
+            // Éviter les doublons
+            if (!sd.missions.some(m => m.id === mId)) {
+              sd.missions.unshift(realMission);
+            }
+
+            // Si le joueur est actuellement sur cette fenêtre active, injecter également en direct
+            const isCurrentActivePlayer = window.game && (
+              !window.game.player?.id || 
+              window.game.player?.id === save.user_id || 
+              window.game.player?.name === save.username ||
+              window.ProtecAuth?.currentUser?.id === save.user_id ||
+              window.ProtecAuth?.currentUser?.username === save.username
+            );
+            if (isCurrentActivePlayer && window.game) {
+              if (!Array.isArray(window.game.missions)) window.game.missions = [];
+              if (!window.game.missions.some(m => m.id === mId)) {
+                window.game.missions.unshift(realMission);
+                if (typeof window.game.renderMissions === 'function') window.game.renderMissions();
+                if (typeof window.game.updateStatsUI === 'function') window.game.updateStatsUI();
+              }
+            }
+          }
+
           await this.client.from('game_saves').update({ save_data: sd }).eq('user_id', save.user_id);
         }
         return true;
@@ -1429,16 +1505,36 @@ window.ProtecSupabase = {
         localEcussons: (game.localEcussons && game.localEcussons.length > 0) ? game.localEcussons : (game.localEcussons || [])
       };
 
-      // Si le jeu n'a pas encore chargé les écussons mais que la sauvegarde en contient déjà, les préserver
-      if (!stateToSave.localEcussons || stateToSave.localEcussons.length === 0) {
-        try {
-          const { data: exSave } = await this.client.from('game_saves').select('save_data').eq('user_id', userId).maybeSingle();
-          if (exSave?.save_data?.localEcussons && exSave.save_data.localEcussons.length > 0) {
+      // Préservation des données injectées à distance (alertes push, missions SAMU, écussons, notifications en attente)
+      try {
+        const { data: exSave } = await this.client.from('game_saves').select('save_data').eq('user_id', userId).maybeSingle();
+        if (exSave?.save_data) {
+          // 1. Préserver les notifications en attente
+          if (Array.isArray(exSave.save_data.pending_notifications) && exSave.save_data.pending_notifications.length > 0) {
+            stateToSave.pending_notifications = exSave.save_data.pending_notifications;
+          }
+          // 2. Fusionner les missions injectées à distance pour ne jamais les écraser
+          if (Array.isArray(exSave.save_data.missions) && exSave.save_data.missions.length > 0) {
+            const currentIds = new Set((stateToSave.missions || []).map(m => m.id));
+            exSave.save_data.missions.forEach(m => {
+              if (!currentIds.has(m.id)) {
+                if (!Array.isArray(stateToSave.missions)) stateToSave.missions = [];
+                stateToSave.missions.unshift(m);
+                currentIds.add(m.id);
+                if (game && Array.isArray(game.missions) && !game.missions.some(gm => gm.id === m.id)) {
+                  game.missions.unshift(m);
+                  if (typeof game.renderMissions === 'function') game.renderMissions();
+                }
+              }
+            });
+          }
+          // 3. Préserver les écussons
+          if ((!stateToSave.localEcussons || stateToSave.localEcussons.length === 0) && exSave.save_data.localEcussons?.length > 0) {
             stateToSave.localEcussons = exSave.save_data.localEcussons;
             game.localEcussons = exSave.save_data.localEcussons;
           }
-        } catch (e) {}
-      }
+        }
+      } catch (e) {}
 
       const payload = {
         user_id: userId,

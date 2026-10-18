@@ -470,8 +470,9 @@ window.ProtecNotifications = {
         this.swRegistration = reg;
 
         navigator.serviceWorker.addEventListener('message', (event) => {
-          if (event.data?.type === 'PUSH_NOTIFICATION_RECEIVED') {
+          if (event.data?.type === 'PUSH_NOTIFICATION_RECEIVED' || event.data?.type === 'NOTIFICATION_ACTION_CLICKED') {
             const d = event.data.data || {};
+            this.syncCloudMissions();
             if (window.game && typeof window.game.showToast === 'function') {
               window.game.showToast(d.title || '🚨 Alerte Reçue', d.body || d.message || '', d.type || 'orange');
             }
@@ -757,16 +758,6 @@ window.ProtecNotifications = {
       this.saveConfig();
       this.updateHeaderUI();
       this.hideSubscriptionBanner();
-
-      this.sendPushNotification(
-        'Notifications MyProtec Activées',
-        'Parfait ! Vous recevrez désormais les alertes SAMU 15, SDIS, devis DPS et rappels d’intervention en direct sur votre appareil, même lorsque l’application est fermée.',
-        { tag: 'welcome-notification' }
-      );
-
-      if (window.game && typeof window.game.showToast === 'function') {
-        window.game.showToast('Notifications Activées', 'Alertes prêtes (y compris avec application fermée) !', 'green');
-      }
       return true;
     } else {
       if (window.game && typeof window.game.showToast === 'function') {
@@ -1247,6 +1238,44 @@ window.ProtecNotifications = {
     } catch (e) {}
 
     this.checkPendingSupabaseNotifications();
+    this.syncCloudMissions();
+  },
+
+  // Synchronisation dynamique des missions reçues par Push / Supabase Cloud
+  async syncCloudMissions() {
+    if (!window.ProtecSupabase?.client || !window.game) return;
+    let cachedUser = null;
+    try {
+      cachedUser = window.ProtecAuth?.currentUser || JSON.parse(localStorage.getItem('protec_user_profile') || '{}');
+    } catch (e) {}
+    const uid = cachedUser?.id || window.game.player?.id;
+    const uname = cachedUser?.username || window.game.player?.name;
+    if (!uid && !uname) return;
+
+    try {
+      const supaSave = await window.ProtecSupabase.loadGameState(uid, uname);
+      if (supaSave?.save_data?.missions && Array.isArray(supaSave.save_data.missions)) {
+        const currentIds = new Set((window.game.missions || []).map(m => m.id));
+        let hasNew = false;
+        supaSave.save_data.missions.forEach(m => {
+          if (!currentIds.has(m.id)) {
+            if (!Array.isArray(window.game.missions)) window.game.missions = [];
+            window.game.missions.unshift(m);
+            currentIds.add(m.id);
+            hasNew = true;
+          }
+        });
+        if (hasNew) {
+          if (typeof window.game.renderMissions === 'function') window.game.renderMissions();
+          if (typeof window.game.updateStatsUI === 'function') window.game.updateStatsUI();
+          if (typeof window.game.showToast === 'function') {
+            window.game.showToast('🚨 Nouvelle Mission Disponible !', 'Une intervention d’urgence attend vos effectifs sur la carte.', 'orange');
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur syncCloudMissions:', e);
+    }
   },
 
   // Récupération des notifications en attente stockées en BDD Supabase (réception dès l'ouverture du site ou reconnexion)

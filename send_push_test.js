@@ -143,8 +143,8 @@ async function main() {
   const payload = {
     title: customTitle || '🚨 ALERTE TEST MYPROTEC',
     body: customBody || 'Notification Web Push reçue avec succès ! Le réveil fonctionne même lorsque la PWA est totalement fermée.',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/badge-monochrome.png',
+    icon: 'https://myprotec.fr/badge-monochrome.png',
+    badge: 'https://myprotec.fr/badge-monochrome.png',
     data: {
       url: '/jeu.html',
       sentAt: new Date().toISOString(),

@@ -195,15 +195,16 @@ self.addEventListener('fetch', (event) => {
 // 4. NOTIFICATIONS PUSH NATIVES W3C (MOBILITÉ & RÉVEIL TERMINAL APP FERMÉE)
 // Conforme architecture officielle W3C Web Push RFC 8030 / RFC 8291 / RFC 8292
 
-// Résolution absolue et sécurisée des URLs d'assets (compatible GitHub Pages en sous-dossier et localhost)
+// Résolution absolue et sécurisée des URLs d'assets (compatible GitHub Pages et réveil OS)
 const getAssetUrl = (path) => {
-  if (!path) return '';
+  if (!path) return 'https://myprotec.fr/badge-monochrome.png';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  return new URL(path.replace(/^\//, ''), self.registration.scope).href;
+  const cleanPath = path.replace(/^\//, '');
+  return `https://myprotec.fr/${cleanPath}`;
 };
 
-const DEFAULT_ICON = getAssetUrl('icon-192.png');
-const DEFAULT_BADGE = getAssetUrl('badge-monochrome.png');
+const DEFAULT_ICON = 'https://myprotec.fr/badge-monochrome.png';
+const DEFAULT_BADGE = 'https://myprotec.fr/badge-monochrome.png';
 
 self.addEventListener('push', (event) => {
   let payload = {};
@@ -223,7 +224,7 @@ self.addEventListener('push', (event) => {
   const body = payload.body || payload.message || 'Mobilisation opérationnelle demandée !';
   const icon = payload.icon ? getAssetUrl(payload.icon) : DEFAULT_ICON;
   const badge = payload.badge ? getAssetUrl(payload.badge) : DEFAULT_BADGE;
-  const targetUrl = payload.data?.url || payload.url || '/';
+  const targetUrl = payload.data?.url || payload.url || '/jeu.html';
 
   const notificationOptions = {
     body: body,

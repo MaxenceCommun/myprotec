@@ -27004,14 +27004,6 @@ window.ProtecWebPush = {
         });
       }
 
-      if (window.game && typeof window.game.showToast === 'function') {
-        window.game.showToast(
-          'Notifications Actives 📲',
-          'Vous recevrez désormais les alertes de secours même lorsque l’application est totalement fermée !',
-          'green'
-        );
-      }
-
       return subscription;
     } catch (err) {
       console.error('[WebPush] Erreur lors de la souscription push :', err);
