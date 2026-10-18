@@ -1015,7 +1015,8 @@ window.ProtecFormations = {
       if (repScore >= 60) baseChance += 0.15;
       if (repScore >= 120) baseChance += 0.20;
 
-      const effectiveChance = Math.min(0.85, baseChance * pubMultiplier);
+      const speedMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('formationCitizenRegistrationSpeed', 1.0) : 1.0;
+      const effectiveChance = Math.min(0.95, baseChance * pubMultiplier * speedMult);
 
       if (Math.random() < effectiveChance) {
         s.publicSeatsBooked = bookedPublic + 1;
@@ -1122,11 +1123,18 @@ window.ProtecFormations = {
     const station = game.stations?.[0] || { city: 'Nancy', id: 'station-1' };
     const deptCode = game.currentDepartmentCode || game.player?.departmentCode || '54';
 
-    const roll = Math.random();
+    // Pondérations de tirage modulées par ProtecGameplayConfig
+    const wSST = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('formationDemandSST', 1.0) * 0.40 : 0.40;
+    const wMAC = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('formationDemandSST', 1.0) * 0.25 : 0.25;
+    const wPSC = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('formationDemandPSC', 1.0) * 0.20 : 0.20;
+    const wGQS = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('formationDemandGQS', 1.0) * 0.15 : 0.15;
+    const totalW = wSST + wMAC + wPSC + wGQS;
+
+    const roll = Math.random() * (totalW > 0 ? totalW : 1.0);
     let trainingType = 'SST';
-    if (roll < 0.40) trainingType = 'SST';
-    else if (roll < 0.65) trainingType = 'MAC_SST';
-    else if (roll < 0.85) trainingType = 'PSC';
+    if (roll < wSST) trainingType = 'SST';
+    else if (roll < (wSST + wMAC)) trainingType = 'MAC_SST';
+    else if (roll < (wSST + wMAC + wPSC)) trainingType = 'PSC';
     else trainingType = 'GQS';
 
     const cfg = this.TRAINING_B2B_CONFIG[trainingType] || this.TRAINING_B2B_CONFIG['SST'];
@@ -1641,15 +1649,110 @@ window.ProtecFormations = {
     const curYear = (window.game?.clock?.year) || 2026;
     if (course.isRecycling || course.id === 'FC_PSE' || course.id === 'MAC_SST') {
       vol.recycledYear = curYear;
+      vol.validityYear = curYear + 1; // Au 31/12 de l'année SUIVANT le recyclage
+      vol.validityDate = `31/12/${curYear + 1}`;
       vol.qualificationExpired = false;
       vol.qualificationExpiredReason = null;
       vol.lastRecycledAt = Date.now();
-    } else if (['PSE1', 'PSE2', 'CE', 'CD'].includes(course.id)) {
+    } else if (['PSE1', 'PSE2', 'CE', 'CD', 'SST'].includes(course.id)) {
+      vol.formationYear = curYear;
       vol.recycledYear = curYear;
+      vol.validityYear = curYear + 1; // Au 31/12 de l'année SUIVANT la formation
+      vol.validityDate = `31/12/${curYear + 1}`;
       vol.qualificationExpired = false;
       vol.qualificationExpiredReason = null;
       vol.lastRecycledAt = Date.now();
     }
+  },
+
+  // Détermination de la validité réglementaire d'une compétence
+  getSkillValidityInfo(skillId, volunteer, game) {
+    if (!volunteer) return { hasValidity: false, expiryDateFormatted: 'Permanente', badgeClass: 'bg-slate-100 text-slate-700 border-slate-300' };
+    const sId = String(skillId || '').toLowerCase().replace(/[- ]/g, '_');
+    const curYear = (game?.clock?.year) || (window.game?.clock?.year) || 2026;
+
+    // Compétences soumises à validité réglementaire au 31/12 de l'année suivant la formation / recyclage
+    const validableSkills = ['pse1', 'pse2', 'ce', 'cd', 'sst', 'formateur_psc', 'formateur_ps', 'formateur_sst', 'formateur_de_formateur', 'permis_vpsp'];
+    const isSubjectToValidity = validableSkills.some(v => sId.includes(v));
+
+    if (!isSubjectToValidity) {
+      return {
+        hasValidity: false,
+        validityLabel: 'Compétence permanente (Acquise à vie)',
+        expiryDateFormatted: 'Permanente',
+        status: 'permanent',
+        statusLabel: 'Permanente',
+        badgeClass: 'bg-slate-100 text-slate-700 border-slate-300',
+        needsRecycling: false
+      };
+    }
+
+    // Année de référence : année du dernier recyclage ou de la formation initiale
+    let refYear = volunteer.recycledYear || volunteer.formationYear;
+    if (!refYear) {
+      refYear = curYear;
+      volunteer.recycledYear = curYear;
+    }
+
+    // RÈGLE OFFICIELLE : Validité au 31/12 de l'année SUIVANT la formation / le recyclage
+    const expiryYear = Number(refYear) + 1;
+    const expiryDateFormatted = `31/12/${expiryYear}`;
+
+    // Comparaison avec l'année en cours dans le jeu
+    if (curYear > expiryYear) {
+      // Expirée (dépassée)
+      return {
+        hasValidity: true,
+        expiryYear: expiryYear,
+        expiryDateFormatted: expiryDateFormatted,
+        validityLabel: `Expirée le ${expiryDateFormatted}`,
+        status: 'expired',
+        statusLabel: 'Expirée (FC requise)',
+        badgeClass: 'bg-red-100 text-red-800 border-red-300 font-black',
+        needsRecycling: true,
+        isUrgent: true
+      };
+    } else if (curYear === expiryYear) {
+      // Échéance cette année
+      return {
+        hasValidity: true,
+        expiryYear: expiryYear,
+        expiryDateFormatted: expiryDateFormatted,
+        validityLabel: `Échéance au ${expiryDateFormatted}`,
+        status: 'warning',
+        statusLabel: 'Recyclage à prévoir',
+        badgeClass: 'bg-amber-100 text-amber-900 border-amber-300 font-black',
+        needsRecycling: true,
+        isUrgent: false
+      };
+    } else {
+      // Valide pour encore plus d'un an
+      return {
+        hasValidity: true,
+        expiryYear: expiryYear,
+        expiryDateFormatted: expiryDateFormatted,
+        validityLabel: `Valide jusqu'au ${expiryDateFormatted}`,
+        status: 'valid',
+        statusLabel: 'À jour (Valide)',
+        badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold',
+        needsRecycling: false,
+        isUrgent: false
+      };
+    }
+  },
+
+  // Vérifie si un bénévole a besoin d'un recyclage (échéance au 31/12 de l'année en cours ou déjà expirée)
+  volunteerNeedsRecycling(volunteer, game) {
+    if (!volunteer) return false;
+    const skills = volunteer.skills || [];
+    const validableSkills = ['pse1', 'pse2', 'ce', 'cd', 'sst', 'formateur_psc', 'formateur_ps', 'formateur_sst', 'formateur_de_formateur'];
+    const hasAnyValidable = validableSkills.some(s => skills.includes(s)) || ['PSE1', 'PSE2', 'CE', 'CD'].includes(volunteer.rank);
+    if (!hasAnyValidable) return false;
+
+    const curYear = (game?.clock?.year) || (window.game?.clock?.year) || 2026;
+    const refYear = volunteer.recycledYear || volunteer.formationYear || curYear;
+    const expiryYear = Number(refYear) + 1;
+    return curYear >= expiryYear;
   },
 
   // Contrôle périodique de péremption annuelle des diplômes opérationnels
@@ -1664,15 +1767,258 @@ window.ProtecFormations = {
         if (!v.recycledYear) {
           v.recycledYear = curYear;
           v.qualificationExpired = false;
-        } else if (curYear > v.recycledYear) {
-          v.qualificationExpired = true;
-          v.qualificationExpiredReason = `Recyclage annuel échu : FC PSE ${curYear} obligatoire pour réactiver les droits opérationnels.`;
         } else {
-          v.qualificationExpired = false;
-          v.qualificationExpiredReason = null;
+          const expiryYear = Number(v.recycledYear) + 1;
+          if (curYear > expiryYear) {
+            v.qualificationExpired = true;
+            v.qualificationExpiredReason = `Validité échue au 31/12/${expiryYear} : Recyclage (Formation Continue FC PSE) obligatoire pour réactiver les droits opérationnels.`;
+          } else {
+            v.qualificationExpired = false;
+            v.qualificationExpiredReason = null;
+          }
         }
       }
     });
+  },
+
+  // Inscription rapide d'un bénévole à une session de recyclage FC PSE
+  inscrireBenevoleRecyclage(game, volunteerId) {
+    const vol = (game.volunteers || []).find(v => v.id === volunteerId);
+    if (!vol) return;
+
+    if (!Array.isArray(game.sessionsFormation)) game.sessionsFormation = [];
+
+    // Chercher une session FC PSE ouverte avec place interne
+    let session = game.sessionsFormation.find(s => 
+      s.courseId === 'FC_PSE' && 
+      !s.isCompleted && 
+      (s.internalAntenneSeats || 0) > (s.registeredCandidates || []).length
+    );
+
+    if (!session) {
+      // Créer une nouvelle session FC PSE interne
+      this.createSession(game, 'FC_PSE', {
+        locationType: 'antenne',
+        internalAntenneSeats: 6,
+        internalProtecSeats: 2,
+        openToPublic: false,
+        totalSeats: 8,
+        roomNumber: 1
+      });
+      session = game.sessionsFormation[game.sessionsFormation.length - 1];
+    }
+
+    if (session) {
+      if (!Array.isArray(session.registeredCandidates)) session.registeredCandidates = [];
+      if (!session.registeredCandidates.includes(vol.id)) {
+        session.registeredCandidates.push(vol.id);
+        vol.registeredSessionId = session.id;
+        game.saveGame();
+        if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+        game.showToast('Inscription Recyclage Validée', `${vol.name} est inscrit(e) à la session « ${session.title} » pour renouveler ses compétences.`, 'green');
+      } else {
+        game.showToast('Déjà Inscrit', `${vol.name} est déjà positionné(e) sur cette session de recyclage.`, 'blue');
+      }
+    }
+    this.renderModal(game);
+  },
+
+  // Inscrire tous les secouristes ayant besoin d'un recyclage en une seule action
+  inscrireTousRetardatairesRecyclage(game) {
+    const needVols = (game.volunteers || []).filter(v => this.volunteerNeedsRecycling(v, game));
+    if (needVols.length === 0) {
+      game.showToast('Effectifs à Jour', 'Tous vos secouristes sont actuellement à jour de leur formation continue.', 'green');
+      return;
+    }
+
+    let count = 0;
+    needVols.forEach(v => {
+      // Chercher ou créer une session
+      let session = (game.sessionsFormation || []).find(s => 
+        s.courseId === 'FC_PSE' && 
+        !s.isCompleted && 
+        (s.internalAntenneSeats || 0) > (s.registeredCandidates || []).length &&
+        !(s.registeredCandidates || []).includes(v.id)
+      );
+
+      if (!session) {
+        this.createSession(game, 'FC_PSE', {
+          locationType: 'antenne',
+          internalAntenneSeats: 8,
+          internalProtecSeats: 0,
+          openToPublic: false,
+          totalSeats: 8,
+          roomNumber: 1
+        });
+        session = game.sessionsFormation[game.sessionsFormation.length - 1];
+      }
+
+      if (session) {
+        if (!Array.isArray(session.registeredCandidates)) session.registeredCandidates = [];
+        session.registeredCandidates.push(v.id);
+        v.registeredSessionId = session.id;
+        count++;
+      }
+    });
+
+    game.saveGame();
+    if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
+    game.showToast('Inscriptions Groupées', `${count} secouriste(s) ont été positionnés sur les sessions de recyclage FC PSE !`, 'green');
+    this.renderModal(game);
+  },
+
+  // Rendu de l'onglet complet Suivi des Validités & Recyclages (Formation Continue)
+  renderRecyclagesTab(game) {
+    const curYear = (game?.clock?.year) || (window.game?.clock?.year) || 2026;
+    const vols = game.volunteers || [];
+
+    // Secouristes concernés par une compétence soumise à validité
+    const validableSkills = ['pse1', 'pse2', 'ce', 'cd', 'sst', 'formateur_psc', 'formateur_ps', 'formateur_sst', 'formateur_de_formateur'];
+    const candidates = vols.filter(v => {
+      const skills = v.skills || [];
+      return validableSkills.some(s => skills.includes(s)) || ['PSE1', 'PSE2', 'CE', 'CD'].includes(v.rank);
+    });
+
+    const statusCounts = { valid: 0, warning: 0, expired: 0 };
+    candidates.forEach(v => {
+      const refYear = v.recycledYear || v.formationYear || curYear;
+      const expiryYear = Number(refYear) + 1;
+      if (curYear > expiryYear) statusCounts.expired++;
+      else if (curYear === expiryYear) statusCounts.warning++;
+      else statusCounts.valid++;
+    });
+
+    return `
+      <div class="space-y-6">
+        <!-- Bandeau Explicatif Réglementation Sécurité Civile -->
+        <div class="p-4 rounded-2xl bg-gradient-to-r from-indigo-900 via-pc-blue to-slate-900 text-white shadow-md space-y-2">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">📋</span>
+            <div>
+              <h4 class="text-sm font-black uppercase tracking-wide">Réglementation Officielle : Validité des Compétences & Recyclages</h4>
+              <p class="text-xs text-blue-100 leading-relaxed">
+                Les diplômes opérationnels de secourisme (PSE1, PSE2, Chef d’Équipe, Formateurs) sont valables <strong>jusqu'au 31/12 de l'année suivant la formation</strong>.
+                Pour renouveler et maintenir ces compétences actives, l’antenne doit organiser des <strong>sessions de recyclage (Formation Continue FC PSE)</strong>. Les diplômes citoyens (PSC1) et permis de conduire sont permanents.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3 Compteurs Synthétiques -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div class="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-2xs flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-black">✓</span>
+              <div>
+                <div class="text-[10px] text-emerald-800 font-bold uppercase">À Jour de Recyclage</div>
+                <div class="text-lg font-black text-emerald-950">${statusCounts.valid} secouristes</div>
+              </div>
+            </div>
+            <span class="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Valides</span>
+          </div>
+
+          <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 shadow-2xs flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black">⚠️</span>
+              <div>
+                <div class="text-[10px] text-amber-800 font-bold uppercase">Échéance 31/12/${curYear}</div>
+                <div class="text-lg font-black text-amber-950">${statusCounts.warning} secouristes</div>
+              </div>
+            </div>
+            <span class="text-[10px] font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">À recycler</span>
+          </div>
+
+          <div class="p-3.5 rounded-2xl bg-red-50 border border-red-200 shadow-2xs flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center font-black">✕</span>
+              <div>
+                <div class="text-[10px] text-red-800 font-bold uppercase">Validité Expirée</div>
+                <div class="text-lg font-black text-red-950">${statusCounts.expired} secouristes</div>
+              </div>
+            </div>
+            <span class="text-[10px] font-black text-red-700 bg-red-100 px-2 py-0.5 rounded-full">FC Requise</span>
+          </div>
+        </div>
+
+        <!-- Actions Rapides -->
+        <div class="p-4 rounded-2xl glass-card border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h5 class="text-xs font-black text-slate-900 uppercase tracking-wide">Organisation des Recyclages (FC PSE)</h5>
+            <p class="text-[11px] text-slate-500">Planifiez une session de formation continue de 6h ou inscrivez directement vos effectifs en attente.</p>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button onclick="window.ProtecFormations.inscrireTousRetardatairesRecyclage(window.game)" class="px-3.5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+              <span>⚡ Inscrire tous les retardataires</span>
+            </button>
+            <button onclick="window.ProtecFormations.setMainTab('grand_public'); setTimeout(() => { const sel=document.getElementById('new-session-course'); if(sel){ sel.value='FC_PSE'; sel.dispatchEvent(new Event('change')); } }, 100);" class="px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>+ Planifier Session FC PSE</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tableau des Secouristes & État des Validités -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black uppercase text-slate-800 tracking-wider">État Individuel des Diplômes & Échéances au 31/12</span>
+            <span class="text-[10px] text-slate-500">${candidates.length} secouriste(s) opérationnel(s)</span>
+          </div>
+
+          <div class="space-y-2">
+            ${candidates.map(v => {
+              const refYear = v.recycledYear || v.formationYear || curYear;
+              const expiryYear = Number(refYear) + 1;
+              const isExpired = curYear > expiryYear;
+              const isWarning = curYear === expiryYear;
+              const isRegistered = (game.sessionsFormation || []).some(s => s.courseId === 'FC_PSE' && !s.isCompleted && (s.registeredCandidates || []).includes(v.id));
+
+              return `
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3 hover:shadow-sm transition">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-lg flex-shrink-0 shadow-2xs">
+                      ${v.avatar || '🙋'}
+                    </div>
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <span class="font-extrabold text-xs text-slate-900">${v.name}</span>
+                        <span class="px-2 py-0.2 rounded-md font-mono text-[9px] font-black bg-pc-blue text-white">${v.rank || 'Secouriste'}</span>
+                        ${v.poleRoleTitle ? `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-black bg-indigo-100 text-indigo-900">${v.poleRoleTitle}</span>` : ''}
+                      </div>
+                      <div class="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
+                        <span>Dernier diplôme / recyclage : <strong>${refYear}</strong></span>
+                        <span>•</span>
+                        <span>Échéance réglementaire : <strong class="${isExpired ? 'text-red-700' : (isWarning ? 'text-amber-700' : 'text-emerald-700')}">31/12/${expiryYear}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-2 self-start md:self-auto flex-shrink-0">
+                    <span class="px-2.5 py-1 rounded-xl text-xs font-black border flex items-center gap-1 ${isExpired ? 'bg-red-100 text-red-800 border-red-300' : (isWarning ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-emerald-100 text-emerald-900 border-emerald-300')}">
+                      ${isExpired ? '✕ Expirée' : (isWarning ? '⚠️ Recyclage requis' : '✓ À jour')}
+                    </span>
+
+                    ${(isExpired || isWarning) ? (isRegistered ? `
+                      <span class="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-800 font-extrabold text-xs flex items-center gap-1">
+                        <i data-lucide="calendar-check" class="w-3.5 h-3.5 text-indigo-600"></i>
+                        <span>FC PSE Planifiée</span>
+                      </span>
+                    ` : `
+                      <button onclick="window.ProtecFormations.inscrireBenevoleRecyclage(window.game, '${v.id}')" class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs transition shadow-xs flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span>Inscrire en FC PSE</span>
+                      </button>
+                    `) : `
+                      <span class="text-xs text-emerald-700 font-bold px-2">Valide ✓</span>
+                    `}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
   },
 
   // Clôturer et certifier une session de formation
@@ -2443,10 +2789,12 @@ window.ProtecFormations = {
       return str.includes(fsq);
     });
 
+    const recyclingNeededCount = (game.volunteers || []).filter(v => this.volunteerNeedsRecycling(v, game)).length;
+
     const navTabsHTML = `
-      <!-- Barre de navigation supérieure des deux canaux de formation -->
+      <!-- Barre de navigation supérieure des pôles de formation -->
       <div class="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-700 pb-3 flex-wrap gap-2">
-        <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
+        <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl flex-wrap">
           <button onclick="window.ProtecFormations.setMainTab('entreprises')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.mainTab === 'entreprises' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer'}">
             <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
             <span>Structures & Entreprises</span>
@@ -2456,6 +2804,11 @@ window.ProtecFormations = {
             <i data-lucide="users" class="w-3.5 h-3.5"></i>
             <span>Grand Public & Internes</span>
             ${activeSessions.length > 0 ? `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-black ${this.mainTab === 'grand_public' ? 'bg-white text-pc-blue' : 'bg-slate-300 dark:bg-slate-700 text-slate-800 dark:text-slate-200'}">${activeSessions.length}</span>` : ''}
+          </button>
+          <button onclick="window.ProtecFormations.setMainTab('recyclages')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.mainTab === 'recyclages' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer'}">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>🔄 Validités & Recyclages (FC)</span>
+            ${recyclingNeededCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-black ${this.mainTab === 'recyclages' ? 'bg-amber-400 text-slate-950' : 'bg-rose-500 text-white animate-pulse'}">${recyclingNeededCount}</span>` : ''}
           </button>
           <button onclick="window.game.openPlanningFiltered('formations')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 hover:text-emerald-950 dark:hover:text-emerald-200 cursor-pointer border border-transparent hover:border-emerald-300 dark:hover:border-emerald-500/40" title="Consulter le calendrier complet du pôle formations">
             <i data-lucide="calendar" class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400"></i>
@@ -2467,9 +2820,26 @@ window.ProtecFormations = {
             <i data-lucide="sparkles" class="w-3.5 h-3.5 text-pc-blue dark:text-sky-400"></i>
             <span>Demandes entrantes auto (Notoriété & Communication)</span>
           </div>
+        ` : this.mainTab === 'recyclages' ? `
+          <div class="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-200 font-bold text-[11px] flex items-center gap-1.5 shadow-xs">
+            <i data-lucide="alert-circle" class="w-3.5 h-3.5 text-amber-600"></i>
+            <span>Échéance réglementaire : 31/12 de l'année N+1</span>
+          </div>
         ` : ''}
       </div>
     `;
+
+    // Si onglet Recyclages & Validités sélectionné :
+    if (this.mainTab === 'recyclages') {
+      body.innerHTML = `
+        <div class="space-y-6">
+          ${navTabsHTML}
+          ${this.renderRecyclagesTab(game)}
+        </div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+      return;
+    }
 
     // Si onglet Entreprises sélectionné :
     if (this.mainTab === 'entreprises') {
@@ -2490,9 +2860,50 @@ window.ProtecFormations = {
     const stationName = primaryStation.name || `Antenne de ${primaryStation.city || 'Nancy'}`;
     const totalTrainingRooms = window.ProtecLocaux?.getStationTrainingRoomsCount ? window.ProtecLocaux.getStationTrainingRoomsCount(primaryStation) : 1;
 
+    // Responsable Formation désigné au sein de l'antenne
+    const respFormationVol = (game.volunteers || []).find(v => v.poleRoleId === 'resp_formation') ||
+      (game.poles ? game.volunteers.find(v => v.id === game.poles.find(p => p.id === 'formation')?.responsibleId) : null);
+
+    const respFormationBannerHTML = `
+      <div class="p-3.5 rounded-2xl border ${respFormationVol ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 border-emerald-300' : 'bg-slate-50 border-slate-200'} flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl ${respFormationVol ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'} flex items-center justify-center font-black text-lg shadow-sm">
+            <i data-lucide="graduation-cap" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-black uppercase text-slate-900 tracking-wide">Responsable Formation d'Antenne</span>
+              ${respFormationVol ? `<span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">En poste</span>` : `<span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300">Poste Vacant</span>`}
+            </div>
+            <div class="text-[11px] text-slate-600">
+              ${respFormationVol 
+                ? `<strong>${respFormationVol.name}</strong> (${respFormationVol.rank}) • <em>Gère automatiquement les inscriptions et la qualification des bénévoles (PSE1, PSE2, FC PSE).</em>` 
+                : `Nommez un Responsable Formation dans l'onglet Pôles pour activer l'automatisation des formations de vos bénévoles.`}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 self-start sm:self-auto flex-shrink-0">
+          ${respFormationVol ? `
+            <div class="px-3 py-1.5 rounded-xl bg-emerald-100/90 border border-emerald-300 text-emerald-900 text-xs font-extrabold flex items-center gap-1.5 shadow-2xs">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Gestion Auto Active</span>
+            </div>
+          ` : `
+            <button onclick="window.game.openModule('poles')" class="px-3 py-1.5 rounded-xl bg-pc-blue text-white text-xs font-black hover:bg-pc-blue-light transition shadow-sm flex items-center gap-1 cursor-pointer">
+              <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+              <span>Nommer Responsable</span>
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+
     body.innerHTML = `
       <div class="space-y-6">
         ${navTabsHTML}
+
+        <!-- Responsable Formation & Gestion Automatique des Bénévoles -->
+        ${respFormationBannerHTML}
 
         <!-- Bandeau d'information Doctrine Protec Civile -->
         <div class="p-3.5 rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-pc-blue text-white shadow-md flex items-center justify-between gap-3 text-xs">

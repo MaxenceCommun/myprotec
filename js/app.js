@@ -1514,6 +1514,9 @@ class ProtecGame {
       if (window.ProtecPersonnel && typeof window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences === 'function') {
         window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences(this);
       }
+      if (window.ProtecPoles && typeof window.ProtecPoles.injectState === 'function') {
+        window.ProtecPoles.injectState(this);
+      }
       setTimeout(() => {
         if (!window.ProtecAuth || !window.ProtecAuth.isSyncing) {
           window.ProtecLoader?.finish('Antenne prête pour le service !');
@@ -1559,6 +1562,11 @@ class ProtecGame {
             departmentInfrastructures: this.departmentInfrastructures || {},
             mealAllowancePerVolunteer: this.mealAllowancePerVolunteer || 15,
             antenneMessagesData: this.antenneMessagesData || null,
+            poles: this.poles || null,
+            roleRequests: this.roleRequests || [],
+            rolesAccessMode: this.rolesAccessMode || 'validation',
+            autoFormationActive: this.autoFormationActive !== undefined ? this.autoFormationActive : true,
+            autoLogisticsActive: this.autoLogisticsActive !== undefined ? this.autoLogisticsActive : true,
             savedAt: Date.now()
           };
           sessionStorage.setItem('myprotec_instant_cache', JSON.stringify(cacheData));
@@ -1628,6 +1636,11 @@ class ProtecGame {
             if (c.departmentInfrastructures) this.departmentInfrastructures = c.departmentInfrastructures;
             if (c.mealAllowancePerVolunteer !== undefined) this.mealAllowancePerVolunteer = c.mealAllowancePerVolunteer;
             if (c.antenneMessagesData) this.antenneMessagesData = c.antenneMessagesData;
+            if (c.poles) this.poles = c.poles;
+            if (c.roleRequests) this.roleRequests = c.roleRequests;
+            if (c.rolesAccessMode) this.rolesAccessMode = c.rolesAccessMode;
+            if (c.autoFormationActive !== undefined) this.autoFormationActive = c.autoFormationActive;
+            if (c.autoLogisticsActive !== undefined) this.autoLogisticsActive = c.autoLogisticsActive;
           }
         } catch (ce) {}
       }
@@ -10724,30 +10737,96 @@ class ProtecGame {
     el.style.zIndex = '99999';
 
     const allSkills = this.getVolunteerAllSkills(vol);
+    const needsRecycling = window.ProtecFormations?.volunteerNeedsRecycling ? window.ProtecFormations.volunteerNeedsRecycling(vol, this) : false;
+
     const skillsBadges = allSkills.length > 0
-      ? allSkills.map(s => `
-          <div class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold border flex items-center justify-between gap-2 shadow-2xs ${s.color}">
-            <span class="font-mono font-black tracking-wide">${s.badge || s.id.toUpperCase()}</span>
-            <span class="text-[9.5px] font-semibold opacity-95 truncate">${s.label}</span>
-          </div>
-        `).join('')
+      ? allSkills.map(s => {
+          const valInfo = window.ProtecFormations?.getSkillValidityInfo
+            ? window.ProtecFormations.getSkillValidityInfo(s.id, vol, this)
+            : { hasValidity: false };
+
+          let validityBadge = '';
+          if (!valInfo.hasValidity) {
+            validityBadge = `<span class="text-[8px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-semibold shrink-0">Permanente</span>`;
+          } else if (valInfo.status === 'valid') {
+            validityBadge = `<span class="text-[8px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold shrink-0" title="Valide jusqu'au 31/12/${valInfo.expiryYear}">✓ 31/12/${valInfo.expiryYear}</span>`;
+          } else if (valInfo.status === 'due_soon') {
+            validityBadge = `<span class="text-[8px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold shrink-0 animate-pulse" title="Recyclage annuel requis avant le 31/12/${valInfo.expiryYear}">⚠️ 31/12/${valInfo.expiryYear}</span>`;
+          } else if (valInfo.status === 'expired') {
+            validityBadge = `<span class="text-[8px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-black shrink-0" title="Expirée au 31/12/${valInfo.expiryYear} - Maintien des compétences obligatoire">✕ Expirée</span>`;
+          }
+
+          return `
+            <div class="px-2 py-1.5 rounded-xl text-[10px] font-bold border flex items-center justify-between gap-1.5 shadow-2xs ${s.color}">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="font-mono font-black tracking-wide shrink-0">${s.badge || s.id.toUpperCase()}</span>
+                <span class="text-[9.5px] font-semibold opacity-95 truncate">${s.label}</span>
+              </div>
+              ${validityBadge}
+            </div>
+          `;
+        }).join('')
       : `<span class="text-[10px] text-slate-500 italic">Formation initiale ${vol.rank || 'Secouriste'}</span>`;
 
     el.innerHTML = `
-      <div class="font-black text-xs text-slate-900 mb-2.5 pb-2 border-b border-slate-200 flex items-center justify-between gap-2">
+      <div class="font-black text-xs text-slate-900 mb-2 pb-2 border-b border-slate-200 flex items-center justify-between gap-2">
         <span class="flex items-center gap-2 truncate">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-400/30 flex-shrink-0"></span>
           <span class="text-slate-900 font-black truncate">${vol.name}</span>
         </span>
         <span class="text-[9.5px] font-mono px-2 py-0.5 rounded-full bg-pc-blue text-white font-black shadow-2xs flex-shrink-0">${vol.rank || 'Secouriste'}</span>
       </div>
-      <div class="text-[10px] font-black uppercase text-amber-800 mb-2 tracking-wider flex items-center gap-1.5">
-        <i data-lucide="award" class="w-3.5 h-3.5 text-amber-600 flex-shrink-0"></i>
-        <span>Compétences & Habilitations :</span>
+
+      ${needsRecycling ? `
+        <div class="mb-2.5 p-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[10px] flex items-center justify-between gap-2 shadow-2xs">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-600 shrink-0"></i>
+            <span class="font-bold leading-tight">Recyclage annuel (FC) requis au 31/12</span>
+          </div>
+          <button type="button" onclick="window.ProtecFormations.openModal(window.game); window.ProtecFormations.setMainTab('recyclages'); window.game.hideFloatingSkillsTooltip();" class="px-2 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-black text-[9px] shrink-0 cursor-pointer shadow-xs transition">
+            Inscrire FC
+          </button>
+        </div>
+      ` : ''}
+
+      <div class="text-[10px] font-black uppercase text-amber-800 mb-1.5 tracking-wider flex items-center justify-between">
+        <span class="flex items-center gap-1">
+          <i data-lucide="award" class="w-3.5 h-3.5 text-amber-600 flex-shrink-0"></i>
+          <span>Compétences & Habilitations :</span>
+        </span>
+        <span class="text-[8.5px] text-slate-400 font-normal">Validité au 31/12 N+1</span>
       </div>
       <div class="space-y-1.5 mb-2.5 max-h-72 overflow-y-auto pr-1.5 custom-scrollbar">
         ${skillsBadges}
       </div>
+      ${(() => {
+        const roleInfo = window.ProtecPoles?.getVolunteerRoleInfo ? window.ProtecPoles.getVolunteerRoleInfo(vol) : null;
+        if (roleInfo) {
+          return `
+            <div class="mt-2 pt-2 border-t border-slate-200">
+              <div class="text-[10px] font-black uppercase text-indigo-900 mb-1 flex items-center justify-between">
+                <span class="flex items-center gap-1"><i data-lucide="${roleInfo.icon || 'award'}" class="w-3.5 h-3.5 text-indigo-600"></i> Rôle dans le Pôle :</span>
+                <span class="text-[9px] font-bold text-slate-500 uppercase">${roleInfo.poleId}</span>
+              </div>
+              <div class="p-2 rounded-xl ${roleInfo.badgeColor} border text-xs">
+                <div class="font-extrabold">${roleInfo.title}</div>
+                <div class="text-[9.5px] opacity-90 leading-tight mt-0.5">${roleInfo.powerDesc || roleInfo.desc}</div>
+              </div>
+            </div>
+          `;
+        }
+        return `
+          <div class="mt-2 pt-2 border-t border-slate-200">
+            <div class="text-[10px] font-black uppercase text-slate-500 mb-1 flex items-center justify-between">
+              <span>Rôle de Pôle :</span>
+              <span class="text-[9px] text-slate-400">Aucun</span>
+            </div>
+            <button type="button" onclick="window.game.openModule('poles'); window.game.hideFloatingSkillsTooltip();" class="w-full py-1 px-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 text-center transition">
+              + Attribuer ou demander un rôle
+            </button>
+          </div>
+        `;
+      })()}
       <div class="text-[9.5px] text-slate-600 pt-2 border-t border-slate-200 flex justify-between items-center font-medium">
         <span>Dispo : <strong class="text-slate-900 font-bold">${vol.dispoJours?.join(', ') || 'Semaine & WE'}</strong></span>
         <span>Énergie : <strong class="text-emerald-700 font-bold">${vol.energy || 80}%</strong></span>
@@ -10803,8 +10882,10 @@ class ProtecGame {
   // Rendu de l'infobulle affichant les compétences détaillées au survol
   getVolunteerSkillsPopoverHTML(v) {
     if (!v) return '';
+    const needsRecycling = window.ProtecFormations?.volunteerNeedsRecycling ? window.ProtecFormations.volunteerNeedsRecycling(v, this) : false;
+
     return `
-      <div class="inline-flex items-center mt-0.5">
+      <div class="inline-flex items-center gap-1 mt-0.5 flex-wrap">
         <button type="button" 
           onmouseenter="window.game.showFloatingSkillsTooltip(event, '${v.id}')"
           onmouseleave="window.game.hideFloatingSkillsTooltip()"
@@ -10813,6 +10894,15 @@ class ProtecGame {
           <i data-lucide="award" class="w-3.5 h-3.5 text-pc-blue group-hover/skill-btn:text-white transition-colors"></i>
           <span>Compétences</span>
         </button>
+        ${needsRecycling ? `
+          <button type="button"
+            onclick="event.stopPropagation(); window.ProtecFormations.openModal(window.game); window.ProtecFormations.setMainTab('recyclages');"
+            title="Recyclage annuel (FC) requis avant le 31/12 - Cliquez pour planifier ou inscrire"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-black border border-amber-300 shadow-2xs transition cursor-pointer">
+            <i data-lucide="refresh-cw" class="w-3 h-3 text-amber-700"></i>
+            <span>Recyclage FC</span>
+          </button>
+        ` : ''}
       </div>
     `;
   }
@@ -19798,7 +19888,8 @@ class ProtecGame {
                   const isServiceCivique = v.contractType === 'service_civique' || v.contractType === 'Service Civique';
                   const contractLabel = isSalarie ? (v.contractType === 'CDD' ? 'Salarié CDD' : (v.contractType === 'CDI' ? 'Salarié CDI' : 'Salarié')) : (isServiceCivique ? 'Service Civique' : 'Bénévole');
                   const trait = window.ProtecPersonnel?.traits[v.trait] || { name: 'Secouriste standard' };
-                  const searchText = `${v.name} ${v.rank || ''} ${v.role || ''} ${contractLabel} ${v.dispoType || ''} ${trait.name || ''} ${(v.skills || []).join(' ')}`.toLowerCase();
+                  const roleInfo = window.ProtecPoles?.getVolunteerRoleInfo ? window.ProtecPoles.getVolunteerRoleInfo(v) : null;
+                  const searchText = `${v.name} ${v.rank || ''} ${v.role || ''} ${roleInfo?.title || ''} ${contractLabel} ${v.dispoType || ''} ${trait.name || ''} ${(v.skills || []).join(' ')}`.toLowerCase();
 
                   return `
                     <div class="volunteer-card p-3 rounded-2xl glass-card text-xs space-y-2 ${v.isBurnout ? 'border-2 border-red-400 bg-red-50/40' : ''}" data-search-text="${searchText}">
@@ -19810,7 +19901,10 @@ class ProtecGame {
                               <span>${v.name}</span>
                               <button type="button" onclick="window.game.openRenameVolunteerModal('${v.id}')" class="text-slate-400 hover:text-pc-blue p-0.5 rounded transition text-xs cursor-pointer" title="Modifier l'identité (prénom et nom)">✏️</button>
                             </div>
-                            <div class="text-[10px] text-slate-500 font-semibold">${v.rank} • ${contractLabel}</div>
+                            <div class="text-[10px] text-slate-500 font-semibold flex items-center gap-1.5 flex-wrap">
+                              <span>${v.rank} • ${contractLabel}</span>
+                              ${roleInfo ? `<span class="px-1.5 py-0.2 rounded font-black text-[8.5px] border ${roleInfo.badgeColor}">${roleInfo.shortTitle || roleInfo.title}</span>` : ''}
+                            </div>
                             ${this.getVolunteerSkillsPopoverHTML(v)}
                           </div>
                         </div>
@@ -22868,6 +22962,11 @@ class ProtecGame {
       // 1h. GESTION DES COMMANDES & LIVRAISONS LOGISTIQUES EN COURS (Suivi et déchargement)
       if (window.ProtecLogistique && typeof window.ProtecLogistique.updateDeliveriesClock === 'function') {
         window.ProtecLogistique.updateDeliveriesClock(this);
+      }
+
+      // 1i. GESTION DES PÔLES D'ANTENNE & RÔLES (Formation auto par le Resp. Formation & Missions logistiques des bénévoles)
+      if (window.ProtecPoles && typeof window.ProtecPoles.processClockTick === 'function') {
+        window.ProtecPoles.processClockTick(this);
       }
 
       // 1b. DÉPART ET GESTION DU TEMPS RÉEL SUR LES ALERTES ET DPS

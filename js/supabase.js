@@ -1402,6 +1402,11 @@ window.ProtecSupabase = {
         departmentInfrastructures: game.departmentInfrastructures || {},
         mealAllowancePerVolunteer: game.mealAllowancePerVolunteer || 15,
         antenneMessagesData: game.antenneMessagesData || null,
+        poles: game.poles || null,
+        roleRequests: game.roleRequests || [],
+        rolesAccessMode: game.rolesAccessMode || 'validation',
+        autoFormationActive: game.autoFormationActive !== undefined ? game.autoFormationActive : true,
+        autoLogisticsActive: game.autoLogisticsActive !== undefined ? game.autoLogisticsActive : true,
         platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(game.player, game)) || null,
         lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null,
         localEcussons: (game.localEcussons && game.localEcussons.length > 0) ? game.localEcussons : (game.localEcussons || [])

@@ -1873,6 +1873,11 @@ window.ProtecAuth = {
           departmentInfrastructures: game.departmentInfrastructures || {},
           mealAllowancePerVolunteer: game.mealAllowancePerVolunteer || 15,
           antenneMessagesData: game.antenneMessagesData || null,
+          poles: game.poles || null,
+          roleRequests: game.roleRequests || [],
+          rolesAccessMode: game.rolesAccessMode || 'validation',
+          autoFormationActive: game.autoFormationActive !== undefined ? game.autoFormationActive : true,
+          autoLogisticsActive: game.autoLogisticsActive !== undefined ? game.autoLogisticsActive : true,
           platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(this.currentUser, game)) || null,
           lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null
         };
@@ -2003,6 +2008,14 @@ window.ProtecAuth = {
       if (savedData.prefectureState) game.prefectureState = savedData.prefectureState;
       if (savedData.mealAllowancePerVolunteer !== undefined) game.mealAllowancePerVolunteer = savedData.mealAllowancePerVolunteer;
       if (savedData.antenneMessagesData) game.antenneMessagesData = savedData.antenneMessagesData;
+      if (savedData.poles) game.poles = savedData.poles;
+      if (savedData.roleRequests) game.roleRequests = savedData.roleRequests;
+      if (savedData.rolesAccessMode) game.rolesAccessMode = savedData.rolesAccessMode;
+      if (savedData.autoFormationActive !== undefined) game.autoFormationActive = savedData.autoFormationActive;
+      if (savedData.autoLogisticsActive !== undefined) game.autoLogisticsActive = savedData.autoLogisticsActive;
+      if (window.ProtecPoles && typeof window.ProtecPoles.injectState === 'function') {
+        window.ProtecPoles.injectState(game);
+      }
       if (savedData.adRewards) {
         game.adRewards = savedData.adRewards;
         if (window.ProtecAds) window.ProtecAds.updateUI(game);

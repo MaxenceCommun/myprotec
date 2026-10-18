@@ -985,6 +985,53 @@ window.ProtecLogistique = {
           </div>
         </div>
 
+        <!-- BANDEAU ÉQUIPE LOGISTIQUE & MISSIONS LOGISTIQUES DES BÉNÉVOLES -->
+        ${(() => {
+          const logVolunteers = (game.volunteers || []).filter(v =>
+            v.poleRoleId === 'benevole_logistique' || v.poleRoleId === 'resp_logistique' ||
+            (game.poles ? game.poles.find(p => p.id === 'logistique')?.assignedVolunteerIds.includes(v.id) : false)
+          );
+          const respLog = (game.volunteers || []).find(v => v.poleRoleId === 'resp_logistique') ||
+            (game.poles ? game.volunteers.find(v => v.id === game.poles.find(p => p.id === 'logistique')?.responsibleId) : null);
+
+          return `
+            <div class="p-3.5 rounded-2xl border ${logVolunteers.length > 0 ? 'bg-gradient-to-r from-teal-50 via-sky-50 to-slate-50 border-teal-300' : 'bg-slate-50 border-slate-200'} flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl ${logVolunteers.length > 0 ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-500'} flex items-center justify-center font-black text-lg shadow-sm">
+                  <i data-lucide="wrench" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-black uppercase text-slate-900 tracking-wide">Équipe Logistique d'Antenne</span>
+                    <span class="px-2 py-0.2 rounded-full text-[9px] font-black ${logVolunteers.length > 0 ? 'bg-teal-100 text-teal-800 border border-teal-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
+                      ${logVolunteers.length} secouriste(s) en charge
+                    </span>
+                    ${respLog ? `<span class="text-[10px] text-teal-900 font-bold hidden md:inline">• Resp : ${respLog.name}</span>` : ''}
+                  </div>
+                  <div class="text-[11px] text-slate-600">
+                    ${logVolunteers.length > 0 
+                      ? `<em>Ce sont les bénévoles qui gèrent les missions de logistique : réarmement automatique des VPSP/VTU rentrant de mission et suivi des consommables.</em>` 
+                      : `Nommez des Bénévoles Logistique dans l'onglet Pôles pour leur confier les missions de réarmement automatique.`}
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 self-start sm:self-auto flex-shrink-0">
+                ${logVolunteers.length > 0 ? `
+                  <div class="px-3 py-1.5 rounded-xl bg-teal-100/80 border border-teal-300 text-teal-900 text-xs font-extrabold flex items-center gap-1.5 shadow-2xs">
+                    <span class="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></span>
+                    <span>Gestion Missions Logistiques Active</span>
+                  </div>
+                ` : `
+                  <button onclick="window.game.openModule('poles')" class="px-3 py-1.5 rounded-xl bg-pc-blue text-white text-xs font-black hover:bg-pc-blue-light transition shadow-sm flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                    <span>Affecter Bénévoles</span>
+                  </button>
+                `}
+              </div>
+            </div>
+          `;
+        })()}
+
         <!-- CONTENU DYNAMIQUE SELON L'ONGLET ACTIF -->
         ${this.activeTab === 'boutique' ? this.renderBoutiqueHTML(game, station, cartTotal, cartCount) : ''}
         ${this.activeTab === 'livraisons' ? this.renderLivraisonsHTML(game, station) : ''}
