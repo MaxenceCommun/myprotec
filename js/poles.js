@@ -286,13 +286,15 @@ window.ProtecPoles = {
     if (!game.poles || !Array.isArray(game.poles) || game.poles.length === 0) {
       game.poles = JSON.parse(JSON.stringify(this.defaultPoles));
       if (game.volunteers && game.volunteers.length > 0) {
-        game.volunteers.forEach((v, idx) => {
-          const poleIdx = idx % game.poles.length;
-          const targetPole = game.poles[poleIdx];
+        const opPole = game.poles.find(p => p.id === 'operationnel') || game.poles[0];
+        game.volunteers.forEach(v => {
+          if (!v.assignedPoleId) {
+            v.assignedPoleId = opPole.id;
+          }
+          const targetPole = game.poles.find(p => p.id === v.assignedPoleId) || opPole;
           if (!targetPole.assignedVolunteerIds.includes(v.id)) {
             targetPole.assignedVolunteerIds.push(v.id);
           }
-          v.assignedPoleId = targetPole.id;
         });
       }
     } else {
@@ -405,13 +407,35 @@ window.ProtecPoles = {
       return;
     }
 
-    // Motivation formulée par le bénévole
+    // Motivation formulée par le bénévole selon le pôle ciblé
+    const poleMotivations = {
+      communication: [
+        `« Après mes premières missions sur le terrain, je souhaite mettre mon aisance relationnelle et digitale au service du rayonnement de l'antenne et de l'accueil des nouvelles recrues. »`,
+        `« Très motivé(e) pour valoriser nos actions sur les réseaux sociaux et dynamiser les candidatures de nouveaux bénévoles. »`,
+        `« Maintenant bien intégré(e) au sein de l'équipe, j'aimerais m'investir pour faire connaître nos dispositifs au grand public et aux partenaires locaux. »`
+      ],
+      logistique: [
+        `« J'ai à cœur de veiller au bon état de notre matériel et de nos véhicules. Je souhaite m'investir pour que nos ambulances et nos lots soient toujours prêts à partir. »`,
+        `« Rigoureux(se) et bricoleur(se), je propose mon aide active pour la gestion de la pharmacie, le réarmement de la flotte et la logistique d'antenne. »`,
+        `« Une intervention réussie commence par un matériel impeccable : je souhaite prendre en main le suivi du parc roulant et des consommables. »`
+      ],
+      formation: [
+        `« Fort(e) de mon expérience en secours, j'aimerais transmettre les gestes qui sauvent et accompagner la montée en compétences de nos futurs secouristes. »`,
+        `« Passionné(e) par la pédagogie, je souhaite m'investir dans l'animation de nos sessions internes (PSE) et grand public (PSC1). »`,
+        `« Très motivé(e) pour former la relève et renforcer la qualité pédagogique de notre équipe d'antenne. »`
+      ],
+      operationnel: [
+        `« Prêt(e) à prendre des responsabilités accrues dans la gestion des départs en alerte et le suivi radio des dispositifs de secours. »`,
+        `« Très motivé(e) pour assurer la régulation et la coordination fluide de nos équipages sur le terrain. »`
+      ]
+    };
     const defaultMotivations = [
       `« Je souhaite m’investir activement au sein du ${pole.name} pour faire progresser notre antenne. »`,
       `« Mes compétences et ma disponibilité me permettent de prendre ces responsabilités avec sérieux. »`,
       `« Très motivé(e) pour encadrer nos missions et soutenir l'équipe dans ce domaine clé. »`
     ];
-    const motivationText = customMotivation || defaultMotivations[Math.floor(Math.random() * defaultMotivations.length)];
+    const pool = poleMotivations[pole.type || pole.id] || defaultMotivations;
+    const motivationText = customMotivation || pool[Math.floor(Math.random() * pool.length)];
 
     // Si le mode est ACCÈS LIBRE : attribution directe sans attendre
     if (game.rolesAccessMode === 'free') {
@@ -558,13 +582,116 @@ window.ProtecPoles = {
     this.renderModal(game);
   },
 
+  // Détermination stable de l'intérêt d'un bénévole pour un pôle (Quotas réels d'antenne)
+  // RÈGLE : 3% Communication (avec maturité), 10% Logistique, 8% Formateurs, ~79% Opérationnel / Terrain pur
+  getVolunteerPoleInterest(volunteer) {
+    if (!volunteer) return 'operationnel';
+    if (volunteer.poleInterest) return volunteer.poleInterest;
+
+    // Hash pseudo-aléatoire stable basé sur l'identifiant pour ne pas changer d'avis à chaque tick
+    let hash = 0;
+    const str = String(volunteer.id || volunteer.name || '');
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    const pct = Math.abs(hash) % 100; // 0 à 99
+
+    let interest = 'operationnel';
+    if (pct < 3) {
+      interest = 'communication'; // 3% des effectifs
+    } else if (pct < 13) {
+      interest = 'logistique';    // 10% des effectifs (3 à 12)
+    } else if (pct < 21) {
+      interest = 'formation';     // 8% des effectifs (13 à 20)
+    } else {
+      interest = 'operationnel';  // ~79% des effectifs : secouristes de terrain, pas de souhait support
+    }
+    volunteer.poleInterest = interest;
+    return interest;
+  },
+
+  // Vérifie si un bénévole a la maturité et les compétences pour formuler une demande pour un rôle
+  isVolunteerReadyForPoleRequest(volunteer, role, game) {
+    if (!volunteer || !role) return false;
+    if (volunteer.isBurnout || volunteer.status === 'mission') return false;
+
+    // 1. Pôle COMMUNICATION (3% des effectifs, et pas dès leur arrivée !)
+    if (role.poleId === 'communication') {
+      // Le bénévole ne doit PAS être un nouvel arrivant : il doit avoir découvert la vie d'antenne
+      const missionsDone = volunteer.missionsCount || 0;
+      const experience = volunteer.exp || 0;
+      // Critère : au moins 5 missions de terrain OU au moins 75 XP
+      if (missionsDone < 5 && experience < 75) {
+        return false; // Trop récent dans l'antenne pour postuler en com
+      }
+      return true;
+    }
+
+    // 2. Pôle FORMATION (8% des effectifs - Formateurs d'antenne)
+    if (role.poleId === 'formation') {
+      // Pour être formateur d'antenne ou responsable formation : PSE2 ou formateur agréé ou expérience confirmée
+      const isTrainerAlready = volunteer.isTrainer || (volunteer.skills && (volunteer.skills.includes('formateur') || volunteer.skills.includes('Formateur Agréé')));
+      const isExperienced = volunteer.rank === 'PSE2' || ['CE', 'CP', 'CD'].includes(volunteer.rank) || (volunteer.missionsCount || 0) >= 4 || (volunteer.exp || 0) >= 60;
+      if (!isTrainerAlready && !isExperienced) {
+        return false; // Pas assez expérimenté pour former les autres
+      }
+      return true;
+    }
+
+    // 3. Pôle LOGISTIQUE (10% des effectifs)
+    if (role.poleId === 'logistique') {
+      // Doit avoir fait au moins 1 mission ou posséder le permis B ou être PSE1
+      const hasPermis = Boolean(volunteer.permis_b || volunteer.hasDrivingLicense || (volunteer.skills && volunteer.skills.includes('permis_b')));
+      const hasMinExp = (volunteer.missionsCount || 0) >= 1 || (volunteer.exp || 0) >= 20 || volunteer.rank !== 'Stagiaire';
+      return hasPermis || hasMinExp;
+    }
+
+    // 4. Rôles Leader / Responsables
+    if (role.isLeader) {
+      return (volunteer.missionsCount || 0) >= 3 || volunteer.rank === 'PSE2' || ['CE', 'CP', 'CD'].includes(volunteer.rank);
+    }
+
+    return true;
+  },
+
   // Générer des souhaits spontanés de rôles formulés par les bénévoles de l'antenne
+  // RÈGLE : Demandes RARES (1 max à la fois, aucune si demande en attente, quotas stricts 3% com, 10% log, 8% formateur)
   triggerVolunteerRoleWishes(game, forcePrompt = false) {
     this.injectState(game);
     if (!game.volunteers || game.volunteers.length === 0) return 0;
 
-    // Trouver les bénévoles sans rôle
-    const availableVolunteers = game.volunteers.filter(v => !v.poleRoleId && !v.isBurnout);
+    // Règle anti-spam : Si une demande est déjà en attente d'arbitrage par le joueur, ne pas en ajouter
+    const pendingRequests = (game.roleRequests || []).filter(r => r.status === 'pending');
+    if (pendingRequests.length > 0 && !forcePrompt) {
+      return 0;
+    }
+
+    const totalVols = game.volunteers.length;
+
+    // 1. Quotas d'effectifs réels par pôle
+    const quotaCom = Math.max(1, Math.round(totalVols * 0.03));   // 3% max en com
+    const quotaLog = Math.max(1, Math.round(totalVols * 0.10));   // 10% max en logistique
+    const quotaForm = Math.max(1, Math.round(totalVols * 0.08));  // 8% max en formation
+
+    // 2. Décompte actuel des bénévoles déjà en poste ou ayant une demande en attente
+    const countInCom = game.volunteers.filter(v => {
+      const r = this.ROLES_CATALOG.find(rc => rc.id === v.poleRoleId);
+      return r && r.poleId === 'communication';
+    }).length + pendingRequests.filter(req => req.poleId === 'communication').length;
+
+    const countInLog = game.volunteers.filter(v => {
+      const r = this.ROLES_CATALOG.find(rc => rc.id === v.poleRoleId);
+      return r && r.poleId === 'logistique';
+    }).length + pendingRequests.filter(req => req.poleId === 'logistique').length;
+
+    const countInForm = game.volunteers.filter(v => {
+      const r = this.ROLES_CATALOG.find(rc => rc.id === v.poleRoleId);
+      return r && r.poleId === 'formation';
+    }).length + pendingRequests.filter(req => req.poleId === 'formation').length;
+
+    // 3. Trouver les bénévoles sans rôle et disponibles
+    const availableVolunteers = game.volunteers.filter(v => !v.poleRoleId && !v.isBurnout && v.status !== 'mission');
     if (availableVolunteers.length === 0) {
       if (forcePrompt) {
         game.showToast('Effectifs Déjà Investis', 'Tous vos bénévoles qualifiés occupent déjà un rôle au sein de l’antenne.', 'blue');
@@ -572,10 +699,11 @@ window.ProtecPoles = {
       return 0;
     }
 
-    // Trouver les rôles vacants
+    // 4. Identifier les rôles vacants dans chaque pôle
     const vacantRoles = this.ROLES_CATALOG.filter(role => {
       const currentHolders = game.volunteers.filter(v => v.poleRoleId === role.id);
-      return currentHolders.length < (role.maxHolders || 1);
+      const pendingForRole = pendingRequests.filter(req => req.roleId === role.id).length;
+      return (currentHolders.length + pendingForRole) < (role.maxHolders || 1);
     });
 
     if (vacantRoles.length === 0) {
@@ -585,30 +713,47 @@ window.ProtecPoles = {
       return 0;
     }
 
-    let generatedCount = 0;
-    // Tirer 1 à 2 bénévoles pour postuler
-    const countToPick = Math.min(availableVolunteers.length, Math.floor(Math.random() * 2) + 1);
-    const shuffledVols = [...availableVolunteers].sort(() => 0.5 - Math.random());
+    // 5. Chercher parmi les bénévoles ceux qui ont un intérêt correspondant ET dont le quota n'est pas saturé
+    const eligibleCandidates = [];
 
-    for (let i = 0; i < countToPick; i++) {
-      const candidateVol = shuffledVols[i];
-      // Choisir un rôle adapté à son profil
-      let candidateRole = null;
-      if (candidateVol.isTrainer || (candidateVol.skills && candidateVol.skills.includes('formateur'))) {
-        candidateRole = vacantRoles.find(r => r.id === 'resp_formation' || r.id === 'formateur') || vacantRoles[0];
-      } else if (candidateVol.permis_b || candidateVol.rank === 'PSE2') {
-        candidateRole = vacantRoles.find(r => r.poleId === 'logistique' || r.poleId === 'operationnel') || vacantRoles[0];
-      } else {
-        candidateRole = vacantRoles[Math.floor(Math.random() * vacantRoles.length)];
-      }
+    availableVolunteers.forEach(v => {
+      const interest = this.getVolunteerPoleInterest(v);
 
-      if (candidateRole) {
-        this.submitVolunteerRoleRequest(game, candidateVol.id, candidateRole.id);
-        generatedCount++;
+      if (interest === 'communication' && countInCom < quotaCom) {
+        const comRoles = vacantRoles.filter(r => r.poleId === 'communication');
+        comRoles.forEach(role => {
+          if (this.isVolunteerReadyForPoleRequest(v, role, game)) {
+            eligibleCandidates.push({ volunteer: v, role: role, interest: 'communication' });
+          }
+        });
+      } else if (interest === 'logistique' && countInLog < quotaLog) {
+        const logRoles = vacantRoles.filter(r => r.poleId === 'logistique');
+        logRoles.forEach(role => {
+          if (this.isVolunteerReadyForPoleRequest(v, role, game)) {
+            eligibleCandidates.push({ volunteer: v, role: role, interest: 'logistique' });
+          }
+        });
+      } else if (interest === 'formation' && countInForm < quotaForm) {
+        const formRoles = vacantRoles.filter(r => r.poleId === 'formation');
+        formRoles.forEach(role => {
+          if (this.isVolunteerReadyForPoleRequest(v, role, game)) {
+            eligibleCandidates.push({ volunteer: v, role: role, interest: 'formation' });
+          }
+        });
       }
+    });
+
+    if (eligibleCandidates.length === 0) {
+      if (forcePrompt) {
+        game.showToast('Sondage de l\'Équipe', 'Vos secouristes sont actuellement pleinement concentrés sur les missions de terrain. Aucun n\'a exprimé le souhait de rejoindre les pôles de soutien pour le moment.', 'slate');
+      }
+      return 0;
     }
 
-    return generatedCount;
+    // 6. Tirer au sort EXACTEMENT UN SEUL bénévole pour formuler sa demande (jamais de rafale !)
+    const picked = eligibleCandidates[Math.floor(Math.random() * eligibleCandidates.length)];
+    this.submitVolunteerRoleRequest(game, picked.volunteer.id, picked.role.id);
+    return 1;
   },
 
   // 5. AUTOMATISATION : FORMATION (Gérée par le Responsable Formation)
@@ -788,11 +933,11 @@ window.ProtecPoles = {
       this.processAutoLogisticsVolunteers(game);
     }
 
-    // 3. Génération spontanée périodique de souhaits de rôles (si des postes sont vacants)
-    if (now - this._lastWishSpawnCheck >= 120000) {
+    // 3. Génération spontanée périodique de souhaits de rôles (rares et espacés dans le temps)
+    // Vérification toutes les 10 minutes réelles (600 000 ms) avec une probabilité réduite (12%)
+    if (now - this._lastWishSpawnCheck >= 600000) {
       this._lastWishSpawnCheck = now;
-      // 30% de chance d'émettre un souhait spontané lors de ce cycle
-      if (Math.random() < 0.35) {
+      if (Math.random() < 0.12) {
         this.triggerVolunteerRoleWishes(game, false);
       }
     }
