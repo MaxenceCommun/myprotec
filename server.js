@@ -2300,3 +2300,95 @@ function runServerMinuteTick() {
 const SERVER_CRON_INTERVAL_MS = 60000;
 setInterval(runServerMinuteTick, SERVER_CRON_INTERVAL_MS);
 console.log('[CRON SERVEUR 24H/24] Moteur autonome initialisé (cycle toutes les 60 secondes).');
+
+// =========================================================================
+// PASSERELLE PUSH CLOUD : SUPABASE -> SERVEUR WEB PUSH (FCM / APNs)
+// Permet à un Administrateur (ou à un autre joueur) d'émettre des alertes
+// depuis https://myprotec.fr vers un utilisateur dont l'application est FERMÉE.
+// =========================================================================
+const SUPABASE_REST_URL = 'https://yrayehhbqcnuiuejqsjz.supabase.co';
+const SUPABASE_REST_KEY = 'sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs';
+let isBridgeProcessing = false;
+
+async function checkAndDispatchCloudPushQueue() {
+  if (isBridgeProcessing) return;
+  isBridgeProcessing = true;
+  try {
+    const res = await fetch(`${SUPABASE_REST_URL}/rest/v1/game_saves?select=user_id,username,save_data`, {
+      headers: {
+        'apikey': SUPABASE_REST_KEY,
+        'Authorization': `Bearer ${SUPABASE_REST_KEY}`
+      }
+    });
+
+    if (!res.ok) {
+      isBridgeProcessing = false;
+      return;
+    }
+
+    const saves = await res.json();
+    if (!Array.isArray(saves)) {
+      isBridgeProcessing = false;
+      return;
+    }
+
+    for (const row of saves) {
+      const sd = row.save_data || {};
+      const pending = sd.pending_notifications || [];
+      const sub = sd.push_subscription;
+
+      if (!sub || !sub.endpoint || !Array.isArray(pending) || pending.length === 0) continue;
+
+      let hasUpdated = false;
+      for (const notif of pending) {
+        // Traiter uniquement les alertes récentes non encore envoyées en Web Push
+        if (!notif.pushed_at && notif.push !== false) {
+          console.log(`\n📢 [Cloud Push Bridge] Événement de jeu détecté pour '${row.username || row.user_id}' : "${notif.title || 'Alerte'}"`);
+          
+          const result = await sendSingleWebPush(sub, {
+            title: notif.title || '🚨 ALERTE MYPROTEC',
+            body: notif.body || notif.message || 'Nouvelle notification opérationnelle reçue du jeu.',
+            icon: notif.icon || '/icons/icon-192x192.png',
+            badge: notif.badge || '/icons/badge-monochrome.png',
+            vibrate: [500, 200, 500, 200, 500],
+            data: { url: '/jeu.html', category: notif.category || 'alert' }
+          });
+
+          notif.pushed_at = new Date().toISOString();
+          notif.push_status = result.success ? 'delivered' : (result.expired ? 'expired_410' : 'error');
+          hasUpdated = true;
+
+          if (result.success) {
+            console.log(`🎉 [Cloud Push Bridge] Web Push expédié avec succès au terminal fermé de '${row.username}' !`);
+          } else {
+            console.warn(`⚠️ [Cloud Push Bridge] Échec d'envoi Web Push pour '${row.username}' (Statut: ${result.status}) : ${result.error}`);
+          }
+        }
+      }
+
+      if (hasUpdated) {
+        // Mise à jour de confirmation d'envoi dans Supabase
+        await fetch(`${SUPABASE_REST_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(row.user_id)}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': SUPABASE_REST_KEY,
+            'Authorization': `Bearer ${SUPABASE_REST_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({ save_data: sd })
+        }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    // Ignoré
+  } finally {
+    isBridgeProcessing = false;
+  }
+}
+
+// Surveillance de la file d'attente Cloud toutes les 5 secondes
+setInterval(checkAndDispatchCloudPushQueue, 5000);
+setTimeout(checkAndDispatchCloudPushQueue, 1500);
+console.log('📡 [Cloud Push Bridge] Passerelle Web Push active (écoute des événements multijoueurs/admin toutes les 5s).');
+
