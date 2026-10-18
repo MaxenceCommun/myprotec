@@ -1197,18 +1197,19 @@ window.ProtecNotifications = {
       });
     }
 
-    // 3. Programmation de rappel d'inactivité avec mission concrète
-    let emergencyTitle = '🚨 Alerte SAMU 15 : VPSP Requis';
-    let emergencyBody = 'Le SAMU 15 demande une ambulance de votre antenne. Touchez pour reprendre votre service !';
-    let missionId = null;
+    // 3. Programmation de rappel d'inactivité adapté aux moyens réels et conventions du joueur
+    const game = window.game;
+    const hasSamuConvention = Boolean(game && game.samuConvention?.signed);
+    const hasVpsp = Boolean(game && Array.isArray(game.vehicles) && game.vehicles.some(v => v.type === 'VPSP'));
 
-    if (window.game && window.game.stations && window.game.stations.length > 0) {
-      const realMission = this.generateEmergencyMission(window.game, 'Détresse Respiratoire à Domicile', 'samu');
-      if (realMission) {
-        missionId = realMission.id;
-        emergencyTitle = `🚨 SAMU 15 : ${realMission.title}`;
-        emergencyBody = `Réquisition urgente régulée dans votre secteur. Touchez pour déployer votre VPSP !`;
-      }
+    let emergencyTitle = '📬 Nouveau Devis : Sollicitation DPS en Attente';
+    let emergencyBody = 'Un organisateur attend votre validation de devis pour un poste de secours. Touchez pour ouvrir votre planning !';
+    let pushCat = 'dps';
+
+    if (hasSamuConvention && hasVpsp) {
+      emergencyTitle = '🚨 Alerte SAMU 15 : VPSP Requis';
+      emergencyBody = 'Le SAMU 15 demande une ambulance de votre antenne. Touchez pour reprendre votre service !';
+      pushCat = 'samu';
     }
 
     this.scheduleDelayedPush({
@@ -1216,10 +1217,10 @@ window.ProtecNotifications = {
       delaySeconds: this.inactivityIntervalSec,
       title: emergencyTitle,
       body: emergencyBody,
-      data: { url: '/jeu.html', category: 'samu', missionId: missionId }
+      data: { url: '/jeu.html', category: pushCat }
     });
 
-    // 4. Programmation Service Worker au niveau de l'OS (secours immédiat si onglet juste minimisé)
+    // 4. Programmation Service Worker au niveau de l'OS (secours différé si onglet juste minimisé)
     if (this.swRegistration && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
         type: 'SCHEDULE_BACKGROUND_ALERT',
@@ -1228,7 +1229,7 @@ window.ProtecNotifications = {
           title: emergencyTitle,
           body: emergencyBody,
           url: '/jeu.html',
-          data: { url: '/jeu.html', category: 'samu', missionId: missionId }
+          data: { url: '/jeu.html', category: pushCat }
         }
       });
     }
@@ -1293,37 +1294,95 @@ window.ProtecNotifications = {
   },
 
   // Génération autonome d'une mission d'urgence réelle pour accompagner un push
-  generateEmergencyMission(game, title = 'Détresse Respiratoire à Domicile', type = 'samu') {
+  generateEmergencyMission(game, title = null, requestedType = 'auto') {
     if (!game || !game.stations || game.stations.length === 0) return null;
+
+    const hasSamuConvention = Boolean(game.samuConvention && game.samuConvention.signed);
+    const hasVpsp = Array.isArray(game.vehicles) && game.vehicles.some(v => v.type === 'VPSP');
+    const totalVols = (game.volunteers || []).length;
+
+    // Détermination du type de mission réellement adapté aux moyens du joueur
+    let type = requestedType;
+    if (type === 'samu' || type === 'auto') {
+      if (!hasSamuConvention || !hasVpsp || totalVols < 3) {
+        // Le joueur n'a pas les moyens ou pas la convention SAMU 15 -> Basculer impérativement sur un DPS
+        type = 'dps';
+      } else {
+        type = 'samu';
+      }
+    }
+
+    // Contrôle d'unicité : s'il existe déjà une mission non assignée du même type en attente, la réutiliser et ne pas en créer d'autre !
+    if (Array.isArray(game.missions)) {
+      const existing = game.missions.find(m => m.status === 'planifie' && (m.id.startsWith('samu_') || m.id.startsWith('dps_') || m.type === type));
+      if (existing) {
+        return existing;
+      }
+    }
+
     const station = game.stations[0];
     const mLat = Number(station.lat || 48.6921) + (Math.random() - 0.5) * 0.04;
     const mLng = Number(station.lng || 6.1844) + (Math.random() - 0.5) * 0.04;
     const mId = `${type}_${Date.now()}`;
-    const mission = {
-      id: mId,
-      type: type,
-      category: 'urgences',
-      title: title,
-      desc: 'Réquisition d’urgence régulée. VPSP demandé immédiatement sur les lieux.',
-      lat: mLat,
-      lng: mLng,
-      city: station.city || 'Secteur Opérationnel',
-      departmentCode: station.departmentCode || '54',
-      address: `Secteur ${station.city || 'Antenne'} (Régulation 15)`,
-      status: 'planifie',
-      progress: 0,
-      requiredVehicles: ['VPSP'],
-      requiredVolunteers: 3,
-      requiredRanks: ['PSE1', 'PSE2'],
-      registeredVolunteers: [],
-      assignedCrew: { volunteers: [], vehicles: [] },
-      rewardMoney: 350,
-      rewardReputation: 45,
-      durationSeconds: 1200,
-      durationHours: "0.3",
-      createdAt: Date.now(),
-      spawnedAt: Date.now()
-    };
+
+    let mission;
+    if (type === 'samu') {
+      mission = {
+        id: mId,
+        type: 'samu',
+        category: 'urgences',
+        title: title || 'Détresse Respiratoire à Domicile',
+        desc: 'Réquisition d’urgence régulée. VPSP demandé immédiatement sur les lieux.',
+        lat: mLat,
+        lng: mLng,
+        city: station.city || 'Secteur Opérationnel',
+        departmentCode: station.departmentCode || '54',
+        address: `Secteur ${station.city || 'Antenne'} (Régulation 15)`,
+        status: 'planifie',
+        progress: 0,
+        requiredVehicles: ['VPSP'],
+        requiredVolunteers: 3,
+        requiredRanks: ['PSE1', 'PSE2'],
+        registeredVolunteers: [],
+        assignedCrew: { volunteers: [], vehicles: [] },
+        rewardMoney: 350,
+        rewardReputation: 45,
+        durationSeconds: 1200,
+        durationHours: "0.3",
+        createdAt: Date.now(),
+        spawnedAt: Date.now()
+      };
+    } else {
+      // Mission DPS adaptée aux moyens réels du joueur (PAPS ou DPS-PE)
+      const availableVeh = (game.vehicles || []).find(v => v.type === 'VTU' || v.type === 'VL') || (game.vehicles || [])[0];
+      const reqVol = Math.max(2, Math.min(3, totalVols || 2));
+      mission = {
+        id: mId,
+        type: 'dps',
+        category: 'dps',
+        title: title || 'Poste de Secours : Tournoi Sportif Local',
+        desc: 'Dispositif Prévisionnel de Secours pour un événement local. Prise en charge des malaises et traumatismes légers.',
+        lat: mLat,
+        lng: mLng,
+        city: station.city || 'Secteur Opérationnel',
+        departmentCode: station.departmentCode || '54',
+        address: `Gymnase Municipal, ${station.city || 'Antenne'}`,
+        status: 'planifie',
+        progress: 0,
+        requiredVehicles: availableVeh ? [availableVeh.type] : [],
+        requiredVolunteers: reqVol,
+        requiredRanks: reqVol >= 3 ? ['CE', 'PSE2', 'PSE1'] : ['PSE1', 'PSE2'],
+        registeredVolunteers: [],
+        assignedCrew: { volunteers: [], vehicles: [] },
+        rewardMoney: 280,
+        rewardReputation: 35,
+        durationSeconds: 1800,
+        durationHours: "0.5",
+        createdAt: Date.now(),
+        spawnedAt: Date.now()
+      };
+    }
+
     if (!Array.isArray(game.missions)) game.missions = [];
     if (!game.missions.some(m => m.id === mId)) {
       game.missions.unshift(mission);
@@ -1335,8 +1394,8 @@ window.ProtecNotifications = {
     const userId = window.ProtecAuth?.currentUser?.id || game.player?.id;
     if (userId && window.ProtecSupabase?.queuePlayerNotification) {
       window.ProtecSupabase.queuePlayerNotification(userId, {
-        title: `🚨 ${title}`,
-        body: 'Mission d’urgence régulée. VPSP demandé immédiatement sur les lieux.',
+        title: `🚨 ${mission.title}`,
+        body: mission.desc,
         category: type,
         missionId: mId
       });
@@ -1535,8 +1594,15 @@ window.ProtecNotifications = {
 
     // 1. Déclenchement de la mission réelle correspondante
     let testMissionId = null;
+    const hasSamu = Boolean(window.game && window.game.samuConvention?.signed && Array.isArray(window.game.vehicles) && window.game.vehicles.some(v => v.type === 'VPSP'));
+    const testCat = hasSamu ? 'samu' : 'dps';
+    const testTitle = hasSamu ? '🚨 Réquisition SAMU 15 (App Fermée)' : '📬 Demande DPS Urgente (App Fermée)';
+    const testBody = hasSamu
+      ? 'Engagement immédiat VPSP demandé ! Touchez pour mobiliser votre équipage sur la carte.'
+      : 'Un organisateur sollicite un poste de secours ! Touchez pour mobiliser votre équipe.';
+
     if (window.game && window.game.stations && window.game.stations.length > 0) {
-      const realMission = this.generateEmergencyMission(window.game, 'Détresse Respiratoire à Domicile (Test App Fermée)', 'samu');
+      const realMission = this.generateEmergencyMission(window.game, hasSamu ? 'Détresse Respiratoire à Domicile (Test App Fermée)' : 'Poste de Secours d’Urgence (Test App Fermée)', testCat);
       if (realMission) testMissionId = realMission.id;
     }
 
@@ -1551,11 +1617,11 @@ window.ProtecNotifications = {
             p256dh: keys?.p256dh,
             auth: keys?.auth,
             delaySeconds: seconds,
-            title: '🚨 Réquisition SAMU 15 (App Fermée)',
-            body: 'Engagement immédiat VPSP demandé ! Touchez pour mobiliser votre équipage sur la carte.',
+            title: testTitle,
+            body: testBody,
             icon: 'https://myprotec.fr/badge-monochrome.png',
             badge: 'https://myprotec.fr/badge-monochrome.png',
-            data: { url: '/jeu.html', missionId: testMissionId, category: 'samu' }
+            data: { url: '/jeu.html', missionId: testMissionId, category: testCat }
           })
         });
         const data = await res.json().catch(() => ({}));

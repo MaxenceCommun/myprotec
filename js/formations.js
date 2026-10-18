@@ -1228,20 +1228,23 @@ window.ProtecFormations = {
         antenne_id: proposal.antenne_id || 'station-1',
         client_name: proposal.client_name,
         client_type: proposal.client_type,
-        training_type: proposal.training_type,
+        location_name: proposal.client_city || proposal.location_name || (game?.stations?.[0]?.city || 'Nancy'),
+        formation_type: proposal.training_type || proposal.formation_type || 'SST',
         attendees_count: proposal.attendees_count,
-        mode: proposal.mode,
-        client_target_budget: proposal.client_target_budget,
-        proposed_price: proposal.proposed_price,
-        acceptance_rate: proposal.acceptance_rate,
+        modality: proposal.mode || proposal.modality || 'intra',
+        target_budget: proposal.client_target_budget || proposal.clientTargetBudget || proposal.target_budget,
+        quoted_price: proposal.proposed_price || proposal.proposedPrice || proposal.quoted_price || null,
         status: proposal.status,
-        trainer_id: proposal.trainer_id,
-        vehicle_id: proposal.vehicle_id,
-        consumable_cost: proposal.consumable_cost,
+        trainer_id: proposal.trainer_id || proposal.trainerId || null,
+        vehicle_id: proposal.vehicle_id || proposal.vehicleId || null,
+        consumable_cost: proposal.consumable_cost || proposal.consumableCost || 0,
         deadline: proposal.deadline ? new Date(proposal.deadline).toISOString() : null,
         evaluation_ends_at: proposal.evaluationEndsAt ? new Date(proposal.evaluationEndsAt).toISOString() : null,
         completed_at: proposal.completedAt ? new Date(proposal.completedAt).toISOString() : null,
-        created_at: proposal.created_at || new Date().toISOString()
+        created_at: proposal.created_at ? new Date(proposal.created_at).toISOString() : new Date().toISOString(),
+        details: {
+          acceptance_rate: proposal.acceptance_rate || proposal.acceptanceRate || 75
+        }
       };
 
       await window.ProtecSupabase.client

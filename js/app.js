@@ -1905,6 +1905,21 @@ class ProtecGame {
     // Purge et archivage systématique : éliminer toute mission terminée du tableau actif
     if (Array.isArray(this.missions)) {
       this.missions = this.missions.filter(m => !this.isMissionTerminated(m));
+
+      // Purge de sécurité : éliminer les missions SAMU injectées sans convention signée ou sans VPSP
+      const hasSamuConv = Boolean(this.samuConvention && this.samuConvention.signed);
+      const hasVpsp = Array.isArray(this.vehicles) && this.vehicles.some(v => v.type === 'VPSP');
+      if (!hasSamuConv || !hasVpsp) {
+        this.missions = this.missions.filter(m => {
+          if (!m) return false;
+          const isSamuMission = (m.type === 'samu' || m.type === 'garde_samu');
+          // Conserver uniquement les missions engagées en cours s'il y en avait, purger toutes les autres
+          if (isSamuMission && m.status !== 'ongoing') {
+            return false;
+          }
+          return true;
+        });
+      }
     }
 
     // Purge absolue de sécurité : aucun véhicule ni bénévole fictif/généré artificiellement comme renfort d'alliance
@@ -2982,6 +2997,11 @@ class ProtecGame {
 
       // Les gardes (SAMU/SDIS) sont gérées dans le planning et la modale de garde, elles ne doivent JAMAIS apparaître comme des marqueurs physiques sur la carte
       if (mission.isGarde || mission.type === 'garde_samu' || mission.isGuard || mission.category === 'garde') return;
+
+      // Exclusion stricte des missions SAMU si le joueur n'a pas de convention SAMU signée ou aucun VPSP
+      const hasSamuConv = Boolean(this.samuConvention && this.samuConvention.signed);
+      const hasVpsp = Array.isArray(this.vehicles) && this.vehicles.some(v => v.type === 'VPSP');
+      if (mission.type === 'samu' && (!hasSamuConv || !hasVpsp)) return;
 
       // Les alertes actives et préalertes urgentes restent visibles en direct sur la carte même avec un filtre sélectionné
       const isUrgentOrCrisis = (
@@ -9527,7 +9547,7 @@ class ProtecGame {
       lng: coords.lng,
       targetEnvironment: pick.targetEnvironment || null,
       scale: `${pick.authorityLabel} (${pick.requiredVolunteers} secouristes requis)`,
-      eventDate: { ...this.clock, hour: curHour, minute: curMin },
+      eventDate: { ...this.clock, hour: targetH, minute: targetM },
       durationSeconds: 45 * 60,
       durationHours: 0.8,
       isEvolutive: true,
@@ -11574,24 +11594,29 @@ class ProtecGame {
   getVolunteerAllSkills(v) {
     if (!v) return [];
     const skillsMap = {
-      'cd': { id: 'cd', label: 'Chef de Dispositif (CD)', cat: 'DPS', badge: 'CD', color: 'bg-amber-100 text-amber-900 border-amber-300' },
-      'ce': { id: 'ce', label: 'Chef d’Équipe (CE)', cat: 'DPS', badge: 'CE', color: 'bg-indigo-100 text-indigo-900 border-indigo-300' },
-      'pse2': { id: 'pse2', label: 'PSE2 Équipier Secouriste', cat: 'Secours', badge: 'PSE2', color: 'bg-sky-100 text-sky-900 border-sky-300' },
-      'pse1': { id: 'pse1', label: 'PSE1 Secouriste', cat: 'Secours', badge: 'PSE1', color: 'bg-blue-100 text-blue-900 border-blue-300' },
-      'stagiaire': { id: 'stagiaire', label: 'Stagiaire en Intégration', cat: 'Formation', badge: 'STAG', color: 'bg-slate-100 text-slate-800 border-slate-300' },
-      'psc1': { id: 'psc1', label: 'PSC1 / Premiers Secours', cat: 'Secours', badge: 'PSC1', color: 'bg-teal-100 text-teal-900 border-teal-300' },
-      'permis_vpsp': { id: 'permis_vpsp', label: 'P.VPSP Conduite Ambulance', cat: 'Véhicule', badge: 'P.VPSP', color: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
-      'permis_b': { id: 'permis_b', label: 'Permis B (VL / VTU / VTP)', cat: 'Véhicule', badge: 'Permis B', color: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
-      'permis_c': { id: 'permis_c', label: 'Permis C (Poids Lourd - FLIT / VALOG)', cat: 'Véhicule', badge: 'Permis C (PL)', color: 'bg-orange-100 text-orange-900 border-orange-300' },
-      'formateur_ps': { id: 'formateur_ps', label: 'Formateur Premiers Secours (PS)', cat: 'Pédagogie', badge: 'Formateur PS', color: 'bg-orange-100 text-orange-900 border-orange-300' },
-      'formateur_psc': { id: 'formateur_psc', label: 'Formateur PSC (PIC F)', cat: 'Pédagogie', badge: 'Formateur PSC', color: 'bg-amber-100 text-amber-900 border-amber-300' },
-      'formateur_sst': { id: 'formateur_sst', label: 'Formateur SST', cat: 'Pédagogie', badge: 'Formateur SST', color: 'bg-amber-100 text-amber-900 border-amber-300' },
-      'formateur_de_formateur': { id: 'formateur_de_formateur', label: 'Formateur de Formateurs (FdF)', cat: 'Pédagogie', badge: 'FdF', color: 'bg-purple-100 text-purple-900 border-purple-300' },
-      'aep1': { id: 'aep1', label: 'AEP1 Écoute d’Urgence', cat: 'Soutien', badge: 'AEP1', color: 'bg-rose-100 text-rose-900 border-rose-300' },
-      'aep2': { id: 'aep2', label: 'AEP2 Soutien CAI & Catastrophe', cat: 'Soutien', badge: 'AEP2', color: 'bg-rose-100 text-rose-900 border-rose-300' },
-      'telepilote': { id: 'telepilote', label: 'Télépilote Drone S1/S3', cat: 'Spécialité', badge: 'Drone', color: 'bg-cyan-100 text-cyan-900 border-cyan-300' },
-      'cyno': { id: 'cyno', label: 'Cynotechnie (Maître-Chien)', cat: 'Spécialité', badge: 'Cyno', color: 'bg-amber-100 text-amber-900 border-amber-300' },
-      'communication': { id: 'communication', label: 'Communication & Médias', cat: 'Presse', badge: 'Com/Média', color: 'bg-pink-100 text-pink-900 border-pink-300' }
+      'cd': { id: 'cd', label: 'Chef de Dispositif (CD)', cat: 'DPS', badge: 'CD', color: 'bg-amber-100 text-amber-900 border-amber-300 font-extrabold', order: 1 },
+      'cp': { id: 'cp', label: 'Chef de Poste (CP)', cat: 'DPS', badge: 'CP', color: 'bg-purple-100 text-purple-900 border-purple-300 font-extrabold', order: 2 },
+      'ce': { id: 'ce', label: 'Chef d’Équipe (CE)', cat: 'DPS', badge: 'CE', color: 'bg-indigo-100 text-indigo-900 border-indigo-300 font-extrabold', order: 3 },
+      'ca': { id: 'ca', label: 'Chef d’Agrès (CA)', cat: 'DPS', badge: 'CA', color: 'bg-indigo-100 text-indigo-900 border-indigo-300 font-extrabold', order: 4 },
+      'pse2': { id: 'pse2', label: 'PSE2 Équipier Secouriste', cat: 'Secours', badge: 'PSE2', color: 'bg-sky-100 text-sky-900 border-sky-300 font-extrabold', order: 10 },
+      'pse1': { id: 'pse1', label: 'PSE1 Secouriste', cat: 'Secours', badge: 'PSE1', color: 'bg-blue-100 text-blue-900 border-blue-300 font-extrabold', order: 11 },
+      'psc1': { id: 'psc1', label: 'PSC1 / Premiers Secours', cat: 'Secours', badge: 'PSC1', color: 'bg-teal-100 text-teal-900 border-teal-300 font-extrabold', order: 12 },
+      'stagiaire': { id: 'stagiaire', label: 'Stagiaire en Intégration', cat: 'Formation', badge: 'STAG', color: 'bg-slate-100 text-slate-800 border-slate-300', order: 13 },
+      'permis_vpsp': { id: 'permis_vpsp', label: 'P.VPSP Conduite Ambulance', cat: 'Véhicule', badge: '🚑 P.VPSP', color: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold', order: 20 },
+      'permis_b': { id: 'permis_b', label: 'Permis B (VL / VTU / VTP)', cat: 'Véhicule', badge: 'Permis B', color: 'bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold', order: 21 },
+      'permis_c': { id: 'permis_c', label: 'Permis C (Poids Lourd - FLIT / VALOG)', cat: 'Véhicule', badge: 'Permis C (PL)', color: 'bg-orange-100 text-orange-900 border-orange-300 font-extrabold', order: 22 },
+      'permis_moto': { id: 'permis_moto', label: 'Permis Moto (A/A2)', cat: 'Véhicule', badge: 'Permis Moto', color: 'bg-cyan-100 text-cyan-900 border-cyan-300 font-semibold', order: 23 },
+      'aep2': { id: 'aep2', label: 'AEP2 Soutien CAI & Catastrophe', cat: 'Soutien', badge: 'AEP2', color: 'bg-rose-100 text-rose-900 border-rose-300 font-bold', order: 30 },
+      'aep1': { id: 'aep1', label: 'AEP1 Écoute d’Urgence', cat: 'Soutien', badge: 'AEP1', color: 'bg-rose-50 text-rose-800 border-rose-200 font-semibold', order: 31 },
+      'formateur_ps': { id: 'formateur_ps', label: 'Formateur Premiers Secours (PS)', cat: 'Pédagogie', badge: 'Formateur PS', color: 'bg-orange-100 text-orange-900 border-orange-300 font-bold', order: 40 },
+      'formateur_psc': { id: 'formateur_psc', label: 'Formateur PSC (PIC F)', cat: 'Pédagogie', badge: 'Formateur PSC', color: 'bg-amber-100 text-amber-900 border-amber-300 font-semibold', order: 41 },
+      'formateur_sst': { id: 'formateur_sst', label: 'Formateur SST', cat: 'Pédagogie', badge: 'Formateur SST', color: 'bg-amber-100 text-amber-900 border-amber-300 font-semibold', order: 42 },
+      'formateur_de_formateur': { id: 'formateur_de_formateur', label: 'Formateur de Formateurs (FdF)', cat: 'Pédagogie', badge: 'FdF', color: 'bg-purple-100 text-purple-900 border-purple-300 font-bold', order: 43 },
+      'telepilote': { id: 'telepilote', label: 'Télépilote Drone S1/S3', cat: 'Spécialité', badge: '🚁 Drone', color: 'bg-cyan-100 text-cyan-900 border-cyan-300 font-bold', order: 50 },
+      'cyno': { id: 'cyno', label: 'Cynotechnie (Maître-Chien)', cat: 'Spécialité', badge: '🐕 Cyno', color: 'bg-amber-100 text-amber-900 border-amber-300 font-bold', order: 51 },
+      'nautique': { id: 'nautique', label: 'Secours Nautique / BNSSA', cat: 'Spécialité', badge: '⚓ Nautique', color: 'bg-teal-100 text-teal-900 border-teal-300 font-bold', order: 52 },
+      'radio': { id: 'radio', label: 'Opérateur Radio / Transmissions PC', cat: 'Transmission', badge: '📻 Radio/PC', color: 'bg-slate-100 text-slate-800 border-slate-300 font-bold', order: 53 },
+      'communication': { id: 'communication', label: 'Communication & Médias', cat: 'Presse', badge: '📸 Com', color: 'bg-pink-100 text-pink-900 border-pink-300 font-semibold', order: 54 }
     };
 
     const detected = new Set();
@@ -11599,20 +11624,25 @@ class ProtecGame {
     existing.forEach(s => {
       if (!s) return;
       const clean = String(s).toLowerCase().replace(/[- ]/g, '_');
-      if (clean.includes('vpsp') || clean.includes('pilotage')) detected.add('permis_vpsp');
+      if (clean.includes('vpsp') || clean.includes('pilotage') || clean === 'conducteur') detected.add('permis_vpsp');
       else if (clean.includes('permis_c') || clean === 'pl' || clean.includes('poids_lourd')) detected.add('permis_c');
+      else if (clean.includes('moto') || clean === 'permis_a' || clean === 'permis_a2') detected.add('permis_moto');
       else if (clean === 'permis_b') detected.add('permis_b');
       else if (clean.includes('psc') && clean.includes('formateur')) detected.add('formateur_psc');
       else if (clean.includes('ps') && clean.includes('formateur')) detected.add('formateur_ps');
       else if (clean === 'formateur' || clean.includes('formateur')) {
         detected.add('formateur_psc');
-        if (['PSE2', 'CE', 'CD'].includes(v.rank)) detected.add('formateur_ps');
-      } else if (clean.includes('ce') || clean === 'chef_equipe') detected.add('ce');
-      else if (clean.includes('cd') || clean === 'chef_dispositif') detected.add('cd');
+        if (['PSE2', 'CE', 'CP', 'CD'].includes(v.rank)) detected.add('formateur_ps');
+      } else if (clean.includes('cd') || clean === 'chef_dispositif') detected.add('cd');
+      else if (clean.includes('cp') || clean === 'chef_poste') detected.add('cp');
+      else if (clean.includes('ce') || clean === 'chef_equipe') detected.add('ce');
+      else if (clean.includes('ca') || clean === 'chef_agres') detected.add('ca');
       else if (clean.includes('pse2')) detected.add('pse2');
       else if (clean.includes('pse1')) detected.add('pse1');
       else if (clean.includes('drone') || clean.includes('telepilote')) detected.add('telepilote');
       else if (clean.includes('cyno') || clean.includes('chien')) detected.add('cyno');
+      else if (clean.includes('nautique') || clean.includes('bnssa')) detected.add('nautique');
+      else if (clean.includes('radio') || clean.includes('trans') || clean === 'pc') detected.add('radio');
       else if (clean.includes('aep2')) detected.add('aep2');
       else if (clean.includes('aep1') || clean.includes('aep')) detected.add('aep1');
       else if (clean.includes('com')) detected.add('communication');
@@ -11623,6 +11653,14 @@ class ProtecGame {
     const rank = v.rank || '';
     if (rank === 'CD' || rank.includes('Dispositif')) {
       detected.add('cd');
+      detected.add('cp');
+      detected.add('ce');
+      detected.add('pse2');
+      detected.add('pse1');
+      detected.add('permis_vpsp');
+      detected.add('permis_b');
+    } else if (rank === 'CP' || rank.includes('Poste')) {
+      detected.add('cp');
       detected.add('ce');
       detected.add('pse2');
       detected.add('pse1');
@@ -11638,11 +11676,11 @@ class ProtecGame {
       detected.add('pse2');
       detected.add('pse1');
       detected.add('permis_b');
-      if ((v.exp || 0) >= 25 || v.hasPermisVpsp) detected.add('permis_vpsp');
+      if ((v.exp || 0) >= 25 || v.hasPermisVpsp || v.isDriver) detected.add('permis_vpsp');
     } else if (rank === 'PSE1' || rank.includes('Secouriste')) {
       detected.add('pse1');
       detected.add('permis_b');
-      if ((v.exp || 0) >= 35 || v.hasPermisVpsp) detected.add('permis_vpsp');
+      if ((v.exp || 0) >= 35 || v.hasPermisVpsp || v.isDriver) detected.add('permis_vpsp');
     } else if (rank === 'Stagiaire' || rank.includes('Stagiaire')) {
       detected.add('stagiaire');
       detected.add('psc1');
@@ -11650,21 +11688,45 @@ class ProtecGame {
 
     if (v.permis_b) detected.add('permis_b');
     if (v.permis_c) detected.add('permis_c');
+    if (v.permis_moto || v.permis_a) detected.add('permis_moto');
+    if (v.isDriver) {
+      detected.add('permis_vpsp');
+      detected.add('permis_b');
+    }
 
     if (v.isTrainer) {
       detected.add('formateur_psc');
-      if (['PSE2', 'CE', 'CD'].includes(rank)) detected.add('formateur_ps');
+      if (['PSE2', 'CE', 'CP', 'CD'].includes(rank)) detected.add('formateur_ps');
     }
 
-    return Array.from(detected).map(id => {
+    const items = Array.from(detected).map(id => {
       return skillsMap[id] || {
         id: id,
         label: id.toUpperCase(),
         cat: 'Qualif',
         badge: id.toUpperCase(),
-        color: 'bg-slate-700 text-slate-200 border-slate-600'
+        color: 'bg-slate-100 text-slate-800 border-slate-300 font-semibold',
+        order: 99
       };
     });
+
+    items.sort((a, b) => (a.order || 99) - (b.order || 99));
+    return items;
+  }
+
+  // Génère les pastilles/badges HTML de toutes les compétences d'un bénévole pour affichage direct
+  getVolunteerAllSkillsBadgesHTML(v) {
+    if (!v) return '';
+    const skills = this.getVolunteerAllSkills(v);
+    if (!skills || skills.length === 0) {
+      return `<span class="text-[8.5px] text-slate-400 italic">Aucune qualification</span>`;
+    }
+    return skills.map(s => `
+      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] border shadow-2xs cursor-help ${s.color || 'bg-slate-100 text-slate-700 border-slate-200'}"
+            title="${s.label} (${s.cat || 'Qualification'})">
+        ${s.badge || s.id.toUpperCase()}
+      </span>
+    `).join('');
   }
 
   // Infobulle globale et absolue pour l'affichage sans obstruction des compétences (z-index 99999) - Style clair et harmonisé
@@ -13899,7 +13961,16 @@ class ProtecGame {
     const rdvBaseDate = new Date(startDate.getTime() - advanceMinutes * 60 * 1000);
 
     const formatH = (dt) => `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
-    const rdvBaseStr = (mission.status === 'ongoing' || mission.status === 'declenche') ? 'Immédiat' : formatH(rdvBaseDate);
+    
+    // Détermination de l'horaire de rassemblement à la base :
+    // Pour une urgence, préalerte ou crise immédiate, le rassemblement à l'antenne est IMMÉDIAT (évite toute heure passée incohérente)
+    const isPastRdv = (this.clock ? (startDate.getHours() < this.clock.hour || (startDate.getHours() === this.clock.hour && rdvBaseDate.getMinutes() <= this.clock.minute)) : false) || rdvBaseDate.getTime() <= Date.now();
+    const isImmediateMobilisation = mission.status === 'ongoing' || 
+                                   mission.status === 'declenche' || 
+                                   mission.status === 'prealerte' || 
+                                   isUrgency || 
+                                   isPastRdv;
+    const rdvBaseStr = isImmediateMobilisation ? 'Immédiat' : formatH(rdvBaseDate);
     const debutEventStr = formatH(startDate);
 
     // RÈGLE MÉTIER : Sur les alertes, pas d'heure de fin prédéterminée si situation évolutive.
@@ -13925,6 +13996,11 @@ class ProtecGame {
         finEventSub = 'Fin estimée (Stabilisation & Repli)';
         durationDisplay = `~${this.formatHoursAndMinutes(missionSec, true)} (Phase finale)`;
         missionScheduleRangeText = `Déclenchée à ${debutEventStr} • Fin prévisionnelle estimée à ~${formatH(endDate)}`;
+      } else if (mission.status === 'prealerte') {
+        finEventStr = 'Indéterminée';
+        finEventSub = 'Situation évolutive';
+        durationDisplay = 'Évolutive (En cours d\'évaluation)';
+        missionScheduleRangeText = `Préalerte active • Déploiement prévu vers ${debutEventStr} (Situation évolutive)`;
       } else {
         finEventStr = 'Indéterminée';
         finEventSub = 'Situation évolutive';
@@ -14809,6 +14885,7 @@ class ProtecGame {
                                   <span class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold flex items-center gap-1.5 shadow-2xs text-[10px]">
                                     <span class="text-slate-900 dark:text-white">${m.name}</span>
                                     <span class="text-[8px] font-black px-1 py-0.2 rounded bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">${roleBadge}</span>
+                                    <button type="button" onclick="event.stopPropagation(); window.game.showFloatingSkillsTooltip(event, '${m.id}', true)" class="text-slate-400 hover:text-pc-blue text-[9px] cursor-pointer" title="Voir toutes les compétences">🏅</button>
                                     ${!isDeparted ? `
                                       <button type="button" onclick="window.game.setVolunteerCrisisTeam('${mission.id}', '${m.id}', '')" class="text-slate-400 hover:text-rose-500 font-black cursor-pointer ml-0.5 text-xs transition" title="Retirer de l'équipe">×</button>
                                     ` : `
@@ -15064,8 +15141,14 @@ class ProtecGame {
                               }
                               return '';
                             })()}
-                            <span class="text-[9px] font-bold text-slate-600 px-1 py-0.2 bg-slate-100 rounded border border-slate-200">${v.rank || 'Secouriste'}</span>
-                            ${(isRoleMissing && isEngaged) ? '<span class="text-[8px] font-black text-amber-700 bg-amber-100 px-1 py-0.2 rounded">Rôle requis</span>' : ''}
+                            <span class="text-[9px] font-extrabold text-slate-700 dark:text-slate-200 px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded border border-slate-200 dark:border-slate-600">${v.rank || 'Secouriste'}</span>
+                            ${(isRoleMissing && isEngaged) ? '<span class="text-[8px] font-black text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">Rôle requis</span>' : ''}
+                          </div>
+                          <!-- Compétences, diplômes & habilitations exhaustives -->
+                          <div class="mt-1.5 pt-1.5 border-t border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1 flex-wrap">
+                            <span class="text-[8px] font-black uppercase text-slate-500 tracking-wider shrink-0">Compétences :</span>
+                            ${this.getVolunteerAllSkillsBadgesHTML(v)}
+                            ${this.getVolunteerSkillsPopoverHTML(v)}
                           </div>
                         </td>
                         <td class="py-2 px-3">
