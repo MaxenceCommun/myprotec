@@ -274,11 +274,43 @@ async function sendSingleWebPush(subscription, payloadObject) {
 
 async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
   configureWebPush();
-  const subs = db.getAllPushSubscriptions();
-  console.log(`📡 [WebPush Server] Dispatch demandé vers target='${targetUserId}', total abonnés en base: ${subs.length}`);
+  let subs = db.getAllPushSubscriptions();
+
+  // Si aucun abonné local, interroger Supabase game_saves
+  if (subs.length === 0) {
+    try {
+      const supaUrl = 'https://yrayehhbqcnuiuejqsjz.supabase.co/rest/v1/game_saves?select=user_id,username,save_data->push_subscription';
+      const supaRes = await fetch(supaUrl, {
+        headers: {
+          'apikey': 'sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs',
+          'Authorization': 'Bearer sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs'
+        }
+      });
+      if (supaRes.ok) {
+        const supaData = await supaRes.json();
+        (supaData || []).forEach(row => {
+          if (row.push_subscription && row.push_subscription.endpoint) {
+            const sub = row.push_subscription;
+            subs.push({
+              endpoint: sub.endpoint,
+              keys: sub.keys || {},
+              p256dh: sub.keys?.p256dh,
+              auth: sub.keys?.auth,
+              user_id: row.user_id,
+              username: row.username || 'Directeur Cloud'
+            });
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[WebPush Server] Erreur lecture Supabase fallback :', e.message);
+    }
+  }
+
+  console.log(`📡 [WebPush Server] Dispatch demandé vers target='${targetUserId}', total abonnés disponibles: ${subs.length}`);
 
   if (subs.length === 0) {
-    console.warn('⚠️ [WebPush Server] Aucun abonnement push enregistré dans la base de données.');
+    console.warn('⚠️ [WebPush Server] Aucun abonnement push enregistré (ni en base locale, ni sur Supabase).');
     return 0;
   }
 
@@ -2084,6 +2116,14 @@ function runServerMinuteTick() {
                 }
                 hasPlayerChanges = true;
                 totalChangesProcessed++;
+
+                // Alerte Web Push immédiate au joueur (réveil terminal si app fermée)
+                dispatchWebPushToPlayer(userId, {
+                  title: '🚑 Mission Terminée & Véhicules Rentrés',
+                  body: `L'opération "${m.title || m.type || 'DPS'}" est terminée. Les véhicules et équipages sont disponibles à l'antenne.`,
+                  category: 'mission_completed',
+                  data: { url: '/jeu.html', missionId: m.id }
+                }).catch(() => {});
               }
             } else if (m.crisisCanClose) {
               // Si la crise a été déclarée prête à clore par le COS

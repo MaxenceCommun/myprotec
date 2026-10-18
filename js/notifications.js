@@ -51,7 +51,7 @@ window.ProtecNotifications = {
     }
   },
 
-  async subscribeUserToPush(onProgress) {
+  async subscribeUserToPush(onProgress, forceRenew = false) {
     const log = (msg) => {
       console.log('[WebPush]', msg);
       if (typeof onProgress === 'function') onProgress(msg);
@@ -116,6 +116,17 @@ window.ProtecNotifications = {
         subscription = await registration.pushManager.getSubscription();
       } catch (e) {
         log(`Note: getSubscription a renvoyé : ${e?.message}`);
+      }
+
+      // Si renouvellement forcé demandé ou token existant périmé
+      if (subscription && forceRenew) {
+        log('Purge de l\'ancienne souscription (renouvellement forcé FCM)...');
+        try {
+          await subscription.unsubscribe();
+        } catch (unsubErr) {
+          console.warn('[WebPush] Avertissement désabonnement ancien token:', unsubErr);
+        }
+        subscription = null;
       }
 
       // 5. Création de la souscription auprès de Google FCM / Apple APNs
@@ -1209,7 +1220,31 @@ window.ProtecNotifications = {
       }
     }, this.inactivityIntervalSec * 1000);
 
-    // 2. Programmation Service Worker au niveau de l'OS (si l'application est TOTALEMENT FERMÉE)
+    // 2. Programmation auprès du serveur Web Push pour chaque mission/intervention en cours
+    if (window.game && Array.isArray(window.game.missions)) {
+      const ongoing = window.game.missions.filter(m => m.status === 'ongoing' && m.endsAt && m.endsAt > Date.now());
+      ongoing.forEach(m => {
+        const remainingSec = Math.max(5, Math.round((m.endsAt - Date.now()) / 1000));
+        this.scheduleDelayedPush({
+          eventId: `mission_end_${m.id}`,
+          delaySeconds: remainingSec,
+          title: '🚑 Véhicules de Retour à l’Antenne',
+          body: `L'opération "${m.title || m.type || 'DPS'}" est terminée. Vos véhicules et équipiers sont disponibles.`,
+          data: { url: '/jeu.html', missionId: m.id }
+        });
+      });
+    }
+
+    // 3. Programmation de rappel d'inactivité auprès du serveur Web Push
+    this.scheduleDelayedPush({
+      eventId: `inactivity_reminder_${Date.now()}`,
+      delaySeconds: this.inactivityIntervalSec,
+      title: '🚨 Alerte SAMU 15 : VPSP Requis',
+      body: 'Le SAMU 15 demande une ambulance de votre antenne. Touchez pour reprendre votre service !',
+      data: { url: '/jeu.html', category: 'samu' }
+    });
+
+    // 4. Programmation Service Worker au niveau de l'OS (secours immédiat si onglet juste minimisé)
     if (this.swRegistration && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
         type: 'SCHEDULE_BACKGROUND_ALERT',
@@ -1231,6 +1266,15 @@ window.ProtecNotifications = {
         type: 'CANCEL_BACKGROUND_ALERTS'
       });
     }
+    // Annulation auprès du serveur des alertes d'inactivité
+    try {
+      fetch('/api/push/cancel-scheduled-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: window.game?.player?.id })
+      }).catch(() => {});
+    } catch (e) {}
+
     this.checkPendingSupabaseNotifications();
   },
 
@@ -1275,46 +1319,32 @@ window.ProtecNotifications = {
     }
   },
 
-  // Test immédiat de notification (Bouton dans la modale)
-  testNotification() {
-    this.sendPushNotification(
-      'Test Opérationnel VPSP',
-      'Votre appareil reçoit bien les alertes d’urgence et notifications de rappel MyProtec.',
-      { tag: 'test-direct-notif' }
-    );
-    // Déclencher également l'émission Web Push serveur si le joueur a une souscription
-    if (this.pushSubscription?.endpoint || localStorage.getItem('protec_push_sub')) {
-      let ep = this.pushSubscription?.endpoint;
-      if (!ep) {
-        try { ep = JSON.parse(localStorage.getItem('protec_push_sub') || '{}').endpoint; } catch (e) {}
+  // Méthode pour renouveler explicitement l'abonnement Push (purge token expiré 410)
+  async renewPushSubscription() {
+    if (window.game && typeof window.game.showToast === 'function') {
+      window.game.showToast('Abonnement Push', 'Renouvellement en cours auprès de Google / Apple...', 'blue');
+    }
+    const res = await this.subscribeUserToPush((msg) => {
+      console.log('[WebPush Renew]', msg);
+    }, true);
+
+    if (res.success) {
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast('Abonnement Réactivé', 'Votre terminal est réenregistré avec un token tout neuf !', 'green');
       }
-      if (ep) {
-        fetch('/api/push/test', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            endpoint: ep,
-            title: '🚨 Test Web Push Réussi !',
-            body: 'Votre terminal reçoit les notifications même application totalement fermée.'
-          })
-        }).catch(() => {});
+      this.renderSettingsModalBody();
+    } else {
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast('Erreur Abonnement', res.message || 'Échec du renouvellement', 'red');
       }
     }
-    if (window.game) {
-      window.game.showToast('Test Envoyé', 'Vérifiez la bannière et le son d’alerte sur votre écran !', 'green');
-    }
+    return res;
   },
 
-  // Test avec application fermée ou mise en veille (compte à rebours)
-  async testOfflinePush(seconds = 5) {
-    if (this.permission !== 'granted') {
-      await this.requestPermission();
-      if (this.permission !== 'granted') return;
-    }
-    if (window.game && typeof window.game.showToast === 'function') {
-      window.game.showToast('Test App Fermée', `Fermez ou réduisez maintenant l'application. La notification arrivera dans ${seconds}s !`, 'orange');
-    }
-
+  // Planification d'une alerte différée auprès du serveur (ex: véhicule qui rentre dans 5 minutes)
+  async scheduleDelayedPush({ eventId, delaySeconds, title, body, data }) {
+    if (!delaySeconds || delaySeconds <= 0) return false;
+    
     let subEndpoint = this.pushSubscription?.endpoint;
     if (!subEndpoint) {
       try {
@@ -1323,24 +1353,147 @@ window.ProtecNotifications = {
       } catch (e) {}
     }
 
-    // 1. Déclenchement serveur Web Push avec délai (garantie réveil réseau OS hors-ligne)
-    if (subEndpoint) {
-      fetch('/api/push/test', {
+    let cachedUser = null;
+    try {
+      cachedUser = window.ProtecAuth?.currentUser || JSON.parse(localStorage.getItem('protec_user_profile') || '{}');
+    } catch (e) {}
+    const userId = cachedUser?.id || window.game?.player?.id;
+
+    // 1. Enregistrement auprès du serveur Node.js si accessible
+    try {
+      const res = await fetch('/api/push/schedule-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          eventId: eventId || `evt_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+          userId,
           endpoint: subEndpoint,
-          delaySeconds: seconds,
-          title: '🚨 Test Web Push Réussi (App Fermée)',
-          body: 'Votre terminal a bien reçu l’alerte native alors que l’application était totalement fermée !',
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/badge-monochrome.png',
-          data: { url: '/jeu.html' }
+          delaySeconds,
+          title: title || '🚑 Intervention Terminée',
+          body: body || 'Les véhicules sont de retour à l’antenne.',
+          data: data || { url: '/jeu.html' }
         })
-      }).catch(() => {});
+      });
+      if (res.ok) return true;
+    } catch (e) {}
+
+    // 2. Fallback Service Worker local si la page est encore en mémoire / réduite
+    if (this.swRegistration && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SCHEDULE_BACKGROUND_ALERT',
+        delayMs: delaySeconds * 1000,
+        data: {
+          title: title || '🚑 Intervention Terminée',
+          body: body || 'Les véhicules sont de retour à l’antenne.',
+          url: '/jeu.html'
+        }
+      });
+    }
+    return true;
+  },
+
+  // Test immédiat de notification (Bouton dans la modale)
+  async testNotification() {
+    this.sendPushNotification(
+      'Test Opérationnel VPSP',
+      'Votre appareil reçoit bien les alertes d’urgence et notifications de rappel MyProtec.',
+      { tag: 'test-direct-notif' }
+    );
+
+    // Déclencher également l'émission Web Push serveur si le joueur a une souscription
+    let ep = this.pushSubscription?.endpoint;
+    let keys = this.pushSubscription?.keys;
+    if (!ep) {
+      try {
+        const localSub = JSON.parse(localStorage.getItem('protec_push_sub') || '{}');
+        ep = localSub.endpoint;
+        keys = localSub.keys;
+      } catch (e) {}
     }
 
-    // 2. Programmation Service Worker locale (secours immédiat)
+    if (ep) {
+      try {
+        const res = await fetch('/api/push/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: ep,
+            p256dh: keys?.p256dh,
+            auth: keys?.auth,
+            title: '🚨 Test Web Push Réussi !',
+            body: 'Votre terminal reçoit les notifications même application totalement fermée.'
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.expired) {
+          console.warn('[WebPush] Token expiré détecté (410). Renouvellement automatique...');
+          await this.renewPushSubscription();
+        }
+      } catch (e) {}
+    }
+
+    if (window.game) {
+      window.game.showToast('Test Envoyé', 'Vérifiez la bannière et le son d’alerte sur votre écran !', 'green');
+    }
+  },
+
+  // Test avec application fermée ou mise en veille (compte à rebours de 10 secondes)
+  async testOfflinePush(seconds = 10) {
+    if (this.permission !== 'granted') {
+      await this.requestPermission();
+      if (this.permission !== 'granted') return;
+    }
+
+    // S'assurer qu'un abonnement valide existe
+    if (!this.pushSubscription) {
+      await this.subscribeUserToPush();
+    }
+
+    let subEndpoint = this.pushSubscription?.endpoint;
+    let keys = this.pushSubscription?.keys;
+    if (!subEndpoint) {
+      try {
+        const localSub = JSON.parse(localStorage.getItem('protec_push_sub') || '{}');
+        subEndpoint = localSub.endpoint;
+        keys = localSub.keys;
+      } catch (e) {}
+    }
+
+    if (window.game && typeof window.game.showToast === 'function') {
+      window.game.showToast(
+        'Test App Fermée',
+        `RÉDUISEZ OU FERMEZ LE JEU DÈS MAINTENANT ! L’alerte arrivera dans ${seconds} secondes sur votre appareil.`,
+        'orange'
+      );
+    }
+
+    // 1. Déclenchement serveur Web Push avec délai (réveil réseau OS natif même app tuée)
+    if (subEndpoint) {
+      try {
+        const res = await fetch('/api/push/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: subEndpoint,
+            p256dh: keys?.p256dh,
+            auth: keys?.auth,
+            delaySeconds: seconds,
+            title: '🚨 Alerte MyProtec (App Fermée)',
+            body: 'Le réveil en arrière-plan fonctionne parfaitement même avec l’application totalement fermée !',
+            icon: '/icons/icon-192x192.png',
+            badge: '/icons/badge-monochrome.png',
+            data: { url: '/jeu.html' }
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.expired) {
+          console.warn('[WebPush] Token expiré détecté (410). Renouvellement automatique...');
+          await this.renewPushSubscription();
+        }
+      } catch (e) {}
+    }
+
+    // 2. Programmation Service Worker locale (secours immédiat si onglet juste minimisé)
     if (this.swRegistration && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
         type: 'SCHEDULE_BACKGROUND_ALERT',
@@ -1629,6 +1782,31 @@ window.ProtecNotifications = {
                 </div>
                 <input type="checkbox" id="notif-opt-inactivity" ${this.config.inactivityEngagement ? 'checked' : ''} onchange="window.ProtecNotifications.toggleConfig('inactivityEngagement', this.checked)" class="w-4 h-4 text-amber-600 rounded cursor-pointer" />
               </label>
+            </div>
+
+            <!-- Tests & Diagnostic du Réveil Push (Application Fermée & Arrière-plan) -->
+            <div class="space-y-2.5 pt-2">
+              <h4 class="font-black text-slate-700 uppercase tracking-wider text-[10px]">Diagnostic & Tests de Réveil</h4>
+              <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div class="text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
+                  <p class="font-bold text-slate-800 dark:text-slate-100">Test de réception avec le jeu fermé :</p>
+                  <p>Cliquez sur <strong>« Tester App Fermée »</strong> ci-dessous, puis <strong>réduisez ou fermez complètement l'application</strong> ou verrouillez l'écran de votre téléphone. L'alerte arrivera dans 10 secondes via le serveur Push.</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button type="button" onclick="window.ProtecNotifications.testNotification()" class="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs">
+                    <span>🔔</span>
+                    <span>Test Immédiat</span>
+                  </button>
+                  <button type="button" onclick="window.ProtecNotifications.testOfflinePush(10)" class="px-3 py-2 rounded-xl bg-pc-orange hover:bg-orange-600 text-white text-xs font-extrabold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md">
+                    <span>⏰</span>
+                    <span>Tester App Fermée (10s)</span>
+                  </button>
+                  <button type="button" onclick="window.ProtecNotifications.renewPushSubscription()" class="px-3 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs" title="Force un nouvel abonnement FCM en purgeant les anciens tokens expirés">
+                    <span>🔄</span>
+                    <span>Renouveler Token</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <!-- Catégories Opérationnelles : 3 Statuts & Personnalisation Audio -->

@@ -61,25 +61,59 @@ async function main() {
   }
 
   // 3. Récupération de l'abonnement cible
-  const subscriptions = db.getAllPushSubscriptions();
-  console.log(`📋 Abonnements enregistrés en base : ${subscriptions.length}`);
+  let subscriptions = db.getAllPushSubscriptions();
+  
+  // Fallback automatique : si aucun abonné local, interroger Supabase game_saves
+  if (subscriptions.length === 0) {
+    console.log('🔍 Aucun abonné local. Recherche des abonnements dans Supabase Cloud...');
+    try {
+      const supaUrl = 'https://yrayehhbqcnuiuejqsjz.supabase.co/rest/v1/game_saves?select=user_id,username,save_data->push_subscription';
+      const supaRes = await fetch(supaUrl, {
+        headers: {
+          'apikey': 'sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs',
+          'Authorization': 'Bearer sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs'
+        }
+      });
+      if (supaRes.ok) {
+        const supaData = await supaRes.json();
+        (supaData || []).forEach(row => {
+          if (row.push_subscription && row.push_subscription.endpoint) {
+            const sub = row.push_subscription;
+            subscriptions.push({
+              endpoint: sub.endpoint,
+              keys: sub.keys || {},
+              p256dh: sub.keys?.p256dh,
+              auth: sub.keys?.auth,
+              user_id: row.user_id,
+              username: row.username || 'Directeur Cloud'
+            });
+          }
+        });
+        console.log(`☁️ Abonnements trouvés dans Supabase : ${subscriptions.length}`);
+      }
+    } catch (e) {
+      console.warn('⚠️ Impossible de joindre Supabase :', e.message);
+    }
+  }
+
+  console.log(`📋 Abonnements utilisables : ${subscriptions.length}`);
 
   let subscription = null;
   if (targetEndpoint) {
-    subscription = db.getPushSubscription(targetEndpoint);
+    subscription = db.getPushSubscription(targetEndpoint) || subscriptions.find(s => s.endpoint === targetEndpoint);
     if (!subscription) {
       console.warn(`⚠️ Endpoint non trouvé dans la BDD, utilisation directe...`);
       subscription = { endpoint: targetEndpoint };
     }
   } else if (targetUserId) {
-    subscription = subscriptions.find(s => s.user_id === targetUserId || s.userId === targetUserId);
+    subscription = subscriptions.find(s => s.user_id === targetUserId || s.userId === targetUserId || (s.username && s.username.toLowerCase() === targetUserId.toLowerCase()));
     if (!subscription) {
       console.error(`❌ Aucun abonnement trouvé pour l'utilisateur ${targetUserId}`);
       process.exit(1);
     }
   } else {
     if (subscriptions.length === 0) {
-      console.error('❌ Aucun abonnement push disponible en base de données.');
+      console.error('❌ Aucun abonnement push disponible en base locale ou sur Supabase.');
       console.log('👉 Ouvrez https://.../jeu.html et autorisez les notifications pour vous abonner.');
       process.exit(1);
     }
