@@ -2310,11 +2310,15 @@ const SUPABASE_REST_URL = 'https://yrayehhbqcnuiuejqsjz.supabase.co';
 const SUPABASE_REST_KEY = 'sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs';
 let isBridgeProcessing = false;
 
+// Mémoire locale des IDs de notifications déjà expédiées pour éviter les doublons instantanés
+const processedNotifIds = new Set();
+
 async function checkAndDispatchCloudPushQueue() {
   if (isBridgeProcessing) return;
   isBridgeProcessing = true;
   try {
-    const res = await fetch(`${SUPABASE_REST_URL}/rest/v1/game_saves?select=user_id,username,save_data`, {
+    // Requête ultra-ciblée (ne télécharge QUE les notifications et l'abonnement en ~150ms)
+    const res = await fetch(`${SUPABASE_REST_URL}/rest/v1/game_saves?select=user_id,username,pending:save_data->pending_notifications,sub:save_data->push_subscription`, {
       headers: {
         'apikey': SUPABASE_REST_KEY,
         'Authorization': `Bearer ${SUPABASE_REST_KEY}`
@@ -2326,69 +2330,92 @@ async function checkAndDispatchCloudPushQueue() {
       return;
     }
 
-    const saves = await res.json();
-    if (!Array.isArray(saves)) {
+    const rows = await res.json();
+    if (!Array.isArray(rows)) {
       isBridgeProcessing = false;
       return;
     }
 
-    for (const row of saves) {
-      const sd = row.save_data || {};
-      const pending = sd.pending_notifications || [];
-      const sub = sd.push_subscription;
+    let hasSentAny = false;
+
+    for (const row of rows) {
+      const pending = row.pending || [];
+      const sub = row.sub;
 
       if (!sub || !sub.endpoint || !Array.isArray(pending) || pending.length === 0) continue;
 
-      let hasUpdated = false;
-      for (const notif of pending) {
-        // Traiter uniquement les alertes récentes non encore envoyées en Web Push
-        if (!notif.pushed_at && notif.push !== false) {
-          console.log(`\n📢 [Cloud Push Bridge] Événement de jeu détecté pour '${row.username || row.user_id}' : "${notif.title || 'Alerte'}"`);
-          
-          const result = await sendSingleWebPush(sub, {
-            title: notif.title || '🚨 ALERTE MYPROTEC',
-            body: notif.body || notif.message || 'Nouvelle notification opérationnelle reçue du jeu.',
-            icon: notif.icon || '/icons/icon-192x192.png',
-            badge: notif.badge || '/icons/badge-monochrome.png',
-            vibrate: [500, 200, 500, 200, 500],
-            data: { url: '/jeu.html', category: notif.category || 'alert' }
-          });
+      // Trouver les alertes non encore expédiées
+      const toSend = pending.filter(n => n && !n.pushed_at && n.push !== false && !processedNotifIds.has(n.id));
+      if (toSend.length === 0) continue;
 
-          notif.pushed_at = new Date().toISOString();
-          notif.push_status = result.success ? 'delivered' : (result.expired ? 'expired_410' : 'error');
-          hasUpdated = true;
+      // Traiter toutes les alertes en parallèle immédiatement pour un délai minimal
+      await Promise.all(toSend.map(async (notif) => {
+        processedNotifIds.add(notif.id);
+        hasSentAny = true;
+        console.log(`\n⚡ [Cloud Push Bridge Éclair] Expédition immédiate à '${row.username || row.user_id}' : "${notif.title || 'Alerte'}"`);
 
-          if (result.success) {
-            console.log(`🎉 [Cloud Push Bridge] Web Push expédié avec succès au terminal fermé de '${row.username}' !`);
-          } else {
-            console.warn(`⚠️ [Cloud Push Bridge] Échec d'envoi Web Push pour '${row.username}' (Statut: ${result.status}) : ${result.error}`);
-          }
+        const result = await sendSingleWebPush(sub, {
+          title: notif.title || '🚨 ALERTE MYPROTEC',
+          body: notif.body || notif.message || 'Nouvelle alerte opérationnelle reçue.',
+          icon: notif.icon || '/icons/icon-192x192.png',
+          badge: notif.badge || '/icons/badge-monochrome.png',
+          vibrate: [500, 200, 500, 200, 500],
+          data: { url: '/jeu.html', category: notif.category || 'alert' }
+        });
+
+        notif.pushed_at = new Date().toISOString();
+        notif.push_status = result.success ? 'delivered' : (result.expired ? 'expired_410' : 'error');
+
+        if (result.success) {
+          console.log(`🎉 [Cloud Push Bridge Éclair] Livré à '${row.username}' en direct (Terminal réveillé) !`);
+        } else {
+          console.warn(`⚠️ [Cloud Push Bridge Éclair] Échec envoi à '${row.username}' (${result.status}) : ${result.error}`);
         }
-      }
+      }));
 
-      if (hasUpdated) {
-        // Mise à jour de confirmation d'envoi dans Supabase
-        await fetch(`${SUPABASE_REST_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(row.user_id)}`, {
-          method: 'PATCH',
+      // Mise à jour asynchrone du statut poussé dans Supabase
+      try {
+        const fullSaveRes = await fetch(`${SUPABASE_REST_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(row.user_id)}&select=save_data`, {
           headers: {
             'apikey': SUPABASE_REST_KEY,
-            'Authorization': `Bearer ${SUPABASE_REST_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify({ save_data: sd })
-        }).catch(() => {});
-      }
+            'Authorization': `Bearer ${SUPABASE_REST_KEY}`
+          }
+        });
+        if (fullSaveRes.ok) {
+          const fullData = await fullSaveRes.json();
+          if (fullData && fullData[0] && fullData[0].save_data) {
+            const sd = fullData[0].save_data;
+            sd.pending_notifications = pending;
+            await fetch(`${SUPABASE_REST_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(row.user_id)}`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': SUPABASE_REST_KEY,
+                'Authorization': `Bearer ${SUPABASE_REST_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+              },
+              body: JSON.stringify({ save_data: sd })
+            });
+          }
+        }
+      } catch (ePatch) {}
+    }
+
+    // Si on vient d'expédier un push, relancer immédiatement au cas où d'autres requêtes suivent
+    if (hasSentAny) {
+      setTimeout(checkAndDispatchCloudPushQueue, 200);
     }
   } catch (err) {
-    // Ignoré
+    // Silencieux
   } finally {
     isBridgeProcessing = false;
   }
 }
 
-// Surveillance de la file d'attente Cloud toutes les 5 secondes
-setInterval(checkAndDispatchCloudPushQueue, 5000);
-setTimeout(checkAndDispatchCloudPushQueue, 1500);
-console.log('📡 [Cloud Push Bridge] Passerelle Web Push active (écoute des événements multijoueurs/admin toutes les 5s).');
+// Surveillance ultra-réactive de la file d'attente Cloud toutes les 1000 ms (1 seconde)
+const CLOUD_BRIDGE_POLL_MS = 1000;
+setInterval(checkAndDispatchCloudPushQueue, CLOUD_BRIDGE_POLL_MS);
+setTimeout(checkAndDispatchCloudPushQueue, 500);
+console.log(`⚡ [Cloud Push Bridge Éclair] Passerelle active (cadence de vérification ultra-rapide toutes les ${CLOUD_BRIDGE_POLL_MS}ms).`);
+
 
