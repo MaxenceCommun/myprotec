@@ -1152,6 +1152,7 @@ window.ProtecFormations = {
     const variation = (0.88 + Math.random() * 0.28) * intraSurplus;
     const targetBudget = Math.round((cfg.baseBudget * variation) / 10) * 10;
     const deadlineHours = 24 + Math.floor(Math.random() * 48);
+    const deadline = now + (deadlineHours * 3600 * 1000);
     const proposalId = (typeof crypto !== 'undefined' && crypto.randomUUID)
       ? crypto.randomUUID()
       : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {

@@ -1197,13 +1197,26 @@ window.ProtecNotifications = {
       });
     }
 
-    // 3. Programmation de rappel d'inactivité auprès du serveur Web Push
+    // 3. Programmation de rappel d'inactivité avec mission concrète
+    let emergencyTitle = '🚨 Alerte SAMU 15 : VPSP Requis';
+    let emergencyBody = 'Le SAMU 15 demande une ambulance de votre antenne. Touchez pour reprendre votre service !';
+    let missionId = null;
+
+    if (window.game && window.game.stations && window.game.stations.length > 0) {
+      const realMission = this.generateEmergencyMission(window.game, 'Détresse Respiratoire à Domicile', 'samu');
+      if (realMission) {
+        missionId = realMission.id;
+        emergencyTitle = `🚨 SAMU 15 : ${realMission.title}`;
+        emergencyBody = `Réquisition urgente régulée dans votre secteur. Touchez pour déployer votre VPSP !`;
+      }
+    }
+
     this.scheduleDelayedPush({
       eventId: `inactivity_reminder_${Date.now()}`,
       delaySeconds: this.inactivityIntervalSec,
-      title: '🚨 Alerte SAMU 15 : VPSP Requis',
-      body: 'Le SAMU 15 demande une ambulance de votre antenne. Touchez pour reprendre votre service !',
-      data: { url: '/jeu.html', category: 'samu' }
+      title: emergencyTitle,
+      body: emergencyBody,
+      data: { url: '/jeu.html', category: 'samu', missionId: missionId }
     });
 
     // 4. Programmation Service Worker au niveau de l'OS (secours immédiat si onglet juste minimisé)
@@ -1212,9 +1225,10 @@ window.ProtecNotifications = {
         type: 'SCHEDULE_BACKGROUND_ALERT',
         delayMs: this.inactivityIntervalSec * 1000,
         data: {
-          title: '🚨 Alerte SAMU 15 : VPSP Requis',
-          body: 'Le SAMU 15 demande une ambulance de votre antenne. Touchez pour reprendre votre service !',
-          url: '/jeu.html'
+          title: emergencyTitle,
+          body: emergencyBody,
+          url: '/jeu.html',
+          data: { url: '/jeu.html', category: 'samu', missionId: missionId }
         }
       });
     }
@@ -1276,6 +1290,58 @@ window.ProtecNotifications = {
     } catch (e) {
       console.warn('Erreur syncCloudMissions:', e);
     }
+  },
+
+  // Génération autonome d'une mission d'urgence réelle pour accompagner un push
+  generateEmergencyMission(game, title = 'Détresse Respiratoire à Domicile', type = 'samu') {
+    if (!game || !game.stations || game.stations.length === 0) return null;
+    const station = game.stations[0];
+    const mLat = Number(station.lat || 48.6921) + (Math.random() - 0.5) * 0.04;
+    const mLng = Number(station.lng || 6.1844) + (Math.random() - 0.5) * 0.04;
+    const mId = `${type}_${Date.now()}`;
+    const mission = {
+      id: mId,
+      type: type,
+      category: 'urgences',
+      title: title,
+      desc: 'Réquisition d’urgence régulée. VPSP demandé immédiatement sur les lieux.',
+      lat: mLat,
+      lng: mLng,
+      city: station.city || 'Secteur Opérationnel',
+      departmentCode: station.departmentCode || '54',
+      address: `Secteur ${station.city || 'Antenne'} (Régulation 15)`,
+      status: 'planifie',
+      progress: 0,
+      requiredVehicles: ['VPSP'],
+      requiredVolunteers: 3,
+      requiredRanks: ['PSE1', 'PSE2'],
+      registeredVolunteers: [],
+      assignedCrew: { volunteers: [], vehicles: [] },
+      rewardMoney: 350,
+      rewardReputation: 45,
+      durationSeconds: 1200,
+      durationHours: "0.3",
+      createdAt: Date.now(),
+      spawnedAt: Date.now()
+    };
+    if (!Array.isArray(game.missions)) game.missions = [];
+    if (!game.missions.some(m => m.id === mId)) {
+      game.missions.unshift(mission);
+      if (typeof game.renderMissions === 'function') game.renderMissions();
+      if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+      if (typeof game.saveGame === 'function') game.saveGame();
+    }
+    // Sauvegarder également dans Supabase
+    const userId = window.ProtecAuth?.currentUser?.id || game.player?.id;
+    if (userId && window.ProtecSupabase?.queuePlayerNotification) {
+      window.ProtecSupabase.queuePlayerNotification(userId, {
+        title: `🚨 ${title}`,
+        body: 'Mission d’urgence régulée. VPSP demandé immédiatement sur les lieux.',
+        category: type,
+        missionId: mId
+      });
+    }
+    return mission;
   },
 
   // Récupération des notifications en attente stockées en BDD Supabase (réception dès l'ouverture du site ou reconnexion)
@@ -1467,7 +1533,14 @@ window.ProtecNotifications = {
       );
     }
 
-    // 1. Déclenchement serveur Web Push avec délai (réveil réseau OS natif même app tuée)
+    // 1. Déclenchement de la mission réelle correspondante
+    let testMissionId = null;
+    if (window.game && window.game.stations && window.game.stations.length > 0) {
+      const realMission = this.generateEmergencyMission(window.game, 'Détresse Respiratoire à Domicile (Test App Fermée)', 'samu');
+      if (realMission) testMissionId = realMission.id;
+    }
+
+    // 2. Déclenchement serveur Web Push avec délai (réveil réseau OS natif même app tuée)
     if (subEndpoint) {
       try {
         const res = await fetch('/api/push/test', {
@@ -1478,11 +1551,11 @@ window.ProtecNotifications = {
             p256dh: keys?.p256dh,
             auth: keys?.auth,
             delaySeconds: seconds,
-            title: '🚨 Alerte MyProtec (App Fermée)',
-            body: 'Le réveil en arrière-plan fonctionne parfaitement même avec l’application totalement fermée !',
-            icon: '/icons/icon-192x192.png',
-            badge: '/icons/badge-monochrome.png',
-            data: { url: '/jeu.html' }
+            title: '🚨 Réquisition SAMU 15 (App Fermée)',
+            body: 'Engagement immédiat VPSP demandé ! Touchez pour mobiliser votre équipage sur la carte.',
+            icon: 'https://myprotec.fr/badge-monochrome.png',
+            badge: 'https://myprotec.fr/badge-monochrome.png',
+            data: { url: '/jeu.html', missionId: testMissionId, category: 'samu' }
           })
         });
         const data = await res.json().catch(() => ({}));

@@ -1190,8 +1190,8 @@ const server = http.createServer((req, res) => {
         const notificationPayload = {
           title,
           body: msgBody,
-          icon: reqData.icon || '/icons/icon-192x192.png',
-          badge: reqData.badge || '/icons/badge-monochrome.png',
+          icon: reqData.icon || 'https://myprotec.fr/badge-monochrome.png',
+          badge: reqData.badge || 'https://myprotec.fr/badge-monochrome.png',
           data: Object.assign({ url: '/jeu.html' }, reqData.data || {})
         };
 

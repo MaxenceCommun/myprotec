@@ -1153,7 +1153,12 @@ window.ProtecFormations = {
     const targetBudget = Math.round((cfg.baseBudget * variation) / 10) * 10;
     const deadlineHours = 24 + Math.floor(Math.random() * 48);
     const deadline = now + (deadlineHours * 3600 * 1000);
-    const proposalId = `b2b-${now}-${Math.random().toString(36).substring(2, 7)}`;
+    const proposalId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = Math.random() * 16 | 0;
+          return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
 
     const newProposal = {
       id: proposalId,
@@ -1205,7 +1210,14 @@ window.ProtecFormations = {
 
   // 10. SYNCHRONISATION ROBUSTE AVEC SUPABASE POSTGRESQL
   async syncB2BWithSupabase(game, proposal) {
-    if (!proposal || !window.ProtecSupabase || !window.ProtecSupabase.isConnected || !window.ProtecSupabase.client) {
+    if (!proposal || !proposal.id || !window.ProtecSupabase || !window.ProtecSupabase.isConnected || !window.ProtecSupabase.client) {
+      return;
+    }
+
+    // Si l'identifiant n'est pas un UUID standard (ex: anciennes sauvegardes b2b-...),
+    // on ne synchronise pas vers Supabase pour éviter l'erreur Postgres 400 invalid input syntax for type uuid.
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(proposal.id).trim());
+    if (!isUUID) {
       return;
     }
 
@@ -1237,7 +1249,6 @@ window.ProtecFormations = {
         .upsert(payload);
     } catch (err) {
       // Échec discret en cas de réseau instable ou table non migrée
-      console.info('Synchro B2B locale active:', err?.message || err);
     }
   },
 
