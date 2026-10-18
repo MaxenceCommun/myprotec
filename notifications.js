@@ -1784,30 +1784,6 @@ window.ProtecNotifications = {
               </label>
             </div>
 
-            <!-- Tests & Diagnostic du Réveil Push (Application Fermée & Arrière-plan) -->
-            <div class="space-y-2.5 pt-2">
-              <h4 class="font-black text-slate-700 uppercase tracking-wider text-[10px]">Diagnostic & Tests de Réveil</h4>
-              <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
-                <div class="text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
-                  <p class="font-bold text-slate-800 dark:text-slate-100">Test de réception avec le jeu fermé :</p>
-                  <p>Cliquez sur <strong>« Tester App Fermée »</strong> ci-dessous, puis <strong>réduisez ou fermez complètement l'application</strong> ou verrouillez l'écran de votre téléphone. L'alerte arrivera dans 10 secondes via le serveur Push.</p>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button type="button" onclick="window.ProtecNotifications.testNotification()" class="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs">
-                    <span>🔔</span>
-                    <span>Test Immédiat</span>
-                  </button>
-                  <button type="button" onclick="window.ProtecNotifications.testOfflinePush(10)" class="px-3 py-2 rounded-xl bg-pc-orange hover:bg-orange-600 text-white text-xs font-extrabold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md">
-                    <span>⏰</span>
-                    <span>Tester App Fermée (10s)</span>
-                  </button>
-                  <button type="button" onclick="window.ProtecNotifications.renewPushSubscription()" class="px-3 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs" title="Force un nouvel abonnement FCM en purgeant les anciens tokens expirés">
-                    <span>🔄</span>
-                    <span>Renouveler Token</span>
-                  </button>
-                </div>
-              </div>
-            </div>
 
             <!-- Catégories Opérationnelles : 3 Statuts & Personnalisation Audio -->
             <div class="space-y-3 pt-2">
