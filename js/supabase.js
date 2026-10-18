@@ -1255,7 +1255,7 @@ window.ProtecSupabase = {
       const [fraudsRes, referralsRes, playersRes] = await Promise.all([
         this.client.from('fraud_logs').select('*').order('timestamp', { ascending: false }),
         this.client.from('referral_logs').select('*').order('created_at', { ascending: false }),
-        this.client.from('players').select('id, username, referral_code, referral_suspended, is_banned')
+        this.client.from('players').select('id, username, is_banned')
       ]);
 
       const playersMap = {};

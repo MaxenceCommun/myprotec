@@ -27025,72 +27025,57 @@ window.ProtecWebPush = {
    * 5. Envoi de l'objet subscription au backend via requête POST dédiée
    */
   async sendSubscriptionToBackend(data) {
-    try {
-      const res = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          endpoint: data.endpoint,
-          p256dh: data.p256dh,
-          auth: data.auth,
-          user_id: data.user_id,
-          username: data.username,
-          userAgent: data.userAgent || navigator.userAgent,
-          subscription: {
+    if (this.isBackendOnline) {
+      try {
+        const res = await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
             endpoint: data.endpoint,
-            keys: {
-              p256dh: data.p256dh,
-              auth: data.auth
+            p256dh: data.p256dh,
+            auth: data.auth,
+            user_id: data.user_id,
+            username: data.username,
+            userAgent: data.userAgent || navigator.userAgent,
+            subscription: {
+              endpoint: data.endpoint,
+              keys: {
+                p256dh: data.p256dh,
+                auth: data.auth
+              }
             }
-          }
-        })
-      });
+          })
+        });
 
-      if (res.ok) {
-        const result = await res.json();
-        console.log('✅ [WebPush] Abonnement enregistré avec succès par le backend :', result);
-      } else {
-        console.warn('[WebPush] Réponse serveur inattendue lors de l\'enregistrement :', res.status);
-      }
-    } catch (e) {
-      console.warn('[WebPush] Impossible de joindre le backend Node.js (mode local ou hors ligne) :', e.message);
+        if (res.ok) {
+          const result = await res.json();
+          console.log('✅ [WebPush] Abonnement enregistré avec succès par le backend :', result);
+        }
+      } catch (e) {}
     }
 
-    // Persistance miroir dans Supabase si disponible
-    if (window.ProtecSupabase?.client) {
+    // Persistance dans Supabase game_saves
+    if (window.ProtecSupabase?.client && data.user_id && data.user_id !== 'local') {
       try {
-        const endpointUrl = data.endpoint;
-        const { data: existing } = await window.ProtecSupabase.client
-          .from('push_subscriptions')
-          .select('id')
-          .eq('endpoint', endpointUrl)
-          .maybeSingle();
-
-        const payload = {
-          endpoint: endpointUrl,
-          user_id: (data.user_id && data.user_id !== 'local') ? data.user_id : null,
-          p256dh: data.p256dh,
-          auth: data.auth,
-          user_agent: navigator.userAgent,
-          updated_at: new Date().toISOString()
-        };
-
-        if (existing && existing.id) {
-          await window.ProtecSupabase.client
-            .from('push_subscriptions')
-            .update(payload)
-            .eq('id', existing.id);
-        } else {
-          await window.ProtecSupabase.client
-            .from('push_subscriptions')
-            .insert(payload);
-        }
-        console.log('✅ [WebPush] Abonnement synchronisé dans la table Supabase push_subscriptions.');
-      } catch (eSupa) {
-        console.warn('[WebPush] Erreur sauvegarde Supabase push_subscriptions :', eSupa);
-      }
+        window.ProtecSupabase.client.from('game_saves').select('save_data').eq('user_id', data.user_id).maybeSingle().then(({ data: rowData }) => {
+          if (rowData) {
+            const sd = rowData.save_data || {};
+            sd.push_subscription = {
+              endpoint: data.endpoint,
+              keys: {
+                p256dh: data.p256dh,
+                auth: data.auth
+              }
+            };
+            sd.push_updated_at = new Date().toISOString();
+            window.ProtecSupabase.client.from('game_saves').update({ save_data: sd }).eq('user_id', data.user_id).then(() => {
+              console.log('✅ [WebPush] Abonnement synchronisé dans la sauvegarde Supabase.');
+            });
+          }
+        });
+      } catch (eSupa) {}
     }
   },
 

@@ -826,16 +826,18 @@ window.ProtecAdmin = {
     }
 
     try {
-      // 1. Récupération des stats globales
+      // 1. Récupération des stats globales si backend local en ligne
       let statsLoaded = false;
-      try {
-        const statsRes = await fetch('/api/admin/stats', { headers: this.getAuthHeaders() });
-        if (statsRes.ok) {
-          const statsData = await statsRes.json();
-          this.renderStats(statsData.stats);
-          statsLoaded = true;
-        }
-      } catch (e) {}
+      if (window.game?.isBackendOnline) {
+        try {
+          const statsRes = await fetch('/api/admin/stats', { headers: this.getAuthHeaders() });
+          if (statsRes.ok) {
+            const statsData = await statsRes.json();
+            this.renderStats(statsData.stats);
+            statsLoaded = true;
+          }
+        } catch (e) {}
+      }
 
       // 2. Récupération et Déduplication des utilisateurs (Serveur Local + Supabase Cloud + Compte Joueur Actif)
       const usersMap = new Map();
@@ -892,14 +894,16 @@ window.ProtecAdmin = {
         }
       };
 
-      // A. Récupération depuis le serveur local Node.js
-      try {
-        const usersRes = await fetch('/api/admin/users', { headers: this.getAuthHeaders() });
-        if (usersRes.ok) {
-          const usersData = await usersRes.json();
-          (usersData.users || []).forEach(u => addOrMergeUser(u));
-        }
-      } catch (e) {}
+      // A. Récupération depuis le serveur local Node.js si actif
+      if (window.game?.isBackendOnline) {
+        try {
+          const usersRes = await fetch('/api/admin/users', { headers: this.getAuthHeaders() });
+          if (usersRes.ok) {
+            const usersData = await usersRes.json();
+            (usersData.users || []).forEach(u => addOrMergeUser(u));
+          }
+        } catch (e) {}
+      }
 
       // B. Récupération depuis Supabase Cloud (comptes en ligne persistés officiels)
       if (window.ProtecSupabase && window.ProtecSupabase.getAllPlayersForAdmin) {
@@ -2893,8 +2897,8 @@ window.ProtecAdmin = {
       // Backend local non joint (ex: hébergement statique GitHub Pages)
     }
 
-    // 1b. Si aucun push n'a été distribué via /api/admin/notify-player, tentative directe via /api/push/test
-    if (pushDispatched === 0 && defaultPayload.push !== false) {
+    // 1b. Si backend local actif, tentative directe via /api/push/test
+    if (pushDispatched === 0 && defaultPayload.push !== false && window.game?.isBackendOnline) {
       try {
         let subData = null;
         try {
@@ -2921,19 +2925,7 @@ window.ProtecAdmin = {
       } catch (ePushTest) {}
     }
 
-    // 1c. Tentative via l'Edge Function Supabase officielle send-push si disponible
-    if (window.ProtecSupabase?.client?.functions) {
-      try {
-        const edgeRes = await window.ProtecSupabase.client.functions.invoke('send-push', {
-          body: defaultPayload
-        });
-        if (edgeRes?.data?.count) {
-          pushDispatched += Number(edgeRes.data.count);
-        }
-      } catch (eEdge) {}
-    }
-
-    // 2. Broadcast temps réel Supabase & Enregistrement en base de données
+    // 2. Enregistrement direct dans Supabase Cloud (traité immédiatement par la passerelle de Push)
     if (window.ProtecSupabase) {
       try {
         if (typeof window.ProtecSupabase.broadcastAdminPlayerNotification === 'function') {
@@ -6709,10 +6701,12 @@ window.ProtecAdmin = {
       const badge = document.getElementById('admin-referral-fraud-badge');
       if (!badge) return;
       let data = null;
-      try {
-        const res = await fetch('/api/admin/referrals', { headers: this.getAuthHeaders() });
-        if (res.ok) data = await res.json();
-      } catch (e) {}
+      if (window.game?.isBackendOnline) {
+        try {
+          const res = await fetch('/api/admin/referrals', { headers: this.getAuthHeaders() });
+          if (res.ok) data = await res.json();
+        } catch (e) {}
+      }
       if (!data && window.ProtecSupabase) {
         data = await window.ProtecSupabase.getReferralAdminDataSupabase();
       }

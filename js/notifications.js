@@ -167,69 +167,40 @@ window.ProtecNotifications = {
       const playerId = cachedUser?.id || (window.game?.player?.id) || 'local';
       const username = cachedUser?.username || (window.game?.player?.name) || 'Directeur';
 
-      // 8. Transmission persistante dans la table Supabase push_subscriptions
-      if (window.ProtecSupabase?.client) {
+      // 8. Transmission persistante dans Supabase game_saves
+      if (window.ProtecSupabase?.client && playerId && playerId !== 'local') {
         try {
           const subJson = (typeof subscription.toJSON === 'function') ? subscription.toJSON() : subscription;
-          const endpointUrl = subscription.endpoint;
-          const { data: existing } = await window.ProtecSupabase.client
-            .from('push_subscriptions')
-            .select('id')
-            .eq('endpoint', endpointUrl)
-            .maybeSingle();
-
-          const payload = {
-            endpoint: endpointUrl,
-            user_id: (playerId && playerId !== 'local') ? playerId : null,
-            p256dh: subJson.keys?.p256dh || '',
-            auth: subJson.keys?.auth || '',
-            user_agent: navigator.userAgent,
-            updated_at: new Date().toISOString()
-          };
-
-          if (existing && existing.id) {
-            await window.ProtecSupabase.client
-              .from('push_subscriptions')
-              .update(payload)
-              .eq('id', existing.id);
-          } else {
-            await window.ProtecSupabase.client
-              .from('push_subscriptions')
-              .insert(payload);
-          }
-          log('Abonnement synchronisé dans la table Supabase push_subscriptions.');
+          window.ProtecSupabase.client.from('game_saves').select('save_data').eq('user_id', playerId).maybeSingle().then(({ data }) => {
+            if (data) {
+              const sd = data.save_data || {};
+              sd.push_subscription = subJson;
+              sd.push_updated_at = new Date().toISOString();
+              window.ProtecSupabase.client.from('game_saves').update({ save_data: sd }).eq('user_id', playerId).then(() => {
+                log('Abonnement synchronisé dans la sauvegarde Supabase.');
+              });
+            }
+          });
         } catch (eSupa) {
-          console.warn('[WebPush] Erreur Supabase push_subscriptions:', eSupa);
-        }
-
-        // Sauvegarde miroir dans game_saves
-        if (playerId && playerId !== 'local') {
-          try {
-            window.ProtecSupabase.client.from('game_saves').select('save_data').eq('user_id', playerId).maybeSingle().then(({ data }) => {
-              if (data) {
-                const sd = data.save_data || {};
-                sd.push_subscription = (typeof subscription.toJSON === 'function') ? subscription.toJSON() : subscription;
-                sd.push_updated_at = new Date().toISOString();
-                window.ProtecSupabase.client.from('game_saves').update({ save_data: sd }).eq('user_id', playerId).then(() => {});
-              }
-            });
-          } catch (e) {}
+          console.warn('[WebPush] Erreur sauvegarde Supabase game_saves:', eSupa);
         }
       }
 
       // 9. Enregistrement auprès du serveur Node.js si actif
-      try {
-        await fetch('/api/push/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            subscription: (typeof subscription.toJSON === 'function') ? subscription.toJSON() : subscription,
-            playerId,
-            username,
-            userAgent: navigator.userAgent
-          })
-        });
-      } catch (e) {}
+      if (window.game?.isBackendOnline) {
+        try {
+          await fetch('/api/push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subscription: (typeof subscription.toJSON === 'function') ? subscription.toJSON() : subscription,
+              playerId,
+              username,
+              userAgent: navigator.userAgent
+            })
+          });
+        } catch (e) {}
+      }
 
       // Informer le Service Worker du joueur actuel
       if (registration.active) {
