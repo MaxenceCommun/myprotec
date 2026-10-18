@@ -2010,6 +2010,17 @@ class ProtecGame {
         if (Array.isArray(st.vehicles)) {
           st.vehicles = st.vehicles.filter(id => validVehicleIds.has(id));
         }
+        if (window.ProtecLocaux && typeof window.ProtecLocaux.ensureModularPremises === 'function') {
+          window.ProtecLocaux.ensureModularPremises(st, this);
+        } else if (st.premises?.rooms?.garage_remisage) {
+          const gLvl = st.premises.rooms.garage_remisage.level || 1;
+          const cap = st.premises.rooms.garage_remisage.capacity || (gLvl === 1 ? 2 : (gLvl === 2 ? 4 : 8));
+          st.premises.rooms.garage_remisage.capacity = cap;
+          st.rooms = st.rooms || {};
+          st.rooms.garage = gLvl;
+          st.rooms.garage_remisage = st.premises.rooms.garage_remisage;
+          st.garageCapacity = cap;
+        }
       });
     }
 
@@ -2412,6 +2423,18 @@ class ProtecGame {
       } else if (this.isPickingLocation && this.onLocationPickedCallback) {
         this.onLocationPickedCallback(e.latlng);
       } else {
+        // Ne fermer le tiroir que si le clic s'est réellement produit sur le fond de carte vierge
+        if (e.originalEvent && (
+          e.originalEvent.target.closest('#context-drawer') || 
+          e.originalEvent.target.closest('#main-modal') || 
+          e.originalEvent.target.closest('#toast-container') ||
+          e.originalEvent.target.closest('.glass-panel-heavy') ||
+          e.originalEvent.target.closest('button') ||
+          e.originalEvent.target.closest('input') ||
+          e.originalEvent.target.closest('select')
+        )) {
+          return;
+        }
         this.closeDrawer();
       }
     });
@@ -7760,7 +7783,7 @@ class ProtecGame {
         this.updateStatsUI();
 
         if (this.selectedMissionId === currentMission.id) {
-          this.openMissionDetails(currentMission.id);
+          this.refreshMissionDetailsIfOpen(currentMission.id);
         }
       }, assignedDelayMs);
     });
@@ -7768,7 +7791,7 @@ class ProtecGame {
     this.saveGame();
     this.renderMissions();
     this.updateStatsUI();
-    this.openMissionDetails(mission.id);
+    this.refreshMissionDetailsIfOpen(mission.id);
   }
 
   // Contrôle et déclenchement de Push Notification dès qu'un équipage d'engin complet est prêt (montée en charge progressive)
@@ -9844,7 +9867,7 @@ class ProtecGame {
     this.renderMissions();
     this.updateStatsUI();
     if (this.selectedMissionId === mission.id) {
-      this.openMissionDetails(mission.id);
+      this.refreshMissionDetailsIfOpen(mission.id);
     }
   }
 
@@ -10064,14 +10087,18 @@ class ProtecGame {
       }
     }
 
-    // Retrait de la mission active de la carte après un délai pour laisser lire
+    mission.status = 'prealerte_levee';
+
+    // Retrait de la mission active de la carte après un délai si le joueur n'a pas son tiroir ouvert dessus
     setTimeout(() => {
-      const idx = this.missions.findIndex(m => m.id === mission.id);
-      if (idx !== -1) {
-        this.missions.splice(idx, 1);
-        this.renderMissions();
-        this.updateStatsUI();
-        this.saveGame();
+      if (this.selectedMissionId !== mission.id) {
+        const idx = this.missions.findIndex(m => m.id === mission.id);
+        if (idx !== -1) {
+          this.missions.splice(idx, 1);
+          this.renderMissions();
+          this.updateStatsUI();
+          this.saveGame();
+        }
       }
     }, 4500);
 
@@ -10079,7 +10106,7 @@ class ProtecGame {
     this.renderMissions();
     this.updateStatsUI();
     if (this.selectedMissionId === mission.id) {
-      this.closeDrawer();
+      this.refreshMissionDetailsIfOpen(mission.id);
     }
   }
 
@@ -10137,7 +10164,7 @@ class ProtecGame {
     this.updateStatsUI();
 
     if (this.selectedMissionId === mission.id) {
-      this.openMissionDetails(mission.id);
+      this.refreshMissionDetailsIfOpen(mission.id, { force: true });
     }
   }
 
@@ -12005,7 +12032,7 @@ class ProtecGame {
     this.updateStatsUI();
 
     if (this.selectedMissionId === mission.id) {
-      this.openMissionDetails(mission.id);
+      this.refreshMissionDetailsIfOpen(mission.id);
     }
   }
 
@@ -13821,6 +13848,9 @@ class ProtecGame {
 
       if (!drawer || !body || !footer) return;
 
+      const isAlreadyOpen = !drawer.classList.contains('hidden');
+      const savedScrollTop = (isAlreadyOpen && body) ? body.scrollTop : 0;
+
       catBadge.textContent = mission.categoryLabel || 'MISSION';
       title.textContent = mission.title || 'Dispositif de Secours';
       headerIcon.setAttribute('data-lucide', 'calendar');
@@ -14088,6 +14118,20 @@ class ProtecGame {
             <span class="text-slate-500 hidden sm:inline text-[10px]">${breadcrumbDateStr}</span>
           </div>
         </div>
+        ${(mission.status === 'carence' || mission.status === 'annule_defaut' || mission.status === 'prealerte_levee') ? `
+          <div class="p-3.5 rounded-2xl ${mission.status === 'prealerte_levee' ? 'bg-emerald-50 border border-emerald-300 text-emerald-950' : 'bg-rose-50 border border-rose-300 text-rose-950'} shadow-sm space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-black uppercase flex items-center gap-1.5">
+                <span>${mission.status === 'prealerte_levee' ? '🟢' : '⏱️'}</span>
+                <span>${mission.status === 'prealerte_levee' ? 'Préalerte Levée' : (mission.status === 'carence' ? 'Carence Opérationnelle Constatée' : 'Délai d\'Engagement Dépassé')}</span>
+              </span>
+              <button onclick="window.game.closeDrawer()" class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/90 hover:bg-white text-slate-800 border border-slate-200 shadow-xs transition">Fermer</button>
+            </div>
+            <p class="text-xs font-medium leading-relaxed">
+              ${mission.carenceInfo?.msg || (mission.status === 'prealerte_levee' ? 'La situation a été maîtrisée par les secours publics ou le risque est écarté. Dispositif de veille clos.' : 'Le délai imparti pour cette mission a expiré. Les services publics ont assuré seuls la prise en charge.')}
+            </p>
+          </div>
+        ` : ''}
         ${mission.isCumpCai ? `
           <div class="p-3.5 rounded-2xl bg-gradient-to-r from-red-600 via-rose-700 to-indigo-800 text-white shadow-md space-y-2">
             <div class="flex items-center justify-between">
@@ -17074,12 +17118,58 @@ class ProtecGame {
     `;
 
     drawer.classList.remove('hidden');
-    drawer.classList.add('flex', 'drawer-slide-in');
+    if (!isAlreadyOpen) {
+      drawer.classList.add('flex', 'drawer-slide-in');
+    } else {
+      drawer.classList.add('flex');
+    }
+    if (body && savedScrollTop > 0) {
+      body.scrollTop = savedScrollTop;
+    }
     this.updateToastContainerPosition();
     if (window.lucide) window.lucide.createIcons();
   }
 
+  // Rafraîchissement doux et non-destructif de la fiche de mission latérale (Tiroir)
+  // Ne coupe JAMAIS les sélections ou saisies de l'utilisateur lors de l'arrivée de notifications, de SMS ou de mises à jour réseau
+  refreshMissionDetailsIfOpen(missionId, options = {}) {
+    if (!this.selectedMissionId || this.selectedMissionId !== missionId) return;
+    const drawer = document.getElementById('context-drawer');
+    if (!drawer || drawer.classList.contains('hidden')) return;
+
+    const body = document.getElementById('drawer-body');
+    if (!body) return;
+
+    // Détection stricte d'interaction active : input, select, textarea ou curseur actif
+    const activeEl = document.activeElement;
+    const isInteracting = activeEl && body.contains(activeEl) && (
+      activeEl.tagName === 'INPUT' ||
+      activeEl.tagName === 'SELECT' ||
+      activeEl.tagName === 'TEXTAREA' ||
+      activeEl.isContentEditable
+    );
+
+    // Ne jamais écraser le DOM pendant que le joueur est en train de sélectionner un rôle ou de taper du texte
+    if (isInteracting && !options.force) {
+      this._pendingMissionDetailsRefresh = missionId;
+      return;
+    }
+
+    const savedScrollTop = body.scrollTop;
+    this._isSoftDrawerRefresh = true;
+    try {
+      this.openMissionDetails(missionId);
+    } finally {
+      this._isSoftDrawerRefresh = false;
+    }
+
+    if (body && savedScrollTop > 0) {
+      body.scrollTop = savedScrollTop;
+    }
+  }
+
   closeDrawer() {
+    const closedMissionId = this.selectedMissionId;
     const drawer = document.getElementById('context-drawer');
     if (drawer) {
       drawer.classList.add('hidden');
@@ -17087,6 +17177,19 @@ class ProtecGame {
     }
     this.selectedMissionId = null;
     this.updateToastContainerPosition();
+
+    if (closedMissionId) {
+      const m = this.missions.find(item => item.id === closedMissionId);
+      if (m && (m.status === 'carence' || m.status === 'annule_defaut' || m.status === 'prealerte_levee')) {
+        const idx = this.missions.findIndex(item => item.id === closedMissionId);
+        if (idx !== -1) {
+          this.missions.splice(idx, 1);
+          this.renderMissions();
+          this.updateStatsUI();
+          this.saveGame();
+        }
+      }
+    }
   }
 
   // Agrandir / Réduire le drawer latéral pour plus d'espace de travail
@@ -23104,6 +23207,26 @@ class ProtecGame {
     const station = this.stations.find(s => s.id === stationId);
     if (!station) return;
 
+    // Vérifier la capacité du garage
+    let maxSlots = 2;
+    if (window.ProtecLocaux && typeof window.ProtecLocaux.getGarageCapacity === 'function') {
+      maxSlots = window.ProtecLocaux.getGarageCapacity(this, station.id);
+    } else if (window.ProtecAdvanced && typeof window.ProtecAdvanced.getGarageCapacity === 'function') {
+      maxSlots = window.ProtecAdvanced.getGarageCapacity(this, station.id);
+    } else {
+      const prem = station.premises || station.modularPremises;
+      const garage = prem?.rooms?.garage_remisage || prem?.rooms?.garage || station.rooms?.garage_remisage;
+      const garageLevel = garage?.level || station.rooms?.garage || 1;
+      maxSlots = garage?.capacity || (garageLevel === 1 ? 2 : (garageLevel === 2 ? 4 : 8));
+    }
+
+    if (!Array.isArray(station.vehicles)) station.vehicles = [];
+    const stationVehicles = (this.vehicles || []).filter(v => v && (v.stationId === station.id || station.vehicles.includes(v.id)));
+    if (stationVehicles.length >= maxSlots) {
+      this.showToast('Garage saturé !', `Votre garage est plein (${stationVehicles.length}/${maxSlots} places). Agrandissez le hangar dans l'aménagement du local !`, 'orange');
+      return;
+    }
+
     this.resources.money -= cost;
     const vehId = `${type.toLowerCase()}-${Date.now()}`;
     const callsign = this.generateVehicleCallsign(type, stationId, station);
@@ -23694,12 +23817,39 @@ class ProtecGame {
       return;
     }
 
+    // Protection contre l'écrasement si l'utilisateur a la souris enfoncée (drag, clic en cours)
+    if (this._isUserMouseDownInModal) {
+      return;
+    }
+
     // Vérifier si une sous-modale contextuelle est active
     const titleEl = document.getElementById('modal-title');
     const currentTitle = titleEl ? (titleEl.textContent || '') : '';
     if (currentTitle.includes('Offre de Recrutement') || currentTitle.includes('Service Civique') || currentTitle.includes('Création') || currentTitle.includes('Entretien')) {
       return;
     }
+
+    // RÈGLE ANTI-COUPURE : Ne rafraîchir la modale QUE si une donnée opérationnelle a réellement changé !
+    let currentSig = '';
+    if (this.currentModalKey === 'planning') {
+      currentSig = (this.missions || []).map(m => `${m.id}:${m.status}:${(m.registeredVolunteers || []).length}`).join(';');
+    } else if (this.currentModalKey === 'flotte') {
+      currentSig = (this.vehicles || []).map(v => `${v.id}:${v.status}:${v.fuel || 100}`).join(';');
+    } else if (this.currentModalKey === 'devis') {
+      currentSig = (this.devis || []).map(d => `${d.id}:${d.status}:${d.secondsLeft || 0}`).join(';');
+    } else if (this.currentModalKey === 'samu' || this.currentModalKey === 'pompiers') {
+      currentSig = (this.missions || []).filter(m => m.type === this.currentModalKey).map(m => `${m.id}:${m.status}`).join(';');
+    }
+
+    if (currentSig && this._lastModalStateSigs && this._lastModalStateSigs[this.currentModalKey] === currentSig) {
+      // Données strictement identiques : aucun re-render destructif, préservation intégrale de la lecture et du défilement
+      return;
+    }
+    if (!this._lastModalStateSigs) this._lastModalStateSigs = {};
+    if (currentSig) this._lastModalStateSigs[this.currentModalKey] = currentSig;
+
+    const modalBody = document.getElementById('modal-body');
+    const savedModalScrollTop = modalBody ? modalBody.scrollTop : 0;
 
     try {
       if (this.currentModalKey === 'flotte') {
@@ -23710,14 +23860,15 @@ class ProtecGame {
         this.openModule('devis', true);
       } else if (this.currentModalKey === 'logistique' && window.ProtecLogistique && typeof window.ProtecLogistique.renderModal === 'function') {
         window.ProtecLogistique.renderModal(this);
-
       } else if (this.currentModalKey === 'pompiers') {
         this.openModule('pompiers', true);
       } else if (this.currentModalKey === 'samu') {
         this.openModule('samu', true);
       }
-      // Note : 'recrutement' n'est volontairement pas réécrasé toutes les 2 secondes
-      // afin de préserver la lecture, la navigation et le défilement fluide des effectifs.
+
+      if (modalBody && savedModalScrollTop > 0) {
+        modalBody.scrollTop = savedModalScrollTop;
+      }
     } catch (e) {
       console.warn('Erreur refreshCurrentModalIfSafe:', e);
     }
@@ -24119,7 +24270,7 @@ class ProtecGame {
             });
 
             if (hasCrisisChanges && this.selectedMissionId === m.id) {
-              this.openMissionDetails(m.id);
+              this.refreshMissionDetailsIfOpen(m.id);
             }
           }
 
@@ -24344,17 +24495,26 @@ class ProtecGame {
                 });
               }
 
+              m.status = 'carence';
+              m.carenceInfo = {
+                title: '⏱️ Carence Opérationnelle',
+                msg: carenceMsg,
+                at: currentTime
+              };
+
               if (this.selectedMissionId === m.id) {
-                this.closeDrawer();
+                this.refreshMissionDetailsIfOpen(m.id);
               }
 
               setTimeout(() => {
-                const idx = this.missions.findIndex(item => item.id === m.id);
-                if (idx !== -1) {
-                  this.missions.splice(idx, 1);
-                  this.renderMissions();
-                  this.updateStatsUI();
-                  this.saveGame();
+                if (this.selectedMissionId !== m.id) {
+                  const idx = this.missions.findIndex(item => item.id === m.id);
+                  if (idx !== -1) {
+                    this.missions.splice(idx, 1);
+                    this.renderMissions();
+                    this.updateStatsUI();
+                    this.saveGame();
+                  }
                 }
               }, 6000);
             }
@@ -24421,17 +24581,25 @@ class ProtecGame {
                 });
               }
 
+              m.carenceInfo = {
+                title: cancelTitle,
+                msg: cancelMsg,
+                at: currentTime
+              };
+
               if (this.selectedMissionId === m.id) {
-                this.closeDrawer();
+                this.refreshMissionDetailsIfOpen(m.id);
               }
 
               setTimeout(() => {
-                const idx = this.missions.findIndex(item => item.id === m.id);
-                if (idx !== -1) {
-                  this.missions.splice(idx, 1);
-                  this.renderMissions();
-                  this.updateStatsUI();
-                  this.saveGame();
+                if (this.selectedMissionId !== m.id) {
+                  const idx = this.missions.findIndex(item => item.id === m.id);
+                  if (idx !== -1) {
+                    this.missions.splice(idx, 1);
+                    this.renderMissions();
+                    this.updateStatsUI();
+                    this.saveGame();
+                  }
                 }
               }, 6000);
             } else {
@@ -24593,7 +24761,7 @@ class ProtecGame {
                   });
                 }
                 this.updateStatsUI();
-                if (this.currentModalKey === 'devis') this.openModule('devis', true);
+                if (this.currentModalKey === 'devis') this.refreshCurrentModalIfSafe();
               }
             }
           }
@@ -26820,6 +26988,7 @@ class ProtecGame {
     // Clic direct sur le toast UNIQUEMENT s'il y a une action/information à ouvrir
     if (hasTarget) {
       toast.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (e.target.closest('button')) return; // Clic sur la croix
         toast.remove();
         if (resolvedTarget.type === 'mission' && resolvedTarget.id) {
@@ -26831,6 +27000,10 @@ class ProtecGame {
         } else if (resolvedTarget.type === 'station' && resolvedTarget.id) {
           this.openStationDetails(resolvedTarget.id);
         }
+      });
+    } else {
+      toast.addEventListener('click', (e) => {
+        e.stopPropagation();
       });
     }
 

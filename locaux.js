@@ -694,7 +694,19 @@ window.ProtecLocaux = {
         volunteerMatCost: 750,
         reqVolunteers: 3
       };
+    } else {
+      const gLvl = p.rooms.garage_remisage.level || 1;
+      const expectedCap = gLvl === 1 ? 2 : (gLvl === 2 ? 4 : 8);
+      if (!p.rooms.garage_remisage.capacity || p.rooms.garage_remisage.capacity < expectedCap) {
+        p.rooms.garage_remisage.capacity = expectedCap;
+      }
     }
+
+    // Synchronisation pour rétrocompatibilité et accès direct
+    station.rooms = station.rooms || {};
+    station.rooms.garage = p.rooms.garage_remisage.level;
+    station.rooms.garage_remisage = p.rooms.garage_remisage;
+    station.garageCapacity = p.rooms.garage_remisage.capacity;
 
     // 1.2 Sas Désinfection & Pharmacie
     if (!p.rooms.sas_desinfection_pharmacie) {
@@ -820,6 +832,10 @@ window.ProtecLocaux = {
       room.state = 100;
       if (roomId === 'garage_remisage') {
         room.capacity = room.level === 2 ? 4 : 8;
+        station.rooms = station.rooms || {};
+        station.rooms.garage = room.level;
+        station.rooms.garage_remisage = room;
+        station.garageCapacity = room.capacity;
       } else if (roomId === 'salle_formation_psc1') {
         room.capacity = room.level === 2 ? 20 : 30;
       }
@@ -865,6 +881,10 @@ window.ProtecLocaux = {
       room.state = 100;
       if (roomId === 'garage_remisage') {
         room.capacity = room.level === 2 ? 4 : 8;
+        station.rooms = station.rooms || {};
+        station.rooms.garage = room.level;
+        station.rooms.garage_remisage = room;
+        station.garageCapacity = room.capacity;
       } else if (roomId === 'salle_formation_psc1') {
         room.capacity = room.level === 2 ? 20 : 30;
       }
@@ -1550,6 +1570,31 @@ window.ProtecLocaux = {
       if (stats.studentCapacity > 0) return stats.studentCapacity;
     }
     return 10;
+  },
+
+  getGarageCapacity(game, stationId) {
+    if (!game) game = window.game;
+    if (!game) return 2;
+    const station = (game.stations || []).find(s => s.id === stationId) || (game.stations && game.stations[0]);
+    if (!station) return 2;
+    const prem = this.getStationPremises(game, station.id);
+    const room = prem?.rooms?.garage_remisage || prem?.rooms?.garage;
+    let cap = 2;
+    if (room) {
+      if (room.capacity && Number(room.capacity) > 0) {
+        cap = Number(room.capacity);
+      } else if (room.level) {
+        cap = room.level === 1 ? 2 : (room.level === 2 ? 4 : 8);
+      }
+    }
+    if (prem?.grid && typeof this.calculatePremisesStats === 'function') {
+      const stats = this.calculatePremisesStats(prem);
+      if (stats && stats.vehicleCapacity > cap) cap = stats.vehicleCapacity;
+    }
+    if (station.garageCapacity && Number(station.garageCapacity) > cap) {
+      cap = Number(station.garageCapacity);
+    }
+    return cap;
   },
 
   getStationTrainingRoomsCount(station) {

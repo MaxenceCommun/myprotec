@@ -1694,6 +1694,28 @@ window.ProtecAdvanced = {
     game.openModule('base');
   },
 
+  // Détermination de la capacité réelle du garage (hangar / locaux)
+  getGarageCapacity(game, stationId) {
+    if (!game) game = window.game;
+    if (!game) return 2;
+    const station = (game.stations || []).find(s => s.id === stationId) || (game.stations && game.stations[0]);
+    if (!station) return 2;
+
+    if (window.ProtecLocaux && typeof window.ProtecLocaux.getGarageCapacity === 'function') {
+      return window.ProtecLocaux.getGarageCapacity(game, station.id);
+    }
+
+    const prem = station.premises || station.modularPremises;
+    const garage = prem?.rooms?.garage_remisage || prem?.rooms?.garage || station.rooms?.garage_remisage;
+    if (garage) {
+      if (garage.capacity && Number(garage.capacity) > 0) return Number(garage.capacity);
+      if (garage.level) return garage.level === 1 ? 2 : (garage.level === 2 ? 4 : 8);
+    }
+
+    const lvl = station.rooms?.garage || station.garageLevel || 1;
+    return lvl === 1 ? 2 : (lvl === 2 ? 4 : 8);
+  },
+
   // 4. Commande d'un nouveau véhicule spécialisé avec configuration / variante
   buySpecializedVehicle(game, stationId, vehicleType, variantOptions = null) {
     const cat = this.vehicleCatalog.find(v => v.type === vehicleType) || {};
@@ -1707,11 +1729,17 @@ window.ProtecAdvanced = {
     const station = game.stations.find(s => s.id === stationId) || game.stations[0];
     if (!station) return;
 
-    // Vérifier la capacité du garage
-    const garageLevel = station.rooms?.garage || 1;
-    const maxSlots = garageLevel === 1 ? 2 : (garageLevel === 2 ? 4 : 8);
-    if (station.vehicles.length >= maxSlots) {
-      game.showToast('Garage saturé !', `Votre garage est plein (${station.vehicles.length}/${maxSlots}). Agrandissez le hangar dans l'aménagement du local !`, 'orange');
+    // Réconciliation et comptage exact des véhicules de l'antenne
+    if (!Array.isArray(station.vehicles)) station.vehicles = [];
+    const stationVehicles = (game.vehicles || []).filter(v => v && (v.stationId === station.id || station.vehicles.includes(v.id)));
+    stationVehicles.forEach(v => {
+      if (!station.vehicles.includes(v.id)) station.vehicles.push(v.id);
+    });
+
+    // Vérifier la capacité réelle du garage
+    const maxSlots = this.getGarageCapacity(game, station.id);
+    if (stationVehicles.length >= maxSlots) {
+      game.showToast('Garage saturé !', `Votre garage est plein (${stationVehicles.length}/${maxSlots} places). Agrandissez le hangar dans l'aménagement du local !`, 'orange');
       return;
     }
 

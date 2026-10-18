@@ -1031,7 +1031,11 @@ window.ProtecCriseLogistique = {
     if (window.ProtecAudio) window.ProtecAudio.playRadioBeep();
     game.showToast('Relève Effectuée !', `Rotation n°${mission.rotationsCount} validée (${relieved.length} secouristes relevés et renvoyés au repos).`, 'green');
     game.saveGame();
-    game.openMissionDetails(mission.id);
+    if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+      game.refreshMissionDetailsIfOpen(mission.id);
+    } else {
+      game.openMissionDetails(mission.id);
+    }
   },
 
   // Retirer un secouriste spécifique épuisé
@@ -1056,7 +1060,11 @@ window.ProtecCriseLogistique = {
 
     game.showToast('Secouriste Désengagé', `${vol.name} a été retiré du dispositif et mis au repos.`, 'blue');
     game.saveGame();
-    game.openMissionDetails(mission.id);
+    if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+      game.refreshMissionDetailsIfOpen(mission.id);
+    } else {
+      game.openMissionDetails(mission.id);
+    }
   },
 
   // Désengager un véhicule engagé sur un dispositif de crise avec son équipage complet et transit retour base
@@ -3077,7 +3085,11 @@ window.ProtecCriseLogistique = {
     game.renderMissions();
     game.updateStatsUI();
     if (game.selectedMissionId === crisis.id) {
-      game.openMissionDetails(crisis.id);
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(crisis.id);
+      } else {
+        game.openMissionDetails(crisis.id);
+      }
     }
   },
 
@@ -3114,7 +3126,11 @@ window.ProtecCriseLogistique = {
     game.renderMissions();
     game.updateStatsUI();
     if (game.selectedMissionId === crisis.id) {
-      game.openMissionDetails(crisis.id);
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(crisis.id);
+      } else {
+        game.openMissionDetails(crisis.id);
+      }
     }
   },
 

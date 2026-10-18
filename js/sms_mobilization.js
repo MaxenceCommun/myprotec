@@ -724,7 +724,11 @@ window.ProtecSmsMobilization = {
     game.renderMissions();
     game.updateStatsUI();
     if (game.selectedMissionId === mission.id) {
-      game.openMissionDetails(mission.id);
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(mission.id);
+      } else {
+        game.openMissionDetails(mission.id);
+      }
     }
   },
 
@@ -780,7 +784,11 @@ window.ProtecSmsMobilization = {
     game.renderMissions();
     game.updateStatsUI();
     if (game.selectedMissionId === mission.id) {
-      game.openMissionDetails(mission.id);
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(mission.id);
+      } else {
+        game.openMissionDetails(mission.id);
+      }
     }
   },
 
@@ -939,7 +947,13 @@ window.ProtecSmsMobilization = {
         game.saveGame();
         game.renderMissions();
         game.updateStatsUI();
-        if (game.selectedMissionId === mission.id) game.openMissionDetails(mission.id);
+        if (game.selectedMissionId === mission.id) {
+          if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+            game.refreshMissionDetailsIfOpen(mission.id);
+          } else {
+            game.openMissionDetails(mission.id);
+          }
+        }
         return;
       }
     }
@@ -959,7 +973,13 @@ window.ProtecSmsMobilization = {
     if (unassignedVols.length === 0) {
       game.showToast('Effectif Maximum Atteint', 'Tous vos personnels disponibles ont déjà été mobilisés.', 'orange');
       game.saveGame();
-      if (game.selectedMissionId === mission.id) game.openMissionDetails(mission.id);
+      if (game.selectedMissionId === mission.id) {
+        if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+          game.refreshMissionDetailsIfOpen(mission.id);
+        } else {
+          game.openMissionDetails(mission.id);
+        }
+      }
       return;
     }
 
@@ -1156,7 +1176,11 @@ window.ProtecSmsMobilization = {
         game.updateStatsUI();
 
         if (game.selectedMissionId === currentMission.id) {
-          game.openMissionDetails(currentMission.id);
+          if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+            game.refreshMissionDetailsIfOpen(currentMission.id);
+          } else {
+            game.openMissionDetails(currentMission.id);
+          }
         }
       }, assignedDelayMs);
     });
@@ -1165,7 +1189,11 @@ window.ProtecSmsMobilization = {
     game.renderMissions();
     game.updateStatsUI();
     if (game.selectedMissionId === mission.id) {
-      game.openMissionDetails(mission.id);
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(mission.id);
+      } else {
+        game.openMissionDetails(mission.id);
+      }
     }
   },
 

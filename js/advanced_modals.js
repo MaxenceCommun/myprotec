@@ -475,9 +475,22 @@ window.ProtecAdvancedModals = {
 
   renderVehicleShop(game, stationId) {
     const st = game.stations.find(s => s.id === stationId) || game.stations[0];
-    const garageLevel = st?.rooms?.garage || 1;
-    const maxSlots = garageLevel === 1 ? 2 : (garageLevel === 2 ? 4 : 8);
-    const usedSlots = st?.vehicles?.length || 0;
+    
+    // Détermination fiable de la capacité réelle du garage (hangar de l'antenne)
+    let maxSlots = 2;
+    if (window.ProtecLocaux && typeof window.ProtecLocaux.getGarageCapacity === 'function') {
+      maxSlots = window.ProtecLocaux.getGarageCapacity(game, st?.id);
+    } else if (window.ProtecAdvanced && typeof window.ProtecAdvanced.getGarageCapacity === 'function') {
+      maxSlots = window.ProtecAdvanced.getGarageCapacity(game, st?.id);
+    } else {
+      const prem = st?.premises || st?.modularPremises;
+      const garage = prem?.rooms?.garage_remisage || prem?.rooms?.garage || st?.rooms?.garage_remisage;
+      const garageLevel = garage?.level || st?.rooms?.garage || 1;
+      maxSlots = garage?.capacity || (garageLevel === 1 ? 2 : (garageLevel === 2 ? 4 : 8));
+    }
+
+    const stationVehicles = (game.vehicles || []).filter(v => v && (v.stationId === st?.id || (Array.isArray(st?.vehicles) && st.vehicles.includes(v.id))));
+    const usedSlots = stationVehicles.length;
 
     const currentShopMode = this.shopMode || 'models';
     const activeFilter = this.vehicleFilter || 'all';

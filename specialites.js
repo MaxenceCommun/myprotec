@@ -103,7 +103,7 @@ window.ProtecSpecialites = {
   },
 
   // Proposer l'ouverture d'une spécialité (Achat du matériel requis)
-  openSpecialtySection(game, specId) {
+  async openSpecialtySection(game, specId) {
     this.injectState(game);
     const spec = this.SPECIALTIES_CATALOG.find(s => s.id === specId);
     if (!spec) return;
@@ -118,7 +118,12 @@ window.ProtecSpecialites = {
       return;
     }
 
-    if (!confirm(`🚁 OUVERTURE D'UNE NOUVELLE SPÉCIALITÉ :\n\n• Section : ${spec.name}\n• Matériel spécialisé requis : ${spec.gearName} (${spec.gearCost.toLocaleString('fr-FR')} €)\n\nConfirmez-vous l'investissement ? Le jeu proposera ensuite les bénévoles intéressés pour débuter leur formation.`)) {
+    const confirmed = await window.ProtecDialog.confirm(
+      `Ouverture d'une nouvelle spécialité opérationnelle :\n\n• Section : ${spec.name}\n• Matériel spécialisé requis : ${spec.gearName} (${spec.gearCost.toLocaleString('fr-FR')} €)\n\nConfirmez-vous l'investissement ? Le jeu proposera ensuite les bénévoles intéressés pour débuter leur formation.`,
+      `Section ${spec.name}`,
+      { confirmText: 'Investir & Ouvrir', cancelText: 'Annuler' }
+    );
+    if (!confirmed) {
       return;
     }
 

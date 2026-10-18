@@ -2089,8 +2089,12 @@ window.ProtecLogistique = {
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
 
     game.saveGame();
-    if (typeof game.openMissionDetails === 'function' && mission) {
-      game.openMissionDetails(mission.id);
+    if (mission) {
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(mission.id);
+      } else if (typeof game.openMissionDetails === 'function') {
+        game.openMissionDetails(mission.id);
+      }
     }
   },
 
@@ -2111,8 +2115,12 @@ window.ProtecLogistique = {
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
 
     game.saveGame();
-    if (typeof game.openMissionDetails === 'function' && mission) {
-      game.openMissionDetails(mission.id);
+    if (mission) {
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(mission.id);
+      } else if (typeof game.openMissionDetails === 'function') {
+        game.openMissionDetails(mission.id);
+      }
     }
   },
 
@@ -2148,8 +2156,12 @@ window.ProtecLogistique = {
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
 
     game.saveGame();
-    if (typeof game.openMissionDetails === 'function' && mission) {
-      game.openMissionDetails(mission.id);
+    if (mission) {
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(mission.id);
+      } else if (typeof game.openMissionDetails === 'function') {
+        game.openMissionDetails(mission.id);
+      }
     }
   },
 
@@ -2170,8 +2182,12 @@ window.ProtecLogistique = {
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
 
     if (typeof game.saveGame === 'function') game.saveGame();
-    if (typeof game.openMissionDetails === 'function' && mission) {
-      game.openMissionDetails(mission.id);
+    if (mission) {
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(mission.id);
+      } else if (typeof game.openMissionDetails === 'function') {
+        game.openMissionDetails(mission.id);
+      }
     }
   },
 

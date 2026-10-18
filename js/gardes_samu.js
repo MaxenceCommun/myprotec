@@ -489,7 +489,10 @@ window.ProtecGardesSamu = {
     if (mission.registeredVolunteers.includes(volunteerId)) {
       mission.volunteerRoles[volunteerId] = role;
       game.saveGame();
-      if (typeof game.openMissionDetails === 'function') game.openMissionDetails(missionId);
+      if (game.selectedMissionId === missionId) {
+        if (typeof game.refreshMissionDetailsIfOpen === 'function') game.refreshMissionDetailsIfOpen(missionId);
+        else if (typeof game.openMissionDetails === 'function') game.openMissionDetails(missionId);
+      }
       return;
     }
 
@@ -518,8 +521,14 @@ window.ProtecGardesSamu = {
 
     game.saveGame();
     game.updateStatsUI();
-    if (typeof game.openMissionDetails === 'function') game.openMissionDetails(missionId);
-    if (game.currentModalKey === 'samu') game.openModule('samu');
+    if (game.selectedMissionId === missionId) {
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') game.refreshMissionDetailsIfOpen(missionId);
+      else if (typeof game.openMissionDetails === 'function') game.openMissionDetails(missionId);
+    }
+    if (game.currentModalKey === 'samu') {
+      if (typeof game.refreshCurrentModalIfSafe === 'function') game.refreshCurrentModalIfSafe();
+      else game.openModule('samu');
+    }
   },
 
   // Retrait d'un secouriste d'une garde
@@ -541,8 +550,14 @@ window.ProtecGardesSamu = {
 
     game.saveGame();
     game.updateStatsUI();
-    if (typeof game.openMissionDetails === 'function') game.openMissionDetails(missionId);
-    if (game.currentModalKey === 'samu') game.openModule('samu');
+    if (game.selectedMissionId === missionId) {
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') game.refreshMissionDetailsIfOpen(missionId);
+      else if (typeof game.openMissionDetails === 'function') game.openMissionDetails(missionId);
+    }
+    if (game.currentModalKey === 'samu') {
+      if (typeof game.refreshCurrentModalIfSafe === 'function') game.refreshCurrentModalIfSafe();
+      else game.openModule('samu');
+    }
   },
 
   // Basculer la posture : À la base (prêt à partir) VS Dispo domicile (astreinte)
@@ -564,8 +579,14 @@ window.ProtecGardesSamu = {
     }
 
     game.saveGame();
-    if (typeof game.openMissionDetails === 'function') game.openMissionDetails(missionId);
-    if (game.currentModalKey === 'samu') game.openModule('samu');
+    if (game.selectedMissionId === missionId) {
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') game.refreshMissionDetailsIfOpen(missionId);
+      else if (typeof game.openMissionDetails === 'function') game.openMissionDetails(missionId);
+    }
+    if (game.currentModalKey === 'samu') {
+      if (typeof game.refreshCurrentModalIfSafe === 'function') game.refreshCurrentModalIfSafe();
+      else game.openModule('samu');
+    }
   },
 
   // Rendu du bloc officiel de garde dans le drawer / fiche de mission

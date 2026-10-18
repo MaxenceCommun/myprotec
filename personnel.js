@@ -2612,9 +2612,9 @@ window.ProtecPersonnel = {
     }
 
     game.closeModal();
+    if (typeof game.closeDrawer === 'function') game.closeDrawer();
     game.saveGame();
     game.updateStatsUI();
-    game.openModule('recrutement');
   },
 
   // 4b. Validation de la formation PSC 1 pour un volontaire en Service Civique

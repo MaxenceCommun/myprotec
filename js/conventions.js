@@ -1680,8 +1680,12 @@ if (numVehicles > 0 && totalCrew > 0) {
     }
 
     // Rafraîchir l'interface de détails si elle est ouverte
-    if (game.selectedMissionId === missionId && typeof game.openMissionDetails === 'function') {
-      game.openMissionDetails(missionId);
+    if (game.selectedMissionId === missionId) {
+      if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(missionId);
+      } else if (typeof game.openMissionDetails === 'function') {
+        game.openMissionDetails(missionId);
+      }
     }
 
     return compliance;
