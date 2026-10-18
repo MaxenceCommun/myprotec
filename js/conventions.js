@@ -1025,7 +1025,7 @@ window.ProtecRNMSC = {
   },
 
   // Génération du bloc HTML officiel complet RNMSC pour les devis et conventions
-  renderRNMSCSimulatorCardHTML(prefix = 'rnmsc') {
+  renderRNMSCSimulatorCardHTML(prefix = 'rnmsc', layoutMode = 'standard') {
     const state = this.getSimulatorState(prefix);
     const p2Val = state.p2 !== undefined ? Number(state.p2) : 0.30;
     const e1Val = state.e1 !== undefined ? Number(state.e1) : 0.30;
@@ -1035,14 +1035,14 @@ window.ProtecRNMSC = {
     const calc = this.calculateRIS({ p1: nVal, p2: p2Val, e1: e1Val, e2: e2Val });
 
     return `
-      <div class="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+      <div id="${prefix}-card" class="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4 transition-all">
         <!-- En-tête officiel -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700/80 pb-3">
           <div class="flex items-center gap-2.5">
             <span class="text-xl">📐</span>
             <div>
-              <h4 class="text-sm font-black text-slate-900 dark:text-white">Grille Officielle RNMSC • Dimensionnement des DPS</h4>
-              <p class="text-xs text-slate-500 dark:text-slate-400">Référentiel National des Missions de Sécurité Civile : Calcul du ratio d'intervenants (RIS)</p>
+              <h4 class="text-sm font-black text-slate-900 dark:text-white">Calculateur du Ratio Intervenants Secouristes (RIS)</h4>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Grille officielle RNMSC • Dimensionnement réglementaire des DPS</p>
             </div>
           </div>
           <span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-pc-blue/10 dark:bg-sky-950/70 text-pc-blue dark:text-sky-300 border border-pc-blue/20 dark:border-sky-500/40 flex-shrink-0 self-start sm:self-auto">
@@ -1051,14 +1051,14 @@ window.ProtecRNMSC = {
         </div>
 
         <!-- 3 Sélecteurs d'indicateurs P2, E1, E2 conformes au référentiel d'État -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+        <div class="grid grid-cols-1 gap-2.5 text-xs">
           <!-- P2 : Activité du rassemblement -->
           <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 space-y-1.5 flex flex-col justify-between">
             <div>
-              <label class="font-extrabold text-slate-800 dark:text-slate-200 block text-[11px]">Indicateur P2 • Activité du rassemblement</label>
+              <label class="font-extrabold text-slate-800 dark:text-slate-200 block text-[11px]">Indicateur P₂ • Activité du rassemblement</label>
               <span class="text-[10px] text-slate-500 dark:text-slate-400 block">Comportement, posture et public</span>
             </div>
-            <select id="${prefix}-p2" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
+            <select id="${prefix}-p2" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-pc-blue">
               <option value="0.25" ${p2Val === 0.25 ? 'selected' : ''}>0,25 - Public assis (spectacle, cérémonie, réunion, sport)</option>
               <option value="0.30" ${p2Val === 0.30 ? 'selected' : ''}>0,30 - Public debout (exposition, foire, salon, comice)</option>
               <option value="0.35" ${p2Val === 0.35 ? 'selected' : ''}>0,35 - Public debout statique (fête foraine, fête avec protection)</option>
@@ -1069,10 +1069,10 @@ window.ProtecRNMSC = {
           <!-- E1 : Caractéristiques de l'environnement ou accessibilité du site -->
           <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 space-y-1.5 flex flex-col justify-between">
             <div>
-              <label class="font-extrabold text-slate-800 dark:text-slate-200 block text-[11px]">Indicateur E1 • Environnement & Accessibilité</label>
+              <label class="font-extrabold text-slate-800 dark:text-slate-200 block text-[11px]">Indicateur E₁ • Environnement & Accessibilité</label>
               <span class="text-[10px] text-slate-500 dark:text-slate-400 block">Structure, superficie et relief</span>
             </div>
-            <select id="${prefix}-e1" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
+            <select id="${prefix}-e1" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-pc-blue">
               <option value="0.25" ${e1Val === 0.25 ? 'selected' : ''}>0,25 - Bâtiment en dur, rues avec accès dégagés</option>
               <option value="0.30" ${e1Val === 0.30 ? 'selected' : ''}>0,30 - Gradins/chapiteaux, terrain ≤ 2 ha, brancardage ≤ 300m</option>
               <option value="0.35" ${e1Val === 0.35 ? 'selected' : ''}>0,35 - Espace 2 à 5 ha, brancardage 300 à 600m, pente > 150m</option>
@@ -1083,10 +1083,10 @@ window.ProtecRNMSC = {
           <!-- E2 : Délai d'intervention des secours publics -->
           <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 space-y-1.5 flex flex-col justify-between">
             <div>
-              <label class="font-extrabold text-slate-800 dark:text-slate-200 block text-[11px]">Indicateur E2 • Délai Secours Publics (15 / 18)</label>
+              <label class="font-extrabold text-slate-800 dark:text-slate-200 block text-[11px]">Indicateur E₂ • Délai Secours Publics (15 / 18)</label>
               <span class="text-[10px] text-slate-500 dark:text-slate-400 block">Délai d'accès pompiers et SAMU</span>
             </div>
-            <select id="${prefix}-e2" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
+            <select id="${prefix}-e2" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-full text-xs font-semibold p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-pc-blue">
               <option value="0.25" ${e2Val === 0.25 ? 'selected' : ''}>0,25 - Délais ≤ 10 minutes</option>
               <option value="0.30" ${e2Val === 0.30 ? 'selected' : ''}>0,30 - Délais de 10 à 20 minutes</option>
               <option value="0.35" ${e2Val === 0.35 ? 'selected' : ''}>0,35 - Délais de 20 à 30 minutes</option>
@@ -1096,29 +1096,109 @@ window.ProtecRNMSC = {
         </div>
 
         <!-- Effectif prévisible déclaré (P1) et Synthèse de la formule -->
-        <div class="p-3.5 rounded-2xl bg-slate-100/90 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div class="flex items-center gap-3">
+        <div class="p-3.5 rounded-2xl bg-slate-100/90 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 space-y-3">
+          <div class="flex items-center justify-between gap-3">
             <div>
               <span class="text-xs font-extrabold text-slate-800 dark:text-slate-200 block">Effectif déclaré du public (P₁) :</span>
-              <span class="text-[10px] text-slate-500 dark:text-slate-400">Public simultané maximal attendu</span>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400">Public simultané attendu</span>
             </div>
-            <input type="number" id="${prefix}-n" value="${nVal}" min="50" max="250000" step="50" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" oninput="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-28 text-xs font-black p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono text-center">
+            <input type="number" id="${prefix}-n" value="${nVal}" min="50" max="250000" step="50" onchange="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" oninput="window.ProtecRNMSC.updateSimulatorUI('${prefix}')" class="w-28 text-xs font-black p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono text-center focus:ring-2 focus:ring-pc-blue">
           </div>
 
-          <div id="${prefix}-result-box" class="flex items-center gap-3 text-xs">
-            <div class="text-right">
+          <div id="${prefix}-result-box" class="flex items-center justify-between gap-2 text-xs pt-2 border-t border-slate-200 dark:border-slate-600">
+            <div class="text-left">
               <span class="text-[10px] text-slate-500 dark:text-slate-400 font-bold block">i = ${calc.i} • RIS = ${calc.ris}</span>
-              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${calc.badgeColor}">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black border ${calc.badgeColor}">
                 ${calc.label}
               </span>
             </div>
-            <div class="p-2.5 rounded-xl bg-pc-blue text-white text-center font-mono font-black text-xs shadow-xs">
-              ${calc.minVolunteers > 0 ? `${calc.minVolunteers} secouristes requis (pair)` : 'Aucun DPS requis'}
+            <div class="p-2 rounded-xl bg-pc-blue text-white text-center font-mono font-black text-xs shadow-xs shrink-0">
+              ${calc.minVolunteers > 0 ? `${calc.minVolunteers} secouristes (pair)` : 'Aucun DPS requis'}
             </div>
           </div>
         </div>
+
+        <!-- Aide-mémoire & formule RNMSC -->
+        <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/70 text-[10.5px] text-slate-500 dark:text-slate-400 space-y-1">
+          <div class="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300">
+            <span>Formule : RIS = i × (P₁ / 1000)</span>
+            <span class="text-[10px] font-mono">i = P₂ + E₁ + E₂</span>
+          </div>
+          <p class="text-[10px] leading-tight text-slate-500 dark:text-slate-400">
+            Effectif toujours arrondi au nombre pair supérieur (min 2 pour PAPS, min 4 pour DPS-PE).
+          </p>
+        </div>
       </div>
     `;
+  },
+
+  // Injection rapide des données d'un devis dans le simulateur
+  loadDevisIntoSimulator(devisId, prefix = 'devis-rnmsc') {
+    if (!window.game || !Array.isArray(window.game.devis)) return;
+    const d = window.game.devis.find(item => item.id === devisId);
+    if (!d) return;
+
+    let p1 = 2500;
+    if (d.rawPublicCount) {
+      p1 = Number(d.rawPublicCount);
+    } else if (d.publicCount) {
+      const parsed = parseInt(String(d.publicCount).replace(/\D/g, ''), 10);
+      if (!isNaN(parsed) && parsed > 0) p1 = parsed;
+    }
+
+    let p2 = 0.30;
+    const nameLower = (d.eventName || '').toLowerCase();
+    if (nameLower.includes('concert') || nameLower.includes('danse') || nameLower.includes('férias') || nameLower.includes('carnaval') || nameLower.includes('fête')) {
+      p2 = 0.40;
+    } else if (nameLower.includes('cross') || nameLower.includes('trail') || nameLower.includes('course') || nameLower.includes('match') || nameLower.includes('foot') || nameLower.includes('rugby')) {
+      p2 = 0.35;
+    } else if (nameLower.includes('théâtre') || nameLower.includes('conférence') || nameLower.includes('cérémonie') || nameLower.includes('spectacle')) {
+      p2 = 0.25;
+    }
+
+    let e1 = 0.30;
+    const envLower = (d.environment || '').toLowerCase();
+    if (envLower.includes('espace > 5 ha') || envLower.includes('forêt') || envLower.includes('relief') || envLower.includes('montagne') || envLower.includes('plein air')) {
+      e1 = 0.40;
+    } else if (envLower.includes('2 à 5 ha') || envLower.includes('parc') || envLower.includes('pente') || envLower.includes('urbain')) {
+      e1 = 0.30;
+    } else if (envLower.includes('enclos') || envLower.includes('bâtiment') || envLower.includes('dur') || envLower.includes('salle')) {
+      e1 = 0.25;
+    }
+
+    let e2 = 0.30;
+    const accLower = (d.emergencyAccess || '').toLowerCase();
+    if (accLower.includes('< 10') || accLower.includes('immédiat') || accLower.includes('centre-ville')) {
+      e2 = 0.25;
+    } else if (accLower.includes('> 30') || accLower.includes('isolé')) {
+      e2 = 0.40;
+    } else if (accLower.includes('20 à 30')) {
+      e2 = 0.35;
+    } else {
+      e2 = 0.30;
+    }
+
+    const p2Elem = document.getElementById(`${prefix}-p2`);
+    const e1Elem = document.getElementById(`${prefix}-e1`);
+    const e2Elem = document.getElementById(`${prefix}-e2`);
+    const nElem = document.getElementById(`${prefix}-n`);
+
+    if (p2Elem) p2Elem.value = String(p2);
+    if (e1Elem) e1Elem.value = String(e1);
+    if (e2Elem) e2Elem.value = String(e2);
+    if (nElem) nElem.value = String(p1);
+
+    this.updateSimulatorUI(prefix);
+
+    const card = document.getElementById(`${prefix}-card`);
+    if (card) {
+      card.classList.add('ring-4', 'ring-amber-500/50');
+      setTimeout(() => card.classList.remove('ring-4', 'ring-amber-500/50'), 1200);
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    if (window.game && typeof window.game.showToast === 'function') {
+      window.game.showToast('Calculateur RIS Actualisé', `Paramètres injectés depuis « ${d.eventName} » (${p1.toLocaleString('fr-FR')} pers.)`, 'blue');
+    }
   },
 
   // Mise à jour visuelle du simulateur dans la vue conventions ou la vue devis
@@ -1143,14 +1223,14 @@ window.ProtecRNMSC = {
     const box = document.getElementById(`${prefix}-result-box`);
     if (box) {
       box.innerHTML = `
-        <div class="text-right">
-          <span class="text-[10px] text-slate-500 font-bold block">i = ${calc.i} • RIS = ${calc.ris}</span>
-          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${calc.badgeColor}">
+        <div class="text-left">
+          <span class="text-[10px] text-slate-500 dark:text-slate-400 font-bold block">i = ${calc.i} • RIS = ${calc.ris}</span>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-black border ${calc.badgeColor}">
             ${calc.label}
           </span>
         </div>
-        <div class="p-2.5 rounded-xl bg-pc-blue text-white text-center font-mono font-black text-xs shadow-xs">
-          ${calc.minVolunteers > 0 ? `${calc.minVolunteers} secouristes requis (pair)` : 'Aucun DPS requis'}
+        <div class="p-2 rounded-xl bg-pc-blue text-white text-center font-mono font-black text-xs shadow-xs shrink-0">
+          ${calc.minVolunteers > 0 ? `${calc.minVolunteers} secouristes (pair)` : 'Aucun DPS requis'}
         </div>
       `;
     }
@@ -2459,6 +2539,9 @@ if (window.ProtecConventions && window.ProtecRNMSC) {
   }
   if (typeof window.ProtecRNMSC.renderTimelineWidget === 'function') {
     window.ProtecConventions.renderTimelineWidget = window.ProtecRNMSC.renderTimelineWidget.bind(window.ProtecRNMSC);
+  }
+  if (typeof window.ProtecRNMSC.loadDevisIntoSimulator === 'function') {
+    window.ProtecConventions.loadDevisIntoSimulator = window.ProtecRNMSC.loadDevisIntoSimulator.bind(window.ProtecRNMSC);
   }
 }
 

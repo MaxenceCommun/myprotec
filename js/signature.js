@@ -21,12 +21,15 @@ window.ProtecSignature = {
 
     if (!container) return null;
 
+    const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+    const defaultColor = isDark ? '#38bdf8' : '#1e3a8a';
+
     const config = {
       title: options.title || 'Paraphe & Signature du Directeur :',
       subtitle: options.subtitle || 'Signez ci-dessous avec votre souris ou votre doigt pour valider',
       placeholder: options.placeholder || '✍️ Signez ici...',
       height: options.height || 120,
-      color: options.color || '#1e3a8a', // Bleu nuit officiel
+      color: options.color || defaultColor, // Cyan lumineux en dark, bleu nuit officiel en clair
       lineWidth: options.lineWidth || 2.5,
       requiredLength: options.requiredLength || 35, // Longueur min de trait
       minPoints: options.minPoints || 6,
@@ -40,31 +43,31 @@ window.ProtecSignature = {
     const padId = `sig-pad-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     container.innerHTML = `
-      <div id="${padId}" class="w-full rounded-2xl bg-white border-2 border-dashed border-slate-300 p-3 sm:p-4 shadow-inner space-y-2 relative select-none">
+      <div id="${padId}" class="w-full rounded-2xl bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-700 p-3 sm:p-4 shadow-inner space-y-2 relative select-none">
         <div class="flex items-center justify-between text-xs">
-          <span class="font-black text-slate-800 flex items-center gap-1.5">
+          <span class="font-black text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
             <span class="text-base">🖋️</span> ${config.title}
           </span>
           <div class="flex items-center gap-2">
-            <span class="text-[10px] text-slate-400 font-bold uppercase">
+            <span class="text-[10px] text-slate-400 dark:text-slate-400 font-bold uppercase">
               Fait le ${new Date().toLocaleDateString('fr-FR')}
             </span>
-            <button type="button" id="${padId}-clear-btn" class="px-2 py-0.5 rounded text-[10px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer">
+            <button type="button" id="${padId}-clear-btn" class="px-2 py-0.5 rounded text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer">
               Effacer ↺
             </button>
           </div>
         </div>
 
-        <div class="relative w-full overflow-hidden rounded-xl bg-slate-50/70 border border-slate-200" style="height: ${config.height}px;">
+        <div class="relative w-full overflow-hidden rounded-xl bg-slate-50/70 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800" style="height: ${config.height}px;">
           <!-- Filigrane incitatif -->
-          <div id="${padId}-placeholder" class="absolute inset-0 flex items-center justify-center text-slate-300 pointer-events-none font-bold text-sm tracking-wide transition-opacity duration-200">
+          <div id="${padId}-placeholder" class="absolute inset-0 flex items-center justify-center text-slate-300 dark:text-slate-600 pointer-events-none font-bold text-sm tracking-wide transition-opacity duration-200">
             ${config.placeholder}
           </div>
 
           <!-- Ligne pointillée de paraphe officiel -->
-          <div class="absolute left-6 right-6 bottom-5 border-b border-dashed border-slate-300 pointer-events-none flex items-center justify-between">
-            <span class="text-[9px] text-slate-400 font-serif italic">✖ Paraphe officiel</span>
-            <span class="text-[9px] text-slate-300 font-mono">MyProtec Live</span>
+          <div class="absolute left-6 right-6 bottom-5 border-b border-dashed border-slate-300 dark:border-slate-700 pointer-events-none flex items-center justify-between">
+            <span class="text-[9px] text-slate-400 dark:text-slate-500 font-serif italic">✖ Paraphe officiel</span>
+            <span class="text-[9px] text-slate-300 dark:text-slate-600 font-mono">MyProtec Live</span>
           </div>
 
           <!-- Canvas interactif -->
@@ -72,16 +75,16 @@ window.ProtecSignature = {
 
           <!-- Tampon officiel d'homologation (apparaît à la validation) -->
           <div id="${padId}-stamp" class="hidden absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <div class="border-4 border-emerald-600 text-emerald-700 bg-white/90 backdrop-blur-xs px-4 py-1.5 rounded-xl font-black uppercase text-xs sm:text-sm tracking-wider shadow-lg transform -rotate-3 scale-95 animate-in zoom-in duration-300 text-center">
+            <div class="border-4 border-emerald-600 text-emerald-700 dark:text-emerald-300 bg-white/90 dark:bg-slate-900/95 backdrop-blur-xs px-4 py-1.5 rounded-xl font-black uppercase text-xs sm:text-sm tracking-wider shadow-lg transform -rotate-3 scale-95 animate-in zoom-in duration-300 text-center">
               <span class="block leading-tight">✓ ${config.stampText}</span>
-              <span class="block text-[8px] sm:text-[9px] text-emerald-600 font-bold tracking-widest mt-0.5">${config.stampSubtext} • ${new Date().toLocaleDateString('fr-FR')}</span>
+              <span class="block text-[8px] sm:text-[9px] text-emerald-600 dark:text-emerald-400 font-bold tracking-widest mt-0.5">${config.stampSubtext} • ${new Date().toLocaleDateString('fr-FR')}</span>
             </div>
           </div>
         </div>
 
-        <div class="flex items-center justify-between text-[10px] text-slate-400 font-semibold">
+        <div class="flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-400 font-semibold">
           <span>${config.subtitle}</span>
-          <span id="${padId}-status" class="text-indigo-600 font-bold">En attente de signature</span>
+          <span id="${padId}-status" class="text-indigo-600 dark:text-blue-400 font-bold">En attente de signature</span>
         </div>
       </div>
     `;
@@ -286,61 +289,61 @@ window.ProtecSignature = {
     const cost = options.cost || 0;
 
     modal.innerHTML = `
-      <div class="glass-panel-heavy rounded-3xl w-full max-w-2xl p-6 sm:p-7 shadow-2xl border-2 border-slate-300 text-slate-800 space-y-5 my-6">
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-2xl p-6 sm:p-7 shadow-2xl border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 space-y-5 my-6">
         
         <!-- En-tête officiel solennel du document -->
-        <div class="flex items-center justify-between pb-4 border-b-2 border-slate-200">
+        <div class="flex items-center justify-between pb-4 border-b-2 border-slate-200 dark:border-slate-800">
           <div class="flex items-center gap-3">
             <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-pc-blue to-indigo-900 text-white flex items-center justify-center text-xl font-black shadow-md flex-shrink-0">
               📜
             </div>
             <div>
-              <span class="text-[10px] font-black uppercase text-pc-blue tracking-wider block">${institution}</span>
-              <h3 class="text-base sm:text-lg font-black text-slate-900 leading-tight">${title}</h3>
-              <p class="text-[11px] text-slate-500">${subtitle}</p>
+              <span class="text-[10px] font-black uppercase text-pc-blue dark:text-blue-400 tracking-wider block">${institution}</span>
+              <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white leading-tight">${title}</h3>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">${subtitle}</p>
             </div>
           </div>
-          <button type="button" onclick="document.getElementById('official-signature-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer transition">✕</button>
+          <button type="button" onclick="document.getElementById('official-signature-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center font-bold text-sm cursor-pointer transition">✕</button>
         </div>
 
         <!-- Corps juridique de la convention -->
-        <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-amber-50/40 to-slate-50 border border-slate-200 space-y-3.5 text-xs">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-2 border-b border-slate-200/80">
+        <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-amber-50/40 to-slate-50 dark:from-slate-800/80 dark:to-slate-900/90 border border-slate-200 dark:border-slate-700 space-y-3.5 text-xs text-slate-800 dark:text-slate-200">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-700">
             <div>
               <span class="text-[10px] font-bold text-slate-400 block uppercase">Partie 1 (Autorité Tutélaire)</span>
-              <strong class="text-slate-800">${partnerName}</strong>
+              <strong class="text-slate-800 dark:text-slate-100">${partnerName}</strong>
             </div>
             <div>
               <span class="text-[10px] font-bold text-slate-400 block uppercase">Partie 2 (AASC Contractante)</span>
-              <strong class="text-pc-blue">${stationName}</strong>
+              <strong class="text-pc-blue dark:text-blue-400">${stationName}</strong>
             </div>
           </div>
 
           <!-- Clauses -->
           <div class="space-y-1.5">
-            <span class="text-[10px] font-black uppercase text-slate-600 block tracking-wider">Clauses & Dispositions Conventionnelles :</span>
-            <ul class="space-y-1 text-slate-700 list-disc list-inside">
+            <span class="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400 block tracking-wider">Clauses & Dispositions Conventionnelles :</span>
+            <ul class="space-y-1 text-slate-700 dark:text-slate-300 list-disc list-inside">
               ${clauses.map(c => `<li class="leading-relaxed font-medium">${c}</li>`).join('')}
             </ul>
           </div>
 
           <!-- Impact financier / Dotation -->
-          <div class="flex flex-wrap items-center justify-between pt-2 border-t border-slate-200/70 text-xs">
+          <div class="flex flex-wrap items-center justify-between pt-2 border-t border-slate-200/70 dark:border-slate-700 text-xs">
             ${cost > 0 ? `
               <div>
-                <span class="text-[10px] text-slate-500 block">Frais d'enregistrement :</span>
-                <strong class="font-mono text-red-600 font-black">${cost.toLocaleString('fr-FR')} €</strong>
+                <span class="text-[10px] text-slate-500 dark:text-slate-400 block">Frais d'enregistrement :</span>
+                <strong class="font-mono text-red-600 dark:text-red-400 font-black">${cost.toLocaleString('fr-FR')} €</strong>
               </div>
             ` : ''}
             ${dotation ? `
               <div>
-                <span class="text-[10px] text-slate-500 block">Dotation de mise en route allouée :</span>
-                <strong class="font-mono text-emerald-600 font-black">+${dotation.toLocaleString('fr-FR')} €</strong>
+                <span class="text-[10px] text-slate-500 dark:text-slate-400 block">Dotation de mise en route allouée :</span>
+                <strong class="font-mono text-emerald-600 dark:text-emerald-400 font-black">+${dotation.toLocaleString('fr-FR')} €</strong>
               </div>
             ` : ''}
             <div>
-              <span class="text-[10px] text-slate-500 block">Effet légal :</span>
-              <strong class="text-slate-800 font-bold">Immédiat après signature</strong>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400 block">Effet légal :</span>
+              <strong class="text-slate-800 dark:text-slate-100 font-bold">Immédiat après signature</strong>
             </div>
           </div>
         </div>
@@ -350,9 +353,9 @@ window.ProtecSignature = {
           <!-- Le pad sera injecté ici -->
         </div>
 
-        <div class="flex items-center justify-between pt-2 text-[11px] text-slate-400 border-t border-slate-200">
+        <div class="flex items-center justify-between pt-2 text-[11px] text-slate-400 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
           <span>Application de la Loi n°2004-811 de Sécurité Civile</span>
-          <button type="button" onclick="document.getElementById('official-signature-modal').classList.add('hidden')" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition cursor-pointer">
+          <button type="button" onclick="document.getElementById('official-signature-modal').classList.add('hidden')" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold transition cursor-pointer">
             Annuler
           </button>
         </div>

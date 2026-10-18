@@ -2439,18 +2439,26 @@ window.ProtecCriseLogistique = {
     let m = null;
 
     if (scenarioKey === 'recherche_disparu') {
-      const loc = game.calculateRealisticMissionLocation(base, 'crise');
+      const deptCode = String(game.currentDepartmentCode || game.stations?.[0]?.departmentCode || game.player?.departmentCode || '75');
+      const isParis = ['75', '92', '93', '94'].includes(deptCode);
+      const loc = game.calculateRealisticMissionLocation(base, 'crise', {
+        title: isParis ? 'Recherche Préfecture de Police : Disparition en Milieu Boisé (Bois de Boulogne)' : 'Recherche Gendarmerie : Personne Disparue en Forêt',
+        targetEnvironment: isParis ? 'bois_paris' : 'foret_province'
+      });
       m = {
         id: `scen_rech_${now}`,
-        title: 'Recherche Gendarmerie : Personne Disparue en Forêt',
-        desc: 'Réquisition officielle par la Gendarmerie Nationale. Dispositif de battue avec Poste de Commandement (PC), Télépilote Drone thermique, maîtres-chiens cyno et VLTT 4x4.',
+        title: isParis ? 'Recherche Préfecture de Police : Disparition en Milieu Boisé' : 'Recherche Gendarmerie : Personne Disparue en Forêt',
+        desc: isParis
+          ? 'Réquisition de la Préfecture de Police (DSPAP / DOPC - Art. 74-1 CPP). Dispositif de ratissage au Bois de Boulogne / Vincennes avec Poste de Commandement (PC), Télépilote Drone thermique et équipes cynotechniques.'
+          : 'Réquisition officielle par la Gendarmerie Nationale (Art. 74-1 CPP). Dispositif de battue avec Poste de Commandement (PC), Télépilote Drone thermique, maîtres-chiens cyno et VLTT 4x4.',
         type: 'crise',
         crisisType: 'recherche_disparu',
         isCrisis: true,
-        scale: 'BATTUE & RECHERCHE GENDARMERIE (6 à 10 intervenants)',
+        scale: isParis ? 'BATTUE & RECHERCHE POLICE (6 à 10 intervenants)' : 'BATTUE & RECHERCHE GENDARMERIE (6 à 10 intervenants)',
         urgency: 'haute',
         lat: loc.lat,
         lng: loc.lng,
+        targetEnvironment: isParis ? 'bois_paris' : 'foret_province',
         requiredVolunteers: 6,
         requiredRanks: ['CD', 'PSE2', 'PSE1'],
         requiredVehicles: ['VL', 'VTU'],
@@ -2651,6 +2659,20 @@ window.ProtecCriseLogistique = {
       return null;
     }
 
+    const deptCode = String(game.currentDepartmentCode || game.stations?.[0]?.departmentCode || game.player?.departmentCode || '75');
+    const isParisArea = ['75', '92', '93', '94'].includes(deptCode);
+
+    // Adaptation contextuelle réaliste pour l'agglomération parisienne
+    if (isParisArea && (crisisType === 'recherche_disparu' || template.type === 'recherche_disparu')) {
+      template.autorite_demandeur = 'Préfecture de Police (DSPAP / DOPC)';
+      template.autorite_code = 'police';
+      template.titre = 'Recherche Préfecture de Police : Personne Vulnérable (Bois Parisiens)';
+      template.description = 'Disparition très inquiétante au Bois de Boulogne / Vincennes. Ratissage pédestre réquisitionné par la Préfecture de Police (Art. 74-1 CPP), équipes cyno et drone thermique.';
+      if (template.phases && template.phases[0]) {
+        template.phases[0].ordre_radio = 'COMMANDEMENT POLICE : Déploiement du PC Mobile au carrefour des cascades. Mise en place de la battue de recherche.';
+      }
+    }
+
     const now = Date.now();
     const crisisId = `crise_${crisisType}_${now}`;
     const anticipationMode = isProgrammee !== null ? (isProgrammee ? 'programmee' : 'immediate') : template.anticipation;
@@ -2716,7 +2738,6 @@ window.ProtecCriseLogistique = {
 
     // Auto-enregistrement dans game.activeCrises
     if (!game.activeCrises) game.activeCrises = [];
-    const deptCode = game.currentDepartmentCode || game.stations?.[0]?.departmentCode || game.player?.departmentCode || '54';
     newCrisis.departmentCode = deptCode;
     newCrisis.title = newCrisis.titre;
 
@@ -2724,9 +2745,15 @@ window.ProtecCriseLogistique = {
     if (!newCrisis.lat || !newCrisis.lng) {
       const baseStation = game.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', departmentCode: deptCode };
       if (typeof game.calculateRealisticMissionLocation === 'function') {
-        const coords = game.calculateRealisticMissionLocation(baseStation, template.autorite_code || 'prefecture');
+        const coords = game.calculateRealisticMissionLocation(baseStation, template.autorite_code || 'prefecture', {
+          title: template.titre,
+          targetEnvironment: (crisisType === 'recherche_disparu' || template.type === 'recherche_disparu')
+            ? (isParisArea ? 'bois_paris' : 'foret_province')
+            : null
+        });
         newCrisis.lat = coords.lat;
         newCrisis.lng = coords.lng;
+        newCrisis.targetEnvironment = coords.targetEnvironment || ((crisisType === 'recherche_disparu' || template.type === 'recherche_disparu') ? (isParisArea ? 'bois_paris' : 'foret_province') : null);
       } else {
         newCrisis.lat = baseStation.lat;
         newCrisis.lng = baseStation.lng;

@@ -657,11 +657,124 @@ window.ProtecSmsMobilization = {
       text: `[ÉVOLUTION OPÉRATIONNELLE]\nDélai maximum de départ (trajet domicile ➔ base) réajusté à : ${delayLabel}.`
     });
 
+    // Réévaluation des secouristes en réserve trop éloignés
+    if (Array.isArray(mission.distantVolunteers) && mission.distantVolunteers.length > 0) {
+      if (!Array.isArray(mission.smsResponses)) mission.smsResponses = [];
+      if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
+      const stillDistant = [];
+      let recoveredCount = 0;
+
+      mission.distantVolunteers.forEach(d => {
+        const diff = parsedDelay > 0 ? (d.rallyMinutes - parsedDelay) : 0;
+        if (parsedDelay === 0 || d.rallyMinutes <= parsedDelay) {
+          // Pleinement admissible désormais
+          recoveredCount++;
+          if (!mission.registeredVolunteers.includes(d.volunteerId)) {
+            mission.registeredVolunteers.push(d.volunteerId);
+          }
+          if (mission.smsConsigne?.consigne === 'base_immediat') {
+            game.initVolunteerCrisisTransit(mission, d.volunteerId);
+          }
+          mission.smsResponses.unshift({
+            volunteerId: d.volunteerId,
+            volunteerName: d.volunteerName,
+            rank: d.rank,
+            isAvailable: true,
+            rallyMinutes: d.rallyMinutes,
+            message: `Suite au réajustement du délai (${delayLabel}), je suis disponible et je pars (trajet domicile : ${d.rallyMinutes} min).`,
+            time: timeStr
+          });
+        } else if (diff <= 5) {
+          // Admissible avec validation
+          recoveredCount++;
+          mission.smsResponses.unshift({
+            volunteerId: d.volunteerId,
+            volunteerName: d.volunteerName,
+            rank: d.rank,
+            isAvailable: false,
+            canOverrideDelay: true,
+            delayOverrunMinutes: diff,
+            rallyMinutes: d.rallyMinutes,
+            maxDelay: parsedDelay,
+            message: `Suite à l'ajustement du délai : domicile à ${d.rallyMinutes} min (+${diff} min / max ${parsedDelay} min). Disponible si vous validez.`,
+            time: timeStr
+          });
+        } else {
+          stillDistant.push(d);
+        }
+      });
+
+      mission.distantVolunteers = stillDistant;
+      if (recoveredCount > 0) {
+        game.showToast(
+          'Effectifs Réévalués',
+          `${recoveredCount} secouriste(s) en réserve deviennent mobilisables avec ce nouveau délai !`,
+          'green'
+        );
+      }
+    }
+
     game.showToast(
       'Délai de Départ Modifié',
       `Le délai maximum a été ajusté à ${delayLabel} en direct.`,
       'blue'
     );
+
+    game.saveGame();
+    game.renderMissions();
+    game.updateStatsUI();
+    if (game.selectedMissionId === mission.id) {
+      game.openMissionDetails(mission.id);
+    }
+  },
+
+  // Déclencher un secouriste quand même malgré un léger dépassement du délai max (<= 5 min)
+  overrideDelayAndMobilize(game, missionId, volunteerId) {
+    if (!game) game = window.game;
+    if (!game) return;
+    const mission = game.missions.find(m => m.id === missionId);
+    if (!mission) return;
+
+    const vol = (game.volunteers || []).find(v => v.id === volunteerId);
+    if (!vol) return;
+
+    if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
+    if (!mission.registeredVolunteers.includes(vol.id)) {
+      mission.registeredVolunteers.push(vol.id);
+    }
+
+    // Mettre à jour la réponse SMS dans la liste
+    if (Array.isArray(mission.smsResponses)) {
+      const resp = mission.smsResponses.find(r => r.volunteerId === vol.id);
+      if (resp) {
+        resp.isAvailable = true;
+        resp.overridden = true;
+        resp.canOverrideDelay = false;
+        resp.message = `Déclenché(e) quand même par le gestionnaire (domicile à ${resp.rallyMinutes || '?'} min de la base). En route !`;
+      }
+    }
+
+    // Si la consigne est "base_immediat", lancer le ralliement domicile -> base
+    const consigneKey = mission.smsConsigne?.consigne || 'base_immediat';
+    if (consigneKey === 'base_immediat') {
+      const transit = game.initVolunteerCrisisTransit(mission, vol.id);
+      const minutes = transit?.rallyMinutes || 20;
+      game.showToast(
+        'Secouriste Déclenché d\'office',
+        `${vol.name} (${vol.rank}) part immédiatement vers la base (trajet estimé : ${minutes} min).`,
+        'green'
+      );
+    } else {
+      game.showToast(
+        'Secouriste Déclenché d\'office',
+        `${vol.name} (${vol.rank}) a été ajouté(e) aux effectifs mobilisés pour la mission.`,
+        'green'
+      );
+    }
+
+    setTimeout(() => {
+      game.checkEnginProgressNotification?.(mission);
+    }, 900);
 
     game.saveGame();
     game.renderMissions();
@@ -852,6 +965,7 @@ window.ProtecSmsMobilization = {
 
     mission.smsCampaignActive = true;
     mission.relancesCount = (mission.relancesCount || 0) + 1;
+    mission.distantVolunteers = [];
 
     const consigneObj = this.CONSIGNES[config.consigne] || this.CONSIGNES.attente_domicile;
     game.showToast('Diffusion SMS Lancée', `Message envoyé à ${unassignedVols.length} secouriste(s) [Consigne : ${consigneObj.shortLabel}].`, 'blue');
@@ -980,17 +1094,49 @@ window.ProtecSmsMobilization = {
         } else if (!isFull) {
           // Si le bénévole est disponible mais que son trajet dépasse le délai maximum imposé
           if (evalResult.isAvailable && !delayRespected) {
-            const rejectMsg = `Délai impossible : domicile à ${rallyMinutes} min de la base (délai max exigé : ${maxDelay} min)`;
-            currentMission.smsResponses.unshift({
-              volunteerId: vol.id,
-              volunteerName: vol.name,
-              rank: vol.rank || 'Secouriste',
-              isAvailable: false,
-              rallyMinutes: rallyMinutes,
-              message: rejectMsg,
-              time: timeStr
-            });
-            game.showToast('SMS : Délai Dépassé', `${vol.name} : « ${rejectMsg} »`, 'orange');
+            const diffMinutes = Math.max(1, rallyMinutes - maxDelay);
+
+            if (diffMinutes <= 5) {
+              // Dépassement léger (<= 5 min) : le bénévole prévient qu'il est à X min et le gestionnaire peut déclencher quand même
+              const overrunMsg = `Domicile à ${rallyMinutes} min de la base (+${diffMinutes} min par rapport au délai max de ${maxDelay} min). Disponible si vous validez.`;
+              currentMission.smsResponses.unshift({
+                volunteerId: vol.id,
+                volunteerName: vol.name,
+                rank: vol.rank || 'Secouriste',
+                isAvailable: false,
+                canOverrideDelay: true,
+                delayOverrunMinutes: diffMinutes,
+                rallyMinutes: rallyMinutes,
+                maxDelay: maxDelay,
+                message: overrunMsg,
+                time: timeStr
+              });
+              game.showToast(
+                `SMS : Délai Limite (+${diffMinutes} min)`,
+                `${vol.name} prévient qu'il est à ${rallyMinutes} min de la base (délai max : ${maxDelay} min).`,
+                'orange'
+              );
+            } else {
+              // Dépassement > 5 min : n'envoie même pas de message pour ne pas encombrer, garde l'info en cas d'évolution
+              if (!Array.isArray(currentMission.distantVolunteers)) {
+                currentMission.distantVolunteers = [];
+              }
+              const existingIdx = currentMission.distantVolunteers.findIndex(d => d.volunteerId === vol.id);
+              const distantInfo = {
+                volunteerId: vol.id,
+                volunteerName: vol.name,
+                rank: vol.rank || 'Secouriste',
+                rallyMinutes: rallyMinutes,
+                diffMinutes: diffMinutes,
+                maxDelay: maxDelay,
+                time: timeStr
+              };
+              if (existingIdx >= 0) {
+                currentMission.distantVolunteers[existingIdx] = distantInfo;
+              } else {
+                currentMission.distantVolunteers.push(distantInfo);
+              }
+            }
           } else if (Math.random() < 0.75) {
             currentMission.smsResponses.unshift({
               volunteerId: vol.id,
@@ -1172,33 +1318,99 @@ window.ProtecSmsMobilization = {
           </div>
 
           ${(mission.smsResponses && mission.smsResponses.length > 0) ? `
-            <div class="space-y-1 max-h-44 overflow-y-auto">
-              ${mission.smsResponses.map(r => `
-                <div class="p-2 rounded-xl border flex items-center justify-between text-xs ${r.isAvailable ? 'bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-500/30 text-slate-800 dark:text-white shadow-2xs' : 'bg-slate-100/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-500'}">
-                  <div class="flex items-center gap-2 min-w-0 flex-1">
-                    <div class="w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${r.isAvailable ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}">
-                      <i data-lucide="${r.isAvailable ? 'check' : 'x'}" class="w-3.5 h-3.5"></i>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="font-bold text-slate-900 dark:text-white">${r.volunteerName}</span>
-                        <span class="text-[9px] font-bold px-1.5 py-0.2 rounded ${r.isAvailable ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'}">
-                          ${r.isAvailable ? 'Dispo' : 'Indispo'}
-                        </span>
-                        <span class="text-[9px] text-slate-400 font-semibold">${r.rank}</span>
+            <div class="space-y-1.5 max-h-48 overflow-y-auto">
+              ${mission.smsResponses.map(r => {
+                const isRegistered = Boolean(mission.registeredVolunteers && mission.registeredVolunteers.includes(r.volunteerId));
+                const isOverridden = Boolean(r.overridden || (r.canOverrideDelay && isRegistered));
+                const isPendingOverride = Boolean(r.canOverrideDelay && !isOverridden && !isRegistered);
+                const isAvailable = Boolean(r.isAvailable || isOverridden);
+
+                let badgeHtml = '';
+                let containerClass = '';
+                let iconClass = '';
+                let iconName = 'x';
+
+                if (isPendingOverride) {
+                  containerClass = 'bg-amber-50/80 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700/60 text-slate-800 dark:text-white shadow-2xs';
+                  iconClass = 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300';
+                  iconName = 'clock';
+                  const overrun = r.delayOverrunMinutes || Math.max(1, (r.rallyMinutes || 0) - (r.maxDelay || 0));
+                  badgeHtml = `
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-600 flex items-center gap-1">
+                      <i data-lucide="clock" class="w-2.5 h-2.5"></i>
+                      <span>À ${r.rallyMinutes || '?'} min (+${overrun} min)</span>
+                    </span>
+                  `;
+                } else if (isAvailable) {
+                  containerClass = 'bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-500/30 text-slate-800 dark:text-white shadow-2xs';
+                  iconClass = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300';
+                  iconName = 'check';
+                  badgeHtml = `
+                    <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
+                      ${isOverridden ? 'Déclenché ✓' : 'Dispo'}
+                    </span>
+                  `;
+                } else {
+                  containerClass = 'bg-slate-100/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-500';
+                  iconClass = 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400';
+                  iconName = 'x';
+                  badgeHtml = `
+                    <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+                      Indispo
+                    </span>
+                  `;
+                }
+
+                return `
+                  <div class="p-2 rounded-xl border flex items-center justify-between text-xs ${containerClass}">
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                      <div class="w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${iconClass}">
+                        <i data-lucide="${iconName}" class="w-3.5 h-3.5"></i>
                       </div>
-                      <div class="text-[11px] italic truncate text-slate-600 dark:text-slate-300 mt-0.5">« ${r.message} »</div>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                          <span class="font-bold text-slate-900 dark:text-white">${r.volunteerName}</span>
+                          ${badgeHtml}
+                          <span class="text-[9px] text-slate-400 font-semibold">${r.rank}</span>
+                        </div>
+                        <div class="text-[11px] italic truncate text-slate-600 dark:text-slate-300 mt-0.5">« ${r.message} »</div>
+                      </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-2 shrink-0 ml-2">
+                      ${isPendingOverride && !hasOtherManager ? `
+                        <button type="button" onclick="window.ProtecSmsMobilization.overrideDelayAndMobilize(window.game, '${mission.id}', '${r.volunteerId}')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-500 hover:bg-amber-600 active:scale-95 text-white transition flex items-center gap-1 cursor-pointer shadow-xs">
+                          <i data-lucide="zap" class="w-3 h-3"></i>
+                          <span>Déclencher quand même</span>
+                        </button>
+                      ` : ''}
+                      <span class="text-[10px] mono-num font-bold text-slate-400">${r.time}</span>
                     </div>
                   </div>
-                  <span class="text-[10px] mono-num font-bold text-slate-400 shrink-0 ml-2">${r.time}</span>
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
           ` : `
             <div class="p-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-dashed border-slate-200 dark:border-white/10 text-center text-slate-400 text-[11px] italic">
               ${mission.smsCampaignActive ? 'Campagne SMS en cours de diffusion... Les réponses des secouristes apparaîtront ici.' : 'Aucun retour SMS pour l\'instant. Cliquez sur « Rédiger & Diffuser SMS » pour solliciter vos bénévoles.'}
             </div>
           `}
+
+          <!-- BANDEAU DES BÉNÉVOLES EN RÉSERVE (> 5 min de dépassement) -->
+          ${(mission.distantVolunteers && mission.distantVolunteers.length > 0) ? `
+            <div class="p-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700 text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5">
+                <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+                <span><strong>${mission.distantVolunteers.length}</strong> bénévole(s) disponible(s) mais à plus de 5 min du délai max requis (gardé(s) en réserve).</span>
+              </div>
+              ${!hasOtherManager ? `
+                <button type="button" onclick="window.ProtecSmsMobilization.quickEditMaxDelay('${mission.id}')" class="text-[9px] font-extrabold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer shrink-0 flex items-center gap-1">
+                  <span>Ajuster délai</span>
+                  <i data-lucide="chevron-right" class="w-3 h-3"></i>
+                </button>
+              ` : ''}
+            </div>
+          ` : ''}
         </div>
 
       </div>

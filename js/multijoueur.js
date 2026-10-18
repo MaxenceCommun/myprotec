@@ -494,10 +494,14 @@ window.ProtecMultiplayer = {
 
     const unitRequestedStr = `${requestedVols} secouriste(s)${selectedVehicles.length > 0 ? ' + ' + selectedVehicles.join(', ') : ''}`;
 
+    const myPlayerId = game.player?.id || window.ProtecAuth?.currentUser?.id || localStorage.getItem('protec_player_id') || 'directeur-local';
+    const myPlayerName = game.player?.name || window.ProtecAuth?.currentUser?.username || localStorage.getItem('protec_player_name') || 'Directeur d’Antenne';
+
     const renfortData = {
       id: `renf-${Date.now()}`,
-      requesterPlayerId: game.player?.id || 'directeur-local',
-      requesterName: game.player?.name || 'Directeur d’Antenne',
+      isMine: true,
+      requesterPlayerId: myPlayerId,
+      requesterName: myPlayerName,
       stationName: game.stations?.[0]?.name || 'Antenne Locale',
       departmentCode: String(myDept || '54'),
       missionId: mission.id,
@@ -526,6 +530,9 @@ window.ProtecMultiplayer = {
       status: 'open'
     };
 
+    if (!game.mySentRenfortIds) game.mySentRenfortIds = new Set();
+    game.mySentRenfortIds.add(renfortData.id);
+
     // Diffusion dans le bon canal de messagerie si le système est actif
     if (window.ProtecMessaging) {
       window.ProtecMessaging.injectState(game);
@@ -535,7 +542,7 @@ window.ProtecMultiplayer = {
       const newMsg = {
         id: `renf-msg-${Date.now()}`,
         type: 'renfort_request',
-        senderId: game.player?.id || 'local',
+        senderId: myPlayerId,
         senderName: game.stations?.[0]?.name || 'Antenne Locale',
         deptCode: game.stations?.[0]?.departmentCode || '75',
         channel: zone === 'national' ? 'national' : zone === 'regional' ? 'regional' : 'departemental',
@@ -569,7 +576,10 @@ window.ProtecMultiplayer = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(renfortData)
     }).then(res => res.json()).then(data => {
-      game.renforts.unshift(data.renfort || renfortData);
+      const saved = data.renfort || renfortData;
+      saved.isMine = true;
+      game.mySentRenfortIds.add(saved.id);
+      game.renforts.unshift(saved);
     }).catch(() => {
       game.renforts.unshift(renfortData);
     });

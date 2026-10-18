@@ -372,10 +372,14 @@ window.ProtecSupabase = {
   broadcastRenfortCreated(renfortData) {
     if (!this.realtimeChannel) return;
     try {
+      const senderId = window.game?.player?.id || window.ProtecAuth?.currentUser?.id || localStorage.getItem('protec_player_id') || 'directeur-local';
       this.realtimeChannel.send({
         type: 'broadcast',
         event: 'renfort_created',
-        payload: renfortData
+        payload: {
+          ...renfortData,
+          senderPlayerId: senderId
+        }
       });
     } catch (e) {
       console.warn('Erreur broadcast création renfort:', e);

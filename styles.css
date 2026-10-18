@@ -2401,3 +2401,61 @@ html.dark .border-purple-300 {
   border-color: rgba(168, 85, 247, 0.35) !important;
 }
 
+/* ==========================================================================
+   TUTORIEL FONDATEUR & PARAPHE OFFICIEL EN MODE SOMBRE
+   ========================================================================== */
+html.dark #onboarding-modal .bg-white,
+html.dark #onboarding-modal .bg-white\/95,
+html.dark #onboarding-modal .bg-white\/90 {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark #onboarding-modal input:not([type="checkbox"]):not([type="radio"]),
+html.dark #onboarding-modal select {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark #onboarding-modal .from-blue-50\/90,
+html.dark #onboarding-modal .from-amber-50\/90 {
+  --tw-gradient-from: #1e293b !important;
+  --tw-gradient-stops: var(--tw-gradient-from), #0f172a, var(--tw-gradient-to) !important;
+}
+
+html.dark #onboarding-modal .to-amber-50\/70,
+html.dark #onboarding-modal .to-blue-50\/90 {
+  --tw-gradient-to: #1e293b !important;
+}
+
+/* Charte d'agrément FNPC en mode sombre */
+html.dark #onboarding-modal .bg-gradient-to-br.from-amber-50\/90 {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important;
+  border-color: rgba(59, 130, 246, 0.5) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.7) !important;
+}
+
+/* Zone du pad de signature */
+html.dark [id^="sig-pad-"],
+html.dark #onboarding-fnpc-signature-container [id^="sig-pad-"] {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark [id^="sig-pad-"] .bg-slate-50\/70 {
+  background-color: #090d16 !important;
+  border-color: #1e293b !important;
+}
+
+html.dark [id^="sig-pad-"] [id$="-placeholder"] {
+  color: #475569 !important;
+}
+
+html.dark [id^="sig-pad-"] .border-slate-300 {
+  border-color: #334155 !important;
+}
+

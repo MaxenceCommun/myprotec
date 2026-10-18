@@ -604,7 +604,7 @@ window.ProtecLogistique = {
       station.stock = {};
     }
     if (station.stockMaterielsPS === undefined) {
-      station.stockMaterielsPS = 150;
+      station.stockMaterielsPS = 0;
     }
     if (game && game.stockMaterielsPS === undefined) {
       game.stockMaterielsPS = station.stockMaterielsPS;
@@ -617,25 +617,6 @@ window.ProtecLogistique = {
         }
       });
     }
-
-    // Dotation opérationnelle initiale en lots et matériels (RNMSC Protection Civile)
-    const defaultLots = {
-      caisse_rearmement: 3,
-      lot_secours_a: 2,
-      lot_secours_b: 2,
-      lot_secours_c: 1,
-      lot_hebergement: 2,
-      lot_ravitaillement: 2,
-      lot_eclairage: 1,
-      lot_pompage: 1,
-      lot_tronconnage: 1,
-      sac_pedestre: 2
-    };
-    Object.entries(defaultLots).forEach(([lotId, defQty]) => {
-      if (station.stock[lotId] === undefined) {
-        station.stock[lotId] = defQty;
-      }
-    });
   },
 
   syncToGlobalLogistics(game) {
@@ -2415,6 +2396,26 @@ window.ProtecLogistique = {
       }
     }
 
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    game.saveGame();
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+  },
+
+  buyRearmKit(game, stationId) {
+    if (!game) game = window.game;
+    const st = (game.stations || []).find(s => s.id === stationId) || game.stations?.[0];
+    if (!st) return;
+    this.ensureStationStock(st, game);
+
+    const cost = 60;
+    if ((game.resources?.money || 0) < cost) {
+      game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour acquérir 1 Kit de réarmement.`, 'orange');
+      return;
+    }
+
+    game.resources.money -= cost;
+    st.stock.caisse_rearmement = (st.stock.caisse_rearmement || 0) + 1;
+    game.showToast('Kit de Réarmement Acquis ✓', `1 Kit de réarmement a été ajouté au stock de l'antenne (-${cost} €).`, 'green');
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
     game.saveGame();
     if (typeof game.updateStatsUI === 'function') game.updateStatsUI();

@@ -231,42 +231,42 @@ window.ProtecOnboarding = {
     else contentHTML = this.renderStep4();
 
     modal.innerHTML = `
-      <div class="glass-panel-heavy rounded-3xl w-full max-w-3xl p-5 sm:p-7 shadow-2xl border-2 border-slate-300 text-slate-800 modal-fade-in space-y-5 max-h-[94vh] overflow-y-auto custom-scrollbar">
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-3xl p-5 sm:p-7 shadow-2xl border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 modal-fade-in space-y-5 max-h-[94vh] overflow-y-auto custom-scrollbar">
         <!-- Barre de progression des 4 étapes -->
-        <div class="space-y-2 pb-3 border-b border-slate-200">
-          <div class="flex items-center justify-between text-xs font-black uppercase tracking-wider text-slate-400">
+        <div class="space-y-2 pb-3 border-b border-slate-200 dark:border-slate-800">
+          <div class="flex items-center justify-between text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-400">
             <span>Tutoriel Fondateur • Protection Civile</span>
-            <span class="text-pc-blue font-bold">Étape ${this.currentStep} sur 4</span>
+            <span class="text-pc-blue dark:text-blue-400 font-bold">Étape ${this.currentStep} sur 4</span>
           </div>
 
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <!-- Étape 1 -->
-            <div class="p-2 rounded-xl border flex items-center gap-2 ${this.currentStep === 1 ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : (this.currentStep > 1 ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-slate-100 text-slate-400 border-slate-200')}">
-              <span class="w-5 h-5 rounded-lg flex items-center justify-center font-black text-xs ${this.currentStep === 1 ? 'bg-white text-pc-blue' : (this.currentStep > 1 ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-600')}">
+            <div class="p-2 rounded-xl border flex items-center gap-2 ${this.currentStep === 1 ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : (this.currentStep > 1 ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-400 border-slate-200 dark:border-slate-700')}">
+              <span class="w-5 h-5 rounded-lg flex items-center justify-center font-black text-xs ${this.currentStep === 1 ? 'bg-white text-pc-blue' : (this.currentStep > 1 ? 'bg-emerald-600 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-600 dark:text-slate-300')}">
                 ${this.currentStep > 1 ? '✓' : '1'}
               </span>
               <span class="text-[11px] font-bold truncate">Équipe de base</span>
             </div>
 
             <!-- Étape 2 -->
-            <div class="p-2 rounded-xl border flex items-center gap-2 ${this.currentStep === 2 ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : (this.currentStep > 2 ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-slate-100 text-slate-400 border-slate-200')}">
-              <span class="w-5 h-5 rounded-lg flex items-center justify-center font-black text-xs ${this.currentStep === 2 ? 'bg-white text-pc-blue' : (this.currentStep > 2 ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-600')}">
+            <div class="p-2 rounded-xl border flex items-center gap-2 ${this.currentStep === 2 ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : (this.currentStep > 2 ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-400 border-slate-200 dark:border-slate-700')}">
+              <span class="w-5 h-5 rounded-lg flex items-center justify-center font-black text-xs ${this.currentStep === 2 ? 'bg-white text-pc-blue' : (this.currentStep > 2 ? 'bg-emerald-600 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-600 dark:text-slate-300')}">
                 ${this.currentStep > 2 ? '✓' : '2'}
               </span>
               <span class="text-[11px] font-bold truncate">Placement carte</span>
             </div>
 
             <!-- Étape 3 -->
-            <div class="p-2 rounded-xl border flex items-center gap-2 ${this.currentStep === 3 ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : (this.currentStep > 3 ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-slate-100 text-slate-400 border-slate-200')}">
-              <span class="w-5 h-5 rounded-lg flex items-center justify-center font-black text-xs ${this.currentStep === 3 ? 'bg-white text-pc-blue' : (this.currentStep > 3 ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-600')}">
+            <div class="p-2 rounded-xl border flex items-center gap-2 ${this.currentStep === 3 ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : (this.currentStep > 3 ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-400 border-slate-200 dark:border-slate-700')}">
+              <span class="w-5 h-5 rounded-lg flex items-center justify-center font-black text-xs ${this.currentStep === 3 ? 'bg-white text-pc-blue' : (this.currentStep > 3 ? 'bg-emerald-600 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-600 dark:text-slate-300')}">
                 ${this.currentStep > 3 ? '✓' : '3'}
               </span>
               <span class="text-[11px] font-bold truncate">Aménagement local</span>
             </div>
 
             <!-- Étape 4 -->
-            <div class="p-2 rounded-xl border flex items-center gap-2 ${this.currentStep === 4 ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-slate-100 text-slate-400 border-slate-200'}">
-              <span class="w-5 h-5 rounded-lg flex items-center justify-center font-black text-xs ${this.currentStep === 4 ? 'bg-white text-pc-blue' : 'bg-slate-300 text-slate-600'}">
+            <div class="p-2 rounded-xl border flex items-center gap-2 ${this.currentStep === 4 ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-400 border-slate-200 dark:border-slate-700'}">
+              <span class="w-5 h-5 rounded-lg flex items-center justify-center font-black text-xs ${this.currentStep === 4 ? 'bg-white text-pc-blue' : 'bg-slate-300 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">
                 4
               </span>
               <span class="text-[11px] font-bold truncate">Affiliation FNPC</span>
@@ -300,16 +300,16 @@ window.ProtecOnboarding = {
       <div class="space-y-4">
         <div class="text-center space-y-1">
           <img src="logo_myprotec.png" alt="MyProtec" class="h-12 object-contain drop-shadow mx-auto" />
-          <h2 class="text-xl sm:text-2xl font-black text-slate-900">1. Fondation de l'Antenne & Équipe de Base</h2>
-          <p class="text-xs text-slate-600 max-w-lg mx-auto">
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">1. Fondation de l'Antenne & Équipe de Base</h2>
+          <p class="text-xs text-slate-600 dark:text-slate-300 max-w-lg mx-auto">
             Définissez le nom de votre antenne, son département de rattachement et découvrez vos 5 bénévoles constitutifs.
           </p>
         </div>
 
         <!-- Encart de fondation : Nom de l'antenne & Choix du département -->
-        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/90 to-amber-50/70 border-2 border-pc-blue/30 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left shadow-xs">
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/90 to-amber-50/70 dark:from-slate-800/90 dark:to-slate-800/70 border-2 border-pc-blue/30 dark:border-blue-500/40 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left shadow-xs">
           <div>
-            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 mb-1 flex items-center gap-1.5">
+            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
               <span>🏢</span>
               <span>Nom officiel de votre Antenne</span>
             </label>
@@ -319,18 +319,18 @@ window.ProtecOnboarding = {
               value="${(this.teamName || '').replace(/"/g, '&quot;')}" 
               placeholder="Ex: Antenne de Nancy, Antenne Paris 15..."
               oninput="window.ProtecOnboarding.updateTeamName(this.value)"
-              class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-black text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/40 shadow-2xs"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-black text-slate-900 dark:text-white bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-pc-blue/40 shadow-2xs"
             />
           </div>
           <div>
-            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 mb-1 flex items-center gap-1.5">
+            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
               <span>📍</span>
               <span>Département d'Implantation</span>
             </label>
             <select 
               id="onboarding-step1-dept-select"
               onchange="window.ProtecOnboarding.changeDepartment(this.value)"
-              class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/40 cursor-pointer shadow-2xs">
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-pc-blue/40 cursor-pointer shadow-2xs">
               ${this.getDepartmentsList().map(d => `<option value="${d.code}" ${d.code === this.deptCode ? 'selected' : ''}>${d.code} - ${d.name} (${d.region})</option>`).join('')}
             </select>
           </div>
@@ -338,24 +338,24 @@ window.ProtecOnboarding = {
 
         <!-- En-tête de section -->
         <div class="flex items-center justify-between px-1 pt-1">
-          <span class="text-xs font-black text-slate-700 uppercase tracking-wide">Membres constitutifs (#1 à #5)</span>
+          <span class="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wide">Membres constitutifs (#1 à #5)</span>
         </div>
 
         <!-- Liste des 5 secouristes personnalisables -->
         <div class="space-y-2.5">
           ${this.volunteersList.map((vol, idx) => `
-            <div class="p-3.5 rounded-2xl glass-card bg-white/95 border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="p-3.5 rounded-2xl glass-card bg-white/95 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div class="flex items-center gap-3">
                 <!-- Avatar Bénévole Tenue Officielle Protection Civile (Orange #f78d20, Blanc, Bleu #024589) -->
                 <div class="relative group">
-                  <button type="button" onclick="window.ProtecOnboarding.toggleVolunteerGender('${vol.id}')" class="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-300 flex items-center justify-center hover:scale-105 active:scale-95 transition cursor-pointer shadow-xs overflow-hidden" title="Changer le modèle (Homme / Femme)">
+                  <button type="button" onclick="window.ProtecOnboarding.toggleVolunteerGender('${vol.id}')" class="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-700/60 border border-slate-300 dark:border-slate-600 flex items-center justify-center hover:scale-105 active:scale-95 transition cursor-pointer shadow-xs overflow-hidden" title="Changer le modèle (Homme / Femme)">
                     ${this.renderVolunteerUniformAvatar(vol, 'w-11 h-11')}
                   </button>
-                  <div class="hidden group-hover:flex absolute left-0 top-full mt-1 z-30 p-1 rounded-xl bg-white shadow-xl border border-slate-200 gap-1 items-center whitespace-nowrap">
-                    <button type="button" onclick="window.ProtecOnboarding.setVolunteerGender('${vol.id}', 'h')" class="px-2 py-1 rounded-lg text-[10px] font-black ${vol.gender === 'h' ? 'bg-pc-blue text-white' : 'hover:bg-slate-100 text-slate-700'} transition cursor-pointer">
+                  <div class="hidden group-hover:flex absolute left-0 top-full mt-1 z-30 p-1 rounded-xl bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 gap-1 items-center whitespace-nowrap">
+                    <button type="button" onclick="window.ProtecOnboarding.setVolunteerGender('${vol.id}', 'h')" class="px-2 py-1 rounded-lg text-[10px] font-black ${vol.gender === 'h' ? 'bg-pc-blue text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'} transition cursor-pointer">
                       Modèle Homme
                     </button>
-                    <button type="button" onclick="window.ProtecOnboarding.setVolunteerGender('${vol.id}', 'f')" class="px-2 py-1 rounded-lg text-[10px] font-black ${vol.gender === 'f' ? 'bg-pc-blue text-white' : 'hover:bg-slate-100 text-slate-700'} transition cursor-pointer">
+                    <button type="button" onclick="window.ProtecOnboarding.setVolunteerGender('${vol.id}', 'f')" class="px-2 py-1 rounded-lg text-[10px] font-black ${vol.gender === 'f' ? 'bg-pc-blue text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'} transition cursor-pointer">
                       Modèle Femme
                     </button>
                   </div>
@@ -365,19 +365,19 @@ window.ProtecOnboarding = {
                 <div class="flex-1 space-y-1">
                   <div class="flex items-center gap-2">
                     <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                      vol.rank === 'CE' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
-                      (vol.rank === 'PSE2' ? 'bg-blue-100 text-blue-900 border border-blue-300' : 'bg-slate-100 text-slate-700 border border-slate-300')
+                      vol.rank === 'CE' ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700' :
+                      (vol.rank === 'PSE2' ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 border border-blue-300 dark:border-blue-700' : 'bg-slate-100 dark:bg-slate-700/70 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600')
                     }">
                       ${vol.role} (${vol.rank})
                     </span>
-                    <span class="text-[10px] text-slate-400">#${idx + 1}</span>
+                    <span class="text-[10px] text-slate-400 dark:text-slate-400">#${idx + 1}</span>
                   </div>
                   <input 
                     type="text" 
                     value="${vol.name.replace(/"/g, '&quot;')}" 
                     oninput="window.ProtecOnboarding.updateVolunteerName('${vol.id}', this.value)"
                     placeholder="Prénom Nom" 
-                    class="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-black text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue w-full max-w-[220px]"
+                    class="px-2.5 py-1 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-black text-slate-900 dark:text-white bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue w-full max-w-[220px]"
                   />
                 </div>
               </div>
@@ -385,11 +385,11 @@ window.ProtecOnboarding = {
               <!-- Compétences & Permis -->
               <div class="flex items-center gap-1.5 flex-wrap text-[10px]">
                 ${(vol.skills || []).map(sk => `
-                  <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold border border-slate-200 uppercase">
+                  <span class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-600 uppercase">
                     ${sk.replace('_', ' ')}
                   </span>
                 `).join('')}
-                <span class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 font-black border border-emerald-200">
+                <span class="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-black border border-emerald-200 dark:border-emerald-800">
                   Motivation ${vol.motivation}%
                 </span>
               </div>
@@ -874,17 +874,17 @@ window.ProtecOnboarding = {
       <div class="space-y-4">
         <div class="text-center space-y-1">
           <span class="text-2xl">🗺️</span>
-          <h2 class="text-xl sm:text-2xl font-black text-slate-900">2. Placement de votre Bâtiment sur la Carte</h2>
-          <p class="text-xs text-slate-600 max-w-xl mx-auto">
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">2. Placement de votre Bâtiment sur la Carte</h2>
+          <p class="text-xs text-slate-600 dark:text-slate-300 max-w-xl mx-auto">
             Définissez l'emplacement officiel de votre local d'antenne dans le département <strong>${deptName} (${this.deptCode})</strong>.
             Le bâtiment doit obligatoirement être situé dans le département, dans une commune libre, et à <strong>au moins ${minKm} km</strong> de toute autre antenne.
           </p>
         </div>
 
         <!-- Encart interactif de configuration de l'antenne & département -->
-        <div class="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+        <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 shadow-2xs grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
           <div>
-            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 mb-1 flex items-center gap-1.5">
+            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
               <span>🏢</span>
               <span>Nom officiel de l'antenne</span>
             </label>
@@ -894,18 +894,18 @@ window.ProtecOnboarding = {
               value="${(this.teamName || '').replace(/"/g, '&quot;')}" 
               placeholder="Ex: Antenne de Nancy, Antenne Paris 15..."
               oninput="window.ProtecOnboarding.updateTeamName(this.value)"
-              class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-black text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/40 shadow-2xs"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-black text-slate-900 dark:text-white bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-pc-blue/40 shadow-2xs"
             />
           </div>
           <div>
-            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 mb-1 flex items-center gap-1.5">
+            <label class="block text-[11px] font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
               <span>📍</span>
               <span>Département d'implantation</span>
             </label>
             <select 
               id="onboarding-step2-dept-select"
               onchange="window.ProtecOnboarding.changeDepartment(this.value)"
-              class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/40 cursor-pointer shadow-2xs">
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-pc-blue/40 cursor-pointer shadow-2xs">
               ${this.getDepartmentsList().map(d => `<option value="${d.code}" ${d.code === this.deptCode ? 'selected' : ''}>${d.code} - ${d.name} (${d.region})</option>`).join('')}
             </select>
           </div>
@@ -914,42 +914,42 @@ window.ProtecOnboarding = {
         <!-- Légende opérationnelle de la carte -->
         <div class="flex items-center justify-between flex-wrap gap-2 px-1 text-[11px]">
           <div class="flex items-center gap-3">
-            <span class="inline-flex items-center gap-1 font-bold text-slate-700">
+            <span class="inline-flex items-center gap-1 font-bold text-slate-700 dark:text-slate-300">
               <span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span>
               Votre Antenne
             </span>
-            <span class="inline-flex items-center gap-1 font-bold text-indigo-700">
+            <span class="inline-flex items-center gap-1 font-bold text-indigo-700 dark:text-indigo-400">
               <span class="w-3 h-3 rounded-full bg-indigo-600 inline-block"></span>
               Antennes Existantes
             </span>
-            <span class="inline-flex items-center gap-1 font-bold text-rose-600">
-              <span class="w-3 h-3 rounded-full bg-rose-200 border border-rose-500 inline-block"></span>
+            <span class="inline-flex items-center gap-1 font-bold text-rose-600 dark:text-rose-400">
+              <span class="w-3 h-3 rounded-full bg-rose-200 dark:bg-rose-950 border border-rose-500 inline-block"></span>
               Exclusion (${minKm} km)
             </span>
           </div>
-          <span class="text-slate-500 font-medium">L'extérieur du département est verrouillé et grisé</span>
+          <span class="text-slate-500 dark:text-slate-400 font-medium">L'extérieur du département est verrouillé et grisé</span>
         </div>
 
         <!-- Cadre de la carte Leaflet interactive -->
-        <div class="relative w-full h-[280px] sm:h-[340px] rounded-2xl overflow-hidden border-2 border-slate-300 shadow-md">
+        <div class="relative w-full h-[280px] sm:h-[340px] rounded-2xl overflow-hidden border-2 border-slate-300 dark:border-slate-700 shadow-md">
           <div id="step2-onboarding-map" class="w-full h-full"></div>
           
-          <div class="absolute top-2.5 left-2.5 z-[1000] px-3 py-1.5 rounded-xl bg-white/95 backdrop-blur border border-slate-300 text-xs font-bold text-slate-800 shadow-sm flex items-center gap-1.5 pointer-events-none">
+          <div class="absolute top-2.5 left-2.5 z-[1000] px-3 py-1.5 rounded-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 shadow-sm flex items-center gap-1.5 pointer-events-none">
             <span class="text-pc-orange">📍</span>
             <span>Cliquez sur la carte ou déplacez le marqueur dans le département</span>
           </div>
         </div>
 
         <!-- Récapitulatif dynamique de l'emplacement et conformité -->
-        <div id="step2-status-card" class="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div id="step2-status-card" class="p-3.5 rounded-2xl bg-blue-50/80 dark:bg-slate-800/80 border border-blue-200 dark:border-blue-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-pc-blue text-white font-black text-base flex items-center justify-center shadow-xs">
               🏢
             </div>
             <div>
-              <div class="text-sm font-black text-slate-900" id="step2-city-label">${this.placementData.city}</div>
-              <div class="text-[11px] text-slate-600">
-                Département ${this.deptCode} • <span class="font-mono text-slate-500" id="step2-coords-label">${this.placementData.lat.toFixed(4)}, ${this.placementData.lng.toFixed(4)}</span>
+              <div class="text-sm font-black text-slate-900 dark:text-white" id="step2-city-label">${this.placementData.city}</div>
+              <div class="text-[11px] text-slate-600 dark:text-slate-300">
+                Département ${this.deptCode} • <span class="font-mono text-slate-500 dark:text-slate-400" id="step2-coords-label">${this.placementData.lat.toFixed(4)}, ${this.placementData.lng.toFixed(4)}</span>
               </div>
             </div>
           </div>
@@ -957,7 +957,7 @@ window.ProtecOnboarding = {
           <button 
             type="button" 
             onclick="window.ProtecOnboarding.resetMapPosition()"
-            class="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs transition cursor-pointer shadow-2xs whitespace-nowrap">
+            class="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold text-xs transition cursor-pointer shadow-2xs whitespace-nowrap">
             🎯 Recentrer la carte
           </button>
         </div>
@@ -967,7 +967,7 @@ window.ProtecOnboarding = {
           <button 
             type="button" 
             onclick="window.ProtecOnboarding.setStep(1)"
-            class="px-4 py-3 rounded-2xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">
+            class="px-4 py-3 rounded-2xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-transparent dark:border-slate-700 transition cursor-pointer">
             ⬅ Retour
           </button>
           <button 
@@ -1464,19 +1464,19 @@ window.ProtecOnboarding = {
       <div class="space-y-4">
         <div class="text-center space-y-1">
           <span class="text-2xl">🛋️</span>
-          <h2 class="text-xl sm:text-2xl font-black text-slate-900">3. Aménagement de votre Bâtiment d'Antenne</h2>
-          <p class="text-xs text-slate-600 max-w-lg mx-auto">
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">3. Aménagement de votre Bâtiment d'Antenne</h2>
+          <p class="text-xs text-slate-600 dark:text-slate-300 max-w-lg mx-auto">
             Le bâtiment est fourni vide. <strong>Définissez le type de chaque pièce</strong> et <strong>placez votre mobilier</strong> selon vos priorités opérationnelles !
           </p>
         </div>
 
         <!-- Dotation & Compteur d'équipement -->
-        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border border-emerald-300 flex items-center justify-between text-xs">
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/40 dark:via-teal-950/40 dark:to-cyan-950/40 border border-emerald-300 dark:border-emerald-700 flex items-center justify-between text-xs">
           <div>
-            <span class="text-[10px] font-black uppercase text-emerald-800 tracking-wider block">Dotation Municipale Disponible</span>
-            <div class="text-lg font-black text-emerald-950 font-mono">${currentMoney.toLocaleString('fr-FR')} €</div>
+            <span class="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 tracking-wider block">Dotation Municipale Disponible</span>
+            <div class="text-lg font-black text-emerald-950 dark:text-emerald-100 font-mono">${currentMoney.toLocaleString('fr-FR')} €</div>
           </div>
-          <span class="px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-900 font-bold text-xs shadow-2xs">
+          <span class="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 font-bold text-xs shadow-2xs">
             ${this.placedFurniture.length} meuble(s) installé(s) au total
           </span>
         </div>
@@ -1568,23 +1568,23 @@ window.ProtecOnboarding = {
         <!-- CATALOGUE D'ACHAT DE MOBILIER OPÉRATIONNEL -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black uppercase text-slate-800 tracking-wider">3. Catalogue de Mobilier • Ajouter à la ${activeRoom.name}</span>
-            <span class="text-[11px] text-slate-500 font-semibold">Les meubles s'installent dans la pièce active</span>
+            <span class="text-xs font-black uppercase text-slate-800 dark:text-slate-200 tracking-wider">3. Catalogue de Mobilier • Ajouter à la ${activeRoom.name}</span>
+            <span class="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Les meubles s'installent dans la pièce active</span>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             ${this.furnitureCatalog.map(item => {
               const totalCount = this.placedFurniture.filter(f => f.typeId === item.id).length;
               return `
-                <div class="p-3 rounded-2xl glass-card bg-white border border-slate-200/90 shadow-2xs flex items-center justify-between gap-2.5 hover:border-amber-300 transition">
+                <div class="p-3 rounded-2xl glass-card bg-white dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700 shadow-2xs flex items-center justify-between gap-2.5 hover:border-amber-300 dark:hover:border-amber-400 transition">
                   <div class="flex items-center gap-2.5">
                     <span class="text-2xl">${item.icon}</span>
                     <div>
-                      <h4 class="text-xs font-black text-slate-900">${item.name}</h4>
-                      <p class="text-[10px] text-slate-500">${item.desc}</p>
+                      <h4 class="text-xs font-black text-slate-900 dark:text-white">${item.name}</h4>
+                      <p class="text-[10px] text-slate-500 dark:text-slate-400">${item.desc}</p>
                       <div class="flex items-center gap-2 mt-0.5">
-                        <span class="text-[10px] font-mono font-black text-emerald-700 bg-emerald-100/70 px-1.5 py-0.2 rounded">${item.cost} €</span>
-                        ${totalCount > 0 ? `<span class="text-[9px] font-bold text-slate-500">${totalCount} acheté(s)</span>` : ''}
+                        <span class="text-[10px] font-mono font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-950/70 px-1.5 py-0.2 rounded">${item.cost} €</span>
+                        ${totalCount > 0 ? `<span class="text-[9px] font-bold text-slate-500 dark:text-slate-400">${totalCount} acheté(s)</span>` : ''}
                       </div>
                     </div>
                   </div>
@@ -1608,7 +1608,7 @@ window.ProtecOnboarding = {
           <button 
             type="button" 
             onclick="window.ProtecOnboarding.setStep(2)"
-            class="px-4 py-3 rounded-2xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">
+            class="px-4 py-3 rounded-2xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-transparent dark:border-slate-700 transition cursor-pointer">
             ⬅ Retour
           </button>
           <button 
@@ -1793,27 +1793,27 @@ window.ProtecOnboarding = {
       <div class="space-y-4">
         <div class="text-center space-y-1">
           <span class="text-2xl">📜</span>
-          <h2 class="text-xl sm:text-2xl font-black text-slate-900">4. Affiliation Nationale & Agrément AASC</h2>
-          <p class="text-xs text-slate-600 max-w-lg mx-auto">
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">4. Affiliation Nationale & Agrément AASC</h2>
+          <p class="text-xs text-slate-600 dark:text-slate-300 max-w-lg mx-auto">
             Pour opérer légalement sur le terrain et être reconnu par l'État et le SAMU, votre antenne doit être officiellement affiliée à la Fédération Nationale de Protection Civile.
           </p>
         </div>
 
         <!-- CHARTE OFFICIELLE D'AFFILIATION FNPC -->
-        <div class="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-amber-50/90 via-white to-blue-50/90 border-2 border-pc-blue/40 shadow-xl space-y-4 text-center">
-          <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div class="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-amber-50/90 via-white to-blue-50/90 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-slate-900/95 border-2 border-pc-blue/40 dark:border-blue-500/50 shadow-xl space-y-4 text-center">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
             <img src="logo_myprotec.png" alt="Protection Civile" class="h-10 object-contain" />
             <div class="text-right">
-              <span class="text-[10px] font-black uppercase text-pc-blue tracking-wider block">Fédération Nationale de Protection Civile</span>
-              <span class="text-[9px] text-slate-400">Agrément National de Sécurité Civile (Loi 2004-811)</span>
+              <span class="text-[10px] font-black uppercase text-pc-blue dark:text-blue-400 tracking-wider block">Fédération Nationale de Protection Civile</span>
+              <span class="text-[9px] text-slate-400 dark:text-slate-400">Agrément National de Sécurité Civile (Loi 2004-811)</span>
             </div>
           </div>
 
           <div class="space-y-2 py-2">
-            <h3 class="text-base sm:text-lg font-black text-slate-900 uppercase tracking-wide">
+            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-wide">
               Charte d'Agrément & d'Affiliation Opérationnelle
             </h3>
-            <p class="text-xs text-slate-700 max-w-md mx-auto leading-relaxed">
+            <p class="text-xs text-slate-700 dark:text-slate-300 max-w-md mx-auto leading-relaxed">
               Il est certifié que l'antenne locale <strong>« ${this.teamName} »</strong>, implantée dans le département de <strong>${deptName} (${this.deptCode})</strong>, sous la direction de <strong>${playerName}</strong>, est officiellement reconnue Association Agréée de Sécurité Civile (AASC).
             </p>
           </div>
@@ -1821,20 +1821,20 @@ window.ProtecOnboarding = {
           <!-- Zone officielle de signature ou Sceau de validation -->
           <div class="py-2">
             ${this.fnpcSigned ? `
-              <div class="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-500 shadow-md flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+              <div class="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border-2 border-emerald-500 dark:border-emerald-600/70 shadow-md flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
                 <div class="flex items-center gap-3">
                   <div class="w-12 h-12 rounded-xl bg-emerald-600 text-white font-black text-xl flex items-center justify-center shadow-md flex-shrink-0">
                     ✓
                   </div>
                   <div>
-                    <strong class="block text-xs font-black text-emerald-950 uppercase tracking-wider">AFFILIATION OFFICIELLEMENT HOMOLOGUÉE</strong>
-                    <span class="text-[11px] text-emerald-700 font-semibold">Agrément AASC actif • Autorisation préfectorale d’opérer délivrée</span>
+                    <strong class="block text-xs font-black text-emerald-950 dark:text-emerald-100 uppercase tracking-wider">AFFILIATION OFFICIELLEMENT HOMOLOGUÉE</strong>
+                    <span class="text-[11px] text-emerald-700 dark:text-emerald-300 font-semibold">Agrément AASC actif • Autorisation préfectorale d’opérer délivrée</span>
                   </div>
                 </div>
                 ${this.fnpcSignatureDataUrl ? `
-                  <div class="h-14 w-32 bg-white/90 rounded-xl p-1.5 border border-emerald-300 flex flex-col items-center justify-center shadow-xs">
+                  <div class="h-14 w-32 bg-white/90 dark:bg-slate-900 rounded-xl p-1.5 border border-emerald-300 dark:border-emerald-800 flex flex-col items-center justify-center shadow-xs">
                     <img src="${this.fnpcSignatureDataUrl}" alt="Signature Directeur" class="max-h-full max-w-full object-contain" />
-                    <span class="text-[7.5px] font-mono text-slate-400 font-bold uppercase mt-0.5">Paraphe Directeur</span>
+                    <span class="text-[7.5px] font-mono text-slate-400 dark:text-slate-400 font-bold uppercase mt-0.5">Paraphe Directeur</span>
                   </div>
                 ` : ''}
               </div>
@@ -1843,7 +1843,7 @@ window.ProtecOnboarding = {
             `}
           </div>
 
-          <div class="pt-2 text-[10px] text-slate-400 border-t border-slate-100 flex items-center justify-between">
+          <div class="pt-2 text-[10px] text-slate-400 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <span>Agrément types A, B, C, D</span>
             <span>République Française • Ministère de l'Intérieur</span>
           </div>
@@ -1854,7 +1854,7 @@ window.ProtecOnboarding = {
           <button 
             type="button" 
             onclick="window.ProtecOnboarding.setStep(3)"
-            class="px-4 py-3 rounded-2xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">
+            class="px-4 py-3 rounded-2xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-transparent dark:border-slate-700 transition cursor-pointer">
             ⬅ Retour
           </button>
           
@@ -1865,7 +1865,7 @@ window.ProtecOnboarding = {
             class="flex-1 py-4 rounded-2xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 cursor-pointer ${
               this.fnpcSigned 
                 ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-pc-blue text-white shadow-xl hover:brightness-110 active:scale-95 animate-pulse' 
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
+                : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-300 dark:border-slate-700'
             }">
             <span>Inaugurer l'Antenne et Lancer la Partie</span>
             <span>🚀</span>
@@ -2033,13 +2033,16 @@ window.ProtecOnboarding = {
     game.vehicles = [starterVpsp];
     newStation.vehicles = [starterVpsp.id];
 
-    // 3. Exactement 0 stock de consommables au départ
+    // 3. Inventaire totalement vide au départ
     game.logistics = {
       oxygenBottles: 0,
       aedPads: 0,
       woundKits: 0,
       cervicalCollars: 0
     };
+    newStation.stock = {};
+    newStation.stockMaterielsPS = 0;
+    game.stockMaterielsPS = 0;
 
     // 4. Conventions d'agrément AASC signée via l'affiliation FNPC
     game.aascConvention = {
@@ -2083,9 +2086,11 @@ window.ProtecOnboarding = {
       window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences(game);
     }
 
-    // Déduction des dépenses d'ameublement du trésor initial (40 000 €)
-    const spentFurniture = this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
-    game.resources.money = Math.max(5000, 40000 - spentFurniture);
+    // Dotation initiale officielle : 40 000 € net
+    game.resources.money = 40000;
+    game.resources.budget = 40000;
+    game.resources.funds = 40000;
+    game.resources._money = 40000;
 
     // Mettre à jour l'identité du joueur
     if (game.player) {

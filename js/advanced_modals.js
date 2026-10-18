@@ -443,12 +443,34 @@ window.ProtecAdvancedModals = {
       hasTowHitch: finalTowHitch,
       hasLedBar: isVPSP || Boolean(selOpts.ledBar) || Boolean(foundVariant?.hasLedBar),
       hasConverter230v: true,
-      installedOptions: activeOptionsList
+      installedOptions: activeOptionsList,
+      capacity_log: foundVariant?.capacity_log || this.getVehicleLogCapacity(foundVariant)
     });
 
     if (window.ProtecAdvanced && typeof window.ProtecAdvanced.buySpecializedVehicle === 'function') {
       window.ProtecAdvanced.buySpecializedVehicle(window.game, stationId, vehicleType, customOptions);
     }
+  },
+
+  // Calcul et vérification de la capacité logistique d'un véhicule/variante (tag LOG)
+  getVehicleLogCapacity(item) {
+    if (!item) return 0;
+    const funcs = item.functions || [];
+    const types = item.types || (item.type ? [item.type] : []);
+    const type = (item.type || '').toUpperCase();
+    const isLog = funcs.includes('LOG') || types.includes('LOG') || item.roleGroup === 'logistique' || ['VTU', 'FLIT', 'VAHU', 'VST', 'VTL', 'VALOG'].includes(type) || Boolean(item.capacity_log && item.capacity_log > 0);
+
+    if (!isLog) return 0;
+
+    if (item.capacity_log !== undefined && item.capacity_log !== null && item.capacity_log > 0) {
+      return item.capacity_log;
+    }
+
+    if (type === 'FLIT') return 12;
+    if (['VTU', 'VST', 'VTL'].includes(type)) return 6;
+    if (['VAHU', 'VTD'].includes(type)) return 4;
+    if (['PCM', 'VCYN', 'VLHR'].includes(type)) return 2;
+    return 4;
   },
 
   renderVehicleShop(game, stationId) {
@@ -653,6 +675,15 @@ window.ProtecAdvancedModals = {
                         const f = window.ProtecAdvanced?.vehicleFunctions?.[fCode];
                         return `<span class="px-1.5 py-0.5 rounded-md text-[9px] font-black border shadow-2xs ${f?.badgeClass || 'bg-slate-100 text-slate-800'}" title="${f?.code} : ${f?.label}">🏷️ ${fCode}</span>`;
                       }).join('')}
+                      ${(() => {
+                        const logCap = this.getVehicleLogCapacity(currentVariant);
+                        return logCap > 0 ? `
+                          <span class="px-2 py-0.5 rounded-lg text-[9.5px] font-black uppercase tracking-wider bg-amber-500 text-white shadow-xs flex items-center gap-1">
+                            <i data-lucide="package" class="w-3 h-3"></i>
+                            <span>LOG : ${logCap} slots</span>
+                          </span>
+                        ` : '';
+                      })()}
                       <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white/90 text-slate-700 backdrop-blur-xs border border-slate-200/70">
                         ${currentVariant.category}
                       </span>
@@ -682,6 +713,7 @@ window.ProtecAdvancedModals = {
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       ${variants.map(v => {
                         const isSelected = v.id === currentVariant.id;
+                        const vLogCap = this.getVehicleLogCapacity(v);
                         return `
                           <button 
                             type="button" 
@@ -699,7 +731,7 @@ window.ProtecAdvancedModals = {
                               </span>
                             </div>
                             <span class="text-[9.5px] block font-semibold ${isSelected ? 'text-pc-blue/80' : 'text-slate-400'} mt-0.5">
-                              ${v.type} ${(v.functions || []).map(f => `[${f}]`).join(' ')} • ${v.capacity} pl.
+                              ${v.type} ${(v.functions || []).map(f => `[${f}]`).join(' ')} • ${v.capacity} pl.${vLogCap > 0 ? ` • 📦 ${vLogCap} slots LOG` : ''}
                             </span>
                           </button>
                         `;
@@ -721,6 +753,21 @@ window.ProtecAdvancedModals = {
                     <div>
                       Attelage : <strong class="${hasNativeTowHitch || selOpts.towHitch ? 'text-emerald-700' : 'text-slate-400'}">${hasNativeTowHitch ? '✓ De série' : (selOpts.towHitch ? '✓ Option ajoutée' : 'Non équipé')}</strong>
                     </div>
+                    ${(() => {
+                      const logCap = this.getVehicleLogCapacity(currentVariant);
+                      if (logCap > 0) {
+                        return `
+                          <div class="col-span-2 flex items-center justify-between p-1.5 px-2.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-950">
+                            <span class="flex items-center gap-1.5 font-bold text-amber-900">
+                              <i data-lucide="package" class="w-3.5 h-3.5 text-amber-600"></i>
+                              <span>Capacité Logistique (tag LOG) :</span>
+                            </span>
+                            <strong class="font-black font-mono text-amber-800 text-xs">${logCap} slot${logCap > 1 ? 's' : ''} de fret</strong>
+                          </div>
+                        `;
+                      }
+                      return '';
+                    })()}
                     <div class="col-span-2">
                       Spécialité : <strong class="text-pc-blue">${currentVariant.specialty || 'Polyvalent'}</strong>
                     </div>
@@ -909,6 +956,8 @@ window.ProtecAdvancedModals = {
         title: 'VTU - Fourgon Tout Usage (Renault Master III)',
         category: 'Logistique & Événementiel',
         roleGroup: 'logistique',
+        functions: ['TU', 'LOG'],
+        capacity_log: 6,
         hasSerigraphieSelector: true,
         groupKey: 'vtu_master3_serigraphie',
         serigraphies: [
@@ -1034,6 +1083,8 @@ window.ProtecAdvancedModals = {
         title: 'FLIT - Fourgon Lourd d’Intervention Technique & Soutien Pop',
         category: 'Technique & Soutien',
         roleGroup: 'heavy',
+        functions: ['LOG', 'POP', 'TECH'],
+        capacity_log: 12,
         desc: 'Châssis Poids Lourd lourdement équipé avec rideaux alu, groupe électrogène haute puissance, mât d’éclairage télescopique, lot PMA et motopompes. Conducteur Permis C obligatoire.',
         cost: 95000,
         capacity: 3,
@@ -1051,7 +1102,9 @@ window.ProtecAdvancedModals = {
           cost: 95000,
           capacity: 3,
           licenseRequired: 'C',
-          image: 'images/vehicles/flit_pop.png'
+          image: 'images/vehicles/flit_pop.png',
+          functions: ['LOG', 'POP', 'TECH'],
+          capacity_log: 12
         }
       },
       // 9. Renault Midliner S135 FLIT Soutien Pop
@@ -1061,6 +1114,8 @@ window.ProtecAdvancedModals = {
         title: 'FLIT - Renault Midliner S135 Soutien Pop (Poids Lourd)',
         category: 'Technique & Soutien',
         roleGroup: 'heavy',
+        functions: ['LOG', 'POP'],
+        capacity_log: 8,
         desc: 'Poids Lourd d’assistance aux populations sinistrées et soutien logistique lourd en situation de crise ou inondation.',
         cost: 42000,
         capacity: 3,
@@ -1380,6 +1435,15 @@ window.ProtecAdvancedModals = {
                         const funcs = game.getVehicleFunctions ? game.getVehicleFunctions(card) : [];
                         return funcs.map(f => `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-black border shadow-2xs ${f.badgeClass}" title="${f.code} : ${f.label}">🏷️ ${f.code}</span>`).join('');
                       })()}
+                      ${(() => {
+                        const logCap = this.getVehicleLogCapacity(card);
+                        return logCap > 0 ? `
+                          <span class="px-1.5 py-0.5 rounded text-[8.5px] font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
+                            <i data-lucide="package" class="w-2.5 h-2.5 text-amber-700"></i>
+                            <span>LOG : ${logCap} slots</span>
+                          </span>
+                        ` : '';
+                      })()}
                       <span class="text-[10px] font-bold text-slate-500">
                         ${card.category}
                       </span>
@@ -1426,11 +1490,27 @@ window.ProtecAdvancedModals = {
                   <p class="text-[11px] text-slate-600 leading-relaxed">${activeDesc}</p>
 
                   <!-- Spécifications techniques (Sans vitesse max) -->
-                  <div class="p-2.5 rounded-xl glass-card-blue text-[10px] text-pc-blue font-bold flex flex-col gap-1">
+                  <div class="p-2.5 rounded-xl glass-card-blue text-[10px] text-pc-blue font-bold flex flex-col gap-1.5">
                     <div class="flex justify-between items-center">
                       <span>Capacité : <strong class="text-slate-900">${card.capacity} place${card.capacity > 1 ? 's' : ''}</strong></span>
                       <span>Attelage : <strong class="${hasNativeTowHitch || selOpts.towHitch ? 'text-emerald-700' : 'text-slate-500'}">${hasNativeTowHitch ? '✓ De série' : (selOpts.towHitch ? '✓ Option ajoutée' : 'Non')}</strong></span>
                     </div>
+
+                    ${(() => {
+                      const logCap = this.getVehicleLogCapacity(card);
+                      if (logCap > 0) {
+                        return `
+                          <div class="flex justify-between items-center pt-1 border-t border-pc-blue/20 text-amber-900">
+                            <span class="flex items-center gap-1 font-bold">
+                              <i data-lucide="package" class="w-3 h-3 text-amber-600"></i>
+                              <span>Capacité Logistique (tag LOG) :</span>
+                            </span>
+                            <strong class="font-black font-mono text-amber-900 text-xs">${logCap} slot${logCap > 1 ? 's' : ''}</strong>
+                          </div>
+                        `;
+                      }
+                      return '';
+                    })()}
 
                     ${card.requiresTrailer ? `
                       <div class="text-[9.5px] text-amber-800 font-semibold bg-amber-50 rounded p-1 border border-amber-200/80">

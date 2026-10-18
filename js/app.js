@@ -26,7 +26,11 @@ class ProtecGame {
       supaUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
     } catch (e) {}
 
-    let savedPlayerId = (supaUser && supaUser.id) || null;
+    let savedPlayerId = (supaUser && supaUser.id) || localStorage.getItem('protec_player_id');
+    if (!savedPlayerId) {
+      savedPlayerId = 'player_' + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem('protec_player_id', savedPlayerId);
+    }
 
     let initialAllianceId = (supaUser && supaUser.allianceId) || localStorage.getItem('protec_alliance_id') || null;
     if (initialAllianceId === 'alliance-fnpc') {
@@ -45,6 +49,9 @@ class ProtecGame {
       deptRole: localStorage.getItem('protec_dept_role') || 'antenne_principale',
       role: (supaUser && supaUser.role) || 'directeur'
     };
+
+    // Identifiants de renforts émis par ce joueur (anti-boucle d'alerte)
+    this.mySentRenfortIds = new Set();
 
     // Calendrier et Horloge Opérationnelle (Synchronisée sur l'heure réelle dès l'instanciation)
     const nowInit = new Date();
@@ -513,12 +520,15 @@ class ProtecGame {
 
     // 1. GARDE CONVENTIONNÉE SAMU 15 (Le créneau global de garde au planning)
     if (mission.isGarde || mission.type === 'garde_samu' || mission.category === 'garde') {
+      const isSigned = Boolean(this.samuConvention?.signed);
       return {
         kind: 'garde_samu',
         typeTitle: 'Garde Conventionnée SAMU 15',
         scaleLabel: mission.scale || 'Vecteur VPSP (1 CE + 1 PSE2 + 1 PSE1)',
         interlocutorLabel: 'Régulation Médicale',
         interlocutorName: mission.clientName || 'SAMU 15 • Centre de Régulation des Appels',
+        agreementStatus: isSigned ? 'Convention Cadre SAMU 15 Active ✓' : 'Garde ponctuelle sans convention cadre',
+        rewardLabel: isSigned ? 'Indemnisation conventionnée (SAMU 15) :' : 'Indemnité horaire d’astreinte sanitaire :',
         rdvLabel: '🏢 Début de Garde',
         startLabel: '⚡ Veille Active Base',
         endLabel: '🏁 Fin de Garde',
@@ -535,12 +545,15 @@ class ProtecGame {
 
     // 2. INTERVENTION D'URGENCE SAMU 15 (Départ réflexe / réquisition d'une mission de secours)
     if (mission.type === 'samu') {
+      const isSigned = Boolean(this.samuConvention?.signed);
       return {
         kind: 'samu',
         typeTitle: 'Intervention d’Urgence SAMU 15',
         scaleLabel: mission.scale || 'Départ Réflexe VPSP',
         interlocutorLabel: 'Régulation Médicale',
         interlocutorName: mission.clientName || 'SAMU 15 • Régulation Médicale Départementale',
+        agreementStatus: isSigned ? 'Convention Partenariale SAMU 15 Active ✓' : 'Réquisition d’urgence SAMU 15 (Hors convention)',
+        rewardLabel: isSigned ? 'Forfait conventionné SAMU 15 :' : 'Indemnité légale de réquisition SAMU 15 :',
         rdvLabel: '🚨 Départ Réflexe',
         startLabel: '📍 Arrivée sur les Lieux',
         endLabel: '🏥 Évacuation / Clôture',
@@ -557,12 +570,15 @@ class ProtecGame {
 
     // 3. GARDE OU MISSION SDIS / SAPEURS-POMPIERS
     if (mission.type === 'pompiers') {
+      const isSigned = Boolean(this.sdisConvention?.signed);
       return {
         kind: 'pompiers',
         typeTitle: 'Mission SDIS / Pompiers',
         scaleLabel: mission.scale || 'Renfort Sanitaire SDIS',
         interlocutorLabel: 'Commandement SDIS',
         interlocutorName: mission.clientName || 'CTA-CODIS 18/112 • Sapeurs-Pompiers',
+        agreementStatus: isSigned ? 'Convention Partenariale SDIS Active ✓' : 'Réquisition d’urgence SDIS (Hors convention)',
+        rewardLabel: isSigned ? 'Indemnisation conventionnée SDIS :' : 'Indemnité de réquisition SDIS :',
         rdvLabel: '🚒 Départ Caserne',
         startLabel: '📍 Sur les Lieux',
         endLabel: '🏁 Fin d’Intervention',
@@ -585,6 +601,8 @@ class ProtecGame {
         scaleLabel: mission.scale || 'Équipe Mobile d’Urgence Sociale',
         interlocutorLabel: 'Coordination Sociale',
         interlocutorName: mission.clientName || 'SIAO 115 • Samu Social / DDETS',
+        agreementStatus: mission.funderName ? `Convention Sociale (${mission.funderName})` : 'Action bénévole de solidarité',
+        rewardLabel: 'Subvention / Forfait maraude :',
         rdvLabel: '☕ Départ Maraude',
         startLabel: '📍 Début de Tournée',
         endLabel: '🏁 Fin de Tournée',
@@ -601,12 +619,42 @@ class ProtecGame {
 
     // 5. SOUTIEN AUX POPULATIONS / CRISE MAJEURE
     if (mission.isCrisis || mission.type === 'crise') {
+      const authLow = (mission.authorityLabel || mission.authority || mission.title || '').toLowerCase();
+      let authLabel = 'Autorité de Crise';
+      let authName = mission.clientName || mission.authorityLabel || 'Préfecture (COD) • Mairie (PCC)';
+      let legalStatus = 'Réquisition Préfectorale d’Urgence (Plan ORSEC)';
+      let rewLabel = 'Indemnité légale de soutien de crise (État) :';
+
+      if (authLow.includes('gendarmerie')) {
+        authLabel = 'Autorité Judiciaire & Gendarmerie';
+        authName = mission.authorityLabel || 'Gendarmerie Nationale (Commandement de Groupement)';
+        legalStatus = 'Réquisition d’Autorité Publique (Art. 74-1 CPP)';
+        rewLabel = 'Indemnité légale d’acte de réquisition (Gendarmerie) :';
+      } else if (authLow.includes('police')) {
+        authLabel = 'Autorité de Police';
+        authName = mission.authorityLabel || 'Préfecture de Police (DSPAP / DOPC)';
+        legalStatus = 'Réquisition Préfecture de Police (Art. 74-1 CPP)';
+        rewLabel = 'Indemnité légale d’acte de réquisition (Police) :';
+      } else if (authLow.includes('sncf')) {
+        authLabel = 'Direction de Crise SNCF';
+        authName = 'SNCF Voyageurs • Direction de Crise';
+        legalStatus = this.sncfConvention?.signed ? 'Convention Nationale SNCF Active ✓' : 'Assistance d’Urgence Voyageurs (Sans convention)';
+        rewLabel = this.sncfConvention?.signed ? 'Indemnisation conventionnée SNCF :' : 'Indemnité d’intervention exceptionnelle SNCF :';
+      } else if (authLow.includes('pompiers') || authLow.includes('bspp') || authLow.includes('codis')) {
+        authLabel = 'Commandement des Secours';
+        authName = mission.authorityLabel || 'Commandement des Sapeurs-Pompiers';
+        legalStatus = 'Réquisition Opérationnelle de Secours (Pompiers)';
+        rewLabel = 'Indemnité de renfort d’urgence (Pompiers) :';
+      }
+
       return {
         kind: 'crise',
         typeTitle: 'Mission de Crise & Soutien aux Populations',
         scaleLabel: mission.scale || 'Détachement d’Urgence & de Crise',
-        interlocutorLabel: 'Autorité de Crise',
-        interlocutorName: mission.clientName || 'Préfecture (COD) • Mairie (PCC)',
+        interlocutorLabel: authLabel,
+        interlocutorName: authName,
+        agreementStatus: legalStatus,
+        rewardLabel: rewLabel,
         rdvLabel: '🚨 Mobilisation Base',
         startLabel: '📍 Déploiement Terrain',
         endLabel: '🏁 Clôture Dispositif',
@@ -622,12 +670,15 @@ class ProtecGame {
     }
 
     // 6. DPS ÉVÉNEMENTIEL (Poste de secours classique)
+    const isDpsSigned = Boolean(mission.status === 'ongoing' || mission.hasConvention || mission.isConventionSigned);
     return {
       kind: 'dps',
       typeTitle: 'Poste de Secours (DPS)',
       scaleLabel: `Dispositif Prévisionnel de Secours (${mission.scale || 'DPS'})`,
       interlocutorLabel: 'Organisateur / Client',
       interlocutorName: mission.clientName || 'Organisateur de l’événement',
+      agreementStatus: isDpsSigned ? 'Convention DPS & Devis Signés ✓' : 'Devis prévisionnel organisateur',
+      rewardLabel: 'Indemnisation conventionnée (Devis Organisateur) :',
       rdvLabel: '🚗 RDV Base',
       startLabel: '📍 Début du Poste',
       endLabel: '🏁 Fin du Dispositif',
@@ -873,7 +924,7 @@ class ProtecGame {
 
   handleMultiplayerEvent(type, data) {
     if (type === 'renfort_requested') {
-      if (data.requesterPlayerId !== this.player.id) {
+      if (!this.isMyRenfortRequest(data)) {
         this.handleRemoteRenfortCreated(data);
       }
     } else if (type === 'department_crisis_alert') {
@@ -2409,16 +2460,32 @@ class ProtecGame {
       // A. Manque de personnel
       if (regCount < reqCount) return true;
 
-      // B. Véhicules requis par le devis non affectés
+      // B. Moyens opérationnels requis (PS, LOG, TP, HR) non couverts
       if (Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) {
-        const assignedVehs = (mission.assignedVehicleIds || []).map(id => this.vehicles.find(v => v.id === id)).filter(Boolean);
-        const pool = [...assignedVehs];
-        const missing = mission.requiredVehicles.some(reqType => {
-          const idx = pool.findIndex(v => v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit)));
-          if (idx >= 0) { pool.splice(idx, 1); return false; }
-          return true;
-        });
-        if (missing) return true;
+        // Règle formelle : les VL simples ne sont JAMAIS requises (uniquement VLHR sur terrain escarpé)
+        const effectiveReqs = mission.requiredVehicles.filter(t => t !== 'VL');
+        if (effectiveReqs.length > 0) {
+          const coverage = this.checkMissionMoyensCoverage ? this.checkMissionMoyensCoverage(mission) : null;
+          if (coverage) {
+            if (!coverage.psSatisfied || !coverage.logSatisfied || !coverage.hrSatisfied) return true;
+          } else {
+            const assignedVehs = (mission.assignedVehicleIds || []).map(id => this.vehicles.find(v => v.id === id)).filter(Boolean);
+            const pool = [...assignedVehs];
+            const missing = effectiveReqs.some(reqType => {
+              const idx = pool.findIndex(v => {
+                if (v.type === reqType) return true;
+                if (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit)) return true;
+                if ((reqType === 'VTU' || reqType === 'LOG') && ((v.types && v.types.includes('LOG')) || v.capacity_log > 0)) return true;
+                if ((reqType === 'VPSP' || reqType === 'PS') && ((v.types && v.types.includes('PS')) || v.type === 'VPSP')) return true;
+                if (reqType === 'VLHR' && (v.type === 'VLHR' || (v.types && v.types.includes('HR')) || v.is4x4)) return true;
+                return false;
+              });
+              if (idx >= 0) { pool.splice(idx, 1); return false; }
+              return true;
+            });
+            if (missing) return true;
+          }
+        }
       }
 
       // C. Rôles non affectés aux secouristes inscrits
@@ -2468,15 +2535,52 @@ class ProtecGame {
     return false;
   }
 
+  // Détermine de manière exhaustive et absolue si une demande de renfort émane du joueur lui-même
+  isMyRenfortRequest(renfort) {
+    if (!renfort || typeof renfort !== 'object') return false;
+
+    // 1. Tag explicite ou mémorisé localement
+    if (renfort.isMine) return true;
+    if (this.mySentRenfortIds && (this.mySentRenfortIds.has(renfort.id) || this.mySentRenfortIds.has(String(renfort.id)))) return true;
+
+    // 2. Identifiant joueur (Local, Supabase ou Auth)
+    const myId = String(this.player?.id || window.ProtecAuth?.currentUser?.id || localStorage.getItem('protec_player_id') || '').trim();
+    const reqId = String(renfort.requesterPlayerId || renfort.requestingPlayerId || renfort.senderPlayerId || renfort.senderId || '').trim();
+    if (myId && reqId && myId === reqId) {
+      return true;
+    }
+
+    // 3. Rapprochement direct par la mission concernée (Critère 100% infaillible pour les missions du joueur)
+    if (renfort.missionId) {
+      const isMyMission = (this.missions || []).some(m => String(m.id) === String(renfort.missionId)) ||
+                          (this.devis || []).some(d => String(d.id) === String(renfort.missionId));
+      if (isMyMission) return true;
+    }
+
+    // 4. Rapprochement par le nom de l'antenne demandeuse
+    if (renfort.stationName && this.stations && this.stations.length > 0) {
+      const renfStation = String(renfort.stationName).trim().toLowerCase();
+      const isMyStation = this.stations.some(s => s.name && s.name.trim().toLowerCase() === renfStation);
+      if (isMyStation) return true;
+    }
+
+    // 5. Rapprochement par le nom du directeur
+    const myName = String(this.player?.name || window.ProtecAuth?.currentUser?.username || localStorage.getItem('protec_player_name') || '').trim().toLowerCase();
+    const reqName = String(renfort.requesterName || renfort.requestingPlayerName || '').trim().toLowerCase();
+    if (myName && reqName && myName === reqName && myName !== 'directeur d’antenne' && myName !== 'antenne locale') {
+      return true;
+    }
+
+    return false;
+  }
+
   // Détermine avec précision si une demande de renfort d'un autre joueur est accessible pour le joueur courant
   isRenfortAccessibleForPlayer(renfort) {
     if (!renfort || typeof renfort !== 'object') return false;
     if (renfort.status !== 'open') return false;
 
-    // 1. Uniquement les demandes d'un AUTRE joueur (ne pas afficher son propre appel comme un renfort allié)
-    const myPlayerId = String(this.player?.id || '');
-    const requesterId = String(renfort.requesterPlayerId || renfort.requestingPlayerId || '');
-    if (myPlayerId && requesterId && myPlayerId === requesterId) {
+    // 1. Uniquement les demandes d'un AUTRE joueur (ne JAMAIS afficher son propre appel comme un renfort allié à pourvoir)
+    if (this.isMyRenfortRequest(renfort)) {
       return false;
     }
 
@@ -3135,15 +3239,18 @@ class ProtecGame {
         newStation.vehicles = [];
       }
 
-      // 2. ZÉRO MATÉRIEL AU DÉPART (stock vierge)
+      // 2. ZÉRO MATÉRIEL AU DÉPART (inventaire totalement vide)
       newStation.stock = {};
+      newStation.stockMaterielsPS = 0;
+      this.stockMaterielsPS = 0;
       this.logistics = { oxygenBottles: 0, aedPads: 0, woundKits: 0, cervicalCollars: 0 };
 
-      // Dotation initiale de trésorerie (40 000 €)
+      // Dotation initiale de trésorerie (40 000 € net)
       if (this.resources) {
         this.resources.money = 40000;
         this.resources.budget = 40000;
         this.resources.funds = 40000;
+        this.resources._money = 40000;
       }
 
       // 3. CONVENTION FONDATRICE AASC (Octroyée dès l'affiliation FNPC lors du tutoriel)
@@ -3461,6 +3568,73 @@ class ProtecGame {
 
     let targetCommune = null;
 
+    // Détection de l'environnement géographique spécifique
+    const isParisArea = ['75', '92', '93', '94'].includes(String(deptCode));
+    const isParisIntramuros = String(deptCode) === '75';
+    const targetEnv = (typeof missionContext === 'object' && missionContext?.targetEnvironment) ? missionContext.targetEnvironment : '';
+    const isForestSearch = targetEnv === 'bois_paris' || targetEnv === 'foret_province' || targetEnv === 'paris_urban_parks' ||
+      ctxText.includes('forêt') || ctxText.includes('foret') || ctxText.includes('bois') || ctxText.includes('battue') || ctxText.includes('disparu');
+
+    // 0. GÉOLOCALISATION PARISIENNE RÉALISTE : Bois de Boulogne / Vincennes ou Parcs Urbains
+    if (isParisIntramuros && (targetEnv === 'bois_paris' || ctxText.includes('bois de boulogne') || ctxText.includes('bois de vincennes') || (isForestSearch && targetEnv !== 'paris_urban_parks'))) {
+      const parisWoods = [
+        { nom: 'Bois de Boulogne (Cascades & Lacs)', cp: '75016', lat: 48.8624, lng: 2.2492 },
+        { nom: 'Bois de Boulogne (Allée de la Reine Marguerite)', cp: '75016', lat: 48.8672, lng: 2.2415 },
+        { nom: 'Bois de Vincennes (Route de la Pyramide)', cp: '75012', lat: 48.8283, lng: 2.4331 },
+        { nom: 'Bois de Vincennes (Lac Daumesnil)', cp: '75012', lat: 48.8315, lng: 2.4145 }
+      ];
+      const pickWood = parisWoods[Math.floor(Math.random() * parisWoods.length)];
+      const jLat = pickWood.lat + (Math.random() - 0.5) * 0.005;
+      const jLng = pickWood.lng + (Math.random() - 0.5) * 0.007;
+      return {
+        lat: parseFloat(jLat.toFixed(5)),
+        lng: parseFloat(jLng.toFixed(5)),
+        commune: pickWood.nom,
+        postcode: pickWood.cp,
+        targetEnvironment: 'bois_paris',
+        isRealCommuneAnchor: true
+      };
+    }
+
+    if (isParisIntramuros && (targetEnv === 'paris_urban_parks' || ctxText.includes('parc') || ctxText.includes('square') || ctxText.includes('berges'))) {
+      const parisParks = [
+        { nom: 'Parc des Buttes-Chaumont', cp: '75019', lat: 48.8809, lng: 2.3828 },
+        { nom: 'Parc Montsouris', cp: '75014', lat: 48.8222, lng: 2.3385 },
+        { nom: 'Jardin des Tuileries & Berges', cp: '75001', lat: 48.8635, lng: 2.3275 },
+        { nom: 'Parc de Bercy', cp: '75012', lat: 48.8355, lng: 2.3812 },
+        { nom: 'Parc de la Villette', cp: '75019', lat: 48.8932, lng: 2.3904 }
+      ];
+      const pickPark = parisParks[Math.floor(Math.random() * parisParks.length)];
+      const jLat = pickPark.lat + (Math.random() - 0.5) * 0.003;
+      const jLng = pickPark.lng + (Math.random() - 0.5) * 0.004;
+      return {
+        lat: parseFloat(jLat.toFixed(5)),
+        lng: parseFloat(jLng.toFixed(5)),
+        commune: pickPark.nom,
+        postcode: pickPark.cp,
+        targetEnvironment: 'paris_urban_parks',
+        isRealCommuneAnchor: true
+      };
+    }
+
+    if (isParisIntramuros && (targetEnv === 'seine_paris' || ctxText.includes('seine') || ctxText.includes('crue'))) {
+      const seineQuais = [
+        { nom: 'Voie Georges Pompidou (Berges de Seine)', cp: '75004', lat: 48.8542, lng: 2.3571 },
+        { nom: 'Quai de la Tournelle', cp: '75005', lat: 48.8504, lng: 2.3533 },
+        { nom: 'Quai de Bercy', cp: '75012', lat: 48.8341, lng: 2.3795 },
+        { nom: 'Quai de Grenelle', cp: '75015', lat: 48.8508, lng: 2.2842 }
+      ];
+      const pickSeine = seineQuais[Math.floor(Math.random() * seineQuais.length)];
+      return {
+        lat: parseFloat(pickSeine.lat.toFixed(5)),
+        lng: parseFloat(pickSeine.lng.toFixed(5)),
+        commune: `Paris (${pickSeine.nom})`,
+        postcode: pickSeine.cp,
+        targetEnvironment: 'seine_paris',
+        isRealCommuneAnchor: true
+      };
+    }
+
     if (isSocial) {
       // 1. Maraude sociale : STRICTEMENT dans la ville de l'antenne (centre-ville, gare, mairie)
       targetCommune = communes.find(c => c.nom.toLowerCase() === (base.city || '').toLowerCase()) || communes[0];
@@ -3502,13 +3676,15 @@ class ProtecGame {
       targetCommune = { nom: base.city || 'Centre', cp: `${deptCode}000`, lat: base.lat, lng: base.lng };
     }
 
-    // 5. ANCRAGE GARANTI DANS LE TISSU URBAIN HABITÉ DE LA COMMUNE (Anti-eau, anti-forêt, anti-autoroute)
-    // On part du centre habité de la commune et on applique un micro-décalage urbain maîtrisé de 70m à 320m.
+    // 5. ANCRAGE GARANTI DANS LE TISSU HABITÉ OU EN PÉRIPHÉRIE BOISÉE
+    // En milieu rural/province pour une battue en forêt, on s'écarte de 1.2 à 2.8 km du centre bourg vers les sous-bois.
     let chosenLat = targetCommune.lat;
     let chosenLng = targetCommune.lng;
 
     const microAngle = Math.random() * 2 * Math.PI;
-    const microDistKm = isSocial ? (0.05 + Math.random() * 0.15) : (0.08 + Math.random() * 0.24);
+    const microDistKm = isForestSearch
+      ? (1.20 + Math.random() * 1.60)
+      : (isSocial ? (0.05 + Math.random() * 0.15) : (0.08 + Math.random() * 0.24));
     const latRad = (targetCommune.lat * Math.PI) / 180;
     const kmPerLngDeg = 111.320 * Math.cos(latRad) || 75;
 
@@ -3544,11 +3720,12 @@ class ProtecGame {
       lng: parseFloat(chosenLng.toFixed(5)),
       commune: targetCommune.nom,
       postcode: targetCommune.cp,
+      targetEnvironment: targetEnv || (isForestSearch ? 'foret_province' : null),
       isRealCommuneAnchor: true
     };
   }
 
-  // Générateur d'adresse réaliste et cohérente selon le contexte de la mission (Gare, Berges/Quais, Stades, Écoles...)
+  // Générateur d'adresse réaliste et cohérente selon le contexte de la mission (Gare, Berges/Quais, Stades, Écoles, Forêts...)
   generateRealisticStreetAddress(city = 'Nancy', lat = null, lng = null, missionContext = null) {
     const ctxText = (typeof missionContext === 'string'
       ? missionContext
@@ -3557,9 +3734,47 @@ class ProtecGame {
     let seed = 0;
     if (lat && lng) seed = Math.abs(Math.round((lat + lng) * 1000));
     const num = (seed % 120) + 1 || Math.floor(Math.random() * 120) + 1;
+    const isParisContext = city && (city.toLowerCase().includes('paris') || city.startsWith('75') || city.includes('bois de'));
+
+    // 0. Recherche de personne disparue / Forêt / Bois / Battue / Massif
+    if (ctxText.includes('forêt') || ctxText.includes('foret') || ctxText.includes('bois') || ctxText.includes('battue') || ctxText.includes('massif') || ctxText.includes('disparu') || ctxText.includes('recherche')) {
+      if (isParisContext) {
+        const adressesParisWoods = [
+          'Route de la Grande Cascade (Bois de Boulogne), 75016 Paris',
+          'Allée de la Reine Marguerite (Bois de Boulogne), 75016 Paris',
+          'Route de la Pyramide (Bois de Vincennes), 75012 Paris',
+          'Route de Ceinture du Lac Daumesnil (Bois de Vincennes), 75012 Paris',
+          'Carrefour des Cascades (Bois de Boulogne), 75016 Paris',
+          'Allée des Buttes-Chaumont, 75019 Paris',
+          'Voie Georges Pompidou (Berges de Seine), 75001 Paris'
+        ];
+        return adressesParisWoods[seed % adressesParisWoods.length];
+      }
+      const forestStreets = [
+        'Route Forestière du Chêne Brûlé',
+        'Chemin des Gardes Forestiers',
+        'Carrefour de la Forêt Domaniale',
+        'Allée des Sous-Bois',
+        'Sentier des Crêtes & Massif Boisé',
+        'Chemin Rural du Val des Bois',
+        'Route Départementale D14 (Lisière du Massif Forestier)'
+      ];
+      return `${forestStreets[seed % forestStreets.length]}, ${city}`;
+    }
 
     // 1. Mission ferroviaire / SNCF / Gares
     if (ctxText.includes('gare') || ctxText.includes('sncf') || ctxText.includes('train') || ctxText.includes('rail') || ctxText.includes('caténaire') || ctxText.includes('naufrag')) {
+      if (isParisContext) {
+        const garesParis = [
+          'Parvis de la Gare de Lyon, 75012 Paris',
+          'Place de la Gare du Nord, 75010 Paris',
+          'Place de la Gare Montparnasse, 75015 Paris',
+          'Place de la Gare Saint-Lazare, 75008 Paris',
+          'Place de la Gare de l’Est, 75010 Paris',
+          'Place de la Gare d’Austerlitz, 75013 Paris'
+        ];
+        return garesParis[seed % garesParis.length];
+      }
       const gares = [
         'Place de la Gare',
         'Parvis de la Gare SNCF',
@@ -3572,6 +3787,16 @@ class ProtecGame {
 
     // 2. Inondations, crues, pompage, canot / nautique
     if (ctxText.includes('inondation') || ctxText.includes('pompage') || ctxText.includes('crue') || ctxText.includes('eau') || ctxText.includes('submersion') || ctxText.includes('nautique')) {
+      if (isParisContext) {
+        const quaisParis = [
+          'Voie Georges Pompidou (Berges de Seine), 75004 Paris',
+          'Quai de la Tournelle, 75005 Paris',
+          'Quai de Bercy, 75012 Paris',
+          'Port de Solférino (Berges de Seine), 75007 Paris',
+          'Quai de Grenelle, 75015 Paris'
+        ];
+        return quaisParis[seed % quaisParis.length];
+      }
       const quais = [
         'Quai des Berges',
         'Promenade du Canal',
@@ -3583,8 +3808,18 @@ class ProtecGame {
       return `${quais[seed % quais.length]}, ${city}`;
     }
 
-    // 3. Accident de la circulation / voie rapide / secours routier
-    if (ctxText.includes('accident') || ctxText.includes('carambolage') || ctxText.includes('collision') || ctxText.includes('secours routier')) {
+    // 3. Accident de la circulation / voie rapide / secours routier / périphérique
+    if (ctxText.includes('accident') || ctxText.includes('carambolage') || ctxText.includes('collision') || ctxText.includes('secours routier') || ctxText.includes('périphérique')) {
+      if (isParisContext) {
+        const axesParis = [
+          'Boulevard Périphérique Extérieur (Porte de Saint-Cloud), 75016 Paris',
+          'Boulevard Périphérique Intérieur (Porte de Bagnolet), 75020 Paris',
+          'Boulevard Périphérique Extérieur (Porte d’Italie), 75013 Paris',
+          'Boulevard Périphérique Intérieur (Porte de la Chapelle), 75018 Paris',
+          'Boulevard des Maréchaux (Boulevard Masséna), 75013 Paris'
+        ];
+        return axesParis[seed % axesParis.length];
+      }
       const axes = [
         'Rond-Point de l\'Europe',
         'Route Nationale (Axe Principal)',
@@ -3619,6 +3854,16 @@ class ProtecGame {
 
     // 6. Maraude sociale / Sans-abri
     if (ctxText.includes('maraude') || ctxText.includes('social') || ctxText.includes('précarité') || ctxText.includes('samu social')) {
+      if (isParisContext) {
+        const maraudeParis = [
+          'Place de la République, 75011 Paris',
+          'Parvis de la Gare de Lyon, 75012 Paris',
+          'Place de la Bastille, 75011 Paris',
+          'Place de l’Hôtel de Ville, 75004 Paris',
+          'Place de Stalingrad, 75019 Paris'
+        ];
+        return maraudeParis[seed % maraudeParis.length];
+      }
       const maraudeStreets = [
         'Place de la Mairie',
         'Parvis de la Gare Centrale',
@@ -3697,11 +3942,10 @@ class ProtecGame {
               item.sector = `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${city || currentCity})`;
               item.address = item.sector;
             } else if (props.label) {
-              const rawLabel = props.label.toLowerCase();
-              const isAutoroute = rawLabel.includes('autoroute') || rawLabel.includes('a31') || rawLabel.includes('a4') || rawLabel.includes('échangeur');
-              const isRail = rawLabel.includes('voie ferrée') || rawLabel.includes('ligne sncf');
-              // Si ce n'est pas un accident de la route, interdire un label d'autoroute
-              if (isAutoroute && !item.title?.toLowerCase().includes('accident') && !item.title?.toLowerCase().includes('routier')) {
+              // Protection des adresses spécifiques de bois, parcs, berges et forêts
+              if (item.targetEnvironment === 'bois_paris' || item.targetEnvironment === 'paris_urban_parks' || item.targetEnvironment === 'seine_paris' || item.targetEnvironment === 'foret_province' || (item.address && (item.address.includes('Bois de') || item.address.includes('Route Forestière') || item.address.includes('Carrefour de la Forêt')))) {
+                // Conserver l'adresse forestière / boisée réaliste déjà attribuée
+              } else if (isAutoroute && !item.title?.toLowerCase().includes('accident') && !item.title?.toLowerCase().includes('routier')) {
                 item.address = this.generateRealisticStreetAddress(city || currentCity, item.lat, item.lng, item.title);
               } else if (isRail && !item.title?.toLowerCase().includes('sncf') && !item.title?.toLowerCase().includes('gare')) {
                 item.address = this.generateRealisticStreetAddress(city || currentCity, item.lat, item.lng, item.title);
@@ -5610,85 +5854,268 @@ class ProtecGame {
       this.toggleMissionVehicle(missionId, vId);
     }
   }
-  // Fonctions opérationnelles par autorité pour les véhicules engagés
+  // Fonctions opérationnelles par autorité pour les véhicules engagés (adaptées à la mission et aux moyens)
   getAvailableVehicleFunctions(mission, veh) {
     if (!mission) return ['Mission Générale'];
     const origin = (((mission.alertOrigin || '') + ' ' + (mission.authority || '')).toLowerCase());
     const type = (mission.type || '').toLowerCase();
     const title = (mission.title || '').toLowerCase();
+    const desc = (mission.desc || mission.scenarioText || '').toLowerCase();
     const vehType = (veh && veh.type ? veh.type.toUpperCase() : '');
+
+    const isLog = veh && ((veh.types && veh.types.includes('LOG')) || (veh.functions && veh.functions.includes('LOG')) || ['VTU', 'FLIT', 'VAHU', 'VST', 'VTL'].includes(vehType) || Boolean(veh.capacity_log && veh.capacity_log > 0));
+    const isPS = veh && (vehType === 'VPSP' || (veh.types && veh.types.includes('PS')) || (veh.functions && veh.functions.includes('PS')));
+    const isHR = veh && (vehType === 'VLHR' || (veh.types && veh.types.includes('HR')) || (veh.functions && veh.functions.includes('HR')) || veh.is4x4 || veh.isAllTerrain);
+    const isPCM = veh && (vehType === 'PCM' || veh.isCommandement || veh.hasCommandementKit);
+
+    const authPrefix = mission.authorityLabel 
+      ? mission.authorityLabel.split('(')[0].replace(/Plan.*|Direction.*/i, '').trim().toUpperCase()
+      : (origin.includes('gendarmerie') ? 'GENDARMERIE' : origin.includes('police') ? 'POLICE' : origin.includes('samu') ? 'SAMU 15' : origin.includes('sdis') ? 'SDIS 18' : 'PRÉFECTURE');
 
     let tasks = [];
 
-    if (origin.includes('sncf') || type.includes('sncf') || title.includes('sncf') || title.includes('gare') || title.includes('ferroviaire')) {
+    // 1. SI LA MISSION DÉFINIT SES PROPRES TÂCHES (Cas des crises / alertes AASC)
+    if (Array.isArray(mission.assignedMissions) && mission.assignedMissions.length > 0) {
+      tasks = mission.assignedMissions.map(m => `${authPrefix} - ${m}`);
+
+      // Complément cohérent et valorisant selon le type du véhicule
+      if (isPS && !tasks.some(t => t.toLowerCase().includes('vpsp') || t.toLowerCase().includes('sanitaire') || t.toLowerCase().includes('évacuation') || t.toLowerCase().includes('soin'))) {
+        tasks.unshift(`${authPrefix} - Soutien Sanitaire & Évacuation (VPSP)`);
+      }
+      if (isLog && !tasks.some(t => t.toLowerCase().includes('logistique') || t.toLowerCase().includes('matériel') || t.toLowerCase().includes('éclairage'))) {
+        tasks.push(`${authPrefix} - Acheminement Lots & Matériel Logistique`);
+      }
+      if (isHR && !tasks.some(t => t.toLowerCase().includes('4x4') || t.toLowerCase().includes('tout-terrain') || t.toLowerCase().includes('escarpé'))) {
+        tasks.unshift(`${authPrefix} - Reconnaissance Tout-Terrain & Accès Difficiles (4x4)`);
+      }
+      if (isPCM && !tasks.some(t => t.toLowerCase().includes('commandement') || t.toLowerCase().includes('pcm') || t.toLowerCase().includes('coordination'))) {
+        tasks.unshift(`${authPrefix} - Poste de Commandement & Transmissions (PCM)`);
+      }
+      return tasks;
+    }
+
+    // 2. TÂCHES PAR TYPE DE SCÉNARIO SPÉCIFIQUE
+    if (title.includes('recherche') || title.includes('disparition') || desc.includes('battue') || desc.includes('recherche de personne')) {
       tasks = [
-        'SNCF - Prise en charge naufragés du rail',
-        'SNCF - Distribution de vivres & bouteilles',
-        'SNCF - Montage & armement CHU Gare',
-        'SNCF - Évacuation Sanitaire & Navette Gare',
-        'SNCF - Soutien Médico-Psychologique (CUMP)',
-        'SNCF - Éclairage autonome & Servitudes',
-        'SNCF - Poste de Liaison Gare'
+        `${authPrefix} - Battue pédestre & ratissage de secteur`,
+        `${authPrefix} - Surveillance & reconnaissance aérienne (Drone)`,
+        `${authPrefix} - Appui Cynotechnique de quête et pistage`,
+        `${authPrefix} - Poste de coordination & transmissions`
       ];
-    } else if (origin.includes('samu') || type === 'samu' || title.includes('samu') || title.includes('15')) {
+      if (isPS) tasks.unshift(`${authPrefix} - Soutien Sanitaire & Évacuation d'Urgence (VPSP)`);
+      if (isLog) tasks.push(`${authPrefix} - Acheminement matériel de ratissage & éclairage`);
+      if (isHR) tasks.unshift(`${authPrefix} - Reconnaissance Tout-Terrain / Zone escarpée (4x4)`);
+    } else if (title.includes('crue') || title.includes('inondation') || desc.includes('submersion') || desc.includes('inondé')) {
+      tasks = [
+        `${authPrefix} - Armement Centre d'Hébergement d'Urgence (CHU)`,
+        `${authPrefix} - Mise en sécurité & sauvetage des riverains`,
+        `${authPrefix} - Soutien logistique & pompage d'urgence`,
+        `${authPrefix} - Noria d'acheminement des sinistrés vers le CHU`
+      ];
+      if (isPS) tasks.unshift(`${authPrefix} - Évacuation Sanitaire & Premiers Soins (VPSP)`);
+    } else if (origin.includes('sncf') || type.includes('sncf') || title.includes('sncf') || title.includes('gare') || title.includes('ferroviaire')) {
+      tasks = [
+        'SNCF - Prise en charge naufragés du rail & CHU',
+        'SNCF - Distribution de vivres & ravitaillement',
+        'SNCF - Éclairage autonome & servitudes de crise',
+        'SNCF - Soutien Médico-Psychologique (CUMP)'
+      ];
+      if (isPS) tasks.unshift('SNCF - Évacuation Sanitaire & Soins (VPSP)');
+    } else if (origin.includes('samu') || type === 'samu' || title.includes('samu') || title.includes('15') || title.includes('novi') || title.includes('carambolage')) {
       tasks = [
         'SAMU 15 - Évacuation Sanitaire d\'Urgence (Noria VPSP)',
-        'SAMU 15 - Prise en charge Détresse Vitale',
         'SAMU 15 - Armement Poste Médical Avancé (PMA)',
-        'SAMU 15 - Soutien Sanitaire & Premiers Soins',
-        'SAMU 15 - Rapatriement Sanitaire d\'Urgence',
-        'SAMU 15 - Liaison Régulation Médicale 15'
+        'SAMU 15 - Prise en charge Détresse Vitale',
+        'SAMU 15 - Soutien Sanitaire & Premiers Soins'
       ];
     } else if (origin.includes('sdis') || origin.includes('pompier') || type === 'pompiers' || title.includes('sdis') || title.includes('18') || title.includes('incendie')) {
       tasks = [
         'SDIS 18 - Soutien Sanitaire aux Pompiers (3SP)',
         'SDIS 18 - Noria d\'Évacuation Blessés (VPSP)',
         'SDIS 18 - Épuisement des Eaux & Motopompes',
-        'SDIS 18 - Éclairage & Balisage de Secteur',
-        'SDIS 18 - Ravitaillement & Vivres des Équipes',
-        'SDIS 18 - Poste de Commandement de Secteur'
-      ];
-    } else if (mission.isCrisis || type === 'crise' || title.includes('novi') || title.includes('orsec') || origin.includes('prefecture') || origin.includes('etat')) {
-      tasks = [
-        'PRÉFECTURE - Centre d\'Hébergement d\'Urgence (CHU)',
-        'PRÉFECTURE - Centre d\'Accueil des Impliqués (CAI)',
-        'PRÉFECTURE - Poste de Commandement Mobile (PCM)',
-        'PRÉFECTURE - Noria d\'Évacuation Sanitaire (VPSP)',
-        'PRÉFECTURE - Soutien Logistique & Éclairage Fort',
-        'PRÉFECTURE - Ravitaillement de la Population',
-        'PRÉFECTURE - Navette Évacuation Population'
+        'SDIS 18 - Éclairage & Balisage de Secteur'
       ];
     } else if (type === 'social' || origin.includes('115') || title.includes('maraude')) {
       tasks = [
         '115 SOCIAL - Maraude & Écoute de Rue',
-        '115 SOCIAL - Distribution Vestimentaire & Couvertures',
-        '115 SOCIAL - Ravitaillement Vivres & Boissons Chaudes',
-        '115 SOCIAL - Orientation & Mise à l\'Abri CHRS',
-        '115 SOCIAL - Évacuation & Soins Sanitaires VPSP'
+        '115 SOCIAL - Distribution Vestimentaire & Vivres',
+        '115 SOCIAL - Orientation & Mise à l\'Abri CHRS'
       ];
+      if (isPS) tasks.unshift('115 SOCIAL - Évacuation & Soins Sanitaires VPSP');
     } else {
       tasks = [
         'DPS - Poste de Secours Fixe (PAP)',
         'DPS - Évacuation Sanitaire d\'Urgence (VPSP)',
         'DPS - Patrouille & Binôme de Secteur',
-        'DPS - Commandement de Dispositif',
-        'DPS - Ravitaillement & Vivres Bénévoles',
-        'DPS - Liaison & Logistique Matériel'
+        'DPS - Commandement de Dispositif'
       ];
+      if (isLog) tasks.push('DPS - Liaison & Logistique Matériel');
     }
 
     if (vehType === 'VPSP' && !tasks.some(t => t.includes('VPSP') || t.includes('Évacuation') || t.includes('Sanitaire'))) {
       tasks.unshift('Évacuation Sanitaire / Soins (VPSP)');
     } else if (vehType === 'PCM' && !tasks.some(t => t.includes('Commandement') || t.includes('PCM'))) {
       tasks.unshift('Poste de Commandement Mobile (PCM)');
-    } else if ((vehType === 'VTU' || vehType === 'VTL') && !tasks.some(t => t.includes('Logistique') || t.includes('Vivres') || t.includes('CHU') || t.includes('Matériel'))) {
+    } else if (isLog && !tasks.some(t => t.includes('Logistique') || t.includes('Vivres') || t.includes('Matériel'))) {
       tasks.unshift('Logistique & Matériel d\'Intervention');
     }
 
     return tasks;
   }
 
-  // Affectation d'un véhicule à une fonction / tâche opérationnelle demandée par l\'autorité
+  // Détermination des besoins opérationnels par types de moyens (PS, LOG, TP, HR...)
+  getMissionRequiredNeeds(mission) {
+    if (!mission) return { needsPS: false, reqPSCount: 0, reqLogKits: 0, reqSeats: 2, needsHR: false, needsDrone: false, needsCyno: false };
+
+    const title = (mission.title || '').toLowerCase();
+    const desc = (mission.desc || mission.scenarioText || '').toLowerCase();
+    const type = (mission.type || '').toLowerCase();
+    const scale = (mission.scale || '').toUpperCase();
+    const isCrisis = mission.isCrisis || type === 'crise';
+
+    let needsPS = false;
+    let reqPSCount = 0;
+    let reqLogKits = 0;
+    let reqSeats = mission.requiredVolunteers || (scale.includes('GE') ? 12 : scale.includes('ME') ? 8 : 4);
+    let needsHR = false;
+    let needsDrone = false;
+    let needsCyno = false;
+
+    // Détection terrain escarpé / massif forestier
+    const isTerrainEscarpé = title.includes('escarpé') || desc.includes('escarpé') || (title.includes('forêt') && !title.includes('paris')) || desc.includes('massif forestier');
+    if (isTerrainEscarpé) needsHR = true;
+
+    if (isCrisis) {
+      if (mission.requiredAssets) {
+        if (mission.requiredAssets.vpsp > 0) {
+          needsPS = true;
+          reqPSCount = mission.requiredAssets.vpsp;
+        }
+        if (mission.requiredAssets.drone) needsDrone = true;
+        if (mission.requiredAssets.cyno > 0) needsCyno = true;
+        reqLogKits = mission.requiredAssets.vtu || (mission.requiredAssets.chu_places > 0 ? 2 : 1);
+      } else {
+        if (title.includes('recherche')) {
+          needsPS = false; // Pas d'ambulance obligatoire au départ d'une recherche pédestre
+          reqLogKits = 1;  // 1 kit matériel de recherche & éclairage (transportable dans n'importe quel véhicule LOG)
+          needsDrone = desc.includes('drone');
+          needsCyno = desc.includes('cyno') || desc.includes('chien');
+        } else if (title.includes('crue') || title.includes('inondation')) {
+          needsPS = true;
+          reqPSCount = 1;
+          reqLogKits = 2; // Kit pompage + kit accueil
+        } else if (title.includes('novi') || title.includes('carambolage') || title.includes('attentat')) {
+          needsPS = true;
+          reqPSCount = 2;
+          reqLogKits = 1; // Lot PMA
+        } else {
+          reqLogKits = 1;
+        }
+      }
+    } else {
+      // Dispositifs Prévisionnels de Secours (DPS)
+      if (Array.isArray(mission.requiredVehicles)) {
+        reqPSCount = mission.requiredVehicles.filter(v => v === 'VPSP').length;
+        if (reqPSCount > 0) needsPS = true;
+        // La logistique est comptée en kits nécessaires
+        reqLogKits = mission.requiredVehicles.filter(v => v === 'VTU' || v === 'LOG').length;
+      }
+      if (scale.includes('GE')) {
+        needsPS = true;
+        reqPSCount = Math.max(reqPSCount, 2);
+        reqLogKits = Math.max(reqLogKits, 2); // Lot A + Lot B
+      } else if (scale.includes('ME')) {
+        needsPS = true;
+        reqPSCount = Math.max(reqPSCount, 1);
+        reqLogKits = Math.max(reqLogKits, 1); // Lot A
+      } else if (scale.includes('PE')) {
+        needsPS = true;
+        reqPSCount = Math.max(reqPSCount, 1);
+      }
+    }
+
+    if (needsPS && reqPSCount === 0) reqPSCount = 1;
+
+    return {
+      needsPS,
+      reqPSCount,
+      reqLogKits,
+      reqSeats,
+      needsHR,
+      needsDrone,
+      needsCyno
+    };
+  }
+
+  // Vérification de la couverture des moyens pour une mission (souple et modulaire)
+  checkMissionMoyensCoverage(mission) {
+    const needs = this.getMissionRequiredNeeds(mission);
+    const assignedVehs = (mission.assignedVehicleIds || [])
+      .map(id => this.vehicles.find(v => v.id === id))
+      .filter(Boolean);
+
+    // 1. Couverture Sanitaire (PS)
+    const psVehiclesCount = assignedVehs.filter(v => 
+      v.type === 'VPSP' || 
+      (v.types && v.types.includes('PS')) || 
+      (v.functions && v.functions.includes('PS'))
+    ).length;
+    const psSatisfied = !needs.needsPS || psVehiclesCount >= (needs.reqPSCount || 1);
+
+    // 2. Couverture Logistique (LOG) : capacité de chargement en slots LOG
+    // Règle du jeu : 1 véhicule LOG (ex: VTU de 6 slots) transporte plusieurs kits logistiques !
+    const totalLogSlots = assignedVehs.reduce((sum, v) => {
+      const isLog = (v.types && v.types.includes('LOG')) || 
+                    (v.functions && v.functions.includes('LOG')) || 
+                    ['VTU', 'FLIT', 'VAHU', 'VST', 'VTL', 'VALOG'].includes(v.type) || 
+                    Boolean(v.capacity_log && v.capacity_log > 0);
+      if (!isLog) return sum;
+      const cap = v.capacity_log !== undefined ? v.capacity_log : (window.ProtecAdvancedModals?.getVehicleLogCapacity(v) || 6);
+      return sum + cap;
+    }, 0);
+    const logSatisfied = needs.reqLogKits === 0 || totalLogSlots >= needs.reqLogKits;
+
+    // 3. Couverture Transport Personnel (TP) : places assises
+    const totalSeats = assignedVehs.reduce((sum, v) => {
+      return sum + (v.seatsCount || v.capacity || (v.type === 'VPSP' ? 3 : v.type === 'VTP' ? 9 : 4));
+    }, 0);
+    const effectiveVolsCount = (mission.registeredVolunteers || []).length;
+    // Si aucun véhicule n'est requis au devis/scénario et aucun véhicule engagé : poste à pied d'œuvre (satisfait)
+    const tpSatisfied = (assignedVehs.length === 0 && !needs.needsPS && needs.reqLogKits === 0 && !needs.needsHR) || totalSeats >= effectiveVolsCount;
+
+    // 4. Couverture Hors-Route (HR / 4x4)
+    const hasHRVehicle = assignedVehs.some(v => 
+      v.type === 'VLHR' || 
+      (v.types && v.types.includes('HR')) || 
+      (v.functions && v.functions.includes('HR')) || 
+      v.isAllTerrain || 
+      v.is4x4
+    );
+    const hrSatisfied = !needs.needsHR || hasHRVehicle;
+
+    return {
+      needs,
+      assignedVehs,
+      psVehiclesCount,
+      psSatisfied,
+      totalLogSlots,
+      logSatisfied,
+      totalSeats,
+      tpSatisfied,
+      hasHRVehicle,
+      hrSatisfied,
+      isComplete: psSatisfied && logSatisfied && tpSatisfied && hrSatisfied
+    };
+  }
+
+  // Vérifie si une mission a des moyens matériels/véhicules manquants
+  hasMissingVehicles(mission) {
+    if (!mission) return false;
+    const cov = this.checkMissionMoyensCoverage(mission);
+    return !cov.isComplete;
+  }
+
+  // Affectation d'un véhicule à une fonction / tâche opérationnelle demandée par l'autorité
   setVehicleMissionFunction(missionId, vehicleId, functionName) {
     const mission = (this.missions || []).find(m => m.id === missionId);
     if (!mission) return;
@@ -5715,7 +6142,7 @@ class ProtecGame {
   }
 
 
-  // Affectation automatique libre de tous les véhicules requis disponibles
+  // Affectation automatique intelligente par types de moyens (PS, LOG, TP, HR...)
   autoAssignVehiclesToMission(missionId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
@@ -5729,56 +6156,87 @@ class ProtecGame {
       (m.assignedCrew?.vehicles || []).forEach(v => busyVehicleIds.add(v.id || v));
     });
 
-    const requiredTypes = Array.isArray(mission.requiredVehicles) ? [...mission.requiredVehicles] : [];
     let assignedCount = 0;
+    const isAvail = (v) => v && (v.status === 'dispo' || v.status === 'sdis_caserne') && !busyVehicleIds.has(v.id) && !mission.assignedVehicleIds.includes(v.id) && !v.isUnavailable && !v.isUnderRepair;
 
-    // 1. Pour chaque type requis dans le devis, engager un véhicule adéquat non encore engagé
-    requiredTypes.forEach(reqType => {
-      // Vérifier si un véhicule de ce type est déjà engagé et disponible
-      const currentAssignedOfType = mission.assignedVehicleIds.filter(id => {
-        const v = this.vehicles.find(veh => veh.id === id);
-        return v && (v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit)));
-      });
+    let cov = this.checkMissionMoyensCoverage(mission);
 
-      // Si le besoin en ce type n'est pas encore totalement couvert par les véhicules déjà engagés
-      const totalReqOfType = requiredTypes.filter(t => t === reqType).length;
-      if (currentAssignedOfType.length < totalReqOfType) {
-        const match = this.vehicles.find(v =>
-          (v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit))) &&
-          (v.status === 'dispo' || v.status === 'sdis_caserne') &&
-          !busyVehicleIds.has(v.id) &&
-          !mission.assignedVehicleIds.includes(v.id)
-        );
-
-        if (match) {
-          mission.assignedVehicleIds.push(match.id);
+    // 1. Couverture Sanitaire (PS / VPSP)
+    if (cov.needs.needsPS && !cov.psSatisfied) {
+      const neededPS = (cov.needs.reqPSCount || 1) - (cov.psVehiclesCount || 0);
+      for (let i = 0; i < neededPS; i++) {
+        const matchPS = this.vehicles.find(v => isAvail(v) && (v.type === 'VPSP' || (v.types && v.types.includes('PS')) || (v.functions && v.functions.includes('PS'))));
+        if (matchPS) {
+          mission.assignedVehicleIds.push(matchPS.id);
           assignedCount++;
         }
       }
-    });
+      cov = this.checkMissionMoyensCoverage(mission);
+    }
 
-    // 2. Si les bénévoles inscrits manquent de places assises, ajouter un véhicule de transport disponible (VTP, VL, VTU)
-    const currentVehs = mission.assignedVehicleIds.map(id => this.vehicles.find(v => v.id === id)).filter(Boolean);
-    const totalCapacity = currentVehs.reduce((sum, v) => sum + (v.seatsCount || v.capacity || (v.type === 'VPSP' ? 3 : v.type === 'VTP' ? 9 : 4)), 0);
-    const registeredCount = (mission.registeredVolunteers || []).length;
-
-    if (totalCapacity < registeredCount) {
-      const extraTransport = this.vehicles.find(v =>
-        ['VTP', 'VL', 'VTU'].includes(v.type) &&
-        (v.status === 'dispo' || v.status === 'sdis_caserne') &&
-        !busyVehicleIds.has(v.id) &&
-        !mission.assignedVehicleIds.includes(v.id)
-      );
-      if (extraTransport) {
-        mission.assignedVehicleIds.push(extraTransport.id);
+    // 2. Couverture Hors-Route (HR / 4x4)
+    if (cov.needs.needsHR && !cov.hrSatisfied) {
+      const matchHR = this.vehicles.find(v => isAvail(v) && (v.type === 'VLHR' || (v.types && v.types.includes('HR')) || (v.functions && v.functions.includes('HR')) || v.isAllTerrain || v.is4x4));
+      if (matchHR) {
+        mission.assignedVehicleIds.push(matchHR.id);
         assignedCount++;
+      }
+      cov = this.checkMissionMoyensCoverage(mission);
+    }
+
+    // 3. Couverture Logistique (LOG - Kits & Matériel) : 1 véhicule logistique (ex: VTU de 6 slots) transporte l'ensemble des kits
+    if (cov.needs.reqLogKits > 0 && !cov.logSatisfied) {
+      // Trier par plus grande capacité logistique pour minimiser le nombre de véhicules
+      const logVehicles = this.vehicles
+        .filter(v => isAvail(v) && ((v.types && v.types.includes('LOG')) || (v.functions && v.functions.includes('LOG')) || ['VTU', 'FLIT', 'VAHU', 'VST', 'VTL'].includes(v.type) || Boolean(v.capacity_log && v.capacity_log > 0)))
+        .sort((a, b) => ((b.capacity_log || 6) - (a.capacity_log || 6)));
+
+      for (const logVeh of logVehicles) {
+        mission.assignedVehicleIds.push(logVeh.id);
+        assignedCount++;
+        cov = this.checkMissionMoyensCoverage(mission);
+        if (cov.logSatisfied) break;
+      }
+    }
+
+    // 4. Commandement (PCM si requis au devis)
+    const requiresPCM = (mission.requiredVehicles || []).includes('PCM');
+    const hasPCM = mission.assignedVehicleIds.some(id => {
+      const v = this.vehicles.find(veh => veh.id === id);
+      return v && (v.type === 'PCM' || v.isCommandement || v.hasCommandementKit || (v.functions && v.functions.includes('PCM')));
+    });
+    if (requiresPCM && !hasPCM) {
+      const matchPCM = this.vehicles.find(v => isAvail(v) && (v.type === 'PCM' || v.isCommandement || v.hasCommandementKit || (v.functions && v.functions.includes('PCM'))));
+      if (matchPCM) {
+        mission.assignedVehicleIds.push(matchPCM.id);
+        assignedCount++;
+      }
+      cov = this.checkMissionMoyensCoverage(mission);
+    }
+
+    // 5. Acheminement du Personnel (TP : places assises pour secouristes inscrits)
+    const registeredCount = (mission.registeredVolunteers || []).length;
+    let currentCapacity = mission.assignedVehicleIds.map(id => this.vehicles.find(v => v.id === id)).filter(Boolean)
+      .reduce((sum, v) => sum + (v.seatsCount || v.capacity || (v.type === 'VPSP' ? 3 : v.type === 'VTP' ? 9 : 4)), 0);
+
+    if (currentCapacity < registeredCount) {
+      // Trier par plus grande capacité de transport (VTP d'abord, puis VTU, puis VL)
+      const transportVehicles = this.vehicles
+        .filter(v => isAvail(v))
+        .sort((a, b) => ((b.seatsCount || b.capacity || 4) - (a.seatsCount || a.capacity || 4)));
+
+      for (const tpVeh of transportVehicles) {
+        mission.assignedVehicleIds.push(tpVeh.id);
+        assignedCount++;
+        currentCapacity += (tpVeh.seatsCount || tpVeh.capacity || (tpVeh.type === 'VPSP' ? 3 : tpVeh.type === 'VTP' ? 9 : 4));
+        if (currentCapacity >= registeredCount) break;
       }
     }
 
     if (assignedCount > 0) {
-      this.showToast('Véhicules Affectés ⚡', `${assignedCount} véhicule(s) ont été engagés sur le dispositif.`, 'green');
+      this.showToast('Véhicules Affectés ⚡', `${assignedCount} véhicule(s) ont été engagés pour couvrir les besoins opérationnels.`, 'green');
     } else {
-      this.showToast('Affectation Véhicules', 'Tous les besoins sont déjà couverts ou aucun autre véhicule disponible.', 'slate');
+      this.showToast('Affectation Véhicules', 'Tous les besoins opérationnels sont déjà couverts ou aucun autre véhicule disponible.', 'slate');
     }
     this.openMissionDetails(missionId);
     this.saveGame();
@@ -8464,8 +8922,43 @@ class ProtecGame {
 
   // --- SCÉNARIOS OFFICIELS ET RÉALISTES DE PRÉALERTE / VEILLE OPÉRATIONNELLE AASC ---
   getAascPrealertScenarios(origin = null) {
-    const scenarios = [
-      {
+    const deptCode = String(this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '75');
+    const isParisArea = ['75', '92', '93', '94'].includes(deptCode);
+    const isParisIntramuros = deptCode === '75';
+
+    let scenarios = [];
+
+    // 1. Incendie / Évacuation
+    if (isParisArea) {
+      scenarios.push({
+        id: 'feu_immeuble_paris',
+        origin: 'pompiers',
+        authority: 'bspp',
+        authorityLabel: 'BSPP (CTAU 18-112 Paris)',
+        authorityBadgeBg: 'bg-red-50 text-red-800 border-red-300',
+        title: 'Feu d’Immeuble Haussmannien R+5 & Évacuations Massives',
+        scenarioText: 'Important incendie d’immeuble d’habitation collectif haussmannien en cours (R+5). La Brigade de Sapeurs-Pompiers de Paris (BSPP) procède à des sauvetages par échelles aériennes et au déploiement de lances. Plus de 90 résidents évacués se trouvent regroupés sur la voie publique, choqués et en tenue de nuit. Le CTAU BSPP préalerte la Protection Civile de Paris pour l’ouverture et l’armement immédiat d’un Centre d’Accueil des Impliqués (CAI) en gymnase municipal et soutien sanitaire.',
+        assignedMissions: [
+          'Ouverture et tenue d’un CAI en gymnase parisien',
+          'Soutien Sanitaire & Bilans secouristes des impliqués',
+          'Ravitaillement d’urgence & distribution de couvertures de survie'
+        ],
+        requiredAssets: {
+          vpsp: 1,
+          vtu: 1,
+          vtp: 1,
+          chu_places: 60,
+          pma: false,
+          cyno: 0,
+          drone: false
+        },
+        requiredVolunteers: 8,
+        requiredVehicles: ['VPSP', 'VTU', 'VTP'],
+        rewardMoney: 620,
+        rewardReputation: 35
+      });
+    } else {
+      scenarios.push({
         id: 'feu_immeuble',
         origin: 'codis',
         authority: 'codis',
@@ -8491,15 +8984,19 @@ class ProtecGame {
         requiredVehicles: ['VPSP', 'VTU', 'VTP'],
         rewardMoney: 580,
         rewardReputation: 35
-      },
-      {
+      });
+    }
+
+    // 2. Mission ferroviaire SNCF (Conditionnée STRICTEMENT à la signature de la convention SNCF)
+    if (this.sncfConvention?.signed || origin === 'sncf') {
+      scenarios.push({
         id: 'tgv_bloque',
         origin: 'sncf',
         authority: 'sncf',
         authorityLabel: 'SNCF (Direction Nationale de Crise)',
         authorityBadgeBg: 'bg-purple-50 text-purple-800 border-purple-300',
         title: 'Crise Ferroviaire : Prise en Charge Voyageurs & CHU en Gare (TGV Bloqué en Ligne)',
-        scenarioText: 'Rupture d’alimentation caténaire sur la ligne à grande vitesse (LGV) en amont. Le TGV 6742 est immobilisé en pleine voie hors agglomération avec 640 passagers sans électricité ni chauffage. Les navettes et bus d’acheminement rapatrient les voyageurs par vagues successives vers la gare centrale. La direction de crise SNCF sollicite la Protection Civile pour l’accueil en gare, le montage d’un Centre d’Hébergement d’Urgence (CHU 50 lits) et la distribution d’eau et de vivres.',
+        scenarioText: 'Rupture d’alimentation caténaire sur la ligne à grande vitesse (LGV) en amont. Le TGV 6742 est immobilisé en pleine voie avec 640 passagers sans électricité ni chauffage. Les navettes et bus rapatrient les voyageurs par vagues successives vers la gare centrale. La direction de crise SNCF sollicite la Protection Civile pour l’accueil en gare, le montage d’un Centre d’Hébergement d’Urgence (CHU 50 lits) et la distribution d’eau et de vivres.',
         assignedMissions: [
           'Montage et tenue d’un CHU en gare centrale (50 lits)',
           'Distribution massive d’eau et collations d’urgence',
@@ -8518,15 +9015,83 @@ class ProtecGame {
         requiredVehicles: ['VPSP', 'VTU'],
         rewardMoney: 540,
         rewardReputation: 35
-      },
-      {
+      });
+    }
+
+    // 3. Recherche de personne vulnérable (adaptée à la topographie réelle)
+    if (isParisIntramuros) {
+      // Scénario A : Massifs boisés parisiens (Bois de Boulogne / Bois de Vincennes)
+      scenarios.push({
+        id: 'recherche_bois_paris',
+        origin: 'prefecture',
+        authority: 'police',
+        authorityLabel: 'Préfecture de Police (DSPAP / DOPC)',
+        authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
+        title: 'Recherche de Personne Vulnérable (Bois de Boulogne / Vincennes)',
+        targetEnvironment: 'bois_paris',
+        scenarioText: 'Disparition très inquiétante d’une personne vulnérable désorientée signalée dans les massifs boisés du Bois de Boulogne / Vincennes à la tombée de la nuit. Les effectifs de la Préfecture de Police et la brigade canine sont déployés. La Préfecture de Police réquisitionne en urgence la Protection Civile de Paris (Art. 74-1 CPP) pour armer une chaîne de battue pédestre coordonnée avec télépilote drone thermique et équipes cynotechniques de quête.',
+        assignedMissions: [
+          'Chaîne de ratissage et battue de recherche pédestre en sous-bois',
+          'Surveillance et reconnaissance aérienne par Drone thermique',
+          'Appui d’une équipe Cynotechnique de quête et sauvetage'
+        ],
+        requiredAssets: {
+          vpsp: 0,
+          vtu: 1,
+          vtp: 0,
+          chu_places: 0,
+          pma: false,
+          cyno: 1,
+          drone: true
+        },
+        requiredVolunteers: 6,
+        requiredVehicles: ['VTU'],
+        rewardMoney: 510,
+        rewardReputation: 35
+      });
+      // Scénario B : Parcs urbains et berges de Seine
+      scenarios.push({
+        id: 'recherche_parcs_paris',
+        origin: 'prefecture',
+        authority: 'police',
+        authorityLabel: 'Préfecture de Police (DSPAP)',
+        authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
+        title: 'Recherche de Personne Disparue en Milieu Urbain (Parcs & Berges)',
+        targetEnvironment: 'paris_urban_parks',
+        scenarioText: 'Disparition inquiétante en milieu urbain dense. Les patrouilles de la Préfecture de Police quadrillent les abords des grands parcs et des quais de Seine. La Préfecture de Police réquisitionne la Protection Civile pour inspecter systématiquement les parcs publics fermés, les berges de Seine et les recoins isolés avec équipes pédestres et drone.',
+        assignedMissions: [
+          'Reconnaissance pédestre des quais et parcs publics',
+          'Surveillance des berges par drone avec caméra thermique',
+          'Équipe cynotechnique de pistage'
+        ],
+        requiredAssets: {
+          vpsp: 0,
+          vtu: 1,
+          vtp: 0,
+          chu_places: 0,
+          pma: false,
+          cyno: 1,
+          drone: true
+        },
+        requiredVolunteers: 6,
+        requiredVehicles: ['VTU'],
+        rewardMoney: 490,
+        rewardReputation: 35
+      });
+    } else {
+      // Province ou Petite Couronne
+      const isPetiteCouronne = ['92', '93', '94'].includes(deptCode);
+      scenarios.push({
         id: 'recherche_foret',
         origin: 'prefecture',
-        authority: 'prefecture',
-        authorityLabel: 'Préfecture (SIDPC / Gendarmerie)',
+        authority: isPetiteCouronne ? 'police' : 'gendarmerie',
+        authorityLabel: isPetiteCouronne ? 'Préfecture de Police (DSPAP / DOPC)' : 'Gendarmerie Nationale (Réquisition CPP)',
         authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-        title: 'Recherche de Personne Vulnérable en Zone Boisée',
-        scenarioText: 'Disparition très inquiétante d’une personne âgée désorientée depuis plus de 6 heures aux abords d’un massif forestier escarpé. Le peloton de gendarmerie et les sapeurs-pompiers sont déjà déployés en phase initiale. La Préfecture active la veille opérationnelle AASC pour mobiliser une équipe de battue pédestre renforcée, un télépilote drone à caméra thermique et un vecteur cynotechnique.',
+        title: isPetiteCouronne ? 'Recherche de Personne Vulnérable en Milieu Boisé' : 'Recherche de Personne Vulnérable en Zone Boisée',
+        targetEnvironment: isPetiteCouronne ? 'bois_paris' : 'foret_province',
+        scenarioText: isPetiteCouronne
+          ? 'Disparition très inquiétante d’une personne âgée désorientée dans les parcs boisés et berges du secteur. Les effectifs de Police sont mobilisés. La Préfecture de Police requiert la Protection Civile pour une battue pédestre renforcée, drone thermique et équipe cynotechnique.'
+          : 'Disparition très inquiétante d’une personne âgée désorientée depuis plus de 6 heures aux abords d’un massif forestier escarpé. Le peloton de gendarmerie et les sapeurs-pompiers sont déjà déployés. La Gendarmerie réquisitionne l’AASC (Art. 74-1 CPP) pour mobiliser une équipe de battue pédestre renforcée, un télépilote drone à caméra thermique et un vecteur cynotechnique.',
         assignedMissions: [
           'Chaîne de ratissage et battue de recherche pédestre',
           'Surveillance et reconnaissance aérienne par Drone',
@@ -8535,18 +9100,51 @@ class ProtecGame {
         requiredAssets: {
           vpsp: 0,
           vtu: 1,
-          vtp: 1,
+          vtp: 0,
           chu_places: 0,
           pma: false,
           cyno: 1,
           drone: true
         },
         requiredVolunteers: 6,
-        requiredVehicles: ['VTU', 'VL'],
+        requiredVehicles: isPetiteCouronne ? ['VTU'] : ['VLHR'],
         rewardMoney: 490,
         rewardReputation: 35
-      },
-      {
+      });
+    }
+
+    // 4. Inondations / Crues
+    if (isParisIntramuros) {
+      scenarios.push({
+        id: 'crue_seine_paris',
+        origin: 'prefecture',
+        authority: 'prefecture',
+        authorityLabel: 'Préfecture de Police (Plan Vigicrues Seine)',
+        authorityBadgeBg: 'bg-sky-50 text-sky-800 border-sky-300',
+        title: 'Crue Majeure de la Seine : Évacuations & Hébergement d’Urgence',
+        targetEnvironment: 'seine_paris',
+        scenarioText: 'Crue majeure de la Seine atteignant le seuil d’alerte avec submersion des voies sur berges et caves inondées. La Préfecture de Police active le plan d’urgence inondation et réquisitionne la Protection Civile de Paris pour l’armement d’un Centre d’Hébergement d’Urgence (CHU 80 lits) en gymnase municipal et l’accueil des sinistrés évacués.',
+        assignedMissions: [
+          'Gestion d’un Centre d’Hébergement d’Urgence (CHU 80 lits)',
+          'Soutien logistique de crise & groupes électrogènes',
+          'Noria d’acheminement des riverains vers le CHU'
+        ],
+        requiredAssets: {
+          vpsp: 2,
+          vtu: 2,
+          vtp: 1,
+          chu_places: 80,
+          pma: true,
+          cyno: 0,
+          drone: true
+        },
+        requiredVolunteers: 10,
+        requiredVehicles: ['VPSP', 'VTU', 'VTP'],
+        rewardMoney: 720,
+        rewardReputation: 40
+      });
+    } else {
+      scenarios.push({
         id: 'inondation_lotissements',
         origin: 'prefecture',
         authority: 'prefecture',
@@ -8572,8 +9170,40 @@ class ProtecGame {
         requiredVehicles: ['VPSP', 'VTU', 'VTP'],
         rewardMoney: 680,
         rewardReputation: 40
-      },
-      {
+      });
+    }
+
+    // 5. Accident NOVI
+    if (isParisArea) {
+      scenarios.push({
+        id: 'accident_peripherique',
+        origin: 'samu',
+        authority: 'samu',
+        authorityLabel: 'SAMU de Paris (Centre 15 / Plan NOVI)',
+        authorityBadgeBg: 'bg-rose-50 text-rose-800 border-rose-300',
+        title: 'Carambolage Multiple sur le Boulevard Périphérique (Plan NOVI)',
+        scenarioText: 'Grave carambolage impliquant un autocar et plusieurs véhicules de tourisme sur le Boulevard Périphérique extérieur. Nombreuses victimes en cours de tri médical par le SAMU 75 et la BSPP. Le SAMU de Paris déclenche la Protection Civile pour prépositionner des VPSP sanitaires, monter un Poste Médical Avancé (PMA) et assurer les norias d’évacuation vers les hôpitaux de l’AP-HP.',
+        assignedMissions: [
+          'Soutien Sanitaire et Grande Noria d’évacuation vers hôpitaux AP-HP',
+          'Montage et armement d’un Poste Médical Avancé (PMA)',
+          'Accueil et prise en charge des victimes légères / impliqués'
+        ],
+        requiredAssets: {
+          vpsp: 2,
+          vtu: 1,
+          vtp: 0,
+          chu_places: 20,
+          pma: true,
+          cyno: 0,
+          drone: false
+        },
+        requiredVolunteers: 8,
+        requiredVehicles: ['VPSP', 'VTU'],
+        rewardMoney: 680,
+        rewardReputation: 40
+      });
+    } else {
+      scenarios.push({
         id: 'accident_novi',
         origin: 'samu',
         authority: 'samu',
@@ -8599,8 +9229,8 @@ class ProtecGame {
         requiredVehicles: ['VPSP', 'VTU'],
         rewardMoney: 640,
         rewardReputation: 40
-      }
-    ];
+      });
+    }
 
     if (origin) {
       const filtered = scenarios.filter(s => s.origin === origin);
@@ -8663,7 +9293,7 @@ class ProtecGame {
     const scenarios = this.getAascPrealertScenarios(origin);
     const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
     const base = this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', departmentCode: deptCode };
-    const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '' });
+    const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '', targetEnvironment: pick.targetEnvironment });
 
     // Calcul de l'heure estimée de déploiement (H+25 min dans l'horloge in-game)
     const curHour = this.clock?.hour !== undefined ? this.clock.hour : 14;
@@ -8685,6 +9315,7 @@ class ProtecGame {
       requiredAssets: pick.requiredAssets,
       lat: coords.lat,
       lng: coords.lng,
+      targetEnvironment: pick.targetEnvironment || null,
       scale: `${pick.authorityLabel} (${pick.requiredVolunteers} secouristes requis)`,
       eventDate: { ...this.clock, hour: curHour, minute: curMin },
       durationSeconds: 45 * 60,
@@ -8712,7 +9343,7 @@ class ProtecGame {
       preMobilisationActive: false,
       registeredVolunteers: [],
       assignedCrew: { volunteers: [], vehicles: [] },
-      address: this.generateRealisticStreetAddress(base.city || 'Paris', coords.lat, coords.lng, pick.title || pick.origin),
+      address: this.generateRealisticStreetAddress(coords.commune || base.city || 'Paris', coords.lat, coords.lng, { title: pick.title || pick.origin, desc: pick.scenarioText, targetEnvironment: pick.targetEnvironment }),
       isSector: false,
       departmentCode: base.departmentCode || deptCode
     };
@@ -9040,7 +9671,7 @@ class ProtecGame {
             const scenarios = this.getAascPrealertScenarios(null);
             const pick = scenarios[Math.floor(Math.random() * scenarios.length)];
             const base = this.stations[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', departmentCode: myDept };
-            const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '' });
+            const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '', targetEnvironment: pick.targetEnvironment });
 
             const minutesAgo = Math.min(Math.floor(offlineHours * 30), Math.floor(Math.random() * 25) + 10);
             const spawnedTime = now - (minutesAgo * 60 * 1000);
@@ -9058,6 +9689,7 @@ class ProtecGame {
               requiredAssets: pick.requiredAssets,
               lat: coords.lat,
               lng: coords.lng,
+              targetEnvironment: pick.targetEnvironment || null,
               scale: `${pick.authorityLabel} (${pick.requiredVolunteers} secouristes requis)`,
               eventDate: { ...this.clock },
               durationSeconds: 45 * 60,
@@ -9080,7 +9712,7 @@ class ProtecGame {
               preMobilisationActive: true,
               registeredVolunteers: [],
               assignedCrew: { volunteers: [], vehicles: [] },
-              address: this.generateRealisticStreetAddress(pick.title, coords.lat, coords.lng),
+              address: this.generateRealisticStreetAddress(coords.commune || base.city || 'Paris', coords.lat, coords.lng, { title: pick.title, origin: pick.origin, desc: pick.scenarioText, targetEnvironment: pick.targetEnvironment }),
               isSector: false,
               departmentCode: myDept
             };
@@ -13007,14 +13639,8 @@ class ProtecGame {
       this.missionDetailActiveTab = 'info';
     }
 
-    // Indicateur s'il manque des véhicules
-    const assignedVehsForCheck = (mission.assignedVehicleIds || []).map(id => this.vehicles.find(v => v.id === id)).filter(Boolean);
-    const poolForCheck = [...assignedVehsForCheck];
-    const hasMissingVehicles = Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0 && mission.requiredVehicles.some(reqType => {
-      const idx = poolForCheck.findIndex(v => v.type === reqType || (reqType === 'PCM' && (v.isCommandement || v.hasCommandementKit)));
-      if (idx >= 0) { poolForCheck.splice(idx, 1); return false; }
-      return true;
-    });
+    // Indicateur s'il manque des moyens ou véhicules
+    const hasMissingVehicles = this.hasMissingVehicles(mission);
 
     // Liste des identifiants des véhicules déjà assignés (déclarée en début de méthode)
 
@@ -13563,7 +14189,7 @@ class ProtecGame {
                 <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                   <span class="text-[9px] uppercase font-black text-slate-400 block">${term.interlocutorLabel}</span>
                   <strong class="text-xs font-extrabold text-slate-900 block mt-0.5 truncate">${mission.clientName || term.interlocutorName}</strong>
-                  <span class="text-[10px] text-slate-500 block">Accord conventionnel validé</span>
+                  <span class="text-[10px] font-semibold text-slate-500 block truncate" title="${term.agreementStatus}">${term.agreementStatus}</span>
                 </div>
               </div>
 
@@ -13673,18 +14299,25 @@ class ProtecGame {
                   <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
                   <h4 class="text-xs font-black text-slate-900 uppercase">Logistique & Vecteurs</h4>
                 </div>
-                <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${assignedVehIds.length >= ((mission.requiredVehicles || []).length || 1) ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
-                  ${assignedVehIds.length} / ${(mission.requiredVehicles || []).length || 1} véhicule(s)
+                <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${!hasMissingVehicles ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                  ${assignedVehIds.length} véhicule(s) mobilisé(s) ${!hasMissingVehicles ? '✓' : '⚠️'}
                 </span>
               </div>
 
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span class="text-[9px] uppercase font-black text-slate-400 block">Vecteurs Requis</span>
+                  <span class="text-[9px] uppercase font-black text-slate-400 block">Moyens Opérationnels Requis</span>
                   <div class="flex items-center gap-1 mt-1 flex-wrap">
-                    ${(mission.requiredVehicles && mission.requiredVehicles.length > 0) ? mission.requiredVehicles.map(vType => `
-                      <span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-pc-blue border border-blue-200">${vType}</span>
-                    `).join('') : '<span class="text-[10px] text-slate-500">Poste fixe (aucun)</span>'}
+                    ${(() => {
+                      const cov = this.checkMissionMoyensCoverage(mission);
+                      const tags = [];
+                      if (cov.needs.needsPS) tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-pc-blue border border-blue-200">🚑 PS</span>');
+                      if (cov.needs.reqLogKits > 0) tags.push(`<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200">📦 LOG (${cov.needs.reqLogKits} kit${cov.needs.reqLogKits > 1 ? 's' : ''})</span>`);
+                      if (cov.needs.needsHR) tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">🏔️ HR 4x4</span>');
+                      if ((mission.requiredVehicles || []).includes('PCM')) tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200">📡 PCM</span>');
+                      if (tags.length === 0) return '<span class="text-[10px] text-slate-500">Poste fixe / Pédestre</span>';
+                      return tags.join('');
+                    })()}
                   </div>
                 </div>
                 <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -13721,11 +14354,11 @@ class ProtecGame {
               </span>
             </div>
 
-            <!-- Indemnisation conventionnée -->
+            <!-- Indemnisation & Rémunération Légale -->
             <div class="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between text-xs">
               <span class="text-emerald-800 font-bold flex items-center gap-1.5">
                 <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
-                <span>Indemnisation conventionnée (Devis Organisateur) :</span>
+                <span>${term.rewardLabel || 'Indemnisation de la mission :'}</span>
               </span>
               <span class="font-black text-emerald-950 mono-num text-sm">+${mission.rewardMoney} €</span>
             </div>
@@ -14436,8 +15069,8 @@ class ProtecGame {
                 <span>Matériel</span>
               </button>
               <button type="button" onclick="window.game.setMissionDetailLogistiqueSubTab('consommable')" class="flex-1 py-1.5 px-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${logistiqueSubTab === 'consommable' ? 'bg-white text-pc-blue shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
-                <i data-lucide="briefcase-medical" class="w-3.5 h-3.5"></i>
-                <span>Consommable</span>
+                <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+                <span>Consommables</span>
               </button>
             </div>
 
@@ -14476,52 +15109,107 @@ class ProtecGame {
                     </div>
                   </div>
 
-                  <!-- Récapitulatif visuel des vecteurs demandés -->
+                  <!-- Récapitulatif visuel des besoins opérationnels par types de moyens (PS, LOG, TP, HR...) -->
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     ${(() => {
-                      const requiredTypes = Array.isArray(mission.requiredVehicles) ? mission.requiredVehicles : [];
-                      if (requiredTypes.length === 0) {
-                        return `
-                          <div class="col-span-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
-                            <span>🚶</span>
-                            <span>${isCrisisMission ? "Dispositif à pied d'œuvre (aucun véhicule imposé). Vous pouvez engager librement vos engins pour acheminer vos bénévoles." : "Dispositif pédestre / poste fixe (aucun véhicule requis au devis)."}</span>
-                          </div>
-                        `;
-                      }
+                      const cov = this.checkMissionMoyensCoverage(mission);
+                      const needs = cov.needs;
+                      const cards = [];
 
-                      const reqCounts = {};
-                      requiredTypes.forEach(t => reqCounts[t] = (reqCounts[t] || 0) + 1);
-
-                      const assignedVehs = (mission.assignedVehicleIds || [])
-                        .map(id => this.vehicles.find(v => v.id === id))
-                        .filter(Boolean);
-
-                      const assignedCounts = {};
-                      assignedVehs.forEach(v => {
-                        assignedCounts[v.type] = (assignedCounts[v.type] || 0) + 1;
-                      });
-
-                      return Object.entries(reqCounts).map(([type, reqCount]) => {
-                        const engagedCount = assignedCounts[type] || 0;
-                        const isSatisfied = engagedCount >= reqCount;
-
-                        return `
+                      // 1. Moyen Sanitaire (PS / VPSP)
+                      if (needs.needsPS) {
+                        const isSatisfied = cov.psSatisfied;
+                        cards.push(`
                           <div class="p-2.5 rounded-xl border ${isSatisfied ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950' : 'bg-amber-50/80 border-amber-300 text-amber-950'} flex items-center justify-between gap-3 shadow-2xs">
                             <div class="flex items-center gap-2.5 min-w-0">
-                              <span class="text-xl shrink-0">${type === 'VPSP' ? '🚑' : type === 'PCM' ? '📡' : type === 'VTU' ? '🚐' : type === 'VTP' ? '🚌' : '🚗'}</span>
+                              <span class="text-xl shrink-0">🚑</span>
                               <div class="min-w-0">
-                                <div class="text-xs font-black truncate">${type}</div>
-                                <div class="text-[10px] font-semibold text-slate-600">${reqCount} ${isCrisisMission ? "requis pour la mission" : "requis au devis"}</div>
+                                <div class="text-xs font-black truncate">Secours Sanitaire (PS)</div>
+                                <div class="text-[10px] font-semibold text-slate-600">${needs.reqPSCount} VPSP ou vecteur sanitaire ${isCrisisMission ? "requis par l'autorité" : "requis au devis"}</div>
                               </div>
                             </div>
                             <div class="shrink-0">
                               <span class="px-2 py-0.5 rounded-lg text-xs font-black whitespace-nowrap shadow-2xs ${isSatisfied ? 'bg-emerald-200 text-emerald-900 border border-emerald-300' : 'bg-amber-200 text-amber-900 border border-amber-300'}">
-                                ${engagedCount} / ${reqCount} ${isSatisfied ? '✓' : '⚠️'}
+                                ${cov.psVehiclesCount} / ${needs.reqPSCount} ${isSatisfied ? '✓' : '⚠️'}
                               </span>
                             </div>
                           </div>
+                        `);
+                      }
+
+                      // 2. Capacité Logistique (LOG - Kits & Matériel)
+                      if (needs.reqLogKits > 0) {
+                        const isSatisfied = cov.logSatisfied;
+                        cards.push(`
+                          <div class="p-2.5 rounded-xl border ${isSatisfied ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950' : 'bg-amber-50/80 border-amber-300 text-amber-950'} flex items-center justify-between gap-3 shadow-2xs">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                              <span class="text-xl shrink-0">📦</span>
+                              <div class="min-w-0">
+                                <div class="text-xs font-black truncate">Kits & Matériel (LOG)</div>
+                                <div class="text-[10px] font-semibold text-slate-600">${needs.reqLogKits} kit(s) requis (1 véhicule LOG de 6 slots transporte l'ensemble)</div>
+                              </div>
+                            </div>
+                            <div class="shrink-0">
+                              <span class="px-2 py-0.5 rounded-lg text-xs font-black whitespace-nowrap shadow-2xs ${isSatisfied ? 'bg-emerald-200 text-emerald-900 border border-emerald-300' : 'bg-amber-200 text-amber-900 border border-amber-300'}">
+                                ${cov.totalLogSlots} slots LOG / ${needs.reqLogKits} kit(s) ${isSatisfied ? '✓' : '⚠️'}
+                              </span>
+                            </div>
+                          </div>
+                        `);
+                      }
+
+                      // 3. Franchissement Hors-Route (HR 4x4)
+                      if (needs.needsHR) {
+                        const isSatisfied = cov.hrSatisfied;
+                        cards.push(`
+                          <div class="p-2.5 rounded-xl border ${isSatisfied ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950' : 'bg-amber-50/80 border-amber-300 text-amber-950'} flex items-center justify-between gap-3 shadow-2xs">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                              <span class="text-xl shrink-0">🏔️</span>
+                              <div class="min-w-0">
+                                <div class="text-xs font-black truncate">Hors-Route 4x4 (HR)</div>
+                                <div class="text-[10px] font-semibold text-slate-600">Terrain escarpé / hors-piste (VLHR ou 4x4 requis)</div>
+                              </div>
+                            </div>
+                            <div class="shrink-0">
+                              <span class="px-2 py-0.5 rounded-lg text-xs font-black whitespace-nowrap shadow-2xs ${isSatisfied ? 'bg-emerald-200 text-emerald-900 border border-emerald-300' : 'bg-amber-200 text-amber-900 border border-amber-300'}">
+                                ${cov.hasHRVehicle ? '1 / 1 ✓' : '0 / 1 ⚠️'}
+                              </span>
+                            </div>
+                          </div>
+                        `);
+                      }
+
+                      // 4. Commandement (PCM si spécifiquement requis au devis)
+                      if ((mission.requiredVehicles || []).includes('PCM')) {
+                        const hasPCM = cov.assignedVehs.some(v => v.type === 'PCM' || v.isCommandement || v.hasCommandementKit || (v.functions && v.functions.includes('PCM')));
+                        cards.push(`
+                          <div class="p-2.5 rounded-xl border ${hasPCM ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950' : 'bg-amber-50/80 border-amber-300 text-amber-950'} flex items-center justify-between gap-3 shadow-2xs">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                              <span class="text-xl shrink-0">📡</span>
+                              <div class="min-w-0">
+                                <div class="text-xs font-black truncate">Poste de Commandement (PCM)</div>
+                                <div class="text-[10px] font-semibold text-slate-600">Véhicule de commandement PCM requis</div>
+                              </div>
+                            </div>
+                            <div class="shrink-0">
+                              <span class="px-2 py-0.5 rounded-lg text-xs font-black whitespace-nowrap shadow-2xs ${hasPCM ? 'bg-emerald-200 text-emerald-900 border border-emerald-300' : 'bg-amber-200 text-amber-900 border border-amber-300'}">
+                                ${hasPCM ? '1 / 1 ✓' : '0 / 1 ⚠️'}
+                              </span>
+                            </div>
+                          </div>
+                        `);
+                      }
+
+                      if (cards.length === 0) {
+                        return `
+                          <div class="col-span-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
+                            <span>🚶</span>
+                            <span>${isCrisisMission ? "Dispositif à pied d'œuvre (aucun véhicule imposé). Vous pouvez engager librement vos engins pour acheminer vos bénévoles et votre matériel." : "Dispositif pédestre / poste fixe (aucun véhicule requis au devis)."}</span>
+                          </div>
                         `;
-                      }).join('');
+                      }
+
+                      return cards.join('');
                     })()}
                   </div>
 
@@ -14958,37 +15646,166 @@ class ProtecGame {
                 </div>
               </div>
             ` : `
-              <!-- SOUS-ONGLET CONSOMMABLE (eProtec STYLE) -->
+              <!-- SOUS-ONGLET CONSOMMABLES (JAUGES VÉHICULES ET KITS DE RÉARMEMENT) -->
               <div class="space-y-3">
-                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
-                  <div class="flex items-center justify-between">
+                <!-- EN-TÊTE CONSOMMABLES -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1.5">
+                  <div class="flex items-center justify-between flex-wrap gap-2">
                     <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
-                      <i data-lucide="briefcase-medical" class="w-4 h-4 text-pc-blue"></i>
-                      <span>Consommables Sanitaires de Mission</span>
+                      <i data-lucide="archive" class="w-4 h-4 text-pc-blue"></i>
+                      <span>Consommables</span>
                     </span>
                     <span class="font-black text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 text-xs">
-                      ${mission.consumableCost || 30} € prévus
+                      ${mission.consumableCost || 30} € prévus au devis
                     </span>
                   </div>
+                  <p class="text-[10px] text-slate-500 font-medium">
+                    Suivi global des jauges de consommables de vos véhicules engagés et réserve de kits de réarmement.
+                  </p>
+                </div>
 
-                  <div class="grid grid-cols-2 gap-2 text-xs">
-                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <strong class="block font-bold text-slate-800">Pansements & Compresses</strong>
-                      <span class="text-[10px] text-slate-500">Compresses stériles 10x10, bandes de gaze, sparadrap</span>
-                    </div>
-                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <strong class="block font-bold text-slate-800">Protection & Hygiène</strong>
-                      <span class="text-[10px] text-slate-500">Gants nitrile (S, M, L), masques FFP2, gel hydroalcoolique</span>
-                    </div>
-                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <strong class="block font-bold text-slate-800">Désinfection & Lavage</strong>
-                      <span class="text-[10px] text-slate-500">Dosettes de sérum physiologique, antiseptique dermo</span>
-                    </div>
-                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <strong class="block font-bold text-slate-800">Hémorragie & Urgence</strong>
-                      <span class="text-[10px] text-slate-500">Garrots tourniquets tactiques, coussins hémostatiques</span>
-                    </div>
+                <!-- 1. JAUGES DE CHAQUE VÉHICULE ENGAGÉ -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+                  <div class="flex items-center justify-between">
+                    <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <i data-lucide="gauge" class="w-3.5 h-3.5 text-pc-blue"></i>
+                      <span>Jauge de consommables par véhicule</span>
+                    </h5>
+                    ${(() => {
+                      const assignedVehs = (mission.assignedVehicleIds || [])
+                        .map(id => this.vehicles.find(v => v.id === id))
+                        .filter(Boolean);
+                      const hasLowVeh = assignedVehs.some(v => (v.consumables !== undefined ? v.consumables : 100) < 100);
+                      const missionStation = (this.stations || []).find(s => s.id === mission.stationId) || this.stations?.[0];
+                      if (assignedVehs.length > 0 && hasLowVeh && missionStation) {
+                        return `
+                          <button type="button" onclick="window.ProtecLogistique?.rearmAllVehicles(window.game, '${missionStation.id}'); window.game.openMissionDetails('${mission.id}');" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1 cursor-pointer shadow-xs">
+                            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                            <span>Réarmer les véhicules</span>
+                          </button>
+                        `;
+                      }
+                      return '';
+                    })()}
                   </div>
+
+                  ${(() => {
+                    const assignedVehs = (mission.assignedVehicleIds || [])
+                      .map(id => this.vehicles.find(v => v.id === id))
+                      .filter(Boolean);
+
+                    if (assignedVehs.length === 0) {
+                      return `
+                        <div class="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center space-y-2">
+                          <p class="text-xs text-slate-500 italic">Aucun véhicule n'est encore engagé sur cette mission.</p>
+                          <button type="button" onclick="window.game.setMissionDetailLogistiqueSubTab('vehicule')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-pc-blue text-white shadow-2xs hover:bg-pc-blue/90 transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <i data-lucide="truck" class="w-3.5 h-3.5"></i>
+                            <span>Affecter un véhicule pour suivre sa jauge</span>
+                          </button>
+                        </div>
+                      `;
+                    }
+
+                    return `
+                      <div class="space-y-2">
+                        ${assignedVehs.map(v => {
+                          const val = Math.round(v.consumables !== undefined ? v.consumables : (v.armementLevel || 100));
+                          const isFull = val >= 100;
+                          const barColor = val > 40 ? 'bg-emerald-500' : (val > 15 ? 'bg-amber-500' : 'bg-rose-500');
+                          const textColor = val > 40 ? 'text-emerald-700' : (val > 15 ? 'text-amber-700' : 'text-rose-700');
+
+                          return `
+                            <div class="p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white transition flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                              <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                <div class="w-10 h-10 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0">
+                                  <img src="${v.image || window.game.getVehicleImage(v.type)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='🚑'" />
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                  <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-extrabold text-xs text-slate-900">${v.name}</span>
+                                    <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">${v.type || 'VPSP'}</span>
+                                    <span class="text-[9px] font-bold px-1.5 py-0.2 rounded ${isFull ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
+                                      ${isFull ? 'OPE (100%)' : `Non OPE (${val}%)`}
+                                    </span>
+                                  </div>
+                                  <!-- Jauge de consommables -->
+                                  <div class="flex items-center gap-2 mt-1.5">
+                                    <span class="text-[10px] font-bold text-slate-500 shrink-0">Jauge :</span>
+                                    <div class="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden max-w-xs">
+                                      <div class="h-full rounded-full transition-all duration-300 ${barColor}" style="width: ${val}%"></div>
+                                    </div>
+                                    <span class="font-mono font-bold text-xs ${textColor}">${val}%</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                                ${!isFull ? `
+                                  <button type="button" onclick="window.ProtecLogistique?.rearmVehicleSingle(window.game, '${v.id}'); window.game.openMissionDetails('${mission.id}');" class="px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1 cursor-pointer shadow-xs">
+                                    <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                                    <span>Réarmer</span>
+                                  </button>
+                                ` : `
+                                  <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                                    <i data-lucide="check" class="w-3 h-3"></i>
+                                    <span>Complet</span>
+                                  </span>
+                                `}
+                              </div>
+                            </div>
+                          `;
+                        }).join('')}
+                      </div>
+                    `;
+                  })()}
+                </div>
+
+                <!-- 2. KITS DE RÉARMEMENT -->
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+                  <div class="flex items-center justify-between">
+                    <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <i data-lucide="package-check" class="w-3.5 h-3.5 text-pc-blue"></i>
+                      <span>Kit de réarmement</span>
+                    </h5>
+                    ${(() => {
+                      const st = (this.stations || []).find(s => s.id === mission.stationId) || this.stations?.[0];
+                      const caisseCount = st?.stock?.caisse_rearmement || 0;
+                      return `
+                        <span class="px-2 py-0.5 rounded-lg text-xs font-black ${caisseCount > 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
+                          ${caisseCount} kit(s) disponible(s)
+                        </span>
+                      `;
+                    })()}
+                  </div>
+
+                  ${(() => {
+                    const st = (this.stations || []).find(s => s.id === mission.stationId) || this.stations?.[0];
+                    const caisseCount = st?.stock?.caisse_rearmement || 0;
+                    const availablePS = st?.stockMaterielsPS || 0;
+
+                    return `
+                      <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div class="space-y-1 min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span class="text-base">📦</span>
+                            <span class="font-extrabold text-slate-900">Kit de Réarmement Opérationnel</span>
+                            <span class="text-[10px] text-slate-500 font-semibold">• Réassort complet à 100%</span>
+                          </div>
+                          <p class="text-[10px] text-slate-500 leading-relaxed">
+                            Permet de remonter la jauge de consommables d'un véhicule de secours à 100% en un clic.
+                            ${availablePS > 0 ? `<span class="text-emerald-700 font-bold block mt-0.5">Réserve locale PS complémentaire : ${availablePS}%</span>` : ''}
+                          </p>
+                        </div>
+
+                        <div class="flex items-center gap-2 shrink-0">
+                          <button type="button" onclick="window.ProtecLogistique?.buyRearmKit(window.game, '${st?.id}'); window.game.openMissionDetails('${mission.id}');" class="px-3 py-1.5 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue/90 text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap">
+                            <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i>
+                            <span>Acheter 1 kit (60 €)</span>
+                          </button>
+                        </div>
+                      </div>
+                    `;
+                  })()}
                 </div>
               </div>
             `}
@@ -15491,16 +16308,23 @@ class ProtecGame {
 
     const needed = mission.requiredVolunteers - (mission.registeredVolunteers?.length || 0);
     const renfortData = {
-      requesterPlayerId: this.player.id,
-      requesterName: this.player.name,
-      allianceId: this.player.allianceId,
+      id: `renf-${Date.now()}`,
+      isMine: true,
+      requesterPlayerId: this.player?.id || 'directeur-local',
+      requesterName: this.player?.name || 'Directeur d’Antenne',
+      allianceId: this.player?.allianceId,
       allianceTag: 'UFSC',
       missionId: mission.id,
+      departmentCode: String(mission.departmentCode || this.stations?.[0]?.departmentCode || '54'),
+      stationName: this.stations?.[0]?.name || 'Antenne Locale',
       title: `Renfort pour ${mission.title}`,
       desc: `Dispositif prévu le ${this.formatShortDate(mission.eventDate)}. Besoin urgent de ${needed} secouriste(s) ou VPSP.`,
       unitRequested: `${needed} secouristes ou VPSP`,
       indemnite: 200
     };
+
+    if (!this.mySentRenfortIds) this.mySentRenfortIds = new Set();
+    this.mySentRenfortIds.add(renfortData.id);
 
     fetch('/api/alliances/renfort/request', {
       method: 'POST',
@@ -15508,12 +16332,13 @@ class ProtecGame {
       body: JSON.stringify(renfortData)
     }).then(res => res.json()).then(data => {
       const saved = Object.assign({}, renfortData, (data && data.renfort) || {});
+      saved.isMine = true;
+      this.mySentRenfortIds.add(saved.id);
       this.renforts.unshift(saved);
       this.sanitizeRenforts();
       this.showToast('Appel à Renfort Diffusé', `Tous les directeurs d’antennes alliés ont reçu votre appel de détresse !`, 'green');
       this.updateStatsUI();
     }).catch(() => {
-      renfortData.id = `renf-${Date.now()}`;
       this.renforts.unshift(renfortData);
       this.sanitizeRenforts();
       this.showToast('Appel à Renfort Diffusé', `Alerte transmise sur la fréquence fédérale !`, 'green');
@@ -17110,7 +17935,23 @@ class ProtecGame {
   // Traitement d'un nouveau renfort créé à distance en temps réel
   handleRemoteRenfortCreated(newRenfort) {
     if (!newRenfort || !newRenfort.id) return;
-    if (newRenfort.requesterPlayerId && this.player?.id && String(newRenfort.requesterPlayerId) === String(this.player.id)) return;
+
+    // RÈGLE ABSOLUE : Ne JAMAIS s'envoyer d'alerte, de son ou de notification à soi-même
+    // lors de ses propres demandes de renfort, même si l'on fait partie du département !
+    if (this.isMyRenfortRequest(newRenfort)) {
+      if (!this.renforts) this.renforts = [];
+      const existingIdx = this.renforts.findIndex(r => r.id === newRenfort.id);
+      if (existingIdx !== -1) {
+        Object.assign(this.renforts[existingIdx], newRenfort);
+      } else {
+        newRenfort.isMine = true;
+        this.renforts.unshift(newRenfort);
+      }
+      this.ensureRenfortCoordinates(newRenfort);
+      this.renderMissions();
+      this.updateStatsUI();
+      return;
+    }
     if (!this.renforts) this.renforts = [];
 
     const existingIdx = this.renforts.findIndex(r => r.id === newRenfort.id);
@@ -17574,28 +18415,27 @@ class ProtecGame {
               ${window.ProtecContratsAnnuels ? window.ProtecContratsAnnuels.renderContractsHTML(this) : '<p class="text-xs text-slate-500 p-4">Chargement des contrats annuels...</p>'}
             </div>
           ` : `
-
-          <div class="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-xs text-amber-950 space-y-2 shadow-xs">
-            <div class="flex items-center justify-between">
-              <span class="font-extrabold flex items-center gap-1.5 text-amber-950">
-                <i data-lucide="scale" class="w-4 h-4 text-amber-600"></i>
-                Barème Réglementaire & Négociation DPS (RNMSC)
-              </span>
-              <span class="text-[11px] font-bold text-amber-900 bg-amber-200/90 px-2 py-0.5 rounded-lg border border-amber-300">Mise en Concurrence Active</span>
-            </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-slate-800">
-              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Vacation secouriste : <strong class="text-amber-950 font-black">18,00 €/h</strong></div>
-              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">VPSP : <strong class="text-amber-950 font-black">110,00 €</strong></div>
-              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Matériel & DSA : <strong class="text-amber-950 font-black">35 à 120 €</strong></div>
-              <div class="p-2 bg-white border border-amber-200 rounded-xl shadow-2xs">Frais convention : <strong class="text-amber-950 font-black">40,00 €</strong></div>
-            </div>
-            <p class="text-[11px] text-amber-900 font-medium italic">
-              <strong>💡 Nouveauté Gestion :</strong> Vous pouvez <strong>mettre en prévisionnel</strong> un événement pour bloquer la date et sonder vos bénévoles avant de vous engager. En cas de délai court (urgence J-2 à J-5), les organisateurs acceptent des tarifs supérieurs. Vous pouvez également <strong>décliner</strong> poliment une demande sans pénalité.
-            </p>
-          </div>
-
-          <!-- Grille Officielle d'Évaluation des Risques RNMSC dans la page Devis -->
-          ${window.ProtecRNMSC ? window.ProtecRNMSC.renderRNMSCSimulatorCardHTML('devis-rnmsc') : ''}
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <!-- Colonne Gauche : Liste des Devis & Dossiers (7 colonnes sur 12) -->
+            <div class="lg:col-span-7 xl:col-span-7 space-y-5 min-w-0">
+              <div class="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/80 text-xs text-amber-950 dark:text-amber-100 space-y-2 shadow-xs">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold flex items-center gap-1.5 text-amber-950 dark:text-amber-200">
+                    <i data-lucide="scale" class="w-4 h-4 text-amber-600 dark:text-amber-400"></i>
+                    Barème Réglementaire & Négociation DPS (RNMSC)
+                  </span>
+                  <span class="text-[11px] font-bold text-amber-900 dark:text-amber-200 bg-amber-200/90 dark:bg-amber-900/60 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-700">Mise en Concurrence Active</span>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-slate-800 dark:text-slate-200">
+                  <div class="p-2 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700/60 rounded-xl shadow-2xs">Vacation secouriste : <strong class="text-amber-950 dark:text-amber-300 font-black">18,00 €/h</strong></div>
+                  <div class="p-2 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700/60 rounded-xl shadow-2xs">VPSP : <strong class="text-amber-950 dark:text-amber-300 font-black">110,00 €</strong></div>
+                  <div class="p-2 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700/60 rounded-xl shadow-2xs">Matériel & DSA : <strong class="text-amber-950 dark:text-amber-300 font-black">35 à 120 €</strong></div>
+                  <div class="p-2 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700/60 rounded-xl shadow-2xs">Frais convention : <strong class="text-amber-950 dark:text-amber-300 font-black">40,00 €</strong></div>
+                </div>
+                <p class="text-[11px] text-amber-900 dark:text-amber-200 font-medium italic">
+                  <strong>💡 Nouveauté Gestion :</strong> Vous pouvez <strong>mettre en prévisionnel</strong> un événement pour bloquer la date et sonder vos bénévoles avant de vous engager. En cas de délai court (urgence J-2 à J-5), les organisateurs acceptent des tarifs supérieurs. Vous pouvez également <strong>décliner</strong> poliment une demande sans pénalité.
+                </p>
+              </div>
 
           <!-- Section Devis en Cours d'Étude & Délibération (Temps Réel) -->
           ${inReviewDevis.length > 0 ? `
@@ -17865,9 +18705,14 @@ class ProtecGame {
                         <i data-lucide="info" class="w-4 h-4 text-sky-600"></i>
                         Données de l'Événement & Configuration du Site
                       </span>
-                      <span class="text-[10px] font-bold text-sky-700 bg-white/80 px-2 py-0.5 rounded-lg border border-sky-200">
-                        Analyse Risque & Barème RNMSC
-                      </span>
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <button type="button" onclick="if(window.ProtecRNMSC) window.ProtecRNMSC.loadDevisIntoSimulator('${d.id}')" class="text-[10px] font-black text-pc-blue dark:text-sky-300 bg-white/95 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 px-2.5 py-1 rounded-lg border border-sky-300 dark:border-sky-600 shadow-2xs transition cursor-pointer flex items-center gap-1 hover:scale-105 active:scale-95" title="Injecter les données de cette demande directement dans le Calculateur RIS à droite">
+                          <span>📐 Tester dans le RIS</span>
+                        </button>
+                        <span class="text-[10px] font-bold text-sky-700 dark:text-sky-300 bg-white/60 dark:bg-slate-800/80 px-2 py-0.5 rounded-lg border border-sky-200 dark:border-sky-700/60 hidden sm:inline-block">
+                          Analyse Risque RNMSC
+                        </span>
+                      </div>
                     </div>
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-700">
                       <div class="p-2 bg-white rounded-xl border border-sky-100">
@@ -18262,6 +19107,13 @@ class ProtecGame {
               </div>
             </div>
           ` : ''}
+            </div>
+
+            <!-- Colonne Droite Fixe / Sticky : Calculateur du Ratio Intervenants Secouristes (RIS) (5 colonnes sur 12) -->
+            <div class="lg:col-span-5 xl:col-span-5 lg:sticky lg:top-0 space-y-3 z-10 min-w-0">
+              ${window.ProtecRNMSC ? window.ProtecRNMSC.renderRNMSCSimulatorCardHTML('devis-rnmsc') : ''}
+            </div>
+          </div>
           `}
         </div>
       `;

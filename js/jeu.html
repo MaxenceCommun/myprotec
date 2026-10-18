@@ -484,42 +484,42 @@
               <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
               <span>Postes de Secours (DPS)</span>
             </div>
-            <span id="badge-submenu-planning" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+            <span id="badge-submenu-planning" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">0</span>
           </button>
-          <button onclick="window.game.openModule('devis'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+          <button onclick="window.game.openModule('planning'); window.game.setPlanningTab('devis'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
-              <i data-lucide="file-check" class="w-4 h-4 text-amber-600"></i>
+              <i data-lucide="file-check" class="w-4 h-4 text-amber-500"></i>
               <span>Devis DPS (Demandes reçues)</span>
             </div>
-            <span id="badge-submenu-devis" class="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">0</span>
+            <span id="badge-submenu-devis" class="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold">0</span>
           </button>
           <button data-feature-key="samu" onclick="window.game.openModule('samu'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="activity" class="w-4 h-4 text-pc-orange"></i>
               <span>SAMU 15 (VPSP)</span>
             </div>
-            <span id="badge-submenu-samu" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+            <span id="badge-submenu-samu" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">0</span>
           </button>
           <button data-feature-key="pompiers" onclick="window.game.openModule('pompiers'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="flame" class="w-4 h-4 text-red-700"></i>
               <span id="label-dock-pompiers">Garde SDIS</span>
             </div>
-            <span id="badge-submenu-pompiers" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+            <span id="badge-submenu-pompiers" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">0</span>
           </button>
           <button data-feature-key="social" onclick="window.game.openModule('social'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="heart-handshake" class="w-4 h-4 text-purple-600"></i>
               <span>Action Sociale</span>
             </div>
-            <span id="badge-submenu-social" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+            <span id="badge-submenu-social" class="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">0</span>
           </button>
           <button data-feature-key="crise" onclick="window.game.openModule('crise'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="siren" class="w-4 h-4 text-red-600"></i>
               <span>Crise NOVI / ORSEC</span>
             </div>
-            <span id="badge-submenu-crise" class="text-[9px] px-1.5 py-0.2 rounded-full bg-red-100 text-red-700 font-bold">0</span>
+            <span id="badge-submenu-crise" class="text-[9px] px-1.5 py-0.2 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 font-bold">0</span>
           </button>
           <button onclick="window.game.openAlertTriggerLogsModal(); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
@@ -819,12 +819,12 @@
             <span class="text-xs font-bold text-slate-700">Planning</span>
             <span class="text-[9px] text-slate-400">Postes DPS</span>
           </button>
-          <button onclick="window.game.closeMobileMenu(); window.game.openModule('devis')" class="mobile-grid-btn group">
+          <button onclick="window.game.closeMobileMenu(); window.game.openModule('planning'); window.game.setPlanningTab('devis');" class="mobile-grid-btn group">
             <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
               <i data-lucide="file-check" class="w-4.5 h-4.5"></i>
             </div>
             <span class="text-xs font-bold text-slate-700">Devis DPS</span>
-            <span class="text-[9px] text-slate-400">Demandes</span>
+            <span class="text-[9px] text-slate-400">Sous-section DPS</span>
           </button>
           <button data-feature-key="samu" onclick="window.game.closeMobileMenu(); window.game.openModule('samu')" class="mobile-grid-btn group">
             <div class="w-9 h-9 rounded-xl bg-orange-50 text-pc-orange flex items-center justify-center mb-1 group-hover:scale-105 transition">
@@ -1111,8 +1111,14 @@
         </div>
       </div>
 
-      <div class="p-3.5 rounded-2xl bg-red-50/70 border border-red-200 text-xs text-red-950 space-y-2">
-        <p class="font-extrabold">Cette action réinitialise entièrement votre antenne à zéro (trésorerie, bénévoles, véhicules, missions).</p>
+      <div class="p-3.5 rounded-2xl bg-red-50/80 border border-red-200 text-xs text-red-950 space-y-2">
+        <p class="font-extrabold text-red-900">Cette action réinitialise intégralement votre partie à zéro :</p>
+        <ul class="list-disc list-inside space-y-1 text-[11px] text-red-800">
+          <li><strong>Suppression de l'antenne et de sa position géographique</strong></li>
+          <li><strong>Suppression du nom de l'antenne et du département choisi</strong></li>
+          <li>Remise à zéro de la trésorerie (40 000 €), des véhicules, bénévoles et missions</li>
+          <li>Relance complète de la procédure de fondation (choix du département, du nom et de l'implantation)</li>
+        </ul>
       </div>
 
       <div class="space-y-2">
