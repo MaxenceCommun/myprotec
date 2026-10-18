@@ -1579,12 +1579,184 @@ class ProtecGame {
     }
   }
 
+  // ============================================================================
+  // SÉCURISATION DU STOCKAGE LOCAL (LOCALSTORAGE / SESSIONSTORAGE) ET GESTION DU QUOTA
+  // ============================================================================
+
+  /**
+   * Écriture sécurisée dans un Storage avec détection QuotaExceededError,
+   * purge automatique des données non essentielles et sauvegarde d'urgence.
+   */
+  safeStorageSet(storage, key, value, isCritical = false) {
+    if (!storage) return false;
+    try {
+      storage.setItem(key, value);
+      return true;
+    } catch (err) {
+      const isQuotaExceeded = (
+        err.name === 'QuotaExceededError' ||
+        err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+        err.code === 22 ||
+        err.code === 1014
+      );
+
+      if (isQuotaExceeded) {
+        console.warn(`[Storage] QuotaExceededError interceptée pour "${key}". Lancement de la purge automatique des historiques et caches...`);
+        this.purgeNonEssentialStorage();
+
+        // Deuxième essai après purge
+        try {
+          storage.setItem(key, value);
+          console.log(`[Storage] Sauvegarde réussie après purge pour "${key}".`);
+          return true;
+        } catch (retryErr) {
+          console.warn(`[Storage] Échec persistant après purge pour "${key}".`, retryErr.message || retryErr);
+          if (isCritical) {
+            this.saveCriticalStateOnly(storage, key);
+          }
+        }
+      } else {
+        console.warn(`[Storage] Erreur écriture "${key}":`, err.message || err);
+      }
+      return false;
+    }
+  }
+
+  safeLocalStorageSet(key, value, isCritical = false) {
+    return this.safeStorageSet(window.localStorage, key, value, isCritical);
+  }
+
+  safeSessionStorageSet(key, value, isCritical = false) {
+    return this.safeStorageSet(window.sessionStorage, key, value, isCritical);
+  }
+
+  /**
+   * Purge automatique des données et historiques non essentiels pour libérer l'espace localStorage / sessionStorage
+   */
+  purgeNonEssentialStorage() {
+    try {
+      // 1. Réduire drastiquement les tableaux d'historique en mémoire
+      if (Array.isArray(this.financesHistory)) {
+        this.financesHistory = this.financesHistory.slice(0, 15);
+      }
+      if (Array.isArray(this.alertTriggerLogs)) {
+        this.alertTriggerLogs = this.alertTriggerLogs.slice(0, 15);
+      }
+      if (Array.isArray(this.radioLogs)) {
+        this.radioLogs = this.radioLogs.slice(0, 15);
+      }
+      if (Array.isArray(this.history)) {
+        this.history = this.history.slice(-15);
+      }
+      if (Array.isArray(this.missions)) {
+        const active = this.missions.filter(m => m.status !== 'completed' && m.status !== 'canceled');
+        const closed = this.missions.filter(m => m.status === 'completed' || m.status === 'canceled').slice(-10);
+        this.missions = [...active, ...closed];
+      }
+
+      // 2. Nettoyer ou tronquer l'historique des notifications
+      if (window.ProtecNotifications && Array.isArray(window.ProtecNotifications.history)) {
+        window.ProtecNotifications.history = window.ProtecNotifications.history.slice(0, 15);
+        try {
+          localStorage.setItem('protec_notif_history', JSON.stringify(window.ProtecNotifications.history));
+        } catch (e) {
+          try { localStorage.removeItem('protec_notif_history'); } catch (ign) {}
+        }
+      }
+
+      // 3. Purger les clés de cache secondaires et obsolètes
+      const nonEssentialKeys = [
+        'protec_offline_queue',
+        'protec_platform_stats',
+        'protec_last_device',
+        'protec_backup_before_reset',
+        'protec_market_local_listings'
+      ];
+      nonEssentialKeys.forEach(k => {
+        try { localStorage.removeItem(k); } catch (e) {}
+      });
+
+      console.info('[Storage] Purge d\'espace terminée avec succès.');
+    } catch (purgeErr) {
+      console.warn('[Storage] Erreur pendant la purge automatique :', purgeErr);
+    }
+  }
+
+  /**
+   * Sauvegarde de secours ultra-minimale ne contenant que l'état critique (trésorerie, statut véhicules, effectifs, stations)
+   */
+  saveCriticalStateOnly(storage, key) {
+    try {
+      const moneyVal = (this.resources?.money !== undefined) ? this.resources.money : 40000;
+      const criticalPayload = {
+        _isCriticalFallback: true,
+        savedAt: Date.now(),
+        money: moneyVal,
+        resources: {
+          money: moneyVal,
+          budget: moneyVal,
+          funds: moneyVal,
+          reputationScore: this.resources?.reputationScore || 0
+        },
+        stations: (this.stations || []).map(s => ({
+          id: s.id,
+          name: s.name,
+          city: s.city,
+          lat: s.lat,
+          lng: s.lng,
+          level: s.level
+        })),
+        vehicles: (this.vehicles || []).map(v => ({
+          id: v.id,
+          name: v.name,
+          type: v.type,
+          status: v.status,
+          stationId: v.stationId,
+          lat: v.lat,
+          lng: v.lng
+        })),
+        volunteers: (this.volunteers || []).map(v => ({
+          id: v.id,
+          name: v.name,
+          rank: v.rank,
+          status: v.status,
+          stationId: v.stationId
+        }))
+      };
+      storage.setItem(key, JSON.stringify(criticalPayload));
+      console.warn(`[Storage] État critique minimal sauvegardé d'urgence sous "${key}".`);
+    } catch (critErr) {
+      console.error('[Storage] Impossible de sauvegarder même l\'état critique minimal :', critErr);
+    }
+  }
+
   save() {
     this.saveGame();
   }
 
   saveGame(forceInstant = false) {
     try {
+      // 0. Limitation automatique et proactive des tableaux d'historique (max 50 éléments)
+      if (Array.isArray(this.financesHistory) && this.financesHistory.length > 50) {
+        this.financesHistory = this.financesHistory.slice(0, 50);
+      }
+      if (Array.isArray(this.alertTriggerLogs) && this.alertTriggerLogs.length > 50) {
+        this.alertTriggerLogs = this.alertTriggerLogs.slice(0, 50);
+      }
+      if (Array.isArray(this.radioLogs) && this.radioLogs.length > 50) {
+        this.radioLogs = this.radioLogs.slice(0, 50);
+      }
+      if (Array.isArray(this.history) && this.history.length > 50) {
+        this.history = this.history.slice(-50);
+      }
+      if (Array.isArray(this.missions)) {
+        const active = this.missions.filter(m => m.status !== 'completed' && m.status !== 'canceled');
+        const closed = this.missions.filter(m => m.status === 'completed' || m.status === 'canceled');
+        if (closed.length > 50) {
+          this.missions = [...active, ...closed.slice(-50)];
+        }
+      }
+
       // 1. Synchronisation stricte de l'argent dans resources
       const moneyVal = (this.resources?.money !== undefined) ? this.resources.money : ((this.resources?.budget !== undefined) ? this.resources.budget : 40000);
       if (this.resources) {
@@ -1595,46 +1767,42 @@ class ProtecGame {
 
       // 2. Cache instantané local de secours (Zéro perte de données en cas de reload immédiat)
       if (this.stations && this.stations.length > 0) {
-        try {
-          const cacheData = {
-            money: moneyVal,
-            stations: this.stations,
-            vehicles: this.vehicles,
-            volunteers: this.volunteers,
-            missions: this.missions,
-            devis: this.devis,
-            aascConvention: this.aascConvention,
-            samuConvention: this.samuConvention,
-            sdisConvention: this.sdisConvention,
-            sncfConvention: this.sncfConvention,
-            cumpConvention: this.cumpConvention,
-            conventionRequests: this.conventionRequests,
-            financesHistory: this.financesHistory || [],
-            alertSubscription: this.alertSubscription,
-            rewards: this.rewards,
-            alertTriggerLogs: this.alertTriggerLogs || [],
-            departmentInfrastructures: this.departmentInfrastructures || {},
-            mealAllowancePerVolunteer: this.mealAllowancePerVolunteer || 15,
-            antenneMessagesData: this.antenneMessagesData || null,
-            poles: this.poles || null,
-            roleRequests: this.roleRequests || [],
-            rolesAccessMode: this.rolesAccessMode || 'validation',
-            autoFormationActive: this.autoFormationActive !== undefined ? this.autoFormationActive : true,
-            autoLogisticsActive: this.autoLogisticsActive !== undefined ? this.autoLogisticsActive : true,
-            savedAt: Date.now()
-          };
-          sessionStorage.setItem('myprotec_instant_cache', JSON.stringify(cacheData));
-        } catch (ce) {}
+        const cacheData = {
+          money: moneyVal,
+          stations: this.stations,
+          vehicles: this.vehicles,
+          volunteers: this.volunteers,
+          missions: this.missions,
+          devis: this.devis,
+          aascConvention: this.aascConvention,
+          samuConvention: this.samuConvention,
+          sdisConvention: this.sdisConvention,
+          sncfConvention: this.sncfConvention,
+          cumpConvention: this.cumpConvention,
+          conventionRequests: this.conventionRequests,
+          financesHistory: this.financesHistory || [],
+          alertSubscription: this.alertSubscription,
+          rewards: this.rewards,
+          alertTriggerLogs: this.alertTriggerLogs || [],
+          departmentInfrastructures: this.departmentInfrastructures || {},
+          mealAllowancePerVolunteer: this.mealAllowancePerVolunteer || 15,
+          antenneMessagesData: this.antenneMessagesData || null,
+          poles: this.poles || null,
+          roleRequests: this.roleRequests || [],
+          rolesAccessMode: this.rolesAccessMode || 'validation',
+          autoFormationActive: this.autoFormationActive !== undefined ? this.autoFormationActive : true,
+          autoLogisticsActive: this.autoLogisticsActive !== undefined ? this.autoLogisticsActive : true,
+          savedAt: Date.now()
+        };
+        this.safeSessionStorageSet('myprotec_instant_cache', JSON.stringify(cacheData), true);
       }
 
       // Persistance locale de secours des récompenses pour zéro perte
       if (this.rewards) {
-        try {
-          localStorage.setItem('protec_rewards_save', JSON.stringify({
-            rewards: this.rewards,
-            savedAt: Date.now()
-          }));
-        } catch (re) {}
+        this.safeLocalStorageSet('protec_rewards_save', JSON.stringify({
+          rewards: this.rewards,
+          savedAt: Date.now()
+        }), true);
       }
 
       // 3. La sauvegarde est transmise directement et fidèlement à la BDD
@@ -2101,84 +2269,123 @@ class ProtecGame {
     this.startAntennaPlacement();
   }
 
+  /**
+   * Chargement sécurisé des contours vectoriels GeoJSON des départements
+   * Résistant aux blocages CORS, au protocole file:// et au mode hors-ligne
+   */
+  async loadDepartementsGeoJSON() {
+    if (window._cachedDepartementsGeoJSON) return window._cachedDepartementsGeoJSON;
+    try {
+      const res = await fetch('data/departements-version-simplifiee.geojson');
+      if (res && res.ok) {
+        const data = await res.json();
+        window._cachedDepartementsGeoJSON = data;
+        return data;
+      } else {
+        console.warn(`[GeoJSON] Réponse inattendue (HTTP ${res?.status}) pour data/departements-version-simplifiee.geojson.`);
+      }
+    } catch (e) {
+      console.warn('[GeoJSON] Contours départementaux indisponibles (mode local / hors-ligne) :', e?.message || e);
+    }
+
+    if (!this._geoJsonErrorNotified) {
+      this._geoJsonErrorNotified = true;
+      if (typeof this.showToast === 'function') {
+        this.showToast(
+          'Mode Dégradé Cartographique 🗺️',
+          'Les contours géographiques vectoriels sont indisponibles hors-ligne. Affichage sécurisé sur le secteur 54 (Meurthe-et-Moselle).',
+          'amber',
+          5000
+        );
+      }
+    }
+    return null;
+  }
+
   initMap() {
     window.ProtecLoader?.setProgress(75, 'Déploiement du système cartographique...', 'Cartographie');
-    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.currentDepartmentCode) : null;
-    let centerLat = deptInfo ? deptInfo.lat : 48.8566;
-    let centerLng = deptInfo ? deptInfo.lng : 2.3522;
-    let initialZoom = deptInfo ? deptInfo.zoom : 11;
+
+    // 1. Résolution des coordonnées avec département 54 / Meurthe-et-Moselle par défaut
+    const deptInfo = window.ProtecDepartements ? window.ProtecDepartements.getByCode(this.currentDepartmentCode || '54') : null;
+    let centerLat = deptInfo ? deptInfo.lat : 48.6921; // Département 54 (Meurthe-et-Moselle / Nancy) par défaut
+    let centerLng = deptInfo ? deptInfo.lng : 6.1844;
+    let initialZoom = deptInfo ? (deptInfo.zoom || 11) : 11;
 
     // Si le joueur possède une antenne, centrer immédiatement la caméra devant ses locaux (zoom 15)
     if (this.stations && this.stations.length > 0 && this.stations[0].lat && this.stations[0].lng) {
-      centerLat = this.stations[0].lat;
-      centerLng = this.stations[0].lng;
+      centerLat = Number(this.stations[0].lat);
+      centerLng = Number(this.stations[0].lng);
       initialZoom = 15;
     }
 
-    this.map = L.map('map', {
-      center: [centerLat, centerLng],
-      zoom: initialZoom,
-      zoomControl: false
-    });
+    try {
+      this.map = L.map('map', {
+        center: [centerLat, centerLng],
+        zoom: initialZoom,
+        zoomControl: false
+      });
 
-    L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+      L.control.zoom({ position: 'bottomright' }).addTo(this.map);
 
-    const isEffectiveDark = window.ProtecTheme ? window.ProtecTheme.isEffectiveDark() : false;
+      const isEffectiveDark = window.ProtecTheme ? window.ProtecTheme.isEffectiveDark() : false;
 
-    this.baseLayers = {
-      light: L.layerGroup([
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-          attribution: 'Tiles &copy; Esri',
-          maxNativeZoom: 16,
-          maxZoom: 19
-        }),
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-          attribution: '',
-          maxNativeZoom: 16,
+      this.baseLayers = {
+        light: L.layerGroup([
+          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri',
+            maxNativeZoom: 16,
+            maxZoom: 19
+          }),
+          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '',
+            maxNativeZoom: 16,
+            maxZoom: 19
+          })
+        ]),
+        dark: L.layerGroup([
+          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri',
+            maxNativeZoom: 16,
+            maxZoom: 19
+          }),
+          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '',
+            maxNativeZoom: 16,
+            maxZoom: 19
+          })
+        ]),
+        osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
           maxZoom: 19
         })
-      ]),
-      dark: L.layerGroup([
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-          attribution: 'Tiles &copy; Esri',
-          maxNativeZoom: 16,
-          maxZoom: 19
-        }),
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-          attribution: '',
-          maxNativeZoom: 16,
-          maxZoom: 19
-        })
-      ]),
-      osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19
-      })
-    };
+      };
 
-    if (isEffectiveDark) {
-      this.baseLayers.dark.addTo(this.map);
-    } else {
-      this.baseLayers.light.addTo(this.map);
+      if (isEffectiveDark) {
+        this.baseLayers.dark.addTo(this.map);
+      } else {
+        this.baseLayers.light.addTo(this.map);
+      }
+
+      this.layerControl = L.control.layers({
+        'Mode Sombre (Gris foncé)': this.baseLayers.dark,
+        'Mode Clair (Épuré)': this.baseLayers.light,
+        'Rues (OpenStreetMap)': this.baseLayers.osm
+      }, null, { position: 'bottomright' }).addTo(this.map);
+
+      this.map.on('baselayerchange', (e) => {
+        this.userCustomLayerLocked = (e.layer === this.baseLayers.osm);
+      });
+
+      // Écouteur réactif pour basculer automatiquement la carte selon le thème (Clair / Sombre)
+      window.addEventListener('protec-theme-changed', (e) => {
+        this.updateMapTheme(e.detail ? e.detail.isDark : false);
+      });
+
+      // Initialisation du sélecteur départemental desktop
+      this.populateDepartmentSelector();
+    } catch (mapErr) {
+      console.warn('[Cartographie] Erreur d\'initialisation Leaflet encapsulée (mode résilient actif) :', mapErr);
     }
-
-    this.layerControl = L.control.layers({
-      'Mode Sombre (Gris foncé)': this.baseLayers.dark,
-      'Mode Clair (Épuré)': this.baseLayers.light,
-      'Rues (OpenStreetMap)': this.baseLayers.osm
-    }, null, { position: 'bottomright' }).addTo(this.map);
-
-    this.map.on('baselayerchange', (e) => {
-      this.userCustomLayerLocked = (e.layer === this.baseLayers.osm);
-    });
-
-    // Écouteur réactif pour basculer automatiquement la carte selon le thème (Clair / Sombre)
-    window.addEventListener('protec-theme-changed', (e) => {
-      this.updateMapTheme(e.detail ? e.detail.isDark : false);
-    });
-
-    // Initialisation du sélecteur départemental desktop
-    this.populateDepartmentSelector();
 
     this.map.on('click', (e) => {
       // Ignorer si un marqueur (mission, événement, renfort, antenne) vient d'être cliqué
@@ -23672,7 +23879,8 @@ class ProtecGame {
   // --- GESTIONNAIRE DE TEMPS RÉEL (1 SECONDE = 1 SECONDE RÉELLE) ---
   startSimulationClock() {
     setInterval(() => {
-      const serverOffset = this.serverTimeOffset || 0;
+      try {
+        const serverOffset = this.serverTimeOffset || 0;
       const now = new Date(Date.now() + serverOffset);
       this.clock.hour = now.getHours();
       this.clock.minute = now.getMinutes();
@@ -24628,11 +24836,12 @@ class ProtecGame {
             const volCountEl = document.getElementById('prealert-vols-count');
             if (volCountEl) volCountEl.textContent = `${cur.registeredVolunteers?.length || 0} / ${cur.requiredVolunteers || 1} secouristes prêts`;
             const barEl = document.getElementById('prealert-vols-bar');
-            if (barEl) barEl.style.width = `${Math.min(100, Math.round(((cur.registeredVolunteers?.length || 0) / (cur.requiredVolunteers || 1)) * 100))}%`;
           }
         }
       }
-
+    } catch (clockErr) {
+      console.warn('[SimulationClock] Erreur interceptée dans la boucle de simulation (jeu préservé du gel) :', clockErr);
+    }
     }, 1000);
   }
 

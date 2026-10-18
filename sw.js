@@ -202,8 +202,8 @@ const getAssetUrl = (path) => {
   return new URL(path.replace(/^\//, ''), self.registration.scope).href;
 };
 
-const DEFAULT_ICON = getAssetUrl('/icons/icon-192x192.png');
-const DEFAULT_BADGE = getAssetUrl('/icons/badge-monochrome.png');
+const DEFAULT_ICON = getAssetUrl('icon-192.png');
+const DEFAULT_BADGE = getAssetUrl('badge-monochrome.png');
 
 self.addEventListener('push', (event) => {
   let payload = {};
@@ -223,13 +223,13 @@ self.addEventListener('push', (event) => {
   const body = payload.body || payload.message || 'Mobilisation opérationnelle demandée !';
   const icon = payload.icon ? getAssetUrl(payload.icon) : DEFAULT_ICON;
   const badge = payload.badge ? getAssetUrl(payload.badge) : DEFAULT_BADGE;
-  const targetUrl = payload.data?.url || payload.url || '/jeu.html';
+  const targetUrl = payload.data?.url || payload.url || '/';
 
   const notificationOptions = {
     body: body,
     icon: icon,
     badge: badge,
-    vibrate: payload.vibrate || [500, 200, 500, 200, 500],
+    vibrate: payload.vibrate || [200, 100, 200],
     tag: payload.tag || `protec-alert-${Date.now()}`,
     renotify: true,
     data: Object.assign({ url: targetUrl }, payload.data || {}),

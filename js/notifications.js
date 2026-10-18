@@ -1014,10 +1014,18 @@ window.ProtecNotifications = {
       read: false
     };
     this.history.unshift(item);
-    if (this.history.length > 80) this.history = this.history.slice(0, 80);
+    if (this.history.length > 50) this.history = this.history.slice(0, 50);
     try {
       localStorage.setItem('protec_notif_history', JSON.stringify(this.history));
-    } catch (e) {}
+    } catch (e) {
+      try {
+        // En cas de QuotaExceededError, réduire aux 15 dernières notifications
+        this.history = this.history.slice(0, 15);
+        localStorage.setItem('protec_notif_history', JSON.stringify(this.history));
+      } catch (crit) {
+        console.warn('[Notifications] QuotaExceededError persistant sur protec_notif_history :', crit?.message || crit);
+      }
+    }
 
     const badge = document.getElementById('notif-history-count');
     if (badge) badge.textContent = this.history.length;

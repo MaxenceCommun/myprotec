@@ -523,16 +523,33 @@ window.ProtecOnboarding = {
       return this.cachedGeoJSON;
     }
     try {
+      // 1. Encapsulation asynchrone sécurisée (CORS, mode hors-ligne, protocole local file://)
       const res = await fetch('data/departements-version-simplifiee.geojson');
-      if (res.ok) {
+      if (res && res.ok) {
         const data = await res.json();
         this.cachedGeoJSON = data;
         window._cachedDepartementsGeoJSON = data;
         return data;
+      } else {
+        console.warn(`[GeoJSON] Réponse inattendue (HTTP ${res?.status}) pour data/departements-version-simplifiee.geojson.`);
       }
     } catch (e) {
-      console.warn('Impossible de charger data/departements-version-simplifiee.geojson:', e);
+      console.warn('[GeoJSON] Impossible de charger les contours départementaux (mode local ou hors-ligne) :', e?.message || e);
     }
+
+    // 2. Notification discrète sans bloquer l'initialisation de l'application
+    if (!this._geoJsonFallbackNotified) {
+      this._geoJsonFallbackNotified = true;
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast(
+          'Mode Hors-Ligne Cartographique 🗺️',
+          'Les contours géographiques vectoriels n\'ont pas pu être chargés (accès local ou hors-ligne). La carte s\'initialise sur le secteur par défaut.',
+          'amber',
+          5000
+        );
+      }
+    }
+
     return null;
   },
 
@@ -1101,6 +1118,15 @@ window.ProtecOnboarding = {
           this.step2Map.setMinZoom(Math.max(6, this.step2Map.getZoom() - 2));
         } catch (e) {}
       }
+    }
+
+    // Fallback de centrage si les contours GeoJSON sont indisponibles (mode hors-ligne, file://)
+    if (!this.deptBorderLayer && this.step2Map) {
+      const fallbackLat = this.placementData?.lat || (deptInfo ? deptInfo.lat : 48.6921); // Meurthe-et-Moselle (54) par défaut
+      const fallbackLng = this.placementData?.lng || (deptInfo ? deptInfo.lng : 6.1844);
+      try {
+        this.step2Map.setView([fallbackLat, fallbackLng], deptInfo?.zoom || 10);
+      } catch (e) {}
     }
 
     // 3. Affichage des antennes existantes et de leurs cercles d'exclusion (20 km)

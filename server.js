@@ -208,6 +208,9 @@ function getOrCreateVapidKeys() {
   return db.getOrCreateVapidKeys();
 }
 
+// Registre en mémoire des alertes Web Push différées (fin d'intervention, rappels opérationnels app fermée)
+const scheduledPushEvents = new Map();
+
 function configureWebPush() {
   const keys = getOrCreateVapidKeys();
   if (webpush && keys && keys.publicKey && keys.privateKey) {
@@ -1198,6 +1201,75 @@ const server = http.createServer((req, res) => {
         }
       } catch (err) {
         sendJson(res, 400, { success: false, error: err.message });
+      }
+    });
+    return;
+  }
+
+  // Planification d'une alerte Web Push différée (fin d'intervention, retour de véhicule, rappel opérationnel app fermée)
+  if (url === '/api/push/schedule-event' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { eventId, userId, endpoint, delaySeconds, title, body: msgBody, data } = JSON.parse(body || '{}');
+        const delay = Math.max(1, Number(delaySeconds) || 60);
+        const timerKey = eventId || `evt_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+        if (scheduledPushEvents.has(timerKey)) {
+          clearTimeout(scheduledPushEvents.get(timerKey).timeoutId);
+        }
+
+        const timeoutId = setTimeout(async () => {
+          scheduledPushEvents.delete(timerKey);
+          try {
+            let targetSub = null;
+            if (endpoint) targetSub = db.getPushSubscription(endpoint);
+            if (!targetSub && userId) {
+              const allSubs = db.getAllPushSubscriptions();
+              targetSub = allSubs.find(s => s.user_id === userId || s.userId === userId || s.playerId === userId);
+            }
+            if (targetSub) {
+              await sendSingleWebPush(targetSub, {
+                title: title || '🚑 Notification Opérationnelle MyProtec',
+                body: msgBody || 'Une opération requiert votre attention.',
+                icon: 'icon-192.png',
+                badge: 'badge-monochrome.png',
+                vibrate: [200, 100, 200],
+                data: Object.assign({ url: '/' }, data || {})
+              });
+              console.log(`[WebPush Server] Alerte différée ${timerKey} envoyée avec succès à ${targetSub.username || targetSub.user_id}`);
+            }
+          } catch (pushErr) {
+            console.warn(`[WebPush Server] Erreur lors de l'envoi différé ${timerKey} :`, pushErr.message || pushErr);
+          }
+        }, delay * 1000);
+
+        scheduledPushEvents.set(timerKey, { timeoutId, userId, scheduledAt: Date.now(), triggerAt: Date.now() + delay * 1000 });
+        sendJson(res, 200, { success: true, scheduled: true, eventId: timerKey, delaySeconds: delay });
+      } catch (e) {
+        sendJson(res, 400, { success: false, error: e.message });
+      }
+    });
+    return;
+  }
+
+  // Annulation d'une alerte différée
+  if (url === '/api/push/cancel-scheduled-event' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { eventId } = JSON.parse(body || '{}');
+        if (eventId && scheduledPushEvents.has(eventId)) {
+          clearTimeout(scheduledPushEvents.get(eventId).timeoutId);
+          scheduledPushEvents.delete(eventId);
+          sendJson(res, 200, { success: true, canceled: true, eventId });
+        } else {
+          sendJson(res, 200, { success: true, canceled: false, message: 'Événement non trouvé ou déjà exécuté' });
+        }
+      } catch (e) {
+        sendJson(res, 400, { success: false, error: e.message });
       }
     });
     return;
