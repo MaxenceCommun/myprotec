@@ -1491,6 +1491,11 @@ class ProtecGame {
     this.updateDockAndFiltersVisibility();
     this.startSimulationClock();
 
+    // Raccordement au backend dédié temps réel OVH (Node.js / Express / Socket.io)
+    if (window.ProtecAPI && typeof window.ProtecAPI.init === 'function') {
+      window.ProtecAPI.init(this);
+    }
+
     // Actualisation périodique des antennes des joueurs (toutes les 20 secondes)
     if (!this._alliancePollingInterval) {
       this._alliancePollingInterval = setInterval(() => this.loadAllianceStations(), 20000);
@@ -8186,6 +8191,13 @@ class ProtecGame {
     veh.fuel = Math.max(10, (veh.fuel || 90) - 10);
 
     mission.status = 'ongoing';
+    // Synchronisation du statut "engagee" avec le backend dédié OVH
+    if (mission.isBackendIntervention || mission.backendId) {
+      const bId = mission.backendId || String(mission.id).replace(/^interv-/, '');
+      if (window.ProtecAPI && typeof window.ProtecAPI.updateInterventionStatut === 'function') {
+        window.ProtecAPI.updateInterventionStatut(bId, 'engagee');
+      }
+    }
     mission.echelonActive = true;
     mission.startedAt = Date.now();
     if (!mission.assignedCrew) mission.assignedCrew = { volunteers: [], vehicles: [] };
@@ -9494,6 +9506,7 @@ class ProtecGame {
 
   // Déclencheur officiel d'une Préalerte AASC (Veille Opérationnelle)
   async triggerAascPrealert(origin = null) {
+    if (window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
     if (!this.stations || this.stations.length === 0) return;
 
     const deptCode = String(this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '54');
@@ -9682,6 +9695,7 @@ class ProtecGame {
   }
 
   triggerSncfPrealert() {
+    if (window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
     if (!this.sncfConvention || !this.sncfConvention.signed) return;
     const activeSncf = this.missions.find(m => m.alertOrigin === 'sncf' && ['prealerte', 'declenche', 'ongoing'].includes(m.status));
     if (activeSncf) return;
@@ -10524,6 +10538,13 @@ class ProtecGame {
     }
 
     mission.status = 'ongoing';
+    // Synchronisation du statut "engagee" avec le backend dédié OVH
+    if (mission.isBackendIntervention || mission.backendId) {
+      const bId = mission.backendId || String(mission.id).replace(/^interv-/, '');
+      if (window.ProtecAPI && typeof window.ProtecAPI.updateInterventionStatut === 'function') {
+        window.ProtecAPI.updateInterventionStatut(bId, 'engagee');
+      }
+    }
     const serverNow = Date.now() + (this.serverTimeOffset || 0);
     mission.startedAt = serverNow;
     if (!mission.durationSeconds) {
@@ -10588,6 +10609,13 @@ class ProtecGame {
 
   completeMission(mission) {
     mission.status = 'completed';
+    // Synchronisation du statut "terminee" avec le backend dédié OVH
+    if (mission.isBackendIntervention || mission.backendId) {
+      const bId = mission.backendId || String(mission.id).replace(/^interv-/, '');
+      if (window.ProtecAPI && typeof window.ProtecAPI.updateInterventionStatut === 'function') {
+        window.ProtecAPI.updateInterventionStatut(bId, 'terminee');
+      }
+    }
 
     const hoursDone = Math.max(2, Math.round(mission.duration / 10));
     if (this.grants) {
@@ -24799,7 +24827,9 @@ class ProtecGame {
         window.ProtecIncidents.checkOngoingMissions(this);
       }
 
-      // 3. Dispatch dynamique d'urgences SAMU 15 (uniquement si une Garde SAMU 15 est activée par convention)
+      // 3. Génération d'interventions déléguée au backend dédié temps réel OVH (Node.js/Socket.io)
+      // La génération aléatoire locale (timers navigateur) est désactivée pour éviter les doublons.
+      /*
       if (this.clock.second === 15 || this.clock.second === 45) {
         if (this.stations.length > 0 && this.samuGarde && this.samuGarde.active) {
           const samuChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('samuEmergencyChance', 0.28) : 0.28;
@@ -24820,6 +24850,7 @@ class ProtecGame {
           }
         }
       }
+      */
 
       // 3c. Contrôle des retards de départ SDIS Pompiers (Temps imparti dépassé = sanction Préfecture)
       if (this.clock.second % 5 === 0) {
@@ -24871,7 +24902,8 @@ class ProtecGame {
         }
       }
 
-      // 3d. Déclenchement périodique de Préalertes AASC (Veille Opérationnelle Préfecture, CODIS, SAMU, SNCF)
+      // 3d. Préalertes et ordres de mission gérés en direct par le backend dédié OVH
+      /*
       if (this.clock.second === 20 && this.clock.minute % 8 === 0) {
         const aascChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('aascPrealertChance', 0.35) : 0.35;
         const sncfChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('sncfPrealertChance', 0.40) : 0.40;
@@ -24883,6 +24915,7 @@ class ProtecGame {
           }
         }
       }
+      */
 
       // 3e. Déclenchement d'Ordre de Mission CUMP / CAI (si Convention AASC-CUMP signée)
       if (this.clock.second === 40 && this.clock.minute % 12 === 0) {
@@ -25141,6 +25174,7 @@ class ProtecGame {
   // Alerte d'urgence SAMU 15 calibrée aux moyens de l'antenne (Convention Cadre requise)
   // Alerte d'urgence SAMU 15 calibrée aux moyens de l'antenne (Convention Cadre requise)
   triggerRandomSamuEmergency() {
+    if (window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
     if (!this.samuConvention || !this.samuConvention.signed) return;
     if (!this.samuGarde || !this.samuGarde.active) return;
 
@@ -26003,6 +26037,7 @@ class ProtecGame {
   }
 
   triggerRandomSdisEmergency() {
+    if (window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
     if (!this.sdisGarde || !this.sdisGarde.active) return;
 
     // CONTRÔLE STRICT DU NOMBRE DE VECTEURS DEMANDÉS PAR LE SDIS / CODIS
@@ -26828,6 +26863,11 @@ class ProtecGame {
       } else {
         dotEl.className = 'w-2 h-2 rounded-full bg-slate-300 ml-0.5';
       }
+    }
+
+    // Actualisation de la barre rapide des interventions actives du tableau de bord
+    if (window.ProtecAPI && typeof window.ProtecAPI.updateDashboardQuickBar === 'function') {
+      window.ProtecAPI.updateDashboardQuickBar();
     }
   }
 

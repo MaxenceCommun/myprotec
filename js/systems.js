@@ -1792,6 +1792,7 @@ window.ProtecSystems = {
     }
   },
 triggerWeatherEmergencyMission(game) {
+    if (window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
     if (!game.weather) return;
     const v = game.weather.vigilance;
     if (v === 'green' || v === 'yellow') return;
