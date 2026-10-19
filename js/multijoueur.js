@@ -2844,7 +2844,7 @@ window.ProtecMultiplayer = {
     const modal = document.getElementById('give-badge-modal');
     if (modal) modal.classList.add('hidden');
 
-    game.showToast('Écusson Cédé avec Succès !', `Vous avez offert « ${badge.name} » à ${targetStation?.name || 'votre allié'} ! (+25 pts d’alliance, +15 réputation)`, 'green');
+    game.showToast('Écusson Cédé avec Succès !', `Vous avez offert « ${badge.name} » à ${targetStation?.name || 'votre allié'} ! (+25 pts d’alliance)`, 'green');
     game.save();
     game.updateStatsUI();
     if (window.ProtecAuth) window.ProtecAuth.openAuthModal();

@@ -1012,7 +1012,7 @@ window.ProtecEquipements = {
     }
     if ((mission.scale?.includes('ME') || mission.scale?.includes('GE') || (mission.requiredVolunteers && mission.requiredVolunteers >= 6)) && this.hasEquipment(game, 'lot_secours_c')) {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + 25;
-      game.showToast('⛺ Lot C Poste Fixe Déployé !', 'Tente de poste de secours et brancards de soins armés : flux de victimes parfaitement absorbé (+25 pts réputation) !', 'purple');
+      game.showToast('⛺ Lot C Poste Fixe Déployé !', 'Tente de poste de secours et brancards de soins armés : flux de victimes parfaitement absorbé !', 'purple');
     }
   },
 

@@ -25702,7 +25702,7 @@ class ProtecGame {
       repBonus += 30; // Grand bond de réputation
       this.reputation_samu = Math.min(100, (this.reputation_samu !== undefined ? this.reputation_samu : 50) + 6);
       if (typeof this.showToast === 'function') {
-        this.showToast('Félicitations Régulation 15 🌟', `Remerciements appuyés du SAMU 15 : renfort VPSP exceptionnel honoré avec brio ! Prime et bonus de réputation accordés.`, 'green');
+        this.showToast('Félicitations Régulation 15 🌟', `Remerciements appuyés du SAMU 15 : renfort VPSP exceptionnel honoré avec brio ! Prime accordée.`, 'green');
       }
     }
 
@@ -26936,11 +26936,18 @@ class ProtecGame {
     // Filtrage systématique de sécurité pour ne jamais exposer ces données dans l'interface ou les notifications.
     if (typeof message === 'string') {
       message = message
+        .replace(/\s*\([^)]*(?:r[ée]putation|r[ée]put|moral|motivation)[^)]*\)/gi, '')
+        .replace(/\s*(?:et|,|&)\s*[+\-]?\d+\s*(?:pts?|points?|%)?\s*(?:de\s*)?r[ée]put(?:ation)?\b/gi, '')
+        .replace(/[,\s•\.\-]*[+\-]?\d+\s*(?:pts?|points?|%)?\s*(?:de\s*)?r[ée]put(?:ation)?\b/gi, '')
         .replace(/([,\s•\.\-]*[+\-]?\d+\s*(?:pts?|points?|%)\s*(?:de\s*)?(?:r[ée]putation|r[ée]put|popularit[ée]|morale?|motivation|coh[ée]sion|relations?)[^,\.\)]*)/gi, '')
-        .replace(/\s*\([^\)]*(?:r[ée]putation|r[ée]put|moral|motivation)[^\)]*\)/gi, '')
         .replace(/(?:,\s*)?(?:baisse|perte)\s+(?:du\s+)?moral\s*(?:et\s*d[ée]gradation\s*de\s*la\s*r[ée]putation)?/gi, '')
         .replace(/(?:,\s*)?d[ée]gradation\s+de\s+la\s+r[ée]putation/gi, '')
+        .replace(/\s*(?:et\s+)?(?:prime\s+et\s+)?(?:bonus|gain|perte)\s+de\s+r[ée]putation/gi, '')
+        .replace(/\s*(?:et\s+)?(?:bonus|gain|perte)\s+de\s+r[ée]putation/gi, '')
+        .replace(/\s*\(\s*\)/g, '');
+      message = message
         .replace(/\s{2,}/g, ' ')
+        .replace(/\s+([!?,.])/g, '$1')
         .trim();
     }
 

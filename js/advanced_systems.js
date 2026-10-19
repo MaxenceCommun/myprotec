@@ -1175,12 +1175,12 @@ window.ProtecAdvanced = {
   // Catalogue officiel des récompenses de connexion consécutive (Cycle de 7 jours)
   streakRewardsCatalog: [
     { day: 1, title: 'Jour 1', money: 350, o2: 2, desc: '+350 € & 2 bouteilles d’Oxygène B5 de dotation', shortDesc: '350 € + 2x O2 B5', icon: '🎁' },
-    { day: 2, title: 'Jour 2', money: 500, dae: 2, rep: 15, desc: '+500 €, 2 paires d’électrodes DAE & +15 Réputation', shortDesc: '500 € + DAE + Rép.', icon: '⚡' },
+    { day: 2, title: 'Jour 2', money: 500, dae: 2, rep: 15, desc: '+500 € & 2 paires d’électrodes DAE de dotation', shortDesc: '500 € + DAE', icon: '⚡' },
     { day: 3, title: 'Jour 3', money: 650, kits: 4, desc: '+650 € & 4 trousses complètes de soins SUAP d’urgence', shortDesc: '650 € + 4x Soins SUAP', icon: '🩹' },
     { day: 4, title: 'Jour 4', money: 800, followers: 80, desc: '+800 € & +80 abonnés locaux (Notoriété & Communication)', shortDesc: '800 € + 80 Abonnés', icon: '📣' },
     { day: 5, title: 'Jour 5', money: 1000, collars: 2, desc: '+1 000 € & 2 colliers cervicaux pédiatriques & adultes', shortDesc: '1 000 € + Colliers', icon: '⭐' },
-    { day: 6, title: 'Jour 6', money: 1500, rep: 25, desc: '+1 500 € & +25 points d’Agrément Préfectoral officiel', shortDesc: '1 500 € + 25 Agrément', icon: '🎖️' },
-    { day: 7, title: 'Jour 7', money: 3500, rep: 50, o2: 4, kits: 6, desc: '🏆 GRAND BONUS FÉDÉRAL JOUR 7 : +3 500 €, dotation complète & reconnaissance fédérale !', shortDesc: '3 500 € + Grand Lot Fédéral', icon: '🏆' }
+    { day: 6, title: 'Jour 6', money: 1500, rep: 25, desc: '+1 500 € & dotation de secours pour l’antenne', shortDesc: '1 500 € + Secours', icon: '🎖️' },
+    { day: 7, title: 'Jour 7', money: 3500, rep: 50, o2: 4, kits: 6, desc: '🏆 GRAND BONUS FÉDÉRAL JOUR 7 : +3 500 € & dotation complète pour l’antenne !', shortDesc: '3 500 € + Grand Lot Fédéral', icon: '🏆' }
   ],
 
   // Helper date du jour au format ISO YYYY-MM-DD
@@ -1652,7 +1652,7 @@ window.ProtecAdvanced = {
 
     game.updateStatsUI();
     game.saveGame(true);
-    game.showToast('Objectif Accompli !', `+${task.reward} € et +${repGained} réputation versés à l’antenne !`, 'green');
+    game.showToast('Objectif Accompli !', `+${task.reward.toLocaleString('fr-FR')} € versés à l’antenne !`, 'green');
 
     // Rafraîchir la modale sans perturber l'affichage
     if (game.currentModalKey === 'recompenses' && window.ProtecAdvancedModals) {

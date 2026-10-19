@@ -1402,7 +1402,7 @@ window.ProtecFormations = {
     }
 
     game.saveGame();
-    game.showToast('Stagiaire Protection Civile Accueilli(e) 🤝', `${name} (${station}) rejoint la session au titre de la solidarité du réseau fédéral (+6 réputation).`, 'blue');
+    game.showToast('Stagiaire Protection Civile Accueilli(e) 🤝', `${name} (${station}) rejoint la session au titre de la solidarité du réseau fédéral.`, 'blue');
     this.renderModal(game);
   },
 

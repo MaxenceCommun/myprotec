@@ -453,6 +453,12 @@ window.ProtecNotifications = {
         }
         return true;
       });
+      // Assainir rétroactivement tous les messages de l'historique (retrait total de toute réputation)
+      this.history.forEach(item => {
+        if (item && item.message) {
+          item.message = this.sanitizeMessage(item.message);
+        }
+      });
       localStorage.setItem('protec_notif_history', JSON.stringify(this.history));
     } catch (e) {
       this.history = [];
@@ -936,13 +942,22 @@ window.ProtecNotifications = {
   // Enregistrement d'une notification dans l'historique
   sanitizeMessage(msg) {
     if (typeof msg !== 'string') return msg;
-    return msg
-      .replace(/([,\s•\.\-]*[+\-]?\d+\s*(?:pts?|points?|%)\s*(?:de\s*)?(?:r[ée]putation|r[ée]put|popularit[ée]|morale?|motivation|coh[ée]sion|relations?)[^,\.\)]*)/gi, '')
-      .replace(/\s*\([^\)]*(?:r[ée]putation|r[ée]put|moral|motivation)[^\)]*\)/gi, '')
-      .replace(/(?:,\s*)?(?:baisse|perte)\s+(?:du\s+)?moral\s*(?:et\s*d[ée]gradation\s*de\s*la\s*r[ée]putation)?/gi, '')
-      .replace(/(?:,\s*)?d[ée]gradation\s+de\s+la\s+r[ée]putation/gi, '')
-      .replace(/\s{2,}/g, ' ')
+    let s = msg;
+    // Supprimer d'abord les mentions complètes entre parenthèses
+    s = s.replace(/\s*\([^)]*(?:r[ée]putation|r[ée]put|moral|motivation)[^)]*\)/gi, '');
+    // Supprimer spécifiquement les gains/pertes de réputation (ex: "et +30 réputation versés à l'antenne" -> "versés à l'antenne")
+    s = s.replace(/\s*(?:et|,|&)\s*[+\-]?\d+\s*(?:pts?|points?|%)?\s*(?:de\s*)?r[ée]put(?:ation)?\b/gi, '');
+    s = s.replace(/[,\s•\.\-]*[+\-]?\d+\s*(?:pts?|points?|%)?\s*(?:de\s*)?r[ée]put(?:ation)?\b/gi, '');
+    s = s.replace(/([,\s•\.\-]*[+\-]?\d+\s*(?:pts?|points?|%)\s*(?:de\s*)?(?:r[ée]putation|r[ée]put|popularit[ée]|morale?|motivation|coh[ée]sion|relations?)[^,\.\)]*)/gi, '');
+    s = s.replace(/(?:,\s*)?(?:baisse|perte)\s+(?:du\s+)?moral\s*(?:et\s*d[ée]gradation\s*de\s*la\s*r[ée]putation)?/gi, '');
+    s = s.replace(/(?:,\s*)?d[ée]gradation\s+de\s+la\s+r[ée]putation/gi, '');
+    s = s.replace(/\s*(?:et\s+)?(?:prime\s+et\s+)?(?:bonus|gain|perte)\s+de\s+r[ée]putation/gi, '');
+    s = s.replace(/\s*(?:et\s+)?(?:bonus|gain|perte)\s+de\s+r[ée]putation/gi, '');
+    s = s.replace(/\s*\(\s*\)/g, '');
+    s = s.replace(/\s{2,}/g, ' ')
+      .replace(/\s+([!?,.])/g, '$1')
       .trim();
+    return s;
   },
 
   recordNotification(data) {
