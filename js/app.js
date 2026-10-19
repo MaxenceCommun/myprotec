@@ -10506,6 +10506,7 @@ class ProtecGame {
               if (remaining <= 0) {
                 cr.status = 'declenche';
                 cr.title = (cr.title || '').replace('[Préalerte] ', '[ALERTE ACTIVE] ');
+                cr.spawnedRealTime = now;
               }
             }
             this.missions.unshift(cr);
@@ -10538,8 +10539,7 @@ class ProtecGame {
             const base = this.stations[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', departmentCode: myDept };
             const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '', targetEnvironment: pick.targetEnvironment });
 
-            const minutesAgo = Math.min(Math.floor(offlineHours * 30), Math.floor(Math.random() * 25) + 10);
-            const spawnedTime = now - (minutesAgo * 60 * 1000);
+            const spawnedTime = now;
 
             const offlineCrisis = {
               id: `m-prealert-${spawnedTime}`,
@@ -10547,7 +10547,7 @@ class ProtecGame {
               crisisType: pick.id,
               scenarioId: pick.id,
               categoryLabel: `Veille Opérationnelle AASC - ${pick.authorityLabel}`,
-              title: `[ALERTE ACTIVE] ${pick.title}`,
+              title: `[Préalerte] ${pick.title}`,
               desc: pick.scenarioText,
               scenarioText: pick.scenarioText,
               assignedMissions: pick.assignedMissions,
@@ -10561,6 +10561,7 @@ class ProtecGame {
               durationHours: 0.8,
               isEvolutive: true,
               spawnedAt: spawnedTime,
+              spawnedRealTime: spawnedTime,
               maxResponseMinutes: 20,
               requiredVolunteers: pick.requiredVolunteers,
               requiredRanks: ['CE', 'PSE2', 'PSE1'],
@@ -10568,13 +10569,15 @@ class ProtecGame {
               rewardMoney: pick.rewardMoney,
               rewardReputation: pick.rewardReputation || 35,
               progress: 0,
-              status: 'declenche',
+              status: 'prealerte',
+              prealertSecondsLeft: 65,
+              prealertTotalSec: 65,
               alertOrigin: pick.origin,
               authority: pick.authority,
               authorityLabel: pick.authorityLabel,
               authorityBadgeBg: pick.authorityBadgeBg,
-              prealertDecisionMode: 'premobilisation',
-              preMobilisationActive: true,
+              prealertDecisionMode: 'veille_simple',
+              preMobilisationActive: false,
               registeredVolunteers: [],
               assignedCrew: { volunteers: [], vehicles: [] },
               address: this.generateRealisticStreetAddress(coords.commune || base.city || 'Paris', coords.lat, coords.lng, { title: pick.title, origin: pick.origin, desc: pick.scenarioText, targetEnvironment: pick.targetEnvironment }),
@@ -25124,30 +25127,40 @@ class ProtecGame {
         // 1b-1. Contrôle des alertes urgentes déclenchées non engagées (Carence / Expiration horaire)
         this.missions.forEach(m => {
           if (m.status === 'declenche') {
-            const spawnedTime = m.spawnedAt || (m.eventDate ? new Date(
-              m.eventDate.year || now.getFullYear(),
-              m.eventDate.month !== undefined ? m.eventDate.month : now.getMonth(),
-              m.eventDate.day || now.getDate(),
-              m.eventDate.hour || 14,
-              m.eventDate.minute || 0
-            ).getTime() : (currentTime - 1800000));
-
-            // Délai minimum garanti de 15 secondes réelles pour voir et répondre à l'alerte
+            // Initialiser le timestamp réel de réception si absent
             if (!m.spawnedRealTime) {
               m.spawnedRealTime = Date.now();
             }
-            const realElapsedSec = (Date.now() - m.spawnedRealTime) / 1000;
-            if (realElapsedSec < 15) {
-              return; // Bloque toute clôture prématurée pendant les 15 premières secondes
+
+            // IMMUNITÉ ABSOLUE : Si le joueur est activement en train d'armer son dispositif,
+            // s'il a affecté des véhicules, des bénévoles, ou s'il a le panneau de la mission ouvert
+            const hasAssignedVehicles = (Array.isArray(m.assignedVehicleIds) && m.assignedVehicleIds.length > 0) ||
+                                       (Array.isArray(m.extraTransportVehicles) && m.extraTransportVehicles.length > 0) ||
+                                       (Array.isArray(m.assignedCrew?.vehicles) && m.assignedCrew.vehicles.length > 0);
+            const hasRegisteredVols = (Array.isArray(m.registeredVolunteers) && m.registeredVolunteers.length > 0) ||
+                                     (Array.isArray(m.assignedCrew?.volunteers) && m.assignedCrew.volunteers.length > 0);
+            const hasActiveDeployments = Boolean(m.crisisTeamDeployments && Object.keys(m.crisisTeamDeployments).length > 0) ||
+                                         Boolean(m.volunteerTransit && Object.keys(m.volunteerTransit).length > 0);
+            const isPlayerArming = this.selectedMissionId === m.id;
+
+            if (hasAssignedVehicles || hasRegisteredVols || hasActiveDeployments || isPlayerArming) {
+              // Dispositif activement en cours de préparation ou d'engagement : jamais de carence !
+              return;
             }
 
-            const elapsedMinutes = (currentTime - spawnedTime) / 60000;
+            // Calcul du temps écoulé STRICTEMENT en minutes réelles depuis que le joueur a reçu l'alerte
+            const realElapsedMinutes = (Date.now() - m.spawnedRealTime) / 60000;
             const maxResponse = m.maxResponseMinutes || 25;
-            const missionDurationSec = m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 2400);
-            const isEventOverTime = (currentTime >= (spawnedTime + (missionDurationSec * 1000)));
 
-            // Si le délai maximal d'intervention est dépassé OU si l'horaire de l'événement est révolu
-            if ((elapsedMinutes > maxResponse || isEventOverTime) && !m.carenceApplied) {
+            // Bloquer toute carence tant que le délai réel maximal n'est pas écoulé
+            if (realElapsedMinutes <= maxResponse) {
+              return;
+            }
+
+            const elapsedMinutes = realElapsedMinutes;
+
+            // Si le délai maximal d'intervention est dépassé sans aucune action
+            if (elapsedMinutes > maxResponse && !m.carenceApplied) {
               m.carenceApplied = true;
               m.status = 'carence';
 
