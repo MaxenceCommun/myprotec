@@ -20219,13 +20219,8 @@ class ProtecGame {
 
     const modalDialog = modal.querySelector('.glass-panel-heavy');
     if (modalDialog) {
-      if (moduleKey === 'planning' || this.activePlanningTab === 'devis' || this.activePlanningTab === 'contrats') {
-        modalDialog.classList.remove('max-w-4xl', 'max-w-5xl', 'max-w-6xl', 'xl:max-w-7xl');
-        modalDialog.classList.add('max-w-[96vw]', '2xl:max-w-[1720px]', 'w-full');
-      } else {
-        modalDialog.classList.remove('max-w-6xl', 'xl:max-w-7xl', 'max-w-[96vw]', '2xl:max-w-[1720px]');
-        modalDialog.classList.add('max-w-4xl');
-      }
+      modalDialog.classList.remove('max-w-4xl', 'max-w-5xl', 'max-w-6xl', 'xl:max-w-7xl');
+      modalDialog.classList.add('max-w-[96vw]', '2xl:max-w-[1780px]', 'w-full', 'max-h-[94vh]');
     }
 
     if (moduleKey === 'antenne_messages' || moduleKey === 'messages') {
@@ -24520,8 +24515,8 @@ class ProtecGame {
       modal.classList.add('hidden');
       const modalDialog = modal.querySelector('.glass-panel-heavy');
       if (modalDialog) {
-        modalDialog.classList.remove('max-w-6xl', 'xl:max-w-7xl', 'max-w-[96vw]', '2xl:max-w-[1720px]');
-        modalDialog.classList.add('max-w-4xl');
+        modalDialog.classList.remove('max-w-4xl', 'max-w-5xl', 'max-w-6xl', 'xl:max-w-7xl');
+        modalDialog.classList.add('max-w-[96vw]', '2xl:max-w-[1780px]', 'w-full', 'max-h-[94vh]');
       }
     }
     const subnav = document.getElementById('modal-category-subnav');

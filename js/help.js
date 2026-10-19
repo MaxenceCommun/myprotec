@@ -140,7 +140,7 @@ window.ProtecHelp = {
     div.id = 'help-guide-modal';
     div.className = 'hidden fixed inset-0 z-[70] items-center justify-center bg-slate-950/80 backdrop-blur-xl p-3 sm:p-4 animate-in fade-in select-none';
     div.innerHTML = `
-      <div class="w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl p-5 sm:p-6 shadow-2xl relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100">
+      <div class="w-full max-w-[96vw] 2xl:max-w-[1760px] max-h-[94vh] flex flex-col rounded-3xl p-5 sm:p-6 shadow-2xl relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100">
         
         <!-- Header Principal -->
         <div class="flex items-center justify-between pb-3.5 border-b border-slate-200 dark:border-slate-800 mb-3 flex-shrink-0">

@@ -644,10 +644,22 @@ html, body {
   box-shadow: 0 20px 50px -10px rgba(0, 46, 109, 0.18), inset 0 1px 1.5px rgba(255, 255, 255, 0.95) !important;
 }
 
-/* Modales glassmorphism aérées */
-#main-modal .modal-fade-in {
-  max-width: min(920px, calc(100vw - 1.5rem));
-  max-height: min(88vh, 850px);
+/* Modales glassmorphism aérées et pleine largeur */
+#main-modal .modal-fade-in,
+#main-modal .glass-panel-heavy {
+  width: 96vw !important;
+  max-width: 1780px !important;
+  max-height: 94vh !important;
+  margin: auto !important;
+}
+
+@media (max-width: 640px) {
+  #main-modal .modal-fade-in,
+  #main-modal .glass-panel-heavy {
+    width: 98vw !important;
+    max-width: 98vw !important;
+    max-height: 94vh !important;
+  }
 }
 
 @media (min-width: 769px) {
@@ -702,7 +714,7 @@ html, body {
 
   #main-modal .modal-fade-in {
     max-width: 100vw !important;
-    max-height: 90vh !important;
+    max-height: 94vh !important;
     width: 100% !important;
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;

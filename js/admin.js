@@ -2569,7 +2569,7 @@ window.ProtecAdmin = {
     const isGestionnaireDiscord = discordRoles.includes('1561702120732758077');
 
     modalEl.innerHTML = `
-      <div class="w-full max-w-4xl rounded-3xl bg-white dark:bg-slate-900 border-2 border-purple-500/50 p-5 sm:p-6 shadow-2xl relative text-left max-h-[92vh] flex flex-col my-auto">
+      <div class="w-full max-w-[96vw] 2xl:max-w-[1780px] rounded-3xl bg-white dark:bg-slate-900 border-2 border-purple-500/50 p-5 sm:p-6 shadow-2xl relative text-left max-h-[94vh] flex flex-col my-auto">
         <!-- Header -->
         <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-3 flex-shrink-0">
           <div class="flex items-center gap-3">
@@ -3780,7 +3780,7 @@ window.ProtecAdmin = {
     div.id = 'admin-modal';
     div.className = 'hidden fixed inset-0 z-[65] items-center justify-center bg-slate-950/80 backdrop-blur-md p-2 sm:p-4 md:p-6 animate-in fade-in overflow-y-auto';
     div.innerHTML = `
-      <div class="w-full max-w-5xl rounded-3xl glass-panel-heavy border-2 border-indigo-500/50 p-4 sm:p-6 shadow-2xl relative text-left max-h-[92vh] flex flex-col my-auto">
+      <div class="w-full max-w-[96vw] 2xl:max-w-[1780px] rounded-3xl glass-panel-heavy border-2 border-indigo-500/50 p-4 sm:p-6 shadow-2xl relative text-left max-h-[94vh] flex flex-col my-auto">
         
         <!-- Header -->
         <div class="flex items-center justify-between pb-3 sm:pb-4 border-b border-slate-200/80 mb-3 sm:mb-4 flex-shrink-0">

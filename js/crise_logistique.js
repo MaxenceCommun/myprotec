@@ -4125,7 +4125,7 @@ window.ProtecCriseLogistique = {
     });
 
     return `
-      <div class="relative w-full max-w-6xl max-h-[92vh] flex flex-col rounded-3xl bg-slate-900 border border-slate-800 text-slate-100 shadow-2xl overflow-hidden">
+      <div class="relative w-full max-w-[96vw] 2xl:max-w-[1780px] max-h-[94vh] flex flex-col rounded-3xl bg-slate-900 border border-slate-800 text-slate-100 shadow-2xl overflow-hidden">
         
         <!-- ================= BANDEAU SUPÉRIEUR PC CRISE ================= -->
         <div class="p-4 sm:p-5 bg-gradient-to-r from-red-950/80 via-slate-900 to-slate-900 border-b border-red-900/40 flex flex-wrap items-center justify-between gap-4">
