@@ -409,39 +409,39 @@ window.ProtecEquipements = {
   LOTS_CATALOG: [
     {
       id: 'lot_secours_a',
-      name: 'Lot A (Secours à personne standard)',
-      lucideIcon: 'briefcase',
+      name: 'Lot A (Poste de Secours fixe & Tente)',
+      lucideIcon: 'tent',
       image: 'images/equipements/lot_secours_a.png',
-      price: 850,
-      storageSize: 1,
-      badge: 'Secours à Personne Standard',
-      badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300',
-      desc: 'Sac d’intervention complet avec oxygénothérapie d’urgence (bouteille O2 2L composite avec manodétendeur débitmètre), BAVU adulte et pédiatrique avec masques, saturomètre de pouls, tensiomètre manuel avec stéthoscope, colliers cervicaux pédiatriques et adultes réglables, garrots tourniquets, pansements compressifs hémostatiques, ciseaux Gesco et consommables de premiers soins.',
-      bonus: 'Dotation fondamentale de tout VPSP et PAPS. Améliore la rapidité de prise en charge des malaises et traumatismes et valorise la qualité du bilan secouriste.'
+      price: 1750,
+      storageSize: 3,
+      badge: 'Poste Fixe & Tente Officielle',
+      badgeColor: 'bg-orange-100 text-orange-900 border-orange-300',
+      desc: 'Tente gonflable de poste de secours officielle Protection Civile 16 m² à déploiement rapide avec sas d’accueil des victimes, rampe d’éclairage LED autonome, table de secrétariat SINUS, tabourets et poubelles DASRI étanches.',
+      bonus: 'Armement des Postes de Secours fixes pour moyens et grands dispositifs (DPS-ME, DPS-GE, festivals). Permet d’accueillir et soigner jusqu’à 6 victimes simultanément sans saturer les secours publics.'
     },
     {
       id: 'lot_secours_b',
-      name: 'Lot B (Immobilisation et relevage)',
-      lucideIcon: 'stretch-horizontal',
+      name: 'Lot B (Secours à personne standard & Sac PS)',
+      lucideIcon: 'briefcase',
       image: 'images/equipements/lot_secours_b.png',
-      price: 1250,
-      storageSize: 2,
-      badge: 'Immobilisation & Traumatologie',
-      badgeColor: 'bg-indigo-100 text-indigo-900 border-indigo-300',
-      desc: 'Matelas immobilisateur à dépression (matelas coquille homologué) avec pompe à dépression manuelle double effet, plan dur pédiatrique et adulte avec jeu complet de sangles araignée et immobilisateur de tête rigide, attelles à dépression pour membres supérieurs et inférieurs (attelles alu et dépression), chaise de transport d’escalier pliable en aluminium.',
-      bonus: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates. Prévient toute aggravation neurologique ou ostéo-articulaire et suscite les félicitations du médecin régulateur SAMU.'
+      price: 850,
+      storageSize: 1,
+      badge: 'Secours à Personne Standard',
+      badgeColor: 'bg-blue-100 text-pc-blue border-blue-300',
+      desc: 'Sac d’intervention d’urgence multipoches rouge et jaune avec bouteille O2 2L composite, manodétendeur débitmètre, BAVU adulte/pédiatrique, saturomètre de pouls, tensiomètre manuel, colliers cervicaux, garrots tourniquets et pansements compressifs hémostatiques.',
+      bonus: 'Dotation fondamentale de tout VPSP et PAPS. Améliore la rapidité de prise en charge des malaises et traumatismes et valorise la qualité du bilan secouriste.'
     },
     {
       id: 'lot_secours_c',
-      name: 'Lot C (Poste de Secours fixe / Renfort)',
-      lucideIcon: 'tent',
+      name: 'Lot C (Brancardage, relevage & immobilisation)',
+      lucideIcon: 'stretch-horizontal',
       image: 'images/equipements/lot_secours_c.png',
-      price: 1750,
-      storageSize: 3,
-      badge: 'Poste Fixe & Accueil Victimes',
-      badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
-      desc: 'Tente gonflable de poste de secours 16 m² à déploiement rapide ou barnum armé renforcé, 2 brancards de soins sur tréteaux de consultation avec porte-perfusion, rampe d’éclairage LED autonome avec batterie, paravents de confidentialité pour respect de l’intimité des victimes, table d’examen et de secrétariat SINUS, tabourets d’auscultation pliables et poubelles DASRI étanches.',
-      bonus: 'Armement des Postes de Secours fixes pour grands dispositifs (DPS-ME, DPS-GE, festivals). Permet de soigner jusqu’à 6 victimes simultanément sans saturer les secours publics.'
+      price: 1250,
+      storageSize: 2,
+      badge: 'Immobilisation & Brancardage',
+      badgeColor: 'bg-slate-200 text-slate-800 border-slate-300',
+      desc: 'Sac d’intervention complet avec brancard de relevage pliant renforcé, matelas immobilisateur à dépression avec pompe, plan dur pédiatrique/adulte, sangles araignée, attelles de membre et chaise de transport.',
+      bonus: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates. Prévient toute aggravation neurologique ou ostéo-articulaire et suscite les félicitations du médecin régulateur SAMU.'
     },
     {
       id: 'lot_tronconnage',
