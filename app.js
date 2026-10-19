@@ -6442,6 +6442,7 @@ class ProtecGame {
     let needsPS = false;
     let reqPSCount = 0;
     let reqLogKits = 0;
+    let logKitNames = [];
     let reqSeats = mission.requiredVolunteers || (scale.includes('GE') ? 12 : scale.includes('ME') ? 8 : 4);
     let needsHR = false;
     let needsDrone = false;
@@ -6460,22 +6461,31 @@ class ProtecGame {
         if (mission.requiredAssets.drone) needsDrone = true;
         if (mission.requiredAssets.cyno > 0) needsCyno = true;
         reqLogKits = mission.requiredAssets.vtu || (mission.requiredAssets.chu_places > 0 ? 2 : 1);
+        if (mission.requiredAssets.chu_places > 0) {
+          logKitNames = ['Kit Hébergement Urgence', 'Kit Accueil Sinistrés'];
+        } else {
+          logKitNames = ['Lot Matériel Logistique & Intervention'];
+        }
       } else {
         if (title.includes('recherche')) {
           needsPS = false; // Pas d'ambulance obligatoire au départ d'une recherche pédestre
           reqLogKits = 1;  // 1 kit matériel de recherche & éclairage (transportable dans n'importe quel véhicule LOG)
+          logKitNames = ['Lot Recherche & Éclairage Nocturne'];
           needsDrone = desc.includes('drone');
           needsCyno = desc.includes('cyno') || desc.includes('chien');
         } else if (title.includes('crue') || title.includes('inondation')) {
           needsPS = true;
           reqPSCount = 1;
           reqLogKits = 2; // Kit pompage + kit accueil
+          logKitNames = ['Lot Pompage & Assèchement', 'Kit Accueil Sinistrés'];
         } else if (title.includes('novi') || title.includes('carambolage') || title.includes('attentat')) {
           needsPS = true;
           reqPSCount = 2;
           reqLogKits = 1; // Lot PMA
+          logKitNames = ['Lot PMA (Poste Médical Avancé)'];
         } else {
           reqLogKits = 1;
+          logKitNames = ['Lot Matériel Logistique & Abri'];
         }
       }
     } else {
@@ -6490,13 +6500,20 @@ class ProtecGame {
         needsPS = true;
         reqPSCount = Math.max(reqPSCount, 2);
         reqLogKits = Math.max(reqLogKits, 2); // Lot A + Lot B
+        logKitNames = ['Lot A (Secours & Réanimation)', 'Lot B (Brancardage & Immobilisation)'];
       } else if (scale.includes('ME')) {
         needsPS = true;
         reqPSCount = Math.max(reqPSCount, 1);
         reqLogKits = Math.max(reqLogKits, 1); // Lot A
+        logKitNames = ['Lot A (Secours & Premiers Soins)'];
       } else if (scale.includes('PE')) {
         needsPS = true;
         reqPSCount = Math.max(reqPSCount, 1);
+        if (reqLogKits > 0) {
+          logKitNames = ['Lot A (Secours d’Urgence)'];
+        }
+      } else if (reqLogKits > 0 && logKitNames.length === 0) {
+        logKitNames = ['Lot Matériel DPS'];
       }
     }
 
@@ -6506,6 +6523,8 @@ class ProtecGame {
       needsPS,
       reqPSCount,
       reqLogKits,
+      logKitNames,
+      logKitDetail: logKitNames.join(' + '),
       reqSeats,
       needsHR,
       needsDrone,
@@ -15738,8 +15757,8 @@ class ProtecGame {
                             <div class="flex items-center gap-2.5 min-w-0">
                               <span class="text-xl shrink-0">📦</span>
                               <div class="min-w-0">
-                                <div class="text-xs font-black truncate">Kits & Matériel (LOG)</div>
-                                <div class="text-[10px] font-semibold text-slate-600">${needs.reqLogKits} kit(s) requis (1 véhicule LOG de 6 slots transporte l'ensemble)</div>
+                                <div class="text-xs font-black truncate">Kits & Matériel (LOG) : <span class="font-bold text-amber-800 dark:text-amber-300">${needs.logKitDetail || `${needs.reqLogKits} kit(s)`}</span></div>
+                                <div class="text-[10px] font-semibold text-slate-600 dark:text-slate-400">${needs.reqLogKits} lot(s) à transporter • 1 véhicule LOG (ex: VTU de 6 slots) transporte l'ensemble</div>
                               </div>
                             </div>
                             <div class="shrink-0">
