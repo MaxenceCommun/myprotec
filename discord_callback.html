@@ -97,11 +97,13 @@
         }
       }
 
-      // Cas 2 : Code d'autorisation reçu (Authorization Code Flow si backend local disponible)
+      // Cas 2 : Code d'autorisation reçu (Authorization Code Flow si backend disponible)
       if (!discordUser && code) {
         try {
           const redirectUri = window.location.origin + window.location.pathname;
-          const res = await fetch('/api/auth/discord/exchange', {
+          const apiBase = (window.opener && window.opener.ProtecAPI && window.opener.ProtecAPI.API_URL) ? window.opener.ProtecAPI.API_URL : '';
+          const exchangeUrl = apiBase ? `${apiBase}/api/auth/discord/exchange` : '/api/auth/discord/exchange';
+          const res = await fetch(exchangeUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code, redirectUri })
@@ -143,6 +145,7 @@
           discriminator: discordUser.discriminator,
           roles: discordRoles,
           inGuild: inGuild,
+          accessToken: accessToken || null,
           linkedAt: new Date().toISOString()
         };
 

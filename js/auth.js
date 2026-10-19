@@ -10,6 +10,22 @@ window.ProtecAuth = {
     clientId: '1559698958966857788'
   },
 
+  getApiUrl(endpoint) {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const apiBase = (window.ProtecAPI && window.ProtecAPI.API_URL) ? window.ProtecAPI.API_URL : (window.API_URL || '');
+    if (!apiBase) return cleanEndpoint;
+    return `${apiBase.replace(/\/+$/, '')}${cleanEndpoint}`;
+  },
+
+  getAuthHeaders() {
+    const token = this.token || localStorage.getItem('protec_auth_token') || '';
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  },
+
   init(game = null) {
     this.token = localStorage.getItem('protec_auth_token') || null;
     this.currentUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
@@ -32,6 +48,8 @@ window.ProtecAuth = {
               targetGame.player.id = user.id;
               targetGame.player.name = user.username;
               targetGame.player.role = user.role || 'user';
+              targetGame.player.isAdmin = (user.role === 'admin' || !!user.isAdmin);
+              targetGame.player.isGestionnaire = (user.role === 'gestionnaire' || !!user.isGestionnaire);
               targetGame.player.discord = user.discord || null;
             }
             if (typeof targetGame.showToast === 'function') {
@@ -671,7 +689,8 @@ window.ProtecAuth = {
   // Échange de code OAuth Discord en direct
   async exchangeDiscordCode(code, redirectUri, game = null) {
     try {
-      const res = await fetch('/api/auth/discord/exchange', {
+      const exchangeUrl = this.getApiUrl('/api/auth/discord/exchange');
+      const res = await fetch(exchangeUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, redirectUri, existingUserId: this.currentUser?.id })
@@ -690,6 +709,8 @@ window.ProtecAuth = {
             targetGame.player.id = data.user.id;
             targetGame.player.name = data.user.username;
             targetGame.player.role = data.user.role || 'user';
+            targetGame.player.isAdmin = (data.user.role === 'admin' || !!data.user.isAdmin);
+            targetGame.player.isGestionnaire = (data.user.role === 'gestionnaire' || !!data.user.isGestionnaire);
             targetGame.player.discord = data.user.discord || null;
           }
           if (typeof targetGame.showToast === 'function') {
@@ -703,6 +724,8 @@ window.ProtecAuth = {
           try {
             const isUUID = typeof data.user.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.user.id);
             let q = window.ProtecSupabase.client.from('players').update({
+              role: data.user.role,
+              is_admin: !!data.user.isAdmin,
               discord: data.user.discord,
               discord_id: data.user.discord.id || null
             });
@@ -735,12 +758,10 @@ window.ProtecAuth = {
         else q = q.eq('username', this.currentUser.username);
         await q;
       }
-      await fetch('/api/auth/discord/unlink', {
+      const unlinkUrl = this.getApiUrl('/api/auth/discord/unlink');
+      await fetch(unlinkUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.token}`
-        }
+        headers: this.getAuthHeaders()
       }).catch(() => null);
     } catch (e) {
       console.warn('Erreur unlink Discord:', e);
@@ -762,37 +783,149 @@ window.ProtecAuth = {
     const targetGame = game || window.game;
     try {
       if (targetGame?.showToast) targetGame.showToast('Synchronisation...', 'Vérification de vos rôles sur le serveur Discord officiel...', 'blue');
-      
-      const res = await fetch('/api/auth/discord/sync-roles', {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify({ userId: this.currentUser.id, discordId: this.currentUser.discord?.id })
-      });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.user) {
-          this.currentUser = { ...this.currentUser, ...data.user };
-          localStorage.setItem('protec_user', JSON.stringify(this.currentUser));
-          if (targetGame && targetGame.player) {
-            targetGame.player.role = data.user.role;
-            targetGame.player.isAdmin = !!data.user.isAdmin;
-            targetGame.player.isGestionnaire = !!data.user.isGestionnaire;
-            targetGame.player.discord = data.user.discord;
+      const discordId = this.currentUser.discord?.id || null;
+      const accessToken = this.currentUser.discord?.accessToken || null;
+      const payload = {
+        userId: this.currentUser.id,
+        discordId: discordId,
+        accessToken: accessToken
+      };
+
+      let syncSuccess = false;
+      let userData = null;
+
+      // 1. Essai via le backend officiel (HTTPS api.myprotec.fr ou relatif)
+      const primaryUrl = this.getApiUrl('/api/auth/discord/sync-roles');
+      try {
+        const res = await fetch(primaryUrl, {
+          method: 'POST',
+          headers: this.getAuthHeaders(),
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.user) {
+            syncSuccess = true;
+            userData = data.user;
           }
-          this.updateHeaderUI();
-          this.renderModalContent('profile');
-          const roleLabel = data.user.role === 'admin' ? '👑 Administrateur' : (data.user.role === 'gestionnaire' ? '🛡️ Gestionnaire Fédéral' : 'Directeur Standard');
-          if (targetGame?.showToast) {
-            targetGame.showToast('Rôles Discord Synchronisés', `Votre compte est configuré avec le statut : ${roleLabel}.`, 'green');
+        }
+      } catch (backendErr) {
+        console.warn('Tentative backend sync-roles échouée:', backendErr);
+      }
+
+      // 2. Si le backend primaire a échoué et que primaryUrl était absolue, repli en chemin relatif
+      if (!syncSuccess && primaryUrl.startsWith('http')) {
+        try {
+          const resRel = await fetch('/api/auth/discord/sync-roles', {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify(payload)
+          });
+          if (resRel.ok) {
+            const dataRel = await resRel.json();
+            if (dataRel && dataRel.success && dataRel.user) {
+              syncSuccess = true;
+              userData = dataRel.user;
+            }
           }
-          return;
+        } catch (relErr) {
+          console.warn('Tentative relative sync-roles échouée:', relErr);
         }
       }
+
+      // 3. Repli côté client direct si on dispose d'un accessToken Discord
+      if (!syncSuccess && accessToken) {
+        try {
+          const guildRes = await fetch('https://discord.com/api/v10/users/@me/guilds/1480571890543235122/member', {
+            headers: { Authorization: `Bearer ${accessToken}` }
+          });
+          if (guildRes.ok) {
+            const memberData = await guildRes.json();
+            const roles = Array.isArray(memberData.roles) ? memberData.roles : [];
+            let computedRole = 'user';
+            if (roles.includes('1561701759733465128')) {
+              computedRole = 'admin';
+            } else if (roles.includes('1561702120732758077')) {
+              computedRole = 'gestionnaire';
+            } else if (this.currentUser.role === 'admin' && !discordId) {
+              computedRole = 'admin';
+            }
+
+            userData = {
+              ...this.currentUser,
+              role: computedRole,
+              isAdmin: (computedRole === 'admin'),
+              isGestionnaire: (computedRole === 'gestionnaire'),
+              discord: {
+                ...(this.currentUser.discord || {}),
+                roles: roles,
+                inGuild: true,
+                rolesSyncedAt: new Date().toISOString()
+              }
+            };
+            syncSuccess = true;
+          }
+        } catch (clientDcErr) {
+          console.warn('Vérification directe Discord échouée:', clientDcErr);
+        }
+      }
+
+      // Si la synchronisation a abouti (via serveur ou client direct)
+      if (syncSuccess && userData) {
+        this.currentUser = { ...this.currentUser, ...userData };
+        localStorage.setItem('protec_user', JSON.stringify(this.currentUser));
+        if (targetGame && targetGame.player) {
+          targetGame.player.role = userData.role;
+          targetGame.player.isAdmin = !!userData.isAdmin;
+          targetGame.player.isGestionnaire = !!userData.isGestionnaire;
+          targetGame.player.discord = userData.discord;
+        }
+
+        // Persistance Supabase si connecté
+        if (window.ProtecSupabase && window.ProtecSupabase.client && this.currentUser.discord) {
+          try {
+            const isUUID = typeof this.currentUser.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(this.currentUser.id);
+            let q = window.ProtecSupabase.client.from('players').update({
+              role: this.currentUser.role,
+              is_admin: !!this.currentUser.isAdmin,
+              discord: this.currentUser.discord,
+              discord_id: this.currentUser.discord.id || null
+            });
+            if (isUUID) q = q.eq('id', this.currentUser.id);
+            else q = q.eq('username', this.currentUser.username);
+            await q;
+          } catch (supaErr) {
+            console.warn('Erreur update Supabase sync roles:', supaErr);
+          }
+        }
+
+        this.updateHeaderUI();
+        this.renderModalContent('profile');
+        const roleLabel = userData.role === 'admin' ? '👑 Administrateur' : (userData.role === 'gestionnaire' ? '🛡️ Gestionnaire Fédéral' : 'Directeur Standard');
+        if (targetGame?.showToast) {
+          targetGame.showToast('Rôles Discord Synchronisés', `Votre compte est configuré avec le statut : ${roleLabel}.`, 'green');
+        }
+        return;
+      }
+
+      // 4. Si la vérification a échoué (token expiré ou serveur distant indisponible) : relance transparente de la liaison
+      if (this.currentUser.discord) {
+        if (targetGame?.showToast) {
+          targetGame.showToast('Actualisation Discord', 'Ouverture de la fenêtre de validation Discord pour mettre à jour vos rôles...', 'blue');
+        }
+        this.loginWithDiscord('link');
+        return;
+      }
+
       if (targetGame?.showToast) targetGame.showToast('Vérification Discord', 'Vos rôles Discord sont déjà à jour.', 'blue');
     } catch (e) {
       console.warn('Erreur syncDiscordRoles:', e);
-      if (targetGame?.showToast) targetGame.showToast('Erreur', 'Impossible de contacter le serveur de synchronisation Discord.', 'red');
+      if (this.currentUser?.discord) {
+        this.loginWithDiscord('link');
+      } else if (targetGame?.showToast) {
+        targetGame.showToast('Erreur', 'Impossible de contacter le serveur de synchronisation Discord.', 'red');
+      }
     }
   },
 
