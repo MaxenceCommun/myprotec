@@ -3227,7 +3227,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 3, ranks: ['CE', 'PSE2', 'PSE1'], vehicles: ['VPSP'] },
                 progression: 0,
-                duree_estimee_sec: 180
+                duree_estimee_sec: 1800
               },
               {
                 id: 'sub_noria_vpsp_2',
@@ -3236,7 +3236,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 3, ranks: ['PSE2', 'PSE1', 'PSE1'], vehicles: ['VPSP'] },
                 progression: 0,
-                duree_estimee_sec: 200
+                duree_estimee_sec: 2100
               }
             ]
           },
@@ -3253,7 +3253,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 4, ranks: ['CD', 'PSE2', 'PSE1'], vehicles: ['VTU'], specialite_requise: 'aep' },
                 progression: 0,
-                duree_estimee_sec: 240
+                duree_estimee_sec: 2400
               }
             ]
           },
@@ -3270,7 +3270,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 2, ranks: ['PSE1'], vehicles: ['VL'] },
                 progression: 0,
-                duree_estimee_sec: 150
+                duree_estimee_sec: 1500
               }
             ]
           }
@@ -3300,7 +3300,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 2, ranks: ['CD', 'CE'], vehicles: ['PCM', 'VL'] },
                 progression: 0,
-                duree_estimee_sec: 160
+                duree_estimee_sec: 1800
               },
               {
                 id: 'sub_battue_ligne',
@@ -3309,7 +3309,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 4, ranks: ['PSE2', 'PSE1', 'Secouriste'], vehicles: ['VLTT', 'VTU'] },
                 progression: 0,
-                duree_estimee_sec: 210
+                duree_estimee_sec: 2100
               }
             ]
           },
@@ -3326,7 +3326,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 2, ranks: ['CE', 'PSE2'], vehicles: ['VTD', 'VL'], specialite_requise: 'drone' },
                 progression: 0,
-                duree_estimee_sec: 190
+                duree_estimee_sec: 2000
               },
               {
                 id: 'sub_equipe_cyno',
@@ -3335,7 +3335,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 2, ranks: ['PSE2', 'PSE1'], vehicles: ['VCYN', 'VLTT'], specialite_requise: 'cynotechnie' },
                 progression: 0,
-                duree_estimee_sec: 180
+                duree_estimee_sec: 1900
               }
             ]
           },
@@ -3352,7 +3352,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 3, ranks: ['CE', 'PSE2', 'PSE1'], vehicles: ['VPSP'] },
                 progression: 0,
-                duree_estimee_sec: 170
+                duree_estimee_sec: 1600
               }
             ]
           }
@@ -3382,7 +3382,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 3, ranks: ['CE', 'PSE2', 'PSE1'], vehicles: ['VPSP'] },
                 progression: 0,
-                duree_estimee_sec: 220
+                duree_estimee_sec: 2400
               }
             ]
           },
@@ -3399,7 +3399,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 3, ranks: ['PSE2', 'PSE2', 'PSE1'], vehicles: ['VPSP'] },
                 progression: 0,
-                duree_estimee_sec: 240
+                duree_estimee_sec: 2400
               }
             ]
           },
@@ -3416,7 +3416,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 2, ranks: ['PSE1'], vehicles: ['VPSP'] },
                 progression: 0,
-                duree_estimee_sec: 140
+                duree_estimee_sec: 1500
               }
             ]
           }
@@ -3446,7 +3446,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 3, ranks: ['CE', 'PSE2', 'PSE1'], vehicles: ['VPSP'] },
                 progression: 0,
-                duree_estimee_sec: 200
+                duree_estimee_sec: 2100
               }
             ]
           },
@@ -3463,7 +3463,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 2, ranks: ['PSE2', 'PSE1'], vehicles: ['VTU'] },
                 progression: 0,
-                duree_estimee_sec: 190
+                duree_estimee_sec: 2200
               }
             ]
           },
@@ -3480,7 +3480,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 2, ranks: ['CE'], vehicles: ['VL'] },
                 progression: 0,
-                duree_estimee_sec: 120
+                duree_estimee_sec: 1400
               }
             ]
           }
@@ -3510,7 +3510,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 4, ranks: ['CE', 'PSE2', 'PSE1', 'Secouriste'], vehicles: ['VTU'] },
                 progression: 0,
-                duree_estimee_sec: 200
+                duree_estimee_sec: 2100
               }
             ]
           },
@@ -3527,7 +3527,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 3, ranks: ['PSE2', 'PSE1', 'Secouriste'], vehicles: ['VTU'] },
                 progression: 0,
-                duree_estimee_sec: 220
+                duree_estimee_sec: 2400
               },
               {
                 id: 'sub_ravitaillement_chaud',
@@ -3536,7 +3536,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 2, ranks: ['PSE1', 'Secouriste'], vehicles: ['VL'] },
                 progression: 0,
-                duree_estimee_sec: 180
+                duree_estimee_sec: 1900
               }
             ]
           },
@@ -3553,7 +3553,7 @@ window.ProtecCriseLogistique = {
                 statut: 'en_attente',
                 moyens_requis: { vols_count: 3, ranks: ['PSE1', 'Secouriste', 'Secouriste'], vehicles: ['VTU'] },
                 progression: 0,
-                duree_estimee_sec: 150
+                duree_estimee_sec: 1500
               }
             ]
           }
@@ -3591,23 +3591,29 @@ window.ProtecCriseLogistique = {
         if (sub.statut === 'en_cours') {
           // Incrémenter la progression en fonction du temps
           const speedMultiplier = (game.simSpeed || 1);
-          const totalDuration = (sub.duree_estimee_sec || 180);
+          const totalDuration = (sub.duree_estimee_sec || 1800);
           const stepIncrement = (100 / totalDuration) * speedMultiplier;
 
           sub.progression = Math.min(100, (sub.progression || 0) + stepIncrement);
 
           // Impact physiologique sur le personnel engagé (fatigue et moral)
+          // RÈGLE : Il faut 1 à 3 jours continus sans repos pour atteindre 100% de fatigue (24h à 72h).
           if (sub.assignedCrew && Array.isArray(sub.assignedCrew.volunteers)) {
             sub.assignedCrew.volunteers.forEach(vId => {
               const vol = (game.volunteers || []).find(v => v.id === vId);
               if (vol) {
-                // Fatigue augmente (+0.1 par tick)
-                vol.fatigue = Math.min(100, (vol.fatigue || 10) + (0.15 * speedMultiplier));
+                // Base : ~48h d'intervention continue pour atteindre 100% (soit ~2% par heure)
+                let hoursToFullFatigue = 48;
+                if (vol.trait === 'sportif' || vol.profileType === 'actif_sportif') hoursToFullFatigue = 72; // 3 jours
+                else if (vol.trait === 'retraite' || vol.trait === 'fragile') hoursToFullFatigue = 28; // ~1 jour
+                
+                const fatiguePerSec = (100 / (hoursToFullFatigue * 3600)) * speedMultiplier;
+                vol.fatigue = Math.min(100, (vol.fatigue || 5) + fatiguePerSec);
                 vol.energy = Math.max(0, 100 - vol.fatigue);
 
-                // Moral : baisse légère si fatigue > 70
-                if (vol.fatigue > 70) {
-                  vol.moral = Math.max(10, (vol.moral || 80) - (0.05 * speedMultiplier));
+                // Moral : baisse très douce uniquement si fatigue très élevée (> 80%) sans relève
+                if (vol.fatigue > 80) {
+                  vol.moral = Math.max(10, (vol.moral || 85) - (0.0002 * speedMultiplier));
                 }
               }
             });

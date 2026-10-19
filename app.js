@@ -1810,6 +1810,11 @@ class ProtecGame {
         }), true);
       }
 
+      // Enregistrement du timestamp réel pour le rattrapage asynchrone 24/24
+      try {
+        localStorage.setItem('protec_last_saved_at', String(Date.now()));
+      } catch (tsErr) {}
+
       // 3. La sauvegarde est transmise directement et fidèlement à la BDD
       if (window.ProtecAuth && window.ProtecAuth.debouncedSaveToDatabase) {
         window.ProtecAuth.debouncedSaveToDatabase(this, forceInstant);
@@ -2084,10 +2089,161 @@ class ProtecGame {
           const isOngoing = (this.missions || []).some(m => m.status === 'ongoing' && (m.assignedCrew?.volunteers || []).some(v => (v.id || v) === vol.id));
           if (!isOngoing) {
             vol.status = 'dispo';
-            vol.transitVehicleId = null;
           }
         }
       });
+    }
+
+    // Simulation asynchrone hors-ligne 24/24 si une sauvegarde antérieure existe
+    try {
+      const lastSavedTs = Number(localStorage.getItem('protec_last_saved_at')) || 0;
+      if (lastSavedTs > 0) {
+        const elapsedSec = (Date.now() - lastSavedTs) / 1000;
+        if (elapsedSec >= 60) {
+          this.simulateOfflineCatchup(elapsedSec);
+        }
+      }
+    } catch (e) {}
+  }
+
+  // SIMULATION ASYNCHRONE DE LA VIE DE L'ANTENNE 24/24 (JEU EN CONTINU HORS-LIGNE)
+  // Règle : Les missions et devis ne doivent pas être générés uniquement quand le joueur est connecté.
+  // L'antenne vit 24h/24 : les missions en cours avancent, les organisateurs déposent des devis via le site,
+  // et les bénévoles s'inscrivent spontanément sur les plannings.
+  simulateOfflineCatchup(elapsedSeconds) {
+    if (!elapsedSeconds || elapsedSeconds < 60) return;
+    if (!this.stations || this.stations.length === 0) return;
+
+    // Plafonner la simulation à 48h (172 800 secondes) pour éviter tout débordement
+    const cappedSeconds = Math.min(172800, elapsedSeconds);
+    const elapsedHours = (cappedSeconds / 3600);
+    const hoursFormatted = elapsedHours >= 1 
+      ? `${Math.floor(elapsedHours)}h ${Math.round((elapsedHours % 1) * 60)}min` 
+      : `${Math.round(cappedSeconds / 60)} minutes`;
+
+    let missionsCompletedCount = 0;
+    let revenueEarned = 0;
+    let devisReceivedCount = 0;
+    let volunteersRegisteredCount = 0;
+
+    // 1. Progression des missions en cours (ongoing)
+    if (Array.isArray(this.missions)) {
+      this.missions.forEach(m => {
+        if (m.status === 'ongoing') {
+          const totalDur = (m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 7200));
+          const progGain = (cappedSeconds / totalDur) * 100;
+          m.progress = Math.min(100, (m.progress || 0) + progGain);
+
+          if (m.progress >= 100) {
+            m.status = 'completed';
+            missionsCompletedCount++;
+            const rev = Number(m.rewardMoney) || 300;
+            revenueEarned += rev;
+            if (this.resources) {
+              this.resources.money = (this.resources.money || 0) + rev;
+              this.resources.reputationScore = (this.resources.reputationScore || 0) + (m.rewardReputation || 20);
+            }
+
+            // Libération des véhicules et bénévoles
+            if (m.assignedCrew?.vehicles && Array.isArray(this.vehicles)) {
+              m.assignedCrew.vehicles.forEach(vRef => {
+                const vId = vRef.id || vRef;
+                const v = this.vehicles.find(veh => veh.id === vId);
+                if (v) {
+                  v.status = 'dispo';
+                  v.needsRearming = true;
+                }
+              });
+            }
+            if (m.assignedCrew?.volunteers && Array.isArray(this.volunteers)) {
+              m.assignedCrew.volunteers.forEach(volRef => {
+                const volId = volRef.id || volRef;
+                const vol = this.volunteers.find(v => v.id === volId);
+                if (vol) {
+                  vol.status = 'dispo';
+                  vol.isBusy = false;
+                  vol.currentMissionId = null;
+                  vol.completedMissionsCount = (vol.completedMissionsCount || 0) + 1;
+                }
+              });
+            }
+          }
+        }
+      });
+    }
+
+    // 2. Inscriptions spontanées des bénévoles aux postes planifiés pendant l'absence
+    if (Array.isArray(this.missions) && Array.isArray(this.volunteers)) {
+      this.missions.forEach(m => {
+        if (m.status === 'planifie') {
+          const reqCount = m.requiredVolunteers || 1;
+          if (!m.registeredVolunteers) m.registeredVolunteers = [];
+          
+          if (m.registeredVolunteers.length < reqCount) {
+            const candidates = this.volunteers.filter(vol => this.canVolunteerRegisterForMission(vol, m));
+            const spotsLeft = reqCount - m.registeredVolunteers.length;
+            const takeCount = Math.min(spotsLeft, Math.max(1, Math.floor(Math.random() * (candidates.length + 1))));
+
+            for (let i = 0; i < takeCount; i++) {
+              const c = candidates[i];
+              if (c && !m.registeredVolunteers.includes(c.id)) {
+                m.registeredVolunteers.push(c.id);
+                volunteersRegisteredCount++;
+              }
+            }
+            if (m.registeredVolunteers.length >= reqCount) {
+              m.isFull = true;
+            }
+          }
+        }
+      });
+    }
+
+    // 3. Arrivée de nouveaux devis DPS selon l'état du site internet et la réputation (24/24)
+    const siteFreshness = this.antenneWebsite?.freshness ?? 85;
+    const pendingCount = (this.devis || []).filter(d => d.status === 'pending').length;
+    const maxPending = this.getSimultaneousDevisLimit ? this.getSimultaneousDevisLimit() : 4;
+
+    if (pendingCount < maxPending && siteFreshness >= 40) {
+      const potentialQuotes = Math.min(maxPending - pendingCount, Math.floor(elapsedHours / 3.5) + (Math.random() < 0.7 ? 1 : 0));
+      for (let q = 0; q < potentialQuotes; q++) {
+        if (window.ProtecDPSGenerator && typeof window.ProtecDPSGenerator.generateDPSWithOSMLocation === 'function') {
+          window.ProtecDPSGenerator.generateDPSWithOSMLocation(this).then(d => {
+            if (d && (this.devis || []).filter(item => item.status === 'pending').length < maxPending) {
+              this.devis.push(d);
+              this.saveGame();
+              if (this.renderMissions) this.renderMissions();
+            }
+          }).catch(() => {});
+          devisReceivedCount++;
+        }
+      }
+    }
+
+    // 4. Décroissance de la fraîcheur du site web pendant l'absence (sauf si salarié délégué)
+    if (this.antenneWebsite) {
+      if (!this.antenneWebsite.autoPilotSalarieId) {
+        const decay = Math.min(45, Math.floor(elapsedHours * 1.2));
+        this.antenneWebsite.freshness = Math.max(15, (this.antenneWebsite.freshness || 90) - decay);
+      } else {
+        this.antenneWebsite.freshness = 100;
+      }
+    }
+
+    // 5. Inscriptions spontanées aux formations internes ouvertes au planning
+    if (window.ProtecFormations && typeof window.ProtecFormations.processVolunteerSpontaneousFormationRegistrations === 'function') {
+      window.ProtecFormations.processVolunteerSpontaneousFormationRegistrations(this);
+    }
+
+    // 6. Rapport immersif d'activité 24/24 présenté au joueur
+    if (missionsCompletedCount > 0 || devisReceivedCount > 0 || volunteersRegisteredCount > 0) {
+      setTimeout(() => {
+        this.showToast(
+          '🌙 Activité 24/24 de l’Antenne',
+          `Pendant votre absence (${hoursFormatted}) : ${missionsCompletedCount} mission(s) terminée(s) (+${revenueEarned} €), ${devisReceivedCount} nouveau(x) devis DPS reçu(s) en ligne, ${volunteersRegisteredCount} bénévole(s) inscrit(s) au planning !`,
+          'blue'
+        );
+      }, 1500);
     }
   }
 
@@ -3916,15 +4072,29 @@ class ProtecGame {
       targetCommune = nearby.length > 0 ? nearby[Math.floor(Math.random() * nearby.length)] : communes[0];
     } else if (missionType === 'dps') {
       // 4. Dispositif Prévisionnel de Secours (DPS)
-      const roll = Math.random();
-      const maxDist = roll < 0.60 ? 10.0 : (roll < 0.85 ? 20.0 : 35.0);
-      const candidates = communes.filter(c => {
-        const d = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+      // Élargi à tout le département, à condition qu'aucune autre antenne ne soit plus proche de cette commune que base
+      const eligibleCommunes = communes.filter(c => {
+        let bestDist = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
           ? window.ProtecDepartements.calculateDistance(base.lat, base.lng, c.lat, c.lng)
           : Math.hypot((c.lat - base.lat) * 111, (c.lng - base.lng) * 75);
-        return d <= maxDist;
+        let closestStationId = base.id;
+
+        for (const st of stationsInDept) {
+          if (st.id === base.id) continue;
+          const dist = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+            ? window.ProtecDepartements.calculateDistance(st.lat, st.lng, c.lat, c.lng)
+            : Math.hypot((c.lat - st.lat) * 111, (c.lng - st.lng) * 75);
+          if (dist < bestDist) {
+            bestDist = dist;
+            closestStationId = st.id;
+          }
+        }
+        return closestStationId === base.id;
       });
-      targetCommune = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : communes[0];
+
+      targetCommune = eligibleCommunes.length > 0
+        ? eligibleCommunes[Math.floor(Math.random() * eligibleCommunes.length)]
+        : communes[0];
     } else {
       // Crises, météo, plans d'urgence
       targetCommune = communes[Math.floor(Math.random() * communes.length)] || communes[0];
@@ -7338,7 +7508,8 @@ class ProtecGame {
       isUnderdimensioned: !!(devis.isUnderdimensioned || (devis.complianceAudit && !devis.complianceAudit.isConforme) || (volsCount < (devis.hiddenMinVolunteers || 4))),
       progress: 0,
       status: 'planifie',
-      registeredVolunteers: [...previDispoIds], // Inscription automatique directe des bénévoles disponibles
+      registeredVolunteers: [], // Diffusion progressive au planning selon disponibilité et distance
+      publishedAt: Date.now(),
       mealsProvidedByOrganizer: devis.mealsProvidedByOrganizer !== undefined ? devis.mealsProvidedByOrganizer : (Math.random() < 0.5),
       servedMeals: {},
       sollicitationSent: true, // Statut sollicité
@@ -7348,28 +7519,12 @@ class ProtecGame {
       isSector: false
     };
 
-    // Journalisation automatique des convocations et ordres de mission dans la messagerie interne
-    if (previDispoIds.length > 0 && window.ProtecMessaging?.logInternalMessage) {
-      previDispoIds.forEach(vId => {
-        const v = (this.volunteers || []).find(vol => vol.id === vId);
-        if (v) {
-          window.ProtecMessaging.logInternalMessage(this, {
-            missionId: newMission.id,
-            missionTitle: newMission.title,
-            type: 'convocation',
-            senderName: 'Pôle Opérationnel',
-            recipientName: `${v.name} (${v.rank})`,
-            text: `📋 Ordre de Mission Officiel : Convocation confirmée pour ${v.name} sur le DPS « ${newMission.title} » (Disponibilité prévisionnelle validée).`
-          });
-        }
-      });
-
-      this.showToast(
-        'Affectation Automatique 📋',
-        `${previDispoIds.length} bénévole(s) disponible(s) en prévisionnel inscrit(s) d'office au poste !`,
-        'green'
-      );
-    }
+    // Information diffusée au planning : les bénévoles s'inscriront au fil de l'eau
+    this.showToast(
+      'DPS Publié au Planning 📋',
+      `« ${newMission.title} » est désormais planifié. L'information se diffuse auprès des bénévoles disponibles.`,
+      'blue'
+    );
 
     this.enrichMissionLocationWithCity(newMission);
     this.missions.push(newMission);
@@ -7534,39 +7689,74 @@ class ProtecGame {
       const reqCount = mission.requiredVolunteers || 1;
       if (regCount >= reqCount) return;
 
+      // 1. Délai de diffusion de l'information auprès des bénévoles
+      const now = Date.now();
+      if (!mission.publishedAt) mission.publishedAt = now;
+
+      // Calcul de la distance kilométrique de l'antenne au DPS
+      let distKm = 5;
+      const baseStation = (this.stations && this.stations[0]) || null;
+      if (baseStation && mission.lat && mission.lng) {
+        if (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function') {
+          distKm = window.ProtecDepartements.calculateDistance(baseStation.lat, baseStation.lng, mission.lat, mission.lng);
+        } else {
+          distKm = Math.hypot((mission.lat - baseStation.lat) * 111, (mission.lng - baseStation.lng) * 75);
+        }
+      }
+
+      // Règle métier : Plus le poste est loin, plus l'information met du temps à se diffuser
+      // et plus les bénévoles attendent de vérifier leurs disponibilités
+      const minDiffusionMs = (25 + Math.min(90, distKm * 1.2)) * 1000;
+      if (now - mission.publishedAt < minDiffusionMs) {
+        return; // L'information est encore en cours de diffusion sur les canaux de l'antenne
+      }
+
+      // Espacement temporel entre inscriptions successives pour éviter l'effet instantané
+      if (mission.lastVolunteerJoinedAt && (now - mission.lastVolunteerJoinedAt < 12000)) {
+        return;
+      }
+
       // Recherche des bénévoles qualifiés et disponibles
       const candidates = (this.volunteers || []).filter(vol => this.canVolunteerRegisterForMission(vol, mission));
       if (candidates.length === 0) return;
 
-      // Tri par motivation, trait dévoué et lissage aléatoire
+      // Tri par motivation, trait dévoué/mobile, affinité de distance et lissage aléatoire
       candidates.sort((a, b) => {
-        const scoreA = (a.motivation || 70) + (a.trait === 'devoue' ? 20 : 0) + (Math.random() * 15);
-        const scoreB = (b.motivation || 70) + (b.trait === 'devoue' ? 20 : 0) + (Math.random() * 15);
+        let scoreA = (a.motivation || 70) + (a.trait === 'devoue' ? 20 : 0) + (Math.random() * 15);
+        let scoreB = (b.motivation || 70) + (b.trait === 'devoue' ? 20 : 0) + (Math.random() * 15);
+        if (distKm > 20) {
+          if (a.trait === 'casanier') scoreA -= 25;
+          if (b.trait === 'casanier') scoreB -= 25;
+          if (a.trait === 'mobile') scoreA += 15;
+          if (b.trait === 'mobile') scoreB += 15;
+        }
         return scoreB - scoreA;
       });
 
       const candidate = candidates[0];
       if (!candidate) return;
 
-      // Calcul d'une probabilité d'inscription spontanée par minute virtuelle
+      // Calcul d'une probabilité d'inscription spontanée modulée par la distance kilométrique
       const motiv = candidate.motivation || 70;
-      let proba = 0.22 * (motiv / 80);
-      if (candidate.trait === 'devoue') proba *= 1.35;
-      if (candidate.trait === 'casanier') proba *= 0.70;
+      const distanceFactor = Math.max(0.18, 1 / (1 + (distKm / 22)));
+      let proba = 0.16 * (motiv / 80) * distanceFactor;
+      if (candidate.trait === 'devoue') proba *= 1.30;
+      if (candidate.trait === 'casanier') proba *= (distKm > 15 ? 0.40 : 0.70);
 
       // Si la date est proche (dans les 7 prochains jours), le taux de consultation du planning augmente
       if (mission.eventDate) {
         const missionDay = mission.eventDate.day ?? this.clock?.day;
         const curDay = this.clock?.day || 1;
         const diffDays = Math.abs(missionDay - curDay);
-        if (diffDays <= 3) proba *= 1.4;
+        if (diffDays <= 3) proba *= 1.35;
         else if (diffDays <= 7) proba *= 1.15;
       }
 
       // Tirage au sort de consultation et positionnement
-      if (Math.random() < Math.min(0.75, proba)) {
+      if (Math.random() < Math.min(0.65, proba)) {
         if (!mission.registeredVolunteers) mission.registeredVolunteers = [];
         mission.registeredVolunteers.push(candidate.id);
+        mission.lastVolunteerJoinedAt = now;
         hasChanges = true;
 
         const newRegCount = mission.registeredVolunteers.length;
@@ -24995,40 +25185,71 @@ class ProtecGame {
         window.ProtecCump.updateCumpMissionsClock(this);
       }
 
-      // 4. Sollicitations spontanées des organisateurs locaux
-      // RÈGLE : Si l'antenne vient d'ouvrir et ne fait NI pub NI DPS -> VISIBILITÉ NULLE = 0 DEMANDE DE DEVIS
+      // 4. Sollicitations spontanées des organisateurs locaux (24/24)
+      // RÈGLE MÉTIER : Ce qui augmente le plus les chances d'avoir des demandes de DPS,
+      // c'est en 1er le Site Internet (qui doit être mis à jour régulièrement),
+      // puis la présence sur DPS (bonne présence et avis organisateurs),
+      // mais aussi le nombre de bénévoles et le nombre de missions effectuées.
       if (this.clock.second === 0 && this.clock.minute % 5 === 0) {
         if (this.stations.length > 0) {
-          const hasActiveCampaign = !!(this.resources.campaigns?.social || this.resources.campaigns?.posters);
           const completedDpsCount = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
+          const volsCount = (this.volunteers || []).length;
           const repScore = this.resources.reputationScore || 0;
 
-          // L'antenne n'est visible que si elle communique activement OU qu'elle a déjà fait ses preuves sur des DPS (ou notoriété établie)
-          const isAntennaVisible = hasActiveCampaign || completedDpsCount > 0 || repScore >= 120;
+          // 1. FACTEUR N°1 : SITE INTERNET DE L'ANTENNE (Mises à jour régulières)
+          const siteFreshness = this.antenneWebsite?.freshness ?? 85;
+          let devisChance = 0.05; // Base de départ
 
-          if (isAntennaVisible) {
-            let devisChance = 0.04; // Base modeste et réaliste
-            if (completedDpsCount >= 1) devisChance += 0.08;
-            if (completedDpsCount >= 5) devisChance += 0.06;
-            devisChance += Math.min(0.12, repScore / 2000); // Bonus réputation progressif
-            if (this.resources.campaigns?.social) devisChance += 0.20; // Impact pub réseaux
-            if (this.resources.campaigns?.posters) devisChance += 0.15; // Impact affichage mairie
-            
-            // Impact direct des Réseaux Sociaux & Visibilité (0 € mais régularité requise)
-            const socialVis = this.socialMedia?.visibilityScore ?? 75;
-            if (socialVis >= 75) devisChance += 0.10; // Antenne active et visible : devis réguliers
-            else if (socialVis >= 50) devisChance += 0.04;
-            else if (socialVis < 30) devisChance = Math.max(0.01, devisChance - 0.05); // Silence radio : baisse d'activité
+          if (siteFreshness >= 80) {
+            devisChance += 0.30; // Site à jour : boost massif n°1 !
+          } else if (siteFreshness >= 50) {
+            devisChance += 0.15;
+          } else if (siteFreshness < 30) {
+            devisChance = Math.max(0.02, devisChance - 0.08); // Site à l'abandon : chute des demandes
+          }
 
-            const dpsMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('dpsRequestBaseChanceMultiplier', 1.0) : 1.0;
-            devisChance *= dpsMult;
+          // 2. FACTEUR N°2 : PRÉSENCE SUR DPS & QUALITÉ DES PRESTATIONS (Avis organisateurs)
+          const reviewsStats = (window.ProtecCommunication && typeof window.ProtecCommunication.getReviewsStats === 'function')
+            ? window.ProtecCommunication.getReviewsStats(this)
+            : { average: 4.8 };
+          if (reviewsStats.average >= 4.7) {
+            devisChance += 0.12; // Excellente présence et recommandation
+          } else if (reviewsStats.average >= 4.2) {
+            devisChance += 0.06;
+          }
 
-            const pendingDevisCount = (this.devis || []).filter(d => d.status === 'pending').length;
-            const cfgMaxDevis = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('maxSimultaneousPendingDevis', 6) : null;
-            const maxSimultaneous = cfgMaxDevis !== null ? cfgMaxDevis : this.getSimultaneousDevisLimit();
-            if (pendingDevisCount < maxSimultaneous && Math.random() < devisChance) {
-              this.generateRandomDevisOpportunity();
-            }
+          // 3. FACTEUR N°3 : NOMBRE DE BÉNÉVOLES DE L'ANTENNE (Capacité opérationnelle)
+          if (volsCount >= 30) devisChance += 0.10;
+          else if (volsCount >= 15) devisChance += 0.06;
+          else if (volsCount >= 8) devisChance += 0.03;
+
+          // 4. FACTEUR N°4 : NOMBRE DE MISSIONS EFFECTUÉES (Expérience démontrée)
+          if (completedDpsCount >= 15) devisChance += 0.12;
+          else if (completedDpsCount >= 5) devisChance += 0.08;
+          else if (completedDpsCount >= 1) devisChance += 0.04;
+
+          // 5. CAMPAGNES PAYANTES CIBLÉES & RÉSEAUX SOCIAUX (Impact concentré)
+          const hasDpsTargetedCampaign = !!(
+            this.commData?.activeCampaign?.subjectId === 'dps' ||
+            this.resources.campaigns?.social ||
+            this.resources.campaigns?.posters
+          );
+          if (hasDpsTargetedCampaign) {
+            devisChance += 0.22; // Impact ciblé concentré
+          }
+
+          const socialVis = this.socialMedia?.visibilityScore ?? 75;
+          if (socialVis >= 75) devisChance += 0.08;
+          else if (socialVis >= 50) devisChance += 0.04;
+
+          const dpsMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('dpsRequestBaseChanceMultiplier', 1.0) : 1.0;
+          devisChance *= dpsMult;
+
+          const pendingDevisCount = (this.devis || []).filter(d => d.status === 'pending').length;
+          const cfgMaxDevis = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('maxSimultaneousPendingDevis', 6) : null;
+          const maxSimultaneous = cfgMaxDevis !== null ? cfgMaxDevis : this.getSimultaneousDevisLimit();
+          if (pendingDevisCount < maxSimultaneous && Math.random() < devisChance) {
+            this.generateRandomDevisOpportunity();
           }
         }
       }
@@ -25046,9 +25267,26 @@ class ProtecGame {
         }
       }
 
-      // 5. Arrivée de nouvelles candidatures spontanées
+      // 5. Arrivée de nouvelles candidatures spontanées & Cycle horaire
       // RÈGLE RÉALISTE : Arrivée mesurée (1 fois par heure in-game maximum si campagne active ou bonne visibilité)
       if (this.clock.second === 0 && this.clock.minute === 0) {
+        // Maintenance et fraîcheur du Site Internet de l'Antenne
+        if (!this.antenneWebsite) {
+          this.antenneWebsite = { freshness: 90, lastUpdatedTimestamp: Date.now(), totalVisits: 1420, quotesRequestedOnline: 12 };
+        }
+        if (this.antenneWebsite.autoPilotSalarieId) {
+          // Un salarié permanent maintient le site à jour en continu
+          this.antenneWebsite.freshness = 100;
+        } else {
+          // Baisse naturelle progressive si le site n'est pas actualisé
+          this.antenneWebsite.freshness = Math.max(15, (this.antenneWebsite.freshness || 90) - 0.7);
+        }
+
+        // Surveillance des délibérations B2B, places grand public et inscriptions spontanées bénévoles en formation
+        if (window.ProtecFormations && typeof window.ProtecFormations.processClockTick === 'function') {
+          window.ProtecFormations.processClockTick(this);
+        }
+
         if (this.stations.length > 0) {
           const hasActiveCampaign = !!(this.resources.campaigns?.social || this.resources.campaigns?.posters);
           const repScore = this.resources.reputationScore || 0;

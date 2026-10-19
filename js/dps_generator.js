@@ -369,9 +369,47 @@
 
     const baseStation = options.baseStation || game.stations[Math.floor(Math.random() * game.stations.length)];
     const deptCode = String(baseStation.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '75').trim();
-    const commune = baseStation.city || 'Chef-Lieu';
 
-    // 1. Sélection du modèle de DPS
+    // 1. Sélection de la commune dans tout le département en respectant la sectorisation :
+    // La mission peut se dérouler dans n'importe quelle commune du département, à condition
+    // qu'aucune autre antenne de la Protection Civile ne soit plus proche de cette commune que baseStation.
+    const deptCommunes = (window.ProtecDepartements && typeof window.ProtecDepartements.getCommunesForDepartment === 'function')
+      ? window.ProtecDepartements.getCommunesForDepartment(deptCode)
+      : [];
+
+    let targetCommune = { nom: baseStation.city || 'Chef-Lieu', lat: baseStation.lat, lng: baseStation.lng };
+
+    if (deptCommunes && deptCommunes.length > 0) {
+      const allStationsInDept = (game.stations || []).filter(s => s.departmentCode === deptCode || !s.departmentCode);
+
+      // Filtrer les communes dont l'antenne la plus proche est bien baseStation
+      const eligibleCommunes = deptCommunes.filter(c => {
+        let bestDist = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+          ? window.ProtecDepartements.calculateDistance(baseStation.lat, baseStation.lng, c.lat, c.lng)
+          : Math.hypot((c.lat - baseStation.lat) * 111, (c.lng - baseStation.lng) * 75);
+        let closestStationId = baseStation.id;
+
+        for (const st of allStationsInDept) {
+          if (st.id === baseStation.id) continue;
+          const dist = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+            ? window.ProtecDepartements.calculateDistance(st.lat, st.lng, c.lat, c.lng)
+            : Math.hypot((c.lat - st.lat) * 111, (c.lng - st.lng) * 75);
+          if (dist < bestDist) {
+            bestDist = dist;
+            closestStationId = st.id;
+          }
+        }
+        return closestStationId === baseStation.id;
+      });
+
+      if (eligibleCommunes.length > 0) {
+        targetCommune = eligibleCommunes[Math.floor(Math.random() * eligibleCommunes.length)];
+      }
+    }
+
+    const commune = targetCommune.nom || baseStation.city || 'Chef-Lieu';
+
+    // 2. Sélection du modèle de DPS
     let template = null;
     if (options.templateId) {
       template = DPS_TEMPLATES.find(t => t.id === options.templateId);
@@ -380,11 +418,11 @@
       template = DPS_TEMPLATES[Math.floor(Math.random() * DPS_TEMPLATES.length)];
     }
 
-    // 2. Recherche ciblée du lieu sur OpenStreetMap (asynchrone sans bloquer l'UI)
-    const radiusMeters = (template.radiusKm || 20) * 1000;
+    // 3. Recherche ciblée du lieu sur OpenStreetMap autour de la commune du département
+    const radiusMeters = Math.min(15000, (template.radiusKm || 15) * 1000);
     const location = await fetchLocationForDPS(
-      baseStation.lat,
-      baseStation.lng,
+      targetCommune.lat,
+      targetCommune.lng,
       radiusMeters,
       template.osmQuery,
       template.defaultFallback,

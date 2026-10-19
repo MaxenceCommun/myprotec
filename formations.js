@@ -967,9 +967,17 @@ window.ProtecFormations = {
       if (registered) hasChanges = true;
     }
 
+    // Inscriptions spontanées des bénévoles aux formations internes (PSE1, PSE2, CE, CP, etc.)
+    if (!game._lastVolunteerFormationRegistrationCheck) game._lastVolunteerFormationRegistrationCheck = 0;
+    if (now - game._lastVolunteerFormationRegistrationCheck >= 15000) {
+      game._lastVolunteerFormationRegistrationCheck = now;
+      const volRegistered = this.processVolunteerSpontaneousFormationRegistrations(game);
+      if (volRegistered) hasChanges = true;
+    }
+
     if (hasChanges) {
       const modal = document.getElementById('main-modal');
-      if (modal && !modal.classList.contains('hidden') && (this.mainTab === 'entreprises' || this.mainTab === 'grand_public')) {
+      if (modal && !modal.classList.contains('hidden') && (this.mainTab === 'entreprises' || this.mainTab === 'grand_public' || this.mainTab === 'sessions')) {
         this.renderModal(game);
       }
     }
@@ -1064,6 +1072,134 @@ window.ProtecFormations = {
               { type: 'module', id: 'formations' }
             );
           }
+        }
+      }
+    });
+
+    if (hasRegistered) {
+      game.saveGame();
+      if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+    }
+
+    return hasRegistered;
+  },
+
+  // Inscriptions spontanées des bénévoles aux formations internes (PSE1, PSE2, CE, CP, etc.)
+  processVolunteerSpontaneousFormationRegistrations(game) {
+    if (!game || !game.sessionsFormation || game.sessionsFormation.length === 0) return false;
+    if (!game.volunteers || game.volunteers.length === 0) return false;
+
+    const now = Date.now();
+    let hasRegistered = false;
+
+    // Sessions internes ouvertes ayant des places bénévoles d'antenne disponibles
+    const eligibleSessions = game.sessionsFormation.filter(s => 
+      s.status === 'open' && 
+      !s.isCompleted && 
+      !s.isExternal && 
+      (s.internalAntenneSeats || 0) > (s.registeredCandidates?.length || 0)
+    );
+
+    if (eligibleSessions.length === 0) return false;
+
+    eligibleSessions.forEach(session => {
+      // 1. Temps de diffusion initial (au moins 20 secondes réelles)
+      if (session.createdAt && (now - session.createdAt < 20000)) return;
+
+      // 2. Espacement temporel entre deux inscriptions successives (au moins 15 secondes réelles)
+      if (session.lastVolunteerJoinedAt && (now - session.lastVolunteerJoinedAt < 15000)) return;
+
+      const course = this.catalog.find(c => c.id === session.courseId);
+      if (!course) return;
+
+      const registered = session.registeredCandidates || [];
+      const maxAntenneSeats = session.internalAntenneSeats || 8;
+      if (registered.length >= maxAntenneSeats) return;
+
+      // 3. Filtrage des bénévoles éligibles selon disponibilités, prérequis et expérience
+      const candidates = game.volunteers.filter(vol => {
+        // Non déjà inscrit à cette session
+        if (registered.includes(vol.id)) return false;
+
+        // Disponibilité opérationnelle (pas en mission active ou engagé ailleurs)
+        if (vol.isBusy || vol.currentMissionId || vol.status === 'mission') return false;
+
+        // Prérequis de qualification
+        if (course.prereqSkill && (!vol.skills || !vol.skills.includes(course.prereqSkill))) {
+          return false;
+        }
+
+        // Si la formation débloque une compétence, ne pas proposer si le bénévole l'a déjà (sauf recyclage)
+        if (!course.isRecycling && course.unlocksSkill && vol.skills && vol.skills.includes(course.unlocksSkill)) {
+          return false;
+        }
+
+        // Expérience minimale (nombre de missions terrain effectuées)
+        const missionsDone = vol.completedMissionsCount || vol.missionsCount || 0;
+        if (course.id === 'PSE2' && missionsDone < 2) return false;
+        if (course.id === 'CE' && missionsDone < 6) return false;
+        if (course.id === 'CD' && missionsDone < 15) return false;
+        if (course.id.startsWith('FORM_') && missionsDone < 8) return false;
+
+        // Motivation minimale pour avoir l'envie de se former
+        const motiv = vol.motivation || 70;
+        if (motiv < 50) return false;
+
+        return true;
+      });
+
+      if (candidates.length === 0) return;
+
+      // Tri des candidats par appétence (motivation, traits de personnalité, expérience)
+      candidates.sort((a, b) => {
+        let scoreA = (a.motivation || 70) + ((a.humeur || 70) * 0.4) + (Math.random() * 15);
+        let scoreB = (b.motivation || 70) + ((b.humeur || 70) * 0.4) + (Math.random() * 15);
+        if (a.trait === 'ambitieux') scoreA += 25;
+        if (b.trait === 'ambitieux') scoreB += 25;
+        if (a.trait === 'devoue') scoreA += 15;
+        if (b.trait === 'devoue') scoreB += 15;
+        return scoreB - scoreA;
+      });
+
+      const bestCandidate = candidates[0];
+      if (!bestCandidate) return;
+
+      // Probabilité de décision d'inscription spontanée
+      const motiv = bestCandidate.motivation || 70;
+      let proba = 0.22 * (motiv / 80);
+      if (bestCandidate.trait === 'ambitieux') proba *= 1.35;
+      if (bestCandidate.trait === 'devoue') proba *= 1.20;
+
+      if (Math.random() < Math.min(0.70, proba)) {
+        if (!session.registeredCandidates) session.registeredCandidates = [];
+        session.registeredCandidates.push(bestCandidate.id);
+        session.lastVolunteerJoinedAt = now;
+        bestCandidate.registeredSessionId = session.id;
+
+        // Boost de moral et motivation pour la progression personnelle
+        bestCandidate.motivation = Math.min(100, (bestCandidate.motivation || 75) + 6);
+        bestCandidate.humeur = Math.min(100, (bestCandidate.humeur || 75) + 5);
+
+        hasRegistered = true;
+
+        const curCount = session.registeredCandidates.length;
+        if (typeof game.showToast === 'function') {
+          game.showToast(
+            '🎓 Inscription Formation Spontanée',
+            `${bestCandidate.name} (${bestCandidate.rank || 'Secouriste'}) s'est inscrit(e) à la formation interne « ${session.title} » (${curCount}/${maxAntenneSeats}).`,
+            'blue',
+            { type: 'module', id: 'formations' }
+          );
+        }
+
+        if (window.ProtecAntenneMessages && typeof window.ProtecAntenneMessages.addOperationnelMessage === 'function') {
+          window.ProtecAntenneMessages.addOperationnelMessage(
+            bestCandidate.name,
+            `🎓 Inscription spontanée à la session de formation interne « ${session.title} » (${curCount}/${maxAntenneSeats} stagiaires).`,
+            bestCandidate.rank || 'Secouriste',
+            'graduation-cap',
+            { badgeColor: 'sky' }
+          );
         }
       }
     });

@@ -2159,6 +2159,15 @@ window.ProtecAuth = {
       if (typeof game.returnToMyAntenna === 'function' && Array.isArray(game.stations) && game.stations.length > 0) {
         setTimeout(() => game.returnToMyAntenna(15, true), 250);
       }
+
+      // Simulation asynchrone hors-ligne 24/24 depuis la dernière synchronisation
+      const lastSavedTime = savedData.savedAt || (savedData.clock?.lastRealTimestamp) || 0;
+      if (lastSavedTime > 0 && typeof game.simulateOfflineCatchup === 'function') {
+        const elapsedSec = (Date.now() - lastSavedTime) / 1000;
+        if (elapsedSec >= 60) {
+          game.simulateOfflineCatchup(elapsedSec);
+        }
+      }
     } catch (err) {
       console.error('Erreur application données:', err);
     }

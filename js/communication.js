@@ -15,6 +15,19 @@ window.ProtecCommunication = {
   // Thématiques de publication gratuite sur les réseaux sociaux (0 €)
   SOCIAL_POST_THEMES: [
     {
+      id: 'crise',
+      title: 'Mobilisation Crise, Intempéries & Soutien Populations',
+      icon: 'alert-triangle',
+      emoji: '🚨',
+      color: 'red',
+      badge: 'Urgence & Institutions',
+      desc: 'Mettre en lumière l’action de nos secouristes sur les crises, plans d’hébergement d’urgence et intempéries (reconnaissance SAMU, SDIS, Préfecture et grand public).',
+      sampleText: 'Mobilisation sans relâche de nos équipiers sur le plan d’urgence départemental ! Accueil des sinistrés, réconfort et coordination avec les services de secours du 15 et 18. Fiers de notre engagement républicain. 🧡💙 #Crise #ProtectionCivile #Solidarite #Secours',
+      visibilityGain: 28,
+      repGain: 18,
+      rewardType: 'reconnaissance_services'
+    },
+    {
       id: 'dps',
       title: 'Bilan de Mission & Dispositif du Week-End',
       icon: 'camera',
@@ -25,6 +38,19 @@ window.ProtecCommunication = {
       sampleText: 'Fiers de nos bénévoles engagés ce week-end pour assurer la sécurité du public ! Une équipe soudée et prête à intervenir à tout instant. 🧡💙 #ProtectionCivile #Secourisme #Bénévolat',
       visibilityGain: 22,
       repGain: 10,
+      rewardType: 'devis_boost'
+    },
+    {
+      id: 'evenement',
+      title: 'Grands Événements, Festivals & Manifestations Sportives',
+      icon: 'trophy',
+      emoji: '🏆',
+      color: 'sky',
+      badge: 'Organisateurs & Partenaires',
+      desc: 'Communication ciblée pour valoriser notre savoir-faire auprès des comités des fêtes, clubs sportifs et festivals locaux.',
+      sampleText: 'Vous organisez une compétition sportive, un concert ou un festival ? Nos équipes conçoivent des Dispositifs Prévisionnels de Secours adaptés et certifiés. Demandez votre devis sur notre site officiel ! 🏃‍♂️🎪 #DPS #Evenementiel #Secourisme',
+      visibilityGain: 25,
+      repGain: 14,
       rewardType: 'devis_boost'
     },
     {
@@ -81,20 +107,29 @@ window.ProtecCommunication = {
     }
   ],
 
-  // Campagnes sponsorisées historiques
+  // Campagnes sponsorisées historiques avec ciblage thématique par type de mission
   SUBJECTS: [
     {
-      id: 'dons',
-      title: 'Appel aux Dons & Mécénat',
-      badge: 'Trésorerie',
-      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-      desc: 'Appel à la générosité des citoyens et des entreprises pour financer nos équipements d\'urgence.',
-      effect: 'Génère des rentrées d\'argent régulières par micro-dons citoyens.',
-      icon: 'coins'
+      id: 'dps',
+      title: 'Campagne Ciblée : Dispositifs de Secours (DPS Événements)',
+      badge: 'Impact Devis DPS',
+      badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
+      desc: 'Campagne concentrée à 100% sur les organisateurs sportifs, mairies et comités des fêtes du département pour attirer des demandes de DPS.',
+      effect: 'Boost massif et ciblé sur les demandes de devis de DPS reçues par l\'antenne.',
+      icon: 'shield-check'
+    },
+    {
+      id: 'crise',
+      title: 'Rayonnement Crise & Partenariats Institutionnels',
+      badge: 'Reconnaissance Services Publics',
+      badgeColor: 'bg-red-100 text-red-800 border-red-200',
+      desc: 'Met en valeur notre engagement de protection des populations auprès de la Préfecture, du SAMU, du SDIS et des mairies.',
+      effect: 'Renforce durablement la confiance des institutions et de la régulation des secours.',
+      icon: 'alert-triangle'
     },
     {
       id: 'recrutement',
-      title: 'Campagne de Recrutement de Bénévoles',
+      title: 'Campagne de Recrutement de Nouveaux Bénévoles',
       badge: 'Ressources Humaines',
       badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
       desc: 'Valorise l\'engagement associatif et suscite de nouvelles vocations de secouristes.',
@@ -103,12 +138,21 @@ window.ProtecCommunication = {
     },
     {
       id: 'formation',
-      title: 'Sensibilisation Gestes qui Sauvent & PSC 1',
+      title: 'Sensibilisation Gestes qui Sauvent, PSC 1 & SST Entreprises',
       badge: 'Formations Payantes',
       badgeColor: 'bg-amber-100 text-amber-900 border-amber-200',
-      desc: 'Encourage le grand public à se former aux premiers secours dans notre salle de formation.',
-      effect: 'Augmente le taux de remplissage des sessions de formation citoyenne (+revenus).',
+      desc: 'Encourage le grand public et les entreprises locales à se former dans notre salle de formation.',
+      effect: 'Augmente le taux de remplissage des sessions et les demandes d\'entreprises (+revenus).',
       icon: 'graduation-cap'
+    },
+    {
+      id: 'dons',
+      title: 'Appel aux Dons Citoyens & Mécénat d\'Entreprise',
+      badge: 'Trésorerie & Dons',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      desc: 'Appel à la générosité des citoyens et des entreprises pour financer nos équipements d\'urgence.',
+      effect: 'Génère des rentrées d\'argent régulières par micro-dons citoyens.',
+      icon: 'coins'
     },
     {
       id: 'retex',
@@ -116,17 +160,8 @@ window.ProtecCommunication = {
       badge: 'Notoriété & Image',
       badgeColor: 'bg-pink-100 text-pink-800 border-pink-200',
       desc: 'Reportage photo et retex valorisant l\'action exemplaire de nos secouristes en intervention.',
-      effect: 'Forte hausse de réputation (+demandes de devis DPS d\'organisateurs).',
+      effect: 'Forte hausse de réputation générale auprès du grand public.',
       icon: 'award'
-    },
-    {
-      id: 'portes_ouvertes',
-      title: 'Journée Portes Ouvertes & Visite de la Caserne',
-      badge: 'Vie Locale & Partenaires',
-      badgeColor: 'bg-sky-100 text-sky-800 border-sky-200',
-      desc: 'Invitation des habitants et élus municipaux à découvrir nos ambulances et locaux.',
-      effect: 'Améliore la confiance des mairies et des partenaires territoriaux.',
-      icon: 'building'
     }
   ],
 
@@ -213,6 +248,52 @@ window.ProtecCommunication = {
     if (!Array.isArray(game.publicReviews)) {
       game.publicReviews = [];
     }
+
+    if (!game.antenneWebsite) {
+      game.antenneWebsite = {
+        freshness: 90,                  // Fraîcheur du site (0 à 100%) - Facteur N°1 d'attribution des devis DPS !
+        lastUpdatedTimestamp: Date.now() - 3600000 * 8,
+        totalVisits: 1420,
+        quotesRequestedOnline: 12,
+        autoPilotSalarieId: null,       // Salarié délégué à la maintenance du site
+        onlineQuoteFormActive: true,
+        showTrainingSchedule: true
+      };
+    }
+  },
+
+  // Actualiser manuellement le site internet de l'antenne
+  updateAntenneWebsite(game) {
+    this.injectState(game);
+    const web = game.antenneWebsite;
+    web.freshness = 100;
+    web.lastUpdatedTimestamp = Date.now();
+    web.totalVisits = (web.totalVisits || 0) + Math.floor(40 + Math.random() * 25);
+    web.quotesRequestedOnline = (web.quotesRequestedOnline || 0) + 1;
+    if (game.resources) {
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 12;
+    }
+    if (typeof game.saveGame === 'function') game.saveGame();
+    if (typeof game.showToast === 'function') {
+      game.showToast(
+        '🌐 Site Internet Actualisé !',
+        'Le site officiel de votre antenne est à 100% à jour (actualités, formulaire devis DPS en ligne, formations). Les organisateurs locaux le remarquent immédiatement !',
+        'green'
+      );
+    }
+    this.renderModal(game);
+  },
+
+  // Déléguer la mise à jour du site internet à un salarié permanent
+  delegateWebsiteAutoPilot(game, salarieId) {
+    this.injectState(game);
+    game.antenneWebsite.autoPilotSalarieId = salarieId ? String(salarieId) : null;
+    if (salarieId) {
+      game.antenneWebsite.freshness = 100;
+      game.antenneWebsite.lastUpdatedTimestamp = Date.now();
+    }
+    if (typeof game.saveGame === 'function') game.saveGame();
+    this.renderModal(game);
   },
 
   // Statistiques et calcul de la Note Avis sur 5 étoiles (Notoriété de l'antenne)
@@ -1028,8 +1109,13 @@ window.ProtecCommunication = {
           </div>
         </div>
 
-        <!-- Onglets de Navigation (3 onglets clairs) -->
+        <!-- Onglets de Navigation (4 onglets clairs) -->
         <div class="flex border-b border-slate-200 dark:border-slate-700 gap-2 overflow-x-auto">
+          <button
+            onclick="window.ProtecCommunication.currentTab = 'website'; window.ProtecCommunication.renderModal(window.game);"
+            class="pb-3 px-4 text-xs font-black transition border-b-2 flex items-center gap-2 whitespace-nowrap cursor-pointer ${this.currentTab === 'website' ? 'border-blue-600 text-blue-700 dark:border-blue-400 dark:text-blue-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}">
+            <span>🌐</span> Site Internet Officiel (Facteur N°1 Devis)
+          </button>
           <button
             onclick="window.ProtecCommunication.currentTab = 'social_media'; window.ProtecCommunication.renderModal(window.game);"
             class="pb-3 px-4 text-xs font-black transition border-b-2 flex items-center gap-2 whitespace-nowrap cursor-pointer ${this.currentTab === 'social_media' ? 'border-purple-600 text-purple-700 dark:border-purple-400 dark:text-purple-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}">
@@ -1047,16 +1133,177 @@ window.ProtecCommunication = {
           </button>
         </div>
 
-        ${this.currentTab === 'social_media'
-          ? this.renderSocialMediaTab(game, salaries, autoPilotSalarie)
-          : (this.currentTab === 'reviews'
-            ? this.renderReviewsTab(game, reviewsStats)
-            : this.renderSponsoredCampaignsTab(game))}
+        ${this.currentTab === 'website'
+          ? this.renderWebsiteTab(game, salaries)
+          : (this.currentTab === 'social_media'
+            ? this.renderSocialMediaTab(game, salaries, autoPilotSalarie)
+            : (this.currentTab === 'reviews'
+              ? this.renderReviewsTab(game, reviewsStats)
+              : this.renderSponsoredCampaignsTab(game)))}
 
       </div>
     `;
 
     if (window.lucide) window.lucide.createIcons();
+  },
+
+  // Onglet 0 : Site Internet Officiel de l'Antenne (Facteur N°1 pour les demandes de DPS)
+  renderWebsiteTab(game, salaries) {
+    this.injectState(game);
+    const web = game.antenneWebsite;
+    const freshness = Math.max(0, Math.min(100, Math.round(web.freshness ?? 90)));
+    const autoPilotSalarie = salaries.find(s => String(s.id) === String(web.autoPilotSalarieId));
+
+    // Libellé et couleur selon la fraîcheur du site
+    let freshnessBadge = 'Excellente Fraîcheur (+35% de Devis DPS en continu)';
+    let freshnessColor = 'bg-emerald-500';
+    let freshnessBorder = 'border-emerald-200 text-emerald-800 bg-emerald-50';
+    if (freshness < 40) {
+      freshnessBadge = 'Site Négligé / Obsolète (Perte de confiance des organisateurs)';
+      freshnessColor = 'bg-red-500';
+      freshnessBorder = 'border-red-200 text-red-800 bg-red-50';
+    } else if (freshness < 75) {
+      freshnessBadge = 'Mise à Jour Recommandée (+15% de Devis DPS)';
+      freshnessColor = 'bg-amber-500';
+      freshnessBorder = 'border-amber-200 text-amber-800 bg-amber-50';
+    }
+
+    return `
+      <!-- EN-TÊTE PRINCIPAL : LE SITE INTERNET FACTEUR N°1 DES DPS -->
+      <div class="p-5 rounded-2xl glass-card border border-blue-200 bg-gradient-to-r from-blue-50/80 via-sky-50/50 to-white space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🌐</span>
+              <h3 class="text-base font-black text-slate-900 dark:text-white">Site Internet Officiel de l’Antenne</h3>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${freshnessBorder}">
+                ${freshness}% Fraîcheur
+              </span>
+            </div>
+            <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+              Le site internet est le <strong>facteur n°1 qui booste les demandes de devis de DPS</strong> des organisateurs locaux (clubs sportifs, festivals, mairies, entreprises). Il doit être <strong>mis à jour régulièrement</strong> avec vos derniers postes, photos et plannings de formation pour garantir un flux constant de sollicitations.
+            </p>
+          </div>
+
+          <!-- Bouton d'Actualisation Manuelle -->
+          <div class="shrink-0 flex items-center gap-2">
+            <button
+              onclick="window.ProtecCommunication.updateAntenneWebsite(window.game);"
+              class="px-4 py-2.5 rounded-xl font-black text-xs bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 transition flex items-center gap-2 cursor-pointer">
+              <span>🚀</span> Mettre à Jour le Site (0 €)
+            </button>
+          </div>
+        </div>
+
+        <!-- JAUGE DE FRAÎCHEUR VISUELLE -->
+        <div class="p-4 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-blue-100 dark:border-slate-700 space-y-2">
+          <div class="flex items-center justify-between text-xs font-black">
+            <span class="text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+              <span>📊</span> Jauge de Fraîcheur des Informations Publiques :
+            </span>
+            <span class="mono-num ${freshness >= 75 ? 'text-emerald-600' : (freshness >= 40 ? 'text-amber-600' : 'text-red-600')}">
+              ${freshness}% • ${freshnessBadge}
+            </span>
+          </div>
+          <div class="w-full h-3 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden p-0.5">
+            <div class="h-full rounded-full ${freshnessColor} transition-all duration-500" style="width: ${freshness}%;"></div>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+            <span>Dernière synchronisation : ${web.lastUpdatedTimestamp ? new Date(web.lastUpdatedTimestamp).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Récemment'}</span>
+            <span>Impact opérationnel : <strong>+35% sollicitations DPS</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BLOC DÉLÉGATION SALARIÉ (MAINTENANCE AUTOMATIQUE DU SITE) -->
+      <div class="p-4 sm:p-5 rounded-2xl glass-card border border-indigo-200 bg-gradient-to-r from-indigo-50/70 via-blue-50/40 to-white space-y-3">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <span class="text-[10px] font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
+              <span>👔</span> Automatisation Salarié (Secrétariat & Webmaster)
+            </span>
+            <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+              Vous pouvez <strong>déléguer la maintenance et la mise à jour hebdomadaire du site internet à un salarié</strong> permanent de l'antenne. Il veillera à actualiser le formulaire de devis et les dates de formation pour maintenir la fraîcheur du site à 100% en continu.
+            </p>
+          </div>
+
+          <!-- Sélecteur Salarié Webmaster -->
+          <div class="shrink-0 flex items-center gap-2 self-start md:self-center">
+            ${salaries.length === 0
+              ? `
+                <div class="text-xs text-slate-400 italic bg-white/70 px-3 py-2 rounded-xl border border-slate-200">
+                  Aucun salarié permanent sous contrat
+                </div>
+              `
+              : `
+                <select
+                  onchange="window.ProtecCommunication.delegateWebsiteAutoPilot(window.game, this.value);"
+                  class="text-xs font-bold rounded-xl border border-indigo-200 bg-white text-slate-800 px-3 py-2 focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-sm">
+                  <option value="">-- Gestion Manuelle du Site --</option>
+                  ${salaries.map(s => `
+                    <option value="${s.id}" ${autoPilotSalarie && autoPilotSalarie.id === s.id ? 'selected' : ''}>
+                      👔 ${s.name} (${s.monthlyHours || 151}h/mois)
+                    </option>
+                  `).join('')}
+                </select>
+              `
+            }
+          </div>
+        </div>
+
+        ${autoPilotSalarie ? `
+          <div class="flex items-center gap-2 text-xs font-bold text-indigo-800 bg-indigo-100/70 px-3 py-2 rounded-xl border border-indigo-200">
+            <span>✅</span>
+            <span><strong>${autoPilotSalarie.name}</strong> assure la mise à jour continue du site officiel. Votre fraîcheur web est maintenue à 100% !</span>
+          </div>
+        ` : ''}
+      </div>
+
+      <!-- FONCTIONNALITÉS EN LIGNE DU SITE OFFICIEL -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="p-4 rounded-2xl glass-card border border-blue-200 bg-white dark:bg-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-lg">📋</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">Actif en Ligne</span>
+          </div>
+          <h4 class="text-xs font-black text-slate-800 dark:text-white">Formulaire Devis DPS</h4>
+          <p class="text-[11px] text-slate-500 leading-relaxed">
+            Permet aux mairies, clubs et organisateurs du département de déposer une demande de devis en 3 clics.
+          </p>
+          <div class="pt-2 border-t border-slate-100 text-[11px] text-blue-600 font-bold">
+            ${web.quotesRequestedOnline || 12} devis reçus via le site
+          </div>
+        </div>
+
+        <div class="p-4 rounded-2xl glass-card border border-amber-200 bg-white dark:bg-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-lg">🎓</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">Actif en Ligne</span>
+          </div>
+          <h4 class="text-xs font-black text-slate-800 dark:text-white">Calendrier Formations PSC & SST</h4>
+          <p class="text-[11px] text-slate-500 leading-relaxed">
+            Présentation des prochaines sessions grand public et entreprises avec inscription directe en ligne.
+          </p>
+          <div class="pt-2 border-t border-slate-100 text-[11px] text-amber-600 font-bold">
+            Réservations citoyennes automatisées
+          </div>
+        </div>
+
+        <div class="p-4 rounded-2xl glass-card border border-purple-200 bg-white dark:bg-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-lg">👥</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">Actif en Ligne</span>
+          </div>
+          <h4 class="text-xs font-black text-slate-800 dark:text-white">Espace Recrutement & Adhésion</h4>
+          <p class="text-[11px] text-slate-500 leading-relaxed">
+            Formulaire de contact pour les citoyens souhaitant devenir secouristes bénévoles dans l’antenne.
+          </p>
+          <div class="pt-2 border-t border-slate-100 text-[11px] text-purple-600 font-bold">
+            ${web.totalVisits || 1420} visiteurs uniques
+          </div>
+        </div>
+      </div>
+    `;
   },
 
   // Onglet 1 : Publications Gratuites Réseaux Sociaux
