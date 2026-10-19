@@ -2163,7 +2163,7 @@ window.ProtecFormations = {
     }
     if (dsaTier === 2) {
       repGain += 8;
-      tierNotice += ' [DSA Connecté HF : +8 réputation]';
+      tierNotice += ' [DSA Connecté HF : Optimisé]';
     }
     game.resources.reputationScore = (game.resources.reputationScore || 0) + repGain;
 
@@ -2240,7 +2240,7 @@ window.ProtecFormations = {
     if (attendeeParts.length === 0) attendeeParts.push(`${totalCount} stagiaire(s) certifié(s)`);
 
     const summaryText = attendeeParts.join(', ');
-    const msg = `Formation validée avec succès : ${summaryText} ! (+${repGain} réputation)${totalRevenue > 0 ? ` (+${totalRevenue} €)` : ''}${tierNotice}`;
+    const msg = `Formation validée avec succès : ${summaryText} !${totalRevenue > 0 ? ` (+${totalRevenue} €)` : ''}${tierNotice}`;
 
     if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordFormationCompleted === 'function') {
       window.ProtecAdvanced.recordFormationCompleted(game, session);
@@ -2387,7 +2387,7 @@ window.ProtecFormations = {
               </p>
             <div class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-pc-blue/10 border border-pc-blue/20 text-pc-blue text-xs font-bold mx-auto">
               <i data-lucide="clock" class="w-4 h-4"></i>
-              <span>Les demandes arrivent automatiquement selon votre notoriété, réputation et communication</span>
+              <span>Les demandes arrivent automatiquement selon votre visibilité et votre communication</span>
             </div>
           </div>
         ` : `
@@ -2619,7 +2619,7 @@ window.ProtecFormations = {
 
                     ${p.status === 'completed' ? `
                       <span class="text-[10px] text-emerald-700 font-bold">✓ Attestations délivrées</span>
-                      <span class="text-xs font-black text-emerald-600">+${cfg.repGain || 12} Réputation</span>
+                      <span class="text-xs font-black text-emerald-600">Prestation honorée</span>
                     ` : ''}
 
                     ${p.status === 'rejected' ? `
@@ -3044,157 +3044,166 @@ window.ProtecFormations = {
 
         <!-- Section 2 : Organiser une Session de Formation (Antenne, Réseau & Grand Public) -->
         <div class="p-5 rounded-3xl glass-card space-y-4 border border-slate-200/90 shadow-xs">
-          <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <!-- En-tête : Titre et Alerte Kit -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-700/80 pb-3">
             <div>
-              <h4 class="text-xs font-black uppercase text-slate-900 tracking-wide flex items-center gap-2">
+              <h4 class="text-xs font-black uppercase text-slate-900 dark:text-white tracking-wide flex items-center gap-2">
                 <i data-lucide="plus-circle" class="w-4 h-4 text-emerald-600"></i>
                 Organiser une Formation à la Base
               </h4>
-              <span class="text-[11px] text-slate-500">Planification d'une session avec formateurs, matériel et salles de l'antenne</span>
+              <span class="text-[11px] text-slate-500 dark:text-slate-400">Planification d'une session avec formateurs, matériel et salles de l'antenne</span>
             </div>
             <div id="new-course-kit-info">
               <!-- Rempli dynamiquement avec le kit requis -->
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-            <!-- 1. Type de Formation -->
-            <div class="sm:col-span-2">
-              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Type de Formation :</label>
-              <select id="new-course-id" onchange="window.ProtecFormations.updateNewSessionFormPreview(window.game)" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-black text-slate-800 bg-white">
-                <optgroup label="Grand Public & Citoyens">
-                  <option value="GQS">GQS (2h - Gestes Qui Sauvent • Sensibilisation)</option>
-                  <option value="PSC" selected>PSC (7h - Prévention et Secours Civiques • Diplôme de base)</option>
-                  <option value="SST">SST (14h - Sauveteur Secouriste du Travail)</option>
-                  <option value="EXTINCTEUR">Manipulation Extincteurs (3h - Équipier Prévention Incendie EPI)</option>
-                </optgroup>
-                <optgroup label="Secourisme Opérationnel">
-                  <option value="PSE1">PSE1 (35h - Premiers Secours en Équipe 1 • Secouriste)</option>
-                  <option value="PSE2">PSE2 (28h - Premiers Secours en Équipe 2 • Équipier Secouriste)</option>
-                  <option value="FC_PSE">Recyclage FC PSE (6h - Formation Continue Annuelle PSE 1 & 2)</option>
-                  <option value="MAC_SST">Recyclage MAC SST (7h - Actualisation des compétences)</option>
-                  <option value="CE">Chef d’Équipe - CE (21h - Commandement Opérationnel)</option>
-                  <option value="CD">Chef de Dispositif - CD (24h - Direction de Poste)</option>
-                  <option value="SSA">SSA (28h - Surveillance et Sauvetage Aquatique)</option>
-                </optgroup>
-                <optgroup label="Soutien Psychologique">
-                  <option value="AEP1">AEP1 (7h - Aide & Écoute Psychologique Initiale)</option>
-                  <option value="AEP2">AEP2 (14h - Prise en charge traumatique & CAI)</option>
-                </optgroup>
-                <optgroup label="Filière Pédagogique (Formateurs)">
-                  <option value="PICF">PIC F (21h - Pédagogie Initiale de Formateur)</option>
-                  <option value="FORM_PSC">Formateur PSC (14h - Diplôme Formateur PSC)</option>
-                  <option value="FORM_PS">Formateur PS (28h - Formateur Premiers Secours)</option>
-                  <option value="FORM_SST">Formateur SST (21h - Formateur SST)</option>
-                  <option value="FORM_AEP">Formateur AEP (21h - Formateur Écoute Psycho)</option>
-                  <option value="CEF">CEF (35h - Concepteur Encadrant de Formation)</option>
-                  <option value="FDF">FdF (42h - Formateur de Formateurs Fédéral)</option>
-                </optgroup>
-              </select>
-            </div>
-
-            <!-- 2. Lieu de Formation -->
-            <div>
-              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Lieu de la formation :</label>
-              <select id="new-course-loc" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-pc-blue bg-white" onchange="
-                const roomWrap = document.getElementById('new-course-room-wrap');
-                const customWrap = document.getElementById('new-course-custom-loc-wrap');
-                if (roomWrap) roomWrap.style.display = (this.value === 'antenne' && ${totalTrainingRooms} > 1) ? 'block' : 'none';
-                if (customWrap) customWrap.style.display = (this.value === 'externe') ? 'block' : 'none';
-              ">
-                <option value="antenne" selected>🏛️ Salle de Formation de la Base</option>
-                <option value="externe">📍 Autre Salle / Lieu Externe</option>
-              </select>
-            </div>
-
-            <!-- N° Salle de base si plusieurs salles -->
-            ${totalTrainingRooms > 1 ? `
-              <div id="new-course-room-wrap">
-                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Salle de la Base :</label>
-                <select id="new-course-room" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-indigo-700 bg-white">
-                  ${Array.from({ length: totalTrainingRooms }, (_, i) => `<option value="${i + 1}">Salle n°${i + 1}</option>`).join('')}
+          <div class="space-y-4 text-xs">
+            <!-- 1. Type de Formation & Lieu (2 Colonnes équilibrées 50% / 50%) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <div>
+                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Type de Formation :</label>
+                <select id="new-course-id" onchange="window.ProtecFormations.updateNewSessionFormPreview(window.game)" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 glass-input font-black text-slate-800 bg-white">
+                  <optgroup label="Grand Public & Citoyens">
+                    <option value="GQS">GQS (2h - Gestes Qui Sauvent • Sensibilisation)</option>
+                    <option value="PSC" selected>PSC (7h - Prévention et Secours Civiques • Diplôme de base)</option>
+                    <option value="SST">SST (14h - Sauveteur Secouriste du Travail)</option>
+                    <option value="EXTINCTEUR">Manipulation Extincteurs (3h - Équipier Prévention Incendie EPI)</option>
+                  </optgroup>
+                  <optgroup label="Secourisme Opérationnel">
+                    <option value="PSE1">PSE1 (35h - Premiers Secours en Équipe 1 • Secouriste)</option>
+                    <option value="PSE2">PSE2 (28h - Premiers Secours en Équipe 2 • Équipier Secouriste)</option>
+                    <option value="FC_PSE">Recyclage FC PSE (6h - Formation Continue Annuelle PSE 1 & 2)</option>
+                    <option value="MAC_SST">Recyclage MAC SST (7h - Actualisation des compétences)</option>
+                    <option value="CE">Chef d’Équipe - CE (21h - Commandement Opérationnel)</option>
+                    <option value="CD">Chef de Dispositif - CD (24h - Direction de Poste)</option>
+                    <option value="SSA">SSA (28h - Surveillance et Sauvetage Aquatique)</option>
+                  </optgroup>
+                  <optgroup label="Soutien Psychologique">
+                    <option value="AEP1">AEP1 (7h - Aide & Écoute Psychologique Initiale)</option>
+                    <option value="AEP2">AEP2 (14h - Prise en charge traumatique & CAI)</option>
+                  </optgroup>
+                  <optgroup label="Filière Pédagogique (Formateurs)">
+                    <option value="PICF">PIC F (21h - Pédagogie Initiale de Formateur)</option>
+                    <option value="FORM_PSC">Formateur PSC (14h - Diplôme Formateur PSC)</option>
+                    <option value="FORM_PS">Formateur PS (28h - Formateur Premiers Secours)</option>
+                    <option value="FORM_SST">Formateur SST (21h - Formateur SST)</option>
+                    <option value="FORM_AEP">Formateur AEP (21h - Formateur Écoute Psycho)</option>
+                    <option value="CEF">CEF (35h - Concepteur Encadrant de Formation)</option>
+                    <option value="FDF">FdF (42h - Formateur de Formateurs Fédéral)</option>
+                  </optgroup>
                 </select>
               </div>
-            ` : `<input type="hidden" id="new-course-room" value="1" />`}
 
-            <div id="new-course-custom-loc-wrap" style="display:none;">
-              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Préciser le Lieu :</label>
-              <input type="text" id="new-course-custom-loc" placeholder="Ex: Salle Municipale Pasteur" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-medium bg-white" />
-            </div>
+              <div>
+                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Lieu de la formation :</label>
+                <div class="grid grid-cols-1 ${totalTrainingRooms > 1 ? 'sm:grid-cols-2' : ''} gap-2">
+                  <select id="new-course-loc" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 glass-input font-bold text-pc-blue bg-white" onchange="
+                    const roomWrap = document.getElementById('new-course-room-wrap');
+                    const customWrap = document.getElementById('new-course-custom-loc-wrap');
+                    if (roomWrap) roomWrap.style.display = (this.value === 'antenne' && ${totalTrainingRooms} > 1) ? 'block' : 'none';
+                    if (customWrap) customWrap.style.display = (this.value === 'externe') ? 'block' : 'none';
+                  ">
+                    <option value="antenne" selected>🏛️ Salle de Formation de la Base</option>
+                    <option value="externe">📍 Autre Salle / Lieu Externe</option>
+                  </select>
 
-            <!-- 3. Dates & Horaires -->
-            <div class="sm:col-span-2 grid grid-cols-4 gap-1.5">
-              <div>
-                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Jour :</label>
-                <input type="number" id="new-course-day" min="1" max="31" value="${Math.min(28, (game.clock?.day || 1) + 2)}" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-center bg-white" />
-              </div>
-              <div>
-                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Mois :</label>
-                <select id="new-course-month" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
-                  ${['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc'].map((m, idx) => `
-                    <option value="${idx}" ${idx === (game.clock?.month || 0) ? 'selected' : ''}>${m}</option>
-                  `).join('')}
-                </select>
-              </div>
-              <div>
-                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Année :</label>
-                <input type="number" id="new-course-year" value="${game.clock?.year || 2026}" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-center bg-white" />
-              </div>
-              <div>
-                <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Début :</label>
-                <select id="new-course-hour" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
-                  <option value="8">08:00</option>
-                  <option value="9" selected>09:00</option>
-                  <option value="10">10:00</option>
-                  <option value="13">13:30</option>
-                  <option value="14">14:00</option>
-                </select>
+                  ${totalTrainingRooms > 1 ? `
+                    <div id="new-course-room-wrap">
+                      <select id="new-course-room" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 glass-input font-bold text-indigo-700 bg-white">
+                        ${Array.from({ length: totalTrainingRooms }, (_, i) => `<option value="${i + 1}">Salle n°${i + 1}</option>`).join('')}
+                      </select>
+                    </div>
+                  ` : `<input type="hidden" id="new-course-room" value="1" />`}
+                </div>
+
+                <div id="new-course-custom-loc-wrap" style="display:none;" class="mt-2">
+                  <input type="text" id="new-course-custom-loc" placeholder="Précisez le lieu (ex: Salle Municipale Pasteur, Mairie...)" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-medium bg-white" />
+                </div>
               </div>
             </div>
 
-            <!-- 4. Répartition des Places -->
+            <!-- 2. Dates & Horaires (Grille 4 colonnes régulières) -->
             <div>
-              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Places Totales :</label>
-              <input 
-                type="number" 
-                id="new-course-total-seats" 
-                min="4" 
-                max="20" 
-                value="10" 
-                oninput="window.ProtecFormations.updateNewSessionFormPreview(window.game)" 
-                class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-black text-slate-900 bg-white" 
-              />
+              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Date & Horaires de la Session :</label>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <span class="text-[9px] font-bold text-slate-400 block mb-0.5">Jour :</span>
+                  <input type="number" id="new-course-day" min="1" max="31" value="${Math.min(28, (game.clock?.day || 1) + 2)}" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-center bg-white" />
+                </div>
+                <div>
+                  <span class="text-[9px] font-bold text-slate-400 block mb-0.5">Mois :</span>
+                  <select id="new-course-month" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
+                    ${['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc'].map((m, idx) => `
+                      <option value="${idx}" ${idx === (game.clock?.month || 0) ? 'selected' : ''}>${m}</option>
+                    `).join('')}
+                  </select>
+                </div>
+                <div>
+                  <span class="text-[9px] font-bold text-slate-400 block mb-0.5">Année :</span>
+                  <input type="number" id="new-course-year" value="${game.clock?.year || 2026}" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-center bg-white" />
+                </div>
+                <div>
+                  <span class="text-[9px] font-bold text-slate-400 block mb-0.5">Début :</span>
+                  <select id="new-course-hour" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
+                    <option value="8">08:00</option>
+                    <option value="9" selected>09:00</option>
+                    <option value="10">10:00</option>
+                    <option value="13">13:30</option>
+                    <option value="14">14:00</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
+            <!-- 3. Répartition des Places (Capacité Totale & Quotas Internes en 3 colonnes parfaites) -->
             <div>
-              <label class="text-[10px] font-bold uppercase text-indigo-700 block mb-1">Places Interne Antenne :</label>
-              <input 
-                type="number" 
-                id="new-course-antenne-seats" 
-                min="0" 
-                max="20" 
-                value="4" 
-                oninput="window.ProtecFormations.updateNewSessionFormPreview(window.game)" 
-                class="w-full text-xs p-2 rounded-xl border border-indigo-200 glass-input font-black text-indigo-800 bg-indigo-50/50" 
-              />
+              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Capacité & Réservations Internes :</label>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <span class="text-[9px] font-bold text-slate-500 block mb-0.5">Places Totales (Capacité) :</span>
+                  <input 
+                    type="number" 
+                    id="new-course-total-seats" 
+                    min="4" 
+                    max="20" 
+                    value="10" 
+                    oninput="window.ProtecFormations.updateNewSessionFormPreview(window.game)" 
+                    class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-black text-slate-900 bg-white" 
+                  />
+                </div>
+
+                <div>
+                  <span class="text-[9px] font-bold text-indigo-700 block mb-0.5">Places Interne Antenne (Bénévoles) :</span>
+                  <input 
+                    type="number" 
+                    id="new-course-antenne-seats" 
+                    min="0" 
+                    max="20" 
+                    value="4" 
+                    oninput="window.ProtecFormations.updateNewSessionFormPreview(window.game)" 
+                    class="w-full text-xs p-2 rounded-xl border border-indigo-200 glass-input font-black text-indigo-800 bg-indigo-50/50" 
+                  />
+                </div>
+
+                <div>
+                  <span class="text-[9px] font-bold text-pc-blue block mb-0.5">Places Interne Protection Civile (Réseau) :</span>
+                  <input 
+                    type="number" 
+                    id="new-course-protec-seats" 
+                    min="0" 
+                    max="20" 
+                    value="2" 
+                    oninput="window.ProtecFormations.updateNewSessionFormPreview(window.game)" 
+                    class="w-full text-xs p-2 rounded-xl border border-blue-200 glass-input font-black text-pc-blue bg-blue-50/50" 
+                  />
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label class="text-[10px] font-bold uppercase text-pc-blue block mb-1">Places Interne Protection Civile :</label>
-              <input 
-                type="number" 
-                id="new-course-protec-seats" 
-                min="0" 
-                max="20" 
-                value="2" 
-                oninput="window.ProtecFormations.updateNewSessionFormPreview(window.game)" 
-                class="w-full text-xs p-2 rounded-xl border border-blue-200 glass-input font-black text-pc-blue bg-blue-50/50" 
-              />
-            </div>
-
-            <!-- 5. Ouverture Grand Public -->
-            <div class="sm:col-span-2 p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-              <div class="flex items-center justify-between">
+            <!-- 4. Ouverture Grand Public & Tarification (Encart pleine largeur équilibré) -->
+            <div class="p-3.5 rounded-2xl bg-slate-50/90 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
+              <div class="flex flex-wrap items-center justify-between gap-3">
                 <label class="flex items-center gap-2 cursor-pointer select-none">
                   <input 
                     type="checkbox" 
@@ -3203,7 +3212,7 @@ window.ProtecFormations = {
                     onchange="window.ProtecFormations.updateNewSessionFormPreview(window.game)" 
                     class="w-4 h-4 text-emerald-600 rounded cursor-pointer" 
                   />
-                  <span class="text-xs font-black text-slate-800">Ouvrir les places restantes au Grand Public</span>
+                  <span class="text-xs font-black text-slate-800 dark:text-white">Ouvrir les places restantes au Grand Public</span>
                 </label>
                 <div id="new-course-public-price-wrap" class="flex items-center gap-1.5">
                   <span class="text-[10px] font-bold uppercase text-slate-400">Tarif / place :</span>
@@ -3215,22 +3224,22 @@ window.ProtecFormations = {
                     max="600" 
                     step="5" 
                     oninput="this.dataset.customized = 'true'" 
-                    class="w-20 p-1 rounded-lg border border-slate-300 font-black text-right text-xs mono-num bg-white" 
+                    class="w-20 p-1.5 rounded-lg border border-slate-300 font-black text-right text-xs mono-num bg-white dark:bg-slate-700 dark:text-white" 
                   />
-                  <span class="text-xs font-bold text-slate-600">€</span>
+                  <span class="text-xs font-bold text-slate-600 dark:text-slate-300">€</span>
                 </div>
               </div>
 
               <!-- Jauge de prévisualisation des places -->
-              <div class="text-[11px] bg-white p-2 rounded-xl border border-slate-200" id="new-course-seats-preview">
+              <div class="text-[11px] bg-white dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80" id="new-course-seats-preview">
                 <!-- Rempli dynamiquement -->
               </div>
             </div>
 
-            <!-- 6. Formateur de l'antenne -->
-            <div class="sm:col-span-2">
-              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Formateur de l’Antenne (ou Renfort) :</label>
-              <select id="new-course-trainer" class="w-full text-xs p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
+            <!-- 5. Formateur de l'antenne -->
+            <div>
+              <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Formateur de l’Antenne (ou Renfort Fédéral) :</label>
+              <select id="new-course-trainer" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white dark:bg-slate-700 dark:text-white">
                 <option value="">Affecter plus tard ou solliciter un renfort...</option>
                 ${trainers.map(t => {
                   return `<option value="${t.id}">${t.name} (${t.role || t.rank})</option>`;
@@ -3238,10 +3247,10 @@ window.ProtecFormations = {
               </select>
             </div>
 
-            <!-- 7. Bouton de Programmation -->
-            <div class="sm:col-span-4 flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-100">
-              <p class="text-[11px] text-slate-500 italic">
-                📢 <strong>Remplissage Grand Public :</strong> Les places ouvertes se remplissent dynamiquement au fil de l'eau si vous faites de la publicité (campagnes réseaux sociaux / affichage mairie) et en fonction de la réputation de l'antenne.
+            <!-- 6. Bouton de Programmation & Note d'information -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-700/80">
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                📢 <strong>Remplissage Grand Public :</strong> Les places ouvertes se remplissent dynamiquement au fil de l'eau grâce à votre visibilité (campagnes de communication réseaux sociaux et affichage mairie).
               </p>
               <button onclick="window.ProtecFormations.createOrganizedSessionFromUI(window.game)" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap">
                 <i data-lucide="calendar-plus" class="w-4 h-4"></i>
