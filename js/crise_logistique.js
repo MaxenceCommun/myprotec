@@ -2444,15 +2444,19 @@ window.ProtecCriseLogistique = {
     this.injectState(game);
     const base = game.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne Principale' };
     const now = Date.now();
+    const deptCode = String(game.currentDepartmentCode || game.stations?.[0]?.departmentCode || game.player?.departmentCode || '75');
+    const apcCap = typeof game.getApcDepartmentOperationalCapacity === 'function'
+      ? game.getApcDepartmentOperationalCapacity(deptCode)
+      : null;
     let m = null;
 
     if (scenarioKey === 'recherche_disparu') {
-      const deptCode = String(game.currentDepartmentCode || game.stations?.[0]?.departmentCode || game.player?.departmentCode || '75');
       const isParis = ['75', '92', '93', '94'].includes(deptCode);
       const loc = game.calculateRealisticMissionLocation(base, 'crise', {
         title: isParis ? 'Recherche Préfecture de Police : Disparition en Milieu Boisé (Bois de Boulogne)' : 'Recherche Gendarmerie : Personne Disparue en Forêt',
         targetEnvironment: isParis ? 'bois_paris' : 'foret_province'
       });
+      const vols = apcCap ? Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.35), Math.max(4, apcCap.totalVolunteers - 1))) : 6;
       m = {
         id: `scen_rech_${now}`,
         title: isParis ? 'Recherche Préfecture de Police : Disparition en Milieu Boisé' : 'Recherche Gendarmerie : Personne Disparue en Forêt',
@@ -2462,15 +2466,15 @@ window.ProtecCriseLogistique = {
         type: 'crise',
         crisisType: 'recherche_disparu',
         isCrisis: true,
-        scale: isParis ? 'BATTUE & RECHERCHE POLICE (6 à 10 intervenants)' : 'BATTUE & RECHERCHE GENDARMERIE (6 à 10 intervenants)',
+        scale: `${isParis ? 'BATTUE POLICE' : 'BATTUE GENDARMERIE'} (Mobilisation APC : ${vols} secouristes + Drone/Cyno)`,
         urgency: 'haute',
         lat: loc.lat,
         lng: loc.lng,
         targetEnvironment: isParis ? 'bois_paris' : 'foret_province',
-        requiredVolunteers: 6,
+        requiredVolunteers: vols,
         requiredRanks: ['CD', 'PSE2', 'PSE1'],
         requiredVehicles: ['VL', 'VTU'],
-        rewardMoney: 1450,
+        rewardMoney: Math.round(1000 + (vols * 70)),
         rewardReputation: 60,
         durationSeconds: 300,
         eventDate: { ...game.clock },
@@ -2481,6 +2485,10 @@ window.ProtecCriseLogistique = {
       };
     } else if (scenarioKey === 'crash_aerien') {
       const loc = game.calculateRealisticMissionLocation(base, 'crise');
+      const vols = apcCap ? Math.max(6, Math.min(Math.round(apcCap.totalVolunteers * 0.65), apcCap.totalVolunteers)) : 8;
+      const vpspCount = apcCap ? Math.max(1, Math.min(Math.round(apcCap.totalVpsp * 0.60), apcCap.totalVpsp)) : 2;
+      const vehList = ['VTU'];
+      for (let i = 0; i < Math.min(2, vpspCount); i++) vehList.unshift('VPSP');
       m = {
         id: `scen_crash_${now}`,
         title: 'Plan Catastrophe : Crash Aérien & CAI CUMP (50 impliqués)',
@@ -2489,14 +2497,14 @@ window.ProtecCriseLogistique = {
         crisisType: 'crash_aerien',
         isCrisis: true,
         isCumpCai: true,
-        scale: 'ORSEC / NOVI CUMP (8 secouristes qualifiés AEP & Lots A/B/C)',
+        scale: `ORSEC / NOVI CUMP (Mobilisation APC : ${vols} secouristes, ${vehList.join('/')})`,
         urgency: 'critique',
         lat: loc.lat,
         lng: loc.lng,
-        requiredVolunteers: 8,
+        requiredVolunteers: vols,
         requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
-        requiredVehicles: ['VPSP', 'VTU'],
-        rewardMoney: 2600,
+        requiredVehicles: vehList,
+        rewardMoney: Math.round(1800 + (vols * 90)),
         rewardReputation: 85,
         durationSeconds: 400,
         eventDate: { ...game.clock },
@@ -2507,6 +2515,7 @@ window.ProtecCriseLogistique = {
       };
     } else if (scenarioKey === 'incendie_ehpad') {
       const loc = game.calculateRealisticMissionLocation(base, 'crise');
+      const vols = apcCap ? Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.45), Math.max(4, apcCap.totalVolunteers - 1))) : 6;
       m = {
         id: `scen_ehpad_${now}`,
         title: 'Incendie EHPAD : Évacuation Sanitaire & Mise à l’Abri',
@@ -2514,14 +2523,14 @@ window.ProtecCriseLogistique = {
         type: 'crise',
         crisisType: 'incendie_ehpad',
         isCrisis: true,
-        scale: 'ÉVACUATION COLLECTIVE (2 VPSP + VTP + 6 secouristes)',
+        scale: `ÉVACUATION COLLECTIVE (Mobilisation APC : ${vols} secouristes + VPSP/VTU)`,
         urgency: 'critique',
         lat: loc.lat,
         lng: loc.lng,
-        requiredVolunteers: 6,
+        requiredVolunteers: vols,
         requiredRanks: ['CE', 'PSE2', 'PSE1'],
         requiredVehicles: ['VPSP', 'VTU'],
-        rewardMoney: 1850,
+        rewardMoney: Math.round(1300 + (vols * 80)),
         rewardReputation: 65,
         durationSeconds: 320,
         eventDate: { ...game.clock },
@@ -2580,6 +2589,7 @@ window.ProtecCriseLogistique = {
       };
     } else if (scenarioKey === 'tempete_rouge') {
       const loc = game.calculateRealisticMissionLocation(base, 'crise');
+      const vols = apcCap ? Math.max(6, Math.min(Math.round(apcCap.totalVolunteers * 0.60), apcCap.totalVolunteers)) : 8;
       m = {
         id: `scen_tempete_${now}`,
         title: 'Tempête Alerte Rouge : Renfort CHU & Déblaiement',
@@ -2587,14 +2597,14 @@ window.ProtecCriseLogistique = {
         type: 'crise',
         crisisType: 'tempete_rouge',
         isCrisis: true,
-        scale: 'DÉTACHEMENT INTEMPÉRIES (8 secouristes + Lots Tronçonnage/Pompage)',
+        scale: `DÉTACHEMENT INTEMPÉRIES (Mobilisation APC : ${vols} secouristes + Lots Pompe/Tronço)`,
         urgency: 'critique',
         lat: loc.lat,
         lng: loc.lng,
-        requiredVolunteers: 8,
+        requiredVolunteers: vols,
         requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
         requiredVehicles: ['VTU', 'VL'],
-        rewardMoney: 2200,
+        rewardMoney: Math.round(1500 + (vols * 80)),
         rewardReputation: 75,
         durationSeconds: 350,
         eventDate: { ...game.clock },
@@ -2720,6 +2730,25 @@ window.ProtecCriseLogistique = {
       },
       status: 'active' // 'active' | 'terminee' | 'echec'
     };
+
+    // Adaptation proportionnelle des sous-missions aux moyens réels de l'APC dans le département
+    const apcCap = typeof game.getApcDepartmentOperationalCapacity === 'function'
+      ? game.getApcDepartmentOperationalCapacity(deptCode)
+      : null;
+
+    if (apcCap && Array.isArray(newCrisis.phases)) {
+      newCrisis.phases.forEach(phase => {
+        if (Array.isArray(phase.sous_missions)) {
+          phase.sous_missions.forEach(sub => {
+            if (sub.moyens_requis) {
+              if (sub.moyens_requis.vols_count && sub.moyens_requis.vols_count > apcCap.totalVolunteers) {
+                sub.moyens_requis.vols_count = Math.max(2, apcCap.totalVolunteers);
+              }
+            }
+          });
+        }
+      });
+    }
 
     // Initialiser les sous-missions de la première phase
     if (newCrisis.phases.length > 0 && newCrisis.phases[0].sous_missions) {

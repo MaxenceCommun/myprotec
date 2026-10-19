@@ -9432,15 +9432,105 @@ class ProtecGame {
     }
   }
 
+  // --- CAPACITÉ OPÉRATIONNELLE RÉELLE DE L'APC (ENSEMBLE DES ANTENNES DU DÉPARTEMENT) ---
+  getApcDepartmentOperationalCapacity(deptCode = null) {
+    const targetDept = String(deptCode || this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '75').trim();
+
+    // 1. Antennes du joueur dans ce département
+    const myDeptStations = (this.stations || []).filter(st => {
+      if (!st) return false;
+      const sDept = String(st.departmentCode || this.currentDepartmentCode || '').trim();
+      if (sDept === targetDept) return true;
+      if (st.lat && st.lng && window.ProtecDepartements && typeof window.ProtecDepartements.getDepartmentByCoordinates === 'function') {
+        const d = window.ProtecDepartements.getDepartmentByCoordinates(st.lat, st.lng);
+        if (d && String(d.code).trim() === targetDept) return true;
+      }
+      return false;
+    });
+
+    const effectiveMyStations = myDeptStations.length > 0 ? myDeptStations : (this.stations || []);
+    const myStationIds = new Set(effectiveMyStations.map(s => s.id));
+
+    // Moyens du joueur dans ces antennes
+    const myVehicles = (this.vehicles || []).filter(v => !v.stationId || myStationIds.has(v.stationId));
+    const myVolunteers = (this.volunteers || []).filter(vol => !vol.stationId || myStationIds.has(vol.stationId));
+
+    const myVpsp = myVehicles.filter(v => v.type === 'VPSP').length;
+    const myVtu = myVehicles.filter(v => v.type === 'VTU').length;
+    const myVtp = myVehicles.filter(v => v.type === 'VTP').length;
+    const myVl = myVehicles.filter(v => ['VL', 'VLHR'].includes(v.type)).length;
+    const myVolCount = myVolunteers.length;
+
+    // 2. Antennes de l'Alliance / Confrères APC dans ce même département
+    let allianceStationsCount = 0;
+    let allianceVolCount = 0;
+    let allianceVpspCount = 0;
+    let allianceVtuCount = 0;
+    let allianceVtpCount = 0;
+
+    if (Array.isArray(this.allianceStations)) {
+      this.allianceStations.forEach(st => {
+        if (!st || !st.id) return;
+        let inDept = false;
+        const stDept = String(st.departmentCode || '').trim();
+        if (stDept && stDept === targetDept) {
+          inDept = true;
+        } else if (st.lat && st.lng && window.ProtecDepartements && typeof window.ProtecDepartements.getDepartmentByCoordinates === 'function') {
+          const d = window.ProtecDepartements.getDepartmentByCoordinates(st.lat, st.lng);
+          if (d && String(d.code).trim() === targetDept) inDept = true;
+        }
+        if (inDept) {
+          allianceStationsCount++;
+          const vols = Number(st.volunteers || st.volunteers_count || 6);
+          allianceVolCount += vols;
+          const vehs = Number(st.vehicles || st.vehicles_count || 2);
+          allianceVpspCount += Math.max(1, Math.floor(vehs * 0.6));
+          allianceVtuCount += Math.max(1, Math.floor(vehs * 0.4));
+        }
+      });
+    }
+
+    // Totaux cumulés départementaux de l'APC
+    const totalStations = Math.max(1, effectiveMyStations.length + allianceStationsCount);
+    const totalVolunteers = Math.max(4, myVolCount + allianceVolCount);
+    const totalVpsp = Math.max(1, myVpsp + allianceVpspCount);
+    const totalVtu = Math.max(1, myVtu + allianceVtuCount);
+    const totalVtp = myVtp + allianceVtpCount;
+    const totalVehicles = Math.max(1, myVehicles.length + (allianceVpspCount + allianceVtuCount + allianceVtpCount));
+
+    return {
+      departmentCode: targetDept,
+      totalStations,
+      totalVolunteers,
+      totalVpsp,
+      totalVtu,
+      totalVtp,
+      totalVehicles,
+      myDeptStations: effectiveMyStations.length,
+      allianceDeptStations: allianceStationsCount
+    };
+  }
+
   // --- SCÉNARIOS OFFICIELS ET RÉALISTES DE PRÉALERTE / VEILLE OPÉRATIONNELLE AASC ---
   getAascPrealertScenarios(origin = null) {
     const deptCode = String(this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '75');
     const isParisArea = ['75', '92', '93', '94'].includes(deptCode);
     const isParisIntramuros = deptCode === '75';
 
+    // Capacité opérationnelle réelle cumulée de l'ensemble des antennes de l'APC dans le département
+    const apcCap = this.getApcDepartmentOperationalCapacity(deptCode);
+
     let scenarios = [];
 
     // 1. Incendie / Évacuation
+    const feuVols = Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.40), Math.max(4, apcCap.totalVolunteers - 2)));
+    const feuVpsp = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.40)), apcCap.totalVpsp));
+    const feuVtu = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVtu * 0.40)), apcCap.totalVtu));
+    const feuVtp = apcCap.totalVtp > 0 && apcCap.totalStations >= 2 ? 1 : 0;
+    const feuChu = Math.min(120, Math.max(30, apcCap.totalStations * 30));
+    const feuVehicles = ['VPSP', 'VTU'];
+    if (feuVtp > 0) feuVehicles.push('VTP');
+
     if (isParisArea) {
       scenarios.push({
         id: 'feu_immeuble_paris',
@@ -9456,17 +9546,18 @@ class ProtecGame {
           'Ravitaillement d’urgence & distribution de couvertures de survie'
         ],
         requiredAssets: {
-          vpsp: 1,
-          vtu: 1,
-          vtp: 1,
-          chu_places: 60,
+          vpsp: feuVpsp,
+          vtu: feuVtu,
+          vtp: feuVtp,
+          chu_places: feuChu,
           pma: false,
           cyno: 0,
           drone: false
         },
-        requiredVolunteers: 8,
-        requiredVehicles: ['VPSP', 'VTU', 'VTP'],
-        rewardMoney: 620,
+        requiredVolunteers: feuVols,
+        requiredVehicles: feuVehicles,
+        scale: `BSPP (Mobilisation APC : ${feuVols} secouristes, ${feuVehicles.join('/')})`,
+        rewardMoney: Math.round(550 + (feuVols * 20)),
         rewardReputation: 35
       });
     } else {
@@ -9484,23 +9575,32 @@ class ProtecGame {
           'Ravitaillement d’urgence & distribution de couvertures'
         ],
         requiredAssets: {
-          vpsp: 1,
-          vtu: 1,
-          vtp: 1,
-          chu_places: 60,
+          vpsp: feuVpsp,
+          vtu: feuVtu,
+          vtp: feuVtp,
+          chu_places: feuChu,
           pma: false,
           cyno: 0,
           drone: false
         },
-        requiredVolunteers: 8,
-        requiredVehicles: ['VPSP', 'VTU', 'VTP'],
-        rewardMoney: 580,
+        requiredVolunteers: feuVols,
+        requiredVehicles: feuVehicles,
+        scale: `CODIS 18 (Mobilisation APC : ${feuVols} secouristes, ${feuVehicles.join('/')})`,
+        rewardMoney: Math.round(520 + (feuVols * 20)),
         rewardReputation: 35
       });
     }
 
     // 2. Mission ferroviaire SNCF (Conditionnée STRICTEMENT à la signature de la convention SNCF)
     if (this.sncfConvention?.signed || origin === 'sncf') {
+      const tgvVols = Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.45), Math.max(4, apcCap.totalVolunteers - 2)));
+      const tgvVpsp = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.35)), apcCap.totalVpsp));
+      const tgvVtu = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVtu * 0.50)), apcCap.totalVtu));
+      const tgvVtp = apcCap.totalVtp > 0 && apcCap.totalStations >= 2 ? 1 : 0;
+      const tgvChu = Math.min(100, Math.max(25, apcCap.totalStations * 25));
+      const tgvVehicles = ['VPSP', 'VTU'];
+      if (tgvVtp > 0) tgvVehicles.push('VTP');
+
       scenarios.push({
         id: 'tgv_bloque',
         origin: 'sncf',
@@ -9510,27 +9610,30 @@ class ProtecGame {
         title: 'Crise Ferroviaire : Prise en Charge Voyageurs & CHU en Gare (TGV Bloqué en Ligne)',
         scenarioText: 'Rupture d’alimentation caténaire sur la ligne à grande vitesse (LGV) en amont. Le TGV 6742 est immobilisé en pleine voie avec 640 passagers sans électricité ni chauffage. Les navettes et bus rapatrient les voyageurs par vagues successives vers la gare centrale. La direction de crise SNCF sollicite la Protection Civile pour l’accueil en gare, le montage d’un Centre d’Hébergement d’Urgence (CHU 50 lits) et la distribution d’eau et de vivres.',
         assignedMissions: [
-          'Montage et tenue d’un CHU en gare centrale (50 lits)',
+          'Montage et tenue d’un CHU en gare centrale',
           'Distribution massive d’eau et collations d’urgence',
           'Accueil, orientation et réconfort des voyageurs rapatriés'
         ],
         requiredAssets: {
-          vpsp: 1,
-          vtu: 2,
-          vtp: 1,
-          chu_places: 50,
+          vpsp: tgvVpsp,
+          vtu: tgvVtu,
+          vtp: tgvVtp,
+          chu_places: tgvChu,
           pma: false,
           cyno: 0,
           drone: false
         },
-        requiredVolunteers: 8,
-        requiredVehicles: ['VPSP', 'VTU'],
-        rewardMoney: 540,
+        requiredVolunteers: tgvVols,
+        requiredVehicles: tgvVehicles,
+        scale: `SNCF (Mobilisation APC : ${tgvVols} secouristes, ${tgvVehicles.join('/')})`,
+        rewardMoney: Math.round(500 + (tgvVols * 20)),
         rewardReputation: 35
       });
     }
 
     // 3. Recherche de personne vulnérable (adaptée à la topographie réelle)
+    const rechVols = Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.35), Math.max(4, apcCap.totalVolunteers - 1)));
+
     if (isParisIntramuros) {
       // Scénario A : Massifs boisés parisiens (Bois de Boulogne / Bois de Vincennes)
       scenarios.push({
@@ -9556,9 +9659,10 @@ class ProtecGame {
           cyno: 1,
           drone: true
         },
-        requiredVolunteers: 6,
+        requiredVolunteers: rechVols,
         requiredVehicles: ['VTU'],
-        rewardMoney: 510,
+        scale: `Préfecture de Police (Mobilisation APC : ${rechVols} secouristes + Drone/Cyno)`,
+        rewardMoney: Math.round(460 + (rechVols * 18)),
         rewardReputation: 35
       });
       // Scénario B : Parcs urbains et berges de Seine
@@ -9585,9 +9689,10 @@ class ProtecGame {
           cyno: 1,
           drone: true
         },
-        requiredVolunteers: 6,
+        requiredVolunteers: rechVols,
         requiredVehicles: ['VTU'],
-        rewardMoney: 490,
+        scale: `DSPAP (Mobilisation APC : ${rechVols} secouristes + Drone/Cyno)`,
+        rewardMoney: Math.round(450 + (rechVols * 18)),
         rewardReputation: 35
       });
     } else {
@@ -9618,14 +9723,23 @@ class ProtecGame {
           cyno: 1,
           drone: true
         },
-        requiredVolunteers: 6,
+        requiredVolunteers: rechVols,
         requiredVehicles: isPetiteCouronne ? ['VTU'] : ['VLHR'],
-        rewardMoney: 490,
+        scale: `${isPetiteCouronne ? 'Police' : 'Gendarmerie'} (Mobilisation APC : ${rechVols} secouristes + Drone/Cyno)`,
+        rewardMoney: Math.round(450 + (rechVols * 18)),
         rewardReputation: 35
       });
     }
 
     // 4. Inondations / Crues
+    const inondVols = Math.max(6, Math.min(Math.round(apcCap.totalVolunteers * 0.60), apcCap.totalVolunteers));
+    const inondVpsp = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.50)), apcCap.totalVpsp));
+    const inondVtu = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVtu * 0.60)), apcCap.totalVtu));
+    const inondVtp = apcCap.totalVtp > 0 ? Math.min(apcCap.totalVtp, Math.max(1, Math.round(apcCap.totalVtp * 0.50))) : 0;
+    const inondChu = Math.min(160, Math.max(40, apcCap.totalStations * 40));
+    const inondVehicles = ['VPSP', 'VTU'];
+    if (inondVtp > 0) inondVehicles.push('VTP');
+
     if (isParisIntramuros) {
       scenarios.push({
         id: 'crue_seine_paris',
@@ -9637,23 +9751,24 @@ class ProtecGame {
         targetEnvironment: 'seine_paris',
         scenarioText: 'Crue majeure de la Seine atteignant le seuil d’alerte avec submersion des voies sur berges et caves inondées. La Préfecture de Police active le plan d’urgence inondation et réquisitionne la Protection Civile de Paris pour l’armement d’un Centre d’Hébergement d’Urgence (CHU 80 lits) en gymnase municipal et l’accueil des sinistrés évacués.',
         assignedMissions: [
-          'Gestion d’un Centre d’Hébergement d’Urgence (CHU 80 lits)',
+          'Gestion d’un Centre d’Hébergement d’Urgence (CHU)',
           'Soutien logistique de crise & groupes électrogènes',
           'Noria d’acheminement des riverains vers le CHU'
         ],
         requiredAssets: {
-          vpsp: 2,
-          vtu: 2,
-          vtp: 1,
-          chu_places: 80,
+          vpsp: inondVpsp,
+          vtu: inondVtu,
+          vtp: inondVtp,
+          chu_places: inondChu,
           pma: true,
           cyno: 0,
           drone: true
         },
-        requiredVolunteers: 10,
-        requiredVehicles: ['VPSP', 'VTU', 'VTP'],
-        rewardMoney: 720,
-        rewardReputation: 40
+        requiredVolunteers: inondVols,
+        requiredVehicles: inondVehicles,
+        scale: `Préfecture (Mobilisation APC : ${inondVols} secouristes, ${inondVehicles.join('/')})`,
+        rewardMoney: Math.round(650 + (inondVols * 25)),
+        rewardReputation: 45
       });
     } else {
       scenarios.push({
@@ -9665,27 +9780,36 @@ class ProtecGame {
         title: 'Crues Majeures & Inondations : Évacuation de Lotissements',
         scenarioText: 'Crue soudaine d’un cours d’eau suite à des précipitations orageuses continues. Plusieurs quartiers résidentiels sont submergés (hauteur d’eau > 70 cm), avec coupures d’électricité et plusieurs axes coupés. Les sauveteurs nautiques du SDIS effectuent les mises en sécurité en embarcation. La Préfecture préalerte l’AASC pour armer le site d’hébergement d’urgence (CHU) et assurer la noria des sinistrés.',
         assignedMissions: [
-          'Gestion d’un Centre d’Hébergement d’Urgence (CHU 80 lits)',
+          'Gestion d’un Centre d’Hébergement d’Urgence (CHU)',
           'Soutien logistique de crise & groupes électrogènes',
           'Grande Noria d’acheminement des sinistrés vers le CHU'
         ],
         requiredAssets: {
-          vpsp: 2,
-          vtu: 2,
-          vtp: 1,
-          chu_places: 80,
+          vpsp: inondVpsp,
+          vtu: inondVtu,
+          vtp: inondVtp,
+          chu_places: inondChu,
           pma: true,
           cyno: 0,
           drone: true
         },
-        requiredVolunteers: 10,
-        requiredVehicles: ['VPSP', 'VTU', 'VTP'],
-        rewardMoney: 680,
-        rewardReputation: 40
+        requiredVolunteers: inondVols,
+        requiredVehicles: inondVehicles,
+        scale: `Plan ORSEC (Mobilisation APC : ${inondVols} secouristes, ${inondVehicles.join('/')})`,
+        rewardMoney: Math.round(620 + (inondVols * 25)),
+        rewardReputation: 45
       });
     }
 
     // 5. Accident NOVI
+    const noviVols = Math.max(6, Math.min(Math.round(apcCap.totalVolunteers * 0.65), apcCap.totalVolunteers));
+    const noviVpsp = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.65)), apcCap.totalVpsp));
+    const noviVtu = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVtu * 0.50)), apcCap.totalVtu));
+    const noviVtp = apcCap.totalVtp > 0 ? Math.min(apcCap.totalVtp, Math.max(1, Math.round(apcCap.totalVtp * 0.50))) : 0;
+    const noviChu = Math.min(60, Math.max(15, apcCap.totalStations * 15));
+    const noviVehicles = ['VPSP', 'VTU'];
+    if (noviVtp > 0) noviVehicles.push('VTP');
+
     if (isParisArea) {
       scenarios.push({
         id: 'accident_peripherique',
@@ -9701,18 +9825,19 @@ class ProtecGame {
           'Accueil et prise en charge des victimes légères / impliqués'
         ],
         requiredAssets: {
-          vpsp: 2,
-          vtu: 1,
-          vtp: 0,
-          chu_places: 20,
+          vpsp: noviVpsp,
+          vtu: noviVtu,
+          vtp: noviVtp,
+          chu_places: noviChu,
           pma: true,
           cyno: 0,
           drone: false
         },
-        requiredVolunteers: 8,
-        requiredVehicles: ['VPSP', 'VTU'],
-        rewardMoney: 680,
-        rewardReputation: 40
+        requiredVolunteers: noviVols,
+        requiredVehicles: noviVehicles,
+        scale: `Plan NOVI SAMU (Mobilisation APC : ${noviVols} secouristes, ${noviVehicles.join('/')})`,
+        rewardMoney: Math.round(650 + (noviVols * 25)),
+        rewardReputation: 45
       });
     } else {
       scenarios.push({
@@ -9729,18 +9854,19 @@ class ProtecGame {
           'Accueil et prise en charge des victimes légères / impliqués'
         ],
         requiredAssets: {
-          vpsp: 2,
-          vtu: 1,
-          vtp: 0,
-          chu_places: 20,
+          vpsp: noviVpsp,
+          vtu: noviVtu,
+          vtp: noviVtp,
+          chu_places: noviChu,
           pma: true,
           cyno: 0,
           drone: false
         },
-        requiredVolunteers: 8,
-        requiredVehicles: ['VPSP', 'VTU'],
-        rewardMoney: 640,
-        rewardReputation: 40
+        requiredVolunteers: noviVols,
+        requiredVehicles: noviVehicles,
+        scale: `Plan NOVI SAMU (Mobilisation APC : ${noviVols} secouristes, ${noviVehicles.join('/')})`,
+        rewardMoney: Math.round(620 + (noviVols * 25)),
+        rewardReputation: 45
       });
     }
 
@@ -9829,7 +9955,7 @@ class ProtecGame {
       lat: coords.lat,
       lng: coords.lng,
       targetEnvironment: pick.targetEnvironment || null,
-      scale: `${pick.authorityLabel} (${pick.requiredVolunteers} secouristes requis)`,
+      scale: pick.scale || `${pick.authorityLabel} (${pick.requiredVolunteers} secouristes requis)`,
       eventDate: { ...this.clock, hour: targetH, minute: targetM },
       durationSeconds: 45 * 60,
       durationHours: 0.8,
@@ -10204,7 +10330,7 @@ class ProtecGame {
               lat: coords.lat,
               lng: coords.lng,
               targetEnvironment: pick.targetEnvironment || null,
-              scale: `${pick.authorityLabel} (${pick.requiredVolunteers} secouristes requis)`,
+              scale: pick.scale || `${pick.authorityLabel} (${pick.requiredVolunteers} secouristes requis)`,
               eventDate: { ...this.clock },
               durationSeconds: 45 * 60,
               durationHours: 0.8,
