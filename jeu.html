@@ -5,6 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>MyProtec - Simulateur Opérationnel (En Ligne)</title>
   
+  <script>
+    try {
+      if (
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true ||
+        location.search.includes('source=pwa') ||
+        location.search.includes('pwa=1') ||
+        location.search.includes('mode=standalone') ||
+        localStorage.getItem('protec_pwa_installed') === 'true' ||
+        localStorage.getItem('myprotec_app_installed') === 'true'
+      ) {
+        document.documentElement.classList.add('pwa-installed');
+      }
+    } catch (e) {}
+  </script>
+  <style>
+    html.pwa-installed #pwa-install-btn,
+    html.pwa-installed #pwa-install-btn-mobile,
+    html.pwa-installed .pwa-install-trigger {
+      display: none !important;
+    }
+  </style>
+
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>

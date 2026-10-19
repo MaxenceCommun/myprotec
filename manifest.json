@@ -13,6 +13,12 @@
   "lang": "fr-FR",
   "dir": "ltr",
   "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "./manifest.json"
+    }
+  ],
   "categories": ["games", "simulation", "education"],
   "icons": [
     {

@@ -10,37 +10,60 @@ window.ProtecPWA = {
   isIOS: false,
   isOnline: navigator.onLine,
 
+  // Détection robuste et exhaustive si le jeu est déjà téléchargé / installé
+  isAppAlreadyInstalled() {
+    try {
+      if (this.isStandalone) return true;
+      if (window.matchMedia('(display-mode: standalone)').matches) return true;
+      if (window.matchMedia('(display-mode: window-controls-overlay)').matches) return true;
+      if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+      if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+      if (window.navigator.standalone === true) return true;
+      if (document.referrer && document.referrer.includes('android-app://')) return true;
+      if (window.location && (
+        window.location.search.includes('source=pwa') ||
+        window.location.search.includes('pwa=1') ||
+        window.location.search.includes('mode=standalone')
+      )) return true;
+      if (localStorage.getItem('protec_pwa_installed') === 'true' || localStorage.getItem('myprotec_app_installed') === 'true') {
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  },
+
   init() {
-    this.checkStandalone();
     this.checkPlatform();
     this.setupNetworkListeners();
     this.setupInstallPrompt();
     this.registerServiceWorker();
     this.updateUI();
+    this.checkStandalone();
   },
 
   // 1. Détecte si l'application est déjà exécutée en tant qu'application installée (PWA Standalone)
   async checkStandalone() {
-    this.isStandalone = (
-      window.matchMedia('(display-mode: standalone)').matches ||
-      window.matchMedia('(display-mode: window-controls-overlay)').matches ||
-      window.matchMedia('(display-mode: fullscreen)').matches ||
-      window.matchMedia('(display-mode: minimal-ui)').matches ||
-      navigator.standalone === true ||
-      document.referrer.includes('android-app://') ||
-      localStorage.getItem('protec_pwa_installed') === 'true'
-    );
+    if (this.isAppAlreadyInstalled()) {
+      this.isStandalone = true;
+      try { localStorage.setItem('protec_pwa_installed', 'true'); } catch (e) {}
+      this.updateUI();
+      return true;
+    }
 
-    if (!this.isStandalone && 'getInstalledRelatedApps' in navigator) {
+    if ('getInstalledRelatedApps' in navigator) {
       try {
         const related = await navigator.getInstalledRelatedApps();
         if (related && related.length > 0) {
+          console.log('📱 [PWA] Application déjà installée détectée via getInstalledRelatedApps :', related);
           this.isStandalone = true;
           try { localStorage.setItem('protec_pwa_installed', 'true'); } catch (e) {}
           this.updateUI();
+          return true;
         }
       } catch (e) {}
     }
+
+    return false;
   },
 
   // 2. Détecte la plateforme (iOS vs Android / PC)
@@ -273,8 +296,11 @@ window.ProtecPWA = {
       try {
         this.deferredPrompt.prompt();
         const choice = await this.deferredPrompt.userChoice;
-        if (choice.outcome === 'accepted') {
+        if (choice && choice.outcome === 'accepted') {
           console.log('Utilisateur a accepté l\'installation PWA');
+          this.isStandalone = true;
+          try { localStorage.setItem('protec_pwa_installed', 'true'); } catch (e) {}
+          this.updateUI();
         } else {
           console.log('Installation refusée par l\'utilisateur');
         }
@@ -397,18 +423,24 @@ window.ProtecPWA = {
 
   // 8. Mise à jour de l'UI (boutons header)
   updateUI() {
-    const isInstalled = this.isStandalone || 
-      window.matchMedia('(display-mode: standalone)').matches ||
-      navigator.standalone === true ||
-      localStorage.getItem('protec_pwa_installed') === 'true';
+    const isInstalled = this.isAppAlreadyInstalled();
+
+    if (isInstalled) {
+      this.isStandalone = true;
+      try { localStorage.setItem('protec_pwa_installed', 'true'); } catch (e) {}
+      if (document.documentElement) {
+        document.documentElement.classList.add('pwa-installed');
+      }
+    }
 
     const buttons = document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-mobile, .pwa-install-trigger');
 
     // Si déjà installé en standalone ou enregistré, masquer complètement les boutons
     if (isInstalled) {
       buttons.forEach(btn => {
-        btn.style.display = 'none';
+        btn.style.setProperty('display', 'none', 'important');
         btn.classList.add('hidden');
+        btn.setAttribute('aria-hidden', 'true');
       });
       return;
     }
@@ -417,6 +449,7 @@ window.ProtecPWA = {
     buttons.forEach(btn => {
       btn.style.display = '';
       btn.classList.remove('hidden');
+      btn.removeAttribute('aria-hidden');
     });
 
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
@@ -787,6 +820,28 @@ window.ProtecPlatformAnalytics = {
     `;
   }
 };
+
+// Évaluation précoce immédiate pour éviter tout flash visuel
+try {
+  const isEarlyInstalled = (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    window.matchMedia('(display-mode: minimal-ui)').matches ||
+    window.navigator.standalone === true ||
+    (document.referrer && document.referrer.includes('android-app://')) ||
+    (window.location && (
+      window.location.search.includes('source=pwa') ||
+      window.location.search.includes('pwa=1') ||
+      window.location.search.includes('mode=standalone')
+    )) ||
+    localStorage.getItem('protec_pwa_installed') === 'true' ||
+    localStorage.getItem('myprotec_app_installed') === 'true'
+  );
+  if (isEarlyInstalled && document.documentElement) {
+    document.documentElement.classList.add('pwa-installed');
+  }
+} catch (e) {}
 
 // Initialisation dès chargement du script
 window.addEventListener('DOMContentLoaded', () => {

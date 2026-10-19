@@ -2459,3 +2459,10 @@ html.dark [id^="sig-pad-"] .border-slate-300 {
   border-color: #334155 !important;
 }
 
+/* Règle PWA : Masquer immédiatement les boutons d'installation / téléchargement si l'application est déjà installée */
+html.pwa-installed #pwa-install-btn,
+html.pwa-installed #pwa-install-btn-mobile,
+html.pwa-installed .pwa-install-trigger {
+  display: none !important;
+}
+
