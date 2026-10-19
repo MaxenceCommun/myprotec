@@ -14925,12 +14925,41 @@ class ProtecGame {
                     })()}
                   </div>
                 </div>
-                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
                   <span class="text-[9px] uppercase font-black text-slate-400 block">Lots RNMSC</span>
                   <div class="flex items-center gap-1 mt-1 flex-wrap">
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">Lot A</span>
-                    ${(mission.configuredLots || []).includes('lot_b') ? '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200">Lot B</span>' : ''}
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-200">DAE+O2</span>
+                    ${(() => {
+                      const cov = this.checkMissionMoyensCoverage(mission);
+                      const lotsBadges = [];
+                      const configured = mission.configuredLots || [];
+                      const scale = (mission.scale || '').toUpperCase();
+                      const isCrisis = mission.isCrisis || mission.type === 'crise';
+
+                      if (isCrisis) {
+                        if (cov.needs.logKitNames && cov.needs.logKitNames.length > 0) {
+                          cov.needs.logKitNames.forEach(kitName => {
+                            lotsBadges.push(`<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">${kitName}</span>`);
+                          });
+                        } else {
+                          lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">Lot Crise</span>');
+                        }
+                      } else {
+                        // Lot A : toujours présent sur les DPS (Secours d'Urgence intégrant DAE & O2)
+                        lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700">Lot A</span>');
+
+                        // Lot B : si configuré ou si échelle ME / GE
+                        const needsLotB = configured.includes('lot_b') || scale.includes('ME') || scale.includes('GE') || (cov.needs.reqLogKits >= 2);
+                        if (needsLotB) {
+                          lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">Lot B</span>');
+                        }
+
+                        // Lot C / Tente PMA si configuré
+                        if (configured.includes('tente') || configured.includes('lot_c') || scale.includes('GE')) {
+                          lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">Tente PMA</span>');
+                        }
+                      }
+                      return lotsBadges.join('');
+                    })()}
                   </div>
                 </div>
               </div>
@@ -16210,24 +16239,30 @@ class ProtecGame {
                   </div>
                 </div>
 
-                <!-- Matériel Spécifique & Dispositifs Médicaux -->
-                <div class="grid grid-cols-2 gap-2 text-xs">
-                  <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
-                    <div class="flex items-center gap-1.5 font-extrabold text-slate-800">
-                      <i data-lucide="heart-pulse" class="w-4 h-4 text-rose-500"></i>
-                      <span>Défibrillateur DAE</span>
-                    </div>
-                    <p class="text-[10px] text-slate-500">Électrodes adultes & pédiatriques vérifiées. Batterie 100%.</p>
-                    <span class="text-[9px] font-bold text-emerald-700 block">✓ Prêt à l'emploi</span>
+                <!-- Dotation Sanitaire Intégrée au Lot A (Norme RNMSC) -->
+                <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-slate-800 dark:text-slate-200 uppercase flex items-center gap-1.5">
+                      <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+                      <span>Dotation Sanitaire Intégrée au Lot A</span>
+                    </span>
+                    <span class="text-[9px] font-black px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700">✓ Conforme RNMSC</span>
                   </div>
-
-                  <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
-                    <div class="flex items-center gap-1.5 font-extrabold text-slate-800">
-                      <i data-lucide="wind" class="w-4 h-4 text-sky-500"></i>
-                      <span>Oxygénothérapie O2</span>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 space-y-1">
+                      <div class="flex items-center gap-1.5 font-extrabold text-slate-800 dark:text-slate-200">
+                        <i data-lucide="heart-pulse" class="w-4 h-4 text-rose-500"></i>
+                        <span>Défibrillateur (DAE)</span>
+                      </div>
+                      <p class="text-[10px] text-slate-500 dark:text-slate-400">Intégré dans le sac d'urgence Lot A. Électrodes adultes & pédiatriques prêtes.</p>
                     </div>
-                    <p class="text-[10px] text-slate-500">2 Bouteilles 5L (200 bars). Masques haute concentration.</p>
-                    <span class="text-[9px] font-bold text-emerald-700 block">✓ Pression conforme</span>
+                    <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 space-y-1">
+                      <div class="flex items-center gap-1.5 font-extrabold text-slate-800 dark:text-slate-200">
+                        <i data-lucide="wind" class="w-4 h-4 text-sky-500"></i>
+                        <span>Inhalothérapie (O2 B5)</span>
+                      </div>
+                      <p class="text-[10px] text-slate-500 dark:text-slate-400">Bouteilles O2 médical 200 bars intégrées à la jauge consommable du Lot A.</p>
+                    </div>
                   </div>
                 </div>
 
@@ -19649,10 +19684,10 @@ class ProtecGame {
                         <label class="block text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">Lots matériels engagés :</label>
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
                           ${[
-                            { id: 'lot_a', name: 'Lot A (Secours/PMA)' },
-                            { id: 'lot_b', name: 'Lot B (Trauma)' },
-                            { id: 'dae', name: 'DAE & Oxygène' },
-                            { id: 'tente', name: 'Tente / Abri PMA' }
+                            { id: 'lot_a', name: 'Lot A (Secours & Réa)' },
+                            { id: 'lot_b', name: 'Lot B (Brancardage & MID)' },
+                            { id: 'tente', name: 'Lot C (Tente & Abri PMA)' },
+                            { id: 'lot_log', name: 'Lot LOG (Éclairage / Énergie)' }
                           ].map(lot => {
                             const isSelected = (d.configuredLots || []).includes(lot.id);
                             return `
