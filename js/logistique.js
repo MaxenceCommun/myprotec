@@ -141,6 +141,38 @@ window.ProtecLogistique = {
       usage: 'Dégagement express d’arbres tombés sur les voies lors d’intempéries.'
     },
     {
+      id: 'remorque_groupe_electro',
+      category: 'technique_crise',
+      name: 'Remorque Groupe Électrogène 50 kVA (Attelage Boule)',
+      lucideIcon: 'zap',
+      image: 'images/equipements/lot_eclairage.png',
+      price: 4800,
+      unit: 'remorque routière freinée',
+      slots: 3,
+      requiresTrailer: true,
+      requiresTowHitch: true,
+      badge: 'Énergie & Black-out (Attelage Boule)',
+      badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
+      desc: 'Groupe électrogène diesel insonorisé 50 kVA (40 kW) sur remorque routière freinée avec tête d’attelage boule 50 mm. Inverseur de source normal/secours, armoire de prises triphasées 400V et monophasées 230V étanches IP67, cuve 350 L de GNR (autonomie 24-36h).',
+      usage: 'Tractée par tout véhicule avec boule d’attelage (VTU, VLHR, VTP, VL). Réalimente d’urgence un EHPAD, un gymnase d’évacuation (CHU), un PMA ou sécurise l’antenne lors d’un black-out Enedis.'
+    },
+    {
+      id: 'remorque_motopompe',
+      category: 'technique_crise',
+      name: 'Remorque Moto-Pompe d’Épuisement Grande Capacité (MPGC - Attelage Boule)',
+      lucideIcon: 'waves',
+      image: 'images/equipements/lot_pompage.png',
+      price: 3800,
+      unit: 'remorque routière freinée',
+      slots: 3,
+      requiresTrailer: true,
+      requiresTowHitch: true,
+      badge: 'Inondations & Pompage Lourd (Attelage Boule)',
+      badgeColor: 'bg-cyan-100 text-cyan-900 border-cyan-300',
+      desc: 'Unité motopompe thermique gros débit (120 m³/h soit 2 000 L/min) sur châssis remorque routière avec tête d’attelage boule 50 mm. Moteur thermique diesel 4 temps à démarrage électrique, crépine d’aspiration armée 100 mm avec clapet anti-retour, 120m de tuyaux de refoulement DSP 100 et vanne de régulation.',
+      usage: 'Tractée par tout véhicule avec boule d’attelage (VTU, VLHR, VTP, VL). Réduit de 50% le temps d’épuisement des eaux lors des crues et parkings submergés. Majore l’indemnisation communale (+40% de subvention par chantier de pompage).'
+    },
+    {
       id: 'lot_pompage',
       category: 'technique_crise',
       name: 'Lot Épuisement / Pompage Eaux Chargées',
@@ -2912,6 +2944,46 @@ window.ProtecLogistique = {
         { icon: '🧴', name: 'Spray antiseptique dermo-nettoyant chlorhexidine', qty: 1 },
         { icon: '✨', name: 'Couvertures de survie isothermes', qty: 2 },
         { icon: '🧤', name: 'Paires de gants nitrile à usage unique', qty: 4 }
+      ]
+    },
+    remorque_groupe_electro: {
+      id: 'remorque_groupe_electro',
+      title: 'Remorque Groupe Électrogène Insonorisé 50 kVA (Attelage Boule 50 mm)',
+      shortName: 'Remorque GE 50 kVA',
+      standard: 'Soutien Électrique Lourd & Continuité d’Activité ORSEC',
+      category: 'Énergie & Black-out',
+      slots: 3,
+      price: 4800,
+      icon: 'zap',
+      badgeClass: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700',
+      desc: 'Groupe électrogène diesel insonorisé 50 kVA (40 kW) sur châssis routier freiné tracté par attelage boule 50 mm.',
+      items: [
+        { icon: '⚡', name: 'Alternateur triphasé 400V / monophasé 230V régulé AVR 50 kVA', qty: 1 },
+        { icon: '⛽', name: 'Cuve intégrée GNR 350L (autonomie 24-36h en pleine charge)', qty: 1 },
+        { icon: '🔌', name: 'Armoire de distribution étanche IP67 (2x 32A tri, 4x 16A mono)', qty: 1 },
+        { icon: '🧯', name: 'Inverseur de source normal/secours automatique/manuel', qty: 1 },
+        { icon: '🔗', name: 'Tête d’attelage boule 50 mm freinée + câble de sécurité et béquille', qty: 1 },
+        { icon: '🦯', name: 'Piquet de terre en cuivre 1.5m + câble équipotentiel 16 mm²', qty: 2 }
+      ]
+    },
+    remorque_motopompe: {
+      id: 'remorque_motopompe',
+      title: 'Remorque Moto-Pompe d’Épuisement Grande Capacité (MPGC 120 m³/h - Attelage Boule)',
+      shortName: 'Remorque Motopompe MPGC',
+      standard: 'ORSEC Inondations & Crues Majeures',
+      category: 'Inondations & Pompage Lourd',
+      slots: 3,
+      price: 3800,
+      icon: 'waves',
+      badgeClass: 'bg-cyan-100 text-cyan-900 border-cyan-300 dark:bg-cyan-950/40 dark:text-cyan-200 dark:border-cyan-700',
+      desc: 'Unité motopompe thermique gros débit (120 m³/h soit 2 000 L/min) sur châssis remorque routière avec tête d’attelage boule 50 mm.',
+      items: [
+        { icon: '🌊', name: 'Corps de pompe fonte haute résistance eaux boueuses & chargées', qty: 1 },
+        { icon: '⚙️', name: 'Moteur diesel 4 temps 22 ch à démarrage électrique & batterie', qty: 1 },
+        { icon: '🚰', name: 'Tuyaux d’aspiration armés 100 mm (DSP 100) avec crépine à clapet', qty: 3 },
+        { icon: '🚒', name: 'Couronnes de tuyaux de refoulement DSP 100 de 20 m (120 m total)', qty: 6 },
+        { icon: '🔗', name: 'Châssis remorque freinée avec tête d’attelage boule 50 mm', qty: 1 },
+        { icon: '🧹', name: 'Clés tricoises DN 100, réducteurs DSP 100/65 et vannes quart de tour', qty: 4 }
       ]
     }
   },

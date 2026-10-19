@@ -538,6 +538,34 @@ window.ProtecEquipements = {
       badgeColor: 'bg-indigo-950 text-indigo-200 border-indigo-700',
       desc: 'Mallette tactique informatique et transmissions tout-en-un (ordinateur de crise cartographie SIG/SINUS, baie radio multi-bandes ANTARES/VHF/UHF, modem satellite 4G/5G sécurisé, tableau SITAC, imprimante de crise et convertisseur 12V/230V). Permet d’équiper une VL standard pour la passer en VL Commandement opérationnelle.',
       bonus: 'Transforme une VL en VL Commandement pour piloter une cellule de crise, un plan NOVI ou un grand dispositif sous la direction d’un Chef de Dispositif ou Chef de Poste.'
+    },
+    {
+      id: 'remorque_groupe_electro',
+      name: 'Remorque Groupe Électrogène 50 kVA (Attelage Boule)',
+      lucideIcon: 'zap',
+      image: 'images/equipements/lot_eclairage.png',
+      price: 4800,
+      storageSize: 3,
+      requiresTrailer: true,
+      requiresTowHitch: true,
+      badge: 'Énergie & Black-out (Attelage Boule)',
+      badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
+      desc: 'Groupe électrogène diesel insonorisé 50 kVA (40 kW) sur remorque routière freinée avec tête d’attelage boule 50 mm. Inverseur de source normal/secours, armoire de prises triphasées 400V et monophasées 230V étanches IP67, cuve 350 L de GNR (autonomie 24-36h).',
+      bonus: 'Tractée par tout véhicule avec boule d’attelage (VTU, VLHR, VTP, VL). Réalimente d’urgence un EHPAD, un gymnase d’évacuation (CHU), un PMA ou sécurise l’antenne lors d’un black-out Enedis (+350 € subvention et +45 réputation).'
+    },
+    {
+      id: 'remorque_motopompe',
+      name: 'Remorque Moto-Pompe d’Épuisement Grande Capacité (MPGC - Attelage Boule)',
+      lucideIcon: 'waves',
+      image: 'images/equipements/lot_pompage.png',
+      price: 3800,
+      storageSize: 3,
+      requiresTrailer: true,
+      requiresTowHitch: true,
+      badge: 'Inondations & Pompage Lourd (Attelage Boule)',
+      badgeColor: 'bg-cyan-100 text-cyan-900 border-cyan-300',
+      desc: 'Unité motopompe thermique gros débit (120 m³/h soit 2 000 L/min) sur châssis remorque routière avec tête d’attelage boule 50 mm. Moteur thermique diesel 4 temps à démarrage électrique, crépine d’aspiration armée 100 mm avec clapet anti-retour, 120m de tuyaux de refoulement DSP 100 et vanne de régulation.',
+      bonus: 'Tractée par tout véhicule avec boule d’attelage (VTU, VLHR, VTP, VL). Réduit de 50% le temps d’épuisement des eaux lors des crues et parkings submergés. Majore l’indemnisation communale (+40% subvention soit +280 € et +40 réputation).'
     }
   ],
 
@@ -619,7 +647,8 @@ window.ProtecEquipements = {
       'lot_secours_a', 'lot_secours_b', 'lot_secours_c',
       'lot_tronconnage', 'lot_pompage', 'lot_eclairage', 'lot_bachage',
       'lot_hebergement', 'lot_ravitaillement', 'lot_soutien_psy',
-      'lot_poste_commandement_mobile'
+      'lot_poste_commandement_mobile',
+      'remorque_groupe_electro', 'remorque_motopompe'
     ];
     allKeys.forEach(k => {
       if (game.workplaceEquipment[k] === undefined) {
@@ -1014,6 +1043,65 @@ window.ProtecEquipements = {
       game.resources.reputationScore = (game.resources.reputationScore || 0) + 25;
       game.showToast('⛺ Lot C Poste Fixe Déployé !', 'Tente de poste de secours et brancards de soins armés : flux de victimes parfaitement absorbé !', 'purple');
     }
+
+    // 9. Remorque Groupe Électrogène 50 kVA (Tractée avec Boule d'attelage)
+    if (this.hasEquipment(game, 'remorque_groupe_electro')) {
+      const isPowerCrisis = mText.includes('coupure') || mText.includes('black-out') || mText.includes('blackout') || 
+                            mText.includes('ehpad') || mText.includes('chu') || mText.includes('électricité') || 
+                            mText.includes('electricite') || mText.includes('groupe') || mText.includes('énergie') || 
+                            mText.includes('tempête') || mText.includes('gymnase');
+      if (isPowerCrisis) {
+        const hasTractorHitch = (game.vehicles || []).some(v => v.hasTowHitch && v.status !== 'indisponible');
+        if (hasTractorHitch) {
+          const powerBonus = 350;
+          game.resources.money += powerBonus;
+          game.resources.reputationScore = (game.resources.reputationScore || 0) + 45;
+          if (window.ProtecFinances) {
+            window.ProtecFinances.recordTransaction(game, powerBonus, 'Subvention Réalimentation Électrique d’Urgence (Remorque GE 50 kVA)', 'prestation');
+          }
+          game.showToast(
+            '⚡ Remorque Groupe Électrogène 50 kVA Engagée !',
+            `Tractée avec boule d'attelage : réseau de secours réalimenté avec succès (+${powerBonus} € subvention préfecture/ARS, +45 réputation) !`,
+            'amber'
+          );
+        } else {
+          game.showToast(
+            '⚠️ Remorque GE 50 kVA Non Tractable !',
+            'Aucun véhicule doté d’une boule d’attelage disponible pour remorquer le groupe électrogène lourd.',
+            'orange'
+          );
+        }
+      }
+    }
+
+    // 10. Remorque Motopompe Grande Capacité (Tractée avec Boule d'attelage)
+    if (this.hasEquipment(game, 'remorque_motopompe')) {
+      const isFloodCrisis = mText.includes('inondation') || mText.includes('pompage') || mText.includes('crue') || 
+                            mText.includes('ruissellement') || mText.includes('submergé') || mText.includes('eau') || 
+                            mText.includes('pluie') || mText.includes('sous-sol') || mText.includes('parking');
+      if (isFloodCrisis) {
+        const hasTractorHitch = (game.vehicles || []).some(v => v.hasTowHitch && v.status !== 'indisponible');
+        if (hasTractorHitch) {
+          const pumpBonus = 280;
+          game.resources.money += pumpBonus;
+          game.resources.reputationScore = (game.resources.reputationScore || 0) + 40;
+          if (window.ProtecFinances) {
+            window.ProtecFinances.recordTransaction(game, pumpBonus, 'Majoration Pompage Lourd Communal (Remorque MPGC 120 m³/h)', 'prestation');
+          }
+          game.showToast(
+            '🌊 Remorque Motopompe Lourd Engagée !',
+            `Tractée avec boule d'attelage : épuisement grande capacité 120 m³/h (2 000 L/min) (+${pumpBonus} € subvention mairie, +40 réputation) !`,
+            'blue'
+          );
+        } else {
+          game.showToast(
+            '⚠️ Remorque Motopompe Non Tractable !',
+            'Aucun véhicule doté d’une boule d’attelage disponible pour remorquer l’unité MPGC.',
+            'orange'
+          );
+        }
+      }
+    }
   },
 
   // Navigation & onglets
@@ -1317,7 +1405,7 @@ window.ProtecEquipements = {
           <button onclick="window.ProtecEquipements.setTab('logistique', window.game)" class="flex-1 py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === 'logistique' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
             <i data-lucide="package" class="w-4 h-4"></i>
             <span>Logistique & Crise</span>
-            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800">11</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800">${this.LOTS_CATALOG.length}</span>
           </button>
           <button onclick="window.ProtecEquipements.setTab('tenues', window.game)" class="flex-1 py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === 'tenues' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
             <i data-lucide="shirt" class="w-4 h-4"></i>
