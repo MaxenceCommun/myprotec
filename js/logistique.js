@@ -16,6 +16,20 @@ window.ProtecLogistique = {
   searchQuery: '',
   cart: {}, // { [itemId]: quantity }
 
+  // Visuels réels disponibles sur le disque (élimine toute erreur 404 dans la console du navigateur)
+  EXISTING_IMAGES: new Set([
+    'images/equipements/lot_secours_a.png',
+    'images/equipements/lot_secours_b.png',
+    'images/equipements/lot_secours_c.png',
+    'images/equipements/lot_poste_commandement_mobile.png',
+    'images/equipements/prise_parametres.png',
+    'images/equipements/schiller.png'
+  ]),
+
+  hasRealImage(path) {
+    return Boolean(path && this.EXISTING_IMAGES.has(path));
+  },
+
   // =========================================================================
   // 1. CATALOGUE OFFICIEL CENTRAL D'ACHATS PROTECTION CIVILE
   // =========================================================================
@@ -998,16 +1012,18 @@ window.ProtecLogistique = {
               return `
                 <div class="p-3.5 rounded-2xl bg-white border border-slate-200/90 hover:border-pc-blue/60 shadow-xs hover:shadow-md transition flex flex-col justify-between gap-2.5 group">
                   <div>
-                    <!-- Zone image PNG avec fallback icône Lucide vectorielle -->
+                    <!-- Zone image PNG ou Icône Lucide vectorielle élégante -->
                     <div class="relative w-full h-32 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden mb-2.5 group-hover:border-pc-blue/30 transition">
-                      <img src="${item.image || 'images/equipements/' + item.id + '.png'}" 
-                           alt="${item.name}" 
-                           class="w-full h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
-                           onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
-                      <div class="fallback-icon hidden w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1 bg-slate-50">
-                        <i data-lucide="${item.lucideIcon || 'package'}" class="w-9 h-9 text-pc-blue stroke-[1.75]"></i>
-                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">${item.unit}</span>
-                      </div>
+                      ${this.hasRealImage(item.image) ? `
+                        <img src="${item.image}" 
+                             alt="${item.name}" 
+                             class="w-full h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105" />
+                      ` : `
+                        <div class="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1 bg-slate-50">
+                          <i data-lucide="${item.lucideIcon || 'package'}" class="w-9 h-9 text-pc-blue stroke-[1.75]"></i>
+                          <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">${item.unit || ''}</span>
+                        </div>
+                      `}
                       <span class="px-2 py-0.5 rounded text-[9.5px] font-black border backdrop-blur-md shadow-xs absolute top-2 left-2 ${item.badgeColor}">
                         ${item.badge}
                       </span>
@@ -1474,13 +1490,15 @@ window.ProtecLogistique = {
                 <div class="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200 flex items-start justify-between gap-3">
                   <div class="flex items-start gap-3">
                     <div class="relative w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 shadow-2xs overflow-hidden">
-                      <img src="${item.image || 'images/equipements/' + item.id + '.png'}" 
-                           alt="${item.name}" 
-                           class="w-full h-full object-contain p-1"
-                           onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
-                      <div class="fallback-icon hidden w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
-                        <i data-lucide="${item.lucideIcon || 'package'}" class="w-6 h-6 text-pc-blue stroke-[1.75]"></i>
-                      </div>
+                      ${this.hasRealImage(item.image) ? `
+                        <img src="${item.image}" 
+                             alt="${item.name}" 
+                             class="w-full h-full object-contain p-1" />
+                      ` : `
+                        <div class="w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
+                          <i data-lucide="${item.lucideIcon || 'package'}" class="w-6 h-6 text-pc-blue stroke-[1.75]"></i>
+                        </div>
+                      `}
                     </div>
                     <div>
                       <h5 class="text-xs font-black text-slate-900 leading-snug">${item.name}</h5>

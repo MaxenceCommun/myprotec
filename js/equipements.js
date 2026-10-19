@@ -20,6 +20,20 @@ window.ProtecEquipements = {
   activeTab: 'secours', // 'secours' | 'formation' | 'logistique' | 'tenues'
   searchQuery: '',
 
+  // Visuels réels disponibles sur le disque (élimine toute erreur 404 dans la console du navigateur)
+  EXISTING_IMAGES: new Set([
+    'images/equipements/lot_secours_a.png',
+    'images/equipements/lot_secours_b.png',
+    'images/equipements/lot_secours_c.png',
+    'images/equipements/lot_poste_commandement_mobile.png',
+    'images/equipements/prise_parametres.png',
+    'images/equipements/schiller.png'
+  ]),
+
+  hasRealImage(path) {
+    return Boolean(path && this.EXISTING_IMAGES.has(path));
+  },
+
   // =========================================================================
   // 1. CATALOGUE DES GAMMES D'ÉQUIPEMENT ÉCHELONNÉES EN NIVEAUX (TIERS)
   // =========================================================================
@@ -1454,13 +1468,15 @@ window.ProtecEquipements = {
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                       <div class="flex items-center gap-3">
                         <div class="relative w-14 h-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-2xs">
-                          <img src="${item.image || 'images/equipements/' + item.id + '.png'}" 
-                               alt="${item.name}" 
-                               class="w-full h-full object-contain p-1"
-                               onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
-                          <div class="fallback-icon hidden w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
-                            <i data-lucide="${item.lucideIcon || 'package'}" class="w-7 h-7 text-pc-blue stroke-[1.75]"></i>
-                          </div>
+                          ${this.hasRealImage(item.image) ? `
+                            <img src="${item.image}" 
+                                 alt="${item.name}" 
+                                 class="w-full h-full object-contain p-1" />
+                          ` : `
+                            <div class="w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
+                              <i data-lucide="${item.lucideIcon || 'package'}" class="w-7 h-7 text-pc-blue stroke-[1.75]"></i>
+                            </div>
+                          `}
                         </div>
                         <div>
                           <h4 class="text-sm font-black text-slate-900 leading-tight">${item.name}</h4>
@@ -1576,13 +1592,15 @@ window.ProtecEquipements = {
                         <div class="flex items-start justify-between gap-2">
                           <div class="flex items-center gap-3">
                             <div class="relative w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-2xs">
-                              <img src="${lot.image || 'images/equipements/' + lot.id + '.png'}" 
-                                   alt="${lot.name}" 
-                                   class="w-full h-full object-contain p-1"
-                                   onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
-                              <div class="fallback-icon hidden w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
-                                <i data-lucide="${lot.lucideIcon || 'package'}" class="w-6 h-6 text-pc-blue stroke-[1.75]"></i>
-                              </div>
+                              ${this.hasRealImage(lot.image) ? `
+                                <img src="${lot.image}" 
+                                     alt="${lot.name}" 
+                                     class="w-full h-full object-contain p-1" />
+                              ` : `
+                                <div class="w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
+                                  <i data-lucide="${lot.lucideIcon || 'package'}" class="w-6 h-6 text-pc-blue stroke-[1.75]"></i>
+                                </div>
+                              `}
                             </div>
                             <div>
                               <h5 class="text-xs font-black text-slate-900 leading-tight">${lot.name}</h5>
@@ -1647,13 +1665,15 @@ window.ProtecEquipements = {
                         <div class="flex items-start justify-between gap-2">
                           <div class="flex items-center gap-3">
                             <div class="relative w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-2xs">
-                              <img src="${item.image || 'images/equipements/' + item.id + '.png'}" 
-                                   alt="${item.name}" 
-                                   class="w-full h-full object-contain p-1"
-                                   onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
-                              <div class="fallback-icon hidden w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
-                                <i data-lucide="${item.lucideIcon || 'armchair'}" class="w-6 h-6 text-pc-blue stroke-[1.75]"></i>
-                              </div>
+                              ${this.hasRealImage(item.image) ? `
+                                <img src="${item.image}" 
+                                     alt="${item.name}" 
+                                     class="w-full h-full object-contain p-1" />
+                              ` : `
+                                <div class="w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
+                                  <i data-lucide="${item.lucideIcon || 'armchair'}" class="w-6 h-6 text-pc-blue stroke-[1.75]"></i>
+                                </div>
+                              `}
                             </div>
                             <div>
                               <h5 class="text-xs font-black text-slate-900 leading-tight">${item.name}</h5>
