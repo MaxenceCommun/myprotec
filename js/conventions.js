@@ -86,6 +86,11 @@ window.ProtecConventions = {
       game.reputation_villes[baseCity] = 55;
     }
 
+    const prefLimits = typeof game.getCrisisConventionLimits === 'function' ? game.getCrisisConventionLimits('prefecture') : { maxVolunteers: 6, maxVpsp: 1, maxVtu: 1, maxChuPlaces: 40 };
+    const samuLimits = typeof game.getCrisisConventionLimits === 'function' ? game.getCrisisConventionLimits('samu') : { maxVolunteers: 6, maxVpsp: 1, maxVtu: 1, maxChuPlaces: 20 };
+    const sdisLimits = typeof game.getCrisisConventionLimits === 'function' ? game.getCrisisConventionLimits('pompiers') : { maxVolunteers: 6, maxVpsp: 1, maxVtu: 1, maxChuPlaces: 30 };
+    const sncfLimits = typeof game.getCrisisConventionLimits === 'function' ? game.getCrisisConventionLimits('sncf') : { maxVolunteers: 4, maxVpsp: 1, maxVtu: 1, maxChuPlaces: 25 };
+
     body.innerHTML = `
       <div class="space-y-6">
 
@@ -200,6 +205,24 @@ window.ProtecConventions = {
             </div>
           </div>
 
+          <div class="p-3 rounded-2xl bg-indigo-50/80 border border-indigo-200 text-[11px] space-y-1.5">
+            <div class="flex items-center justify-between font-black text-indigo-950">
+              <span class="flex items-center gap-1.5">
+                <span>🛡️</span>
+                <span>Plafonds Contractuels de Crise (Plan ORSEC & Réquisitions)</span>
+              </span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white">Capacité Départementale Garantie</span>
+            </div>
+            <p class="text-[10.5px] text-slate-600 leading-tight">
+              Cette convention cadre délimite le contingent maximal que la Préfecture, la Police et la Gendarmerie sont légalement habilitées à requérir auprès de l’APC.
+            </p>
+            <div class="pt-1 border-t border-indigo-200/80 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-slate-700 font-semibold">
+              <div>👥 <strong>Effectif max garanti :</strong> <span class="text-indigo-900 font-bold">${prefLimits.maxVolunteers} secouristes</span></div>
+              <div>🚑 <strong>Flotte max réquisition :</strong> <span class="text-indigo-900 font-bold">${prefLimits.maxVpsp} VPSP • ${prefLimits.maxVtu} VTU</span></div>
+              <div>🛏️ <strong>Capacité CHU garantie :</strong> <span class="text-indigo-900 font-bold">${prefLimits.maxChuPlaces} lits</span></div>
+            </div>
+          </div>
+
           <div class="pt-1 flex items-center justify-between">
             ${game.aascConvention?.signed ? `
               <div class="flex items-center gap-2 text-xs font-bold text-emerald-800">
@@ -281,6 +304,10 @@ window.ProtecConventions = {
                 <div class="pt-1.5 border-t border-sky-200/80 grid grid-cols-2 gap-1 text-[10px] text-slate-700">
                   <div>⏱️ <strong>Délai max départ :</strong> <span class="text-indigo-900 font-bold">&lt; 3 min (Base) / &lt; 12 min (Domicile)</span></div>
                   <div>👥 <strong>Équipage mini :</strong> <span class="text-indigo-900 font-bold">3 secouristes (dont 1 CE/PSE2)</span></div>
+                </div>
+                <div class="pt-1.5 border-t border-sky-200/80 text-[10px] text-slate-700 flex items-center justify-between font-semibold">
+                  <span>🛡️ <strong>Plafond Conventionné Plan NOVI :</strong></span>
+                  <span class="text-indigo-950 font-bold">Max ${samuLimits.maxVolunteers} secouristes • ${samuLimits.maxVpsp} VPSP • ${samuLimits.maxVtu} VTU (PMA)</span>
                 </div>
               </div>
 
@@ -502,6 +529,10 @@ window.ProtecConventions = {
                   <span>Cadre d'intervention :</span>
                   <span>${pompiersAuth.cadreIntervention}</span>
                 </div>
+                <div class="pt-1.5 border-t border-slate-200/80 flex justify-between text-[10px]">
+                  <span class="text-slate-600 font-semibold">🛡️ Plafond Crise Conventionné :</span>
+                  <span class="text-orange-950 font-bold">Max ${sdisLimits.maxVolunteers} secouristes • ${sdisLimits.maxVpsp} VPSP • ${sdisLimits.maxVtu} VTU</span>
+                </div>
               </div>
 
               ${game.sdisConvention?.requestStatus === 'rejected' ? `
@@ -718,6 +749,10 @@ window.ProtecConventions = {
                 <div class="flex justify-between">
                   <span>Cadre d'intervention :</span>
                   <span>Prise en charge, eau et réconfort des voyageurs bloqués en gare ou pleine voie</span>
+                </div>
+                <div class="pt-1.5 border-t border-slate-200/80 flex justify-between text-[10px]">
+                  <span class="text-slate-600 font-semibold">🛡️ Plafond Crise Ferroviaire :</span>
+                  <span class="text-purple-950 font-bold">Max ${sncfLimits.maxVolunteers} secouristes • ${sncfLimits.maxVpsp} VPSP • ${sncfLimits.maxChuPlaces} lits CHU</span>
                 </div>
               </div>
 

@@ -2445,9 +2445,6 @@ window.ProtecCriseLogistique = {
     const base = game.stations[0] || { lat: 48.8566, lng: 2.3522, name: 'Antenne Principale' };
     const now = Date.now();
     const deptCode = String(game.currentDepartmentCode || game.stations?.[0]?.departmentCode || game.player?.departmentCode || '75');
-    const apcCap = typeof game.getApcDepartmentOperationalCapacity === 'function'
-      ? game.getApcDepartmentOperationalCapacity(deptCode)
-      : null;
     let m = null;
 
     if (scenarioKey === 'recherche_disparu') {
@@ -2456,7 +2453,10 @@ window.ProtecCriseLogistique = {
         title: isParis ? 'Recherche Préfecture de Police : Disparition en Milieu Boisé (Bois de Boulogne)' : 'Recherche Gendarmerie : Personne Disparue en Forêt',
         targetEnvironment: isParis ? 'bois_paris' : 'foret_province'
       });
-      const vols = apcCap ? Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.35), Math.max(4, apcCap.totalVolunteers - 1))) : 6;
+      const limits = typeof game.getCrisisConventionLimits === 'function'
+        ? game.getCrisisConventionLimits('recherche', deptCode)
+        : { maxVolunteers: 6, maxVtu: 1, conventionBadge: 'Convention AASC' };
+      const vols = limits.maxVolunteers;
       m = {
         id: `scen_rech_${now}`,
         title: isParis ? 'Recherche Préfecture de Police : Disparition en Milieu Boisé' : 'Recherche Gendarmerie : Personne Disparue en Forêt',
@@ -2466,7 +2466,7 @@ window.ProtecCriseLogistique = {
         type: 'crise',
         crisisType: 'recherche_disparu',
         isCrisis: true,
-        scale: `${isParis ? 'BATTUE POLICE' : 'BATTUE GENDARMERIE'} (Mobilisation APC : ${vols} secouristes + Drone/Cyno)`,
+        scale: `${isParis ? 'BATTUE POLICE' : 'BATTUE GENDARMERIE'} [${limits.conventionBadge}] : Plafond ${vols} secouristes + Drone/Cyno`,
         urgency: 'haute',
         lat: loc.lat,
         lng: loc.lng,
@@ -2485,8 +2485,11 @@ window.ProtecCriseLogistique = {
       };
     } else if (scenarioKey === 'crash_aerien') {
       const loc = game.calculateRealisticMissionLocation(base, 'crise');
-      const vols = apcCap ? Math.max(6, Math.min(Math.round(apcCap.totalVolunteers * 0.65), apcCap.totalVolunteers)) : 8;
-      const vpspCount = apcCap ? Math.max(1, Math.min(Math.round(apcCap.totalVpsp * 0.60), apcCap.totalVpsp)) : 2;
+      const limits = typeof game.getCrisisConventionLimits === 'function'
+        ? game.getCrisisConventionLimits('samu', deptCode)
+        : { maxVolunteers: 8, maxVpsp: 2, conventionBadge: 'Convention Cadre SAMU' };
+      const vols = limits.maxVolunteers;
+      const vpspCount = Math.max(1, limits.maxVpsp);
       const vehList = ['VTU'];
       for (let i = 0; i < Math.min(2, vpspCount); i++) vehList.unshift('VPSP');
       m = {
@@ -2497,7 +2500,7 @@ window.ProtecCriseLogistique = {
         crisisType: 'crash_aerien',
         isCrisis: true,
         isCumpCai: true,
-        scale: `ORSEC / NOVI CUMP (Mobilisation APC : ${vols} secouristes, ${vehList.join('/')})`,
+        scale: `ORSEC / NOVI CUMP [${limits.conventionBadge}] : Plafond ${vols} secouristes, ${vehList.join('/')}`,
         urgency: 'critique',
         lat: loc.lat,
         lng: loc.lng,
@@ -2515,15 +2518,18 @@ window.ProtecCriseLogistique = {
       };
     } else if (scenarioKey === 'incendie_ehpad') {
       const loc = game.calculateRealisticMissionLocation(base, 'crise');
-      const vols = apcCap ? Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.45), Math.max(4, apcCap.totalVolunteers - 1))) : 6;
+      const limits = typeof game.getCrisisConventionLimits === 'function'
+        ? game.getCrisisConventionLimits('pompiers', deptCode)
+        : { maxVolunteers: 6, maxVpsp: 1, conventionBadge: 'Convention SDIS' };
+      const vols = limits.maxVolunteers;
       m = {
         id: `scen_ehpad_${now}`,
         title: 'Incendie EHPAD : Évacuation Sanitaire & Mise à l’Abri',
-        desc: 'Feu dans un établissement pour personnes âgées. Le CODIS missionne la Protection Civile pour l’évacuation d’urgence de 45 résidents valides et dépendants vers la salle des fêtes.',
+        desc: 'Feu dans un établissement pour personnes âgées. Le CODIS missionne la Protection Civile pour l’évacuation d’urgence de résidents valides et dépendants vers la salle des fêtes dans la limite des contingents conventionnés.',
         type: 'crise',
         crisisType: 'incendie_ehpad',
         isCrisis: true,
-        scale: `ÉVACUATION COLLECTIVE (Mobilisation APC : ${vols} secouristes + VPSP/VTU)`,
+        scale: `ÉVACUATION COLLECTIVE [${limits.conventionBadge}] : Plafond ${vols} secouristes + VPSP/VTU`,
         urgency: 'critique',
         lat: loc.lat,
         lng: loc.lng,
@@ -2589,15 +2595,18 @@ window.ProtecCriseLogistique = {
       };
     } else if (scenarioKey === 'tempete_rouge') {
       const loc = game.calculateRealisticMissionLocation(base, 'crise');
-      const vols = apcCap ? Math.max(6, Math.min(Math.round(apcCap.totalVolunteers * 0.60), apcCap.totalVolunteers)) : 8;
+      const limits = typeof game.getCrisisConventionLimits === 'function'
+        ? game.getCrisisConventionLimits('prefecture', deptCode)
+        : { maxVolunteers: 8, conventionBadge: 'Convention ORSEC' };
+      const vols = limits.maxVolunteers;
       m = {
         id: `scen_tempete_${now}`,
         title: 'Tempête Alerte Rouge : Renfort CHU & Déblaiement',
-        desc: 'Vigilance rouge vents violents. Renfort interdépartemental mobilisé : sécurisation des accès du CHU, bâchage de toitures et accueil des naufragés de la route.',
+        desc: 'Vigilance rouge vents violents. Renfort interdépartemental mobilisé : sécurisation des accès du CHU, bâchage de toitures et accueil des naufragés de la route dans les limites de la convention ORSEC.',
         type: 'crise',
         crisisType: 'tempete_rouge',
         isCrisis: true,
-        scale: `DÉTACHEMENT INTEMPÉRIES (Mobilisation APC : ${vols} secouristes + Lots Pompe/Tronço)`,
+        scale: `DÉTACHEMENT INTEMPÉRIES [${limits.conventionBadge}] : Plafond ${vols} secouristes + Lots Pompe/Tronço`,
         urgency: 'critique',
         lat: loc.lat,
         lng: loc.lng,
@@ -2731,18 +2740,28 @@ window.ProtecCriseLogistique = {
       status: 'active' // 'active' | 'terminee' | 'echec'
     };
 
-    // Adaptation proportionnelle des sous-missions aux moyens réels de l'APC dans le département
-    const apcCap = typeof game.getApcDepartmentOperationalCapacity === 'function'
-      ? game.getApcDepartmentOperationalCapacity(deptCode)
+    // Adaptation proportionnelle des sous-missions aux plafonds fixés par la convention de l'autorité
+    const authKey = template.autorite_code || template.type || crisisType;
+    const convLimits = typeof game.getCrisisConventionLimits === 'function'
+      ? game.getCrisisConventionLimits(authKey, deptCode)
       : null;
 
-    if (apcCap && Array.isArray(newCrisis.phases)) {
+    if (convLimits && Array.isArray(newCrisis.phases)) {
       newCrisis.phases.forEach(phase => {
         if (Array.isArray(phase.sous_missions)) {
           phase.sous_missions.forEach(sub => {
             if (sub.moyens_requis) {
-              if (sub.moyens_requis.vols_count && sub.moyens_requis.vols_count > apcCap.totalVolunteers) {
-                sub.moyens_requis.vols_count = Math.max(2, apcCap.totalVolunteers);
+              if (sub.moyens_requis.vols_count && sub.moyens_requis.vols_count > convLimits.maxVolunteers) {
+                sub.moyens_requis.vols_count = Math.max(2, convLimits.maxVolunteers);
+              }
+              if (Array.isArray(sub.moyens_requis.vehicles)) {
+                const reqVpsp = sub.moyens_requis.vehicles.filter(v => v === 'VPSP').length;
+                if (reqVpsp > convLimits.maxVpsp) {
+                  sub.moyens_requis.vehicles = sub.moyens_requis.vehicles.filter(v => v !== 'VPSP');
+                  for (let i = 0; i < Math.max(1, convLimits.maxVpsp); i++) {
+                    sub.moyens_requis.vehicles.unshift('VPSP');
+                  }
+                }
               }
             }
           });

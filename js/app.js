@@ -9511,93 +9511,260 @@ class ProtecGame {
     };
   }
 
+  // --- LIMITES OPÉRATIONNELLES DES DEMANDES DE CRISE FIXÉES PAR LES CONVENTIONS ---
+  getCrisisConventionLimits(originOrAuthority, deptCode = null) {
+    const apcCap = this.getApcDepartmentOperationalCapacity(deptCode);
+    const key = String(originOrAuthority || '').toLowerCase();
+
+    // 1. Convention Nationale SNCF (Naufragés du Rail & CHU en gare)
+    if (key === 'sncf') {
+      const isSigned = Boolean(this.sncfConvention?.signed);
+      // Limites contractuelles conventionnées basées sur les moyens déclarés du département :
+      // La SNCF ne peut pas exiger plus que ce qui est convenu dans la convention
+      const maxVolunteers = isSigned ? Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.40), 8)) : 0;
+      const maxVpsp = isSigned ? Math.max(1, Math.min(1, apcCap.totalVpsp)) : 0;
+      const maxVtu = isSigned ? Math.max(1, Math.min(2, apcCap.totalVtu)) : 0;
+      const maxVtp = isSigned && apcCap.totalVtp > 0 && apcCap.totalStations >= 2 ? 1 : 0;
+      const maxChuPlaces = isSigned ? Math.min(80, Math.max(25, apcCap.totalStations * 25)) : 0;
+
+      return {
+        authority: 'sncf',
+        conventionKey: 'sncfConvention',
+        conventionTitle: 'Convention Nationale SNCF - Naufragés du Rail',
+        isSigned,
+        authorized: isSigned,
+        maxVolunteers,
+        maxVpsp,
+        maxVtu,
+        maxVtp,
+        maxChuPlaces,
+        pmaAuthorized: false,
+        cynoAuthorized: false,
+        droneAuthorized: false,
+        conventionBadge: 'SNCF [Convention Nationale]',
+        summary: isSigned ? `Plafond Conventionné SNCF : max ${maxVolunteers} secouristes, ${maxVpsp} VPSP, ${maxVtu} VTU, ${maxChuPlaces} lits CHU` : 'Convention non signée (Aucune réquisition autorisée)'
+      };
+    }
+
+    // 2. Convention Partenariale Pompiers (CODIS 18 / SDIS / BSPP)
+    if (['pompiers', 'sdis', 'codis', 'bspp', 'bmpm'].includes(key)) {
+      const isSigned = Boolean(this.sdisConvention?.signed);
+      const isAasc = Boolean(this.aascConvention?.signed);
+      const maxVolunteers = isSigned 
+        ? Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.45), 10)) 
+        : Math.max(3, Math.min(4, apcCap.totalVolunteers));
+      const maxVpsp = isSigned 
+        ? Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.40)), 2)) 
+        : Math.min(1, apcCap.totalVpsp);
+      const maxVtu = isSigned 
+        ? Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVtu * 0.40)), 2)) 
+        : Math.min(1, apcCap.totalVtu);
+      const maxVtp = isSigned && apcCap.totalVtp > 0 && apcCap.totalStations >= 2 ? 1 : 0;
+      const maxChuPlaces = Math.min(100, Math.max(30, apcCap.totalStations * 30));
+
+      return {
+        authority: 'pompiers',
+        conventionKey: 'sdisConvention',
+        conventionTitle: 'Convention Partenariale Pompiers (SDIS / BSPP)',
+        isSigned,
+        authorized: isSigned || isAasc,
+        maxVolunteers,
+        maxVpsp,
+        maxVtu,
+        maxVtp,
+        maxChuPlaces,
+        pmaAuthorized: false,
+        cynoAuthorized: false,
+        droneAuthorized: false,
+        conventionBadge: isSigned ? 'Pompiers [Convention Signée]' : 'Pompiers [Concours AASC d’Urgence]',
+        summary: `Plafond Conventionné Pompiers : max ${maxVolunteers} secouristes, ${maxVpsp} VPSP, ${maxVtu} VTU`
+      };
+    }
+
+    // 3. Convention Cadre SAMU 15 (Plan NOVI, Norias sanitaires, Accueil impliqués CUMP)
+    if (['samu', 'cump', 'novi'].includes(key)) {
+      const isSigned = Boolean(this.samuConvention?.signed);
+      const isAasc = Boolean(this.aascConvention?.signed);
+      const hasCump = Boolean(this.cumpConvention?.signed);
+      const maxVolunteers = isSigned 
+        ? Math.max(6, Math.min(Math.round(apcCap.totalVolunteers * 0.55), 12)) 
+        : Math.max(4, Math.min(6, apcCap.totalVolunteers));
+      const maxVpsp = isSigned 
+        ? Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.55)), apcCap.totalVpsp)) 
+        : Math.min(1, apcCap.totalVpsp);
+      const maxVtu = isSigned 
+        ? Math.max(1, Math.min(1, apcCap.totalVtu)) 
+        : Math.min(1, apcCap.totalVtu);
+      const maxVtp = isSigned && apcCap.totalVtp > 0 ? Math.min(1, apcCap.totalVtp) : 0;
+      const maxChuPlaces = Math.min(40, Math.max(15, apcCap.totalStations * 15));
+
+      return {
+        authority: 'samu',
+        conventionKey: 'samuConvention',
+        conventionTitle: 'Convention Cadre SAMU 15 (Gardes & Plan NOVI)',
+        isSigned,
+        hasCump,
+        authorized: isSigned || isAasc,
+        maxVolunteers,
+        maxVpsp,
+        maxVtu,
+        maxVtp,
+        maxChuPlaces,
+        pmaAuthorized: true,
+        cynoAuthorized: false,
+        droneAuthorized: false,
+        conventionBadge: isSigned ? 'SAMU 15 [Convention Cadre]' : 'SAMU 15 [Concours AASC Réflexe]',
+        summary: `Plafond Conventionné SAMU 15 : max ${maxVolunteers} secouristes, ${maxVpsp} VPSP, ${maxVtu} VTU (PMA inclus)`
+      };
+    }
+
+    // 4. Convention Préfectorale d'AASC & Plan ORSEC (Préfecture, Police, Gendarmerie)
+    const isAascSigned = Boolean(this.aascConvention?.signed);
+    const isRecherche = key.includes('recherche') || key === 'police' || key === 'gendarmerie';
+
+    if (isRecherche) {
+      const maxVolunteers = isAascSigned 
+        ? Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.35), 8)) 
+        : 4;
+      return {
+        authority: 'prefecture',
+        conventionKey: 'aascConvention',
+        conventionTitle: 'Convention Préfectorale d’AASC (Réquisition Art. 74-1 CPP)',
+        isSigned: isAascSigned,
+        authorized: isAascSigned,
+        maxVolunteers,
+        maxVpsp: 0,
+        maxVtu: Math.max(1, Math.min(1, apcCap.totalVtu)),
+        maxVtp: 0,
+        maxChuPlaces: 0,
+        pmaAuthorized: false,
+        cynoAuthorized: true,
+        droneAuthorized: true,
+        conventionBadge: 'Police/Gendarmerie [Convention AASC Art. 74-1 CPP]',
+        summary: `Plafond Conventionné Recherche : max ${maxVolunteers} secouristes, 1 VTU + Drone/Cyno`
+      };
+    }
+
+    // Inondations / Crues ORSEC Préfecture
+    const maxVolunteers = isAascSigned 
+      ? Math.max(6, Math.min(Math.round(apcCap.totalVolunteers * 0.60), 16)) 
+      : Math.max(4, Math.min(6, apcCap.totalVolunteers));
+    const maxVpsp = isAascSigned 
+      ? Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.50)), apcCap.totalVpsp)) 
+      : Math.min(1, apcCap.totalVpsp);
+    const maxVtu = isAascSigned 
+      ? Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVtu * 0.60)), apcCap.totalVtu)) 
+      : Math.min(1, apcCap.totalVtu);
+    const maxVtp = isAascSigned && apcCap.totalVtp > 0 ? Math.min(apcCap.totalVtp, Math.max(1, Math.round(apcCap.totalVtp * 0.50))) : 0;
+    const maxChuPlaces = Math.min(160, Math.max(40, apcCap.totalStations * 40));
+
+    return {
+      authority: 'prefecture',
+      conventionKey: 'aascConvention',
+      conventionTitle: 'Convention Préfectorale d’AASC (Dispositif ORSEC)',
+      isSigned: isAascSigned,
+      authorized: isAascSigned,
+      maxVolunteers,
+      maxVpsp,
+      maxVtu,
+      maxVtp,
+      maxChuPlaces,
+      pmaAuthorized: true,
+      cynoAuthorized: false,
+      droneAuthorized: true,
+      conventionBadge: 'Préfecture [Convention ORSEC AASC]',
+      summary: `Plafond Conventionné Plan ORSEC : max ${maxVolunteers} secouristes, ${maxVpsp} VPSP, ${maxVtu} VTU, ${maxChuPlaces} places CHU`
+    };
+  }
+
   // --- SCÉNARIOS OFFICIELS ET RÉALISTES DE PRÉALERTE / VEILLE OPÉRATIONNELLE AASC ---
   getAascPrealertScenarios(origin = null) {
     const deptCode = String(this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '75');
     const isParisArea = ['75', '92', '93', '94'].includes(deptCode);
     const isParisIntramuros = deptCode === '75';
 
-    // Capacité opérationnelle réelle cumulée de l'ensemble des antennes de l'APC dans le département
-    const apcCap = this.getApcDepartmentOperationalCapacity(deptCode);
-
     let scenarios = [];
 
-    // 1. Incendie / Évacuation
-    const feuVols = Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.40), Math.max(4, apcCap.totalVolunteers - 2)));
-    const feuVpsp = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.40)), apcCap.totalVpsp));
-    const feuVtu = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVtu * 0.40)), apcCap.totalVtu));
-    const feuVtp = apcCap.totalVtp > 0 && apcCap.totalStations >= 2 ? 1 : 0;
-    const feuChu = Math.min(120, Math.max(30, apcCap.totalStations * 30));
-    const feuVehicles = ['VPSP', 'VTU'];
-    if (feuVtp > 0) feuVehicles.push('VTP');
+    // 1. Incendie / Évacuation (CODIS 18 ou BSPP - régie par la Convention Pompiers)
+    const pompiersLimits = this.getCrisisConventionLimits('pompiers', deptCode);
+    if (pompiersLimits.authorized) {
+      const feuVols = pompiersLimits.maxVolunteers;
+      const feuVpsp = pompiersLimits.maxVpsp;
+      const feuVtu = pompiersLimits.maxVtu;
+      const feuVtp = pompiersLimits.maxVtp;
+      const feuChu = pompiersLimits.maxChuPlaces;
+      const feuVehicles = ['VPSP', 'VTU'];
+      if (feuVtp > 0) feuVehicles.push('VTP');
 
-    if (isParisArea) {
-      scenarios.push({
-        id: 'feu_immeuble_paris',
-        origin: 'pompiers',
-        authority: 'bspp',
-        authorityLabel: 'BSPP (CTAU 18-112 Paris)',
-        authorityBadgeBg: 'bg-red-50 text-red-800 border-red-300',
-        title: 'Feu d’Immeuble Haussmannien R+5 & Évacuations Massives',
-        scenarioText: 'Important incendie d’immeuble d’habitation collectif haussmannien en cours (R+5). La Brigade de Sapeurs-Pompiers de Paris (BSPP) procède à des sauvetages par échelles aériennes et au déploiement de lances. Plus de 90 résidents évacués se trouvent regroupés sur la voie publique, choqués et en tenue de nuit. Le CTAU BSPP préalerte la Protection Civile de Paris pour l’ouverture et l’armement immédiat d’un Centre d’Accueil des Impliqués (CAI) en gymnase municipal et soutien sanitaire.',
-        assignedMissions: [
-          'Ouverture et tenue d’un CAI en gymnase parisien',
-          'Soutien Sanitaire & Bilans secouristes des impliqués',
-          'Ravitaillement d’urgence & distribution de couvertures de survie'
-        ],
-        requiredAssets: {
-          vpsp: feuVpsp,
-          vtu: feuVtu,
-          vtp: feuVtp,
-          chu_places: feuChu,
-          pma: false,
-          cyno: 0,
-          drone: false
-        },
-        requiredVolunteers: feuVols,
-        requiredVehicles: feuVehicles,
-        scale: `BSPP (Mobilisation APC : ${feuVols} secouristes, ${feuVehicles.join('/')})`,
-        rewardMoney: Math.round(550 + (feuVols * 20)),
-        rewardReputation: 35
-      });
-    } else {
-      scenarios.push({
-        id: 'feu_immeuble',
-        origin: 'codis',
-        authority: 'codis',
-        authorityLabel: 'CODIS 18 (Sapeurs-Pompiers)',
-        authorityBadgeBg: 'bg-red-50 text-red-800 border-red-300',
-        title: 'Feu d’Habitation Collective R+4 & Nombreuses Évacuations',
-        scenarioText: 'Important incendie d’immeuble collectif d’habitation en cours (R+4). Les sapeurs-pompiers procèdent aux sauvetages par échelles aériennes et aux lances à incendie. 85 résidents évacués se trouvent regroupés sur la voie publique en pleine nuit, choqués et en tenue de nuit. Le CODIS préalerte la Protection Civile pour l’ouverture et l’armement immédiat d’un Centre d’Accueil des Impliqués (CAI) en gymnase et soutien sanitaire.',
-        assignedMissions: [
-          'Ouverture et tenue d’un CAI en gymnase communal',
-          'Soutien Sanitaire & Bilans secouristes des impliqués',
-          'Ravitaillement d’urgence & distribution de couvertures'
-        ],
-        requiredAssets: {
-          vpsp: feuVpsp,
-          vtu: feuVtu,
-          vtp: feuVtp,
-          chu_places: feuChu,
-          pma: false,
-          cyno: 0,
-          drone: false
-        },
-        requiredVolunteers: feuVols,
-        requiredVehicles: feuVehicles,
-        scale: `CODIS 18 (Mobilisation APC : ${feuVols} secouristes, ${feuVehicles.join('/')})`,
-        rewardMoney: Math.round(520 + (feuVols * 20)),
-        rewardReputation: 35
-      });
+      if (isParisArea) {
+        scenarios.push({
+          id: 'feu_immeuble_paris',
+          origin: 'pompiers',
+          authority: 'bspp',
+          authorityLabel: 'BSPP (CTAU 18-112 Paris)',
+          authorityBadgeBg: 'bg-red-50 text-red-800 border-red-300',
+          title: 'Feu d’Immeuble Haussmannien R+5 & Évacuations Massives',
+          scenarioText: 'Important incendie d’immeuble d’habitation collectif haussmannien en cours (R+5). La Brigade de Sapeurs-Pompiers de Paris (BSPP) procède à des sauvetages par échelles aériennes et au déploiement de lances. Plus de 90 résidents évacués se trouvent regroupés sur la voie publique, choqués et en tenue de nuit. Le CTAU BSPP préalerte la Protection Civile de Paris dans le cadre de la convention pour l’ouverture et l’armement d’un Centre d’Accueil des Impliqués (CAI) en gymnase municipal et soutien sanitaire.',
+          assignedMissions: [
+            'Ouverture et tenue d’un CAI en gymnase parisien',
+            'Soutien Sanitaire & Bilans secouristes des impliqués',
+            'Ravitaillement d’urgence & distribution de couvertures de survie'
+          ],
+          requiredAssets: {
+            vpsp: feuVpsp,
+            vtu: feuVtu,
+            vtp: feuVtp,
+            chu_places: feuChu,
+            pma: false,
+            cyno: 0,
+            drone: false
+          },
+          requiredVolunteers: feuVols,
+          requiredVehicles: feuVehicles,
+          scale: `BSPP [${pompiersLimits.conventionBadge}] : Plafond ${feuVols} secouristes, ${feuVehicles.join('/')}`,
+          rewardMoney: Math.round(550 + (feuVols * 20)),
+          rewardReputation: 35
+        });
+      } else {
+        scenarios.push({
+          id: 'feu_immeuble',
+          origin: 'codis',
+          authority: 'codis',
+          authorityLabel: 'CODIS 18 (Sapeurs-Pompiers)',
+          authorityBadgeBg: 'bg-red-50 text-red-800 border-red-300',
+          title: 'Feu d’Habitation Collective R+4 & Nombreuses Évacuations',
+          scenarioText: 'Important incendie d’immeuble collectif d’habitation en cours (R+4). Les sapeurs-pompiers procèdent aux sauvetages par échelles aériennes et aux lances à incendie. 85 résidents évacués se trouvent regroupés sur la voie publique en pleine nuit, choqués et en tenue de nuit. Le CODIS préalerte la Protection Civile dans le respect des contingents de la convention pour l’ouverture et l’armement d’un Centre d’Accueil des Impliqués (CAI) en gymnase et soutien sanitaire.',
+          assignedMissions: [
+            'Ouverture et tenue d’un CAI en gymnase communal',
+            'Soutien Sanitaire & Bilans secouristes des impliqués',
+            'Ravitaillement d’urgence & distribution de couvertures'
+          ],
+          requiredAssets: {
+            vpsp: feuVpsp,
+            vtu: feuVtu,
+            vtp: feuVtp,
+            chu_places: feuChu,
+            pma: false,
+            cyno: 0,
+            drone: false
+          },
+          requiredVolunteers: feuVols,
+          requiredVehicles: feuVehicles,
+          scale: `CODIS 18 [${pompiersLimits.conventionBadge}] : Plafond ${feuVols} secouristes, ${feuVehicles.join('/')}`,
+          rewardMoney: Math.round(520 + (feuVols * 20)),
+          rewardReputation: 35
+        });
+      }
     }
 
     // 2. Mission ferroviaire SNCF (Conditionnée STRICTEMENT à la signature de la convention SNCF)
-    if (this.sncfConvention?.signed || origin === 'sncf') {
-      const tgvVols = Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.45), Math.max(4, apcCap.totalVolunteers - 2)));
-      const tgvVpsp = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.35)), apcCap.totalVpsp));
-      const tgvVtu = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVtu * 0.50)), apcCap.totalVtu));
-      const tgvVtp = apcCap.totalVtp > 0 && apcCap.totalStations >= 2 ? 1 : 0;
-      const tgvChu = Math.min(100, Math.max(25, apcCap.totalStations * 25));
+    const sncfLimits = this.getCrisisConventionLimits('sncf', deptCode);
+    if (sncfLimits.authorized || origin === 'sncf') {
+      const tgvVols = Math.max(4, sncfLimits.maxVolunteers || 4);
+      const tgvVpsp = Math.max(1, sncfLimits.maxVpsp || 1);
+      const tgvVtu = Math.max(1, sncfLimits.maxVtu || 1);
+      const tgvVtp = sncfLimits.maxVtp || 0;
+      const tgvChu = Math.max(25, sncfLimits.maxChuPlaces || 25);
       const tgvVehicles = ['VPSP', 'VTU'];
       if (tgvVtp > 0) tgvVehicles.push('VTP');
 
@@ -9608,7 +9775,7 @@ class ProtecGame {
         authorityLabel: 'SNCF (Direction Nationale de Crise)',
         authorityBadgeBg: 'bg-purple-50 text-purple-800 border-purple-300',
         title: 'Crise Ferroviaire : Prise en Charge Voyageurs & CHU en Gare (TGV Bloqué en Ligne)',
-        scenarioText: 'Rupture d’alimentation caténaire sur la ligne à grande vitesse (LGV) en amont. Le TGV 6742 est immobilisé en pleine voie avec 640 passagers sans électricité ni chauffage. Les navettes et bus rapatrient les voyageurs par vagues successives vers la gare centrale. La direction de crise SNCF sollicite la Protection Civile pour l’accueil en gare, le montage d’un Centre d’Hébergement d’Urgence (CHU 50 lits) et la distribution d’eau et de vivres.',
+        scenarioText: 'Rupture d’alimentation caténaire sur la ligne à grande vitesse (LGV) en amont. Le TGV 6742 est immobilisé en pleine voie avec 640 passagers sans électricité ni chauffage. Les navettes et bus rapatrient les voyageurs par vagues successives vers la gare centrale. La direction de crise SNCF sollicite la Protection Civile selon les plafonds de la Convention Nationale pour l’accueil en gare, le montage d’un Centre d’Hébergement d’Urgence (CHU) et la distribution de ravitaillement.',
         assignedMissions: [
           'Montage et tenue d’un CHU en gare centrale',
           'Distribution massive d’eau et collations d’urgence',
@@ -9625,249 +9792,258 @@ class ProtecGame {
         },
         requiredVolunteers: tgvVols,
         requiredVehicles: tgvVehicles,
-        scale: `SNCF (Mobilisation APC : ${tgvVols} secouristes, ${tgvVehicles.join('/')})`,
+        scale: `SNCF [Convention Nationale] : Plafond ${tgvVols} secouristes, ${tgvVehicles.join('/')}, ${tgvChu} lits CHU`,
         rewardMoney: Math.round(500 + (tgvVols * 20)),
         rewardReputation: 35
       });
     }
 
-    // 3. Recherche de personne vulnérable (adaptée à la topographie réelle)
-    const rechVols = Math.max(4, Math.min(Math.round(apcCap.totalVolunteers * 0.35), Math.max(4, apcCap.totalVolunteers - 1)));
+    // 3. Recherche de personne vulnérable (Convention Préfectorale d'AASC - Réquisition CPP Art. 74-1)
+    const rechLimits = this.getCrisisConventionLimits('recherche', deptCode);
+    if (rechLimits.authorized) {
+      const rechVols = rechLimits.maxVolunteers;
 
-    if (isParisIntramuros) {
-      // Scénario A : Massifs boisés parisiens (Bois de Boulogne / Bois de Vincennes)
-      scenarios.push({
-        id: 'recherche_bois_paris',
-        origin: 'prefecture',
-        authority: 'police',
-        authorityLabel: 'Préfecture de Police (DSPAP / DOPC)',
-        authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-        title: 'Recherche de Personne Vulnérable (Bois de Boulogne / Vincennes)',
-        targetEnvironment: 'bois_paris',
-        scenarioText: 'Disparition très inquiétante d’une personne vulnérable désorientée signalée dans les massifs boisés du Bois de Boulogne / Vincennes à la tombée de la nuit. Les effectifs de la Préfecture de Police et la brigade canine sont déployés. La Préfecture de Police réquisitionne en urgence la Protection Civile de Paris (Art. 74-1 CPP) pour armer une chaîne de battue pédestre coordonnée avec télépilote drone thermique et équipes cynotechniques de quête.',
-        assignedMissions: [
-          'Chaîne de ratissage et battue de recherche pédestre en sous-bois',
-          'Surveillance et reconnaissance aérienne par Drone thermique',
-          'Appui d’une équipe Cynotechnique de quête et sauvetage'
-        ],
-        requiredAssets: {
-          vpsp: 0,
-          vtu: 1,
-          vtp: 0,
-          chu_places: 0,
-          pma: false,
-          cyno: 1,
-          drone: true
-        },
-        requiredVolunteers: rechVols,
-        requiredVehicles: ['VTU'],
-        scale: `Préfecture de Police (Mobilisation APC : ${rechVols} secouristes + Drone/Cyno)`,
-        rewardMoney: Math.round(460 + (rechVols * 18)),
-        rewardReputation: 35
-      });
-      // Scénario B : Parcs urbains et berges de Seine
-      scenarios.push({
-        id: 'recherche_parcs_paris',
-        origin: 'prefecture',
-        authority: 'police',
-        authorityLabel: 'Préfecture de Police (DSPAP)',
-        authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-        title: 'Recherche de Personne Disparue en Milieu Urbain (Parcs & Berges)',
-        targetEnvironment: 'paris_urban_parks',
-        scenarioText: 'Disparition inquiétante en milieu urbain dense. Les patrouilles de la Préfecture de Police quadrillent les abords des grands parcs et des quais de Seine. La Préfecture de Police réquisitionne la Protection Civile pour inspecter systématiquement les parcs publics fermés, les berges de Seine et les recoins isolés avec équipes pédestres et drone.',
-        assignedMissions: [
-          'Reconnaissance pédestre des quais et parcs publics',
-          'Surveillance des berges par drone avec caméra thermique',
-          'Équipe cynotechnique de pistage'
-        ],
-        requiredAssets: {
-          vpsp: 0,
-          vtu: 1,
-          vtp: 0,
-          chu_places: 0,
-          pma: false,
-          cyno: 1,
-          drone: true
-        },
-        requiredVolunteers: rechVols,
-        requiredVehicles: ['VTU'],
-        scale: `DSPAP (Mobilisation APC : ${rechVols} secouristes + Drone/Cyno)`,
-        rewardMoney: Math.round(450 + (rechVols * 18)),
-        rewardReputation: 35
-      });
-    } else {
-      // Province ou Petite Couronne
-      const isPetiteCouronne = ['92', '93', '94'].includes(deptCode);
-      scenarios.push({
-        id: 'recherche_foret',
-        origin: 'prefecture',
-        authority: isPetiteCouronne ? 'police' : 'gendarmerie',
-        authorityLabel: isPetiteCouronne ? 'Préfecture de Police (DSPAP / DOPC)' : 'Gendarmerie Nationale (Réquisition CPP)',
-        authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-        title: isPetiteCouronne ? 'Recherche de Personne Vulnérable en Milieu Boisé' : 'Recherche de Personne Vulnérable en Zone Boisée',
-        targetEnvironment: isPetiteCouronne ? 'bois_paris' : 'foret_province',
-        scenarioText: isPetiteCouronne
-          ? 'Disparition très inquiétante d’une personne âgée désorientée dans les parcs boisés et berges du secteur. Les effectifs de Police sont mobilisés. La Préfecture de Police requiert la Protection Civile pour une battue pédestre renforcée, drone thermique et équipe cynotechnique.'
-          : 'Disparition très inquiétante d’une personne âgée désorientée depuis plus de 6 heures aux abords d’un massif forestier escarpé. Le peloton de gendarmerie et les sapeurs-pompiers sont déjà déployés. La Gendarmerie réquisitionne l’AASC (Art. 74-1 CPP) pour mobiliser une équipe de battue pédestre renforcée, un télépilote drone à caméra thermique et un vecteur cynotechnique.',
-        assignedMissions: [
-          'Chaîne de ratissage et battue de recherche pédestre',
-          'Surveillance et reconnaissance aérienne par Drone',
-          'Appui d’une équipe Cynotechnique de quête'
-        ],
-        requiredAssets: {
-          vpsp: 0,
-          vtu: 1,
-          vtp: 0,
-          chu_places: 0,
-          pma: false,
-          cyno: 1,
-          drone: true
-        },
-        requiredVolunteers: rechVols,
-        requiredVehicles: isPetiteCouronne ? ['VTU'] : ['VLHR'],
-        scale: `${isPetiteCouronne ? 'Police' : 'Gendarmerie'} (Mobilisation APC : ${rechVols} secouristes + Drone/Cyno)`,
-        rewardMoney: Math.round(450 + (rechVols * 18)),
-        rewardReputation: 35
-      });
+      if (isParisIntramuros) {
+        // Scénario A : Massifs boisés parisiens (Bois de Boulogne / Bois de Vincennes)
+        scenarios.push({
+          id: 'recherche_bois_paris',
+          origin: 'prefecture',
+          authority: 'police',
+          authorityLabel: 'Préfecture de Police (DSPAP / DOPC)',
+          authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
+          title: 'Recherche de Personne Vulnérable (Bois de Boulogne / Vincennes)',
+          targetEnvironment: 'bois_paris',
+          scenarioText: 'Disparition très inquiétante d’une personne vulnérable désorientée signalée dans les massifs boisés du Bois de Boulogne / Vincennes à la tombée de la nuit. Les effectifs de la Préfecture de Police et la brigade canine sont déployés. La Préfecture de Police réquisitionne la Protection Civile de Paris selon les termes conventionnés (Art. 74-1 CPP) pour armer une chaîne de battue pédestre coordonnée avec télépilote drone thermique et équipes cynotechniques.',
+          assignedMissions: [
+            'Chaîne de ratissage et battue de recherche pédestre en sous-bois',
+            'Surveillance et reconnaissance aérienne par Drone thermique',
+            'Appui d’une équipe Cynotechnique de quête et sauvetage'
+          ],
+          requiredAssets: {
+            vpsp: 0,
+            vtu: 1,
+            vtp: 0,
+            chu_places: 0,
+            pma: false,
+            cyno: 1,
+            drone: true
+          },
+          requiredVolunteers: rechVols,
+          requiredVehicles: ['VTU'],
+          scale: `Préfecture de Police [${rechLimits.conventionBadge}] : Plafond ${rechVols} secouristes + Drone/Cyno`,
+          rewardMoney: Math.round(460 + (rechVols * 18)),
+          rewardReputation: 35
+        });
+        // Scénario B : Parcs urbains et berges de Seine
+        scenarios.push({
+          id: 'recherche_parcs_paris',
+          origin: 'prefecture',
+          authority: 'police',
+          authorityLabel: 'Préfecture de Police (DSPAP)',
+          authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
+          title: 'Recherche de Personne Disparue en Milieu Urbain (Parcs & Berges)',
+          targetEnvironment: 'paris_urban_parks',
+          scenarioText: 'Disparition inquiétante en milieu urbain dense. Les patrouilles de la Préfecture de Police quadrillent les abords des grands parcs et des quais de Seine. La Préfecture de Police réquisitionne la Protection Civile pour inspecter systématiquement les parcs publics fermés, les berges de Seine et les recoins isolés avec équipes pédestres et drone dans la limite des effectifs conventionnés.',
+          assignedMissions: [
+            'Reconnaissance pédestre des quais et parcs publics',
+            'Surveillance des berges par drone avec caméra thermique',
+            'Équipe cynotechnique de pistage'
+          ],
+          requiredAssets: {
+            vpsp: 0,
+            vtu: 1,
+            vtp: 0,
+            chu_places: 0,
+            pma: false,
+            cyno: 1,
+            drone: true
+          },
+          requiredVolunteers: rechVols,
+          requiredVehicles: ['VTU'],
+          scale: `DSPAP [${rechLimits.conventionBadge}] : Plafond ${rechVols} secouristes + Drone/Cyno`,
+          rewardMoney: Math.round(450 + (rechVols * 18)),
+          rewardReputation: 35
+        });
+      } else {
+        // Province ou Petite Couronne
+        const isPetiteCouronne = ['92', '93', '94'].includes(deptCode);
+        scenarios.push({
+          id: 'recherche_foret',
+          origin: 'prefecture',
+          authority: isPetiteCouronne ? 'police' : 'gendarmerie',
+          authorityLabel: isPetiteCouronne ? 'Préfecture de Police (DSPAP / DOPC)' : 'Gendarmerie Nationale (Réquisition CPP)',
+          authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
+          title: isPetiteCouronne ? 'Recherche de Personne Vulnérable en Milieu Boisé' : 'Recherche de Personne Vulnérable en Zone Boisée',
+          targetEnvironment: isPetiteCouronne ? 'bois_paris' : 'foret_province',
+          scenarioText: isPetiteCouronne
+            ? 'Disparition très inquiétante d’une personne âgée désorientée dans les parcs boisés et berges du secteur. Les effectifs de Police sont mobilisés. La Préfecture de Police requiert la Protection Civile pour une battue pédestre renforcée, drone thermique et équipe cynotechnique selon la convention d’AASC.'
+            : 'Disparition très inquiétante d’une personne âgée désorientée depuis plus de 6 heures aux abords d’un massif forestier escarpé. Le peloton de gendarmerie et les sapeurs-pompiers sont déjà déployés. La Gendarmerie réquisitionne l’AASC (Art. 74-1 CPP) selon les limites conventionnées pour mobiliser une équipe de battue pédestre renforcée, un télépilote drone à caméra thermique et un vecteur cynotechnique.',
+          assignedMissions: [
+            'Chaîne de ratissage et battue de recherche pédestre',
+            'Surveillance et reconnaissance aérienne par Drone',
+            'Appui d’une équipe Cynotechnique de quête'
+          ],
+          requiredAssets: {
+            vpsp: 0,
+            vtu: 1,
+            vtp: 0,
+            chu_places: 0,
+            pma: false,
+            cyno: 1,
+            drone: true
+          },
+          requiredVolunteers: rechVols,
+          requiredVehicles: isPetiteCouronne ? ['VTU'] : ['VLHR'],
+          scale: `${isPetiteCouronne ? 'Police' : 'Gendarmerie'} [${rechLimits.conventionBadge}] : Plafond ${rechVols} secouristes + Drone/Cyno`,
+          rewardMoney: Math.round(450 + (rechVols * 18)),
+          rewardReputation: 35
+        });
+      }
     }
 
-    // 4. Inondations / Crues
-    const inondVols = Math.max(6, Math.min(Math.round(apcCap.totalVolunteers * 0.60), apcCap.totalVolunteers));
-    const inondVpsp = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.50)), apcCap.totalVpsp));
-    const inondVtu = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVtu * 0.60)), apcCap.totalVtu));
-    const inondVtp = apcCap.totalVtp > 0 ? Math.min(apcCap.totalVtp, Math.max(1, Math.round(apcCap.totalVtp * 0.50))) : 0;
-    const inondChu = Math.min(160, Math.max(40, apcCap.totalStations * 40));
-    const inondVehicles = ['VPSP', 'VTU'];
-    if (inondVtp > 0) inondVehicles.push('VTP');
+    // 4. Inondations / Crues (Convention Préfectorale d'AASC & Plan ORSEC)
+    const prefLimits = this.getCrisisConventionLimits('prefecture', deptCode);
+    if (prefLimits.authorized) {
+      const inondVols = prefLimits.maxVolunteers;
+      const inondVpsp = prefLimits.maxVpsp;
+      const inondVtu = prefLimits.maxVtu;
+      const inondVtp = prefLimits.maxVtp;
+      const inondChu = prefLimits.maxChuPlaces;
+      const inondVehicles = ['VPSP', 'VTU'];
+      if (inondVtp > 0) inondVehicles.push('VTP');
 
-    if (isParisIntramuros) {
-      scenarios.push({
-        id: 'crue_seine_paris',
-        origin: 'prefecture',
-        authority: 'prefecture',
-        authorityLabel: 'Préfecture de Police (Plan Vigicrues Seine)',
-        authorityBadgeBg: 'bg-sky-50 text-sky-800 border-sky-300',
-        title: 'Crue Majeure de la Seine : Évacuations & Hébergement d’Urgence',
-        targetEnvironment: 'seine_paris',
-        scenarioText: 'Crue majeure de la Seine atteignant le seuil d’alerte avec submersion des voies sur berges et caves inondées. La Préfecture de Police active le plan d’urgence inondation et réquisitionne la Protection Civile de Paris pour l’armement d’un Centre d’Hébergement d’Urgence (CHU 80 lits) en gymnase municipal et l’accueil des sinistrés évacués.',
-        assignedMissions: [
-          'Gestion d’un Centre d’Hébergement d’Urgence (CHU)',
-          'Soutien logistique de crise & groupes électrogènes',
-          'Noria d’acheminement des riverains vers le CHU'
-        ],
-        requiredAssets: {
-          vpsp: inondVpsp,
-          vtu: inondVtu,
-          vtp: inondVtp,
-          chu_places: inondChu,
-          pma: true,
-          cyno: 0,
-          drone: true
-        },
-        requiredVolunteers: inondVols,
-        requiredVehicles: inondVehicles,
-        scale: `Préfecture (Mobilisation APC : ${inondVols} secouristes, ${inondVehicles.join('/')})`,
-        rewardMoney: Math.round(650 + (inondVols * 25)),
-        rewardReputation: 45
-      });
-    } else {
-      scenarios.push({
-        id: 'inondation_lotissements',
-        origin: 'prefecture',
-        authority: 'prefecture',
-        authorityLabel: 'Préfecture (COZ / SIDPC - Plan ORSEC)',
-        authorityBadgeBg: 'bg-sky-50 text-sky-800 border-sky-300',
-        title: 'Crues Majeures & Inondations : Évacuation de Lotissements',
-        scenarioText: 'Crue soudaine d’un cours d’eau suite à des précipitations orageuses continues. Plusieurs quartiers résidentiels sont submergés (hauteur d’eau > 70 cm), avec coupures d’électricité et plusieurs axes coupés. Les sauveteurs nautiques du SDIS effectuent les mises en sécurité en embarcation. La Préfecture préalerte l’AASC pour armer le site d’hébergement d’urgence (CHU) et assurer la noria des sinistrés.',
-        assignedMissions: [
-          'Gestion d’un Centre d’Hébergement d’Urgence (CHU)',
-          'Soutien logistique de crise & groupes électrogènes',
-          'Grande Noria d’acheminement des sinistrés vers le CHU'
-        ],
-        requiredAssets: {
-          vpsp: inondVpsp,
-          vtu: inondVtu,
-          vtp: inondVtp,
-          chu_places: inondChu,
-          pma: true,
-          cyno: 0,
-          drone: true
-        },
-        requiredVolunteers: inondVols,
-        requiredVehicles: inondVehicles,
-        scale: `Plan ORSEC (Mobilisation APC : ${inondVols} secouristes, ${inondVehicles.join('/')})`,
-        rewardMoney: Math.round(620 + (inondVols * 25)),
-        rewardReputation: 45
-      });
+      if (isParisIntramuros) {
+        scenarios.push({
+          id: 'crue_seine_paris',
+          origin: 'prefecture',
+          authority: 'prefecture',
+          authorityLabel: 'Préfecture de Police (Plan Vigicrues Seine)',
+          authorityBadgeBg: 'bg-sky-50 text-sky-800 border-sky-300',
+          title: 'Crue Majeure de la Seine : Évacuations & Hébergement d’Urgence',
+          targetEnvironment: 'seine_paris',
+          scenarioText: 'Crue majeure de la Seine atteignant le seuil d’alerte avec submersion des voies sur berges et caves inondées. La Préfecture de Police active le plan d’urgence inondation et réquisitionne la Protection Civile de Paris dans le cadre de la convention pour l’armement d’un Centre d’Hébergement d’Urgence (CHU) en gymnase municipal et l’accueil des sinistrés évacués.',
+          assignedMissions: [
+            'Gestion d’un Centre d’Hébergement d’Urgence (CHU)',
+            'Soutien logistique de crise & groupes électrogènes',
+            'Noria d’acheminement des riverains vers le CHU'
+          ],
+          requiredAssets: {
+            vpsp: inondVpsp,
+            vtu: inondVtu,
+            vtp: inondVtp,
+            chu_places: inondChu,
+            pma: true,
+            cyno: 0,
+            drone: true
+          },
+          requiredVolunteers: inondVols,
+          requiredVehicles: inondVehicles,
+          scale: `Préfecture [${prefLimits.conventionBadge}] : Plafond ${inondVols} secouristes, ${inondVehicles.join('/')}`,
+          rewardMoney: Math.round(650 + (inondVols * 25)),
+          rewardReputation: 45
+        });
+      } else {
+        scenarios.push({
+          id: 'inondation_lotissements',
+          origin: 'prefecture',
+          authority: 'prefecture',
+          authorityLabel: 'Préfecture (COZ / SIDPC - Plan ORSEC)',
+          authorityBadgeBg: 'bg-sky-50 text-sky-800 border-sky-300',
+          title: 'Crues Majeures & Inondations : Évacuation de Lotissements',
+          scenarioText: 'Crue soudaine d’un cours d’eau suite à des précipitations orageuses continues. Plusieurs quartiers résidentiels sont submergés (hauteur d’eau > 70 cm), avec coupures d’électricité et axes coupés. Les sauveteurs nautiques du SDIS effectuent les mises en sécurité en embarcation. La Préfecture préalerte l’AASC selon les plafonds de la convention pour armer le site d’hébergement d’urgence (CHU) et assurer la noria des sinistrés.',
+          assignedMissions: [
+            'Gestion d’un Centre d’Hébergement d’Urgence (CHU)',
+            'Soutien logistique de crise & groupes électrogènes',
+            'Grande Noria d’acheminement des sinistrés vers le CHU'
+          ],
+          requiredAssets: {
+            vpsp: inondVpsp,
+            vtu: inondVtu,
+            vtp: inondVtp,
+            chu_places: inondChu,
+            pma: true,
+            cyno: 0,
+            drone: true
+          },
+          requiredVolunteers: inondVols,
+          requiredVehicles: inondVehicles,
+          scale: `Plan ORSEC [${prefLimits.conventionBadge}] : Plafond ${inondVols} secouristes, ${inondVehicles.join('/')}`,
+          rewardMoney: Math.round(620 + (inondVols * 25)),
+          rewardReputation: 45
+        });
+      }
     }
 
-    // 5. Accident NOVI
-    const noviVols = Math.max(6, Math.min(Math.round(apcCap.totalVolunteers * 0.65), apcCap.totalVolunteers));
-    const noviVpsp = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.65)), apcCap.totalVpsp));
-    const noviVtu = Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVtu * 0.50)), apcCap.totalVtu));
-    const noviVtp = apcCap.totalVtp > 0 ? Math.min(apcCap.totalVtp, Math.max(1, Math.round(apcCap.totalVtp * 0.50))) : 0;
-    const noviChu = Math.min(60, Math.max(15, apcCap.totalStations * 15));
-    const noviVehicles = ['VPSP', 'VTU'];
-    if (noviVtp > 0) noviVehicles.push('VTP');
+    // 5. Accident NOVI (Convention Cadre SAMU 15 / Centre 15)
+    const samuLimits = this.getCrisisConventionLimits('samu', deptCode);
+    if (samuLimits.authorized) {
+      const noviVols = samuLimits.maxVolunteers;
+      const noviVpsp = samuLimits.maxVpsp;
+      const noviVtu = samuLimits.maxVtu;
+      const noviVtp = samuLimits.maxVtp;
+      const noviChu = samuLimits.maxChuPlaces;
+      const noviVehicles = ['VPSP', 'VTU'];
+      if (noviVtp > 0) noviVehicles.push('VTP');
 
-    if (isParisArea) {
-      scenarios.push({
-        id: 'accident_peripherique',
-        origin: 'samu',
-        authority: 'samu',
-        authorityLabel: 'SAMU de Paris (Centre 15 / Plan NOVI)',
-        authorityBadgeBg: 'bg-rose-50 text-rose-800 border-rose-300',
-        title: 'Carambolage Multiple sur le Boulevard Périphérique (Plan NOVI)',
-        scenarioText: 'Grave carambolage impliquant un autocar et plusieurs véhicules de tourisme sur le Boulevard Périphérique extérieur. Nombreuses victimes en cours de tri médical par le SAMU 75 et la BSPP. Le SAMU de Paris déclenche la Protection Civile pour prépositionner des VPSP sanitaires, monter un Poste Médical Avancé (PMA) et assurer les norias d’évacuation vers les hôpitaux de l’AP-HP.',
-        assignedMissions: [
-          'Soutien Sanitaire et Grande Noria d’évacuation vers hôpitaux AP-HP',
-          'Montage et armement d’un Poste Médical Avancé (PMA)',
-          'Accueil et prise en charge des victimes légères / impliqués'
-        ],
-        requiredAssets: {
-          vpsp: noviVpsp,
-          vtu: noviVtu,
-          vtp: noviVtp,
-          chu_places: noviChu,
-          pma: true,
-          cyno: 0,
-          drone: false
-        },
-        requiredVolunteers: noviVols,
-        requiredVehicles: noviVehicles,
-        scale: `Plan NOVI SAMU (Mobilisation APC : ${noviVols} secouristes, ${noviVehicles.join('/')})`,
-        rewardMoney: Math.round(650 + (noviVols * 25)),
-        rewardReputation: 45
-      });
-    } else {
-      scenarios.push({
-        id: 'accident_novi',
-        origin: 'samu',
-        authority: 'samu',
-        authorityLabel: 'SAMU Centre 15 (Plan NOVI)',
-        authorityBadgeBg: 'bg-rose-50 text-rose-800 border-rose-300',
-        title: 'Carambolage Multiple sur Voie Rapide (Plan NOVI)',
-        scenarioText: 'Grave carambolage impliquant un autocar de ligne et plusieurs véhicules de tourisme sur voie rapide. Nombreuses victimes en cours de tri médical par les équipes SMUR et sapeurs-pompiers. Le SAMU 15 préalerte la Protection Civile pour prépositionner des VPSP sanitaires, un lot PMA d’urgence et assurer la noria d’évacuation vers les centres hospitaliers.',
-        assignedMissions: [
-          'Soutien Sanitaire et Grande Noria d’évacuation vers CHU',
-          'Montage et armement d’un Poste Médical Avancé (PMA)',
-          'Accueil et prise en charge des victimes légères / impliqués'
-        ],
-        requiredAssets: {
-          vpsp: noviVpsp,
-          vtu: noviVtu,
-          vtp: noviVtp,
-          chu_places: noviChu,
-          pma: true,
-          cyno: 0,
-          drone: false
-        },
-        requiredVolunteers: noviVols,
-        requiredVehicles: noviVehicles,
-        scale: `Plan NOVI SAMU (Mobilisation APC : ${noviVols} secouristes, ${noviVehicles.join('/')})`,
-        rewardMoney: Math.round(620 + (noviVols * 25)),
-        rewardReputation: 45
-      });
+      if (isParisArea) {
+        scenarios.push({
+          id: 'accident_peripherique',
+          origin: 'samu',
+          authority: 'samu',
+          authorityLabel: 'SAMU de Paris (Centre 15 / Plan NOVI)',
+          authorityBadgeBg: 'bg-rose-50 text-rose-800 border-rose-300',
+          title: 'Carambolage Multiple sur le Boulevard Périphérique (Plan NOVI)',
+          scenarioText: 'Grave carambolage impliquant un autocar et plusieurs véhicules de tourisme sur le Boulevard Périphérique extérieur. Nombreuses victimes en cours de tri médical par le SAMU 75 et la BSPP. Le SAMU de Paris déclenche la Protection Civile selon les plafonds conventionnés pour prépositionner des VPSP sanitaires, monter un Poste Médical Avancé (PMA) et assurer les norias d’évacuation vers les hôpitaux de l’AP-HP.',
+          assignedMissions: [
+            'Soutien Sanitaire et Grande Noria d’évacuation vers hôpitaux AP-HP',
+            'Montage et armement d’un Poste Médical Avancé (PMA)',
+            'Accueil et prise en charge des victimes légères / impliqués'
+          ],
+          requiredAssets: {
+            vpsp: noviVpsp,
+            vtu: noviVtu,
+            vtp: noviVtp,
+            chu_places: noviChu,
+            pma: true,
+            cyno: 0,
+            drone: false
+          },
+          requiredVolunteers: noviVols,
+          requiredVehicles: noviVehicles,
+          scale: `Plan NOVI SAMU [${samuLimits.conventionBadge}] : Plafond ${noviVols} secouristes, ${noviVehicles.join('/')}`,
+          rewardMoney: Math.round(650 + (noviVols * 25)),
+          rewardReputation: 45
+        });
+      } else {
+        scenarios.push({
+          id: 'accident_novi',
+          origin: 'samu',
+          authority: 'samu',
+          authorityLabel: 'SAMU Centre 15 (Plan NOVI)',
+          authorityBadgeBg: 'bg-rose-50 text-rose-800 border-rose-300',
+          title: 'Carambolage Multiple sur Voie Rapide (Plan NOVI)',
+          scenarioText: 'Grave carambolage impliquant un autocar de ligne et plusieurs véhicules de tourisme sur voie rapide. Nombreuses victimes en cours de tri médical par les équipes SMUR et sapeurs-pompiers. Le SAMU 15 préalerte la Protection Civile selon la convention cadre pour prépositionner des VPSP sanitaires, un lot PMA d’urgence et assurer la noria d’évacuation vers les centres hospitaliers.',
+          assignedMissions: [
+            'Soutien Sanitaire et Grande Noria d’évacuation vers CHU',
+            'Montage et armement d’un Poste Médical Avancé (PMA)',
+            'Accueil et prise en charge des victimes légères / impliqués'
+          ],
+          requiredAssets: {
+            vpsp: noviVpsp,
+            vtu: noviVtu,
+            vtp: noviVtp,
+            chu_places: noviChu,
+            pma: true,
+            cyno: 0,
+            drone: false
+          },
+          requiredVolunteers: noviVols,
+          requiredVehicles: noviVehicles,
+          scale: `Plan NOVI SAMU [${samuLimits.conventionBadge}] : Plafond ${noviVols} secouristes, ${noviVehicles.join('/')}`,
+          rewardMoney: Math.round(620 + (noviVols * 25)),
+          rewardReputation: 45
+        });
+      }
     }
 
     if (origin) {
