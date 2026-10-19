@@ -1035,7 +1035,7 @@ window.ProtecRNMSC = {
     const calc = this.calculateRIS({ p1: nVal, p2: p2Val, e1: e1Val, e2: e2Val });
 
     return `
-      <div id="${prefix}-card" class="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4 transition-all">
+      <div id="${prefix}-card" class="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4 transition-all overflow-hidden">
         <!-- En-tête officiel -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700/80 pb-3">
           <div class="flex items-center gap-2.5">

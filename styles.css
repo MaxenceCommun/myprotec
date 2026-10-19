@@ -722,7 +722,7 @@ html, body {
     color: #0f172a !important;
   }
 
-  html:not(.dark) #main-modal .border-b.border-slate-100 {
+  html:not(.dark) #main-modal .modal-header {
     background: #ffffff !important;
     background-color: #ffffff !important;
   }
@@ -1942,13 +1942,20 @@ html.dark #auth-modal #auth-modal-body {
   color: #f8fafc !important;
 }
 
-html.dark #main-modal .border-b.border-slate-100,
-html.dark #main-modal .bg-white\/50,
-html.dark #context-drawer #drawer-footer,
-html.dark .border-b.border-slate-100 {
+html.dark #main-modal .modal-header,
+html.dark #context-drawer .drawer-header,
+html.dark #context-drawer #drawer-footer {
   background: #0f172a !important;
   background-color: #0f172a !important;
   border-color: #334155 !important;
+}
+
+/* Préservation des fonds transparents pour tous les sous-titres et en-têtes de cartes/sections afin de conserver les arrondis et bordures */
+.border-b.border-slate-100:not(.modal-header):not(.drawer-header),
+.border-b.border-slate-200:not(.modal-header):not(.drawer-header),
+.border-b.border-slate-700:not(.modal-header):not(.drawer-header) {
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 html.dark #main-modal #modal-category-subnav,
