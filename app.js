@@ -4899,7 +4899,7 @@ class ProtecGame {
       });
     });
 
-    // 3. PÔLE FORMATIONS (Sessions grand public & internes + Prospections/contrats B2B)
+    // 3. PÔLE FORMATIONS (Formations Internes, Stages Externes, Formations en Entreprise B2B, et Formations Grand Public)
     const formationSessions = (this.sessionsFormation || []).filter(s => s.status !== 'completed');
     formationSessions.forEach(s => {
       let eDate = s.eventDate;
@@ -4912,24 +4912,43 @@ class ProtecGame {
       }
       s.eventDate = eDate;
 
-      const trainer = this.volunteers?.find(v => v.id === s.trainerId);
+      const trainer = this.volunteers?.find(v => v.id === s.trainerId) || s.assignedTrainer;
+      const isStageExt = !!(s.isStageExterne || s.isExternal || s.category === 'stage_externe' || s.locationType === 'externe');
+      const isInternal = !isStageExt && !!(s.isInternal || !s.openToPublic || (s.publicSeatsMax === 0 && s.internalAntenneSeats > 0) || ['PSE1','PSE2','FC_PSE','CI','CHEF_DISPOSITIF','FORM_PS','FORM_SST','CEF','PICF','FDF','AEP1','AEP2'].includes(s.courseId));
+
+      let formType = 'Formation Grand Public';
+      let badgeBg = 'bg-emerald-500 text-white';
+      let poleColor = 'bg-emerald-600';
+
+      if (isStageExt) {
+        formType = 'Stage Externe';
+        badgeBg = 'bg-indigo-600 text-white';
+        poleColor = 'bg-indigo-600';
+      } else if (isInternal) {
+        formType = 'Formation Interne';
+        badgeBg = 'bg-emerald-700 text-white';
+        poleColor = 'bg-emerald-700';
+      }
+
       events.push({
         id: s.id,
         pole: 'formations',
+        formationSubtype: isStageExt ? 'externe' : (isInternal ? 'interne' : 'public'),
         poleLabel: 'Formations',
-        poleColor: 'bg-emerald-600',
-        type: s.isInternal ? 'Formation Interne' : 'Formation Grand Public',
-        badgeBg: 'bg-emerald-600 text-white',
+        poleColor: poleColor,
+        type: formType,
+        badgeBg: badgeBg,
         title: s.title || `Session ${s.courseId}`,
         eventDate: eDate,
         startHour: eDate.hour || 9,
-        durationHours: 7,
-        rewardMoney: s.finalPrice ? s.finalPrice * (s.registeredCandidates?.length || 1) : null,
-        registeredCount: (s.registeredCandidates?.length || 0) + (s.externalAttendeesCount || 0),
-        requiredCount: s.maxCandidates || 8,
-        scale: s.category || 'Formation',
-        address: s.locationLabel || (s.locationType === 'antenne' ? `${(this.stations?.[0]?.name || 'Antenne')} - Salle n°${s.roomNumber || 1}` : 'Délocalisée (Entreprise Partenaire)'),
-        trainerName: trainer ? trainer.name : null,
+        durationHours: s.durationHours || 7,
+        rewardMoney: s.finalPrice ? s.finalPrice * (s.registeredCandidates?.length || 1) : (s.cost ? -s.cost : null),
+        registeredCount: isStageExt ? 1 : ((s.registeredCandidates?.length || 0) + (s.externalAttendeesCount || 0) + (s.publicSeatsBooked || 0)),
+        requiredCount: s.maxCandidates || s.totalSeats || 8,
+        scale: isStageExt ? 'Stage Externe' : (isInternal ? 'Formation Interne' : 'Formation Grand Public'),
+        address: s.locationLabel || (s.locationType === 'antenne' ? `${(this.stations?.[0]?.name || 'Antenne')} - Salle n°${s.roomNumber || 1}` : (s.locationCustom || 'Organisme Tiers / Externe')),
+        trainerName: trainer ? trainer.name : (isStageExt ? (s.assignedTrainer?.name || 'Organisme Extérieur') : null),
+        volunteerName: s.volunteerName || null,
         raw: s
       });
     });
@@ -4937,24 +4956,41 @@ class ProtecGame {
     const b2bProposals = (this.formationB2BProposals || []).filter(p => ['accepted', 'in_progress', 'evaluating', 'pending_quote'].includes(p.status));
     b2bProposals.forEach(p => {
       let bDate = p.eventDate;
-      if (!bDate && p.deadline) {
-        const cd = new Date(p.deadline);
-        bDate = { day: cd.getDate(), month: cd.getMonth(), year: cd.getFullYear(), hour: 9, minute: 0 };
-      } else if (!bDate && p.startedAt) {
+      if (!bDate && p.startedAt) {
         const cd = new Date(p.startedAt);
+        bDate = { day: cd.getDate(), month: cd.getMonth(), year: cd.getFullYear(), hour: 9, minute: 0 };
+      } else if (!bDate && p.deadline) {
+        const cd = new Date(p.deadline);
         bDate = { day: cd.getDate(), month: cd.getMonth(), year: cd.getFullYear(), hour: 9, minute: 0 };
       } else if (!bDate) {
         bDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: 9, minute: 0 };
       }
       p.eventDate = bDate;
 
+      const trainer = (this.volunteers || []).find(v => v.id === (p.trainer_id || p.trainerId));
+      const veh = (this.vehicles || []).find(v => v.id === (p.vehicle_id || p.vehicleId));
+
+      let b2bStatusLabel = 'Devis à émettre';
+      let b2bBadgeBg = 'bg-teal-600 text-white';
+      if (p.status === 'accepted') {
+        b2bStatusLabel = 'Prête à démarrer';
+        b2bBadgeBg = 'bg-emerald-600 text-white';
+      } else if (p.status === 'in_progress') {
+        b2bStatusLabel = 'En cours';
+        b2bBadgeBg = 'bg-sky-600 text-white';
+      } else if (p.status === 'evaluating') {
+        b2bStatusLabel = 'En délibération';
+        b2bBadgeBg = 'bg-amber-600 text-white';
+      }
+
       events.push({
         id: p.id,
         pole: 'formations',
+        formationSubtype: 'entreprise',
         poleLabel: 'Formations',
         poleColor: 'bg-teal-600',
-        type: `Entreprise • ${p.training_type}`,
-        badgeBg: 'bg-teal-600 text-white',
+        type: `Entreprise • ${p.training_type} (${b2bStatusLabel})`,
+        badgeBg: b2bBadgeBg,
         title: `Formation Entreprise : ${p.training_type} (${p.client_name || 'Client'})`,
         eventDate: bDate,
         startHour: 9,
@@ -4962,8 +4998,10 @@ class ProtecGame {
         rewardMoney: p.proposed_price || p.proposedPrice || p.client_target_budget || 0,
         registeredCount: p.attendees_count || 10,
         requiredCount: p.attendees_count || 10,
-        scale: 'Formation Entreprise',
-        address: p.mode === 'intra' ? `Site client : ${p.client_name}` : `${(this.stations?.[0]?.name || 'Antenne')} - Salle n°${p.roomNumber || 1}`,
+        scale: `Entreprise (${p.mode === 'intra' ? 'Intra - Chez le client' : 'Inter - À l’antenne'})`,
+        address: p.mode === 'intra' ? `Site client : ${p.client_name} (${p.client_city || 'Sur site'})` : `${(this.stations?.[0]?.name || 'Antenne')} - Salle n°${p.roomNumber || 1}`,
+        trainerName: trainer ? trainer.name : (p.status === 'accepted' ? '⚠️ Formateur à affecter' : null),
+        vehicleName: veh ? veh.name : null,
         raw: p
       });
     });
@@ -20456,44 +20494,69 @@ class ProtecGame {
                       </p>
                     ` : `
                       <div class="space-y-4">
-                        <!-- SECTION 1 : FORMATIONS & STAGES PÉDAGOGIQUES -->
+                        <!-- SECTION 1 : FORMATIONS & STAGES PÉDAGOGIQUES (INTERNES, EXTERNES, ENTREPRISES) -->
                         ${filters.formations && selectedDayFormations.length > 0 ? `
                           <div class="space-y-2.5">
-                            <div class="text-[11px] font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1.5">
-                              <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-emerald-600"></i>
-                              <span>Pôle Formations & Stages (${selectedDayFormations.length})</span>
+                            <div class="text-[11px] font-black uppercase text-emerald-800 dark:text-emerald-300 tracking-wider flex items-center justify-between">
+                              <div class="flex items-center gap-1.5">
+                                <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-emerald-600"></i>
+                                <span>Pôle Formations & Stages (${selectedDayFormations.length})</span>
+                              </div>
                             </div>
                             <div class="flex flex-col space-y-3">
                               ${selectedDayFormations.map(e => {
                                 const f = e.raw;
-                                const isB2B = e.type.startsWith('B2B');
+                                const isEntreprise = e.formationSubtype === 'entreprise' || e.type.includes('Entreprise');
+                                const isStageExt = e.formationSubtype === 'externe' || e.type.includes('Externe');
+                                const isInterne = e.formationSubtype === 'interne' || e.type.includes('Interne');
+
+                                let cardBorder = 'border-emerald-300 dark:border-emerald-700/60 bg-emerald-50/40 dark:bg-emerald-950/30';
+                                if (isEntreprise) {
+                                  cardBorder = 'border-teal-400 dark:border-teal-700/60 bg-teal-50/40 dark:bg-teal-950/30';
+                                } else if (isStageExt) {
+                                  cardBorder = 'border-indigo-400 dark:border-indigo-700/60 bg-indigo-50/40 dark:bg-indigo-950/30';
+                                }
+
                                 return `
-                                  <div class="p-3.5 rounded-2xl border-2 border-emerald-300 dark:border-emerald-700/60 bg-emerald-50/40 dark:bg-emerald-950/30 flex flex-col justify-between space-y-2.5">
+                                  <div class="p-3.5 rounded-2xl border-2 ${cardBorder} flex flex-col justify-between space-y-2.5">
                                     <div>
-                                      <div class="flex items-center justify-between gap-2">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white uppercase">
+                                      <div class="flex items-center justify-between gap-2 flex-wrap">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${e.badgeBg} uppercase">
                                           ${e.type}
                                         </span>
-                                        ${e.rewardMoney ? `<span class="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400">+${e.rewardMoney} €</span>` : ''}
+                                        ${e.rewardMoney ? `<span class="text-xs font-mono font-bold ${e.rewardMoney > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}">${e.rewardMoney > 0 ? `+${e.rewardMoney.toLocaleString('fr-FR')} €` : `${e.rewardMoney.toLocaleString('fr-FR')} €`}</span>` : ''}
                                       </div>
                                       <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${e.title}</h5>
+                                      <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-1">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
+                                        <span>Lieu : <strong>${e.address}</strong></span>
+                                      </p>
                                       <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                                        Lieu : <strong>${e.address}</strong> • Inscrits : <strong>${e.registeredCount} / ${e.requiredCount}</strong>
+                                        ${isStageExt ? `
+                                          Stagiaire : <strong class="text-indigo-900 dark:text-indigo-300">${e.volunteerName || 'Bénévole antenne'}</strong> • Organisme extérieur
+                                        ` : isEntreprise ? `
+                                          Salariés : <strong>${e.registeredCount} prévus</strong> • Mode : <strong>${e.scale}</strong>
+                                        ` : `
+                                          Inscrits : <strong>${e.registeredCount} / ${e.requiredCount}</strong> (${e.scale})
+                                        `}
                                       </p>
                                       ${e.trainerName ? `
-                                        <p class="text-[11px] text-emerald-800 dark:text-emerald-300 font-semibold mt-0.5">
-                                          Formateur : <strong>${e.trainerName}</strong>
+                                        <p class="text-[11px] ${isEntreprise ? 'text-teal-800 dark:text-teal-300' : isStageExt ? 'text-indigo-800 dark:text-indigo-300' : 'text-emerald-800 dark:text-emerald-300'} font-semibold mt-0.5">
+                                          ${isStageExt ? 'Organisme :' : 'Formateur :'} <strong>${e.trainerName}</strong>
                                         </p>
-                                      ` : `
+                                      ` : !isStageExt ? `
                                         <p class="text-[11px] text-amber-700 dark:text-amber-400 font-bold mt-0.5">
                                           ⚠️ Aucun formateur affecté
                                         </p>
-                                      `}
+                                      ` : ''}
                                     </div>
 
-                                    <div class="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-end">
-                                      <button onclick="window.game.openModule('formations')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition flex items-center gap-1 cursor-pointer">
-                                        <span>Gérer la Formation</span>
+                                    <div class="pt-2 border-t ${isEntreprise ? 'border-teal-200/60 dark:border-teal-800/40' : isStageExt ? 'border-indigo-200/60 dark:border-indigo-800/40' : 'border-emerald-200/60 dark:border-emerald-800/40'} flex items-center justify-end">
+                                      <button 
+                                        onclick="if(window.ProtecFormations) window.ProtecFormations.mainTab = '${isEntreprise ? 'entreprises' : 'grand_public'}'; window.game.openModule('formations');" 
+                                        class="px-3 py-1.5 rounded-xl ${isEntreprise ? 'bg-teal-600 hover:bg-teal-700' : isStageExt ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white text-[11px] font-black transition flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <span>${isEntreprise ? 'Gérer la Formation Entreprise' : isStageExt ? 'Voir le Module Formations' : 'Gérer la Formation'}</span>
                                         <i data-lucide="arrow-right" class="w-3 h-3"></i>
                                       </button>
                                     </div>
@@ -20893,8 +20956,8 @@ class ProtecGame {
                             Consulter le Devis DPS
                           </button>
                         ` : `
-                          <button onclick="window.game.openModule('formations')" class="w-full py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer">
-                            Consulter la Formation
+                          <button onclick="if(window.ProtecFormations) window.ProtecFormations.mainTab = '${e.formationSubtype === 'entreprise' ? 'entreprises' : 'grand_public'}'; window.game.openModule('formations');" class="w-full py-2 rounded-xl text-xs font-bold ${e.formationSubtype === 'entreprise' ? 'bg-teal-600 hover:bg-teal-700' : e.formationSubtype === 'externe' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white transition cursor-pointer">
+                            ${e.formationSubtype === 'entreprise' ? 'Consulter la Formation Entreprise' : e.formationSubtype === 'externe' ? 'Voir le Stage Externe' : 'Consulter la Formation'}
                           </button>
                         `}
                       </div>

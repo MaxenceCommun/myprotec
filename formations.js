@@ -1366,6 +1366,8 @@ window.ProtecFormations = {
       eventDate: evDate,
       dateDesc: `${evDate.day}/${(evDate.month || 0) + 1}/${evDate.year} à ${evDate.hour}h00 (Durée : ${course.durationHours}h)`,
       status: 'open',
+      isInternal: !!(isInternal || !openToPublic || (internalAntenneSeats > 0 && !openToPublic)),
+      isExternal: locType === 'externe',
       createdAt: Date.now()
     };
 
@@ -1438,6 +1440,54 @@ window.ProtecFormations = {
 
     // Attribution immédiate des compétences et rôles
     this.grantCourseQualifications(vol, course);
+
+    // Inscription du stage externe au planning général de l'antenne
+    const extSessionId = `ext-stage-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const curClock = game.clock || {};
+    const evDate = {
+      day: curClock.day || 1,
+      month: curClock.month !== undefined ? curClock.month : 0,
+      year: curClock.year || 2026,
+      hour: 9,
+      minute: 0
+    };
+    const newExtSession = {
+      id: extSessionId,
+      courseId: course.id,
+      title: `Stage Externe : ${course.title} (${vol.name})`,
+      category: 'stage_externe',
+      locationType: 'externe',
+      locationCustom: 'Organisme Agréé Externe / Union Départementale',
+      locationLabel: 'Organisme Agréé Externe / Union Départementale',
+      totalSeats: 1,
+      maxCandidates: 1,
+      internalAntenneSeats: 1,
+      internalProtecSeats: 0,
+      openToPublic: false,
+      publicSeatsMax: 0,
+      publicSeatsBooked: 0,
+      publicPrice: 0,
+      publicAttendees: [],
+      registeredCandidates: [vol.id],
+      registeredProtecReinforcements: [],
+      trainerId: null,
+      assignedTrainer: { name: 'Organisme Agréé Externe / UD', role: 'Formateur Organisme Tiers' },
+      kitRequired: null,
+      kitName: null,
+      eventDate: evDate,
+      dateDesc: `${evDate.day}/${(evDate.month || 0) + 1}/${evDate.year} à 09h00 (Stage Externe)`,
+      status: 'open',
+      isExternal: true,
+      isStageExterne: true,
+      volunteerId: vol.id,
+      volunteerName: vol.name,
+      payMode: payMode,
+      cost: cost,
+      durationHours: course.durationHours || 7,
+      createdAt: Date.now()
+    };
+    if (!Array.isArray(game.sessionsFormation)) game.sessionsFormation = [];
+    game.sessionsFormation.unshift(newExtSession);
 
     game.updateStatsUI();
     game.saveGame();
