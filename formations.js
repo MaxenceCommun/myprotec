@@ -1508,6 +1508,9 @@ window.ProtecFormations = {
     };
 
     game.sessionsFormation.unshift(newSession);
+    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordFormationScheduled === 'function') {
+      window.ProtecAdvanced.recordFormationScheduled(game, newSession);
+    }
     game.saveGame();
     game.showToast('Session de Formation Programmée 🎓', `La session « ${course.title} » est ouverte au calendrier (${totalSeats} places).`, 'green');
     this.renderModal(game);
@@ -1624,6 +1627,9 @@ window.ProtecFormations = {
     };
     if (!Array.isArray(game.sessionsFormation)) game.sessionsFormation = [];
     game.sessionsFormation.unshift(newExtSession);
+    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordFormationScheduled === 'function') {
+      window.ProtecAdvanced.recordFormationScheduled(game, newExtSession);
+    }
 
     game.updateStatsUI();
     game.saveGame();
@@ -2308,6 +2314,9 @@ window.ProtecFormations = {
       const v = game.volunteers.find(vol => vol.id === vid);
       if (v && course) {
         this.grantCourseQualifications(v, course);
+        if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordVolunteerPromoted === 'function') {
+          window.ProtecAdvanced.recordVolunteerPromoted(game, v);
+        }
         // Bonus de rapidité d'apprentissage QCPR
         if (mannequinTier === 3) {
           v.exp = (v.exp || 0) + 15;

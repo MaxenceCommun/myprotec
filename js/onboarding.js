@@ -2045,10 +2045,10 @@ window.ProtecOnboarding = {
           image: (typeof game.getVehicleImage === 'function') ? game.getVehicleImage('VPSP') : 'images/vehicles/VPSP.png',
           types: ['PS', 'VPSP'],
           capacity_log: 0,
-          consumables: 100,
-          armementLevel: 100,
-          isRearmed: true,
-          needsRearming: false,
+          consumables: 0,
+          armementLevel: 0,
+          isRearmed: false,
+          needsRearming: true,
           loadedItems: []
         };
 

@@ -1883,7 +1883,10 @@ class ProtecGame {
           const rawRewards = localStorage.getItem('protec_rewards_save');
           if (rawRewards) {
             const parsed = JSON.parse(rawRewards);
-            if (parsed && parsed.rewards) this.rewards = parsed.rewards;
+            const myPlayerId = this.player?.id || window.ProtecAuth?.currentUser?.id || null;
+            if (parsed && parsed.rewards && (!parsed.userId || !myPlayerId || parsed.userId === myPlayerId)) {
+              this.rewards = parsed.rewards;
+            }
           }
         } catch (re) {}
       }
@@ -23759,10 +23762,10 @@ class ProtecGame {
       image: (typeof this.getVehicleImage === 'function') ? this.getVehicleImage('VPSP') : 'images/vehicles/VPSP.png',
       types: ['PS', 'VPSP'],
       capacity_log: 0,
-      consumables: 100,
-      armementLevel: 100,
-      isRearmed: true,
-      needsRearming: false,
+      consumables: 0,
+      armementLevel: 0,
+      isRearmed: false,
+      needsRearming: true,
       loadedItems: []
     };
 

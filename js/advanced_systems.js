@@ -1131,7 +1131,9 @@ window.ProtecAdvanced = {
   saveRewardsLocally(game) {
     if (!game || !game.rewards) return;
     try {
+      const playerId = game.player?.id || window.ProtecAuth?.currentUser?.id || null;
       localStorage.setItem('protec_rewards_save', JSON.stringify({
+        userId: playerId,
         rewards: game.rewards,
         savedAt: Date.now()
       }));
@@ -1144,6 +1146,11 @@ window.ProtecAdvanced = {
       const raw = localStorage.getItem('protec_rewards_save');
       if (raw) {
         const parsed = JSON.parse(raw);
+        const currentPlayerId = game.player?.id || window.ProtecAuth?.currentUser?.id || null;
+        // Si la sauvegarde de récompenses provient d'un autre compte utilisateur, ne pas réimporter
+        if (parsed.userId && currentPlayerId && parsed.userId !== currentPlayerId) {
+          return;
+        }
         if (parsed && parsed.rewards) {
           if (!game.rewards) {
             game.rewards = parsed.rewards;
@@ -1357,20 +1364,28 @@ window.ProtecAdvanced = {
     if (!game.rewards.dailyActivity || game.rewards.dailyActivity.date !== todayKey) {
       game.rewards.dailyActivity = {
         date: todayKey,
+        startTimestamp: Date.now(),
         missions: 0,
         samu: 0,
         formations: 0,
+        sessionsPlanned: 0,
         devis: 0,
-        recycles: 0
+        recycles: 0,
+        rearms: 0,
+        roleAssignments: 0
       };
     }
     if (!game.rewards.weeklyActivity || game.rewards.weeklyActivity.week !== curWeek) {
       game.rewards.weeklyActivity = {
         week: curWeek,
+        startTimestamp: Date.now(),
         missions: 0,
         formations: 0,
+        sessionsPlanned: 0,
         devis: 0,
         recycles: 0,
+        promotions: 0,
+        roleAssignments: 0,
         startVolunteerHours: game.grants?.totalVolunteerHours || 0
       };
     }
@@ -1398,6 +1413,15 @@ window.ProtecAdvanced = {
     this.saveRewardsLocally(game);
   },
 
+  recordFormationScheduled(game, session) {
+    if (!game || !game.rewards) return;
+    this.ensureActivityTracking(game);
+    game.rewards.dailyActivity.sessionsPlanned = (game.rewards.dailyActivity.sessionsPlanned || 0) + 1;
+    game.rewards.weeklyActivity.sessionsPlanned = (game.rewards.weeklyActivity.sessionsPlanned || 0) + 1;
+    this.updateTasksProgress(game);
+    this.saveRewardsLocally(game);
+  },
+
   recordDevisSigned(game, devis) {
     if (!game || !game.rewards) return;
     this.ensureActivityTracking(game);
@@ -1412,6 +1436,31 @@ window.ProtecAdvanced = {
     this.ensureActivityTracking(game);
     game.rewards.dailyActivity.recycles = (game.rewards.dailyActivity.recycles || 0) + 1;
     game.rewards.weeklyActivity.recycles = (game.rewards.weeklyActivity.recycles || 0) + 1;
+    this.updateTasksProgress(game);
+    this.saveRewardsLocally(game);
+  },
+
+  recordRoleAssigned(game, volunteer, role) {
+    if (!game || !game.rewards) return;
+    this.ensureActivityTracking(game);
+    game.rewards.dailyActivity.roleAssignments = (game.rewards.dailyActivity.roleAssignments || 0) + 1;
+    game.rewards.weeklyActivity.roleAssignments = (game.rewards.weeklyActivity.roleAssignments || 0) + 1;
+    this.updateTasksProgress(game);
+    this.saveRewardsLocally(game);
+  },
+
+  recordVolunteerPromoted(game, volunteer) {
+    if (!game || !game.rewards) return;
+    this.ensureActivityTracking(game);
+    game.rewards.weeklyActivity.promotions = (game.rewards.weeklyActivity.promotions || 0) + 1;
+    this.updateTasksProgress(game);
+    this.saveRewardsLocally(game);
+  },
+
+  recordVehicleRearmed(game, vehicle) {
+    if (!game || !game.rewards) return;
+    this.ensureActivityTracking(game);
+    game.rewards.dailyActivity.rearms = (game.rewards.dailyActivity.rearms || 0) + 1;
     this.updateTasksProgress(game);
     this.saveRewardsLocally(game);
   },
@@ -1532,6 +1581,23 @@ window.ProtecAdvanced = {
     const act = game.rewards.dailyActivity || {};
     const wAct = game.rewards.weeklyActivity || {};
 
+    // Assainissement des faux positifs sur comptes récents n'ayant encore aucune activité
+    const totalCompletedMissions = (game.missions || []).filter(m => m.status === 'completed').length;
+    const totalSessions = (game.sessionsFormation || []).length;
+    const hasAnyRoleAssigned = (game.volunteers || []).some(v => v.poleRoleId && v.poleRoleId !== '');
+    if (totalCompletedMissions === 0 && totalSessions === 0 && !hasAnyRoleAssigned) {
+      const pedagoTask = (game.rewards.dailyTasks || []).find(t => t.id === 'task-daily-pedago');
+      if (pedagoTask && (act.formations || 0) === 0 && (act.devis || 0) === 0 && (act.sessionsPlanned || 0) === 0) {
+        pedagoTask.done = false;
+        pedagoTask.current = 0;
+      }
+      const teamWeekly = (game.rewards.weeklyTasks || []).find(w => w.id === 'w-task-team');
+      if (teamWeekly && (wAct.roleAssignments || 0) === 0 && (wAct.promotions || 0) === 0) {
+        teamWeekly.done = false;
+        teamWeekly.current = 0;
+      }
+    }
+
     // Progression des Tâches Quotidiennes
     (game.rewards.dailyTasks || []).forEach(t => {
       if (t.done) {
@@ -1554,20 +1620,22 @@ window.ProtecAdvanced = {
           const kits = game.logistics?.woundKits || 0;
           t.current = Math.min(t.goal, o2 + dae + kits);
         } else {
-          // Véhicules prêts au départ
+          // Véhicules prêts au départ (armement complet, non en panne, CT valide)
           const readyVehs = (game.vehicles || []).filter(v => 
-            !v.isBrokenDown && !v.needsRearming && (v.mechanical || 100) >= 50 && v.ctStatus !== 'expire'
+            !v.isBrokenDown && !v.needsRearming && v.isRearmed !== false && (v.armementLevel === undefined || v.armementLevel >= 100) && (v.mechanical || 100) >= 50 && v.ctStatus !== 'expire'
           ).length;
-          t.current = Math.min(t.goal, readyVehs);
+          const hasDoneRearm = (act.rearms || 0) > 0;
+          t.current = Math.min(t.goal, Math.max(hasDoneRearm ? 1 : 0, readyVehs));
         }
       }
       // 3. Pédagogie, Formations & Recyclages
       else if (t.id === 'task-daily-pedago') {
-        const pedagoCount = (act.formations || 0) + (act.recycles || 0) + (act.devis || 0);
-        const hasSession = (game.sessionsFormation || []).some(s => s.status !== 'completed' || s.isCompleted);
-        const hasPendingB2B = (game.formationB2BProposals || []).some(p => p.status === 'accepted' || p.status === 'pending_quote');
-        const hasRecycledVols = (game.volunteers || []).some(v => v.lastRecycledYear === game.clock?.year);
-        t.current = Math.min(t.goal, Math.max(pedagoCount, hasSession ? 1 : 0, hasPendingB2B ? 1 : 0, hasRecycledVols ? 1 : 0));
+        const pedagoCount = (act.formations || 0) + (act.recycles || 0) + (act.devis || 0) + (act.sessionsPlanned || 0);
+        // Session planifiée aujourd'hui par le joueur
+        const plannedToday = (game.sessionsFormation || []).some(s => s.createdAt && s.createdAt >= (act.startTimestamp || 0));
+        // Devis B2B signé aujourd'hui
+        const signedB2BToday = (game.formationB2BProposals || []).some(p => p.status === 'accepted' && p.acceptedAt && p.acceptedAt >= (act.startTimestamp || 0));
+        t.current = Math.min(t.goal, Math.max(pedagoCount, plannedToday ? 1 : 0, signedB2BToday ? 1 : 0));
       }
       // Rétrocompatibilité avec d'anciens IDs de tâches
       else if (t.id === 'task-starter-aasc') {
@@ -1603,13 +1671,11 @@ window.ProtecAdvanced = {
         const totalDone = (game.missions || []).filter(m => m.status === 'completed').length;
         w.current = Math.min(w.goal, Math.max(weekMissions, totalDone));
       }
-      // 3. Pôle formation, recyclages et équipe
+      // 3. Pôle formation, recyclages et équipe (Défis Hebdomadaires)
       else if (w.id === 'w-task-team') {
-        const qualifiedCount = (game.volunteers || []).filter(v => 
-          (v.poleRoleId && v.poleRoleId !== '') || ['CE', 'CD', 'PSE2'].includes(v.rank) || (v.skills || []).includes('pse2')
-        ).length;
-        const pedagoTotal = (wAct.formations || 0) + (wAct.recycles || 0) + (wAct.devis || 0);
-        w.current = Math.min(w.goal, Math.max(pedagoTotal, qualifiedCount));
+        // Actions réelles effectuées durant la semaine : attribution d'un rôle de pôle, promotion/qualification, formation ou recyclage certifié
+        const teamActions = (wAct.roleAssignments || 0) + (wAct.promotions || 0) + (wAct.formations || 0) + (wAct.recycles || 0) + (wAct.devis || 0);
+        w.current = Math.min(w.goal, teamActions);
       }
       // Rétrocompatibilité anciens défis
       else if (w.id === 'w-task-starter-recrut') {

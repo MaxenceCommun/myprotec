@@ -1829,6 +1829,7 @@ window.ProtecAuth = {
 
       // PURGE FORMELLE DU LOCALSTORAGE : Tout nouveau compte démarre avec une sauvegarde locale vierge
       localStorage.removeItem('protec_live_save_v4');
+      localStorage.removeItem('protec_rewards_save');
       localStorage.removeItem('protec_offline_queue');
       localStorage.removeItem('protec_admin_auth');
       localStorage.removeItem('protec_pending_ref');
@@ -1838,6 +1839,10 @@ window.ProtecAuth = {
       if (!window.game || !document.getElementById('map')) {
         window.location.href = 'jeu.html';
         return;
+      }
+
+      if (window.game) {
+        window.game.rewards = null;
       }
 
       game.player.id = data.user.id;
@@ -2345,6 +2350,7 @@ window.ProtecAuth = {
     localStorage.removeItem('protec_last_login_username');
     localStorage.removeItem('protec_last_login_password');
     localStorage.removeItem('protec_live_save_v4');
+    localStorage.removeItem('protec_rewards_save');
     localStorage.removeItem('protec_department_code');
     localStorage.removeItem('protec_player_id');
 
@@ -2352,6 +2358,7 @@ window.ProtecAuth = {
     // Purge totale de l'antenne locale pour éviter toute persistance orpheline
     if (g) {
       if (g.player) g.player.id = null;
+      g.rewards = null;
       g.stations = [];
       g.vehicles = [];
       g.volunteers = [];

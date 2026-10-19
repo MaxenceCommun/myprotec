@@ -546,6 +546,9 @@ window.ProtecPoles = {
     vol.energy = Math.min(100, (vol.energy || 80) + 5);
 
     if (window.ProtecAudio) window.ProtecAudio.playRadioBeep();
+    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordRoleAssigned === 'function') {
+      window.ProtecAdvanced.recordRoleAssigned(game, vol, role);
+    }
     game.saveGame();
 
     if (isDirectAccess) {

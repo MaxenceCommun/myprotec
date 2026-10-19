@@ -1522,6 +1522,11 @@ window.ProtecSystems = {
       }
       game.resources.money -= cost;
       v.needsRearming = false;
+      v.isRearmed = true;
+      v.armementLevel = 100;
+      if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordVehicleRearmed === 'function') {
+        window.ProtecAdvanced.recordVehicleRearmed(game, v);
+      }
       game.showToast('Matériel Réarmé', `${v.name} a reçu ses sacs de secours reconditionnés et son matériel médical complet.`, 'green');
     } else if (actionType === 'fuel') {
       const cost = 75;
