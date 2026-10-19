@@ -1061,12 +1061,30 @@
      * Génère le vivier d'événements du territoire et alimente modérément le carnet de devis.
      */
     initStationEvents(game, station) {
-      if (!game || !station) return;
+      if (!game || !station) return 0;
 
       console.log(`[MyProtec EvenementsReels] 📍 Vivier d'ancrage territorial initialisé pour ${station.name} (${station.city})`);
 
       const pool = this.generateTerritoryEventsPool(game, station, 20);
-      const added = this.injectEventsIntoGame(game, pool);
+
+      // Si l'antenne vient de démarrer et n'a pas encore communiqué, conserver le vivier en réserve dormante
+      const hasComm = !!(game.resources?.campaigns?.social || game.resources?.campaigns?.posters || game.resources?.campaigns?.presse || (game.activeCampaigns || []).length > 0);
+      const hasWebsite = !!(game.antenneWebsite && game.antenneWebsite.published && (game.antenneWebsite.freshness || 0) >= 40);
+      const rep = game.resources?.reputationScore || 0;
+      const completedDps = (game.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
+
+      let added = 0;
+      if (hasComm || hasWebsite || rep >= 80 || completedDps > 0) {
+        added = this.injectEventsIntoGame(game, pool);
+      } else {
+        // Enregistrer le vivier sans pousser de devis en boîte de réception
+        if (!Array.isArray(game.territoryEventsPool)) game.territoryEventsPool = [];
+        pool.forEach(evt => {
+          if (!game.territoryEventsPool.some(p => (p.eventName || '').toLowerCase() === (evt.eventName || '').toLowerCase())) {
+            game.territoryEventsPool.push(evt);
+          }
+        });
+      }
 
       station.territoryEventsPoolCount = pool.length;
       station.lastTerritoryEventsGeneratedAt = Date.now();

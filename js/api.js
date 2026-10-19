@@ -126,15 +126,38 @@
         console.log(`[API MyProtec] ${interventions.length} intervention(s) reçue(s) du backend :`, interventions);
 
         if (Array.isArray(interventions)) {
+          const game = this._gameRef || window.game;
           interventions.forEach(interv => {
             this.syncInterventionIntoGame(interv, false);
           });
+
+          if (game) {
+            this.purgeUnconventionedMissions(game);
+          }
 
           this.refreshUI();
         }
       } catch (error) {
         console.error('[API MyProtec] Erreur lors du chargement des interventions:', error);
       }
+    },
+
+    /**
+     * Purge stricte des missions actives non conventionnées
+     */
+    purgeUnconventionedMissions(game) {
+      if (!game || !Array.isArray(game.missions)) return;
+      const hasSamu = Boolean(game.samuConvention && game.samuConvention.signed && game.samuGarde && game.samuGarde.active);
+      const hasSdis = Boolean(game.sdisConvention && game.sdisConvention.signed && game.sdisGarde && game.sdisGarde.active);
+      const hasAasc = Boolean(game.aascConvention && game.aascConvention.signed);
+
+      game.missions = game.missions.filter(m => {
+        if (!m) return false;
+        if ((m.type === 'samu' || m.type === 'garde_samu') && !hasSamu) return false;
+        if ((m.type === 'pompiers' || m.type === 'garde_sdis') && !hasSdis) return false;
+        if (m.type === 'crise' && !hasAasc) return false;
+        return true;
+      });
     },
 
     /**
@@ -248,14 +271,70 @@
       if (interv.statut === 'engagee') clientStatus = 'ongoing';
       else if (interv.statut === 'terminee') clientStatus = 'completed';
 
+      // Détermination rigoureuse du type de mission
       let missionType = 'pompiers';
-      if (reqVehicles.includes('VPSP')) {
-        missionType = 'samu';
-      } else if (interv.titre && /hébergement|soutien logistique|crise|inondation|évacuation/i.test(interv.titre)) {
+      const titleLower = (interv.titre || '').toLowerCase();
+      if (/dps|renfort dps|poste de secours|sportif|course|trail|match|stade/i.test(titleLower)) {
+        missionType = 'dps';
+      } else if (/hébergement|soutien logistique|crise|inondation|évacuation|plan blanc|novi/i.test(titleLower)) {
         missionType = 'crise';
+      } else if (reqVehicles.includes('VPSP') || /détresse|malaise|cardiaque|avc|respiratoire|smur|samu|urgence vitale/i.test(titleLower)) {
+        missionType = 'samu';
+      }
+
+      // VÉRIFICATION STRICTE DES CONDITIONS CONVENTIONNELLES & EFFECTIFS
+      if (!game.stations || game.stations.length === 0) {
+        return null; // Antenne non encore placée sur la carte
       }
 
       let existing = game.missions.find(m => m.id === missionId || m.backendId == cleanId);
+
+      // 1. Mission SAMU : Exige impérativement Convention Cadre SAMU signée ET garde VPSP active
+      if (missionType === 'samu') {
+        const hasSamuConv = Boolean(game.samuConvention && game.samuConvention.signed);
+        const hasSamuGarde = Boolean(game.samuGarde && game.samuGarde.active);
+        const hasVpsp = Array.isArray(game.vehicles) && game.vehicles.some(v => v.type === 'VPSP');
+
+        if (!hasSamuConv || !hasSamuGarde || !hasVpsp) {
+          // Si le joueur n'a pas conventionné le SAMU ou n'a pas de garde VPSP déclarée, il ne reçoit aucun appel 15
+          if (existing) {
+            game.missions = game.missions.filter(m => m.id !== missionId && m.backendId != cleanId);
+          }
+          return null;
+        }
+
+        // Règle opérationnelle stricte : Pas plus d'interventions SAMU simultanées que de vecteurs VPSP de garde
+        const maxVectors = (game.samuGarde && game.samuGarde.assignedVehicles && game.samuGarde.assignedVehicles.length > 0)
+          ? game.samuGarde.assignedVehicles.length
+          : 1;
+        const activeSamu = (game.missions || []).filter(m => m.type === 'samu' && (m.status === 'ongoing' || m.status === 'declenche' || m.status === 'planifie') && m.id !== missionId && m.backendId != cleanId);
+        if (activeSamu.length >= maxVectors && !existing) {
+          return null; // Vecteur VPSP déjà engagé
+        }
+      }
+
+      // 2. Mission Garde SDIS : Exige convention SDIS et garde active
+      if (missionType === 'pompiers') {
+        const hasSdisConv = Boolean(game.sdisConvention && game.sdisConvention.signed);
+        const hasSdisGarde = Boolean(game.sdisGarde && game.sdisGarde.active);
+        if (!hasSdisConv || !hasSdisGarde) {
+          if (existing) {
+            game.missions = game.missions.filter(m => m.id !== missionId && m.backendId != cleanId);
+          }
+          return null;
+        }
+      }
+
+      // 3. Mission Crise / Soutien Logistique : Exige convention AASC / agrément sécurité civile
+      if (missionType === 'crise') {
+        const hasAascConv = Boolean(game.aascConvention && game.aascConvention.signed);
+        if (!hasAascConv) {
+          if (existing) {
+            game.missions = game.missions.filter(m => m.id !== missionId && m.backendId != cleanId);
+          }
+          return null;
+        }
+      }
 
       if (existing) {
         existing.title = interv.titre || existing.title;
@@ -269,6 +348,7 @@
         }
         existing.backendStatut = interv.statut;
         existing.status = clientStatus;
+        existing.type = missionType;
         existing.requiredVehicles = reqVehicles;
         existing.requiredVolunteers = reqVolunteers;
         existing.urgency = interv.gravite || existing.urgency;

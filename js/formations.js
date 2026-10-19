@@ -454,8 +454,31 @@ window.ProtecFormations = {
       return true;
     });
 
+    // Règle métier stricte : Une antenne ne reçoit aucune demande B2B sans formateur diplômé
+    const trainers = (game.volunteers || []).filter(v => v.isTrainer || (v.skills && v.skills.some(s => s.startsWith('formateur') || s === 'cef' || s === 'picf' || s === 'pae_f' || s === 'pae_fps')));
+    if (trainers.length === 0) {
+      if (!forceNew) {
+        // Purger les devis de formation en attente non légitimes
+        game.formationB2BProposals = (game.formationB2BProposals || []).filter(p => ['completed', 'in_progress', 'accepted'].includes(p.status));
+        return;
+      }
+    }
+
     const activeCount = game.formationB2BProposals.filter(p => ['pending_quote', 'evaluating', 'accepted', 'in_progress'].includes(p.status)).length;
-    const targetPool = forceNew ? (activeCount + 1) : Math.max(3, Math.min(5, 3 + Math.floor((game.resources?.reputationScore || 50) / 100)));
+
+    // Facteurs de communication et visibilité réelle
+    const hasComm = !!(game.resources?.campaigns?.formation || (game.activeCampaigns || []).some(c => c.type === 'formation' || c.id?.includes('formation')) || (game.antenneWebsite && game.antenneWebsite.published && (game.antenneWebsite.freshness || 0) >= 40));
+    const repScore = game.resources?.reputationScore || 0;
+    const completedSessions = (game.sessionsFormation || []).filter(s => s.status === 'completed').length;
+
+    // Démarrage réaliste de l'antenne : 0 demande sans action de communication ou notoriété
+    let targetPool = 0;
+    if (hasComm || completedSessions > 0 || repScore >= 120) {
+      targetPool = 1;
+      if (repScore >= 200) targetPool = 2;
+      if (repScore >= 400) targetPool = 3;
+    }
+    if (forceNew) targetPool = activeCount + 1;
 
     if (activeCount < targetPool || forceNew) {
       const needed = forceNew ? 1 : (targetPool - activeCount);
@@ -1235,21 +1258,28 @@ window.ProtecFormations = {
 
     const activeCount = game.formationB2BProposals.filter(p => ['pending_quote', 'evaluating', 'accepted', 'in_progress'].includes(p.status)).length;
 
+    // Règle formateur : Aucun formateur diplômé = 0 demande
+    const trainers = (game.volunteers || []).filter(v => v.isTrainer || (v.skills && v.skills.some(s => s.startsWith('formateur') || s === 'cef' || s === 'picf' || s === 'pae_f' || s === 'pae_fps')));
+    if (trainers.length === 0) return false;
+
     // Facteurs de notoriété et de communication
     const repScore = game.resources?.reputationScore || 0;
-    const commCampaigns = (game.activeCampaigns || []).length;
+    const commCampaigns = (game.activeCampaigns || []).filter(c => c.type === 'formation' || c.id?.includes('formation')).length;
+    const hasSite = !!(game.antenneWebsite && game.antenneWebsite.published && (game.antenneWebsite.freshness || 0) >= 40);
     const socialFollowers = game.socialMediaState?.followers || game.resources?.followers || 0;
     const hasRoom = window.ProtecLocaux && typeof window.ProtecLocaux.hasFormationRoom === 'function' ? window.ProtecLocaux.hasFormationRoom(game) : true;
 
-    // Jauge cible du vivier de demandes actives (de 2 à 6)
-    let maxPool = 2;
-    if (repScore >= 60) maxPool = 3;
-    if (repScore >= 150) maxPool = 4;
-    if (repScore >= 300) maxPool = 5;
-    if (repScore >= 500) maxPool = 6;
-    if (commCampaigns > 0) maxPool += 1;
+    // Progression temps réel : 0 demande sans communication active, sans site et réputation < 100
+    let maxPool = 0;
+    if (commCampaigns > 0 || hasSite || repScore >= 100) {
+      maxPool = 1;
+      if (repScore >= 180) maxPool = 2;
+      if (repScore >= 350) maxPool = 3;
+      if (repScore >= 600) maxPool = 4;
+      if (commCampaigns > 0) maxPool += 1;
+    }
 
-    if (activeCount >= maxPool) return false;
+    if (activeCount >= maxPool || maxPool === 0) return false;
 
     // Probabilité d'apparition par cycle de 30s
     let proba = 0.35 + Math.min(0.40, (repScore / 500) * 0.40);

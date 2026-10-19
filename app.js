@@ -1919,19 +1919,59 @@ class ProtecGame {
     if (Array.isArray(this.missions)) {
       this.missions = this.missions.filter(m => !this.isMissionTerminated(m));
 
-      // Purge de sécurité : éliminer les missions SAMU injectées sans convention signée ou sans VPSP
+      // 1. Purge stricte SAMU 15 : Exige convention signée ET garde VPSP active
       const hasSamuConv = Boolean(this.samuConvention && this.samuConvention.signed);
+      const hasSamuGarde = Boolean(this.samuGarde && this.samuGarde.active);
       const hasVpsp = Array.isArray(this.vehicles) && this.vehicles.some(v => v.type === 'VPSP');
-      if (!hasSamuConv || !hasVpsp) {
+      if (!hasSamuConv || !hasVpsp || !hasSamuGarde) {
         this.missions = this.missions.filter(m => {
           if (!m) return false;
-          const isSamuMission = (m.type === 'samu' || m.type === 'garde_samu');
-          // Conserver uniquement les missions engagées en cours s'il y en avait, purger toutes les autres
-          if (isSamuMission && m.status !== 'ongoing') {
-            return false;
-          }
-          return true;
+          const isSamu = (m.type === 'samu' || m.type === 'garde_samu');
+          return !isSamu;
         });
+      }
+
+      // 2. Purge stricte SDIS Pompiers : Exige convention SDIS et garde active
+      const hasSdisConv = Boolean(this.sdisConvention && this.sdisConvention.signed);
+      const hasSdisGarde = Boolean(this.sdisGarde && this.sdisGarde.active);
+      if (!hasSdisConv || !hasSdisGarde) {
+        this.missions = this.missions.filter(m => {
+          if (!m) return false;
+          const isSdis = (m.type === 'pompiers' || m.type === 'garde_sdis');
+          return !isSdis;
+        });
+      }
+
+      // 3. Purge stricte Crises & Soutien : Exige convention AASC / agrément sécurité civile
+      const hasAascConv = Boolean(this.aascConvention && this.aascConvention.signed);
+      if (!hasAascConv) {
+        this.missions = this.missions.filter(m => {
+          if (!m) return false;
+          return m.type !== 'crise' && !m.isCrisis;
+        });
+      }
+
+      // 4. Assainissement progression nouvelle antenne : pas de devis pending sans visibilité
+      const hasComm = !!(this.resources?.campaigns?.social || this.resources?.campaigns?.posters || this.resources?.campaigns?.presse || (this.activeCampaigns || []).length > 0);
+      const hasSite = !!(this.antenneWebsite && this.antenneWebsite.published && (this.antenneWebsite.freshness || 0) >= 40);
+      const rep = this.resources?.reputationScore || 0;
+      const completedDps = this.missions.filter(m => m.type === 'dps' && m.status === 'completed').length;
+      if (!hasComm && !hasSite && rep < 60 && completedDps === 0) {
+        if (Array.isArray(this.devis) && this.devis.some(d => d.status === 'pending')) {
+          if (!Array.isArray(this.territoryEventsPool)) this.territoryEventsPool = [];
+          this.devis.filter(d => d.status === 'pending').forEach(d => {
+            if (!this.territoryEventsPool.some(p => (p.eventName || '').toLowerCase() === (d.eventName || '').toLowerCase())) {
+              this.territoryEventsPool.push(d);
+            }
+          });
+          this.devis = this.devis.filter(d => d.status !== 'pending');
+        }
+      }
+
+      // 5. Assainissement des formations : aucune opportunité B2B si pas de formateur
+      const trainers = (this.volunteers || []).filter(v => v.isTrainer || (v.skills && v.skills.some(s => s.startsWith('formateur') || s === 'cef' || s === 'picf' || s === 'pae_f' || s === 'pae_fps')));
+      if (trainers.length === 0 && Array.isArray(this.formationB2BProposals)) {
+        this.formationB2BProposals = (this.formationB2BProposals || []).filter(p => ['completed', 'in_progress', 'accepted'].includes(p.status));
       }
     }
 
@@ -2203,9 +2243,9 @@ class ProtecGame {
     }
 
     // 3. Arrivée de nouveaux devis DPS selon l'état du site internet et la réputation (24/24)
-    const siteFreshness = this.antenneWebsite?.freshness ?? 85;
+    const siteFreshness = (this.antenneWebsite && this.antenneWebsite.published) ? (this.antenneWebsite.freshness || 0) : 0;
     const pendingCount = (this.devis || []).filter(d => d.status === 'pending').length;
-    const maxPending = this.getSimultaneousDevisLimit ? this.getSimultaneousDevisLimit() : 4;
+    const maxPending = this.getSimultaneousDevisLimit ? this.getSimultaneousDevisLimit() : 0;
 
     if (pendingCount < maxPending && siteFreshness >= 40) {
       const potentialQuotes = Math.min(maxPending - pendingCount, Math.floor(elapsedHours / 3.5) + (Math.random() < 0.7 ? 1 : 0));
@@ -4658,15 +4698,21 @@ class ProtecGame {
 
   // Limite dynamique et invisible du nombre de demandes de devis/DPS en simultané
   getSimultaneousDevisLimit() {
-    const hasActiveCampaign = !!(this.resources.campaigns?.social || this.resources.campaigns?.posters);
+    const hasActiveCampaign = !!(this.resources.campaigns?.social || this.resources.campaigns?.posters || this.resources.campaigns?.presse || (this.activeCampaigns || []).length > 0);
+    const hasWebsite = !!(this.antenneWebsite && this.antenneWebsite.published && (this.antenneWebsite.freshness || 0) >= 40);
     const completedDpsCount = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
     const repScore = this.resources.reputationScore || 0;
 
-    // Antenne débutante sans campagne de communication active : 2 demandes simultanées maximum
-    if (!hasActiveCampaign && completedDpsCount < 3 && repScore < 100) {
-      return 2;
+    // Nouvelle antenne sans communication, sans site web et sans historique de mission : 0 demande (personne ne connaît l'antenne)
+    if (!hasActiveCampaign && !hasWebsite && completedDpsCount === 0 && repScore < 60) {
+      return 0;
     }
-    // Avec communication active ou notoriété montante (3 à 8 DPS) : 3 demandes simultanées
+
+    // Antenne ayant fait sa première communication ou notoriété naissante (1 à 3 DPS) : 1 à 2 demandes maximum
+    if (!hasActiveCampaign && completedDpsCount < 3 && repScore < 100) {
+      return 1;
+    }
+    // Avec communication active ou notoriété montante (3 à 8 DPS) : 2 à 3 demandes simultanées
     if (hasActiveCampaign || completedDpsCount < 8 || repScore < 250) {
       return 3;
     }
