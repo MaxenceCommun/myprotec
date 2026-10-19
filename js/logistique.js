@@ -21,30 +21,17 @@ window.ProtecLogistique = {
   // =========================================================================
   CATEGORIES: [
     { id: 'all', label: 'Tout le Catalogue', iconLucide: 'layout-grid' },
-    { id: 'pharmacie', label: 'Pharmacie & Consommables', iconLucide: 'cross' },
-    { id: 'lots_secours', label: 'Lots de Secours A/B/C', iconLucide: 'briefcase' },
+    { id: 'pharmacie', label: 'Consommables & Réarmement', iconLucide: 'archive' },
+    { id: 'lots_secours', label: 'Lots de Secours (A, B, C)', iconLucide: 'briefcase' },
     { id: 'technique_crise', label: 'Technique & Crise', iconLucide: 'wrench' },
-    { id: 'tenues_epi', label: 'Tenues & Équipements EPI', iconLucide: 'shield' },
-    { id: 'social_hebergement', label: 'Ravitaillement & Social', iconLucide: 'heart-handshake' },
+    { id: 'social_hebergement', label: 'Ravitaillement & Hébergement', iconLucide: 'heart-handshake' },
     { id: 'transmissions', label: 'Transmissions & Radio', iconLucide: 'radio' },
+    { id: 'tenues_epi', label: 'Tenues & Équipements EPI', iconLucide: 'shield' },
     { id: 'kits_formation', label: 'Kits Pédagogiques (Formations)', iconLucide: 'graduation-cap' }
   ],
 
   CATALOG: [
-    // --- 1. PHARMACIE & CONSOMMABLES ---
-    {
-      id: 'stock_materiels_ps',
-      category: 'pharmacie',
-      name: 'Stock Matériels PS (Consommables Premiers Secours)',
-      lucideIcon: 'briefcase-medical',
-      image: 'images/equipements/woundKits.png',
-      price: 150,
-      unit: 'lot (100 unités / 100%)',
-      badge: 'Réarmement PS',
-      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      desc: 'Dotation globale de consommables (pansements, compresses, O2, désinfection, colliers, attelles) pour réarmer les VPSP et VTU.',
-      usage: 'Permet de réarmer la flotte de secours (VPSP et VTU DPS). Diminue à chaque réarmement selon le % consommé.'
-    },
+    // --- 1. CONSOMMABLES & RÉARMEMENT OPÉRATIONNEL ---
     {
       id: 'caisse_rearmement',
       category: 'pharmacie',
@@ -60,108 +47,17 @@ window.ProtecLogistique = {
       usage: 'Réarme immédiatement un VPSP ou un Lot entamé à 100% à la base ou directement sur le terrain.'
     },
     {
-      id: 'oxygenBottles',
+      id: 'stock_materiels_ps',
       category: 'pharmacie',
-      name: 'Bouteille Oxygène Médical 5L (O2 B5)',
-      lucideIcon: 'cylinder',
-      image: 'images/equipements/oxygenBottles.png',
-      price: 45,
-      unit: 'bouteille',
-      badge: 'Urgence Vitale',
-      badgeColor: 'bg-red-50 text-red-700 border-red-200',
-      desc: 'Bouteille d’oxygène pur B5 (5L / 200 bars) avec manodétendeur débitmètre intégré.',
-      usage: 'Consommée lors des détresses respiratoires et arrêts cardiaques en mission.'
-    },
-    {
-      id: 'aedPads',
-      category: 'pharmacie',
-      name: 'Électrodes Défibrillateur DAE (Adulte/Enfant)',
-      lucideIcon: 'zap',
-      image: 'images/equipements/aedPads.png',
-      price: 38,
-      unit: 'paire',
-      badge: 'Défibrillation',
-      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      desc: 'Paire d’électrodes de défibrillation pré-connectées avec capteur de RCP.',
-      usage: 'Utilisées pour tout arrêt cardio-respiratoire (ACR).'
-    },
-    {
-      id: 'woundKits',
-      category: 'pharmacie',
-      name: 'Trousse Plaies, Pansements & Bandages',
-      lucideIcon: 'cross',
+      name: 'Stock Matériels PS (Consommables Premiers Secours)',
+      lucideIcon: 'briefcase-medical',
       image: 'images/equipements/woundKits.png',
-      price: 20,
-      unit: 'trousse',
-      badge: 'Soins & Plaies',
-      badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
-      desc: 'Compresses stériles, bandes extensibles, sparadrap microporeux et désinfectant chlorhexidine.',
-      usage: 'Essentielle sur les postes de secours pour soigner les traumatismes bénins et coupures.'
-    },
-    {
-      id: 'cervicalCollars',
-      category: 'pharmacie',
-      name: 'Collier Cervical Multiposture Réglable',
-      lucideIcon: 'shield',
-      image: 'images/equipements/cervicalCollars.png',
-      price: 22,
-      unit: 'collier',
-      badge: 'Immobilisation',
-      badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-      desc: 'Collier cervical rigide monobloc réglable adulte et pédiatrique avec ouverture trachéale.',
-      usage: 'Immobilisation du rachis cervical lors d’accidents de la voie publique et chutes.'
-    },
-    {
-      id: 'tourniquets',
-      category: 'pharmacie',
-      name: 'Garrot Tourniquet Hémostatique Tactique (CAT)',
-      lucideIcon: 'droplet',
-      image: 'images/equipements/tourniquets.png',
-      price: 35,
-      unit: 'garrot',
-      badge: 'Hémorragie Massive',
-      badgeColor: 'bg-rose-50 text-rose-700 border-rose-200',
-      desc: 'Garrot tourniquet militaire Combat Application Tourniquet (CAT Gen 7) officiel.',
-      usage: 'Arrêt immédiat des hémorragies externes graves sur membres.'
-    },
-    {
-      id: 'attelles_pack',
-      category: 'pharmacie',
-      name: 'Pack Attelles Modelables Aluform & Dépression',
-      lucideIcon: 'bone',
-      image: 'images/equipements/attelles_pack.png',
-      price: 110,
-      unit: 'pack',
-      badge: 'Traumatologie',
-      badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
-      desc: 'Ensemble complet d’attelles pour membres supérieurs et inférieurs (poignet, coude, jambe).',
-      usage: 'Stabilisation des fractures fermées et entorses graves avant évacuation.'
-    },
-    {
-      id: 'bavu_ambu',
-      category: 'pharmacie',
-      name: 'Insufflateur Manuel BAVU avec Masques O2',
-      lucideIcon: 'activity',
-      image: 'images/equipements/bavu_ambu.png',
-      price: 65,
-      unit: 'bavu',
-      badge: 'Ventilation',
-      badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200',
-      desc: 'Ballon auto-remplisseur avec réservoir d’oxygène haute concentration, masques n°3, 4 et 5.',
-      usage: 'Ventilation artificielle lors de l’arrêt cardio-respiratoire.'
-    },
-    {
-      id: 'trousse_brulures',
-      category: 'pharmacie',
-      name: 'Trousse Brûlures Hydrogel Water-Jel',
-      lucideIcon: 'flame',
-      image: 'images/equipements/trousse_brulures.png',
-      price: 55,
-      unit: 'trousse',
-      badge: 'Thermique',
-      badgeColor: 'bg-orange-50 text-orange-700 border-orange-200',
-      desc: 'Compresses et flacons de gel d’eau apaisant stérile pour brûlures thermiques et chimiques.',
-      usage: 'Soulagement immédiat et arrêt de la progression thermique.'
+      price: 150,
+      unit: 'lot réserve (100 unités / 100%)',
+      badge: 'Réarmement PS',
+      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      desc: 'Dotation globale de consommables (pansements, compresses, O2, désinfection, colliers, attelles) pour réarmer les VPSP et VTU.',
+      usage: 'Permet de réarmer la flotte de secours (VPSP et VTU DPS). Diminue à chaque réarmement selon le % consommé.'
     },
 
     // --- 2. LOTS DE SECOURS A / B / C ---
@@ -197,7 +93,7 @@ window.ProtecLogistique = {
       badge: 'Traumatologie Lourde',
       badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-300',
       desc: 'Matelas immobilisateur à dépression avec pompe, plan dur adulte/enfant et chaise de transport.',
-      usage: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates (+25 réputation). Embarquable dans un véhicule LOG (2 slots).'
+      usage: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates. Embarquable dans un véhicule LOG (2 slots).'
     },
     {
       id: 'lot_secours_c',
@@ -228,19 +124,6 @@ window.ProtecLogistique = {
       badgeColor: 'bg-teal-50 text-teal-800 border-teal-300',
       desc: 'Sac d’épaule ultra-léger avec pansements, DAE compact de poche et garrot pour patrouilles.',
       usage: 'Équipe les secouristes en patrouille à pied dans les foules denses.'
-    },
-    {
-      id: 'chaise_transport',
-      category: 'lots_secours',
-      name: 'Chaise de Transport d’Escalier Pliable Alu',
-      lucideIcon: 'chevrons-up-down',
-      image: 'images/equipements/chaise_transport.png',
-      price: 450,
-      unit: 'chaise',
-      badge: 'Évacuation',
-      badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-      desc: 'Chaise d’évacuation pliable en alliage d’aluminium avec chenilles pour escaliers étroits.',
-      usage: 'Extraction des victimes d’appartements sans ascenseur.'
     },
 
     // --- 3. TECHNIQUE & CRISE ---
@@ -295,19 +178,6 @@ window.ProtecLogistique = {
       badgeColor: 'bg-orange-50 text-orange-800 border-orange-300',
       desc: '6 grandes bâches armées 10x12m, liteaux, cloueuses, sangles d’arrimage et harnais antichute.',
       usage: 'Mise hors d’eau d’urgence des toitures arrachées par les vents violents.'
-    },
-    {
-      id: 'groupe_electro',
-      category: 'technique_crise',
-      name: 'Groupe Électrogène Inverter Insonorisé 3.5 kVA',
-      lucideIcon: 'zap',
-      image: 'images/equipements/groupe_electro.png',
-      price: 890,
-      unit: 'appareil',
-      badge: 'Énergie',
-      badgeColor: 'bg-zinc-100 text-zinc-800 border-zinc-300',
-      desc: 'Générateur électrique portable silencieux à technologie Inverter pour matériel médical sensible.',
-      usage: 'Alimentation autonome des tentes et équipements lors de coupures réseau.'
     },
 
     // --- 4. TENUES & ÉQUIPEMENTS EPI ---
@@ -407,32 +277,6 @@ window.ProtecLogistique = {
       badgeColor: 'bg-purple-50 text-purple-800 border-purple-300',
       desc: 'Paravents acoustiques, plaids douillets, coin jeux/coloriages et peluches de réconfort.',
       usage: 'Accueil des impliqués et familles lors de catastrophes NOVI et accidents collectifs.'
-    },
-    {
-      id: 'couvertures_pack',
-      category: 'social_hebergement',
-      name: 'Carton de 50 Couvertures de Survie Or/Argent',
-      lucideIcon: 'sparkles',
-      image: 'images/equipements/couvertures_pack.png',
-      price: 45,
-      unit: 'carton 50 ex',
-      badge: 'Hypothermie',
-      badgeColor: 'bg-amber-50 text-amber-800 border-amber-300',
-      desc: 'Couvertures isolantes réflectives pour protection contre le froid, la pluie et la chaleur.',
-      usage: 'Distribuées systématiquement aux victimes et personnes évacuées.'
-    },
-    {
-      id: 'kits_hygiene',
-      category: 'social_hebergement',
-      name: 'Lot de 20 Trousses d’Hygiène Sinistrés Complètes',
-      lucideIcon: 'bath',
-      image: 'images/equipements/kits_hygiene.png',
-      price: 70,
-      unit: 'lot de 20',
-      badge: 'Dignité Humaine',
-      badgeColor: 'bg-cyan-50 text-cyan-800 border-cyan-300',
-      desc: 'Brosse à dents, dentifrice, savon, shampoing, serviette microfibre et rasoir jetable.',
-      usage: 'Données aux personnes hébergées d’urgence en gymnase.'
     },
 
     // --- 6. TRANSMISSIONS & RADIO ---
@@ -1641,43 +1485,29 @@ window.ProtecLogistique = {
     if (!v) return;
 
     const station = game.stations?.find(s => s.id === v.stationId) || game.stations?.[0];
-    const stock = (game.logistics?.stationsStock && game.logistics.stationsStock[station?.id]) || {};
-
-    // Consommables nécessaires : O2 médical, compresses stériles, gants nitrile, spray désinfectant
-    const hasO2 = (stock.oxygenBottles && stock.oxygenBottles >= 1) || (stock.medicalO2 && stock.medicalO2 >= 1);
-    const hasCompresses = (stock.woundKits && stock.woundKits >= 1) || (stock.compresses && stock.compresses >= 1);
-    const hasGloves = (stock.protectiveGloves && stock.protectiveGloves >= 1) || (stock.gants && stock.gants >= 1);
-    const hasDisinfectant = (stock.disinfectantSprays && stock.disinfectantSprays >= 1) || (stock.surfanios && stock.surfanios >= 1);
+    this.ensureStationStock(station, game);
 
     const hasWaterPoint = station?.premises?.rooms?.sas_desinfection_pharmacie?.hasWaterPoint || (station?.premises?.rooms?.sas_desinfection_pharmacie?.level >= 2);
-    const fullStock = hasO2 && hasCompresses && hasGloves && hasDisinfectant;
 
-    if (!fullStock) {
+    const hasCaisse = (station.stock?.caisse_rearmement && station.stock.caisse_rearmement >= 1);
+    const hasStockPS = (station.stockMaterielsPS && station.stockMaterielsPS >= 20);
+
+    if (hasCaisse) {
+      station.stock.caisse_rearmement -= 1;
+    } else if (hasStockPS) {
+      station.stockMaterielsPS -= 20;
+      game.stockMaterielsPS = station.stockMaterielsPS;
+    } else {
       // Si consommables manquants au local, forfait kit réarmement pharmacie (divisé par 2 si point d'eau/centrale présente : 22 € au lieu de 45 €)
       const cost = hasWaterPoint ? 22 : 45;
       if (game.resources.money < cost) {
-        game.showToast('Stock insuffisant & Fonds manquants', `Le kit de réarmement (O2, compresses, gants, désinfectant) requiert ${cost} € ou les consommables en stock.`, 'orange');
+        game.showToast('Stock insuffisant & Fonds manquants', `Le réarmement requiert 1 Caisse de réarmement en stock ou ${cost} € de réassort express.`, 'orange');
         return;
       }
       game.resources.money -= cost;
       if (window.ProtecFinances) {
         window.ProtecFinances.recordTransaction(game, -cost, `Achat Pack Réarmement & Bionettoyage VPSP ${hasWaterPoint ? '(Centrale SAS intégrée)' : ''}`, 'materiel');
       }
-    } else {
-      // Déduire du stock de la station
-      if (stock.oxygenBottles) stock.oxygenBottles = Math.max(0, stock.oxygenBottles - 1);
-      else if (stock.medicalO2) stock.medicalO2 = Math.max(0, stock.medicalO2 - 1);
-
-      if (stock.woundKits) stock.woundKits = Math.max(0, stock.woundKits - 1);
-      else if (stock.compresses) stock.compresses = Math.max(0, stock.compresses - 1);
-
-      if (stock.protectiveGloves) stock.protectiveGloves = Math.max(0, stock.protectiveGloves - 1);
-      else if (stock.gants) stock.gants = Math.max(0, stock.gants - 1);
-
-      if (stock.disinfectantSprays) stock.disinfectantSprays = Math.max(0, stock.disinfectantSprays - 1);
-      else if (stock.surfanios) stock.surfanios = Math.max(0, stock.surfanios - 1);
-
-      this.syncToGlobalLogistics(game);
     }
 
     // Mobilisation d'un secouriste de l'antenne (priorité bénévole retraité ou bénévole disponible)
@@ -1690,6 +1520,8 @@ window.ProtecLogistique = {
       vol.energy = Math.max(0, 100 - vol.fatigue);
     }
 
+    v.consumables = 100;
+    v.armementLevel = 100;
     v.status = 'dispo';
     v.a_rearme = false;
     v.needsRearming = false;
@@ -1699,7 +1531,7 @@ window.ProtecLogistique = {
     const waterNotice = hasWaterPoint ? ' [Centrale de bionettoyage SAS utilisée : temps & coût divisés par 2]' : '';
     game.showToast(
       'Véhicule Réarmé & Désinfecté ✓',
-      `${v.name} : Bouteille O2 changée, compresses et gants réapprovisionnés, bionettoyage validé${vol ? ` par ${vol.name}` : ''}.${waterNotice} Prêt pour départ opérationnel !`,
+      `${v.name} : Jauge de consommables réarmée à 100%, bionettoyage validé${vol ? ` par ${vol.name}` : ''}.${waterNotice} Prêt pour départ opérationnel !`,
       'green'
     );
 

@@ -5229,22 +5229,33 @@ window.ProtecLocaux = {
             </div>
 
             <div class="space-y-2 text-xs">
-              <div class="flex justify-between p-2 rounded-xl bg-slate-50">
-                <span>🫁 Bouteilles Oxygène B5 :</span>
-                <strong class="text-slate-800">${log.oxygenBottles || log.oxygenB5 || 0} bouteilles</strong>
-              </div>
-              <div class="flex justify-between p-2 rounded-xl bg-slate-50">
-                <span>🩹 Trousses PSE & Pansements :</span>
-                <strong class="text-slate-800">${log.woundKits || log.firstAidKits || 0} trousses</strong>
-              </div>
-              <div class="flex justify-between p-2 rounded-xl bg-slate-50">
-                <span>⚡ Électrodes DAE :</span>
-                <strong class="text-slate-800">${log.aedPads || 0} paires</strong>
-              </div>
-              <div class="flex justify-between p-2 rounded-xl bg-slate-50">
-                <span>🩻 Colliers Cervicaux :</span>
-                <strong class="text-slate-800">${log.cervicalCollars || 0} unités</strong>
-              </div>
+              ${(() => {
+                const activeSt = game.stations?.find(s => s.id === game.currentStationId) || game.stations?.[0];
+                const stStock = activeSt?.stock || {};
+                const caisses = stStock.caisse_rearmement || 0;
+                const reservePS = activeSt?.stockMaterielsPS || game.stockMaterielsPS || 0;
+                const lotsSecours = (stStock.lot_secours_a || 0) + (stStock.lot_secours_b || 0) + (stStock.lot_secours_c || 0);
+                const lotsCrise = (stStock.lot_tronconnage || 0) + (stStock.lot_pompage || 0) + (stStock.lot_eclairage || 0) + (stStock.lot_bachage || 0);
+
+                return `
+                  <div class="flex justify-between p-2 rounded-xl bg-slate-50">
+                    <span>📦 Caisses Réarmement Opérationnel :</span>
+                    <strong class="text-slate-800">${caisses} caisse(s)</strong>
+                  </div>
+                  <div class="flex justify-between p-2 rounded-xl bg-slate-50">
+                    <span>🩹 Réserve Consommables PS :</span>
+                    <strong class="text-slate-800">${reservePS}%</strong>
+                  </div>
+                  <div class="flex justify-between p-2 rounded-xl bg-slate-50">
+                    <span>🎒 Lots Secours (A, B, C) :</span>
+                    <strong class="text-slate-800">${lotsSecours} lot(s)</strong>
+                  </div>
+                  <div class="flex justify-between p-2 rounded-xl bg-slate-50">
+                    <span>🛠️ Lots Technique & Crise :</span>
+                    <strong class="text-slate-800">${lotsCrise} lot(s)</strong>
+                  </div>
+                `;
+              })()}
             </div>
             
             <button onclick="window.game.openModule('logistique')" class="w-full py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center justify-center gap-2">
