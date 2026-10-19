@@ -1,12 +1,12 @@
 /**
  * PROTEC LIVE - MODULE DE COMMUNICATION BACKEND & TEMPS RÉEL (Socket.io & REST)
- * Connecte le frontend MyProtec au backend dédié OVH (http://15.235.242.76:3000)
+ * Connecte le frontend MyProtec au backend dédié HTTPS (https://api.myprotec.fr)
  */
 
 (function(window) {
   'use strict';
 
-  const API_URL = 'http://15.235.242.76:3000';
+  const API_URL = 'https://api.myprotec.fr';
   let socket = null;
 
   try {
@@ -25,9 +25,29 @@
     console.error('[API MyProtec] Erreur lors de l’initialisation de Socket.io:', err);
   }
 
+  const API = {
+    async getInterventions() {
+      const res = await fetch(`${API_URL}/api/interventions`);
+      if (!res.ok) throw new Error("Erreur de récupération des interventions");
+      return await res.json();
+    },
+    async updateStatut(id, statut) {
+      const res = await fetch(`${API_URL}/api/interventions/${id}/statut`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statut })
+      });
+      if (!res.ok) throw new Error("Erreur de mise à jour du statut");
+      return await res.json();
+    }
+  };
+
   const ProtecAPI = {
     API_URL: API_URL,
     socket: socket,
+    API: API,
+    getInterventions: API.getInterventions,
+    updateStatut: API.updateStatut,
     isBackendManaged: true,
     _initialized: false,
     _gameRef: null,
@@ -102,11 +122,7 @@
     async loadInitialInterventions() {
       try {
         console.log(`[API MyProtec] Chargement initial des interventions depuis ${API_URL}/api/interventions...`);
-        const response = await fetch(`${API_URL}/api/interventions`);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status} - ${response.statusText}`);
-        }
-        const interventions = await response.json();
+        const interventions = await API.getInterventions();
         console.log(`[API MyProtec] ${interventions.length} intervention(s) reçue(s) du backend :`, interventions);
 
         if (Array.isArray(interventions)) {
@@ -203,21 +219,7 @@
 
       try {
         console.log(`[API MyProtec] Envoi PUT ${API_URL}/api/interventions/${cleanId}/statut -> statut="${statut}"`);
-        const response = await fetch(`${API_URL}/api/interventions/${cleanId}/statut`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ statut: statut })
-        });
-
-        if (!response.ok) {
-          const errText = await response.text().catch(() => '');
-          console.warn(`[API MyProtec] Échec mise à jour statut serveur (${response.status}):`, errText);
-          return false;
-        }
-
-        const data = await response.json().catch(() => ({}));
+        const data = await API.updateStatut(cleanId, statut);
         console.log(`✅ [API MyProtec] Statut mis à jour sur le serveur pour #${cleanId}:`, data);
         return true;
       } catch (err) {
@@ -384,6 +386,8 @@
     }
   };
 
+  window.API = API;
+  window.socket = socket;
   window.ProtecAPI = ProtecAPI;
 
   // Auto-initialisation au chargement si window.game existe déjà
