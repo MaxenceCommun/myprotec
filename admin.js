@@ -28,17 +28,33 @@ window.ProtecAdmin = {
     };
   },
 
-  async openAdminModal(game) {
-    const isActuallyAdmin = !!(
+  isCurrentUserAdmin() {
+    return !!(
       (window.ProtecAuth?.currentUser?.isAdmin) ||
       (window.ProtecAuth?.currentUser?.role === 'admin') ||
-      (game?.player?.isAdmin) ||
-      (game?.player?.role === 'admin')
+      (window.game?.player?.isAdmin) ||
+      (window.game?.player?.role === 'admin')
     );
+  },
 
-    if (!isActuallyAdmin) {
+  isCurrentUserGestionnaireOnly() {
+    if (this.isCurrentUserAdmin()) return false;
+    return !!(
+      (window.ProtecAuth?.currentUser?.isGestionnaire) ||
+      (window.ProtecAuth?.currentUser?.role === 'gestionnaire') ||
+      (window.game?.player?.isGestionnaire) ||
+      (window.game?.player?.role === 'gestionnaire')
+    );
+  },
+
+  async openAdminModal(game) {
+    const isActuallyAdmin = this.isCurrentUserAdmin();
+    const isActuallyGestionnaire = this.isCurrentUserGestionnaireOnly();
+    const isAuthorized = isActuallyAdmin || isActuallyGestionnaire;
+
+    if (!isAuthorized) {
       if (game && typeof game.showToast === 'function') {
-        game.showToast('Accès Restreint', 'Accès réservé exclusivement aux comptes Administrateurs certifiés en BDD.', 'red');
+        game.showToast('Accès Restreint', 'Accès réservé exclusivement aux Administrateurs et Gestionnaires certifiés sur le serveur Discord.', 'red');
       }
       return;
     }
@@ -47,6 +63,38 @@ window.ProtecAdmin = {
     if (!modal) {
       this.createAdminModalDOM();
       modal = document.getElementById('admin-modal');
+    }
+
+    // Adaptation de l'en-tête du panel selon les privilèges
+    const titleEl = document.getElementById('admin-modal-title');
+    const subtitleEl = document.getElementById('admin-modal-subtitle');
+    const iconEl = document.getElementById('admin-modal-icon');
+
+    // Onglets soumis à restriction stricte pour les gestionnaires (économie, catalogues véhicules/matériel, reset)
+    const vehTab = document.getElementById('admin-tab-vehicles-btn');
+    const matTab = document.getElementById('admin-tab-equipment-btn');
+    const balTab = document.getElementById('admin-tab-balancing-btn');
+    const rstTab = document.getElementById('admin-tab-reset-btn');
+
+    if (isActuallyGestionnaire) {
+      if (titleEl) titleEl.textContent = 'Portail Gestionnaire Protec Live';
+      if (subtitleEl) subtitleEl.textContent = 'Gestion des Scénarios Fédéraux & Diagnostics des Bugs Joueurs';
+      if (iconEl) iconEl.textContent = '🛡️';
+
+      // Masquage strict de la gestion de l'économie, des catalogues et de la réinitialisation
+      if (vehTab) vehTab.classList.add('hidden');
+      if (matTab) matTab.classList.add('hidden');
+      if (balTab) balTab.classList.add('hidden');
+      if (rstTab) rstTab.classList.add('hidden');
+    } else {
+      if (titleEl) titleEl.textContent = 'Panel Administrateur Protec Live';
+      if (subtitleEl) subtitleEl.textContent = 'Gestion globale des Directeurs & Antennes';
+      if (iconEl) iconEl.textContent = '👑';
+
+      if (vehTab) vehTab.classList.remove('hidden');
+      if (matTab) matTab.classList.remove('hidden');
+      if (balTab) balTab.classList.remove('hidden');
+      if (rstTab) rstTab.classList.remove('hidden');
     }
 
     modal.classList.remove('hidden');
@@ -1152,55 +1200,66 @@ window.ProtecAdmin = {
             </span>
           </td>
 
-          <!-- Actions d'administration -->
-          <td class="py-3 px-3 text-right">
-            <div class="flex items-center justify-end gap-1">
-              <!-- Tester Notifications Joueur -->
-              <button onclick="window.ProtecAdmin.openNotificationTester('${u.id}')" title="Envoyer une Notification Test (Push Mobile OS - Fonctionne même application fermée !)" class="p-1 rounded-lg text-amber-600 hover:bg-amber-100 transition cursor-pointer font-bold relative">
-                🔔
-                ${u.hasPushSubscription ? '<span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white animate-pulse" title="Push Mobile Actif (App Fermée)"></span>' : ''}
-              </button>
-              <!-- Gérer & Attribuer Écussons (Admin, Zones de Défense...) -->
-              <button onclick="window.ProtecAdmin.openBadgeManagerForPlayer('${u.id}')" title="Gérer & Attribuer les Écussons (Admin, Zones de Défense...)" class="p-1 rounded-lg text-pc-blue hover:bg-blue-100 transition cursor-pointer font-bold">
-                🛡️
-              </button>
-              <!-- Modifier Pseudo -->
-              <button onclick="window.ProtecAdmin.promptEditUsername('${u.id}', '${u.username}')" title="Modifier le Pseudo" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition cursor-pointer">
-                ✏️
-              </button>
-              <!-- +10k € rapide -->
-              <button onclick="window.ProtecAdmin.quickAddMoney('${u.id}', 10000)" title="+10 000 €" class="px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition cursor-pointer">
-                +10k€
-              </button>
-              <!-- Modifier trésorerie -->
-              <button onclick="window.ProtecAdmin.promptEditMoney('${u.id}', ${u.money || 0})" title="Changer Trésorerie" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition cursor-pointer">
-                💶
-              </button>
-              <!-- Réinitialiser MdP -->
-              <button onclick="window.ProtecAdmin.promptResetPassword('${u.id}', '${u.username}')" title="Réinitialiser Mot de passe" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition cursor-pointer">
-                🔑
-              </button>
-              <!-- Support Flotte & Missions -->
-              <button onclick="window.ProtecAdmin.openSupportForPlayer('${u.id}')" title="Dépanner Véhicules & Missions" class="p-1 rounded-lg text-amber-600 hover:bg-amber-50 transition cursor-pointer">
-                🛠️
-              </button>
-              <!-- Bannir / Débannir -->
-              <button onclick="window.ProtecAdmin.toggleBan('${u.id}', ${!isBanned})" title="${isBanned ? 'Débannir' : 'Bannir'}" class="px-2 py-1 rounded-lg text-[10px] font-bold ${isBanned ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} transition cursor-pointer">
-                ${isBanned ? 'Débannir' : 'Bannir'}
-              </button>
-              <!-- Rôle Admin -->
-              <button onclick="window.ProtecAdmin.toggleAdminRole('${u.id}', '${isAdmin ? 'user' : 'admin'}')" title="Changer Rôle" class="p-1 rounded-lg text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
-                👑
-              </button>
-              <!-- Supprimer joueur -->
-              <button onclick="window.ProtecAdmin.confirmDeleteUser('${u.id}', '${u.username}')" title="Supprimer joueur" class="p-1 rounded-lg text-red-500 hover:bg-red-50 transition cursor-pointer">
-                🗑️
-              </button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
+            <!-- Actions d'administration -->
+            <td class="py-3 px-3 text-right">
+              <div class="flex items-center justify-end gap-1 flex-wrap">
+                <!-- Inspecter Logs & Diagnostics Joueur (accessible Gestionnaires & Admins) -->
+                <button onclick="window.ProtecAdmin.openPlayerDiagnosticsModal('${u.id}')" title="Inspecter les Logs Opérationnels, Détection Bugs & Sauvegarde" class="px-2 py-1 rounded-lg text-[10px] font-black bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition cursor-pointer flex items-center gap-1 shadow-2xs">
+                  <span>📜 Logs</span>
+                </button>
+                <!-- Tester Notifications Joueur -->
+                <button onclick="window.ProtecAdmin.openNotificationTester('${u.id}')" title="Envoyer une Notification Test (Push Mobile OS)" class="p-1 rounded-lg text-amber-600 hover:bg-amber-100 transition cursor-pointer font-bold relative">
+                  🔔
+                  ${u.hasPushSubscription ? '<span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white animate-pulse" title="Push Mobile Actif (App Fermée)"></span>' : ''}
+                </button>
+                <!-- Gérer & Attribuer Écussons -->
+                <button onclick="window.ProtecAdmin.openBadgeManagerForPlayer('${u.id}')" title="Gérer & Attribuer les Écussons (Admin, Zones de Défense...)" class="p-1 rounded-lg text-pc-blue hover:bg-blue-100 transition cursor-pointer font-bold">
+                  🛡️
+                </button>
+                <!-- Support Flotte & Déblocage Missions -->
+                <button onclick="window.ProtecAdmin.openSupportForPlayer('${u.id}')" title="Dépanner & Débloquer Missions" class="p-1 rounded-lg text-amber-600 hover:bg-amber-50 transition cursor-pointer">
+                  🛠️
+                </button>
+
+                ${!this.isCurrentUserGestionnaireOnly() ? `
+                  <!-- ACTIONS RÉSERVÉES AUX ADMINISTRATEURS (Économie, Véhicules, Mots de Passe, Rôles, Suppression) -->
+                  <!-- Modifier Pseudo -->
+                  <button onclick="window.ProtecAdmin.promptEditUsername('${u.id}', '${u.username}')" title="Modifier le Pseudo" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition cursor-pointer">
+                    ✏️
+                  </button>
+                  <!-- +10k € rapide -->
+                  <button onclick="window.ProtecAdmin.quickAddMoney('${u.id}', 10000)" title="+10 000 €" class="px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition cursor-pointer">
+                    +10k€
+                  </button>
+                  <!-- Modifier trésorerie -->
+                  <button onclick="window.ProtecAdmin.promptEditMoney('${u.id}', ${u.money || 0})" title="Changer Trésorerie" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition cursor-pointer">
+                    💶
+                  </button>
+                  <!-- Réinitialiser MdP -->
+                  <button onclick="window.ProtecAdmin.promptResetPassword('${u.id}', '${u.username}')" title="Réinitialiser Mot de passe" class="p-1 rounded-lg text-slate-500 hover:bg-slate-100 transition cursor-pointer">
+                    🔑
+                  </button>
+                  <!-- Bannir / Débannir -->
+                  <button onclick="window.ProtecAdmin.toggleBan('${u.id}', ${!isBanned})" title="${isBanned ? 'Débannir' : 'Bannir'}" class="px-2 py-1 rounded-lg text-[10px] font-bold ${isBanned ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} transition cursor-pointer">
+                    ${isBanned ? 'Débannir' : 'Bannir'}
+                  </button>
+                  <!-- Rôle Admin -->
+                  <button onclick="window.ProtecAdmin.toggleAdminRole('${u.id}', '${isAdmin ? 'user' : 'admin'}')" title="Changer Rôle" class="p-1 rounded-lg text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
+                    👑
+                  </button>
+                  <!-- Supprimer joueur -->
+                  <button onclick="window.ProtecAdmin.confirmDeleteUser('${u.id}', '${u.username}')" title="Supprimer joueur" class="p-1 rounded-lg text-red-500 hover:bg-red-50 transition cursor-pointer">
+                    🗑️
+                  </button>
+                ` : `
+                  <!-- Rôle Gestionnaire : indicateur de consultation sécurisée -->
+                  <span class="text-[9px] font-extrabold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md" title="Actions économiques et suppression réservées aux Administrateurs">Lecture</span>
+                `}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
 
     if (window.lucide) window.lucide.createIcons();
   },
@@ -1223,6 +1282,10 @@ window.ProtecAdmin = {
   },
 
   async quickAddMoney(userId, amount) {
+    if (this.isCurrentUserGestionnaireOnly()) {
+      if (window.game?.showToast) window.game.showToast('Action Restreinte', 'Le rôle Gestionnaire ne permet pas de modifier la trésorerie des directeurs.', 'amber');
+      return;
+    }
     const user = this.usersCache.find(u => u.id === userId);
     if (!user) return;
     const newAmount = Number(user.money || 0) + amount;
@@ -1230,6 +1293,10 @@ window.ProtecAdmin = {
   },
 
   async promptEditMoney(userId, currentMoney) {
+    if (this.isCurrentUserGestionnaireOnly()) {
+      if (window.game?.showToast) window.game.showToast('Action Restreinte', 'Le rôle Gestionnaire ne permet pas de modifier la trésorerie des directeurs.', 'amber');
+      return;
+    }
     const user = this.usersCache.find(u => u.id === userId);
     if (!user) return;
     const input = await window.ProtecDialog.prompt(
@@ -1244,6 +1311,10 @@ window.ProtecAdmin = {
   },
 
   async promptResetPassword(userId, username) {
+    if (this.isCurrentUserGestionnaireOnly()) {
+      if (window.game?.showToast) window.game.showToast('Action Restreinte', 'Le rôle Gestionnaire ne permet pas de modifier les mots de passe des joueurs.', 'amber');
+      return;
+    }
     const newPwd = await window.ProtecDialog.prompt(
       `Nouveau mot de passe pour ${username} (min. 4 car.) :`,
       '',
@@ -1269,6 +1340,10 @@ window.ProtecAdmin = {
   },
 
   async toggleAdminRole(userId, newRole) {
+    if (this.isCurrentUserGestionnaireOnly()) {
+      if (window.game?.showToast) window.game.showToast('Action Restreinte', 'Le rôle Gestionnaire ne permet pas d’altérer les rôles d’administration.', 'amber');
+      return;
+    }
     const user = this.usersCache.find(u => u.id === userId);
     if (!user) return;
     await this.updateUser(userId, { role: newRole }, `Rôle de ${user.username} changé en ${newRole}.`);
@@ -1352,6 +1427,10 @@ window.ProtecAdmin = {
   },
 
   async confirmDeleteUser(userId, username) {
+    if (this.isCurrentUserGestionnaireOnly()) {
+      if (window.game?.showToast) window.game.showToast('Action Restreinte', 'La suppression de compte est exclusivement réservée aux Administrateurs.', 'amber');
+      return;
+    }
     const confirmed = await window.ProtecDialog.confirm(
       `ATTENTION : Voulez-vous définitivement supprimer le compte de ${username} et toutes ses données de jeu ? Cette action est irréversible.`,
       'Suppression Définitive de Joueur',
@@ -2020,45 +2099,50 @@ window.ProtecAdmin = {
         </div>
       </div>
 
-      <!-- BLOC 3 : GESTION DE LA FLOTTE DE VÉHICULES -->
+      <!-- BLOC 3 : GESTION DE LA FLOTTE DE VÉHICULES (Consultation diagnostic pour Gestionnaires, Édition pour Admins) -->
       <div class="border border-slate-200 rounded-2xl p-3.5 bg-white space-y-3 shadow-2xs">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
           <div>
             <span class="text-xs font-black text-slate-900 flex items-center gap-1.5">
               <span>🚑 Flotte de Véhicules & Équipements (${vehicles.length})</span>
+              ${this.isCurrentUserGestionnaireOnly() ? '<span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Lecture Seule (Gestionnaire)</span>' : ''}
             </span>
-            <p class="text-[10px] text-slate-500">Attribuez ou retirez n'importe quel modèle de véhicule de la Protection Civile.</p>
+            <p class="text-[10px] text-slate-500">${this.isCurrentUserGestionnaireOnly() ? 'Inspection des véhicules de l’antenne pour diagnostic de disponibilité.' : 'Attribuez ou retirez n’importe quel modèle de véhicule de la Protection Civile.'}</p>
           </div>
-          <div class="flex items-center gap-1.5">
-            <button onclick="window.ProtecAdmin.supportAddVehicle('${user.id}', 'VPSP')" class="px-2.5 py-1 rounded-lg bg-pc-blue text-white font-bold text-[10px] shadow-xs cursor-pointer">
-              + VPSP Rapide
-            </button>
-            <button onclick="window.ProtecAdmin.supportAddVehicle('${user.id}', 'VTU')" class="px-2.5 py-1 rounded-lg bg-slate-700 text-white font-bold text-[10px] shadow-xs cursor-pointer">
-              + VTU Rapide
-            </button>
-          </div>
+          ${!this.isCurrentUserGestionnaireOnly() ? `
+            <div class="flex items-center gap-1.5">
+              <button onclick="window.ProtecAdmin.supportAddVehicle('${user.id}', 'VPSP')" class="px-2.5 py-1 rounded-lg bg-pc-blue text-white font-bold text-[10px] shadow-xs cursor-pointer">
+                + VPSP Rapide
+              </button>
+              <button onclick="window.ProtecAdmin.supportAddVehicle('${user.id}', 'VTU')" class="px-2.5 py-1 rounded-lg bg-slate-700 text-white font-bold text-[10px] shadow-xs cursor-pointer">
+                + VTU Rapide
+              </button>
+            </div>
+          ` : ''}
         </div>
 
-        <!-- Attribution spécifique avec sélecteur complet -->
-        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center gap-2">
-          <label class="text-[11px] font-bold text-slate-700 whitespace-nowrap">Attribuer un véhicule :</label>
-          <select id="adm-support-new-vehicle-type" class="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-xs text-slate-800 focus:outline-none">
-            <option value="VPSP">🚑 VPSP - Véhicule Premiers Secours à Personnes</option>
-            <option value="VTU">🚚 VTU - Véhicule Tout Usage / Logistique</option>
-            <option value="VL">🚗 VL - Véhicule Léger de Liaison</option>
-            <option value="VTP">🚐 VTP - Transport de Personnel (9 places)</option>
-            <option value="VLM">⚕️ VLM - Véhicule Léger Médicalisé</option>
-            <option value="PMA">⛺ PMA - Remorque / Poste Médical Avancé</option>
-            <option value="Quad">🏍️ QUAD - Reconnaissance & Terrains Difficiles</option>
-            <option value="BRS">🚤 BRS - Bateau Reconnaissance & Sauvetage</option>
-            <option value="VSR">🚒 VSR - Véhicule de Secours Routier</option>
-            <option value="MOTO">🛵 MOTO - Prompt Secours Urbain</option>
-            <option value="VELO">🚲 VTT - Équipe Secours VTT Événementiel</option>
-          </select>
-          <button onclick="const sel = document.getElementById('adm-support-new-vehicle-type'); if (sel) window.ProtecAdmin.supportAddSpecificVehicle('${user.id}', sel.value);" class="w-full sm:w-auto px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs cursor-pointer whitespace-nowrap">
-            + Attribuer à l'antenne
-          </button>
-        </div>
+        ${!this.isCurrentUserGestionnaireOnly() ? `
+          <!-- Attribution spécifique avec sélecteur complet (Réservé Admin) -->
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center gap-2">
+            <label class="text-[11px] font-bold text-slate-700 whitespace-nowrap">Attribuer un véhicule :</label>
+            <select id="adm-support-new-vehicle-type" class="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-xs text-slate-800 focus:outline-none">
+              <option value="VPSP">🚑 VPSP - Véhicule Premiers Secours à Personnes</option>
+              <option value="VTU">🚚 VTU - Véhicule Tout Usage / Logistique</option>
+              <option value="VL">🚗 VL - Véhicule Léger de Liaison</option>
+              <option value="VTP">🚐 VTP - Transport de Personnel (9 places)</option>
+              <option value="VLM">⚕️ VLM - Véhicule Léger Médicalisé</option>
+              <option value="PMA">⛺ PMA - Remorque / Poste Médical Avancé</option>
+              <option value="Quad">🏍️ QUAD - Reconnaissance & Terrains Difficiles</option>
+              <option value="BRS">🚤 BRS - Bateau Reconnaissance & Sauvetage</option>
+              <option value="VSR">🚒 VSR - Véhicule de Secours Routier</option>
+              <option value="MOTO">🛵 MOTO - Prompt Secours Urbain</option>
+              <option value="VELO">🚲 VTT - Équipe Secours VTT Événementiel</option>
+            </select>
+            <button onclick="const sel = document.getElementById('adm-support-new-vehicle-type'); if (sel) window.ProtecAdmin.supportAddSpecificVehicle('${user.id}', sel.value);" class="w-full sm:w-auto px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs cursor-pointer whitespace-nowrap">
+              + Attribuer à l'antenne
+            </button>
+          </div>
+        ` : ''}
 
         <!-- Liste des véhicules du joueur -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -2068,9 +2152,13 @@ window.ProtecAdmin = {
                 <strong class="text-slate-900 block truncate">${v.name || v.type}</strong>
                 <span class="text-[10px] text-slate-400 block">${v.immat || 'Sans plaque'} • État: <b class="text-emerald-700">${v.condition || 100}%</b></span>
               </div>
-              <button onclick="window.ProtecAdmin.supportRemoveVehicle('${user.id}', '${v.id}')" title="Retirer ce véhicule" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[10px] border border-rose-200 cursor-pointer flex-shrink-0">
-                Retirer
-              </button>
+              ${!this.isCurrentUserGestionnaireOnly() ? `
+                <button onclick="window.ProtecAdmin.supportRemoveVehicle('${user.id}', '${v.id}')" title="Retirer ce véhicule" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[10px] border border-rose-200 cursor-pointer flex-shrink-0">
+                  Retirer
+                </button>
+              ` : `
+                <span class="text-[9px] font-bold text-slate-400 bg-slate-200/60 px-2 py-0.5 rounded-md">En dotation</span>
+              `}
             </div>
           `).join('')}
         </div>
@@ -2243,6 +2331,10 @@ window.ProtecAdmin = {
   },
 
   async supportAddVehicle(userId, vehicleType) {
+    if (this.isCurrentUserGestionnaireOnly()) {
+      if (window.game?.showToast) window.game.showToast('Action Restreinte', 'Le rôle Gestionnaire ne permet pas d’attribuer de véhicules.', 'amber');
+      return;
+    }
     const user = (this.usersCache || []).find(u => u.id === userId);
     if (!user) return;
 
@@ -2303,6 +2395,10 @@ window.ProtecAdmin = {
   },
 
   async supportRemoveVehicle(userId, vehicleId) {
+    if (this.isCurrentUserGestionnaireOnly()) {
+      if (window.game?.showToast) window.game.showToast('Action Restreinte', 'Le rôle Gestionnaire ne permet pas de retirer de véhicules.', 'amber');
+      return;
+    }
     const user = (this.usersCache || []).find(u => u.id === userId);
     if (!user) return;
 
@@ -2332,6 +2428,10 @@ window.ProtecAdmin = {
   },
 
   async supportForceCompleteMission(userId, missionId) {
+    if (this.isCurrentUserGestionnaireOnly()) {
+      if (window.game?.showToast) window.game.showToast('Action Restreinte', 'Le rôle Gestionnaire ne permet pas de valider des gains monétaires.', 'amber');
+      return;
+    }
     const user = (this.usersCache || []).find(u => u.id === userId);
     if (!user) return;
 
@@ -2406,6 +2506,190 @@ window.ProtecAdmin = {
     `;
 
     modalEl.classList.remove('hidden');
+  },
+
+  // Modale d'inspection des logs opérationnels, détection de bugs et diagnostic d'un joueur (Accessible Gestionnaires & Admins)
+  async openPlayerDiagnosticsModal(userId) {
+    const user = (this.usersCache || []).find(u => u.id === userId);
+    if (!user) {
+      if (window.game?.showToast) window.game.showToast('Erreur', 'Joueur introuvable.', 'red');
+      return;
+    }
+
+    const modalId = 'adm-player-diagnostics-modal';
+    let modalEl = document.getElementById(modalId);
+    if (!modalEl) {
+      modalEl = document.createElement('div');
+      modalEl.id = modalId;
+      modalEl.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-3 sm:p-5 animate-in fade-in overflow-y-auto';
+      document.body.appendChild(modalEl);
+    }
+
+    // Récupération de la sauvegarde la plus fraîche possible
+    let sData = user.saveData;
+    if (!sData && window.ProtecSupabase) {
+      try {
+        const supaSave = await window.ProtecSupabase.loadGameState(user.id, user.username);
+        sData = supaSave ? supaSave.save_data : null;
+      } catch (e) {}
+    }
+    sData = sData || {};
+    const vehicles = sData.vehicles || [];
+    const missions = sData.missions || [];
+    const stations = sData.stations || [];
+
+    // Détection automatique d'anomalies / bugs dans la partie du joueur
+    const bugsDetected = [];
+    missions.forEach((m, idx) => {
+      if (m.status === 'in_progress' && m.timeRemaining <= 0) {
+        bugsDetected.push(`Mission #${m.id || idx} (« ${m.title || 'Mission'} ») : Temps écoulé mais mission non finalisée.`);
+      }
+      if (Array.isArray(m.assignedVehicles) && m.assignedVehicles.length > 0) {
+        m.assignedVehicles.forEach(vid => {
+          const vExists = vehicles.some(v => v.id === vid);
+          if (!vExists) {
+            bugsDetected.push(`Mission #${m.id || idx} : Véhicule référencé #${vid} introuvable dans la flotte.`);
+          }
+        });
+      }
+    });
+
+    vehicles.forEach(v => {
+      if (v.status === 'en_route' || v.status === 'sur_les_lieux') {
+        const missionEngaged = missions.some(m => Array.isArray(m.assignedVehicles) && m.assignedVehicles.includes(v.id));
+        if (!missionEngaged && missions.length === 0) {
+          bugsDetected.push(`Véhicule « ${v.name || v.type} » marqué « ${v.status} » sans mission active associée.`);
+        }
+      }
+    });
+
+    // Rôles Discord
+    const discordRoles = user.discord?.roles || [];
+    const isAdminDiscord = discordRoles.includes('1561701759733465128');
+    const isGestionnaireDiscord = discordRoles.includes('1561702120732758077');
+
+    modalEl.innerHTML = `
+      <div class="w-full max-w-4xl rounded-3xl bg-white dark:bg-slate-900 border-2 border-purple-500/50 p-5 sm:p-6 shadow-2xl relative text-left max-h-[92vh] flex flex-col my-auto">
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-3 flex-shrink-0">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black text-lg shadow-md">
+              📜
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-base font-black text-slate-900 dark:text-white leading-tight">Logs & Diagnostic : ${user.username}</h3>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${user.role === 'admin' ? 'bg-amber-100 text-amber-900' : (user.role === 'gestionnaire' ? 'bg-indigo-100 text-indigo-900' : 'bg-slate-100 text-slate-700')}">${user.role || 'Joueur'}</span>
+              </div>
+              <p class="text-[11px] text-purple-700 dark:text-purple-400 font-bold">Outil d'inspection et détection des bugs de partie (Accessible Gestionnaires & Admins)</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('${modalId}').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
+          <!-- Carte statut & identité -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+              <span class="text-[9px] font-black uppercase text-slate-400 block">Antenne & Territoire</span>
+              <strong class="text-xs text-slate-800 dark:text-slate-100">${user.stationName || 'Antenne'}</strong>
+              <div class="text-[10px] text-slate-500">${user.city || 'Paris'} (${user.departmentCode || '75'}) • ${stations.length} centre(s)</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+              <span class="text-[9px] font-black uppercase text-slate-400 block">Compte & Rôles Discord</span>
+              <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${user.discord ? `@${user.discord.username}` : 'Non lié'}</div>
+              <div class="text-[10px] text-slate-500">
+                ${isAdminDiscord ? '<b class="text-amber-600">👑 Admin Discord (1561701759733465128)</b>' : isGestionnaireDiscord ? '<b class="text-indigo-600">🛡️ Gestionnaire Discord (1561702120732758077)</b>' : 'Aucun rôle spécial Discord'}
+              </div>
+            </div>
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+              <span class="text-[9px] font-black uppercase text-slate-400 block">Dernière Connexion & Sauvegarde</span>
+              <strong class="text-xs text-slate-800 dark:text-slate-100">${user.lastLogin ? new Date(user.lastLogin).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'Inconnue'}</strong>
+              <div class="text-[10px] text-slate-500">Sauvegarde: ${user.lastSaved ? new Date(user.lastSaved).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</div>
+            </div>
+          </div>
+
+          <!-- Analyseur de bugs automatique -->
+          <div class="p-3.5 rounded-2xl ${bugsDetected.length > 0 ? 'bg-rose-50 border-2 border-rose-300 text-rose-950' : 'bg-emerald-50 border border-emerald-200 text-emerald-950'}">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-lg">${bugsDetected.length > 0 ? '⚠️' : '✅'}</span>
+                <div>
+                  <h4 class="text-xs font-black uppercase tracking-wider">${bugsDetected.length > 0 ? `${bugsDetected.length} anomalie(s) détectée(s) pouvant bloquer le joueur` : 'Aucun bug critique détecté dans la structure de sauvegarde'}</h4>
+                  <span class="text-[10px] opacity-80">Analyse de la cohérence missions / véhicules / état du serveur</span>
+                </div>
+              </div>
+              <button onclick="window.ProtecAdmin.supportClearStuckMissions('${user.id}')" class="px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-black text-xs shadow-sm cursor-pointer flex items-center gap-1.5 shrink-0">
+                <span>🧹 Débloquer & Purger Missions</span>
+              </button>
+            </div>
+            ${bugsDetected.length > 0 ? `
+              <ul class="list-disc list-inside text-xs space-y-1 font-mono text-rose-800 pt-1">
+                ${bugsDetected.map(b => `<li>${b}</li>`).join('')}
+              </ul>
+            ` : `
+              <p class="text-[11px] text-emerald-800">Les missions actives (${missions.length}) et véhicules (${vehicles.length}) répondent aux règles opérationnelles normales.</p>
+            `}
+          </div>
+
+          <!-- Détail des Missions en cours -->
+          <div class="border border-slate-200 dark:border-slate-800 rounded-2xl p-3 bg-white dark:bg-slate-900 space-y-2">
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+              <span class="text-xs font-black text-slate-900 dark:text-white">Missions Actives (${missions.length})</span>
+              <span class="text-[10px] text-slate-500">Missions en cours sur le standard du joueur</span>
+            </div>
+            ${missions.length === 0 ? '<div class="text-[11px] text-slate-400 italic py-2 text-center">Aucune mission en cours.</div>' : missions.map(m => `
+              <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                <div>
+                  <strong class="text-slate-900 dark:text-white">${m.title || 'Intervention'}</strong>
+                  <div class="text-[10px] text-slate-500 font-mono">ID: ${m.id} • Statut: <span class="font-bold text-indigo-600">${m.status || 'in_progress'}</span> • Véhicules requis: ${m.requiredVehicles ? JSON.stringify(m.requiredVehicles) : 'N/A'}</div>
+                </div>
+                <button onclick="window.ProtecAdmin.supportCancelMission('${user.id}', '${m.id}')" class="px-2.5 py-1 rounded-lg bg-rose-100 text-rose-800 hover:bg-rose-200 font-bold text-[10px] cursor-pointer">
+                  Annuler Mission
+                </button>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- Détail de la Flotte -->
+          <div class="border border-slate-200 dark:border-slate-800 rounded-2xl p-3 bg-white dark:bg-slate-900 space-y-2">
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+              <span class="text-xs font-black text-slate-900 dark:text-white">Flotte Opérationnelle (${vehicles.length} véhicules)</span>
+              <span class="text-[10px] text-slate-500">État et disponibilité des moyens</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              ${vehicles.length === 0 ? '<div class="text-[11px] text-slate-400 italic py-2 text-center col-span-3">Aucun véhicule.</div>' : vehicles.map(v => `
+                <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs">
+                  <div class="font-bold text-slate-800 dark:text-white truncate">${v.name || v.type}</div>
+                  <div class="text-[10px] text-slate-500">${v.immat || 'Sans immat'} • Statut: <b class="${v.status === 'dispo' ? 'text-emerald-600' : 'text-amber-600'}">${v.status || 'dispo'}</b></div>
+                  <div class="text-[9px] text-slate-400">Capacité: ${v.capacity || v.seatsCount || 4} places • Méca: ${v.mechanical || 100}%</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Vue JSON brute de la sauvegarde pour analyse technique -->
+          <details class="border border-slate-200 dark:border-slate-800 rounded-2xl p-3 bg-slate-50 dark:bg-slate-950">
+            <summary class="text-xs font-black text-slate-700 dark:text-slate-300 cursor-pointer">📦 Sauvegarde BDD Brute (JSON complet pour diagnostic approfondi)</summary>
+            <pre class="mt-2 p-3 rounded-xl bg-slate-900 text-emerald-400 font-mono text-[10px] max-h-60 overflow-y-auto whitespace-pre-wrap select-all">${JSON.stringify(sData, null, 2)}</pre>
+          </details>
+        </div>
+
+        <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
+          <button onclick="document.getElementById('${modalId}').classList.add('hidden'); window.ProtecAdmin.openSupportForPlayer('${user.id}');" class="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 cursor-pointer">
+            🛠️ Ouvrir dans l'Outil de Support
+          </button>
+          <button onclick="document.getElementById('${modalId}').classList.add('hidden')" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs cursor-pointer">
+            Fermer
+          </button>
+        </div>
+      </div>
+    `;
+
+    modalEl.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
   },
 
   async sendGlobalBroadcast(e) {
@@ -3501,12 +3785,12 @@ window.ProtecAdmin = {
         <!-- Header -->
         <div class="flex items-center justify-between pb-3 sm:pb-4 border-b border-slate-200/80 mb-3 sm:mb-4 flex-shrink-0">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-lg shadow-indigo-600/30 text-lg">
+            <div id="admin-modal-icon" class="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-lg shadow-indigo-600/30 text-lg">
               👑
             </div>
             <div>
-              <h3 class="text-base sm:text-lg font-black text-slate-900 leading-tight">Panel Administrateur Protec Live</h3>
-              <p class="text-xs text-indigo-600 font-bold">Gestion globale des Directeurs & Antennes</p>
+              <h3 id="admin-modal-title" class="text-base sm:text-lg font-black text-slate-900 leading-tight">Panel Administrateur Protec Live</h3>
+              <p id="admin-modal-subtitle" class="text-xs text-indigo-600 font-bold">Gestion globale des Directeurs & Antennes</p>
             </div>
           </div>
           <button onclick="window.ProtecAdmin.closeAdminModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer">

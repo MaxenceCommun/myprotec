@@ -64,6 +64,9 @@
 
       let discordUser = null;
 
+      let discordRoles = [];
+      let inGuild = false;
+
       // Cas 1 : Token OAuth2 reçu directement (Implicit Flow - 100% compatible hébergement statique sans backend)
       if (accessToken) {
         try {
@@ -74,6 +77,20 @@
             discordUser = await res.json();
           } else {
             throw new Error('Erreur de validation du jeton Discord (' + res.status + ')');
+          }
+
+          // Récupération des rôles sur le serveur officiel Protection Civile (Guild ID : 1480571890543235122)
+          try {
+            const guildRes = await fetch('https://discord.com/api/v10/users/@me/guilds/1480571890543235122/member', {
+              headers: { Authorization: `${tokenType} ${accessToken}` }
+            });
+            if (guildRes.ok) {
+              const guildData = await guildRes.json();
+              inGuild = true;
+              discordRoles = Array.isArray(guildData.roles) ? guildData.roles : [];
+            }
+          } catch (gErr) {
+            console.warn('Impossible de récupérer le statut guilde Discord :', gErr);
           }
         } catch (err) {
           console.error('Erreur API Discord /users/@me:', err);
@@ -107,6 +124,15 @@
           ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=128`
           : `https://cdn.discordapp.com/embed/avatars/${parseInt(discordUser.discriminator || '0', 10) % 5}.png`;
 
+        // Calcul dynamique du rôle Discord :
+        // Admin : 1561701759733465128 | Gestionnaire : 1561702120732758077
+        let computedRole = 'user';
+        if (discordRoles.includes('1561701759733465128')) {
+          computedRole = 'admin';
+        } else if (discordRoles.includes('1561702120732758077')) {
+          computedRole = 'gestionnaire';
+        }
+
         const discordProfile = {
           id: discordUser.id,
           username: discordUser.username,
@@ -115,6 +141,8 @@
           avatarUrl: avatarUrl,
           email: discordUser.email || null,
           discriminator: discordUser.discriminator,
+          roles: discordRoles,
+          inGuild: inGuild,
           linkedAt: new Date().toISOString()
         };
 
@@ -128,13 +156,20 @@
           }
         } catch (e) {}
 
+        const finalRole = (computedRole !== 'user') ? computedRole : (existingUser?.role || 'user');
+
         const userRecord = existingUser ? {
           ...existingUser,
+          role: finalRole,
+          isAdmin: (finalRole === 'admin'),
+          isGestionnaire: (finalRole === 'gestionnaire'),
           discord: discordProfile
         } : {
           id: 'usr-dc-' + discordUser.id.slice(-8),
           username: discordUser.global_name || discordUser.username,
-          role: 'user',
+          role: finalRole,
+          isAdmin: (finalRole === 'admin'),
+          isGestionnaire: (finalRole === 'gestionnaire'),
           stationName: 'Antenne Protection Civile',
           city: 'Paris',
           departmentCode: '75',

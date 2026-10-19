@@ -321,17 +321,33 @@ window.ProtecAuth = {
       }
     }
 
-    // Sécurité stricte d'accès aux boutons Panel Admin (Desktop et Mobile)
+    // Sécurité stricte d'accès aux boutons Panel Admin et Gestionnaire (Desktop et Mobile)
     const isActualAdmin = !!(this.currentUser && (this.currentUser.isAdmin || this.currentUser.role === 'admin'));
+    const isActualGestionnaire = !isActualAdmin && !!(this.currentUser && (this.currentUser.isGestionnaire || this.currentUser.role === 'gestionnaire'));
+    const isAuthorized = isActualAdmin || isActualGestionnaire;
+
     const adminBtn = document.getElementById('admin-header-btn');
     if (adminBtn) {
-      if (isActualAdmin) adminBtn.classList.remove('hidden');
-      else adminBtn.classList.add('hidden');
+      if (isAuthorized) {
+        adminBtn.classList.remove('hidden');
+        adminBtn.title = isActualAdmin ? "Panel Administrateur" : "Portail Gestionnaire (Scénarios & Logs)";
+        const iconSpan = adminBtn.querySelector('span:first-child');
+        if (iconSpan) iconSpan.textContent = isActualAdmin ? '👑' : '🛡️';
+        const labelSpan = adminBtn.querySelector('span:last-child');
+        if (labelSpan) labelSpan.textContent = isActualAdmin ? 'Admin' : 'Gestionnaire';
+      } else {
+        adminBtn.classList.add('hidden');
+      }
     }
     const adminMobileBtn = document.getElementById('admin-mobile-btn');
     if (adminMobileBtn) {
-      if (isActualAdmin) adminMobileBtn.classList.remove('hidden');
-      else adminMobileBtn.classList.add('hidden');
+      if (isAuthorized) {
+        adminMobileBtn.classList.remove('hidden');
+        adminMobileBtn.innerHTML = isActualAdmin ? '👑 Admin' : '🛡️ Gestionnaire';
+        adminMobileBtn.title = isActualAdmin ? "Panel Administrateur" : "Portail Gestionnaire";
+      } else {
+        adminMobileBtn.classList.add('hidden');
+      }
     }
   },
 
@@ -636,7 +652,7 @@ window.ProtecAuth = {
     }
 
     // response_type=token : flux direct SPA / client-side compatible hébergement statique (Render, Cloudflare, etc.)
-    const oauthUrl = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=identify%20email&state=${encodeURIComponent(state)}`;
+    const oauthUrl = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=identify%20email%20guilds%20guilds.members.read&state=${encodeURIComponent(state)}`;
 
     const width = 500, height = 750;
     const left = Math.max(0, Math.floor((window.screen.width - width) / 2));
@@ -738,6 +754,46 @@ window.ProtecAuth = {
       targetGame.showToast('Discord Dissocié', 'Votre compte Discord a été dissocié de cette antenne.', 'blue');
     }
     this.renderModalContent('profile');
+  },
+
+  // Synchronisation dynamique des rôles Discord (Admin 1561701759733465128 / Gestionnaire 1561702120732758077)
+  async syncDiscordRoles(game = null) {
+    if (!this.currentUser) return;
+    const targetGame = game || window.game;
+    try {
+      if (targetGame?.showToast) targetGame.showToast('Synchronisation...', 'Vérification de vos rôles sur le serveur Discord officiel...', 'blue');
+      
+      const res = await fetch('/api/auth/discord/sync-roles', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ userId: this.currentUser.id, discordId: this.currentUser.discord?.id })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.user) {
+          this.currentUser = { ...this.currentUser, ...data.user };
+          localStorage.setItem('protec_user', JSON.stringify(this.currentUser));
+          if (targetGame && targetGame.player) {
+            targetGame.player.role = data.user.role;
+            targetGame.player.isAdmin = !!data.user.isAdmin;
+            targetGame.player.isGestionnaire = !!data.user.isGestionnaire;
+            targetGame.player.discord = data.user.discord;
+          }
+          this.updateHeaderUI();
+          this.renderModalContent('profile');
+          const roleLabel = data.user.role === 'admin' ? '👑 Administrateur' : (data.user.role === 'gestionnaire' ? '🛡️ Gestionnaire Fédéral' : 'Directeur Standard');
+          if (targetGame?.showToast) {
+            targetGame.showToast('Rôles Discord Synchronisés', `Votre compte est configuré avec le statut : ${roleLabel}.`, 'green');
+          }
+          return;
+        }
+      }
+      if (targetGame?.showToast) targetGame.showToast('Vérification Discord', 'Vos rôles Discord sont déjà à jour.', 'blue');
+    } catch (e) {
+      console.warn('Erreur syncDiscordRoles:', e);
+      if (targetGame?.showToast) targetGame.showToast('Erreur', 'Impossible de contacter le serveur de synchronisation Discord.', 'red');
+    }
   },
 
   openAuthModal(isMandatory = false) {
@@ -860,20 +916,34 @@ window.ProtecAuth = {
 
               <!-- Encart Liaison Discord Officielle -->
               ${this.currentUser.discord ? `
-                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-blue-50/40 to-slate-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-800 border border-indigo-200/80 dark:border-slate-700 flex items-center justify-between gap-3 shadow-2xs">
-                  <div class="flex items-center gap-3 min-w-0">
-                    <img src="${this.currentUser.discord.avatarUrl}" alt="Avatar Discord" class="w-9 h-9 rounded-full border-2 border-[#5865F2] object-cover shadow-xs shrink-0" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'" />
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-1.5">
-                        <span class="text-xs font-black text-slate-900 truncate">${this.currentUser.discord.global_name || this.currentUser.discord.username}</span>
-                        <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full bg-[#5865F2]/15 text-[#5865F2] border border-[#5865F2]/30 shrink-0">Discord Lié</span>
+                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-blue-50/40 to-slate-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-800 border border-indigo-200/80 dark:border-slate-700 flex flex-col gap-2.5 shadow-2xs">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                      <img src="${this.currentUser.discord.avatarUrl}" alt="Avatar Discord" class="w-9 h-9 rounded-full border-2 border-[#5865F2] object-cover shadow-xs shrink-0" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'" />
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                          <span class="text-xs font-black text-slate-900 truncate">${this.currentUser.discord.global_name || this.currentUser.discord.username}</span>
+                          ${(this.currentUser.role === 'admin' || this.currentUser.isAdmin) ? `
+                            <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">👑 Administrateur Discord</span>
+                          ` : (this.currentUser.role === 'gestionnaire' || this.currentUser.isGestionnaire) ? `
+                            <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900 border border-indigo-300">🛡️ Gestionnaire Discord</span>
+                          ` : `
+                            <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full bg-[#5865F2]/15 text-[#5865F2] border border-[#5865F2]/30">Membre Discord</span>
+                          `}
+                        </div>
+                        <div class="text-[10px] text-slate-500 font-mono truncate">@${this.currentUser.discord.username} • ID : ${this.currentUser.discord.id}</div>
                       </div>
-                      <div class="text-[10px] text-slate-500 font-mono truncate">@${this.currentUser.discord.username} • ID : ${this.currentUser.discord.id}</div>
                     </div>
+                    <button type="button" onclick="window.ProtecAuth.unlinkDiscord(window.game)" class="text-[10px] font-extrabold text-rose-600 hover:text-rose-800 px-2.5 py-1 rounded-xl hover:bg-rose-50 border border-rose-200/60 transition cursor-pointer shrink-0">
+                      Dissocier
+                    </button>
                   </div>
-                  <button type="button" onclick="window.ProtecAuth.unlinkDiscord(window.game)" class="text-[10px] font-extrabold text-rose-600 hover:text-rose-800 px-2.5 py-1.5 rounded-xl hover:bg-rose-50 border border-rose-200/60 transition cursor-pointer shrink-0">
-                    Dissocier
-                  </button>
+                  <div class="pt-2 border-t border-indigo-100/80 dark:border-slate-700/60 flex items-center justify-between">
+                    <span class="text-[10px] text-slate-500">Rôles vérifiés sur serveur officiel <code>1480571890543235122</code></span>
+                    <button type="button" onclick="window.ProtecAuth.syncDiscordRoles(window.game)" class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 bg-white hover:bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl transition cursor-pointer shadow-2xs flex items-center gap-1">
+                      <span>🔄 Actualiser mes rôles Discord</span>
+                    </button>
+                  </div>
                 </div>
               ` : `
                 <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/70 via-blue-50/50 to-slate-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-800 border border-indigo-200/80 dark:border-slate-700 flex items-center justify-between gap-3 shadow-2xs">

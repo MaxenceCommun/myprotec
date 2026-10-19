@@ -31,7 +31,11 @@ const defaultDb = {
   badgesCollection: [],
   customVehicleCatalog: null,
   customEquipmentCatalog: null,
-  customBadgesCatalog: null
+  customBadgesCatalog: null,
+  referralLogs: [],  // [{ id, referrer_id, referee_id, status, reward_referee_granted, reward_referrer_granted, created_at, validated_at }]
+  fraudLogs: [],      // [{ id, timestamp, referrer_id, attempted_referee_username, ip_detected, device_fingerprint, reason, reviewed }]
+  pushSubscriptions: {}, // endpoint -> { endpoint, keys, userId, username, userAgent, createdAt, lastUsed }
+  vapidKeys: null
 };
 
 class Database {
@@ -65,7 +69,11 @@ class Database {
           chatMessages: parsed.chatMessages || [],
           marketplace: parsed.marketplace || [],
           communityEvents: parsed.communityEvents || [],
-          badgesCollection: parsed.badgesCollection || []
+          badgesCollection: parsed.badgesCollection || [],
+          referralLogs: parsed.referralLogs || [],
+          fraudLogs: parsed.fraudLogs || [],
+          pushSubscriptions: parsed.pushSubscriptions || {},
+          vapidKeys: parsed.vapidKeys || null
         };
       } catch (e) {
         console.error('Erreur lecture BDD, utilisation état par défaut:', e);
@@ -101,8 +109,72 @@ class Database {
     return crypto.randomBytes(32).toString('hex');
   }
 
-  // Inscription
-  registerUser(username, password, stationName, city, departmentCode) {
+  normalizeIp(ip) {
+    if (!ip || typeof ip !== 'string') return '';
+    let clean = ip.trim();
+    if (clean.startsWith('::ffff:')) clean = clean.slice(7);
+    if (clean === '::1') clean = '127.0.0.1';
+    return clean;
+  }
+
+  generateReferralCode(username) {
+    const prefix = (username || 'PC').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'PROT';
+    const rand = crypto.randomBytes(3).toString('hex').toUpperCase();
+    return `${prefix}-${rand}`;
+  }
+
+  findUserByReferralCode(code) {
+    if (!code) return null;
+    const cleanCode = String(code).trim().toUpperCase();
+    for (const u of Object.values(this.data.users)) {
+      if (u.referral_code && u.referral_code.toUpperCase() === cleanCode) {
+        return u;
+      }
+      if (u.username && u.username.toUpperCase() === cleanCode) {
+        return u;
+      }
+    }
+    return null;
+  }
+
+  logFraudAttempt(referrerId, refereeUsername, ipDetected, deviceFingerprint, reason) {
+    const log = {
+      id: `frd-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      referrer_id: referrerId,
+      attempted_referee_username: refereeUsername || 'Inconnu',
+      ip_detected: ipDetected || 'Inconnue',
+      device_fingerprint: deviceFingerprint || null,
+      reason: reason || 'SUSPECTED_FRAUD',
+      reviewed: false
+    };
+    this.data.fraudLogs = this.data.fraudLogs || [];
+    this.data.fraudLogs.unshift(log);
+
+    // Notification Parrain
+    const referrer = Object.values(this.data.users).find(u => u.id === referrerId);
+    if (referrer) {
+      referrer.pending_referral_alerts = referrer.pending_referral_alerts || [];
+      referrer.pending_referral_alerts.unshift({
+        id: `alt-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        message: "Avertissement : Une tentative de parrainage non conforme a été détectée sur votre compte (adresse IP ou appareil doublon). La liaison a été rejetée et l'incident consigné.",
+        reason: reason
+      });
+
+      // Seuil de récidive : 3 tentatives non résolues (reviewed === false)
+      const unreviewedFraudCount = this.data.fraudLogs.filter(f => f.referrer_id === referrerId && !f.reviewed).length;
+      if (unreviewedFraudCount >= 3) {
+        referrer.referral_suspended = true;
+      }
+    }
+
+    this.save();
+    return log;
+  }
+
+  // Inscription avec gestion du parrainage et sécurité anti-fraude IP
+  registerUser(username, password, stationName, city, departmentCode, referralCodeInput = null, clientIpRaw = null, deviceFingerprint = null) {
     if (!username || typeof username !== 'string' || username.trim().length < 3) {
       return { error: 'Le nom d’utilisateur doit comporter au moins 3 caractères.' };
     }
@@ -117,6 +189,7 @@ class Database {
       return { error: 'Ce nom d’utilisateur est déjà utilisé. Veuillez en choisir un autre.' };
     }
 
+    const clientIp = this.normalizeIp(clientIpRaw);
     const salt = this.generateSalt();
     const passwordHash = this.hashPassword(password, salt);
     const userId = 'usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
@@ -126,7 +199,7 @@ class Database {
 
     const cleanDept = (departmentCode || city || '75').toString().trim().toUpperCase();
 
-    // Gestion du rôle départemental : le premier joueur dans le département devient l'antenne principale
+    // Rôle départemental
     let deptRole = 'antenne_departementale';
     if (!this.data.departments[cleanDept]) {
       this.data.departments[cleanDept] = {
@@ -144,6 +217,104 @@ class Database {
 
     const assignedStationName = (stationName && stationName.trim()) || (deptRole === 'antenne_principale' ? `Antenne Principale (${cleanDept})` : `Antenne Territoriale ${cleanUsername} (${cleanDept})`);
 
+    // Traitement du parrainage
+    let referredBy = null;
+    let referralStatus = null;
+    let refereeBonusGranted = false;
+
+    if (referralCodeInput && String(referralCodeInput).trim().length > 0) {
+      const codeClean = String(referralCodeInput).trim();
+      const referrer = this.findUserByReferralCode(codeClean);
+
+      if (!referrer) {
+        referralStatus = {
+          success: false,
+          code: 'CODE_NOT_FOUND',
+          message: 'Code de parrainage introuvable. Inscription poursuivie sans parrain.'
+        };
+      } else if (referrer.id === userId || referrer.username.toLowerCase() === key) {
+        // Auto-parrainage
+        this.logFraudAttempt(referrer.id, cleanUsername, clientIp, deviceFingerprint, 'SELF_REFERRAL');
+        referralStatus = {
+          success: false,
+          code: 'SELF_REFERRAL',
+          message: 'Auto-parrainage interdit.'
+        };
+      } else if (referrer.referral_suspended) {
+        // Parrain suspendu
+        this.logFraudAttempt(referrer.id, cleanUsername, clientIp, deviceFingerprint, 'REFERRAL_SUSPENDED');
+        referralStatus = {
+          success: false,
+          code: 'REFERRAL_SUSPENDED',
+          message: 'Ce parrain est temporairement inéligible au parrainage.'
+        };
+      } else {
+        // CONTRÔLE ANTI-FRAUDE STRICT
+        let fraudReason = null;
+
+        // Contrôle 1 (Parrain <-> Filleul)
+        const referrerIps = [referrer.registration_ip, ...(referrer.last_known_ips || [])]
+          .map(ip => this.normalizeIp(ip))
+          .filter(Boolean);
+
+        if (clientIp && referrerIps.includes(clientIp)) {
+          fraudReason = 'SAME_IP_AS_REFERRER';
+        }
+
+        // Contrôle 2 (Filleul <-> Autres filleuls existants)
+        if (!fraudReason && clientIp) {
+          for (const u of Object.values(this.data.users)) {
+            if (u.referred_by) {
+              const otherRefereeIps = [u.registration_ip, ...(u.last_known_ips || [])]
+                .map(ip => this.normalizeIp(ip))
+                .filter(Boolean);
+              if (otherRefereeIps.includes(clientIp)) {
+                fraudReason = 'IP_ALREADY_USED_BY_ANOTHER_REFERRAL';
+                break;
+              }
+            }
+          }
+        }
+
+        if (fraudReason) {
+          // Bloquer la liaison mais NE PAS bloquer l'inscription du compte
+          this.logFraudAttempt(referrer.id, cleanUsername, clientIp, deviceFingerprint, fraudReason);
+          referralStatus = {
+            success: false,
+            fraudDetected: true,
+            code: fraudReason,
+            message: 'Parrainage refusé : anomalie de sécurité réseau détectée (adresse IP doublon).'
+          };
+        } else {
+          // Parrainage certifié conforme
+          referredBy = referrer.id;
+          refereeBonusGranted = true;
+
+          const refLog = {
+            id: `ref-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            referrer_id: referrer.id,
+            referee_id: userId,
+            status: 'pending',
+            reward_referee_granted: true,
+            reward_referrer_granted: false,
+            created_at: new Date().toISOString(),
+            validated_at: null
+          };
+          this.data.referralLogs = this.data.referralLogs || [];
+          this.data.referralLogs.unshift(refLog);
+
+          referralStatus = {
+            success: true,
+            referrerName: referrer.username,
+            bonus: 1500,
+            message: 'Parrainage validé ! Bonus de bienvenue de 1 500 € accordé.'
+          };
+        }
+      }
+    }
+
+    const myReferralCode = this.generateReferralCode(cleanUsername);
+
     const userRecord = {
       id: userId,
       username: cleanUsername,
@@ -155,6 +326,13 @@ class Database {
       isBanned: false,
       stationName: assignedStationName,
       city: cleanDept,
+      // Champs Parrainage & Sécurité
+      referral_code: myReferralCode,
+      referred_by: referredBy,
+      referral_suspended: false,
+      registration_ip: clientIp || null,
+      last_known_ips: clientIp ? [clientIp] : [],
+      pending_referral_alerts: [],
       createdAt: new Date().toISOString(),
       lastLogin: new Date().toISOString()
     };
@@ -169,6 +347,26 @@ class Database {
       role: deptRole,
       joinedAt: new Date().toISOString()
     });
+
+    // Sauvegarde initiale avec éventuel bonus filleul (+1 500 €)
+    const initialMoney = 15000 + (refereeBonusGranted ? 1500 : 0);
+    this.data.savedGames[userId] = {
+      savedAt: new Date().toISOString(),
+      data: {
+        player: {
+          id: userId,
+          name: cleanUsername,
+          departmentCode: cleanDept,
+          allianceId: 'alliance-fnpc'
+        },
+        resources: {
+          money: initialMoney,
+          budget: initialMoney,
+          funds: initialMoney,
+          reputationScore: 50
+        }
+      }
+    };
 
     // Création session token
     const token = this.generateToken();
@@ -187,6 +385,7 @@ class Database {
     return {
       success: true,
       token,
+      referralStatus,
       user: {
         id: userId,
         username: cleanUsername,
@@ -194,13 +393,17 @@ class Database {
         deptRole,
         departmentCode: cleanDept,
         stationName: userRecord.stationName,
-        city: userRecord.city
+        city: userRecord.city,
+        referral_code: myReferralCode,
+        referred_by: referredBy,
+        referral_suspended: false,
+        discord: userRecord.discord || null
       }
     };
   }
 
   // Connexion
-  loginUser(username, password) {
+  loginUser(username, password, clientIpRaw = null) {
     if (!username || !password) {
       return { error: 'Identifiant et mot de passe requis.' };
     }
@@ -225,6 +428,29 @@ class Database {
     const role = userRecord.role || (key === 'admin' ? 'admin' : 'user');
     userRecord.role = role;
 
+    // Mise à jour de l'historique IP
+    const clientIp = this.normalizeIp(clientIpRaw);
+    if (clientIp) {
+      userRecord.last_known_ips = userRecord.last_known_ips || [];
+      if (!userRecord.last_known_ips.includes(clientIp)) {
+        userRecord.last_known_ips.push(clientIp);
+        if (userRecord.last_known_ips.length > 20) userRecord.last_known_ips.shift();
+      }
+      if (!userRecord.registration_ip) userRecord.registration_ip = clientIp;
+    }
+
+    // Assurer la présence d'un referral_code pour les anciens comptes
+    if (!userRecord.referral_code) {
+      userRecord.referral_code = this.generateReferralCode(userRecord.username);
+    }
+    if (userRecord.referral_suspended === undefined) {
+      userRecord.referral_suspended = false;
+    }
+
+    const alertsToSend = [...(userRecord.pending_referral_alerts || [])];
+    // Réinitialiser les alertes après lecture
+    userRecord.pending_referral_alerts = [];
+
     const token = this.generateToken();
     this.data.sessions[token] = {
       userId: userRecord.id,
@@ -239,14 +465,411 @@ class Database {
     return {
       success: true,
       token,
+      pendingAlerts: alertsToSend,
       user: {
         id: userRecord.id,
         username: userRecord.username,
         role,
         stationName: userRecord.stationName,
-        city: userRecord.city
+        city: userRecord.city,
+        referral_code: userRecord.referral_code,
+        referred_by: userRecord.referred_by || null,
+        referral_suspended: !!userRecord.referral_suspended,
+        discord: userRecord.discord || null
       }
     };
+  }
+
+  // Liaison ou Connexion via Discord OAuth2
+  loginOrLinkDiscord(discordProfile, existingUserId = null, clientIpRaw = null) {
+    if (!discordProfile || !discordProfile.id) {
+      return { error: 'Profil Discord invalide.' };
+    }
+
+    const discordId = String(discordProfile.id).trim();
+    const discordUsername = (discordProfile.username || 'Directeur').trim();
+    const discordGlobalName = (discordProfile.global_name || discordUsername).trim();
+    const discordAvatarUrl = discordProfile.avatarUrl || (discordProfile.avatar 
+      ? `https://cdn.discordapp.com/avatars/${discordId}/${discordProfile.avatar}.png?size=128`
+      : `https://cdn.discordapp.com/embed/avatars/${(BigInt(discordId) >> 22n) % 6n}.png`);
+
+    const discordRoles = Array.isArray(discordProfile.roles) ? discordProfile.roles : [];
+    const inGuild = !!discordProfile.inGuild;
+
+    const discordData = {
+      id: discordId,
+      username: discordUsername,
+      global_name: discordGlobalName,
+      discriminator: discordProfile.discriminator || '0',
+      avatar: discordProfile.avatar || null,
+      avatarUrl: discordAvatarUrl,
+      email: discordProfile.email || null,
+      roles: discordRoles,
+      inGuild: inGuild,
+      linkedAt: new Date().toISOString()
+    };
+
+    // Détermination dynamique du rôle en fonction des rôles Discord sur le serveur 1480571890543235122
+    let computedRole = 'user';
+    if (discordRoles.includes('1561701759733465128')) {
+      computedRole = 'admin';
+    } else if (discordRoles.includes('1561702120732758077')) {
+      computedRole = 'gestionnaire';
+    } else if (discordProfile.assignedRole === 'admin' || discordProfile.assignedRole === 'gestionnaire') {
+      computedRole = discordProfile.assignedRole;
+    }
+
+    // Cas 1 : Liaison à un compte utilisateur existant et connecté
+    if (existingUserId) {
+      const targetUser = Object.values(this.data.users).find(u => u.id === existingUserId);
+      if (!targetUser) {
+        return { error: 'Compte joueur introuvable pour la liaison.' };
+      }
+      // Vérifier si un autre utilisateur a déjà lié ce compte Discord
+      const alreadyLinked = Object.values(this.data.users).find(u => u.discord && u.discord.id === discordId && u.id !== existingUserId);
+      if (alreadyLinked) {
+        return { error: `Ce compte Discord est déjà lié au joueur « ${alreadyLinked.username} ».` };
+      }
+
+      targetUser.discord = discordData;
+      // Mise à niveau du rôle si le joueur détient le rôle Admin ou Gestionnaire Discord
+      if (computedRole === 'admin' || computedRole === 'gestionnaire') {
+        targetUser.role = computedRole;
+      } else if (targetUser.role === 'gestionnaire' && computedRole === 'user') {
+        targetUser.role = 'user';
+      }
+      targetUser.isAdmin = (targetUser.role === 'admin');
+      targetUser.isGestionnaire = (targetUser.role === 'gestionnaire');
+
+      this.save();
+      return {
+        success: true,
+        action: 'linked',
+        user: {
+          id: targetUser.id,
+          username: targetUser.username,
+          role: targetUser.role,
+          isAdmin: targetUser.isAdmin,
+          isGestionnaire: targetUser.isGestionnaire,
+          stationName: targetUser.stationName,
+          city: targetUser.city,
+          referral_code: targetUser.referral_code,
+          discord: targetUser.discord
+        }
+      };
+    }
+
+    // Cas 2 : Connexion directe via Discord
+    // Recherche si un utilisateur possède déjà ce discord.id
+    let userRecord = Object.values(this.data.users).find(u => u.discord && u.discord.id === discordId);
+
+    if (userRecord) {
+      if (userRecord.isBanned) {
+        return { error: 'Ce compte joueur a été suspendu par un administrateur.' };
+      }
+      // Mise à jour des informations Discord fraîches
+      userRecord.discord = {
+        ...userRecord.discord,
+        ...discordData,
+        linkedAt: userRecord.discord?.linkedAt || discordData.linkedAt
+      };
+      userRecord.lastLogin = new Date().toISOString();
+
+      // Synchronisation du rôle avec Discord
+      if (computedRole === 'admin') {
+        userRecord.role = 'admin';
+      } else if (computedRole === 'gestionnaire') {
+        userRecord.role = 'gestionnaire';
+      } else if (userRecord.role === 'gestionnaire' || (userRecord.role === 'admin' && userRecord.promotedViaDiscord)) {
+        userRecord.role = 'user';
+      }
+      userRecord.isAdmin = (userRecord.role === 'admin');
+      userRecord.isGestionnaire = (userRecord.role === 'gestionnaire');
+
+      const token = this.generateToken();
+      this.data.sessions[token] = {
+        userId: userRecord.id,
+        username: userRecord.username,
+        role: userRecord.role || 'user',
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 30 * 24 * 3600 * 1000
+      };
+      this.save();
+
+      return {
+        success: true,
+        action: 'login',
+        token,
+        user: {
+          id: userRecord.id,
+          username: userRecord.username,
+          role: userRecord.role || 'user',
+          isAdmin: userRecord.isAdmin,
+          isGestionnaire: userRecord.isGestionnaire,
+          stationName: userRecord.stationName,
+          city: userRecord.city,
+          referral_code: userRecord.referral_code,
+          discord: userRecord.discord
+        }
+      };
+    }
+
+    // Cas 3 : Nouveau joueur arrivant via Discord -> Création automatique
+    let baseUsername = (discordGlobalName || discordUsername).replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 16);
+    if (!baseUsername || baseUsername.length < 3) baseUsername = 'Dir_' + discordUsername.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 12);
+    if (baseUsername.length < 3) baseUsername = 'Directeur_' + discordId.slice(-4);
+
+    let finalUsername = baseUsername;
+    let counter = 1;
+    while (this.data.users[finalUsername.toLowerCase()]) {
+      finalUsername = `${baseUsername.slice(0, 12)}_${counter}`;
+      counter++;
+    }
+
+    const regResult = this.registerUser(
+      finalUsername,
+      'discord_' + crypto.randomBytes(16).toString('hex'), // Mot de passe aléatoire sécurisé
+      `Antenne ${finalUsername}`,
+      'Paris',
+      '75',
+      null,
+      clientIpRaw
+    );
+
+    if (regResult.error) {
+      return { error: regResult.error };
+    }
+
+    const newUser = this.data.users[finalUsername.toLowerCase()];
+    if (newUser) {
+      newUser.discord = discordData;
+      if (computedRole === 'admin' || computedRole === 'gestionnaire') {
+        newUser.role = computedRole;
+        newUser.promotedViaDiscord = true;
+      }
+      newUser.isAdmin = (newUser.role === 'admin');
+      newUser.isGestionnaire = (newUser.role === 'gestionnaire');
+      this.save();
+      regResult.user.discord = discordData;
+      regResult.user.role = newUser.role;
+      regResult.user.isAdmin = newUser.isAdmin;
+      regResult.user.isGestionnaire = newUser.isGestionnaire;
+      if (regResult.token && this.data.sessions[regResult.token]) {
+        this.data.sessions[regResult.token].role = newUser.role;
+      }
+    }
+
+    return {
+      success: true,
+      action: 'registered',
+      token: regResult.token,
+      user: regResult.user
+    };
+  }
+
+  // Synchronisation forcée des rôles Discord d'un utilisateur
+  syncDiscordRoles(userId, roles = [], inGuild = true) {
+    if (!userId) return { error: 'UserId requis' };
+    const user = Object.values(this.data.users).find(u => u.id === userId);
+    if (!user) return { error: 'Utilisateur introuvable' };
+
+    const roleList = Array.isArray(roles) ? roles : [];
+    if (!user.discord) user.discord = {};
+    user.discord.roles = roleList;
+    user.discord.inGuild = !!inGuild;
+    user.discord.rolesSyncedAt = new Date().toISOString();
+
+    let newRole = 'user';
+    if (roleList.includes('1561701759733465128')) {
+      newRole = 'admin';
+    } else if (roleList.includes('1561702120732758077')) {
+      newRole = 'gestionnaire';
+    } else if (user.role === 'admin' && !user.discord.id) {
+      // Conserver le statut admin créé hors Discord
+      newRole = 'admin';
+    }
+
+    user.role = newRole;
+    user.isAdmin = (newRole === 'admin');
+    user.isGestionnaire = (newRole === 'gestionnaire');
+
+    // Mettre à jour les sessions actives en cache
+    Object.values(this.data.sessions).forEach(sess => {
+      if (sess && sess.userId === userId) {
+        sess.role = newRole;
+      }
+    });
+
+    this.save();
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        isAdmin: user.isAdmin,
+        isGestionnaire: user.isGestionnaire,
+        discord: user.discord
+      }
+    };
+  }
+
+  // Dissocier le compte Discord
+  unlinkDiscord(userId) {
+    if (!userId) return { error: 'UserId requis' };
+    const user = Object.values(this.data.users).find(u => u.id === userId);
+    if (!user) return { error: 'Utilisateur introuvable' };
+
+    delete user.discord;
+    if (user.role === 'gestionnaire') user.role = 'user';
+    user.isAdmin = (user.role === 'admin');
+    user.isGestionnaire = (user.role === 'gestionnaire');
+    this.save();
+    return { success: true };
+  }
+
+  // Déblocage de la prime parrain lors du palier (1ère intervention terminée)
+  claimReferralFirstMission(userId) {
+    if (!userId) return { error: 'UserId requis' };
+    this.data.referralLogs = this.data.referralLogs || [];
+    const log = this.data.referralLogs.find(l => l.referee_id === userId && l.status === 'pending');
+    if (!log) {
+      return { success: false, message: 'Aucun parrainage en attente pour ce joueur.' };
+    }
+
+    const referrer = Object.values(this.data.users).find(u => u.id === log.referrer_id);
+    if (!referrer) {
+      return { error: 'Parrain introuvable' };
+    }
+
+    if (referrer.referral_suspended) {
+      return { success: false, error: 'Le parrain est actuellement suspendu du programme.' };
+    }
+
+    // Valider le parrainage
+    log.status = 'completed';
+    log.reward_referrer_granted = true;
+    log.validated_at = new Date().toISOString();
+
+    // Créditer le bonus de 2 500 € au parrain
+    const referrerSave = this.data.savedGames[referrer.id];
+    if (referrerSave && referrerSave.data && referrerSave.data.resources) {
+      const currentMoney = referrerSave.data.resources.money || 15000;
+      referrerSave.data.resources.money = currentMoney + 2500;
+      if (referrerSave.data.resources.budget !== undefined) referrerSave.data.resources.budget += 2500;
+      if (referrerSave.data.resources.funds !== undefined) referrerSave.data.resources.funds += 2500;
+      referrerSave.savedAt = new Date().toISOString();
+    }
+
+    // Notification d'information pour le parrain
+    referrer.pending_referral_alerts = referrer.pending_referral_alerts || [];
+    referrer.pending_referral_alerts.unshift({
+      id: `rew-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'reward',
+      message: `Félicitations ! Votre filleul a accompli sa première intervention. Vous recevez votre prime de parrainage de +2 500 € !`
+    });
+
+    this.save();
+    return {
+      success: true,
+      referrerId: referrer.id,
+      referrerName: referrer.username,
+      bonusGranted: 2500
+    };
+  }
+
+  // Données complètes pour l'onglet Admin Sécurité & Parrainages
+  getReferralAdminData() {
+    this.data.fraudLogs = this.data.fraudLogs || [];
+    this.data.referralLogs = this.data.referralLogs || [];
+
+    const fraudCountsByReferrer = {};
+    this.data.fraudLogs.forEach(f => {
+      fraudCountsByReferrer[f.referrer_id] = (fraudCountsByReferrer[f.referrer_id] || 0) + 1;
+    });
+
+    const enrichedFraudLogs = this.data.fraudLogs.map(f => {
+      const referrer = Object.values(this.data.users).find(u => u.id === f.referrer_id);
+      const count = fraudCountsByReferrer[f.referrer_id] || 1;
+      return {
+        ...f,
+        referrer_username: referrer ? referrer.username : 'Inconnu',
+        referrer_suspended: referrer ? !!referrer.referral_suspended : false,
+        referrer_is_banned: referrer ? !!referrer.isBanned : false,
+        total_fraud_attempts: count,
+        is_recidivist: count >= 2
+      };
+    });
+
+    const enrichedReferralLogs = this.data.referralLogs.map(r => {
+      const referrer = Object.values(this.data.users).find(u => u.id === r.referrer_id);
+      const referee = Object.values(this.data.users).find(u => u.id === r.referee_id);
+      return {
+        ...r,
+        referrer_username: referrer ? referrer.username : 'Inconnu',
+        referee_username: referee ? referee.username : 'Inconnu'
+      };
+    });
+
+    return {
+      fraudLogs: enrichedFraudLogs,
+      referralLogs: enrichedReferralLogs,
+      summary: {
+        totalReferrals: this.data.referralLogs.length,
+        completedReferrals: this.data.referralLogs.filter(r => r.status === 'completed').length,
+        totalFrauds: this.data.fraudLogs.length,
+        unreviewedFrauds: this.data.fraudLogs.filter(f => !f.reviewed).length,
+        recidivistCount: Object.values(fraudCountsByReferrer).filter(c => c >= 2).length
+      }
+    };
+  }
+
+  // Actions d'administration sur les parrainages et incidents de fraude
+  processAdminReferralAction(action, targetId, extra = {}) {
+    if (action === 'review_fraud') {
+      const log = (this.data.fraudLogs || []).find(f => f.id === targetId);
+      if (!log) return { error: 'Log d’incident introuvable.' };
+      log.reviewed = true;
+      this.save();
+      return { success: true, log };
+    }
+
+    if (action === 'reactivate_referrer') {
+      const user = Object.values(this.data.users).find(u => u.id === targetId);
+      if (!user) return { error: 'Joueur introuvable.' };
+      user.referral_suspended = false;
+      this.save();
+      return { success: true, user: { id: user.id, username: user.username, referral_suspended: false } };
+    }
+
+    if (action === 'warn_referrer') {
+      const user = Object.values(this.data.users).find(u => u.id === targetId);
+      if (!user) return { error: 'Joueur introuvable.' };
+      user.pending_referral_alerts = user.pending_referral_alerts || [];
+      user.pending_referral_alerts.unshift({
+        id: `adm-warn-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'admin_warning',
+        message: extra.message || "Avertissement Administrateur : Des irrégularités ont été constatées sur l’utilisation de votre code de parrainage. Veillez à respecter les conditions d'utilisation."
+      });
+      this.save();
+      return { success: true };
+    }
+
+    if (action === 'ban_referrer') {
+      const user = Object.values(this.data.users).find(u => u.id === targetId);
+      if (!user) return { error: 'Joueur introuvable.' };
+      user.isBanned = true;
+      user.referral_suspended = true;
+      for (const [token, sess] of Object.entries(this.data.sessions)) {
+        if (sess.userId === user.id) delete this.data.sessions[token];
+      }
+      this.save();
+      return { success: true, user: { id: user.id, username: user.username, isBanned: true } };
+    }
+
+    return { error: 'Action non reconnue.' };
   }
 
   // Validation de session
@@ -287,6 +910,13 @@ class Database {
       savedAt: new Date().toISOString(),
       data: gameData
     };
+
+    // Mettre à jour les analytics de plateforme sur l'utilisateur si disponibles
+    if (this.data.users[userId]) {
+      if (gameData.platformStats) this.data.users[userId].platformStats = gameData.platformStats;
+      if (gameData.lastDevice) this.data.users[userId].lastDevice = gameData.lastDevice;
+    }
+
     this.save();
     return true;
   }
@@ -324,19 +954,6 @@ class Database {
     // Effacer la sauvegarde active si l'utilisateur est identifié
     if (userId && this.data.savedGames[userId]) {
       delete this.data.savedGames[userId];
-    }
-
-    // Réinitialisation intégrale du profil utilisateur : suppression de l'antenne, du département et de la commune
-    if (this.data.users) {
-      const userKey = Object.keys(this.data.users).find(k => 
-        (userId && this.data.users[k].id === userId) || 
-        (username && k === username.toLowerCase())
-      );
-      if (userKey && this.data.users[userKey]) {
-        this.data.users[userKey].stationName = null;
-        this.data.users[userKey].departmentCode = null;
-        this.data.users[userKey].city = null;
-      }
     }
 
     this.save();
@@ -458,19 +1075,29 @@ class Database {
         id: u.id,
         username: u.username,
         role: u.role || 'user',
+        isAdmin: (u.role === 'admin' || !!u.isAdmin),
+        isGestionnaire: (u.role === 'gestionnaire' || !!u.isGestionnaire),
+        discord: u.discord || null,
         isBanned: !!u.isBanned,
+        referral_code: u.referral_code || null,
+        referred_by: u.referred_by || null,
+        referral_suspended: !!u.referral_suspended,
+        registration_ip: u.registration_ip || null,
+        last_known_ips: u.last_known_ips || [],
         stationName: u.stationName || 'Antenne',
         city: u.city || 'paris',
         departmentCode: u.departmentCode || '75',
         createdAt: u.createdAt,
         lastLogin: u.lastLogin,
-        money: gData?.resources?.money ?? 40000,
+        money: gData?.resources?.money ?? 15000,
         volunteersCount: gData?.volunteers?.length ?? 4,
         vehiclesCount: gData?.vehicles?.length ?? 1,
         stationsCount: gData?.stations?.length ?? 1,
         missionsCount: gData?.missions?.length ?? 0,
         reputationScore: gData?.resources?.reputationScore ?? 50,
         timeTracking: u.timeTracking || gData?.timeTracking || null,
+        platformStats: u.platformStats || gData?.platformStats || null,
+        lastDevice: u.lastDevice || gData?.lastDevice || null,
         lastSaved: save?.savedAt || null,
         saveData: gData
       };
@@ -535,7 +1162,7 @@ class Database {
       if (!this.data.savedGames[userId]) {
         this.data.savedGames[userId] = {
           savedAt: new Date().toISOString(),
-          data: { resources: { money: Number(updates.money || 40000) } }
+          data: { resources: { money: Number(updates.money || 15000) } }
         };
       }
       const saveRecord = this.data.savedGames[userId];
@@ -621,37 +1248,85 @@ class Database {
     return { success: true, department: dept };
   }
 
-  // --- RÉINITIALISATION GLOBALE DU JEU (WIPE COMPLET TEST / MAINTENANCE) ---
-  masterResetAllGameData() {
-    const backupSummary = {
-      timestamp: new Date().toISOString(),
-      previousUsersCount: Object.keys(this.data.users || {}).length,
-      previousSavesCount: Object.keys(this.data.savedGames || {}).length
+  // --- GESTION DES ABONNEMENTS WEB PUSH & CLÉS VAPID ---
+
+  getOrCreateVapidKeys() {
+    if (this.data.vapidKeys && this.data.vapidKeys.publicKey && this.data.vapidKeys.privateKey) {
+      return this.data.vapidKeys;
+    }
+    try {
+      const webpush = require('web-push');
+      const keys = webpush.generateVAPIDKeys();
+      this.data.vapidKeys = {
+        publicKey: keys.publicKey,
+        privateKey: keys.privateKey,
+        subject: 'mailto:contact@myprotec.fr',
+        created_at: new Date().toISOString()
+      };
+      this.save();
+      console.log('🔑 [DB] Clés VAPID officielles initialisées et persistées.');
+      return this.data.vapidKeys;
+    } catch (e) {
+      console.error('Erreur génération VAPID avec web-push:', e);
+      return null;
+    }
+  }
+
+  savePushSubscription(subData) {
+    if (!subData || !subData.endpoint) return null;
+
+    const endpoint = String(subData.endpoint).trim();
+    this.data.pushSubscriptions = this.data.pushSubscriptions || {};
+
+    const existing = this.data.pushSubscriptions[endpoint] || {};
+
+    const id = existing.id || subData.id || `push_sub_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const userId = subData.user_id || subData.userId || subData.playerId || existing.user_id || null;
+    const p256dh = subData.p256dh || (subData.keys && subData.keys.p256dh) || existing.p256dh || '';
+    const auth = subData.auth || (subData.keys && subData.keys.auth) || existing.auth || '';
+    const username = subData.username || existing.username || 'Directeur';
+    const userAgent = subData.userAgent || subData.user_agent || existing.user_agent || '';
+    const now = new Date().toISOString();
+
+    const record = {
+      id,
+      user_id: userId,
+      endpoint,
+      p256dh,
+      auth,
+      keys: {
+        p256dh,
+        auth
+      },
+      username,
+      user_agent: userAgent,
+      created_at: existing.created_at || now,
+      updated_at: now,
+      last_used: Date.now()
     };
 
-    // 1. Purge intégrale de toutes les tables et données
-    this.data.users = {};
-    this.data.sessions = {};
-    this.data.savedGames = {};
-    this.data.departments = {};
-    this.data.resetArchives = [];
-    this.data.referrals = {};
-    this.data.badgeOffers = [];
-    this.data.pushSubscriptions = {};
-
-    // 2. Recréer immédiatement le compte Administrateur par défaut propre et fonctionnel
-    this.ensureAdminUser();
-
-    // 3. Sauvegarder sur le disque
+    this.data.pushSubscriptions[endpoint] = record;
     this.save();
+    return record;
+  }
 
-    return {
-      success: true,
-      message: 'Base de données réinitialisée intégralement avec succès. Tous les comptes et données ont été purgés.',
-      backupSummary,
-      adminRecreated: true,
-      timestamp: new Date().toISOString()
-    };
+  getPushSubscription(endpoint) {
+    if (!endpoint || !this.data.pushSubscriptions) return null;
+    return this.data.pushSubscriptions[endpoint] || null;
+  }
+
+  getAllPushSubscriptions() {
+    return Object.values(this.data.pushSubscriptions || {});
+  }
+
+  deletePushSubscription(endpoint) {
+    if (!endpoint || !this.data.pushSubscriptions) return false;
+    if (this.data.pushSubscriptions[endpoint]) {
+      delete this.data.pushSubscriptions[endpoint];
+      this.save();
+      return true;
+    }
+    return false;
   }
 }
 

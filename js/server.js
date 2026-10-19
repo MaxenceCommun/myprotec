@@ -139,10 +139,74 @@ function sendJson(res, statusCode, data) {
   res.end(JSON.stringify(data));
 }
 
-// Configuration OAuth2 Discord Officielle
+// Configuration OAuth2 & Serveur Discord Officiel Protection Civile
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1559698958966857788';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || 'PBVswxt7MDfJFbUMV86EI3yBMJnda9-7';
 const DISCORD_PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY || 'e3386fdde63936935ff2d3567b51a0d5717f0f822f8eec83d7f62454ac22558b';
+const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
+
+// Serveur officiel Protection Civile et Rôles d'autorité
+const DISCORD_GUILD_ID = '1480571890543235122';
+const DISCORD_ROLE_ADMIN = '1561701759733465128';
+const DISCORD_ROLE_GESTIONNAIRE = '1561702120732758077';
+
+// Contrôle d'accès RBAC (Admin & Gestionnaire)
+function getAdminAccess(req) {
+  const user = getAuthUser(req);
+  const adminKey = req.headers['x-admin-key'];
+  const isSecret = adminKey === 'protec_admin_secret_2026';
+  const isAdmin = isSecret || (user && (user.role === 'admin' || user.isAdmin));
+  const isGestionnaire = !isAdmin && (user && (user.role === 'gestionnaire' || user.isGestionnaire));
+  return {
+    user,
+    isSecret,
+    isAdmin,
+    isGestionnaire,
+    isAuthorized: isAdmin || isGestionnaire
+  };
+}
+
+// Récupération des rôles d'un membre sur le serveur Discord officiel
+async function fetchDiscordGuildRoles(accessToken, discordUserId = null) {
+  let roles = [];
+  let inGuild = false;
+
+  // 1. Requête via Bearer token de l'utilisateur (scope guilds.members.read)
+  if (accessToken) {
+    try {
+      const res = await fetch(`https://discord.com/api/v10/users/@me/guilds/${DISCORD_GUILD_ID}/member`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        inGuild = true;
+        roles = Array.isArray(data.roles) ? data.roles : [];
+        return { inGuild, roles };
+      }
+    } catch (e) {
+      console.warn('Erreur appel /users/@me/guilds member :', e.message);
+    }
+  }
+
+  // 2. Repli éventuel avec Bot Token si configuré
+  if (DISCORD_BOT_TOKEN && discordUserId) {
+    try {
+      const botRes = await fetch(`https://discord.com/api/v10/guilds/${DISCORD_GUILD_ID}/members/${discordUserId}`, {
+        headers: { 'Authorization': `Bot ${DISCORD_BOT_TOKEN}` }
+      });
+      if (botRes.ok) {
+        const bData = await botRes.json();
+        inGuild = true;
+        roles = Array.isArray(bData.roles) ? bData.roles : [];
+        return { inGuild, roles };
+      }
+    } catch (e) {
+      console.warn('Erreur appel Bot /guilds member :', e.message);
+    }
+  }
+
+  return { inGuild, roles };
+}
 
 async function exchangeDiscordCode(code, redirectUri) {
   const tokenParams = new URLSearchParams({
@@ -182,6 +246,16 @@ async function exchangeDiscordCode(code, redirectUri) {
     ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png?size=128`
     : `https://cdn.discordapp.com/embed/avatars/${(BigInt(userData.id) >> 22n) % 6n}.png`;
 
+  // Vérification des rôles sur le serveur Discord officiel de la Protection Civile
+  const { inGuild, roles } = await fetchDiscordGuildRoles(tokenData.access_token, userData.id);
+
+  let assignedRole = 'user';
+  if (roles.includes(DISCORD_ROLE_ADMIN)) {
+    assignedRole = 'admin';
+  } else if (roles.includes(DISCORD_ROLE_GESTIONNAIRE)) {
+    assignedRole = 'gestionnaire';
+  }
+
   return {
     id: userData.id,
     username: userData.username,
@@ -189,7 +263,11 @@ async function exchangeDiscordCode(code, redirectUri) {
     discriminator: userData.discriminator || '0',
     avatar: userData.avatar || null,
     avatarUrl,
-    email: userData.email || null
+    email: userData.email || null,
+    roles,
+    assignedRole,
+    inGuild,
+    accessToken: tokenData.access_token
   };
 }
 
@@ -207,6 +285,9 @@ try {
 function getOrCreateVapidKeys() {
   return db.getOrCreateVapidKeys();
 }
+
+// Registre en mémoire des alertes Web Push différées (fin d'intervention, rappels opérationnels app fermée)
+const scheduledPushEvents = new Map();
 
 function configureWebPush() {
   const keys = getOrCreateVapidKeys();
@@ -271,11 +352,43 @@ async function sendSingleWebPush(subscription, payloadObject) {
 
 async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
   configureWebPush();
-  const subs = db.getAllPushSubscriptions();
-  console.log(`📡 [WebPush Server] Dispatch demandé vers target='${targetUserId}', total abonnés en base: ${subs.length}`);
+  let subs = db.getAllPushSubscriptions();
+
+  // Si aucun abonné local, interroger Supabase game_saves
+  if (subs.length === 0) {
+    try {
+      const supaUrl = 'https://yrayehhbqcnuiuejqsjz.supabase.co/rest/v1/game_saves?select=user_id,username,save_data->push_subscription';
+      const supaRes = await fetch(supaUrl, {
+        headers: {
+          'apikey': 'sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs',
+          'Authorization': 'Bearer sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs'
+        }
+      });
+      if (supaRes.ok) {
+        const supaData = await supaRes.json();
+        (supaData || []).forEach(row => {
+          if (row.push_subscription && row.push_subscription.endpoint) {
+            const sub = row.push_subscription;
+            subs.push({
+              endpoint: sub.endpoint,
+              keys: sub.keys || {},
+              p256dh: sub.keys?.p256dh,
+              auth: sub.keys?.auth,
+              user_id: row.user_id,
+              username: row.username || 'Directeur Cloud'
+            });
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[WebPush Server] Erreur lecture Supabase fallback :', e.message);
+    }
+  }
+
+  console.log(`📡 [WebPush Server] Dispatch demandé vers target='${targetUserId}', total abonnés disponibles: ${subs.length}`);
 
   if (subs.length === 0) {
-    console.warn('⚠️ [WebPush Server] Aucun abonnement push enregistré dans la base de données.');
+    console.warn('⚠️ [WebPush Server] Aucun abonnement push enregistré (ni en base locale, ni sur Supabase).');
     return 0;
   }
 
@@ -284,8 +397,8 @@ async function dispatchWebPushToPlayer(targetUserId, payloadObject) {
     title: payloadObject.title || '🚨 ALERTE MYPROTEC',
     body: payloadObject.body || payloadObject.message || 'Nouvelle notification opérationnelle !',
     message: payloadObject.message || payloadObject.body || 'Nouvelle notification opérationnelle !',
-    icon: payloadObject.icon || '/icons/icon-192x192.png',
-    badge: payloadObject.badge || '/icons/badge-monochrome.png',
+    icon: payloadObject.icon || 'https://myprotec.fr/badge-monochrome.png',
+    badge: payloadObject.badge || 'https://myprotec.fr/badge-monochrome.png',
     data: Object.assign({ url: '/jeu.html', category: payloadObject.category || 'alert' }, payloadObject.data || {}),
     vibrate: payloadObject.vibrate || [500, 200, 500, 200, 500],
     tag: payloadObject.tag || `protec-alert-${Date.now()}`
@@ -583,6 +696,45 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Synchronisation dynamique des rôles Discord sur le serveur officiel Protection Civile
+  if (url === '/api/auth/discord/sync-roles' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const payload = body ? JSON.parse(body) : {};
+        const user = getAuthUser(req) || (payload.userId ? Object.values(db.data.users).find(u => u.id === payload.userId) : null);
+        if (!user) {
+          sendJson(res, 401, { success: false, error: 'Non authentifié' });
+          return;
+        }
+
+        const discordId = user.discord?.id || payload.discordId;
+        const accessToken = payload.accessToken || null;
+
+        // Récupération des rôles en direct depuis l'API Discord
+        const { inGuild, roles } = await fetchDiscordGuildRoles(accessToken, discordId);
+        const syncRes = db.syncDiscordRoles(user.id, roles, inGuild);
+
+        if (syncRes.error) {
+          sendJson(res, 400, { success: false, error: syncRes.error });
+        } else {
+          broadcastSSE('user_roles_updated', { userId: user.id, role: syncRes.user.role, isAdmin: syncRes.user.isAdmin, isGestionnaire: syncRes.user.isGestionnaire });
+          sendJson(res, 200, {
+            success: true,
+            user: syncRes.user,
+            roles,
+            inGuild
+          });
+        }
+      } catch (err) {
+        console.error('Erreur sync-roles Discord:', err);
+        sendJson(res, 400, { success: false, error: err.message || 'Erreur synchronisation rôles' });
+      }
+    });
+    return;
+  }
+
   // Validation du palier première mission terminée pour le parrainage
   if (url === '/api/referral/claim-first-mission' && req.method === 'POST') {
     const user = getAuthUser(req);
@@ -747,10 +899,9 @@ const server = http.createServer((req, res) => {
 
   // Consulter les archives de remise à zéro (Panel Admin)
   if (url === '/api/admin/reset-archives' && req.method === 'GET') {
-    const user = getAuthUser(req);
-    const adminKey = req.headers['x-admin-key'];
-    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
-      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs et gestionnaires.' });
       return;
     }
     const archives = db.getResetArchives();
@@ -758,12 +909,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Restaurer une archive de remise à zéro vers un joueur (Panel Admin)
+  // Restaurer une archive de remise à zéro vers un joueur (Panel Admin - Admin uniquement)
   if (url === '/api/admin/restore-archive' && req.method === 'POST') {
-    const user = getAuthUser(req);
-    const adminKey = req.headers['x-admin-key'];
-    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
-      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+    const access = getAdminAccess(req);
+    if (!access.isAdmin) {
+      sendJson(res, 403, { success: false, error: 'Restauration réservée exclusivement aux administrateurs.' });
       return;
     }
     let body = '';
@@ -854,10 +1004,9 @@ const server = http.createServer((req, res) => {
 
   // Liste de tous les joueurs
   if (url === '/api/admin/users' && req.method === 'GET') {
-    const user = getAuthUser(req);
-    const adminKey = req.headers['x-admin-key'];
-    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
-      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs et gestionnaires.' });
       return;
     }
     const users = db.getAllUsersForAdmin();
@@ -872,6 +1021,8 @@ const server = http.createServer((req, res) => {
             id: p.id,
             username: p.name || 'Directeur d’Antenne',
             role: 'user',
+            isAdmin: false,
+            isGestionnaire: false,
             isBanned: false,
             stationName: st0?.name || 'Antenne Locale',
             city: st0?.city || 'Paris',
@@ -907,10 +1058,9 @@ const server = http.createServer((req, res) => {
 
   // Statistiques globales du serveur
   if (url === '/api/admin/stats' && req.method === 'GET') {
-    const user = getAuthUser(req);
-    const adminKey = req.headers['x-admin-key'];
-    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
-      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs et gestionnaires.' });
       return;
     }
     const allUsers = Object.values(db.data.users);
@@ -928,10 +1078,9 @@ const server = http.createServer((req, res) => {
 
   // Admin : Sécurité & Parrainages (Logs de fraude et parrainages)
   if (url === '/api/admin/referrals' && req.method === 'GET') {
-    const user = getAuthUser(req);
-    const adminKey = req.headers['x-admin-key'];
-    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
-      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs et gestionnaires.' });
       return;
     }
     const referralData = db.getReferralAdminData();
@@ -941,10 +1090,9 @@ const server = http.createServer((req, res) => {
 
   // Admin : Action sur un incident de fraude ou un compte parrain
   if (url === '/api/admin/referrals/action' && req.method === 'POST') {
-    const user = getAuthUser(req);
-    const adminKey = req.headers['x-admin-key'];
-    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
-      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs et gestionnaires.' });
       return;
     }
     let body = '';
@@ -966,12 +1114,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Modification d'un joueur par l'admin (argent, mot de passe, ban, rôle)
+  // Modification d'un joueur par l'admin ou gestionnaire (avec protection stricte sur l'argent et rôles pour gestionnaire)
   if (url === '/api/admin/user/update' && req.method === 'POST') {
-    const user = getAuthUser(req);
-    const adminKey = req.headers['x-admin-key'];
-    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
-      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs et gestionnaires.' });
       return;
     }
     let body = '';
@@ -979,6 +1126,18 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const { userId, ...updates } = JSON.parse(body);
+
+        // Blocage strict : les gestionnaires ne peuvent pas modifier la trésorerie, les rôles ou les mots de passe
+        if (access.isGestionnaire && !access.isAdmin) {
+          if (updates.money !== undefined || updates.role !== undefined || updates.password !== undefined || updates.isAdmin !== undefined) {
+            sendJson(res, 403, {
+              success: false,
+              error: 'Action non autorisée : le rôle Gestionnaire ne permet pas de modifier la trésorerie, les mots de passe ou les rôles des directeurs.'
+            });
+            return;
+          }
+        }
+
         const result = db.updateUserByAdmin(userId, updates);
         if (result.error) {
           sendJson(res, 400, { success: false, error: result.error });
@@ -993,12 +1152,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Suppression d'un joueur par l'admin
+  // Suppression d'un joueur par l'admin (strictement réservé aux Administrateurs)
   if (url === '/api/admin/user/delete' && req.method === 'POST') {
-    const user = getAuthUser(req);
-    const adminKey = req.headers['x-admin-key'];
-    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
-      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+    const access = getAdminAccess(req);
+    if (!access.isAdmin) {
+      sendJson(res, 403, { success: false, error: 'Suppression d’un compte réservée exclusivement aux administrateurs.' });
       return;
     }
     let body = '';
@@ -1019,39 +1177,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Réinitialisation intégrale du jeu en entier (Wipe complet : tous les comptes et données)
-  if (url === '/api/admin/master-reset' && req.method === 'POST') {
-    const user = getAuthUser(req);
-    const adminKey = req.headers['x-admin-key'];
-    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
-      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
-      return;
-    }
-
-    try {
-      // 1. Purge du gameState multijoueur en mémoire vive
-      if (typeof gameState !== 'undefined' && gameState) {
-        if (gameState.players) gameState.players = {};
-        if (gameState.missions) gameState.missions = {};
-        if (gameState.events) gameState.events = [];
-      }
-
-      // 2. Wipe complet dans la base de données locale
-      const result = db.masterResetAllGameData();
-      sendJson(res, 200, { success: true, result });
-    } catch (err) {
-      console.error('Erreur master-reset:', err);
-      sendJson(res, 500, { success: false, error: err.message });
-    }
-    return;
-  }
-
   // Alerte / Annonce globale diffusée à tous les joueurs
   if (url === '/api/admin/broadcast' && req.method === 'POST') {
-    const user = getAuthUser(req);
-    const adminKey = req.headers['x-admin-key'];
-    if ((!user || user.role !== 'admin') && adminKey !== 'protec_admin_secret_2026') {
-      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs.' });
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { success: false, error: 'Accès réservé aux administrateurs et gestionnaires.' });
       return;
     }
     let body = '';
@@ -1182,8 +1312,8 @@ const server = http.createServer((req, res) => {
         const notificationPayload = {
           title,
           body: msgBody,
-          icon: reqData.icon || '/icons/icon-192x192.png',
-          badge: reqData.badge || '/icons/badge-monochrome.png',
+          icon: reqData.icon || 'https://myprotec.fr/badge-monochrome.png',
+          badge: reqData.badge || 'https://myprotec.fr/badge-monochrome.png',
           data: Object.assign({ url: '/jeu.html' }, reqData.data || {})
         };
 
@@ -1225,6 +1355,75 @@ const server = http.createServer((req, res) => {
         }
       } catch (err) {
         sendJson(res, 400, { success: false, error: err.message });
+      }
+    });
+    return;
+  }
+
+  // Planification d'une alerte Web Push différée (fin d'intervention, retour de véhicule, rappel opérationnel app fermée)
+  if (url === '/api/push/schedule-event' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { eventId, userId, endpoint, delaySeconds, title, body: msgBody, data } = JSON.parse(body || '{}');
+        const delay = Math.max(1, Number(delaySeconds) || 60);
+        const timerKey = eventId || `evt_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+        if (scheduledPushEvents.has(timerKey)) {
+          clearTimeout(scheduledPushEvents.get(timerKey).timeoutId);
+        }
+
+        const timeoutId = setTimeout(async () => {
+          scheduledPushEvents.delete(timerKey);
+          try {
+            let targetSub = null;
+            if (endpoint) targetSub = db.getPushSubscription(endpoint);
+            if (!targetSub && userId) {
+              const allSubs = db.getAllPushSubscriptions();
+              targetSub = allSubs.find(s => s.user_id === userId || s.userId === userId || s.playerId === userId);
+            }
+            if (targetSub) {
+              await sendSingleWebPush(targetSub, {
+                title: title || '🚑 Notification Opérationnelle MyProtec',
+                body: msgBody || 'Une opération requiert votre attention.',
+                icon: 'icon-192.png',
+                badge: 'badge-monochrome.png',
+                vibrate: [200, 100, 200],
+                data: Object.assign({ url: '/' }, data || {})
+              });
+              console.log(`[WebPush Server] Alerte différée ${timerKey} envoyée avec succès à ${targetSub.username || targetSub.user_id}`);
+            }
+          } catch (pushErr) {
+            console.warn(`[WebPush Server] Erreur lors de l'envoi différé ${timerKey} :`, pushErr.message || pushErr);
+          }
+        }, delay * 1000);
+
+        scheduledPushEvents.set(timerKey, { timeoutId, userId, scheduledAt: Date.now(), triggerAt: Date.now() + delay * 1000 });
+        sendJson(res, 200, { success: true, scheduled: true, eventId: timerKey, delaySeconds: delay });
+      } catch (e) {
+        sendJson(res, 400, { success: false, error: e.message });
+      }
+    });
+    return;
+  }
+
+  // Annulation d'une alerte différée
+  if (url === '/api/push/cancel-scheduled-event' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { eventId } = JSON.parse(body || '{}');
+        if (eventId && scheduledPushEvents.has(eventId)) {
+          clearTimeout(scheduledPushEvents.get(eventId).timeoutId);
+          scheduledPushEvents.delete(eventId);
+          sendJson(res, 200, { success: true, canceled: true, eventId });
+        } else {
+          sendJson(res, 200, { success: true, canceled: false, message: 'Événement non trouvé ou déjà exécuté' });
+        }
+      } catch (e) {
+        sendJson(res, 400, { success: false, error: e.message });
       }
     });
     return;
@@ -1637,8 +1836,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 16. Admin : Valider un Événement Proposé (avec modifications éventuelles)
+  // 16. Admin / Gestionnaire : Valider un Événement Proposé (avec modifications éventuelles)
   if (url === '/api/admin/events/approve' && req.method === 'POST') {
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { error: 'Accès réservé aux administrateurs et gestionnaires.' });
+      return;
+    }
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
@@ -1663,8 +1867,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 17. Admin : Modifier toutes les informations d'un Événement (Adresse, Indemnisation, Écusson, Moyens...)
+  // 17. Admin / Gestionnaire : Modifier toutes les informations d'un Événement (Adresse, Indemnisation, Écusson, Moyens...)
   if (url === '/api/admin/events/update' && req.method === 'POST') {
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { error: 'Accès réservé aux administrateurs et gestionnaires.' });
+      return;
+    }
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
@@ -1689,8 +1898,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 18. Admin : Refuser un Événement Proposé
+  // 18. Admin / Gestionnaire : Refuser un Événement Proposé
   if (url === '/api/admin/events/reject' && req.method === 'POST') {
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { error: 'Accès réservé aux administrateurs et gestionnaires.' });
+      return;
+    }
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
@@ -1714,8 +1928,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 19. Admin : Créer un nouvel Événement Fédéral Officiel
+  // 19. Admin / Gestionnaire : Créer un nouvel Événement Fédéral Officiel
   if (url === '/api/admin/events/create' && req.method === 'POST') {
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { error: 'Accès réservé aux administrateurs et gestionnaires.' });
+      return;
+    }
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
@@ -1737,8 +1956,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 20. Admin : Supprimer un Événement
+  // 20. Admin / Gestionnaire : Supprimer un Événement
   if (url === '/api/admin/events/delete' && req.method === 'POST') {
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { error: 'Accès réservé aux administrateurs et gestionnaires.' });
+      return;
+    }
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
@@ -1766,13 +1990,30 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 22. Admin : Sauvegarde des catalogues personnalisés
+  // 22. Admin : Sauvegarde des catalogues personnalisés (Gestionnaires interdits sur véhicules/équipements)
   if (url === '/api/admin/catalogs/save' && req.method === 'POST') {
+    const access = getAdminAccess(req);
+    if (!access.isAuthorized) {
+      sendJson(res, 403, { error: 'Accès réservé.' });
+      return;
+    }
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       try {
         const payload = JSON.parse(body);
+
+        // Sécurité stricte Gestionnaire : interdiction de toucher aux catalogues de véhicules ou matériel/économie
+        if (access.isGestionnaire && !access.isAdmin) {
+          if (payload.vehicles !== undefined || payload.equipments !== undefined) {
+            sendJson(res, 403, {
+              success: false,
+              error: 'Action non autorisée : les gestionnaires ne peuvent pas modifier les catalogues de véhicules ou de matériel.'
+            });
+            return;
+          }
+        }
+
         if (payload.vehicles !== undefined) db.data.customVehicleCatalog = payload.vehicles;
         if (payload.equipments !== undefined) db.data.customEquipmentCatalog = payload.equipments;
         if (payload.badges !== undefined) db.data.customBadgesCatalog = payload.badges;
@@ -2039,6 +2280,14 @@ function runServerMinuteTick() {
                 }
                 hasPlayerChanges = true;
                 totalChangesProcessed++;
+
+                // Alerte Web Push immédiate au joueur (réveil terminal si app fermée)
+                dispatchWebPushToPlayer(userId, {
+                  title: '🚑 Mission Terminée & Véhicules Rentrés',
+                  body: `L'opération "${m.title || m.type || 'DPS'}" est terminée. Les véhicules et équipages sont disponibles à l'antenne.`,
+                  category: 'mission_completed',
+                  data: { url: '/jeu.html', missionId: m.id }
+                }).catch(() => {});
               }
             } else if (m.crisisCanClose) {
               // Si la crise a été déclarée prête à clore par le COS
@@ -2215,3 +2464,122 @@ function runServerMinuteTick() {
 const SERVER_CRON_INTERVAL_MS = 60000;
 setInterval(runServerMinuteTick, SERVER_CRON_INTERVAL_MS);
 console.log('[CRON SERVEUR 24H/24] Moteur autonome initialisé (cycle toutes les 60 secondes).');
+
+// =========================================================================
+// PASSERELLE PUSH CLOUD : SUPABASE -> SERVEUR WEB PUSH (FCM / APNs)
+// Permet à un Administrateur (ou à un autre joueur) d'émettre des alertes
+// depuis https://myprotec.fr vers un utilisateur dont l'application est FERMÉE.
+// =========================================================================
+const SUPABASE_REST_URL = 'https://yrayehhbqcnuiuejqsjz.supabase.co';
+const SUPABASE_REST_KEY = 'sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs';
+let isBridgeProcessing = false;
+
+// Mémoire locale des IDs de notifications déjà expédiées pour éviter les doublons instantanés
+const processedNotifIds = new Set();
+
+async function checkAndDispatchCloudPushQueue() {
+  if (isBridgeProcessing) return;
+  isBridgeProcessing = true;
+  try {
+    // Requête ultra-ciblée (ne télécharge QUE les notifications et l'abonnement en ~150ms)
+    const res = await fetch(`${SUPABASE_REST_URL}/rest/v1/game_saves?select=user_id,username,pending:save_data->pending_notifications,sub:save_data->push_subscription`, {
+      headers: {
+        'apikey': SUPABASE_REST_KEY,
+        'Authorization': `Bearer ${SUPABASE_REST_KEY}`
+      }
+    });
+
+    if (!res.ok) {
+      isBridgeProcessing = false;
+      return;
+    }
+
+    const rows = await res.json();
+    if (!Array.isArray(rows)) {
+      isBridgeProcessing = false;
+      return;
+    }
+
+    let hasSentAny = false;
+
+    for (const row of rows) {
+      const pending = row.pending || [];
+      const sub = row.sub;
+
+      if (!sub || !sub.endpoint || !Array.isArray(pending) || pending.length === 0) continue;
+
+      // Trouver les alertes non encore expédiées
+      const toSend = pending.filter(n => n && !n.pushed_at && n.push !== false && !processedNotifIds.has(n.id));
+      if (toSend.length === 0) continue;
+
+      // Traiter toutes les alertes en parallèle immédiatement pour un délai minimal
+      await Promise.all(toSend.map(async (notif) => {
+        processedNotifIds.add(notif.id);
+        hasSentAny = true;
+        console.log(`\n⚡ [Cloud Push Bridge Éclair] Expédition immédiate à '${row.username || row.user_id}' : "${notif.title || 'Alerte'}"`);
+
+        const result = await sendSingleWebPush(sub, {
+          title: notif.title || '🚨 ALERTE MYPROTEC',
+          body: notif.body || notif.message || 'Nouvelle alerte opérationnelle reçue.',
+          icon: notif.icon || 'https://myprotec.fr/badge-monochrome.png',
+          badge: notif.badge || 'https://myprotec.fr/badge-monochrome.png',
+          vibrate: [500, 200, 500, 200, 500],
+          data: { url: '/jeu.html', category: notif.category || 'alert' }
+        });
+
+        notif.pushed_at = new Date().toISOString();
+        notif.push_status = result.success ? 'delivered' : (result.expired ? 'expired_410' : 'error');
+
+        if (result.success) {
+          console.log(`🎉 [Cloud Push Bridge Éclair] Livré à '${row.username}' en direct (Terminal réveillé) !`);
+        } else {
+          console.warn(`⚠️ [Cloud Push Bridge Éclair] Échec envoi à '${row.username}' (${result.status}) : ${result.error}`);
+        }
+      }));
+
+      // Mise à jour asynchrone du statut poussé dans Supabase
+      try {
+        const fullSaveRes = await fetch(`${SUPABASE_REST_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(row.user_id)}&select=save_data`, {
+          headers: {
+            'apikey': SUPABASE_REST_KEY,
+            'Authorization': `Bearer ${SUPABASE_REST_KEY}`
+          }
+        });
+        if (fullSaveRes.ok) {
+          const fullData = await fullSaveRes.json();
+          if (fullData && fullData[0] && fullData[0].save_data) {
+            const sd = fullData[0].save_data;
+            sd.pending_notifications = pending;
+            await fetch(`${SUPABASE_REST_URL}/rest/v1/game_saves?user_id=eq.${encodeURIComponent(row.user_id)}`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': SUPABASE_REST_KEY,
+                'Authorization': `Bearer ${SUPABASE_REST_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+              },
+              body: JSON.stringify({ save_data: sd })
+            });
+          }
+        }
+      } catch (ePatch) {}
+    }
+
+    // Si on vient d'expédier un push, relancer immédiatement au cas où d'autres requêtes suivent
+    if (hasSentAny) {
+      setTimeout(checkAndDispatchCloudPushQueue, 200);
+    }
+  } catch (err) {
+    // Silencieux
+  } finally {
+    isBridgeProcessing = false;
+  }
+}
+
+// Surveillance ultra-réactive de la file d'attente Cloud toutes les 1000 ms (1 seconde)
+const CLOUD_BRIDGE_POLL_MS = 1000;
+setInterval(checkAndDispatchCloudPushQueue, CLOUD_BRIDGE_POLL_MS);
+setTimeout(checkAndDispatchCloudPushQueue, 500);
+console.log(`⚡ [Cloud Push Bridge Éclair] Passerelle active (cadence de vérification ultra-rapide toutes les ${CLOUD_BRIDGE_POLL_MS}ms).`);
+
+

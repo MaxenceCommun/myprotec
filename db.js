@@ -493,6 +493,9 @@ class Database {
       ? `https://cdn.discordapp.com/avatars/${discordId}/${discordProfile.avatar}.png?size=128`
       : `https://cdn.discordapp.com/embed/avatars/${(BigInt(discordId) >> 22n) % 6n}.png`);
 
+    const discordRoles = Array.isArray(discordProfile.roles) ? discordProfile.roles : [];
+    const inGuild = !!discordProfile.inGuild;
+
     const discordData = {
       id: discordId,
       username: discordUsername,
@@ -501,8 +504,20 @@ class Database {
       avatar: discordProfile.avatar || null,
       avatarUrl: discordAvatarUrl,
       email: discordProfile.email || null,
+      roles: discordRoles,
+      inGuild: inGuild,
       linkedAt: new Date().toISOString()
     };
+
+    // Détermination dynamique du rôle en fonction des rôles Discord sur le serveur 1480571890543235122
+    let computedRole = 'user';
+    if (discordRoles.includes('1561701759733465128')) {
+      computedRole = 'admin';
+    } else if (discordRoles.includes('1561702120732758077')) {
+      computedRole = 'gestionnaire';
+    } else if (discordProfile.assignedRole === 'admin' || discordProfile.assignedRole === 'gestionnaire') {
+      computedRole = discordProfile.assignedRole;
+    }
 
     // Cas 1 : Liaison à un compte utilisateur existant et connecté
     if (existingUserId) {
@@ -517,6 +532,15 @@ class Database {
       }
 
       targetUser.discord = discordData;
+      // Mise à niveau du rôle si le joueur détient le rôle Admin ou Gestionnaire Discord
+      if (computedRole === 'admin' || computedRole === 'gestionnaire') {
+        targetUser.role = computedRole;
+      } else if (targetUser.role === 'gestionnaire' && computedRole === 'user') {
+        targetUser.role = 'user';
+      }
+      targetUser.isAdmin = (targetUser.role === 'admin');
+      targetUser.isGestionnaire = (targetUser.role === 'gestionnaire');
+
       this.save();
       return {
         success: true,
@@ -525,6 +549,8 @@ class Database {
           id: targetUser.id,
           username: targetUser.username,
           role: targetUser.role,
+          isAdmin: targetUser.isAdmin,
+          isGestionnaire: targetUser.isGestionnaire,
           stationName: targetUser.stationName,
           city: targetUser.city,
           referral_code: targetUser.referral_code,
@@ -549,6 +575,17 @@ class Database {
       };
       userRecord.lastLogin = new Date().toISOString();
 
+      // Synchronisation du rôle avec Discord
+      if (computedRole === 'admin') {
+        userRecord.role = 'admin';
+      } else if (computedRole === 'gestionnaire') {
+        userRecord.role = 'gestionnaire';
+      } else if (userRecord.role === 'gestionnaire' || (userRecord.role === 'admin' && userRecord.promotedViaDiscord)) {
+        userRecord.role = 'user';
+      }
+      userRecord.isAdmin = (userRecord.role === 'admin');
+      userRecord.isGestionnaire = (userRecord.role === 'gestionnaire');
+
       const token = this.generateToken();
       this.data.sessions[token] = {
         userId: userRecord.id,
@@ -567,6 +604,8 @@ class Database {
           id: userRecord.id,
           username: userRecord.username,
           role: userRecord.role || 'user',
+          isAdmin: userRecord.isAdmin,
+          isGestionnaire: userRecord.isGestionnaire,
           stationName: userRecord.stationName,
           city: userRecord.city,
           referral_code: userRecord.referral_code,
@@ -604,8 +643,20 @@ class Database {
     const newUser = this.data.users[finalUsername.toLowerCase()];
     if (newUser) {
       newUser.discord = discordData;
+      if (computedRole === 'admin' || computedRole === 'gestionnaire') {
+        newUser.role = computedRole;
+        newUser.promotedViaDiscord = true;
+      }
+      newUser.isAdmin = (newUser.role === 'admin');
+      newUser.isGestionnaire = (newUser.role === 'gestionnaire');
       this.save();
       regResult.user.discord = discordData;
+      regResult.user.role = newUser.role;
+      regResult.user.isAdmin = newUser.isAdmin;
+      regResult.user.isGestionnaire = newUser.isGestionnaire;
+      if (regResult.token && this.data.sessions[regResult.token]) {
+        this.data.sessions[regResult.token].role = newUser.role;
+      }
     }
 
     return {
@@ -616,6 +667,53 @@ class Database {
     };
   }
 
+  // Synchronisation forcée des rôles Discord d'un utilisateur
+  syncDiscordRoles(userId, roles = [], inGuild = true) {
+    if (!userId) return { error: 'UserId requis' };
+    const user = Object.values(this.data.users).find(u => u.id === userId);
+    if (!user) return { error: 'Utilisateur introuvable' };
+
+    const roleList = Array.isArray(roles) ? roles : [];
+    if (!user.discord) user.discord = {};
+    user.discord.roles = roleList;
+    user.discord.inGuild = !!inGuild;
+    user.discord.rolesSyncedAt = new Date().toISOString();
+
+    let newRole = 'user';
+    if (roleList.includes('1561701759733465128')) {
+      newRole = 'admin';
+    } else if (roleList.includes('1561702120732758077')) {
+      newRole = 'gestionnaire';
+    } else if (user.role === 'admin' && !user.discord.id) {
+      // Conserver le statut admin créé hors Discord
+      newRole = 'admin';
+    }
+
+    user.role = newRole;
+    user.isAdmin = (newRole === 'admin');
+    user.isGestionnaire = (newRole === 'gestionnaire');
+
+    // Mettre à jour les sessions actives en cache
+    Object.values(this.data.sessions).forEach(sess => {
+      if (sess && sess.userId === userId) {
+        sess.role = newRole;
+      }
+    });
+
+    this.save();
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        isAdmin: user.isAdmin,
+        isGestionnaire: user.isGestionnaire,
+        discord: user.discord
+      }
+    };
+  }
+
   // Dissocier le compte Discord
   unlinkDiscord(userId) {
     if (!userId) return { error: 'UserId requis' };
@@ -623,6 +721,9 @@ class Database {
     if (!user) return { error: 'Utilisateur introuvable' };
 
     delete user.discord;
+    if (user.role === 'gestionnaire') user.role = 'user';
+    user.isAdmin = (user.role === 'admin');
+    user.isGestionnaire = (user.role === 'gestionnaire');
     this.save();
     return { success: true };
   }
@@ -974,6 +1075,9 @@ class Database {
         id: u.id,
         username: u.username,
         role: u.role || 'user',
+        isAdmin: (u.role === 'admin' || !!u.isAdmin),
+        isGestionnaire: (u.role === 'gestionnaire' || !!u.isGestionnaire),
+        discord: u.discord || null,
         isBanned: !!u.isBanned,
         referral_code: u.referral_code || null,
         referred_by: u.referred_by || null,
