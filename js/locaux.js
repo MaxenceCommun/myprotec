@@ -531,14 +531,26 @@ window.ProtecLocaux = {
       const rw = r.w * scale;
       const rh = r.h * scale;
 
+      // Couleurs chaleureuses selon le type de pièce
+      const colors = {
+        garage: '#64748b',
+        formation: '#0284c7',
+        stockage: '#b45309',
+        detente: '#ea580c',
+        dortoir: '#4338ca',
+        bureau: '#334155'
+      };
+      const roomBg = colors[r.type] || '#1e293b';
+
       return `
         <g>
-          <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="#111827" stroke="#334155" stroke-width="1.5" rx="3" />
-          <text x="${rx + rw / 2}" y="${ry + rh / 2 - 4}" fill="#ffffff" font-size="9" font-weight="900" text-anchor="middle">
-            Salle ${i + 1} (🚪 Libre)
+          <!-- Sol de la salle meublable -->
+          <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${roomBg}" stroke="#475569" stroke-width="2" rx="4" />
+          <text x="${rx + rw / 2}" y="${ry + rh / 2 - 4}" fill="#ffffff" font-size="9.5" font-weight="900" text-anchor="middle">
+            Salle ${i + 1}
           </text>
-          <text x="${rx + rw / 2}" y="${ry + rh / 2 + 10}" fill="#38bdf8" font-size="8" font-weight="700" text-anchor="middle">
-            ${r.area} m²
+          <text x="${rx + rw / 2}" y="${ry + rh / 2 + 10}" fill="#cbd5e1" font-size="8" font-weight="700" text-anchor="middle">
+            ${r.area} m² · Prête à aménager
           </text>
         </g>
       `;
@@ -557,8 +569,8 @@ window.ProtecLocaux = {
       const sh = s.d * scale;
       return `
         <g>
-          <rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="rgba(245, 158, 11, 0.08)" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3 2" rx="2" />
-          <text x="${sx + sw / 2}" y="${sy + sh / 2 + 3}" fill="#fbbf24" font-size="7.5" font-weight="800" text-anchor="middle">
+          <rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="rgba(255, 255, 255, 0.08)" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="4 3" rx="3" />
+          <text x="${sx + sw / 2}" y="${sy + sh / 2 + 3}" fill="#ffffff" font-size="8" font-weight="800" text-anchor="middle">
             🅿️ Place 0${idx + 1}
           </text>
         </g>
@@ -566,30 +578,23 @@ window.ProtecLocaux = {
     }).join('');
 
     return `
-      <svg viewBox="0 0 ${width} ${height}" class="w-full h-auto max-h-[220px] block rounded-xl font-sans select-none shadow-inner border border-slate-800">
-        <!-- Fond sombre CAD -->
-        <rect width="${width}" height="${height}" fill="#0a0e17" />
+      <svg viewBox="0 0 ${width} ${height}" class="w-full h-auto max-h-[220px] block rounded-2xl font-sans select-none shadow-lg border border-slate-700/60 overflow-hidden">
+        <!-- Décor extérieur : Pelouse verte et allée goudronnée -->
+        <rect width="${width}" height="${height}" fill="#166534" />
+        <rect x="15" y="15" width="${width - 30}" height="${height - 30}" fill="#0f172a" rx="12" />
         
-        <!-- Grille millimétrée -->
-        <defs>
-          <pattern id="gridCAD_${b.id}" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#131c2e" stroke-width="0.8" />
-          </pattern>
-        </defs>
-        <rect width="${width}" height="${height}" fill="url(#gridCAD_${b.id})" />
-
-        <!-- Cour & Parking extérieur -->
-        <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#0d1424" stroke="#d97706" stroke-width="1.5" stroke-dasharray="4 3" rx="4" />
-        <text x="${px + pw / 2}" y="${py + 12}" fill="#fbbf24" font-size="8" font-weight="900" text-anchor="middle">COUR OPÉRATIONNELLE</text>
+        <!-- Cour de stationnement opérationnelle -->
+        <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#1e293b" stroke="#f59e0b" stroke-width="2" rx="6" />
+        <text x="${px + pw / 2}" y="${py + 13}" fill="#fbbf24" font-size="8.5" font-weight="900" text-anchor="middle">COUR & HANGAR OPÉRATIONNEL</text>
         ${spotsSvg}
 
         <!-- Pièces du Bâtiment -->
         ${roomsSvg}
 
-        <!-- Cartouche technique d'Architecte -->
-        <rect x="${width - 240}" y="${height - 24}" width="230" height="20" fill="#0f172a" stroke="#1e293b" rx="4" />
-        <text x="${width - 125}" y="${height - 10}" fill="#94a3b8" font-size="8" font-weight="800" text-anchor="middle">
-          PLAN CAD D'ARCHITECTE • ${b.surfaceM2} m² • ${b.roomsCount} PIÈCES LIBRES
+        <!-- Bandeau supérieur descriptif -->
+        <rect x="25" y="18" width="${width - 50}" height="18" fill="rgba(15, 23, 42, 0.85)" rx="4" />
+        <text x="${width / 2}" y="30" fill="#f8fafc" font-size="8.5" font-weight="800" text-anchor="middle">
+          🏛️ Caserne & Locaux d'Antenne · ${b.surfaceM2} m² · ${b.roomsCount} Salles Aménageables
         </text>
       </svg>
     `;
@@ -4021,11 +4026,11 @@ window.ProtecLocaux = {
 
             <!-- Indicateur de surface totale et hauteur sous plafond -->
             <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
-              <span>Hauteur sous plafond : <strong>2.80 m</strong></span>
+              <span>🏛️ Locaux Bâtiment : <strong class="text-pc-blue">84.6 m²</strong></span>
               <span>•</span>
-              <span>Surface Bâtiment : <strong class="text-pc-blue">84.6 m²</strong></span>
+              <span>🚒 Cour & Hangar : <strong class="text-amber-600">43.2 m²</strong></span>
               <span>•</span>
-              <span>Cour & Parking : <strong class="text-amber-600">43.2 m²</strong></span>
+              <span>👥 Capacité : <strong class="text-emerald-600">24 secouristes</strong></span>
             </div>
           </div>
 
@@ -4035,7 +4040,7 @@ window.ProtecLocaux = {
               <span>🎯</span> Recentrer la Vue
             </button>
             <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition flex items-center gap-1.5 cursor-pointer">
-              <span class="font-mono text-cyan-400">{ }</span> Fiche Technique
+              <span>📋</span> Agencement des Salles
             </button>
           </div>
         </div>
@@ -4086,54 +4091,54 @@ window.ProtecLocaux = {
         <!-- ========================================================================= -->
         <!-- ZONE VISUALISEUR D'ARCHITECTE 2D / 3D TEMPS RÉEL (ADAPTÉ SMARTPHONE & PC)  -->
         <!-- ========================================================================= -->
-        <div class="relative w-full h-[360px] sm:h-[480px] md:h-[580px] rounded-3xl bg-[#0b0f19] border-2 border-slate-800 shadow-2xl overflow-hidden select-none">
+        <div class="relative w-full h-[360px] sm:h-[480px] md:h-[580px] rounded-3xl bg-[#f5f0e8] border-2 border-amber-200/80 shadow-2xl overflow-hidden select-none">
           
           <!-- CANVAS PRINCIPAL HAUTE DÉFINITION TACTILE -->
           <canvas id="architect-canvas" style="touch-action: none;" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
 
           <!-- 1. En-tête gauche : Badge Plan d'Architecte 2D -->
-          <div class="absolute top-2.5 sm:top-3.5 left-2.5 sm:left-3.5 z-20 flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-lg text-[11px] sm:text-xs font-bold text-white pointer-events-none">
-            <span class="text-blue-400">📐</span>
-            <span>Plan 2D Bâtiment</span>
+          <div class="absolute top-2.5 sm:top-3.5 left-2.5 sm:left-3.5 z-20 flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-white/90 backdrop-blur border border-amber-200 shadow-md text-[11px] sm:text-xs font-bold text-slate-700 pointer-events-none">
+            <span>🏠</span>
+            <span>🏢 Caserne Opérationnelle</span>
           </div>
 
           <!-- 2. En-tête droite : Boutons + et { } -->
           <div class="absolute top-2.5 sm:top-3.5 right-2.5 sm:right-3.5 z-20 flex items-center gap-1.5">
-            <button onclick="window.ProtecLocaux.showAddElementModal(window.game)" class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white border border-slate-700/80 flex items-center justify-center font-black text-lg shadow-lg transition active:scale-95 cursor-pointer" title="Ajouter un équipement ou mobilier">
+            <button onclick="window.ProtecLocaux.showAddElementModal(window.game)" class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl bg-white/90 hover:bg-amber-50 text-slate-700 border border-amber-200 flex items-center justify-center font-black text-lg shadow-md transition active:scale-95 cursor-pointer" title="Ajouter un équipement ou mobilier">
               +
             </button>
-            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-cyan-400 border border-slate-700/80 flex items-center justify-center font-mono font-bold text-xs sm:text-sm shadow-lg transition active:scale-95 cursor-pointer" title="Fiche technique & cotes d'architecte">
-              { }
+            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl bg-white/90 hover:bg-slate-50 text-slate-500 border border-slate-200 flex items-center justify-center font-mono font-bold text-xs sm:text-sm shadow-md transition active:scale-95 cursor-pointer" title="Agencement des pièces et surfaces">
+              📋
             </button>
           </div>
 
           <!-- 3. Barre d'outils latérale droite (Flottante sombre) -->
-          <div class="absolute top-1/2 -translate-y-1/2 right-2.5 sm:right-3.5 z-20 flex flex-col items-center gap-1.5 p-1 sm:p-1.5 rounded-2xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-2xl">
+          <div class="absolute top-1/2 -translate-y-1/2 right-2.5 sm:right-3.5 z-20 flex flex-col items-center gap-1.5 p-1 sm:p-1.5 rounded-2xl bg-white/90 backdrop-blur border border-slate-200 shadow-xl">
             <!-- Crayon / Éditer -->
-            <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.isEditing ? 'bg-amber-500 text-white shadow-md animate-pulse' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" title="${isOwner ? 'Réaménager cloisons' : 'Aménagement interdit en location'}">
+            <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.isEditing ? 'bg-amber-500 text-white shadow-md animate-pulse' : 'text-slate-400 hover:text-slate-700 hover:bg-amber-50'}" title="${isOwner ? 'Réaménager cloisons' : 'Aménagement interdit en location'}">
               ✏️
             </button>
             <!-- Aimant Snap / Magnétisme -->
-            <button onclick="window.ProtecLocaux.toggleMagnet()" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.snapToGrid ? 'bg-blue-600 text-white shadow-md shadow-blue-500/50 ring-2 ring-blue-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" title="Magnétisme Grille (Snap)">
+            <button onclick="window.ProtecLocaux.toggleMagnet()" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.snapToGrid ? 'bg-blue-500 text-white shadow-md ring-2 ring-blue-300' : 'text-slate-400 hover:text-slate-700 hover:bg-blue-50'}" title="Alignement automatique des meubles">
               🧲
             </button>
             <div class="w-5 h-[1px] bg-slate-700/80 my-0.5"></div>
             <!-- Zoom + -->
-            <button onclick="window.ProtecLocaux.zoomCamera(1.2)" class="w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center justify-center font-black text-base transition cursor-pointer" title="Zoom avant">
+            <button onclick="window.ProtecLocaux.zoomCamera(1.2)" class="w-8 h-8 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center font-black text-base transition cursor-pointer" title="Zoom avant">
               +
             </button>
             <!-- Zoom - -->
-            <button onclick="window.ProtecLocaux.zoomCamera(0.8)" class="w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center justify-center font-black text-base transition cursor-pointer" title="Zoom arrière">
+            <button onclick="window.ProtecLocaux.zoomCamera(0.8)" class="w-8 h-8 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center font-black text-base transition cursor-pointer" title="Zoom arrière">
               −
             </button>
             <!-- Centrer caméra -->
-            <button onclick="window.ProtecLocaux.resetCamera()" class="w-8 h-8 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-slate-800 flex items-center justify-center transition cursor-pointer" title="Recentrer la vue">
+            <button onclick="window.ProtecLocaux.resetCamera()" class="w-8 h-8 rounded-xl text-orange-400 hover:text-orange-500 hover:bg-orange-50 flex items-center justify-center transition cursor-pointer" title="Recentrer la vue">
               🎯
             </button>
           </div>
 
           <!-- 4. Barre contextuelle inférieure interactive (Mobile & Bureau) -->
-          <div id="canvas-context-bar" class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-2xl bg-slate-900/95 backdrop-blur border border-slate-700/80 shadow-2xl max-w-[94%] transition-all">
+          <div id="canvas-context-bar" class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-2xl bg-white/95 backdrop-blur border border-slate-200 shadow-lg max-w-[94%] transition-all">
             <div class="flex items-center gap-1.5 text-slate-300 text-[10px] sm:text-[11px] font-medium text-center">
               <span>👆</span>
               <span><strong>1 doigt :</strong> déplacer • <strong>2 doigts :</strong> zoomer • Touchez un meuble ou une pièce</span>
@@ -4722,50 +4727,318 @@ window.ProtecLocaux = {
   },
 
   // =========================================================================
-  // RENDU 2D ARCHITECTURAL STYLE CAD (CONFORME À LA MAQUETTE OFFICIELLE)
+  // RENDU 2D STYLE MAQUETTE (FOND PARQUET, MURS BLANCS NETS, OMBRES DOUCES)
   // =========================================================================
+
+  // Palette de sols et textures réalistes de jeu de gestion (SimCity / RimWorld / Theme Hospital)
+  _getRoomStyle(type) {
+    const ROOM_STYLES = {
+      libre:       { floor: '#f8fafc', accent: '#cbd5e1', label: '#475569', floorType: 'neutral', name: 'Espace Libre' },
+      bureau:      { floor: '#e2e8f0', accent: '#94a3b8', label: '#1e293b', floorType: 'carpet', name: 'Bureau & Direction' },
+      formation:   { floor: '#e0f2fe', accent: '#7dd3fc', label: '#0369a1', floorType: 'lino', name: 'Salle de Formation' },
+      stockage:    { floor: '#fef3c7', accent: '#fde68a', label: '#92400e', floorType: 'concrete', name: 'Réserve Logistique' },
+      reserve:     { floor: '#fef3c7', accent: '#fde68a', label: '#92400e', floorType: 'concrete', name: 'Réserve Lots A/B' },
+      garage:      { floor: '#94a3b8', accent: '#64748b', label: '#0f172a', floorType: 'epoxy', name: 'Hangar VPSP' },
+      detente:     { floor: '#fed7aa', accent: '#f97316', label: '#9a3412', floorType: 'wood', name: 'Foyer des Bénévoles' },
+      foyer:       { floor: '#fed7aa', accent: '#f97316', label: '#9a3412', floorType: 'wood', name: 'Foyer des Bénévoles' },
+      dortoir:     { floor: '#e0e7ff', accent: '#a5b4fc', label: '#3730a3', floorType: 'carpet_cozy', name: 'Dortoir de Garde' },
+      salle_garde: { floor: '#e0e7ff', accent: '#a5b4fc', label: '#3730a3', floorType: 'carpet_cozy', name: 'Salle de Garde' },
+      pc_radio:    { floor: '#ccfbf1', accent: '#5eead4', label: '#115e59', floorType: 'tech', name: 'PC Radio & Régulation' },
+      douche:      { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Sanitaires & Douches' },
+      wc:          { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Sanitaires' },
+      vestiaire:   { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Vestiaires Secouristes' }
+    };
+    return ROOM_STYLES[type] || ROOM_STYLES.libre;
+  },
+
+  // Tracé des textures et revêtements de sol immersifs façon jeu de gestion
+  drawRoomFloor(ctx, rx, ry, rw, rh, room, style, isNight, scale) {
+    const fType = style.floorType || 'neutral';
+
+    // 1. Dalle de sol de base
+    ctx.fillStyle = isNight ? '#1e2433' : style.floor;
+    ctx.fillRect(rx, ry, rw, rh);
+
+    if (isNight) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rx, ry, rw, rh);
+    ctx.clip();
+
+    // 2. Textures réalistes selon l'usage de la pièce
+    if (fType === 'wood') {
+      // --- PARQUET CHÊNE CHALEUREUX (Foyer / Détente) ---
+      const plankH = Math.max(7, scale * 0.35);
+      const plankW = Math.max(26, scale * 1.3);
+      ctx.strokeStyle = 'rgba(217, 119, 6, 0.28)';
+      ctx.lineWidth = 1;
+
+      for (let y = ry; y < ry + rh; y += plankH) {
+        ctx.beginPath();
+        ctx.moveTo(rx, y);
+        ctx.lineTo(rx + rw, y);
+        ctx.stroke();
+
+        const row = Math.floor((y - ry) / plankH);
+        const offset = (row % 2) * (plankW / 2);
+        for (let x = rx - offset; x < rx + rw; x += plankW) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x, Math.min(y + plankH, ry + rh));
+          ctx.stroke();
+        }
+      }
+
+      // Tapis de salon cosy au centre
+      const rugW = Math.min(rw * 0.65, 80);
+      const rugH = Math.min(rh * 0.55, 60);
+      const rugX = rx + rw / 2 - rugW / 2;
+      const rugY = ry + rh / 2 - rugH / 2;
+      ctx.fillStyle = '#dc2626'; // Rouge convivial
+      ctx.fillRect(rugX, rugY, rugW, rugH);
+      ctx.strokeStyle = '#fef08a'; // Liseré or
+      ctx.lineWidth = 2;
+      ctx.strokeRect(rugX + 2, rugY + 2, rugW - 4, rugH - 4);
+
+    } else if (fType === 'tiles') {
+      // --- CARRELAGE BLANC BRILLANT / SANITAIRES & VESTIAIRES ---
+      const tileSize = Math.max(10, scale * 0.45);
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.7)';
+      ctx.lineWidth = 1;
+
+      for (let x = rx; x < rx + rw; x += tileSize) {
+        ctx.beginPath(); ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh); ctx.stroke();
+      }
+      for (let y = ry; y < ry + rh; y += tileSize) {
+        ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + rw, y); ctx.stroke();
+      }
+
+    } else if (fType === 'epoxy') {
+      // --- BÉTON D'ATELIER & HANGAR VPSP ---
+      // Traces de passage des roues du véhicule
+      ctx.fillStyle = 'rgba(51, 65, 85, 0.15)';
+      ctx.fillRect(rx + rw * 0.2, ry, rw * 0.15, rh);
+      ctx.fillRect(rx + rw * 0.65, ry, rw * 0.15, rh);
+
+      // Zébrures jaunes et noires de sécurité au seuil d'accès
+      const stripH = Math.min(10, rh * 0.15);
+      const stripY = ry + rh - stripH;
+      for (let x = rx; x < rx + rw; x += 12) {
+        ctx.fillStyle = ((Math.floor(x / 12) % 2 === 0) ? '#facc15' : '#1e293b');
+        ctx.fillRect(x, stripY, Math.min(12, rx + rw - x), stripH);
+      }
+
+    } else if (fType === 'lino') {
+      // --- DALLES VINYLE SALLE DE COURS / PSC SST ---
+      const tileSize = Math.max(14, scale * 0.6);
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.4)';
+      ctx.lineWidth = 1;
+      for (let x = rx; x < rx + rw; x += tileSize) {
+        ctx.beginPath(); ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh); ctx.stroke();
+      }
+      for (let y = ry; y < ry + rh; y += tileSize) {
+        ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + rw, y); ctx.stroke();
+      }
+
+      // Tableau blanc mural au fond de la salle
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(rx + rw * 0.25, ry + 2, rw * 0.5, 4);
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rx + rw * 0.25, ry + 2, rw * 0.5, 4);
+
+    } else if (fType === 'concrete') {
+      // --- BÉTON CIRÉ LOGISTIQUE & PALETTES BOIS ---
+      ctx.strokeStyle = 'rgba(217, 119, 6, 0.2)';
+      ctx.lineWidth = 1;
+      const step = Math.max(18, scale * 0.8);
+      for (let x = rx; x < rx + rw; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh); ctx.stroke();
+      }
+      for (let y = ry; y < ry + rh; y += step) {
+        ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + rw, y); ctx.stroke();
+      }
+
+      // Silhouette d'une palette Europe en bois dans un angle
+      const palW = Math.min(rw * 0.35, 32);
+      const palH = Math.min(rh * 0.35, 24);
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(rx + 6, ry + 6, palW, palH);
+      ctx.strokeStyle = '#92400e';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rx + 6, ry + 6, palW, palH);
+      for (let py = ry + 10; py < ry + 6 + palH; py += 6) {
+        ctx.beginPath(); ctx.moveTo(rx + 6, py); ctx.lineTo(rx + 6 + palW, py); ctx.stroke();
+      }
+
+    } else if (fType === 'carpet' || fType === 'carpet_cozy' || fType === 'tech') {
+      // --- MOQUETTE BUREAU / DORTOIR / PC RADIO ---
+      const step = Math.max(8, scale * 0.35);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+      for (let x = rx; x < rx + rw; x += step * 2) {
+        for (let y = ry; y < ry + rh; y += step * 2) {
+          ctx.fillRect(x, y, step, step);
+        }
+      }
+    }
+
+    ctx.restore();
+  },
+
+  // Dessin détaillé en vue du dessus d'un véhicule de secours officiel de la Protection Civile
+  drawTopDownVehicle(ctx, x, y, w, h, veh, isNight) {
+    ctx.save();
+
+    // Ombre portée au sol
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x + 3, y + 4, w, h, 6);
+    else ctx.rect(x + 3, y + 4, w, h);
+    ctx.fill();
+
+    // Carrosserie blanche de base
+    ctx.fillStyle = '#f8fafc';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 6);
+    else ctx.rect(x, y, w, h);
+    ctx.fill();
+
+    // Bandes latérales officielles Protection Civile (Orange fluo et Bleu Marine)
+    ctx.fillStyle = '#f97316'; // Orange fluorescent
+    ctx.fillRect(x, y + 4, 3, h - 8);
+    ctx.fillRect(x + w - 3, y + 4, 3, h - 8);
+
+    ctx.fillStyle = '#1e3a8a'; // Bleu marine
+    ctx.fillRect(x + 3, y + 6, 2, h - 12);
+    ctx.fillRect(x + w - 5, y + 6, 2, h - 12);
+
+    // Pare-brise avant teinté (dégradé bleu nuit)
+    ctx.fillStyle = isNight ? '#0f172a' : '#1e293b';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x + 4, y + 4, w - 8, Math.min(h * 0.22, 14), 3);
+    else ctx.rect(x + 4, y + 4, w - 8, Math.min(h * 0.22, 14));
+    ctx.fill();
+
+    // Vitres latérales et arrière
+    ctx.fillStyle = isNight ? '#1e293b' : '#334155';
+    ctx.fillRect(x + 4, y + h * 0.35, 3, h * 0.3);
+    ctx.fillRect(x + w - 7, y + h * 0.35, 3, h * 0.3);
+    ctx.fillRect(x + 6, y + h - 5, w - 12, 3);
+
+    // Toit : Croix de Vie ou Chevrons de toit
+    const cx = x + w / 2;
+    const cy = y + h * 0.6;
+    ctx.fillStyle = '#0284c7';
+    ctx.fillRect(cx - 2, cy - 6, 4, 12);
+    ctx.fillRect(cx - 6, cy - 2, 12, 4);
+
+    // Rampe de gyrophares bleus avec éclat lumineux
+    const lightY = y + 2;
+    ctx.fillStyle = '#38bdf8';
+    ctx.shadowColor = '#0284c7';
+    ctx.shadowBlur = 8;
+    ctx.fillRect(cx - 8, lightY, 5, 3);
+    ctx.fillRect(cx + 3, lightY, 5, 3);
+    ctx.shadowBlur = 0;
+
+    // Rétroviseurs extérieurs
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(x - 2, y + 8, 2, 4);
+    ctx.fillRect(x + w, y + 8, 2, 4);
+
+    // Bordure globale du véhicule
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.restore();
+  },
+
+  // Dessin détaillé en vue du dessus d'un secouriste de la Protection Civile
+  drawTopDownVolunteer(ctx, x, y, name, role = 'Secouriste') {
+    ctx.save();
+
+    // Ombre douce au sol
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    ctx.arc(x + 1.5, y + 2, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Épaules et Veste d'intervention officielle (Bleu Marine & Orange Fluo)
+    ctx.fillStyle = '#0f172a'; // Bleu marine
+    ctx.beginPath();
+    ctx.ellipse(x, y, 10, 6.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Empiècement haute visibilité Orange Fluo sur le haut du buste
+    ctx.fillStyle = '#f97316';
+    ctx.beginPath();
+    ctx.ellipse(x, y - 1, 8.5, 4.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bande rétro-réfléchissante blanche
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 9, 5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Tête / Casquette officielle Protection Civile
+    ctx.fillStyle = '#1e3a8a';
+    ctx.beginPath();
+    ctx.arc(x, y - 1, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Visière casquette
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(x - 3, y - 6, 6, 2);
+
+    // Badge nominatif au-dessus du secouriste
+    ctx.font = 'bold 8.5px "Plus Jakarta Sans", sans-serif';
+    const textW = ctx.measureText(name).width + 8;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x - textW / 2, y - 18, textW, 12, 4);
+    else ctx.rect(x - textW / 2, y - 18, textW, 12);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(name, x, y - 12);
+
+    ctx.restore();
+  },
 
   render2D(ctx, width, height) {
     const model = this.getArchitectModel();
     const cx = width / 2 + this.camera2D.panX;
     const cy = height / 2 + this.camera2D.panY;
     const scale = this.camera2D.zoom;
+    const dpr = window.devicePixelRatio || 1;
 
-    // 1. Fond sombre CAD et grille millimétrée
-    ctx.fillStyle = '#0a0e17';
+    // Heure du jeu pour mode nuit / jour
+    const curH = window.game ? (window.game.currentHour || new Date().getHours()) : new Date().getHours();
+    const isNightMode = curH < 6 || curH >= 22;
+
+    // 1. Fond extérieur : Pelouse verdoyante et cour pavée (style jeu de gestion vivant)
+    if (isNightMode) {
+      ctx.fillStyle = '#0f172a';
+    } else {
+      // Pelouse naturelle verte et fraîche
+      const grad = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height) * 0.7);
+      grad.addColorStop(0, '#22c55e');
+      grad.addColorStop(1, '#15803d');
+      ctx.fillStyle = grad;
+    }
     ctx.fillRect(0, 0, width, height);
 
-    // Grille 0.5m et 1.0m
-    ctx.lineWidth = 1;
-    const gridSize = 1.0 * scale;
-    const startX = (cx % gridSize);
-    const startY = (cy % gridSize);
-
-    ctx.strokeStyle = '#121927';
-    ctx.beginPath();
-    for (let x = startX - gridSize; x < width + gridSize; x += gridSize / 2) {
-      ctx.moveTo(x, 0); ctx.lineTo(x, height);
-    }
-    for (let y = startY - gridSize; y < height + gridSize; y += gridSize / 2) {
-      ctx.moveTo(0, y); ctx.lineTo(width, y);
-    }
-    ctx.stroke();
-
-    ctx.strokeStyle = '#1b2438';
-    ctx.beginPath();
-    for (let x = startX - gridSize; x < width + gridSize; x += gridSize) {
-      ctx.moveTo(x, 0); ctx.lineTo(x, height);
-    }
-    for (let y = startY - gridSize; y < height + gridSize; y += gridSize) {
-      ctx.moveTo(0, y); ctx.lineTo(width, y);
-    }
-    ctx.stroke();
-
-    // Centrage du complexe (centre vers x=8.3m, y=6.0m)
+    // Centrage du complexe
     const ox = cx - 8.3 * scale;
     const oy = cy - 6.0 * scale;
 
-    // 2. Tracé de la zone extérieure : Parking Opérationnel 2 places
+    // 2. Zone extérieure : Cour enrobée bitumineuse & Parking Opérationnel
     if (model.parking) {
       const pk = model.parking;
       const px = ox + pk.x * scale;
@@ -4773,24 +5046,27 @@ window.ProtecLocaux = {
       const pw = pk.w * scale;
       const ph = pk.h * scale;
 
-      // Sol bitumé d'antenne
-      ctx.fillStyle = '#111724';
+      // Ombre portée de la cour
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
+      ctx.fillRect(px + 4, py + 5, pw, ph);
+
+      // Sol asphalte bitumé réaliste
+      ctx.fillStyle = isNightMode ? '#1e293b' : '#334155';
       ctx.fillRect(px, py, pw, ph);
 
-      // Bordure extérieure de la cour
-      ctx.strokeStyle = '#1e293b';
+      // Bordure en béton de voirie propre
+      ctx.strokeStyle = isNightMode ? '#334155' : '#64748b';
       ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
       ctx.strokeRect(px, py, pw, ph);
-      ctx.setLineDash([]);
 
-      // Titre de la zone parking
-      ctx.fillStyle = '#64748b';
-      ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+      // Marquage au sol du parking
+      ctx.fillStyle = isNightMode ? '#94a3b8' : '#ffffff';
+      ctx.font = 'bold 9px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(pk.label.toUpperCase(), px + pw / 2, py + 14);
+      ctx.textBaseline = 'top';
+      ctx.fillText('🚒 COUR & HANGAR OPÉRATIONNEL', px + pw / 2, py + 8);
 
-      // Tracé des emplacements de parking
+      // Récupération des véhicules affectés à la station
       const game = window.game;
       const st = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
       const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id)) : [];
@@ -4801,28 +5077,53 @@ window.ProtecLocaux = {
         const sw = spot.w * scale;
         const sd = spot.d * scale;
 
-        // Tracé au sol jaune/orange sécurité
-        ctx.fillStyle = 'rgba(234, 88, 12, 0.06)';
-        ctx.fillRect(sx, sy, sw, sd);
-
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([5, 5]);
-        ctx.strokeRect(sx, sy, sw, sd);
-        ctx.setLineDash([]);
-
-        // Libellé de l'emplacement au sol
         const assignedVeh = stVehs[idx];
-        const displayLabel = assignedVeh ? `🚑 ${assignedVeh.name} (${assignedVeh.type})` : (spot.label || `🅿️ EMPLACEMENT LIBRE 0${idx + 1}`);
 
-        ctx.fillStyle = assignedVeh ? '#38bdf8' : '#fbbf24';
-        ctx.font = 'bold 9px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(displayLabel, sx + sw / 2, sy + sd / 2);
+        // Lignes de stationnement blanches nettes
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.strokeRect(sx, sy, sw, sd);
+
+        // Si un véhicule est garé sur l'emplacement, on le dessine en vue du dessus !
+        if (assignedVeh) {
+          const vehW = Math.min(sw * 0.78, 38);
+          const vehH = Math.min(sd * 0.88, 70);
+          const vehX = sx + sw / 2 - vehW / 2;
+          const vehY = sy + sd / 2 - vehH / 2;
+          this.drawTopDownVehicle(ctx, vehX, vehY, vehW, vehH, assignedVeh, isNightMode);
+
+          // Étiquette sous le véhicule
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 8.5px "Plus Jakarta Sans", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(assignedVeh.name, sx + sw / 2, sy + sd - 4);
+        } else {
+          // Emplacement vide
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+          ctx.fillRect(sx, sy, sw, sd);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+          ctx.font = 'bold 9px "Plus Jakarta Sans", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(spot.label || `🅿️ LIBRE ${idx + 1}`, sx + sw / 2, sy + sd / 2);
+        }
       });
     }
 
-    // 3. Tracé des sols des 3 pièces intérieures
+    // 3. Ombre portée globale du bâtiment (effet de relief de jeu de gestion)
+    const buildX = ox + 6.0 * scale;
+    const buildY = oy + 1.4 * scale;
+    const buildW = 9.8 * scale;
+    const buildH = 9.2 * scale;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(buildX + 6, buildY + 8, buildW, buildH, 6);
+    else ctx.rect(buildX + 6, buildY + 8, buildW, buildH);
+    ctx.fill();
+
+    // 4. Tracé des sols réalistes des pièces de la caserne
     model.rooms.forEach(r => {
       const rx = ox + r.x * scale;
       const ry = oy + r.y * scale;
@@ -4830,143 +5131,125 @@ window.ProtecLocaux = {
       const rh = r.h * scale;
       const isSelected = this.selectedRoomId === r.id;
 
-      ctx.fillStyle = r.color;
-      ctx.fillRect(rx, ry, rw, rh);
+      const roomStyle = this._getRoomStyle(r.type);
 
-      // Si la pièce est sélectionnée par le joueur, surbrillance néon
+      // Tracé personnalisé du sol (bois, carrelage, lino, époxy atelier)
+      this.drawRoomFloor(ctx, rx, ry, rw, rh, r, roomStyle, isNightMode, scale);
+
+      // Surbrillance orange si la pièce est sélectionnée pour aménagement
       if (isSelected) {
-        ctx.strokeStyle = '#3b82f6';
+        ctx.strokeStyle = '#f97316';
         ctx.lineWidth = 3;
         ctx.strokeRect(rx, ry, rw, rh);
-
-        // Lueur néon
-        ctx.fillStyle = 'rgba(59, 130, 246, 0.08)';
+        ctx.fillStyle = 'rgba(249, 115, 22, 0.12)';
         ctx.fillRect(rx, ry, rw, rh);
       }
 
-      // Cartouche discret d'identification de la pièce (centré au milieu de la pièce)
-      const roomTitle = r.name.split('\n')[0];
-      const showDimensions = !!this.isEditing;
-      const roomSubtitle = showDimensions ? `${r.area.toFixed(1)} m² • ${r.w.toFixed(1)}m × ${r.h.toFixed(1)}m` : '';
-      
-      const badgeW = Math.min(rw - 16, showDimensions ? 200 : 160);
-      const badgeH = showDimensions ? 34 : 24;
-      const badgeX = rx + rw / 2 - badgeW / 2;
-      const badgeY = ry + rh / 2 - badgeH / 2;
+      // Pastille conviviale avec le nom de la pièce
+      if (rw > 40 && rh > 30) {
+        const roomTitle = r.name.split('\n')[0];
+        const showDimensions = !!this.isEditing;
+        const roomSubtitle = showDimensions ? `${r.area ? r.area.toFixed(1) : '?'} m²` : '';
 
-      ctx.fillStyle = isSelected ? 'rgba(30, 58, 138, 0.85)' : 'rgba(15, 23, 42, 0.75)';
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 6);
-      else ctx.rect(badgeX, badgeY, badgeW, badgeH);
-      ctx.fill();
+        const labelColor = isNightMode ? '#e2e8f0' : roomStyle.label;
+        ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
 
-      ctx.strokeStyle = isSelected ? '#3b82f6' : 'rgba(148, 163, 184, 0.25)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+        const labelW = Math.min(rw - 12, Math.max(ctx.measureText(roomTitle).width + 16, 75));
+        const labelH = showDimensions ? 32 : 22;
+        const labelX = rx + rw / 2 - labelW / 2;
+        const labelY = ry + rh / 2 - labelH / 2;
 
-      ctx.fillStyle = '#f8fafc';
-      ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      if (showDimensions) {
-        ctx.fillText(roomTitle, rx + rw / 2, badgeY + 11);
-        ctx.fillStyle = isSelected ? '#93c5fd' : '#94a3b8';
-        ctx.font = '600 9.5px monospace';
-        ctx.fillText(roomSubtitle, rx + rw / 2, badgeY + 24);
-      } else {
-        ctx.fillText(roomTitle, rx + rw / 2, badgeY + 12);
+        ctx.fillStyle = isSelected
+          ? 'rgba(249, 115, 22, 0.95)'
+          : (isNightMode ? 'rgba(30, 41, 59, 0.90)' : 'rgba(255, 255, 255, 0.88)');
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(labelX, labelY, labelW, labelH, 6);
+        else ctx.rect(labelX, labelY, labelW, labelH);
+        ctx.fill();
+
+        ctx.strokeStyle = isSelected ? '#ea6b00' : 'rgba(148, 163, 184, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = isSelected ? '#ffffff' : labelColor;
+        ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+        if (showDimensions) {
+          ctx.fillText(roomTitle, rx + rw / 2, labelY + 10);
+          ctx.fillStyle = isSelected ? 'rgba(255,255,255,0.8)' : '#64748b';
+          ctx.font = '600 8.5px "Plus Jakarta Sans", sans-serif';
+          ctx.fillText(roomSubtitle, rx + rw / 2, labelY + 23);
+        } else {
+          ctx.fillText(roomTitle, rx + rw / 2, labelY + 11);
+        }
       }
     });
 
-    // 4. Tracé des murs porteurs et cloisons (double trait ardoise)
+    // 5. Murs porteurs épais et solides (style jeu de gestion en relief)
     model.walls.forEach(w => {
       const x1 = ox + w.x1 * scale;
       const y1 = oy + w.y1 * scale;
       const x2 = ox + w.x2 * scale;
       const y2 = oy + w.y2 * scale;
-      const th = Math.max(4, w.th * scale);
+      const thBase = Math.max(7, w.th * scale);
 
-      ctx.strokeStyle = '#273349';
-      ctx.lineWidth = th;
-      ctx.lineCap = 'square';
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
+      // Ombre du mur
+      ctx.strokeStyle = isNightMode ? '#0f172a' : '#1e293b';
+      ctx.lineWidth = thBase + 2;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x1 + 1, y1 + 2); ctx.lineTo(x2 + 1, y2 + 2); ctx.stroke();
 
-      // Bords clairs
-      ctx.strokeStyle = w.outer ? '#475569' : '#334155';
+      // Corps du mur solide
+      ctx.strokeStyle = isNightMode ? '#334155' : '#475569';
+      ctx.lineWidth = thBase;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+
+      // Arête claire de relief supérieur
+      ctx.strokeStyle = isNightMode ? '#475569' : '#94a3b8';
       ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
     });
 
-    // 5. Tracé des portes avec arc de débattement et battant marron
+    // 6. Portes de caserne accueillantes (seuil et battant ouvert en bois, sans arcs de cercle pointillés)
     model.doors.forEach(d => {
       const dx = ox + d.x * scale;
       const dy = oy + d.y * scale;
       const dlen = d.len * scale;
 
-      // Battant de porte ouvert à 90° (marron bois)
+      // Seuil d'ouverture franc dans le mur
+      ctx.strokeStyle = isNightMode ? '#1e293b' : '#e2e8f0';
+      ctx.lineWidth = Math.max(7, 0.16 * scale);
+      ctx.lineCap = 'butt';
+      ctx.beginPath(); ctx.moveTo(dx, dy);
+      if (d.wall === 'W') ctx.lineTo(dx + dlen, dy);
+      else if (d.wall === 'E') ctx.lineTo(dx - dlen, dy);
+      else if (d.wall === 'S') ctx.lineTo(dx, dy - dlen);
+      else ctx.lineTo(dx, dy + dlen);
+      ctx.stroke();
+
+      // Battant de porte en bois avec sa poignée
       ctx.strokeStyle = '#b45309';
       ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(dx, dy);
-
-      if (d.wall === 'W') {
-        ctx.lineTo(dx + dlen, dy);
-      } else if (d.wall === 'E') {
-        ctx.lineTo(dx - dlen, dy);
-      } else if (d.wall === 'S') {
-        ctx.lineTo(dx, dy - dlen);
-      } else {
-        ctx.lineTo(dx, dy + dlen);
-      }
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(dx, dy);
+      // Angle naturel d'ouverture de porte à 45 degrés
+      if (d.wall === 'W') ctx.lineTo(dx + dlen * 0.7, dy - dlen * 0.7);
+      else if (d.wall === 'E') ctx.lineTo(dx - dlen * 0.7, dy - dlen * 0.7);
+      else if (d.wall === 'S') ctx.lineTo(dx + dlen * 0.7, dy - dlen * 0.7);
+      else ctx.lineTo(dx + dlen * 0.7, dy + dlen * 0.7);
       ctx.stroke();
-
-      // Arc de débattement en tirets blancs
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      if (d.wall === 'W') {
-        ctx.arc(dx, dy, dlen, 0, Math.PI / 2, false);
-      } else if (d.wall === 'E') {
-        ctx.arc(dx, dy, dlen, Math.PI, Math.PI * 1.5, false);
-      } else if (d.wall === 'S') {
-        ctx.arc(dx, dy, dlen, Math.PI * 1.5, Math.PI * 2, false);
-      } else {
-        ctx.arc(dx, dy, dlen, 0, Math.PI / 2, false);
-      }
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Cote de porte : taille uniquement en mode édition
-      const doorLabel = this.isEditing ? d.label : (d.label || '').replace(/\s*\(\d+cm\)/i, '').replace(/\s*\([\d\.]+m\)/i, '');
-      ctx.fillStyle = '#cbd5e1';
-      ctx.font = 'bold 9px monospace';
-      ctx.textAlign = 'center';
-      if (d.wall === 'W' || d.wall === 'E') {
-        ctx.save();
-        ctx.translate(dx + (d.wall === 'W' ? -8 : 8), dy + dlen / 2);
-        ctx.rotate(-Math.PI / 2);
-        ctx.fillText(doorLabel, 0, 0);
-        ctx.restore();
-      } else {
-        ctx.fillText(doorLabel, dx + dlen / 2, dy - 8);
-      }
     });
 
-    // 6. Tracé des fenêtres (cyan double vitrage avec cotes dégagées)
+    // 7. Fenêtres lumineuses avec reflets
     model.windows.forEach(w => {
       const wx = ox + w.x * scale;
       const wy = oy + w.y * scale;
       const wlen = w.len * scale;
 
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 5;
+      // Encadrement
+      ctx.strokeStyle = isNightMode ? '#1e293b' : '#cbd5e1';
+      ctx.lineWidth = Math.max(5, 0.1 * scale);
       ctx.beginPath();
       if (w.wall === 'N' || w.wall === 'S') {
         ctx.moveTo(wx, wy); ctx.lineTo(wx + wlen, wy);
@@ -4975,66 +5258,36 @@ window.ProtecLocaux = {
       }
       ctx.stroke();
 
-      // Cote de fenêtre (taille uniquement en mode édition)
-      const winLabel = this.isEditing ? w.label : (w.label || '').replace(/\s*\([\d\.]+m\)/i, '').replace(/\s*\(\d+cm\)/i, '');
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = 'bold 9px monospace';
-      ctx.textAlign = 'center';
+      // Vitrage bleu ciel brillant
+      ctx.strokeStyle = isNightMode ? 'rgba(56, 189, 248, 0.4)' : '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
       if (w.wall === 'N' || w.wall === 'S') {
-        ctx.fillText(winLabel, wx + wlen / 2, wy + (w.wall === 'N' ? -13 : 15));
+        ctx.moveTo(wx, wy); ctx.lineTo(wx + wlen, wy);
       } else {
-        ctx.save();
-        ctx.translate(wx + (w.wall === 'W' ? -12 : 14), wy + wlen / 2);
-        ctx.rotate(-Math.PI / 2);
-        ctx.fillText(winLabel, 0, 0);
-        ctx.restore();
+        ctx.moveTo(wx, wy); ctx.lineTo(wx, wy + wlen);
       }
+      ctx.stroke();
     });
 
-    // 7. Tracé des équipements techniques fixes (radiateurs, extincteurs, TGBT)
+    // 8. Équipements de sécurité (extincteurs, TGBT)
     model.fixtures.forEach(f => {
-      if (f.type === 'radiator') {
-        const fx = ox + f.x * scale;
-        const fy = oy + f.y * scale;
-        const flen = f.len * scale;
-
-        ctx.strokeStyle = '#ea580c';
-        ctx.lineWidth = 4;
-        ctx.setLineDash([3, 2]);
-        ctx.beginPath();
-        if (f.wall === 'N' || f.wall === 'S') {
-          ctx.moveTo(fx, fy + (f.wall === 'N' ? 5 : -5));
-          ctx.lineTo(fx + flen, fy + (f.wall === 'N' ? 5 : -5));
-        } else {
-          ctx.moveTo(fx + (f.wall === 'W' ? 5 : -5), fy);
-          ctx.lineTo(fx + (f.wall === 'W' ? 5 : -5), fy + flen);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]);
-        // Symbole technique strié épuré (sans texte parasite orange qui masque les ouvertures)
-      } else if (f.type === 'duct' || f.type === 'extinguisher') {
+      if (f.type === 'extinguisher') {
         const px = ox + f.x * scale;
         const py = oy + f.y * scale;
-        const pw = f.w * scale;
-        const ph = f.h * scale;
-
-        ctx.fillStyle = f.type === 'extinguisher' ? '#dc2626' : '#1e293b';
-        ctx.fillRect(px, py, pw, ph);
-        ctx.strokeStyle = f.type === 'extinguisher' ? '#ef4444' : '#64748b';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(px, py, pw, ph);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 8px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(f.label, px + pw / 2, py + ph / 2 + 3);
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(px + 4, py + 4, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
     });
 
-    // 7-bis. Présence des secouristes en faction / repos au local
+    // 9. Présence vivante des secouristes en faction dans la caserne
     const availableVolunteers = (window.game && window.game.volunteers) ? window.game.volunteers.filter(v => v.status === 'dispo' || v.status === 'sdis_caserne') : [];
     if (availableVolunteers.length > 0) {
-      // Représentation de secouristes dans les pièces conviviales ou de commandement
       model.rooms.forEach((rm, rIdx) => {
         if (rm.type === 'foyer' || (rm.name && rm.name.includes('Foyer'))) {
           const v1 = availableVolunteers[0];
@@ -5048,16 +5301,17 @@ window.ProtecLocaux = {
       });
     }
 
-    // 7-ter. Badge d'ambiance temporelle & statut base en haut à droite
+    // 10. Badge d'ambiance temporelle & statut base en haut à droite
+    const isGardeActive = !!(window.game && window.game.gardeActive);
     ctx.save();
-    const statusText = isNightMode ? `🌙 Nuit (${curH}h00) • ${isGardeActive ? 'Garde SAMU 15 Active 🚑' : 'Veille Nocturne'}` : `☀️ Journée (${curH}h00) • Base Opérationnelle Active`;
+    const statusText = isNightMode ? `🌙 Nuit (${curH}h00) • ${isGardeActive ? 'Garde SAMU 15 Active 🚑' : 'Veille Nocturne'}` : `☀️ Journée (${curH}h00) • Caserne Opérationnelle Active`;
     ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
-    const bW = ctx.measureText(statusText).width + 20;
-    const bH = 24;
+    const bW = ctx.measureText(statusText).width + 22;
+    const bH = 26;
     const bX = width - bW - 14;
     const bY = 14;
 
-    ctx.fillStyle = isNightMode ? 'rgba(15, 23, 42, 0.90)' : 'rgba(255, 255, 255, 0.92)';
+    ctx.fillStyle = isNightMode ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.95)';
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(bX, bY, bW, bH, 8);
     else ctx.rect(bX, bY, bW, bH);
@@ -5067,13 +5321,13 @@ window.ProtecLocaux = {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    ctx.fillStyle = isNightMode ? (isGardeActive ? '#38bdf8' : '#e2e8f0') : '#1e293b';
+    ctx.fillStyle = isNightMode ? (isGardeActive ? '#38bdf8' : '#e2e8f0') : '#0f172a';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(statusText, bX + bW / 2, bY + bH / 2);
     ctx.restore();
 
-    // 8. Tracé du mobilier en vue de dessus détaillée (style Les Sims)
+    // 11. Tracé du mobilier meublé (style Les Sims)
     (model.furniture || []).forEach(item => {
       const ix = ox + item.x * scale;
       const iy = oy + item.y * scale;
@@ -5082,88 +5336,79 @@ window.ProtecLocaux = {
       const isSelected = this.selectedFurnitureId === item.id;
 
       // Ombre portée du meuble
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.fillRect(ix + 2, iy + 2, iw, ih);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
+      ctx.fillRect(ix + 3, iy + 3, iw, ih);
 
       // Corps du meuble
-      ctx.fillStyle = item.color || '#334155';
-      ctx.fillRect(ix, iy, iw, ih);
+      ctx.fillStyle = item.color || '#8a9bb0';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(ix, iy, iw, ih, 4);
+      else ctx.rect(ix, iy, iw, ih);
+      ctx.fill();
 
       // Bordure intérieure
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(ix, iy, iw, ih);
+      ctx.stroke();
 
       // Détails graphiques selon le type
       if (item.type === 'mannequin_rcp') {
-        // Tête et torse
         ctx.fillStyle = '#fed7aa';
         ctx.beginPath();
         ctx.arc(ix + iw / 2, iy + ih * 0.25, Math.min(iw, ih) * 0.2, 0, Math.PI * 2);
         ctx.fill();
       } else if (item.type === 'dae_mural') {
-        // Croix ou flash
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(ix + iw * 0.4, iy + ih * 0.2, iw * 0.2, ih * 0.6);
         ctx.fillRect(ix + iw * 0.2, iy + ih * 0.4, iw * 0.6, ih * 0.2);
       } else if (item.type === 'armoire_pharmacie') {
-        // Croix rouge
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(ix + iw * 0.45, iy + ih * 0.25, iw * 0.1, ih * 0.5);
         ctx.fillRect(ix + iw * 0.3, iy + ih * 0.45, iw * 0.4, ih * 0.1);
       } else if (item.type === 'etagere_lots') {
-        // Rayonnages
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(ix, iy + ih * 0.33); ctx.lineTo(ix + iw, iy + ih * 0.33);
         ctx.moveTo(ix, iy + ih * 0.66); ctx.lineTo(ix + iw, iy + ih * 0.66);
         ctx.stroke();
       } else if (item.type === 'lit_garde') {
-        // Oreiller
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(ix + iw * 0.15, iy + ih * 0.08, iw * 0.7, ih * 0.25);
       }
 
-      // Si le meuble est sélectionné ou survolé : surbrillance + cartouche d'information
+      // Si le meuble est sélectionné ou survolé
       const isHovered = this.hoveredFurnitureId === item.id;
       if (isSelected || isHovered) {
-        ctx.strokeStyle = isSelected ? '#38bdf8' : '#67e8f9';
+        ctx.strokeStyle = isSelected ? '#f97316' : '#fb923c';
         ctx.lineWidth = isSelected ? 2.5 : 1.5;
-        ctx.setLineDash(isSelected ? [4, 4] : []);
-        ctx.strokeRect(ix - 3, iy - 3, iw + 6, ih + 6);
-        ctx.setLineDash([]);
+        ctx.strokeRect(ix - 2, iy - 2, iw + 4, ih + 4);
 
         if (isSelected) {
-          // Poignée de rotation au sommet
-          ctx.fillStyle = '#38bdf8';
+          ctx.fillStyle = '#f97316';
           ctx.beginPath();
-          ctx.arc(ix + iw / 2, iy - 10, 4.5, 0, Math.PI * 2);
+          ctx.arc(ix + iw / 2, iy - 8, 4, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1;
-          ctx.stroke();
         }
 
-        // Cartouche flottante informative au-dessus de l'objet
         const infoText = `${item.label} (${item.w.toFixed(1)}m × ${item.d.toFixed(1)}m)`;
-        ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+        ctx.font = 'bold 9.5px "Plus Jakarta Sans", sans-serif';
         const cardW = ctx.measureText(infoText).width + 16;
-        const cardH = 22;
-        const cardX = Math.max(8, Math.min(width - cardW - 8, ix + iw / 2 - cardW / 2));
-        const cardY = iy - (isSelected ? 32 : 26);
+        const cardH = 20;
+        const cardX = ix + iw / 2 - cardW / 2;
+        const cardY = iy - (isSelected ? 30 : 24);
 
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(cardX, cardY, cardW, cardH, 5);
         else ctx.rect(cardX, cardY, cardW, cardH);
         ctx.fill();
 
-        ctx.strokeStyle = isSelected ? '#38bdf8' : '#64748b';
+        ctx.strokeStyle = isSelected ? '#f97316' : '#cbd5e1';
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        ctx.fillStyle = '#f8fafc';
+        ctx.fillStyle = isSelected ? '#f97316' : '#374151';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(infoText, cardX + cardW / 2, cardY + cardH / 2);
