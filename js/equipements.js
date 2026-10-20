@@ -534,9 +534,9 @@ window.ProtecEquipements = {
     },
     {
       id: 'lot_hebergement',
-      name: 'Lot Hébergement d’urgence',
+      name: 'Kit CHU (30 Lits Picots)',
       lucideIcon: 'bed-double',
-      image: 'images/equipements/lot_hebergement.png',
+      image: 'images/equipements/lit_picot.png',
       price: 2100,
       storageSize: 4,
       badge: 'Hébergement d’urgence',
@@ -558,9 +558,9 @@ window.ProtecEquipements = {
     },
     {
       id: 'lot_soutien_psy',
-      name: 'Lot Soutien psychologique',
+      name: 'Lot CAI (Soutien psychologique)',
       lucideIcon: 'heart-handshake',
-      image: 'images/equipements/lot_soutien_psy.png',
+      image: 'images/equipements/lot_cai.png',
       price: 1200,
       storageSize: 2,
       badge: 'Accueil & Écoute (CAI)',

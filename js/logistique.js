@@ -559,9 +559,9 @@ window.ProtecLogistique = {
     {
       id: 'lot_hebergement',
       category: 'social_hebergement',
-      name: 'Lot Hébergement',
+      name: 'Kit CHU (30 Lits Picots)',
       lucideIcon: 'bed-double',
-      image: 'images/equipements/lot_hebergement.png',
+      image: 'images/equipements/lit_picot.png',
       price: 2100,
       unit: 'lot complet',
       slots: 3,
@@ -589,9 +589,9 @@ window.ProtecLogistique = {
     {
       id: 'lot_soutien_psy',
       category: 'social_hebergement',
-      name: 'Lot Soutien psychologique',
+      name: 'Lot CAI (Soutien psychologique)',
       lucideIcon: 'heart-handshake',
-      image: 'images/equipements/lot_soutien_psy.png',
+      image: 'images/equipements/lot_cai.png',
       price: 1200,
       unit: 'lot complet',
       badge: 'Cellule d’Accueil',
