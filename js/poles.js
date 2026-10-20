@@ -1,1040 +1,865 @@
 /**
- * PROTEC LIVE - GESTION DES PÔLES OPÉRATIONNELS D'ANTENNE & RÔLES DES BÉNÉVOLES
+ * PROTEC LIVE - SYSTÈME AVANCÉ DE GESTION DES PÔLES D'ANTENNE & DÉLÉGATION DE TÂCHES
  * 
- * En plus des compétences des personnels (PSC1, PSE1, PSE2, CE, CD, Formateur, Permis...),
- * les personnels peuvent occuper des RÔLES spécifiques dans chacun des pôles.
- * 
- * POLITIQUES D'ACCÈS AUX RÔLES :
- * - Mode 'free' (Accès libre) : les bénévoles accèdent au poste dès leur demande spontanée.
- * - Mode 'validation' (Sous validation du joueur) : les demandes arrivent en attente et requièrent
- *   la validation explicite du joueur (boutons Accepter / Refuser).
- * - Le joueur peut également nommer directement ou retirer un rôle manuellement à tout moment.
- * 
- * AUTOMATISATIONS D'ANTENNE CONFÉRÉES PAR LES RÔLES :
- * 1. PÔLE FORMATION - Responsable Formation :
- *    Gère les formations des bénévoles de manière automatique (inscriptions aux sessions
- *    ouvertes pour monter en qualification PSE1/PSE2 et recyclages annuels FC PSE).
- * 2. PÔLE LOGISTIQUE - Bénévoles Logistique :
- *    Ce sont ces bénévoles qui gèrent les missions logistiques (réarmement automatique des
- *    ambulances VPSP et VTU rentrant de mission, réassort pharmacie et préparation des kits).
- * 3. PÔLE OPÉRATIONNEL - Responsable & Régulateur :
- *    Optimisation de la réactivité et des départs en alerte / DPS.
- * 4. PÔLE COMMUNICATION - Responsable & Accueil :
- *    Animation de la notoriété et accueil des nouvelles candidatures.
- * 5. PÔLE MÉCÉNAT & SOCIAL - Responsable & Référent Social :
- *    Développement des dons, subventions publiques et maraudes solidaires.
+ * Règles doctrinales :
+ * - Au démarrage, l'antenne ne possède aucun pôle par défaut. Le joueur a le choix de créer des
+ *   pôles à partir de modèles clés en main ou entièrement personnalisés.
+ * - Chaque pôle se voit confier des MISSIONS RÉELLES d'automatisation (RH, Logistique, Formations, Com, etc.).
+ * - Les missions disposent de réglages précis (sévérité des recrutements, autonomie budgétaire, seuils d'usure...).
+ * - Les automatisations ne fonctionnent QUE si au moins un bénévole est en poste dans le pôle.
+ * - Les tâches non confiées à un pôle restent gérées à 100% manuellement par le joueur.
  */
 
 window.ProtecPoles = {
+  activeTab: 'poles', // 'poles' | 'all_tasks' | 'volunteers'
+  expandedTaskId: null, // id de la tâche dont les réglages sont dépliés
+  expandedPoleTasksModal: null, // id du pôle en cours d'ajout de tâches
+  isCreatingCustom: false,
+  isChoosingPreset: false,
   editingPoleId: null,
-  activeSubTab: 'poles', // 'poles', 'demandes', 'roles_liste'
   _lastTickCheck: 0,
-  _lastAutoFormationCheck: 0,
-  _lastAutoLogisticsCheck: 0,
-  _lastWishSpawnCheck: 0,
 
-  // 1. PÔLES MAJEURS PAR DÉFAUT
-  defaultPoles: [
+  // =========================================================================
+  // 1. RÉPERTOIRE GÉNÉRAL DE TOUTES LES TÂCHES D'ANTENNE (MÊME HORS PÔLE)
+  // =========================================================================
+  TASKS_CATALOG: [
+    // --- RESSOURCES HUMAINES & RECRUTEMENT ---
     {
-      id: 'formation',
-      type: 'formation',
-      name: 'Pôle Pédagogique & Formations',
+      id: 'rh_candidatures',
+      name: 'Gestion & Filtrage des Candidatures',
+      category: 'rh',
+      categoryLabel: 'Ressources Humaines',
+      icon: 'user-plus',
+      badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      desc: 'Analyse et traitement automatique des candidatures spontanées reçues à l\'antenne.',
+      defaultSettings: {
+        severity: 'standard', // 'souple' | 'standard' | 'stricte'
+        autoInterview: true,
+        maxVolunteersTarget: 30
+      }
+    },
+    {
+      id: 'rh_habillement',
+      name: 'Gestion du Paquetage & Habillement',
+      category: 'rh',
+      categoryLabel: 'Ressources Humaines',
+      icon: 'shirt',
+      badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      desc: 'Dotation automatique des tenues d\'intervention (tenue F1, parka, polo) aux recrues et renouvellement.',
+      defaultSettings: {
+        autoEquipNew: true,
+        maxMonthlyBudget: 250
+      }
+    },
+    {
+      id: 'rh_fidelisation',
+      name: 'Suivi du Moral & Bien-Être des Bénévoles',
+      category: 'rh',
+      categoryLabel: 'Ressources Humaines',
+      icon: 'smile',
+      badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      desc: 'Détection des signes de démotivation ou de fatigue et organisation d\'entretiens de remotivation.',
+      defaultSettings: {
+        triggerThreshold: 45, // Si motivation < 45%
+        grantRestDays: true
+      }
+    },
+
+    // --- LOGISTIQUE & FLOTTE ---
+    {
+      id: 'log_rearmement',
+      name: 'Réarmement & Désinfection des Ambulances',
+      category: 'logistique',
+      categoryLabel: 'Logistique & Flotte',
+      icon: 'truck',
+      badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
+      desc: 'Réapprovisionnement automatique des VPSP/VTU rentrant de mission (consommables, draps, pansements, O2).',
+      defaultSettings: {
+        autoRestockThreshold: 85, // Si consommables < 85%
+        autoClean: true
+      }
+    },
+    {
+      id: 'log_achats',
+      name: 'Approvisionnements & Commandes de Consommables',
+      category: 'logistique',
+      categoryLabel: 'Logistique & Flotte',
+      icon: 'shopping-cart',
+      badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
+      desc: 'Passation automatique de commandes de lots de secours et d\'oxygène dès que la réserve baisse.',
+      defaultSettings: {
+        minStockThreshold: 4, // Déclencher si < 4 caisses
+        maxBudgetPerOrder: 300 // Autonomie financière max par commande
+      }
+    },
+    {
+      id: 'log_maintenance',
+      name: 'Maintenance & Contrôles Techniques du Parc Roulant',
+      category: 'logistique',
+      categoryLabel: 'Logistique & Flotte',
+      icon: 'wrench',
+      badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
+      desc: 'Envoi automatique des véhicules au garage avant que les pannes mécaniques ne bloquent les départs.',
+      defaultSettings: {
+        wearThreshold: 60, // Réparer si état mécanique < 60%
+        autoInspection: true
+      }
+    },
+
+    // --- FORMATION & COMPÉTENCES ---
+    {
+      id: 'form_recyclages',
+      name: 'Gestion des Recyclages Annuels Obligatoires (FC PSE)',
+      category: 'formation',
+      categoryLabel: 'Formation',
+      icon: 'refresh-cw',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      desc: 'Surveillance des dates d\'échéance et inscription automatique des secouristes en formation continue.',
+      defaultSettings: {
+        anticipationDays: 60, // Inscrire 60 jours avant échéance
+        prioritizeUrgent: true
+      }
+    },
+    {
+      id: 'form_montee_competence',
+      name: 'Montée en Compétences & Inscriptions PSE1 / PSE2',
+      category: 'formation',
+      categoryLabel: 'Formation',
       icon: 'graduation-cap',
-      color: 'emerald',
-      desc: 'Gestion des formations des bénévoles (PSE1, PSE2, recyclages FC PSE) et organisation des sessions grand public (PSC, SST).',
-      missionLabel: 'Pédagogie, Recyclages & Montées en Compétence',
-      responsibleId: null,
-      assignedVolunteerIds: [],
-      xpMultiplierBenevole: 1.2,
-      xpMultiplierSalarie: 1.5,
-      bonusDesc: 'Montée en compétence accélérée et automatisation des inscriptions aux formations'
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      desc: 'Détection des bénévoles méritants et inscription automatique aux sessions qualifiantes.',
+      defaultSettings: {
+        targetQualifications: 'all', // 'all' | 'pse1' | 'pse2'
+        minExpRequired: 40 // minimum 40 XP
+      }
     },
     {
-      id: 'logistique',
-      type: 'logistique',
-      name: 'Pôle Matériel & Parc Roulant',
-      icon: 'package-check',
-      color: 'teal',
-      desc: 'Entretien de la flotte VPSP/VTU/VL, gestion des stocks d’Oxygène, électrodes DAE et désinfections.',
-      missionLabel: 'Maintenance, Pharmacie & Réarmement Flotte',
-      responsibleId: null,
-      assignedVolunteerIds: [],
-      xpMultiplierBenevole: 1.0,
-      xpMultiplierSalarie: 1.3,
-      bonusDesc: '-20% d’usure mécanique et prise en charge des missions logistiques par les bénévoles'
+      id: 'form_sessions_publiques',
+      name: 'Organisation des Formations Grand Public (PSC / SST)',
+      category: 'formation',
+      categoryLabel: 'Formation',
+      icon: 'book-open',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      desc: 'Planification automatique de sessions payantes pour financer l\'antenne dès qu\'une salle et un formateur sont libres.',
+      defaultSettings: {
+        autoOpenSession: true,
+        ticketPrice: 60 // Tarif par participant
+      }
     },
+
+    // --- COMMUNICATION & RAYONNEMENT ---
     {
-      id: 'operationnel',
-      type: 'operationnel',
-      name: 'Pôle Opérationnel & Secours',
-      icon: 'shield-alert',
-      color: 'blue',
-      desc: 'Gestion des dispositifs de secours (DPS), des gardes SAMU 15 et des renforts pompiers SDIS.',
-      missionLabel: 'Interventions & Gestion des Dispositifs',
-      responsibleId: null,
-      assignedVolunteerIds: [],
-      xpMultiplierBenevole: 1.0,
-      xpMultiplierSalarie: 1.4,
-      bonusDesc: '+10% Réussite des bilans et réactivité immédiate des équipages'
+      id: 'com_site_web',
+      name: 'Maintien & Publication sur le Site Internet',
+      category: 'communication',
+      categoryLabel: 'Communication',
+      icon: 'globe',
+      badgeColor: 'bg-purple-100 text-purple-800 border-purple-200',
+      desc: 'Rédaction et publication régulière d\'articles d\'actualité pour maintenir la fraîcheur du site web au-dessus de 80%.',
+      defaultSettings: {
+        targetFreshness: 80, // Maintenir fraîcheur >= 80%
+        autoPostMissionDebriefs: true
+      }
     },
+
+    // --- OPÉRATIONS & DISPOSITIFS DE SECOURS ---
     {
-      id: 'communication',
-      type: 'communication',
-      name: 'Pôle Communication & Recrutement',
-      icon: 'megaphone',
-      color: 'indigo',
-      desc: 'Relations publiques, réseaux sociaux, affichage mairie et intégration des nouveaux candidats.',
-      missionLabel: 'Promotion, Recrutement & Notoriété',
-      responsibleId: null,
-      assignedVolunteerIds: [],
-      xpMultiplierBenevole: 1.0,
-      xpMultiplierSalarie: 1.5,
-      bonusDesc: '+25% de candidatures qualifiées et hausse de réputation d’antenne'
-    },
-    {
-      id: 'mecenat',
-      type: 'mecenat',
-      name: 'Pôle Mécénat & Action Solidaire',
-      icon: 'heart-handshake',
-      color: 'amber',
-      desc: 'Recherche de donateurs, conventions d’aides d’État, collecte de denrées et distributions alimentaires.',
-      missionLabel: 'Collectes de Dons, Mécénat & Aides d’État',
-      responsibleId: null,
-      assignedVolunteerIds: [],
-      xpMultiplierBenevole: 1.1,
-      xpMultiplierSalarie: 1.4,
-      bonusDesc: '+15% de générosité publique et subventions départementales bonifiées'
+      id: 'ops_devis',
+      name: 'Filtrage & Traitement des Devis DPS en Ligne',
+      category: 'operations',
+      categoryLabel: 'Opérations',
+      icon: 'file-text',
+      badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
+      desc: 'Analyse des demandes d\'organisateurs d\'événements et acceptation automatique selon rentabilité.',
+      defaultSettings: {
+        minRevenueThreshold: 300, // Refuser devis < 300 €
+        checkVolunteerAvailability: true
+      }
     }
   ],
 
-  // 2. CATALOGUE OFFICIEL DES RÔLES PAR PÔLE
-  ROLES_CATALOG: [
-    // --- Pôle Formation ---
+  // =========================================================================
+  // 2. MODÈLES DE PÔLES CLÉS EN MAIN (PRÉSETS)
+  // =========================================================================
+  PRESET_TEMPLATES: [
     {
-      id: 'resp_formation',
-      poleId: 'formation',
-      title: 'Responsable Formation',
-      shortTitle: 'Resp. Formation',
-      icon: 'graduation-cap',
-      color: 'emerald',
-      desc: 'Gère les formations des bénévoles de manière automatique (inscriptions, anticipation des recyclages annuels et montées en qualification).',
-      powerDesc: 'Automatisation complète de l\'inscription des bénévoles aux formations (PSE1, PSE2, FC PSE)',
-      prereqLabel: 'Formateur ou PSE2 confirmé',
-      isLeader: true,
-      maxHolders: 1,
-      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300'
-    },
-    {
-      id: 'formateur',
-      poleId: 'formation',
-      title: 'Formateur d’Antenne',
-      shortTitle: 'Formateur',
-      icon: 'book-open',
-      color: 'teal',
-      desc: 'Dispense les formations internes pour l’équipe et anime les stages grand public (PSC, SST, GQS).',
-      powerDesc: 'Réduit les frais d\'organisation des sessions de 40% et booste la qualité pédagogique',
-      prereqLabel: 'Qualification Formateur (PIC F / PSC / PS)',
-      isLeader: false,
-      maxHolders: 3,
-      badgeColor: 'bg-teal-100 text-teal-800 border-teal-300'
-    },
-
-    // --- Pôle Logistique ---
-    {
-      id: 'resp_logistique',
-      poleId: 'logistique',
-      title: 'Responsable Logistique & Parc',
-      shortTitle: 'Resp. Logistique',
+      id: 'preset_logistique',
+      name: 'Pôle Logistique & Flotte',
       icon: 'truck',
       color: 'teal',
-      desc: 'Coordonne l’entretien de la flotte, la disponibilité des vecteurs d’urgence et les approvisionnements en pharmacie.',
-      powerDesc: 'Planification optimisée des contrôles techniques et surveillance des stocks centraux',
-      prereqLabel: 'Permis B & Rigueur logistique',
-      isLeader: true,
-      maxHolders: 1,
-      badgeColor: 'bg-teal-100 text-teal-900 border-teal-300'
+      badgeClass: 'bg-teal-100 text-teal-800 border-teal-300',
+      desc: 'Gestion du matériel d\'urgence, entretien de la flotte VPSP/VTU, réassort pharmacie et dotation habillement.',
+      includedTaskIds: ['log_rearmement', 'log_achats', 'log_maintenance', 'rh_habillement']
     },
     {
-      id: 'benevole_logistique',
-      poleId: 'logistique',
-      title: 'Bénévole Logistique',
-      shortTitle: 'Équipier Logistique',
-      icon: 'package-check',
-      color: 'sky',
-      desc: 'Prend en charge les missions logistiques : réarmement automatique des ambulances VPSP et VTU rentrant de mission, réassort pharmacie et préparation des malles de crise.',
-      powerDesc: 'Ce sont les bénévoles qui gèrent les missions de logistique et le réarmement de la flotte',
-      prereqLabel: 'Tous bénévoles motivés',
-      isLeader: false,
-      maxHolders: 5,
-      badgeColor: 'bg-sky-100 text-sky-800 border-sky-300'
-    },
-
-    // --- Pôle Opérationnel ---
-    {
-      id: 'resp_operationnel',
-      poleId: 'operationnel',
-      title: 'Responsable Opérationnel',
-      shortTitle: 'Resp. Opérations',
-      icon: 'shield-alert',
-      color: 'blue',
-      desc: 'Supervise l’organisation des dispositifs prévisionnels de secours (DPS), des gardes SAMU 15 et des renforts SDIS.',
-      powerDesc: '+15% de rapidité de mobilisation sur les alertes et conformité des équipages',
-      prereqLabel: 'Chef d’Équipe ou Chef de Dispositif',
-      isLeader: true,
-      maxHolders: 1,
-      badgeColor: 'bg-blue-100 text-blue-800 border-blue-300'
-    },
-    {
-      id: 'regulateur_operationnel',
-      poleId: 'operationnel',
-      title: 'Régulateur Opérationnel',
-      shortTitle: 'Régulateur Antenne',
-      icon: 'radio',
+      id: 'preset_rh',
+      name: 'Pôle Ressources Humaines & Recrutement',
+      icon: 'users',
       color: 'indigo',
-      desc: 'Assure la veille radio, le suivi des départs d’équipages et la fluidité des communications opérationnelles.',
-      powerDesc: 'Réduit les délais de ralliement des secouristes en astreinte de 25%',
-      prereqLabel: 'PSE1 minimum',
-      isLeader: false,
-      maxHolders: 2,
-      badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-300'
+      badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+      desc: 'Filtrage des candidatures citoyennes, accueil des nouveaux bénévoles et suivi du moral de l\'équipe.',
+      includedTaskIds: ['rh_candidatures', 'rh_fidelisation']
     },
-
-    // --- Pôle Communication & Recrutement ---
     {
-      id: 'resp_communication',
-      poleId: 'communication',
-      title: 'Responsable Communication & Recrutement',
-      shortTitle: 'Resp. Com & Recrutement',
+      id: 'preset_formation',
+      name: 'Pôle Pédagogique & Formation',
+      icon: 'graduation-cap',
+      color: 'emerald',
+      badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      desc: 'Organisation des sessions grand public (PSC, SST), recyclages annuels obligatoires et montées en qualification PSE.',
+      includedTaskIds: ['form_recyclages', 'form_montee_competence', 'form_sessions_publiques']
+    },
+    {
+      id: 'preset_communication',
+      name: 'Pôle Communication & Notoriété',
       icon: 'megaphone',
-      color: 'indigo',
-      desc: 'Anime les réseaux sociaux, conçoit les affichages et dynamise la visibilité publique de l’antenne.',
-      powerDesc: '+30% de candidatures spontanées de nouveaux secouristes',
-      prereqLabel: 'Aisance relationnelle & digitale',
-      isLeader: true,
-      maxHolders: 1,
-      badgeColor: 'bg-indigo-100 text-indigo-900 border-indigo-300'
-    },
-    {
-      id: 'charge_accueil',
-      poleId: 'communication',
-      title: 'Chargé d’Accueil & Intégration',
-      shortTitle: 'Chargé d’Accueil',
-      icon: 'user-check',
       color: 'purple',
-      desc: 'Accueille les nouveaux candidats, assure le parrainage des premières semaines et renforce l’esprit d’équipe.',
-      powerDesc: 'Boost de fidélisation et baisse du risque de démission des nouvelles recrues',
-      prereqLabel: 'Sens de l’écoute & bienveillance',
-      isLeader: false,
-      maxHolders: 2,
-      badgeColor: 'bg-purple-100 text-purple-800 border-purple-300'
-    },
-
-    // --- Pôle Mécénat & Action Sociale ---
-    {
-      id: 'resp_mecenat',
-      poleId: 'mecenat',
-      title: 'Responsable Mécénat & Action Solidaire',
-      shortTitle: 'Resp. Mécénat & Social',
-      icon: 'heart-handshake',
-      color: 'amber',
-      desc: 'Recherche de donateurs, conventions d’aides d’État, subventions DDETS/CCAS et mécénats d’entreprises.',
-      powerDesc: '+20% sur les subventions obtenues et dons financiers du public',
-      prereqLabel: 'Sens du contact & rigueur administrative',
-      isLeader: true,
-      maxHolders: 1,
-      badgeColor: 'bg-amber-100 text-amber-800 border-amber-300'
-    },
-    {
-      id: 'referent_social',
-      poleId: 'mecenat',
-      title: 'Référent Maraudes & Solidarité',
-      shortTitle: 'Référent Maraudes',
-      icon: 'utensils',
-      color: 'orange',
-      desc: 'Organise les tournées de maraude, les distributions de vivres aux sans-abris et l’accueil d’urgence.',
-      powerDesc: 'Optimise l’efficacité et la réputation citoyenne sur toutes les missions sociales',
-      prereqLabel: 'Expérience du terrain social',
-      isLeader: false,
-      maxHolders: 3,
-      badgeColor: 'bg-orange-100 text-orange-800 border-orange-300'
+      badgeClass: 'bg-purple-100 text-purple-800 border-purple-300',
+      desc: 'Animation et fraîcheur du site internet de l\'antenne, relations publiques et valorisation des missions.',
+      includedTaskIds: ['com_site_web', 'ops_devis']
     }
   ],
 
-  // 3. INITIALISATION & INJECTION DE L'ÉTAT DANS LE JEU
+  // =========================================================================
+  // 3. INITIALISATION & INJECTION D'ÉTAT
+  // =========================================================================
   injectState(game) {
     if (!game) return;
 
-    // Mode d'accès aux rôles : 'validation' (par défaut, sous validation du joueur) ou 'free' (accès libre)
-    if (!game.rolesAccessMode) {
-      game.rolesAccessMode = 'validation';
+    // Règle : Au démarrage, aucun pôle n'est créé automatiquement !
+    if (!Array.isArray(game.poles)) {
+      game.poles = [];
     }
 
-    // Liste des demandes de rôles formulées par les bénévoles
-    if (!Array.isArray(game.roleRequests)) {
-      game.roleRequests = [];
-    }
-
-    // Gestion automatique activée par défaut si un responsable formation est en poste
-    if (game.autoFormationActive === undefined) {
-      game.autoFormationActive = true;
-    }
-    if (game.autoLogisticsActive === undefined) {
-      game.autoLogisticsActive = true;
-    }
-
-    // Initialisation ou mise à jour des pôles par défaut
-    if (!game.poles || !Array.isArray(game.poles) || game.poles.length === 0) {
-      game.poles = JSON.parse(JSON.stringify(this.defaultPoles));
-      if (game.volunteers && game.volunteers.length > 0) {
-        const opPole = game.poles.find(p => p.id === 'operationnel') || game.poles[0];
-        game.volunteers.forEach(v => {
-          if (!v.assignedPoleId) {
-            v.assignedPoleId = opPole.id;
-          }
-          const targetPole = game.poles.find(p => p.id === v.assignedPoleId) || opPole;
-          if (!targetPole.assignedVolunteerIds.includes(v.id)) {
-            targetPole.assignedVolunteerIds.push(v.id);
-          }
-        });
+    // Assurer que chaque pôle possède sa structure de tâches et de réglages
+    game.poles.forEach(pole => {
+      if (!Array.isArray(pole.assignedTaskIds)) {
+        pole.assignedTaskIds = [];
       }
-    } else {
-      // S'assurer que le pôle Formation et les pôles essentiels existent
-      this.defaultPoles.forEach(def => {
-        const existing = game.poles.find(p => p.id === def.id || p.type === def.type);
-        if (!existing) {
-          game.poles.push(JSON.parse(JSON.stringify(def)));
-        } else if (!existing.icon) {
-          existing.icon = def.icon;
-          existing.color = def.color;
+      if (!pole.taskConfigs) {
+        pole.taskConfigs = {};
+      }
+      if (!Array.isArray(pole.assignedVolunteerIds)) {
+        pole.assignedVolunteerIds = [];
+      }
+      if (!Array.isArray(pole.actionLogs)) {
+        pole.actionLogs = [];
+      }
+
+      // Initialiser les réglages par défaut pour chaque tâche confiée
+      pole.assignedTaskIds.forEach(taskId => {
+        const taskDef = this.TASKS_CATALOG.find(t => t.id === taskId);
+        if (taskDef && !pole.taskConfigs[taskId]) {
+          pole.taskConfigs[taskId] = { enabled: true, ...taskDef.defaultSettings };
         }
       });
-    }
-
-    // Synchronisation bidirectionnelle des rôles entre les bénévoles et les pôles
-    this.syncAllVolunteerRoles(game);
-  },
-
-  // Synchronisation des rôles entre game.volunteers et game.poles
-  syncAllVolunteerRoles(game) {
-    if (!game || !Array.isArray(game.volunteers)) return;
-
-    game.volunteers.forEach(v => {
-      // Si le bénévole a un poleRoleId, vérifier qu'il correspond à un rôle valide
-      if (v.poleRoleId) {
-        const roleDef = this.ROLES_CATALOG.find(r => r.id === v.poleRoleId);
-        if (roleDef) {
-          v.poleRoleTitle = roleDef.title;
-          v.assignedPoleId = roleDef.poleId;
-          const pole = (game.poles || []).find(p => p.id === roleDef.poleId);
-          if (pole) {
-            if (!pole.assignedVolunteerIds.includes(v.id)) {
-              pole.assignedVolunteerIds.push(v.id);
-            }
-            if (roleDef.isLeader && !pole.responsibleId) {
-              pole.responsibleId = v.id;
-            }
-          }
-        }
-      }
-    });
-
-    // Inversement : si un pôle a un responsibleId, lui attribuer le rôle leader s'il ne l'a pas
-    (game.poles || []).forEach(p => {
-      if (p.responsibleId) {
-        const leaderVol = game.volunteers.find(v => v.id === p.responsibleId);
-        if (leaderVol && !leaderVol.poleRoleId) {
-          const leaderRole = this.ROLES_CATALOG.find(r => r.poleId === p.id && r.isLeader);
-          if (leaderRole) {
-            leaderVol.poleRoleId = leaderRole.id;
-            leaderVol.poleRoleTitle = leaderRole.title;
-            leaderVol.assignedPoleId = p.id;
-          }
-        }
-      }
     });
   },
 
-  // Récupérer les informations de rôle d'un bénévole
-  getVolunteerRoleInfo(volunteer) {
-    if (!volunteer) return null;
-    if (!volunteer.poleRoleId) return null;
-    const roleDef = this.ROLES_CATALOG.find(r => r.id === volunteer.poleRoleId);
-    if (!roleDef) return null;
-    return {
-      id: roleDef.id,
-      title: roleDef.title,
-      shortTitle: roleDef.shortTitle,
-      poleId: roleDef.poleId,
-      color: roleDef.color,
-      badgeColor: roleDef.badgeColor,
-      icon: roleDef.icon,
-      isLeader: roleDef.isLeader,
-      desc: roleDef.desc,
-      powerDesc: roleDef.powerDesc
-    };
-  },
-
-  // 4. GESTION DES POLITIQUES D'ACCÈS : LIBRE OU VALIDATION DU JOUEUR
-  setRolesAccessMode(game, mode) {
+  // Création d'un pôle à partir d'un modèle prédéfini
+  createPoleFromPreset(game, presetId) {
     this.injectState(game);
-    if (mode !== 'free' && mode !== 'validation') return;
-    game.rolesAccessMode = mode;
-    game.saveGame();
-    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
-    const modeLabel = mode === 'free' ? 'Accès Libre (Attribution Directe)' : 'Sous Validation du Joueur';
-    game.showToast('Politique d’Accès Modifiée', `Les rôles d'antenne sont désormais configurés en mode : ${modeLabel}.`, 'blue');
-    this.renderModal(game);
-  },
+    const preset = this.PRESET_TEMPLATES.find(p => p.id === presetId);
+    if (!preset) return;
 
-  // Soumission d'une demande de rôle par un bénévole
-  submitVolunteerRoleRequest(game, volunteerId, roleId, customMotivation = null) {
-    this.injectState(game);
-    const vol = (game.volunteers || []).find(v => v.id === volunteerId);
-    const role = this.ROLES_CATALOG.find(r => r.id === roleId);
-    const pole = (game.poles || []).find(p => p.id === role?.poleId);
-    if (!vol || !role || !pole) return;
+    const newPoleId = `pole_${preset.id.replace('preset_', '')}_${Date.now()}`;
+    const taskConfigs = {};
+    preset.includedTaskIds.forEach(tId => {
+      const def = this.TASKS_CATALOG.find(t => t.id === tId);
+      if (def) {
+        taskConfigs[tId] = { enabled: true, ...def.defaultSettings };
+      }
+    });
 
-    // Si le bénévole a déjà ce rôle
-    if (vol.poleRoleId === role.id) {
-      game.showToast('Poste Déjà Occupé', `${vol.name} occupe déjà le rôle de « ${role.title} ».`, 'blue');
-      return;
-    }
-
-    // Vérifier la limite de titulaires pour ce rôle
-    const currentHolders = (game.volunteers || []).filter(v => v.poleRoleId === role.id && v.id !== vol.id);
-    if (currentHolders.length >= (role.maxHolders || 1)) {
-      game.showToast('Poste Complet', `Le rôle de « ${role.title} » est actuellement complet (${currentHolders.length}/${role.maxHolders}). Libérez une place pour postuler.`, 'orange');
-      return;
-    }
-
-    // Motivation formulée par le bénévole selon le pôle ciblé
-    const poleMotivations = {
-      communication: [
-        `« Après mes premières missions sur le terrain, je souhaite mettre mon aisance relationnelle et digitale au service du rayonnement de l'antenne et de l'accueil des nouvelles recrues. »`,
-        `« Très motivé(e) pour valoriser nos actions sur les réseaux sociaux et dynamiser les candidatures de nouveaux bénévoles. »`,
-        `« Maintenant bien intégré(e) au sein de l'équipe, j'aimerais m'investir pour faire connaître nos dispositifs au grand public et aux partenaires locaux. »`
-      ],
-      logistique: [
-        `« J'ai à cœur de veiller au bon état de notre matériel et de nos véhicules. Je souhaite m'investir pour que nos ambulances et nos lots soient toujours prêts à partir. »`,
-        `« Rigoureux(se) et bricoleur(se), je propose mon aide active pour la gestion de la pharmacie, le réarmement de la flotte et la logistique d'antenne. »`,
-        `« Une intervention réussie commence par un matériel impeccable : je souhaite prendre en main le suivi du parc roulant et des consommables. »`
-      ],
-      formation: [
-        `« Fort(e) de mon expérience en secours, j'aimerais transmettre les gestes qui sauvent et accompagner la montée en compétences de nos futurs secouristes. »`,
-        `« Passionné(e) par la pédagogie, je souhaite m'investir dans l'animation de nos sessions internes (PSE) et grand public (PSC1). »`,
-        `« Très motivé(e) pour former la relève et renforcer la qualité pédagogique de notre équipe d'antenne. »`
-      ],
-      operationnel: [
-        `« Prêt(e) à prendre des responsabilités accrues dans la gestion des départs en alerte et le suivi radio des dispositifs de secours. »`,
-        `« Très motivé(e) pour assurer la régulation et la coordination fluide de nos équipages sur le terrain. »`
+    const newPole = {
+      id: newPoleId,
+      name: preset.name,
+      icon: preset.icon,
+      color: preset.color,
+      desc: preset.desc,
+      responsibleId: null,
+      assignedVolunteerIds: [],
+      assignedTaskIds: [...preset.includedTaskIds],
+      taskConfigs: taskConfigs,
+      actionLogs: [
+        { time: Date.now(), text: `Création du ${preset.name} depuis le modèle officiel.` }
       ]
     };
-    const defaultMotivations = [
-      `« Je souhaite m’investir activement au sein du ${pole.name} pour faire progresser notre antenne. »`,
-      `« Mes compétences et ma disponibilité me permettent de prendre ces responsabilités avec sérieux. »`,
-      `« Très motivé(e) pour encadrer nos missions et soutenir l'équipe dans ce domaine clé. »`
-    ];
-    const pool = poleMotivations[pole.type || pole.id] || defaultMotivations;
-    const motivationText = customMotivation || pool[Math.floor(Math.random() * pool.length)];
 
-    // Si le mode est ACCÈS LIBRE : attribution directe sans attendre
-    if (game.rolesAccessMode === 'free') {
-      this.assignRoleToVolunteer(game, volunteerId, roleId, true);
+    game.poles.push(newPole);
+    game.saveGame();
+    this.isChoosingPreset = false;
+    game.showToast('Pôle Créé avec Succès !', `Le « ${preset.name} » a été constitué avec ${preset.includedTaskIds.length} missions confiées. Assignez-y des bénévoles pour démarrer les automatisations.`, 'green');
+    this.renderModal(game);
+  },
+
+  // Création d'un pôle entièrement sur-mesure
+  createCustomPole(game, name, icon, color, desc, selectedTaskIds) {
+    this.injectState(game);
+    if (!name || name.trim() === '') {
+      game.showToast('Nom Requis', 'Veuillez saisir un nom pour ce pôle.', 'orange');
       return;
     }
 
-    // Sinon, mode SOUS VALIDATION DU JOUEUR : enregistrement de la demande
-    // Vérifier si une demande identique est déjà en attente
-    const existingReq = (game.roleRequests || []).find(r => r.volunteerId === volunteerId && r.roleId === roleId && r.status === 'pending');
-    if (existingReq) {
-      game.showToast('Demande en Attente', `Une demande de ${vol.name} pour le poste de « ${role.title} » est déjà en cours d'examen.`, 'blue');
-      return;
-    }
+    const newPoleId = `pole_custom_${Date.now()}`;
+    const taskConfigs = {};
+    (selectedTaskIds || []).forEach(tId => {
+      const def = this.TASKS_CATALOG.find(t => t.id === tId);
+      if (def) {
+        taskConfigs[tId] = { enabled: true, ...def.defaultSettings };
+      }
+    });
 
-    const newRequest = {
-      id: `role_req_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-      volunteerId: vol.id,
-      volunteerName: vol.name,
-      volunteerRank: vol.rank || 'Secouriste',
-      volunteerAvatar: vol.avatar || '🙋',
-      roleId: role.id,
-      roleTitle: role.title,
-      poleId: pole.id,
-      poleName: pole.name,
-      motivation: motivationText,
-      requestedAt: Date.now(),
-      status: 'pending'
+    const newPole = {
+      id: newPoleId,
+      name: name.trim(),
+      icon: icon || 'shield',
+      color: color || 'blue',
+      desc: desc || 'Pôle personnalisé d\'antenne.',
+      responsibleId: null,
+      assignedVolunteerIds: [],
+      assignedTaskIds: [...(selectedTaskIds || [])],
+      taskConfigs: taskConfigs,
+      actionLogs: [
+        { time: Date.now(), text: `Création du pôle personnalisé « ${name.trim()} ».` }
+      ]
     };
 
-    if (!Array.isArray(game.roleRequests)) game.roleRequests = [];
-    game.roleRequests.unshift(newRequest);
-
-    if (window.ProtecAudio) window.ProtecAudio.playRadioBeep();
+    game.poles.push(newPole);
     game.saveGame();
-    game.showToast('⭐ Demande de Rôle Reçue', `${vol.name} souhaite devenir « ${role.title} ». Validez ou déclinez sa candidature dans l'onglet Pôles.`, 'indigo');
+    this.isCreatingCustom = false;
+    game.showToast('Nouveau Pôle Opérationnel', `« ${newPole.name} » a été créé avec ${newPole.assignedTaskIds.length} mission(s) attribuée(s).`, 'green');
     this.renderModal(game);
   },
 
-  // Valider (Accepter) la demande d'un bénévole
-  acceptRoleRequest(game, requestId) {
+  // Suppression d'un pôle
+  deletePole(game, poleId) {
     this.injectState(game);
-    const req = (game.roleRequests || []).find(r => r.id === requestId);
-    if (!req) return;
-
-    req.status = 'accepted';
-    this.assignRoleToVolunteer(game, req.volunteerId, req.roleId, false);
-
-    // Nettoyer les autres demandes en attente de ce même bénévole
-    game.roleRequests = game.roleRequests.filter(r => r.id === requestId || !(r.volunteerId === req.volunteerId && r.status === 'pending'));
-
-    if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
-    game.saveGame();
-    game.showToast('✓ Candidature Validée !', `${req.volunteerName} est officiellement nommé(e) « ${req.roleTitle} ».`, 'green');
-    this.renderModal(game);
-  },
-
-  // Refuser (Décliner) la demande d'un bénévole
-  rejectRoleRequest(game, requestId) {
-    this.injectState(game);
-    const req = (game.roleRequests || []).find(r => r.id === requestId);
-    if (!req) return;
-
-    req.status = 'rejected';
-    game.roleRequests = game.roleRequests.filter(r => r.id !== requestId);
-
-    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
-    game.saveGame();
-    game.showToast('Candidature Déclinée', `La demande de ${req.volunteerName} pour le poste de « ${req.roleTitle} » a été refusée.`, 'blue');
-    this.renderModal(game);
-  },
-
-  // Attribution directe d'un rôle à un bénévole (par le joueur ou en accès libre)
-  assignRoleToVolunteer(game, volunteerId, roleId, isDirectAccess = false) {
-    this.injectState(game);
-    const vol = (game.volunteers || []).find(v => v.id === volunteerId);
-    const role = this.ROLES_CATALOG.find(r => r.id === roleId);
-    if (!vol || !role) return;
-
-    const pole = (game.poles || []).find(p => p.id === role.poleId);
+    const pole = game.poles.find(p => p.id === poleId);
     if (!pole) return;
 
-    // Si le rôle est un rôle Leader (Responsable de pôle)
-    if (role.isLeader) {
-      // Retirer l'ancien responsable s'il y en avait un
-      if (pole.responsibleId && pole.responsibleId !== vol.id) {
-        const oldLeader = game.volunteers.find(v => v.id === pole.responsibleId);
-        if (oldLeader && oldLeader.poleRoleId === role.id) {
-          oldLeader.poleRoleId = null;
-          oldLeader.poleRoleTitle = null;
-        }
-      }
-      pole.responsibleId = vol.id;
+    if (!confirm(`Êtes-vous sûr de vouloir dissoudre le « ${pole.name} » ? Toutes ses tâches reviendront en gestion 100% manuelle.`)) {
+      return;
     }
 
-    // Assigner au bénévole
-    vol.poleRoleId = role.id;
-    vol.poleRoleTitle = role.title;
-    vol.assignedPoleId = pole.id;
+    // Libérer les bénévoles assignés
+    (game.volunteers || []).forEach(v => {
+      if (v.assignedPoleId === poleId) {
+        v.assignedPoleId = null;
+        v.poleRoleId = null;
+        v.poleRoleTitle = null;
+      }
+    });
 
-    // S'assurer qu'il est membre du pôle
+    game.poles = game.poles.filter(p => p.id !== poleId);
+    game.saveGame();
+    game.showToast('Pôle Dissous', `Le « ${pole.name} » a été supprimé. Ses missions sont repassées en gestion manuelle.`, 'blue');
+    this.renderModal(game);
+  },
+
+  // Ajouter / retirer une tâche à un pôle
+  toggleTaskInPole(game, poleId, taskId) {
+    this.injectState(game);
+    const pole = game.poles.find(p => p.id === poleId);
+    if (!pole) return;
+
+    const idx = pole.assignedTaskIds.indexOf(taskId);
+    if (idx === -1) {
+      // Confier la tâche
+      pole.assignedTaskIds.push(taskId);
+      const def = this.TASKS_CATALOG.find(t => t.id === taskId);
+      if (def && !pole.taskConfigs[taskId]) {
+        pole.taskConfigs[taskId] = { enabled: true, ...def.defaultSettings };
+      }
+      game.showToast('Mission Confiée', `La mission « ${def?.name || taskId} » a été déléguée au ${pole.name}.`, 'green');
+    } else {
+      // Retirer la tâche
+      pole.assignedTaskIds.splice(idx, 1);
+      game.showToast('Mission Retirée', `La mission est revenue en gestion manuelle.`, 'blue');
+    }
+    game.saveGame();
+    this.renderModal(game);
+  },
+
+  // Bascule On/Off de l'automatisation d'une tâche au sein d'un pôle
+  toggleTaskEnabled(game, poleId, taskId) {
+    this.injectState(game);
+    const pole = game.poles.find(p => p.id === poleId);
+    if (!pole || !pole.taskConfigs[taskId]) return;
+
+    pole.taskConfigs[taskId].enabled = !pole.taskConfigs[taskId].enabled;
+    game.saveGame();
+    this.renderModal(game);
+  },
+
+  // Mise à jour d'un paramètre spécifique d'une tâche
+  updateTaskSetting(game, poleId, taskId, key, value) {
+    this.injectState(game);
+    const pole = game.poles.find(p => p.id === poleId);
+    if (!pole || !pole.taskConfigs[taskId]) return;
+
+    pole.taskConfigs[taskId][key] = value;
+    game.saveGame();
+    this.renderModal(game);
+  },
+
+  // Affectation d'un bénévole à un pôle (Responsable ou Équipier)
+  assignVolunteerToPole(game, volunteerId, poleId, makeResponsible = false) {
+    this.injectState(game);
+    const vol = (game.volunteers || []).find(v => v.id === volunteerId);
+    const pole = game.poles.find(p => p.id === poleId);
+    if (!vol || !pole) return;
+
+    // Retirer le bénévole de son ancien pôle s'il y en avait un
+    if (vol.assignedPoleId && vol.assignedPoleId !== poleId) {
+      const oldPole = game.poles.find(p => p.id === vol.assignedPoleId);
+      if (oldPole) {
+        oldPole.assignedVolunteerIds = oldPole.assignedVolunteerIds.filter(id => id !== vol.id);
+        if (oldPole.responsibleId === vol.id) oldPole.responsibleId = null;
+      }
+    }
+
+    vol.assignedPoleId = poleId;
     if (!pole.assignedVolunteerIds.includes(vol.id)) {
       pole.assignedVolunteerIds.push(vol.id);
     }
 
-    // Gain de moral et boost d'énergie pour la prise de fonction
-    vol.motivation = Math.min(100, (vol.motivation || 75) + 8);
-    vol.energy = Math.min(100, (vol.energy || 80) + 5);
-
-    if (window.ProtecAudio) window.ProtecAudio.playRadioBeep();
-    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordRoleAssigned === 'function') {
-      window.ProtecAdvanced.recordRoleAssigned(game, vol, role);
-    }
-    game.saveGame();
-
-    if (isDirectAccess) {
-      game.showToast('🎓 Prise de Poste (Accès Libre)', `${vol.name} a rejoint le rôle de « ${role.title} » au ${pole.name}.`, 'green');
+    if (makeResponsible) {
+      pole.responsibleId = vol.id;
+      vol.poleRoleTitle = `Responsable - ${pole.name}`;
     } else {
-      game.showToast('Rôle Attribué', `${vol.name} a été nommé(e) « ${role.title} ».`, 'green');
+      if (pole.responsibleId === vol.id) pole.responsibleId = null;
+      vol.poleRoleTitle = `Équipier - ${pole.name}`;
     }
+
+    pole.actionLogs.unshift({
+      time: Date.now(),
+      text: `${vol.name} a rejoint le pôle en tant que ${vol.poleRoleTitle}.`
+    });
+    if (pole.actionLogs.length > 20) pole.actionLogs.pop();
+
+    game.saveGame();
+    game.showToast('Bénévole Affecté', `${vol.name} est désormais en poste dans le « ${pole.name} ».`, 'green');
     this.renderModal(game);
   },
 
-  // Retirer un rôle à un bénévole
-  removeRoleFromVolunteer(game, volunteerId) {
+  // Retirer un bénévole d'un pôle
+  removeVolunteerFromPole(game, volunteerId) {
     this.injectState(game);
     const vol = (game.volunteers || []).find(v => v.id === volunteerId);
-    if (!vol || !vol.poleRoleId) return;
+    if (!vol || !vol.assignedPoleId) return;
 
-    const oldRoleId = vol.poleRoleId;
-    const oldRoleTitle = vol.poleRoleTitle || 'Rôle';
-    const roleDef = this.ROLES_CATALOG.find(r => r.id === oldRoleId);
-
-    if (roleDef && roleDef.isLeader) {
-      const pole = (game.poles || []).find(p => p.id === roleDef.poleId);
-      if (pole && pole.responsibleId === vol.id) {
-        pole.responsibleId = null;
-      }
+    const pole = game.poles.find(p => p.id === vol.assignedPoleId);
+    if (pole) {
+      pole.assignedVolunteerIds = pole.assignedVolunteerIds.filter(id => id !== vol.id);
+      if (pole.responsibleId === vol.id) pole.responsibleId = null;
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `${vol.name} a quitté le pôle.`
+      });
+      if (pole.actionLogs.length > 20) pole.actionLogs.pop();
     }
 
+    vol.assignedPoleId = null;
     vol.poleRoleId = null;
     vol.poleRoleTitle = null;
 
-    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
     game.saveGame();
-    game.showToast('Rôle Libéré', `${vol.name} ne tient plus le rôle de « ${oldRoleTitle} ». Le poste est désormais vacant.`, 'blue');
+    game.showToast('Bénévole Libéré', `${vol.name} est de retour en secouriste opérationnel standard.`, 'blue');
     this.renderModal(game);
   },
 
-  // Détermination stable de l'intérêt d'un bénévole pour un pôle (Quotas réels d'antenne)
-  // RÈGLE : 3% Communication (avec maturité), 10% Logistique, 8% Formateurs, ~79% Opérationnel / Terrain pur
-  getVolunteerPoleInterest(volunteer) {
-    if (!volunteer) return 'operationnel';
-    if (volunteer.poleInterest) return volunteer.poleInterest;
+  // Obtenir les informations de rôle d'un bénévole pour les infobulles du jeu
+  getVolunteerRoleInfo(volunteer) {
+    if (!volunteer || !volunteer.assignedPoleId) return null;
+    const game = window.game;
+    if (!game || !Array.isArray(game.poles)) return null;
+    const pole = game.poles.find(p => p.id === volunteer.assignedPoleId);
+    if (!pole) return null;
 
-    // Hash pseudo-aléatoire stable basé sur l'identifiant pour ne pas changer d'avis à chaque tick
-    let hash = 0;
-    const str = String(volunteer.id || volunteer.name || '');
-    for (let i = 0; i < str.length; i++) {
-      hash = ((hash << 5) - hash) + str.charCodeAt(i);
-      hash |= 0;
-    }
-    const pct = Math.abs(hash) % 100; // 0 à 99
-
-    let interest = 'operationnel';
-    if (pct < 3) {
-      interest = 'communication'; // 3% des effectifs
-    } else if (pct < 13) {
-      interest = 'logistique';    // 10% des effectifs (3 à 12)
-    } else if (pct < 21) {
-      interest = 'formation';     // 8% des effectifs (13 à 20)
-    } else {
-      interest = 'operationnel';  // ~79% des effectifs : secouristes de terrain, pas de souhait support
-    }
-    volunteer.poleInterest = interest;
-    return interest;
+    const isLeader = pole.responsibleId === volunteer.id;
+    return {
+      poleId: pole.id,
+      poleName: pole.name,
+      poleColor: pole.color || 'blue',
+      roleTitle: isLeader ? `Responsable (${pole.name})` : `Équipier (${pole.name})`,
+      isLeader: isLeader,
+      badgeColor: isLeader ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-blue-100 text-blue-900 border-blue-300'
+    };
   },
 
-  // Vérifie si un bénévole a la maturité et les compétences pour formuler une demande pour un rôle
-  isVolunteerReadyForPoleRequest(volunteer, role, game) {
-    if (!volunteer || !role) return false;
-    if (volunteer.isBurnout || volunteer.status === 'mission') return false;
-
-    // 1. Pôle COMMUNICATION (3% des effectifs, et pas dès leur arrivée !)
-    if (role.poleId === 'communication') {
-      // Le bénévole ne doit PAS être un nouvel arrivant : il doit avoir découvert la vie d'antenne
-      const missionsDone = volunteer.missionsCount || 0;
-      const experience = volunteer.exp || 0;
-      // Critère : au moins 5 missions de terrain OU au moins 75 XP
-      if (missionsDone < 5 && experience < 75) {
-        return false; // Trop récent dans l'antenne pour postuler en com
-      }
-      return true;
-    }
-
-    // 2. Pôle FORMATION (8% des effectifs - Formateurs d'antenne)
-    if (role.poleId === 'formation') {
-      // Pour être formateur d'antenne ou responsable formation : PSE2 ou formateur agréé ou expérience confirmée
-      const isTrainerAlready = volunteer.isTrainer || (volunteer.skills && (volunteer.skills.includes('formateur') || volunteer.skills.includes('Formateur Agréé')));
-      const isExperienced = volunteer.rank === 'PSE2' || ['CE', 'CP', 'CD'].includes(volunteer.rank) || (volunteer.missionsCount || 0) >= 4 || (volunteer.exp || 0) >= 60;
-      if (!isTrainerAlready && !isExperienced) {
-        return false; // Pas assez expérimenté pour former les autres
-      }
-      return true;
-    }
-
-    // 3. Pôle LOGISTIQUE (10% des effectifs)
-    if (role.poleId === 'logistique') {
-      // Doit avoir fait au moins 1 mission ou posséder le permis B ou être PSE1
-      const hasPermis = Boolean(volunteer.permis_b || volunteer.hasDrivingLicense || (volunteer.skills && volunteer.skills.includes('permis_b')));
-      const hasMinExp = (volunteer.missionsCount || 0) >= 1 || (volunteer.exp || 0) >= 20 || volunteer.rank !== 'Stagiaire';
-      return hasPermis || hasMinExp;
-    }
-
-    // 4. Rôles Leader / Responsables
-    if (role.isLeader) {
-      return (volunteer.missionsCount || 0) >= 3 || volunteer.rank === 'PSE2' || ['CE', 'CP', 'CD'].includes(volunteer.rank);
-    }
-
-    return true;
-  },
-
-  // Générer des souhaits spontanés de rôles formulés par les bénévoles de l'antenne
-  // RÈGLE : Demandes RARES (1 max à la fois, aucune si demande en attente, quotas stricts 3% com, 10% log, 8% formateur)
-  triggerVolunteerRoleWishes(game, forcePrompt = false) {
-    this.injectState(game);
-    if (!game.volunteers || game.volunteers.length === 0) return 0;
-
-    // Règle anti-spam : Si une demande est déjà en attente d'arbitrage par le joueur, ne pas en ajouter
-    const pendingRequests = (game.roleRequests || []).filter(r => r.status === 'pending');
-    if (pendingRequests.length > 0 && !forcePrompt) {
-      return 0;
-    }
-
-    const totalVols = game.volunteers.length;
-
-    // 1. Quotas d'effectifs réels par pôle
-    const quotaCom = Math.max(1, Math.round(totalVols * 0.03));   // 3% max en com
-    const quotaLog = Math.max(1, Math.round(totalVols * 0.10));   // 10% max en logistique
-    const quotaForm = Math.max(1, Math.round(totalVols * 0.08));  // 8% max en formation
-
-    // 2. Décompte actuel des bénévoles déjà en poste ou ayant une demande en attente
-    const countInCom = game.volunteers.filter(v => {
-      const r = this.ROLES_CATALOG.find(rc => rc.id === v.poleRoleId);
-      return r && r.poleId === 'communication';
-    }).length + pendingRequests.filter(req => req.poleId === 'communication').length;
-
-    const countInLog = game.volunteers.filter(v => {
-      const r = this.ROLES_CATALOG.find(rc => rc.id === v.poleRoleId);
-      return r && r.poleId === 'logistique';
-    }).length + pendingRequests.filter(req => req.poleId === 'logistique').length;
-
-    const countInForm = game.volunteers.filter(v => {
-      const r = this.ROLES_CATALOG.find(rc => rc.id === v.poleRoleId);
-      return r && r.poleId === 'formation';
-    }).length + pendingRequests.filter(req => req.poleId === 'formation').length;
-
-    // 3. Trouver les bénévoles sans rôle et disponibles
-    const availableVolunteers = game.volunteers.filter(v => !v.poleRoleId && !v.isBurnout && v.status !== 'mission');
-    if (availableVolunteers.length === 0) {
-      if (forcePrompt) {
-        game.showToast('Effectifs Déjà Investis', 'Tous vos bénévoles qualifiés occupent déjà un rôle au sein de l’antenne.', 'blue');
-      }
-      return 0;
-    }
-
-    // 4. Identifier les rôles vacants dans chaque pôle
-    const vacantRoles = this.ROLES_CATALOG.filter(role => {
-      const currentHolders = game.volunteers.filter(v => v.poleRoleId === role.id);
-      const pendingForRole = pendingRequests.filter(req => req.roleId === role.id).length;
-      return (currentHolders.length + pendingForRole) < (role.maxHolders || 1);
-    });
-
-    if (vacantRoles.length === 0) {
-      if (forcePrompt) {
-        game.showToast('Tous les Postes sont Pourvus', 'Aucun rôle n\'est vacant pour le moment.', 'blue');
-      }
-      return 0;
-    }
-
-    // 5. Chercher parmi les bénévoles ceux qui ont un intérêt correspondant ET dont le quota n'est pas saturé
-    const eligibleCandidates = [];
-
-    availableVolunteers.forEach(v => {
-      const interest = this.getVolunteerPoleInterest(v);
-
-      if (interest === 'communication' && countInCom < quotaCom) {
-        const comRoles = vacantRoles.filter(r => r.poleId === 'communication');
-        comRoles.forEach(role => {
-          if (this.isVolunteerReadyForPoleRequest(v, role, game)) {
-            eligibleCandidates.push({ volunteer: v, role: role, interest: 'communication' });
-          }
-        });
-      } else if (interest === 'logistique' && countInLog < quotaLog) {
-        const logRoles = vacantRoles.filter(r => r.poleId === 'logistique');
-        logRoles.forEach(role => {
-          if (this.isVolunteerReadyForPoleRequest(v, role, game)) {
-            eligibleCandidates.push({ volunteer: v, role: role, interest: 'logistique' });
-          }
-        });
-      } else if (interest === 'formation' && countInForm < quotaForm) {
-        const formRoles = vacantRoles.filter(r => r.poleId === 'formation');
-        formRoles.forEach(role => {
-          if (this.isVolunteerReadyForPoleRequest(v, role, game)) {
-            eligibleCandidates.push({ volunteer: v, role: role, interest: 'formation' });
-          }
-        });
-      }
-    });
-
-    if (eligibleCandidates.length === 0) {
-      if (forcePrompt) {
-        game.showToast('Sondage de l\'Équipe', 'Vos secouristes sont actuellement pleinement concentrés sur les missions de terrain. Aucun n\'a exprimé le souhait de rejoindre les pôles de soutien pour le moment.', 'slate');
-      }
-      return 0;
-    }
-
-    // 6. Tirer au sort EXACTEMENT UN SEUL bénévole pour formuler sa demande (jamais de rafale !)
-    const picked = eligibleCandidates[Math.floor(Math.random() * eligibleCandidates.length)];
-    this.submitVolunteerRoleRequest(game, picked.volunteer.id, picked.role.id);
-    return 1;
-  },
-
-  // 5. AUTOMATISATION : FORMATION (Gérée par le Responsable Formation)
-  processAutoFormationManager(game) {
-    if (!game || !game.autoFormationActive) return;
-    if (!Array.isArray(game.volunteers) || game.volunteers.length === 0) return;
-
-    // Vérifier si un Responsable Formation est désigné
-    const respFormationVol = game.volunteers.find(v => v.poleRoleId === 'resp_formation') ||
-      (game.poles ? game.volunteers.find(v => v.id === game.poles.find(p => p.id === 'formation')?.responsibleId) : null);
-
-    if (!respFormationVol) return; // Automatisation inactive sans Responsable Formation
-
-    // S'assurer que game.sessionsFormation existe
-    if (!Array.isArray(game.sessionsFormation)) game.sessionsFormation = [];
-
-    // 1. Détecter les bénévoles ayant besoin d'une formation ou d'un recyclage :
-    // - Priorité 1 : Bénévoles soumis à recyclage annuel (échéance au 31/12 ou validité expirée) -> FC_PSE
-    // - Priorité 2 : Stagiaires ou PSC1 sans PSE1 -> Besoin PSE1
-    // - Priorité 3 : PSE1 confirmés (>= 3 missions ou >= 60 XP) -> Besoin PSE2
-    const needsTraining = [];
-    game.volunteers.forEach(v => {
-      if (v.status === 'mission' || v.isBurnout) return;
-      const skills = v.skills || [];
-
-      // Vérification du maintien des compétences (Recyclage annuel au 31/12)
-      const needsRecycling = window.ProtecFormations?.volunteerNeedsRecycling
-        ? window.ProtecFormations.volunteerNeedsRecycling(v, game)
-        : Boolean(v.needsRecyclingFC_PSE);
-
-      // Priorité 1 : Recyclage FC PSE
-      if (needsRecycling) {
-        needsTraining.unshift({ vol: v, courseId: 'FC_PSE', title: 'FC PSE (Recyclage Annuel)', isRecycling: true });
-      }
-      // Priorité 2 : Besoin initial PSE1
-      else if (!skills.includes('pse1') && !skills.includes('pse2')) {
-        needsTraining.push({ vol: v, courseId: 'PSE1', title: 'PSE1 (Premiers Secours en Équipe 1)' });
-      }
-      // Priorité 3 : Montée PSE2
-      else if (skills.includes('pse1') && !skills.includes('pse2') && ((v.missionsCount || 0) >= 3 || (v.exp || 0) >= 60)) {
-        needsTraining.push({ vol: v, courseId: 'PSE2', title: 'PSE2 (Équipier-Secouriste)' });
-      }
-    });
-
-    if (needsTraining.length === 0) return;
-
-    // Prendre le premier besoin à traiter
-    const target = needsTraining[0];
-
-    // Chercher si une session de ce cours existe déjà avec des places internes disponibles
-    const openSession = game.sessionsFormation.find(s =>
-      s.courseId === target.courseId &&
-      !s.isCompleted &&
-      (s.internalAntenneSeats || 0) > (s.registeredCandidates || []).length &&
-      !(s.registeredCandidates || []).includes(target.vol.id)
-    );
-
-    if (openSession) {
-      // Inscription automatique du bénévole par le Responsable Formation
-      if (!Array.isArray(openSession.registeredCandidates)) openSession.registeredCandidates = [];
-      openSession.registeredCandidates.push(target.vol.id);
-      target.vol.registeredSessionId = openSession.id;
-
-      game.saveGame();
-      game.showToast(
-        '🎓 Responsable Formation (Auto)',
-        `${respFormationVol.name} a inscrit automatiquement ${target.vol.name} à la session « ${openSession.title} ».`,
-        'green'
-      );
-    } else {
-      // Aucune session existante : si au moins 2 bénévoles ont ce besoin, le Responsable Formation ouvre une session interne !
-      const sameNeedCount = needsTraining.filter(t => t.courseId === target.courseId).length;
-      if (sameNeedCount >= 2 && window.ProtecFormations && typeof window.ProtecFormations.createSession === 'function') {
-        const station = (game.stations && game.stations[0]) || { name: 'Antenne', city: 'Nancy' };
-        window.ProtecFormations.createSession(game, target.courseId, {
-          locationType: 'antenne',
-          internalAntenneSeats: 4,
-          internalProtecSeats: 2,
-          openToPublic: true,
-          totalSeats: 8,
-          roomNumber: 1
-        });
-
-        // Trouver la session tout juste créée
-        const newlyCreated = game.sessionsFormation[game.sessionsFormation.length - 1];
-        if (newlyCreated) {
-          // Y inscrire les bénévoles demandeurs
-          const candidatesToRegister = needsTraining.filter(t => t.courseId === target.courseId).slice(0, 4);
-          candidatesToRegister.forEach(item => {
-            if (!newlyCreated.registeredCandidates.includes(item.vol.id)) {
-              newlyCreated.registeredCandidates.push(item.vol.id);
-              item.vol.registeredSessionId = newlyCreated.id;
-            }
-          });
-
-          game.saveGame();
-          game.showToast(
-            '🎓 Responsable Formation (Planification Auto)',
-            `${respFormationVol.name} a programmé une nouvelle session interne de « ${target.title} » et y a positionné ${candidatesToRegister.length} secouristes !`,
-            'green'
-          );
-        }
-      }
-    }
-  },
-
-  // 6. AUTOMATISATION : LOGISTIQUE (Gérée par les Bénévoles Logistique)
-  processAutoLogisticsVolunteers(game) {
-    if (!game || !game.autoLogisticsActive) return;
-    if (!Array.isArray(game.vehicles) || game.vehicles.length === 0) return;
-
-    // Trouver les bénévoles ayant le rôle Logistique
-    const logVolunteers = (game.volunteers || []).filter(v =>
-      (v.poleRoleId === 'benevole_logistique' || v.poleRoleId === 'resp_logistique') &&
-      v.status === 'dispo' &&
-      !v.isBurnout
-    );
-
-    if (logVolunteers.length === 0) return; // Aucune gestion automatique sans bénévole logistique dispo
-
-    // Chercher les véhicules stationnés à la base qui nécessitent un réarmement ou dont les consommables sont bas
-    const vehiclesNeedingRestock = game.vehicles.filter(veh => {
-      const isAtBase = veh.status === 'dispo' || veh.status === 'base' || !veh.status;
-      if (!isAtBase) return false;
-      const isConsumableLow = (veh.consumablesPercent !== undefined && veh.consumablesPercent < 85);
-      const isOxygenLow = (veh.oxygenPercent !== undefined && veh.oxygenPercent < 80);
-      const isRestockFlagged = !!veh.needsRestock;
-      return isConsumableLow || isOxygenLow || isRestockFlagged;
-    });
-
-    if (vehiclesNeedingRestock.length === 0) return;
-
-    // Le premier bénévole logistique disponible prend en charge la mission de réarmement
-    const volunteerLog = logVolunteers[0];
-    const targetVeh = vehiclesNeedingRestock[0];
-
-    // Effectuer le réarmement complet du véhicule
-    targetVeh.consumablesPercent = 100;
-    targetVeh.oxygenPercent = 100;
-    targetVeh.needsRestock = false;
-    targetVeh.lastRestockAt = Date.now();
-
-    // Récompense d'XP pour le bénévole logistique
-    volunteerLog.exp = (volunteerLog.exp || 0) + 10;
-    volunteerLog.motivation = Math.min(100, (volunteerLog.motivation || 75) + 3);
-
-    game.saveGame();
-    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
-
-    game.showToast(
-      '🔧 Mission Logistique Réussie',
-      `${volunteerLog.name} (Équipe Logistique) a pris en charge le réarmement complet du véhicule « ${targetVeh.name || targetVeh.type} ».`,
-      'teal'
-    );
-  },
-
-  // 7. BOUCLE D'HORLOGE GÉNÉRALE DU SYSTÈME DES PÔLES
+  // =========================================================================
+  // 4. MOTEUR D'EXÉCUTION RÉELLE DES AUTOMATISATIONS D'ANTENNE
+  // =========================================================================
   processClockTick(game) {
     if (!game) return;
     const now = Date.now();
 
-    // Exécution toutes les 25 secondes réelles pour équilibrer le gameplay
+    // Fréquence d'exécution : toutes les 25 secondes réelles
     if (now - this._lastTickCheck < 25000) return;
     this._lastTickCheck = now;
 
     this.injectState(game);
+    if (!game.poles || game.poles.length === 0) return;
 
-    // 1. Exécution de la gestion automatique de la Formation par le Responsable Formation
-    if (now - this._lastAutoFormationCheck >= 35000) {
-      this._lastAutoFormationCheck = now;
-      this.processAutoFormationManager(game);
+    game.poles.forEach(pole => {
+      // RÈGLE ABSOLUE : Le pôle n'agit QUE s'il a au moins un bénévole en poste !
+      const assignedCount = (pole.assignedVolunteerIds || []).length;
+      if (assignedCount === 0 && !pole.responsibleId) return; // Pôle inactif sans bénévoles
+
+      // Calcul du coefficient d'efficacité selon l'expérience et la motivation des bénévoles du pôle
+      const vols = (game.volunteers || []).filter(v => (pole.assignedVolunteerIds || []).includes(v.id) || pole.responsibleId === v.id);
+      const avgMotivation = vols.reduce((acc, v) => acc + (v.motivation || 75), 0) / Math.max(1, vols.length);
+
+      // Exécuter chaque tâche active du pôle
+      (pole.assignedTaskIds || []).forEach(taskId => {
+        const config = pole.taskConfigs[taskId];
+        if (!config || !config.enabled) return;
+
+        // --- 1. GESTION DES CANDIDATURES ---
+        if (taskId === 'rh_candidatures') {
+          this.executeTaskCandidatures(game, pole, config, vols);
+        }
+        // --- 2. GESTION DE L'HABILLEMENT ---
+        else if (taskId === 'rh_habillement') {
+          this.executeTaskHabillement(game, pole, config, vols);
+        }
+        // --- 3. SUIVI DU MORAL & BIEN-ÊTRE ---
+        else if (taskId === 'rh_fidelisation') {
+          this.executeTaskFidelisation(game, pole, config, vols);
+        }
+        // --- 4. RÉARMEMENT DES AMBULANCES ---
+        else if (taskId === 'log_rearmement') {
+          this.executeTaskRearmement(game, pole, config, vols);
+        }
+        // --- 5. ACHATS & APPROVISIONNEMENTS ---
+        else if (taskId === 'log_achats') {
+          this.executeTaskAchats(game, pole, config, vols);
+        }
+        // --- 6. MAINTENANCE PARC ROULANT ---
+        else if (taskId === 'log_maintenance') {
+          this.executeTaskMaintenance(game, pole, config, vols);
+        }
+        // --- 7. RECYCLAGES FC PSE ---
+        else if (taskId === 'form_recyclages') {
+          this.executeTaskRecyclages(game, pole, config, vols);
+        }
+        // --- 8. MONTÉE EN COMPÉTENCES PSE ---
+        else if (taskId === 'form_montee_competence') {
+          this.executeTaskMonteeCompetence(game, pole, config, vols);
+        }
+        // --- 9. SESSIONS PUBLIQUES PSC1 ---
+        else if (taskId === 'form_sessions_publiques') {
+          this.executeTaskSessionsPubliques(game, pole, config, vols);
+        }
+        // --- 10. SITE WEB D'ANTENNE ---
+        else if (taskId === 'com_site_web') {
+          this.executeTaskSiteWeb(game, pole, config, vols);
+        }
+        // --- 11. DEVIS DPS ---
+        else if (taskId === 'ops_devis') {
+          this.executeTaskDevis(game, pole, config, vols);
+        }
+      });
+    });
+  },
+
+  // 4.1 Traitement automatique des candidatures
+  executeTaskCandidatures(game, pole, config, vols) {
+    if (!Array.isArray(game.candidatures) || game.candidatures.length === 0) return;
+    const pending = game.candidatures.filter(c => c.status === 'pending');
+    if (pending.length === 0) return;
+
+    const cand = pending[0];
+    const totalVols = (game.volunteers || []).length;
+    const maxTarget = config.maxVolunteersTarget || 30;
+
+    // Si le quota max est dépassé, refus automatique
+    if (totalVols >= maxTarget) {
+      cand.status = 'rejected';
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Candidature de ${cand.name} refusée automatiquement (Effectif maximum atteint : ${totalVols}/${maxTarget}).`
+      });
+      game.saveGame();
+      return;
     }
 
-    // 2. Exécution des missions logistiques par les Bénévoles Logistique
-    if (now - this._lastAutoLogisticsCheck >= 30000) {
-      this._lastAutoLogisticsCheck = now;
-      this.processAutoLogisticsVolunteers(game);
+    // Filtrage selon la sévérité réglée par le joueur
+    let accept = false;
+    const sev = config.severity || 'standard';
+
+    if (sev === 'souple') {
+      accept = (cand.motivationScore || 50) >= 40;
+    } else if (sev === 'standard') {
+      accept = (cand.motivationScore || 50) >= 55 && (cand.hasPermis || cand.hasPSC1 || cand.hasPSE1);
+    } else if (sev === 'stricte') {
+      accept = (cand.motivationScore || 50) >= 70 && (cand.hasPSE1 || cand.hasPSE2 || cand.isFormateur);
     }
 
-    // 3. Génération spontanée périodique de souhaits de rôles (rares et espacés dans le temps)
-    // Vérification toutes les 10 minutes réelles (600 000 ms) avec une probabilité réduite (12%)
-    if (now - this._lastWishSpawnCheck >= 600000) {
-      this._lastWishSpawnCheck = now;
-      if (Math.random() < 0.12) {
-        this.triggerVolunteerRoleWishes(game, false);
+    if (accept) {
+      // Intégrer automatiquement le candidat
+      if (typeof game.hireCandidate === 'function') {
+        game.hireCandidate(cand.id);
+      } else {
+        cand.status = 'accepted';
       }
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Candidature de ${cand.name} validée automatiquement (Filtre: ${sev}).`
+      });
+      game.showToast('Recrutement Automatique', `Le ${pole.name} a accepté la candidature de ${cand.name} selon vos critères (${sev}).`, 'indigo');
+    } else {
+      cand.status = 'rejected';
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Candidature de ${cand.name} rejetée (Critères de sélection ${sev} non atteints).`
+      });
+    }
+    game.saveGame();
+  },
+
+  // 4.2 Dotation automatique de l'habillement
+  executeTaskHabillement(game, pole, config, vols) {
+    if (!config.autoEquipNew) return;
+    const unequipped = (game.volunteers || []).filter(v => !v.hasUniform);
+    if (unequipped.length === 0) return;
+
+    const target = unequipped[0];
+    const cost = 45; // Coût paquetage
+    if (game.resources && game.resources.money >= cost) {
+      game.resources.money -= cost;
+      target.hasUniform = true;
+      target.motivation = Math.min(100, (target.motivation || 75) + 8);
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Dotation du paquetage complet pour ${target.name} (-45 €).`
+      });
+      game.saveGame();
     }
   },
 
-  // 8. ÉDITION DES PÔLES (PERSONNALISATION DU JOUEUR)
-  openEditModal(game, poleId) {
-    this.editingPoleId = poleId;
-    this.renderModal(game);
-  },
+  // 4.3 Suivi du moral et remotivation
+  executeTaskFidelisation(game, pole, config, vols) {
+    const threshold = config.triggerThreshold || 45;
+    const demotivated = (game.volunteers || []).filter(v => (v.motivation || 100) < threshold && v.status === 'dispo');
+    if (demotivated.length === 0) return;
 
-  closeEditModal(game) {
-    this.editingPoleId = null;
-    this.renderModal(game);
-  },
-
-  savePoleEdits(game, poleId) {
-    const pole = game.poles.find(p => p.id === poleId);
-    if (!pole) return;
-
-    const nameInput = document.getElementById('edit-pole-name');
-    const missionInput = document.getElementById('edit-pole-mission');
-    const descInput = document.getElementById('edit-pole-desc');
-    const bonusInput = document.getElementById('edit-pole-bonus');
-    const colorInput = document.getElementById('edit-pole-color');
-
-    if (nameInput && nameInput.value.trim().length >= 2) pole.name = nameInput.value.trim();
-    if (missionInput && missionInput.value.trim()) pole.missionLabel = missionInput.value.trim();
-    if (descInput && descInput.value.trim()) pole.desc = descInput.value.trim();
-    if (bonusInput && bonusInput.value.trim()) pole.bonusDesc = bonusInput.value.trim();
-    if (colorInput) pole.color = colorInput.value;
-
-    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    const target = demotivated[0];
+    target.motivation = Math.min(100, (target.motivation || 30) + 20);
+    target.energy = Math.min(100, (target.energy || 50) + 15);
+    pole.actionLogs.unshift({
+      time: Date.now(),
+      text: `Entretien d'écoute avec ${target.name} : moral rehaussé à ${target.motivation}%.`
+    });
     game.saveGame();
-    game.showToast('Pôle Modifié', `Les modifications du « ${pole.name} » ont été enregistrées avec succès.`, 'green');
-    this.editingPoleId = null;
-    this.renderModal(game);
   },
 
-  // Ajouter un nouveau pôle personnalisé
-  addNewCustomPole(game) {
-    this.injectState(game);
-    const id = `pole_custom_${Date.now()}`;
-    const newPole = {
-      id: id,
-      type: 'custom',
-      name: 'Nouveau Pôle Opérationnel',
-      icon: 'sparkles',
-      color: 'purple',
-      desc: 'Définissez la mission et les objectifs spécifiques de cette section de l’antenne.',
-      missionLabel: 'Missions Personnalisées',
-      responsibleId: null,
-      assignedVolunteerIds: [],
-      xpMultiplierBenevole: 1.1,
-      xpMultiplierSalarie: 1.4,
-      bonusDesc: '+10% d’efficacité sur les missions associées'
-    };
-    game.poles.push(newPole);
-    game.saveGame();
-    game.showToast('Nouveau Pôle Créé', 'Personnalisez son titre, ses missions et affectez ses membres.', 'green');
-    this.editingPoleId = id;
-    this.renderModal(game);
-  },
-
-  // Assigner un personnel à un pôle
-  assignVolunteerToPole(game, volunteerId, targetPoleId) {
-    this.injectState(game);
-    const v = game.volunteers.find(vol => vol.id === volunteerId);
-    if (!v) return;
-
-    game.poles.forEach(p => {
-      p.assignedVolunteerIds = p.assignedVolunteerIds.filter(id => id !== volunteerId);
-      if (p.responsibleId === volunteerId && p.id !== targetPoleId) {
-        p.responsibleId = null;
-      }
+  // 4.4 Réarmement et désinfection des ambulances
+  executeTaskRearmement(game, pole, config, vols) {
+    if (!Array.isArray(game.vehicles)) return;
+    const threshold = config.autoRestockThreshold || 85;
+    const toRestock = game.vehicles.filter(v => {
+      const isAtBase = v.status === 'dispo' || v.status === 'base' || !v.status;
+      return isAtBase && ((v.consumablesPercent || 100) < threshold || (v.oxygenPercent || 100) < threshold || v.needsRestock);
     });
 
-    const targetPole = game.poles.find(p => p.id === targetPoleId);
-    if (targetPole) {
-      if (!targetPole.assignedVolunteerIds.includes(volunteerId)) {
-        targetPole.assignedVolunteerIds.push(volunteerId);
-      }
-      v.assignedPoleId = targetPole.id;
-      if (window.ProtecAudio) window.ProtecAudio.playClickSound();
-      game.showToast('Affectation Pôle', `${v.name} a rejoint le ${targetPole.name}.`, 'blue');
-    } else {
-      v.assignedPoleId = null;
-    }
+    if (toRestock.length === 0) return;
+    const veh = toRestock[0];
+    veh.consumablesPercent = 100;
+    veh.oxygenPercent = 100;
+    veh.needsRestock = false;
+    veh.lastRestockAt = Date.now();
 
+    pole.actionLogs.unshift({
+      time: Date.now(),
+      text: `Réarmement complet et désinfection de ${veh.name || veh.type}.`
+    });
     game.saveGame();
-    this.renderModal(game);
+    game.showToast('🔧 Réarmement Flotte', `Le ${pole.name} a réarmé et désinfecté l'ambulance ${veh.name || veh.type}.`, 'teal');
   },
 
-  // 9. RENDU DE L'INTERFACE UTILISATEUR
+  // 4.5 Approvisionnements & commandes de consommables
+  executeTaskAchats(game, pole, config, vols) {
+    const minThreshold = config.minStockThreshold || 4;
+    const maxBudget = config.maxBudgetPerOrder || 300;
+    const st = (game.stations && game.stations[0]) || null;
+    if (!st || !game.resources) return;
+
+    st.stock = st.stock || {};
+    const caisses = st.stock.caisse_rearmement || 0;
+    if (caisses < minThreshold && game.resources.money >= 120 && maxBudget >= 120) {
+      game.resources.money -= 120;
+      st.stock.caisse_rearmement = (st.stock.caisse_rearmement || 0) + 5;
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Commande d'urgence de 5 caisses de réarmement (-120 €).`
+      });
+      game.saveGame();
+      game.showToast('📦 Commande Logistique', `Le ${pole.name} a commandé 5 caisses de réassort pour éviter la rupture (-120 €).`, 'teal');
+    }
+  },
+
+  // 4.6 Maintenance parc roulant au garage
+  executeTaskMaintenance(game, pole, config, vols) {
+    if (!Array.isArray(game.vehicles) || !game.resources) return;
+    const wearLimit = config.wearThreshold || 60;
+    const damaged = game.vehicles.filter(v => (v.status === 'dispo' || !v.status) && (v.conditionPercent !== undefined && v.conditionPercent < wearLimit));
+    if (damaged.length === 0) return;
+
+    const target = damaged[0];
+    const repairCost = Math.min(350, Math.floor((100 - (target.conditionPercent || 50)) * 6));
+    if (game.resources.money >= repairCost) {
+      game.resources.money -= repairCost;
+      target.conditionPercent = 100;
+      target.status = 'garage';
+      setTimeout(() => { target.status = 'dispo'; }, 20000); // 20s au garage
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Envoi de ${target.name} en révision mécanique complète (-${repairCost} €).`
+      });
+      game.saveGame();
+      game.showToast('🛠️ Entretien Mécanique', `Le ${pole.name} a envoyé ${target.name} au garage (-${repairCost} €).`, 'teal');
+    }
+  },
+
+  // 4.7 Recyclages annuels obligatoires
+  executeTaskRecyclages(game, pole, config, vols) {
+    if (!Array.isArray(game.volunteers) || !Array.isArray(game.sessionsFormation)) return;
+    const candidates = game.volunteers.filter(v => v.status === 'dispo' && (v.needsRecyclingFC_PSE || v.skills?.includes('pse1') || v.skills?.includes('pse2')));
+    if (candidates.length === 0) return;
+
+    // Inscrire sur une session ouverte de FC PSE
+    const session = game.sessionsFormation.find(s => s.courseId === 'FC_PSE' && !s.isCompleted && (s.registeredCandidates || []).length < (s.totalSeats || 8));
+    if (session) {
+      const vol = candidates.find(c => !(session.registeredCandidates || []).includes(c.id));
+      if (vol) {
+        session.registeredCandidates = session.registeredCandidates || [];
+        session.registeredCandidates.push(vol.id);
+        vol.needsRecyclingFC_PSE = false;
+        pole.actionLogs.unshift({
+          time: Date.now(),
+          text: `Inscription automatique de ${vol.name} au recyclage annuel FC PSE.`
+        });
+        game.saveGame();
+        game.showToast('🎓 Recyclage Anticipé', `Le ${pole.name} a inscrit ${vol.name} au recyclage annuel FC PSE.`, 'emerald');
+      }
+    }
+  },
+
+  // 4.8 Montée en compétences PSE1/PSE2
+  executeTaskMonteeCompetence(game, pole, config, vols) {
+    if (!Array.isArray(game.volunteers) || !Array.isArray(game.sessionsFormation)) return;
+    const minXp = config.minExpRequired || 40;
+    const targetRank = config.targetQualifications || 'all';
+
+    const eligible = game.volunteers.filter(v => {
+      if (v.status !== 'dispo') return false;
+      const skills = v.skills || [];
+      if (targetRank === 'pse1' || targetRank === 'all') {
+        if (!skills.includes('pse1') && (v.exp || 0) >= minXp) return true;
+      }
+      if (targetRank === 'pse2' || targetRank === 'all') {
+        if (skills.includes('pse1') && !skills.includes('pse2') && (v.exp || 0) >= (minXp + 30)) return true;
+      }
+      return false;
+    });
+
+    if (eligible.length === 0) return;
+    const vol = eligible[0];
+    const neededCourse = !(vol.skills || []).includes('pse1') ? 'PSE1' : 'PSE2';
+
+    const session = game.sessionsFormation.find(s => s.courseId === neededCourse && !s.isCompleted && (s.registeredCandidates || []).length < (s.totalSeats || 8));
+    if (session && !(session.registeredCandidates || []).includes(vol.id)) {
+      session.registeredCandidates = session.registeredCandidates || [];
+      session.registeredCandidates.push(vol.id);
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Inscription de ${vol.name} à la session ${neededCourse} pour monter en grade.`
+      });
+      game.saveGame();
+      game.showToast('🎓 Montée en Compétences', `Le ${pole.name} a inscrit ${vol.name} en formation ${neededCourse}.`, 'emerald');
+    }
+  },
+
+  // 4.9 Sessions publiques PSC1 payantes
+  executeTaskSessionsPubliques(game, pole, config, vols) {
+    if (!config.autoOpenSession) return;
+    if (!Array.isArray(game.sessionsFormation)) game.sessionsFormation = [];
+
+    // Vérifier si une session publique est déjà en cours
+    const activePublic = game.sessionsFormation.find(s => s.courseId === 'PSC' && !s.isCompleted);
+    if (activePublic) return;
+
+    // Vérifier si un bénévole du pôle est formateur
+    const formateur = vols.find(v => (v.skills || []).includes('formateur') || v.isFormateur);
+    if (!formateur) return;
+
+    // Créer la session publique
+    if (window.ProtecFormations && typeof window.ProtecFormations.createSession === 'function') {
+      window.ProtecFormations.createSession(game, 'PSC', {
+        locationType: 'antenne',
+        internalAntenneSeats: 2,
+        openToPublic: true,
+        totalSeats: 10,
+        roomNumber: 1
+      });
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Ouverture d'une session publique PSC1 animée par ${formateur.name}.`
+      });
+      game.saveGame();
+      game.showToast('💰 Session Publique Ouverte', `Le ${pole.name} a ouvert une session PSC1 grand public animée par ${formateur.name}.`, 'emerald');
+    }
+  },
+
+  // 4.10 Maintien & fraîcheur du site web
+  executeTaskSiteWeb(game, pole, config, vols) {
+    if (!game.antenneWebsite || !game.antenneWebsite.published) return;
+    const target = config.targetFreshness || 80;
+    if ((game.antenneWebsite.freshness || 50) < target) {
+      game.antenneWebsite.freshness = Math.min(100, (game.antenneWebsite.freshness || 50) + 12);
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Publication d'un nouvel article d'actualité : fraîcheur site rehaussée à ${game.antenneWebsite.freshness}%.`
+      });
+      game.saveGame();
+    }
+  },
+
+  // 4.11 Traitement des devis DPS
+  executeTaskDevis(game, pole, config, vols) {
+    if (!Array.isArray(game.devis)) return;
+    const minRev = config.minRevenueThreshold || 300;
+    const pending = game.devis.filter(d => d.status === 'pending');
+    if (pending.length === 0) return;
+
+    const devis = pending[0];
+    if ((devis.price || devis.revenue || 0) >= minRev) {
+      if (typeof game.acceptDevis === 'function') {
+        game.acceptDevis(devis.id);
+      } else {
+        devis.status = 'accepted';
+      }
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Validation automatique du devis DPS « ${devis.title || 'Dispositif'} » (+ ${devis.price || devis.revenue} €).`
+      });
+      game.saveGame();
+      game.showToast('📋 Devis DPS Validé', `Le ${pole.name} a accepté automatiquement un devis rentable de ${devis.price || devis.revenue} €.`, 'blue');
+    } else {
+      devis.status = 'rejected';
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Devis DPS sous-payé rejeté automatiquement (${devis.price || devis.revenue} € < ${minRev} €).`
+      });
+      game.saveGame();
+    }
+  },
+
+  // =========================================================================
+  // 5. INTERFACE UTILISATEUR MODERNE ET INTERACTIVE
+  // =========================================================================
   renderModal(game) {
     this.injectState(game);
     const body = document.getElementById('modal-body');
@@ -1044,342 +869,420 @@ window.ProtecPoles = {
 
     if (!body || !title) return;
 
-    title.textContent = 'Organisation des Pôles & Rôles des Bénévoles';
-    subtitle.textContent = 'Postes par pôle, gestion des demandes bénévoles, automatisations formation & logistique';
+    title.textContent = 'Organisation des Pôles & Délégation d’Antenne';
+    subtitle.textContent = 'Créez vos pôles, confiez des missions réelles et paramétrez le niveau d’autonomie de vos équipes';
     icon.setAttribute('data-lucide', 'network');
 
-    const editingPole = this.editingPoleId ? game.poles.find(p => p.id === this.editingPoleId) : null;
-    const pendingRequests = (game.roleRequests || []).filter(r => r.status === 'pending');
-    const isFreeMode = game.rolesAccessMode === 'free';
+    const polesCount = (game.poles || []).length;
 
     body.innerHTML = `
-      <div class="space-y-6">
+      <div class="space-y-5">
 
-        <!-- MODAL D'ÉDITION DU PÔLE (Si activé) -->
-        ${editingPole ? `
-          <div class="p-5 rounded-3xl bg-slate-900 text-white shadow-2xl border-2 border-indigo-400 space-y-4 animate-in fade-in">
-            <div class="flex items-center justify-between border-b border-slate-700 pb-3">
-              <div class="flex items-center gap-2.5">
-                <span class="text-xl">✏️</span>
-                <h4 class="text-sm font-black text-amber-300">Modifier le Pôle : ${editingPole.name}</h4>
-              </div>
-              <button onclick="window.ProtecPoles.closeEditModal(window.game)" class="text-xs text-slate-400 hover:text-white transition">✕ Annuler</button>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div class="space-y-1">
-                <label class="font-bold text-slate-300">Titre du Pôle :</label>
-                <input id="edit-pole-name" type="text" value="${editingPole.name}" class="w-full p-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold text-xs focus:border-amber-400 outline-none" />
-              </div>
-
-              <div class="space-y-1">
-                <label class="font-bold text-slate-300">Missions attribuées (Sous-titre) :</label>
-                <input id="edit-pole-mission" type="text" value="${editingPole.missionLabel || ''}" class="w-full p-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:border-amber-400 outline-none" />
-              </div>
-
-              <div class="space-y-1 sm:col-span-2">
-                <label class="font-bold text-slate-300">Description du Rôle Opérationnel :</label>
-                <textarea id="edit-pole-desc" rows="2" class="w-full p-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:border-amber-400 outline-none">${editingPole.desc || ''}</textarea>
-              </div>
-
-              <div class="space-y-1 sm:col-span-2">
-                <label class="font-bold text-slate-300">Bonus & Impact Opérationnel :</label>
-                <input id="edit-pole-bonus" type="text" value="${editingPole.bonusDesc || ''}" class="w-full p-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:border-amber-400 outline-none" />
-              </div>
-
-              <div class="space-y-1">
-                <label class="font-bold text-slate-300">Thème Couleur :</label>
-                <select id="edit-pole-color" class="w-full p-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs outline-none">
-                  <option value="blue" ${editingPole.color === 'blue' ? 'selected' : ''}>Bleu Protection Civile</option>
-                  <option value="teal" ${editingPole.color === 'teal' ? 'selected' : ''}>Sarcelle Logistique</option>
-                  <option value="emerald" ${editingPole.color === 'emerald' ? 'selected' : ''}>Émeraude Formation</option>
-                  <option value="indigo" ${editingPole.color === 'indigo' ? 'selected' : ''}>Indigo Communication</option>
-                  <option value="amber" ${editingPole.color === 'amber' ? 'selected' : ''}>Ambre Mécénat / Social</option>
-                  <option value="purple" ${editingPole.color === 'purple' ? 'selected' : ''}>Violet Spécialités</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-              <button onclick="window.ProtecPoles.closeEditModal(window.game)" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800 transition">Annuler</button>
-              <button onclick="window.ProtecPoles.savePoleEdits(window.game, '${editingPole.id}')" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:brightness-110 transition flex items-center gap-1.5">
-                <i data-lucide="check" class="w-4 h-4"></i>
-                Enregistrer les Modifications
-              </button>
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- 1. BANDEAU DE GESTION DE LA POLITIQUE D'ACCÈS AUX RÔLES -->
-        <div class="p-4 rounded-2xl glass-card space-y-3 border border-indigo-200 bg-gradient-to-r from-slate-50 via-indigo-50/40 to-slate-50">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm">
-                  <i data-lucide="shield-check" class="w-4 h-4"></i>
-                </span>
-                <div>
-                  <h4 class="text-xs font-black text-slate-900 uppercase tracking-wide">Politique d'Accès aux Postes & Rôles</h4>
-                  <p class="text-[11px] text-slate-500">Les rôles sont accessibles à la demande des bénévoles selon le mode choisi.</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Boutons de bascule Accès Libre vs Validation Joueur -->
-            <div class="flex items-center gap-2 bg-white/90 p-1 rounded-2xl border border-slate-200 shadow-2xs self-start md:self-auto">
-              <button onclick="window.ProtecPoles.setRolesAccessMode(window.game, 'free')" class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 ${isFreeMode ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}">
-                <i data-lucide="unlock" class="w-3.5 h-3.5"></i>
-                <span>Accès Libre (Direct)</span>
-              </button>
-              <button onclick="window.ProtecPoles.setRolesAccessMode(window.game, 'validation')" class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 ${!isFreeMode ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}">
-                <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
-                <span>Sous Validation du Joueur</span>
-                ${pendingRequests.length > 0 ? `<span class="px-1.5 py-0.2 rounded-full text-[9px] bg-red-600 text-white font-black animate-pulse">${pendingRequests.length}</span>` : ''}
-              </button>
-            </div>
+        <!-- Barre de navigation supérieure par onglets -->
+        <div class="flex items-center justify-between border-b border-slate-200/80 pb-3 flex-wrap gap-2">
+          <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl">
+            <button onclick="window.ProtecPoles.activeTab = 'poles'; window.ProtecPoles.renderModal(window.game);" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.activeTab === 'poles' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}">
+              <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
+              <span>🏢 Mes Pôles (${polesCount})</span>
+            </button>
+            <button onclick="window.ProtecPoles.activeTab = 'all_tasks'; window.ProtecPoles.renderModal(window.game);" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.activeTab === 'all_tasks' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}">
+              <i data-lucide="check-square" class="w-3.5 h-3.5"></i>
+              <span>📋 Répertoire Général des Tâches (${this.TASKS_CATALOG.length})</span>
+            </button>
+            <button onclick="window.ProtecPoles.activeTab = 'volunteers'; window.ProtecPoles.renderModal(window.game);" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 ${this.activeTab === 'volunteers' ? 'bg-pc-blue text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}">
+              <i data-lucide="users" class="w-3.5 h-3.5"></i>
+              <span>👥 Affectations des Bénévoles</span>
+            </button>
           </div>
 
-          <!-- Explication de la politique en cours -->
-          <div class="p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 ${isFreeMode ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : 'bg-amber-50 text-amber-900 border border-amber-200'}">
-            <div class="flex items-center gap-2">
-              <span class="text-base">${isFreeMode ? '🟢' : '🟡'}</span>
-              <span class="text-[11px]">
-                ${isFreeMode 
-                  ? '<strong>Accès Libre actif :</strong> Les bénévoles motivés prennent directement leur poste dès qu’ils le souhaitent sans attendre votre accord.' 
-                  : '<strong>Sous validation du joueur :</strong> Les bénévoles postulent et attendent votre validation explicite avant de prendre leurs fonctions.'}
-              </span>
-            </div>
-            <button onclick="window.ProtecPoles.triggerVolunteerRoleWishes(window.game, true)" class="px-3 py-1 rounded-lg text-[11px] font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1 flex-shrink-0">
-              <i data-lucide="hand" class="w-3 h-3"></i>
-              <span>Sonder les bénévoles</span>
+          <!-- Bouton Nouveau Pôle -->
+          <div class="flex items-center gap-2">
+            <button onclick="window.ProtecPoles.isChoosingPreset = true; window.ProtecPoles.isCreatingCustom = false; window.ProtecPoles.renderModal(window.game);" class="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-indigo-600 text-white shadow-md hover:brightness-110 transition flex items-center gap-1.5">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i>
+              <span>+ Nouveau Pôle</span>
             </button>
           </div>
         </div>
 
-        <!-- 2. SECTION DEMANDES DE RÔLES EN ATTENTE (Si le joueur est en mode validation) -->
-        ${pendingRequests.length > 0 ? `
-          <div class="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-400 space-y-3">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
-                <h4 class="text-xs font-black text-amber-950 uppercase tracking-wide">
-                  Candidatures Internes en Attente (${pendingRequests.length})
-                </h4>
+        <!-- MODALE 1 : CHOISIR UN MODÈLE PRÉDÉFINI -->
+        ${this.isChoosingPreset ? this.renderPresetSelectionModal(game) : ''}
+
+        <!-- MODALE 2 : CRÉER UN PÔLE SUR-MESURE -->
+        ${this.isCreatingCustom ? this.renderCustomCreationModal(game) : ''}
+
+        <!-- MODALE 3 : AJOUTER DES TÂCHES À UN PÔLE -->
+        ${this.expandedPoleTasksModal ? this.renderAddTasksToPoleModal(game, this.expandedPoleTasksModal) : ''}
+
+        <!-- VUE 1 : MES PÔLES -->
+        ${this.activeTab === 'poles' ? this.renderPolesTab(game) : ''}
+
+        <!-- VUE 2 : RÉPERTOIRE GÉNÉRAL DES TÂCHES -->
+        ${this.activeTab === 'all_tasks' ? this.renderAllTasksTab(game) : ''}
+
+        <!-- VUE 3 : AFFECTATION DES BÉNÉVOLES -->
+        ${this.activeTab === 'volunteers' ? this.renderVolunteersTab(game) : ''}
+
+      </div>
+    `;
+
+    if (window.lucide) window.lucide.createIcons();
+  },
+
+  // 5.1 Rendu de l'onglet principal : Cartes des Pôles
+  renderPolesTab(game) {
+    if (!game.poles || game.poles.length === 0) {
+      return `
+        <div class="p-8 rounded-3xl bg-gradient-to-b from-slate-50 to-indigo-50/40 border-2 border-dashed border-indigo-200 text-center space-y-4 max-w-2xl mx-auto my-6">
+          <div class="w-16 h-16 rounded-3xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-3xl mx-auto shadow-inner">
+            🏢
+          </div>
+          <div class="space-y-1">
+            <h3 class="text-base font-black text-slate-900">Aucun Pôle Créé pour le Moment</h3>
+            <p class="text-xs text-slate-600 leading-relaxed max-w-lg mx-auto">
+              Votre antenne fonctionne actuellement en <strong>gestion 100% manuelle</strong>. Toutes les tâches (candidatures, réarmement, formations, site internet) vous incombent.
+            </p>
+          </div>
+          <div class="p-4 rounded-2xl bg-white border border-indigo-100 text-left text-xs space-y-2 text-slate-700">
+            <span class="font-extrabold text-indigo-900 block flex items-center gap-1.5">
+              <span>💡</span> Pourquoi structurer votre antenne en pôles ?
+            </span>
+            <ul class="list-disc pl-5 space-y-1 text-slate-600 text-[11px]">
+              <li><strong>Déléguez les corvées répétitives</strong> à vos bénévoles qualifiés.</li>
+              <li><strong>Réglez précisément leur autonomie</strong> (budget max autorisé, sévérité de recrutement, seuils d'usure).</li>
+              <li><strong>Créez vos propres équipes</strong> à partir des 4 modèles officiels ou entièrement sur-mesure !</li>
+            </ul>
+          </div>
+          <div class="flex items-center justify-center gap-3 pt-2 flex-wrap">
+            <button onclick="window.ProtecPoles.isChoosingPreset = true; window.ProtecPoles.renderModal(window.game);" class="px-5 py-2.5 rounded-2xl text-xs font-black bg-pc-blue hover:bg-blue-600 text-white shadow-md transition flex items-center gap-2">
+              <i data-lucide="layers" class="w-4 h-4"></i>
+              <span>Choisir parmi les 4 Modèles Clés en Main</span>
+            </button>
+            <button onclick="window.ProtecPoles.isCreatingCustom = true; window.ProtecPoles.renderModal(window.game);" class="px-5 py-2.5 rounded-2xl text-xs font-black bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-sm transition flex items-center gap-2">
+              <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i>
+              <span>Créer un Pôle Sur-Mesure</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          ${game.poles.map(pole => this.renderPoleCard(game, pole)).join('')}
+        </div>
+      </div>
+    `;
+  },
+
+  // 5.2 Rendu d'une carte de pôle
+  renderPoleCard(game, pole) {
+    const leader = (game.volunteers || []).find(v => v.id === pole.responsibleId);
+    const assignedVols = (game.volunteers || []).filter(v => (pole.assignedVolunteerIds || []).includes(v.id));
+    const totalStaff = assignedVols.length + (leader && !assignedVols.some(v => v.id === leader.id) ? 1 : 0);
+    const isActive = totalStaff > 0;
+
+    return `
+      <div class="p-4 rounded-3xl glass-card space-y-4 border ${isActive ? 'border-slate-200/90 shadow-sm' : 'border-amber-300 bg-amber-50/20'} flex flex-col justify-between hover:shadow-md transition">
+        <div class="space-y-3.5">
+          <!-- Header Pôle -->
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-center gap-2.5">
+              <div class="w-10 h-10 rounded-2xl bg-${pole.color || 'blue'}-100 text-${pole.color || 'blue'}-700 flex items-center justify-center font-bold text-lg shadow-inner">
+                <i data-lucide="${pole.icon || 'shield'}" class="w-5 h-5"></i>
               </div>
-              <span class="text-[10px] text-amber-800 font-bold">Action du Joueur Requise</span>
+              <div>
+                <h4 class="text-xs font-black text-slate-900">${pole.name}</h4>
+                <div class="flex items-center gap-2 mt-0.5">
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${isActive ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'}">
+                    ${isActive ? `🟢 Actif (${totalStaff} bénévole${totalStaff > 1 ? 's' : ''})` : '⏸️ En pause (0 bénévole)'}
+                  </span>
+                  <span class="text-[10px] text-slate-500 font-semibold">${(pole.assignedTaskIds || []).length} mission(s)</span>
+                </div>
+              </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-              ${pendingRequests.map(req => `
-                <div class="p-3 rounded-xl bg-white border border-amber-200 shadow-sm space-y-2 flex flex-col justify-between">
-                  <div>
-                    <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-2">
-                        <span class="text-lg">${req.volunteerAvatar || '🙋'}</span>
-                        <div>
-                          <div class="font-extrabold text-xs text-slate-900">${req.volunteerName}</div>
-                          <div class="text-[10px] text-slate-500">${req.volunteerRank} • Souhaite intégrer : <strong class="text-indigo-900">${req.roleTitle}</strong></div>
+            <!-- Bouton Dissoudre -->
+            <button onclick="window.ProtecPoles.deletePole(window.game, '${pole.id}')" class="p-1.5 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition" title="Dissoudre ce pôle">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <p class="text-[11px] text-slate-600 leading-relaxed">${pole.desc || ''}</p>
+
+          <!-- Statut de pause si 0 bénévole -->
+          ${!isActive ? `
+            <div class="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5">
+                <span>⚠️</span>
+                <span>Aucune automatisation active. Assignez au moins 1 bénévole pour que ce pôle commence à agir.</span>
+              </div>
+              <button onclick="window.ProtecPoles.activeTab = 'volunteers'; window.ProtecPoles.renderModal(window.game);" class="px-2.5 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-[10px] flex-shrink-0">
+                Affecter ➜
+              </button>
+            </div>
+          ` : ''}
+
+          <!-- Responsable & Équipe -->
+          <div class="p-3 rounded-2xl bg-slate-50/80 border border-slate-100 space-y-2 text-xs">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">Équipe du Pôle</span>
+              <button onclick="window.ProtecPoles.activeTab = 'volunteers'; window.ProtecPoles.renderModal(window.game);" class="text-[10px] font-bold text-pc-blue hover:underline">
+                Gérer les membres (${totalStaff}) ➜
+              </button>
+            </div>
+
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="text-sm">👑</span>
+                <div>
+                  <span class="text-[10px] text-slate-400 block font-semibold leading-tight">Responsable</span>
+                  <strong class="text-slate-800 text-[11px]">${leader ? leader.name : 'Aucun responsable nommé'}</strong>
+                </div>
+              </div>
+              <span class="text-[10px] text-slate-500 font-bold">${assignedVols.length} équipier(s)</span>
+            </div>
+          </div>
+
+          <!-- LISTE DES MISSIONS & TÂCHES DÉLÉGUÉES AU PÔLE -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">Missions Confiées (${(pole.assignedTaskIds || []).length})</span>
+              <button onclick="window.ProtecPoles.expandedPoleTasksModal = '${pole.id}'; window.ProtecPoles.renderModal(window.game);" class="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition flex items-center gap-1">
+                <i data-lucide="plus" class="w-3 h-3"></i>
+                <span>Ajouter Mission</span>
+              </button>
+            </div>
+
+            <div class="space-y-2">
+              ${(pole.assignedTaskIds || []).map(taskId => {
+                const taskDef = this.TASKS_CATALOG.find(t => t.id === taskId);
+                if (!taskDef) return '';
+                const config = pole.taskConfigs[taskId] || { enabled: true };
+                const isExpanded = this.expandedTaskId === `${pole.id}_${taskId}`;
+
+                return `
+                  <div class="p-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="p-1 rounded-lg bg-slate-100 text-slate-700 text-xs flex-shrink-0">
+                          <i data-lucide="${taskDef.icon || 'check'}" class="w-3.5 h-3.5"></i>
+                        </span>
+                        <div class="min-w-0">
+                          <h5 class="text-xs font-bold text-slate-900 truncate leading-snug">${taskDef.name}</h5>
+                          <span class="text-[9.5px] text-slate-500 block truncate">${taskDef.desc}</span>
                         </div>
                       </div>
-                      <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300">
-                        ${req.poleName}
-                      </span>
-                    </div>
-                    <p class="text-[11px] text-slate-600 italic bg-slate-50 p-2 rounded-lg mt-2 border border-slate-100 leading-snug">
-                      ${req.motivation}
-                    </p>
-                  </div>
 
-                  <div class="flex items-center gap-2 pt-2 border-t border-slate-100">
-                    <button onclick="window.ProtecPoles.rejectRoleRequest(window.game, '${req.id}')" class="flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition border border-slate-200">
-                      Décliner
-                    </button>
-                    <button onclick="window.ProtecPoles.acceptRoleRequest(window.game, '${req.id}')" class="flex-1 py-1.5 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center justify-center gap-1">
-                      <i data-lucide="check" class="w-3.5 h-3.5"></i>
-                      <span>Valider le Rôle</span>
-                    </button>
+                      <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <!-- Bascule ON/OFF -->
+                        <button onclick="window.ProtecPoles.toggleTaskEnabled(window.game, '${pole.id}', '${taskId}')" class="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase transition ${config.enabled ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-200 text-slate-500'}">
+                          ${config.enabled ? 'AUTO ON' : 'PAUSE'}
+                        </button>
+
+                        <!-- Bouton Déplier Réglages -->
+                        <button onclick="window.ProtecPoles.expandedTaskId = '${isExpanded ? '' : `${pole.id}_${taskId}`}'; window.ProtecPoles.renderModal(window.game);" class="p-1 rounded-lg text-slate-500 hover:text-pc-blue hover:bg-slate-100 transition" title="Configurer les réglages d'automatisation">
+                          <i data-lucide="${isExpanded ? 'chevron-up' : 'settings-2'}" class="w-3.5 h-3.5"></i>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- PANNEAU DÉPLIABLE DE CONFIGURATION DE LA TÂCHE -->
+                    ${isExpanded ? this.renderTaskSettingsForm(pole, taskId, config) : ''}
                   </div>
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
           </div>
-        ` : ''}
 
-        <!-- 3. ACTIONS RAPIDES & CRÉATION DE PÔLE -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-black uppercase text-pc-blue flex items-center gap-1.5">
-              <i data-lucide="layers" class="w-4 h-4"></i> Pôles d'Antenne (${game.poles.length})
-            </span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pc-blue/10 text-pc-blue">
-              ${game.volunteers.length} effectifs
-            </span>
+          <!-- Journal d'activité récent -->
+          ${(pole.actionLogs && pole.actionLogs.length > 0) ? `
+            <div class="p-2.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
+              <span class="text-[9px] font-black uppercase text-slate-400 block tracking-wider">Dernière action automatisée :</span>
+              <p class="text-[10px] text-slate-600 italic">
+                « ${pole.actionLogs[0].text} »
+              </p>
+            </div>
+          ` : ''}
+
+        </div>
+      </div>
+    `;
+  },
+
+  // 5.3 Formulaire de réglages spécifiques pour chaque tâche
+  renderTaskSettingsForm(pole, taskId, config) {
+    let inputsHtml = '';
+
+    if (taskId === 'rh_candidatures') {
+      inputsHtml = `
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">Sévérité des refus :</label>
+            <select onchange="window.ProtecPoles.updateTaskSetting(window.game, '${pole.id}', '${taskId}', 'severity', this.value)" class="w-full p-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 outline-none">
+              <option value="souple" ${config.severity === 'souple' ? 'selected' : ''}>Souple (Motivation > 40%)</option>
+              <option value="standard" ${config.severity === 'standard' ? 'selected' : ''}>Standard (Permis ou PSC1)</option>
+              <option value="stricte" ${config.severity === 'stricte' ? 'selected' : ''}>Stricte (PSE2 ou Formateur)</option>
+            </select>
           </div>
-          <button onclick="window.ProtecPoles.addNewCustomPole(window.game)" class="px-3.5 py-1.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition flex items-center gap-1 self-start sm:self-auto">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-            <span>+ Créer un Pôle</span>
+          <div>
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">Quota effectif max :</label>
+            <input type="number" value="${config.maxVolunteersTarget || 30}" min="5" max="100" onchange="window.ProtecPoles.updateTaskSetting(window.game, '${pole.id}', '${taskId}', 'maxVolunteersTarget', parseInt(this.value, 10))" class="w-full p-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 outline-none" />
+          </div>
+        </div>
+      `;
+    } else if (taskId === 'log_achats') {
+      inputsHtml = `
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">Seuil critique d'alerte :</label>
+            <input type="number" value="${config.minStockThreshold || 4}" min="1" max="15" onchange="window.ProtecPoles.updateTaskSetting(window.game, '${pole.id}', '${taskId}', 'minStockThreshold', parseInt(this.value, 10))" class="w-full p-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 outline-none" />
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">Autonomie financière max :</label>
+            <select onchange="window.ProtecPoles.updateTaskSetting(window.game, '${pole.id}', '${taskId}', 'maxBudgetPerOrder', parseInt(this.value, 10))" class="w-full p-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 outline-none">
+              <option value="150" ${config.maxBudgetPerOrder === 150 ? 'selected' : ''}>Max 150 € par commande</option>
+              <option value="300" ${config.maxBudgetPerOrder === 300 ? 'selected' : ''}>Max 300 € par commande</option>
+              <option value="600" ${config.maxBudgetPerOrder === 600 ? 'selected' : ''}>Max 600 € par commande</option>
+            </select>
+          </div>
+        </div>
+      `;
+    } else if (taskId === 'log_maintenance') {
+      inputsHtml = `
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">Seuil toléré avant révision :</label>
+            <select onchange="window.ProtecPoles.updateTaskSetting(window.game, '${pole.id}', '${taskId}', 'wearThreshold', parseInt(this.value, 10))" class="w-full p-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 outline-none">
+              <option value="75" ${config.wearThreshold === 75 ? 'selected' : ''}>Préventif (< 75% d'état)</option>
+              <option value="60" ${config.wearThreshold === 60 ? 'selected' : ''}>Standard (< 60% d'état)</option>
+              <option value="40" ${config.wearThreshold === 40 ? 'selected' : ''}>Tardif (< 40% d'état)</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2 pt-3">
+            <input type="checkbox" id="insp_${pole.id}" ${config.autoInspection ? 'checked' : ''} onchange="window.ProtecPoles.updateTaskSetting(window.game, '${pole.id}', '${taskId}', 'autoInspection', this.checked)" class="rounded text-pc-blue" />
+            <label for="insp_${pole.id}" class="text-[10px] font-bold text-slate-600">Contrôles techniques auto</label>
+          </div>
+        </div>
+      `;
+    } else if (taskId === 'form_montee_competence') {
+      inputsHtml = `
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">Qualification visée :</label>
+            <select onchange="window.ProtecPoles.updateTaskSetting(window.game, '${pole.id}', '${taskId}', 'targetQualifications', this.value)" class="w-full p-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 outline-none">
+              <option value="all" ${config.targetQualifications === 'all' ? 'selected' : ''}>Toutes (PSE1 et PSE2)</option>
+              <option value="pse1" ${config.targetQualifications === 'pse1' ? 'selected' : ''}>PSE1 prioritaire</option>
+              <option value="pse2" ${config.targetQualifications === 'pse2' ? 'selected' : ''}>PSE2 uniquement</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">XP minimum requis :</label>
+            <input type="number" value="${config.minExpRequired || 40}" min="10" max="100" onchange="window.ProtecPoles.updateTaskSetting(window.game, '${pole.id}', '${taskId}', 'minExpRequired', parseInt(this.value, 10))" class="w-full p-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 outline-none" />
+          </div>
+        </div>
+      `;
+    } else if (taskId === 'ops_devis') {
+      inputsHtml = `
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="text-[10px] font-bold text-slate-500 block mb-1">Seuil minimal de rentabilité :</label>
+            <select onchange="window.ProtecPoles.updateTaskSetting(window.game, '${pole.id}', '${taskId}', 'minRevenueThreshold', parseInt(this.value, 10))" class="w-full p-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 outline-none">
+              <option value="200" ${config.minRevenueThreshold === 200 ? 'selected' : ''}>Dès 200 €</option>
+              <option value="350" ${config.minRevenueThreshold === 350 ? 'selected' : ''}>À partir de 350 €</option>
+              <option value="500" ${config.minRevenueThreshold === 500 ? 'selected' : ''}>Grands DPS (> 500 €)</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2 pt-3">
+            <input type="checkbox" id="devis_vol_${pole.id}" ${config.checkVolunteerAvailability ? 'checked' : ''} onchange="window.ProtecPoles.updateTaskSetting(window.game, '${pole.id}', '${taskId}', 'checkVolunteerAvailability', this.checked)" class="rounded text-pc-blue" />
+            <label for="devis_vol_${pole.id}" class="text-[10px] font-bold text-slate-600">Vérifier effectifs disponibles</label>
+          </div>
+        </div>
+      `;
+    } else {
+      inputsHtml = `
+        <p class="text-[11px] text-slate-500 italic">Cette tâche s'exécute automatiquement selon la présence et l'énergie des bénévoles assignés.</p>
+      `;
+    }
+
+    return `
+      <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2 mt-2 animate-in fade-in">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+          <span class="text-[10px] font-extrabold text-slate-700 uppercase tracking-wide">⚙️ Réglages d'Automatisation de cette Mission</span>
+          <button onclick="window.ProtecPoles.toggleTaskInPole(window.game, '${pole.id}', '${taskId}')" class="text-[10px] font-bold text-red-600 hover:underline">
+            Retirer du pôle
           </button>
         </div>
+        ${inputsHtml}
+      </div>
+    `;
+  },
 
-        <!-- 4. GRILLE DÉTAILLÉE DES PÔLES & LEURS RÔLES -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          ${game.poles.map(p => {
-            const leader = game.volunteers.find(v => v.id === p.responsibleId);
-            const members = game.volunteers.filter(v => p.assignedVolunteerIds.includes(v.id));
-            const poleRoles = this.ROLES_CATALOG.filter(r => r.poleId === p.id);
+  // 5.4 VUE 2 : RÉPERTOIRE GÉNÉRAL DE TOUTES LES TÂCHES (DÉLÉGUÉES OU 100% MANUELLES)
+  renderAllTasksTab(game) {
+    const tasks = this.TASKS_CATALOG;
+    const poles = game.poles || [];
 
-            // Automatisation active
-            const isFormation = p.id === 'formation' || p.type === 'formation';
-            const isLogistique = p.id === 'logistique' || p.type === 'logistique';
+    return `
+      <div class="space-y-4">
+        <!-- Bandeau informatif -->
+        <div class="p-4 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md flex items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-xl">📋</span>
+            <div>
+              <h4 class="font-black text-sm">Répertoire Central des Tâches d'Antenne</h4>
+              <p class="text-white/70 text-[11px]">Visualisez quelles tâches sont confiées à des pôles et lesquelles restent sous votre responsabilité 100% manuelle.</p>
+            </div>
+          </div>
+          <span class="px-3 py-1 rounded-full text-[10px] font-black bg-white/10 border border-white/20">
+            ${tasks.length} missions réelles
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          ${tasks.map(task => {
+            const managingPole = poles.find(p => (p.assignedTaskIds || []).includes(task.id));
+            const isDelegated = !!managingPole;
 
             return `
-              <div class="p-4 rounded-2xl glass-card space-y-4 border border-white/80 shadow-sm flex flex-col justify-between hover:shadow-md transition">
-                <div class="space-y-3">
-                  <!-- Header Pôle avec Bouton Modifier -->
-                  <div class="flex items-start justify-between gap-2">
-                    <div class="flex items-center gap-2">
-                      <div class="w-9 h-9 rounded-xl bg-${p.color || 'blue'}-100 text-${p.color || 'blue'}-700 flex items-center justify-center font-bold">
-                        <i data-lucide="${p.icon || 'shield'}" class="w-4 h-4"></i>
-                      </div>
-                      <div>
-                        <h4 class="text-xs font-black text-slate-900">${p.name}</h4>
-                        <span class="text-[10px] text-slate-400 font-semibold">${p.missionLabel || 'Missions'}</span>
-                      </div>
-                    </div>
-                    
-                    <button onclick="window.ProtecPoles.openEditModal(window.game, '${p.id}')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition flex items-center gap-1 border border-indigo-200" title="Modifier le titre, les missions et descriptions">
-                      <i data-lucide="pencil" class="w-3 h-3"></i>
-                      <span>Modifier</span>
-                    </button>
+              <div class="p-3.5 rounded-2xl glass-card space-y-2.5 border ${isDelegated ? 'border-slate-200' : 'border-amber-300 bg-amber-50/20'} flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase ${task.badgeColor}">
+                      ${task.categoryLabel}
+                    </span>
+                    <span class="px-2 py-0.5 rounded-full text-[9px] font-black ${isDelegated ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-900 border border-amber-300'}">
+                      ${isDelegated ? `Délégué : ${managingPole.name}` : '✋ 100% Manuel par Vous'}
+                    </span>
                   </div>
 
-                  <p class="text-xs text-slate-600 leading-normal">${p.desc || ''}</p>
-                  
-                  <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-[10px] text-slate-700 font-semibold flex items-center gap-1.5">
-                    <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-500 flex-shrink-0"></i>
-                    <span>${p.bonusDesc || 'Bonus opérationnel actif'}</span>
-                  </div>
-
-                  <!-- BADGE D'AUTOMATISATION SPÉCIFIQUE (Formation & Logistique) -->
-                  ${isFormation ? `
-                    <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-950 flex items-center justify-between">
-                      <div class="flex items-center gap-2">
-                        <span class="text-base">⚡</span>
-                        <div>
-                          <div class="font-black text-emerald-900">Automatisation Formations Active</div>
-                          <div class="text-[9.5px] text-emerald-700">Le Responsable Formation inscrit et planifie automatiquement les sessions des bénévoles.</div>
-                        </div>
-                      </div>
-                      <span class="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[9px] font-black">AUTO</span>
-                    </div>
-                  ` : ''}
-
-                  ${isLogistique ? `
-                    <div class="p-2.5 rounded-xl bg-teal-50 border border-teal-200 text-[11px] text-teal-950 flex items-center justify-between">
-                      <div class="flex items-center gap-2">
-                        <span class="text-base">🔧</span>
-                        <div>
-                          <div class="font-black text-teal-900">Missions Logistiques Bénévoles</div>
-                          <div class="text-[9.5px] text-teal-700">Ce sont les bénévoles logistique qui réarment automatiquement la flotte et les consommables.</div>
-                        </div>
-                      </div>
-                      <span class="px-2 py-0.5 rounded-full bg-teal-200 text-teal-900 text-[9px] font-black">AUTO</span>
-                    </div>
-                  ` : ''}
-
-                  <!-- SECTION DES RÔLES & POSTES DU PÔLE -->
-                  <div class="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800">
-                    <div class="flex items-center justify-between text-[11px]">
-                      <span class="font-extrabold text-slate-800 uppercase tracking-wider text-[9px]">Postes & Rôles d'Antenne</span>
-                      <span class="text-[10px] text-slate-400 font-semibold">${poleRoles.length} poste(s) définis</span>
-                    </div>
-
-                    <div class="space-y-1.5">
-                      ${poleRoles.map(role => {
-                        const holders = game.volunteers.filter(v => v.poleRoleId === role.id);
-                        const isVacant = holders.length === 0;
-
-                        return `
-                          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                            <div class="flex items-center justify-between">
-                              <div class="flex items-center gap-1.5">
-                                <span class="w-6 h-6 rounded-lg ${role.badgeColor} flex items-center justify-center text-xs font-black">
-                                  <i data-lucide="${role.icon}" class="w-3.5 h-3.5"></i>
-                                </span>
-                                <div>
-                                  <div class="text-xs font-black text-slate-900">${role.title}</div>
-                                  <div class="text-[9px] text-slate-500 font-medium">${role.prereqLabel}</div>
-                                </div>
-                              </div>
-                              <span class="px-2 py-0.5 rounded text-[9px] font-black ${isVacant ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
-                                ${isVacant ? 'Vacant' : `${holders.length}/${role.maxHolders || 1}`}
-                              </span>
-                            </div>
-
-                            <p class="text-[10px] text-slate-600 leading-tight">${role.desc}</p>
-
-                            <!-- Titulaires actuels du poste -->
-                            <div class="flex flex-wrap items-center gap-1 pt-1">
-                              ${isVacant ? `
-                                <span class="text-[10px] text-slate-400 italic">Aucun titulaire pour le moment.</span>
-                              ` : holders.map(h => `
-                                <div class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-[10px] font-bold text-slate-800 flex items-center gap-1 shadow-2xs">
-                                  <span>${h.avatar || '🙋'}</span>
-                                  <span>${h.name}</span>
-                                  <button onclick="window.ProtecPoles.removeRoleFromVolunteer(window.game, '${h.id}')" class="text-slate-400 hover:text-red-600 transition ml-1" title="Libérer le poste">✕</button>
-                                </div>
-                              `).join('')}
-                            </div>
-
-                            <!-- Nommer directement un bénévole à ce poste -->
-                            <div class="pt-1">
-                              <select onchange="if(this.value) window.ProtecPoles.assignRoleToVolunteer(window.game, this.value, '${role.id}'); this.value='';" class="w-full text-[10.5px] p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium">
-                                <option value="">+ Nommer un bénévole à ce poste...</option>
-                                ${game.volunteers.filter(v => v.poleRoleId !== role.id).map(v => `
-                                  <option value="${v.id}">${v.name} (${v.rank} • ${v.poleRoleTitle ? `Déjà ${v.poleRoleTitle}` : 'Sans rôle'})</option>
-                                `).join('')}
-                              </select>
-                            </div>
-                          </div>
-                        `;
-                      }).join('')}
+                  <div class="flex items-center gap-2 mt-2">
+                    <span class="p-1.5 rounded-xl bg-slate-100 text-slate-700">
+                      <i data-lucide="${task.icon}" class="w-4 h-4"></i>
+                    </span>
+                    <div>
+                      <h5 class="text-xs font-bold text-slate-900">${task.name}</h5>
                     </div>
                   </div>
 
-                  <!-- Effectifs affectés au pôle -->
-                  <div class="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <div class="flex items-center justify-between text-[11px]">
-                      <span class="font-extrabold text-slate-700">Membres affectés (${members.length})</span>
-                      <span class="text-[10px] text-slate-400">Salariés & Bénévoles</span>
-                    </div>
-                    <div class="max-h-24 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                      ${members.length === 0 ? '<p class="text-[11px] text-slate-400 italic">Aucun secouriste assigné à ce pôle.</p>' : ''}
-                      ${members.map(m => `
-                        <div class="p-1.5 rounded-xl glass-card flex items-center justify-between text-xs">
-                          <div class="flex items-center gap-1.5">
-                            <span>${m.avatar || '🙋'}</span>
-                            <div>
-                              <div class="font-bold text-slate-800 text-[11px]">${m.name}</div>
-                              <div class="text-[9px] text-slate-400 font-medium">${m.rank} • ${m.poleRoleTitle ? `<span class="text-indigo-700 font-bold">${m.poleRoleTitle}</span>` : 'Membre'}</div>
-                            </div>
-                          </div>
-                          <span class="px-1.5 py-0.2 rounded text-[8.5px] font-black ${m.dispoType === 'salarié' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}">
-                            ${m.id === p.responsibleId ? 'Responsable' : (m.dispoType === 'salarié' ? '+40% XP' : 'Membre')}
-                          </span>
-                        </div>
-                      `).join('')}
-                    </div>
-                  </div>
+                  <p class="text-[11px] text-slate-600 mt-1.5 leading-relaxed">${task.desc}</p>
                 </div>
 
-                <!-- Assigner un membre au pôle -->
-                <div class="pt-3 border-t border-slate-100 dark:border-slate-800">
-                  <select onchange="if(this.value) window.ProtecPoles.assignVolunteerToPole(window.game, this.value, '${p.id}'); this.value='';" class="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-pc-blue dark:text-sky-400 font-bold">
-                    <option value="">+ Affecter un bénévole / salarié à ce pôle...</option>
-                    ${game.volunteers.filter(v => !p.assignedVolunteerIds.includes(v.id)).map(v => `
-                      <option value="${v.id}">${v.name} (${v.rank} • ${v.dispoType === 'salarié' ? 'Salarié' : 'Bénévole'})</option>
-                    `).join('')}
-                  </select>
+                <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span class="text-[10px] text-slate-400 font-semibold">
+                    ${isDelegated ? 'Automatisé selon présence des bénévoles' : 'Aucune automatisation active'}
+                  </span>
+
+                  ${poles.length > 0 ? `
+                    <select onchange="if (this.value) window.ProtecPoles.toggleTaskInPole(window.game, this.value, '${task.id}')" class="p-1 px-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] font-extrabold text-slate-700 outline-none cursor-pointer">
+                      <option value="">${isDelegated ? 'Changer de Pôle...' : 'Confier à un Pôle...'}</option>
+                      ${poles.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                    </select>
+                  ` : `
+                    <button onclick="window.ProtecPoles.isChoosingPreset = true; window.ProtecPoles.renderModal(window.game);" class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-indigo-600 text-white hover:bg-indigo-700 transition">
+                      + Créer un Pôle
+                    </button>
+                  `}
                 </div>
               </div>
             `;
@@ -1387,7 +1290,268 @@ window.ProtecPoles = {
         </div>
       </div>
     `;
+  },
 
-    if (window.lucide) window.lucide.createIcons();
+  // 5.5 VUE 3 : AFFECTATION DES BÉNÉVOLES
+  renderVolunteersTab(game) {
+    const vols = game.volunteers || [];
+    const poles = game.poles || [];
+
+    return `
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h4 class="text-xs font-black uppercase text-slate-900 tracking-wider">Effectif de l'Antenne & Postes Occupés</h4>
+            <p class="text-[11px] text-slate-500">Assignez vos secouristes aux pôles pour activer les automatisations.</p>
+          </div>
+          <span class="text-xs font-bold text-slate-500">${vols.length} personnel(s)</span>
+        </div>
+
+        ${poles.length === 0 ? `
+          <div class="p-6 rounded-2xl bg-amber-50 border border-amber-200 text-center space-y-2 text-xs text-amber-900">
+            <strong>Aucun pôle n'existe actuellement.</strong>
+            <p class="text-[11px]">Créez d'abord un pôle pour pouvoir y affecter des bénévoles.</p>
+            <button onclick="window.ProtecPoles.isChoosingPreset = true; window.ProtecPoles.renderModal(window.game);" class="px-4 py-2 rounded-xl bg-pc-blue text-white font-black">
+              Créer un Pôle
+            </button>
+          </div>
+        ` : `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            ${vols.map(v => {
+              const assignedPole = poles.find(p => p.id === v.assignedPoleId);
+              const isResp = assignedPole && assignedPole.responsibleId === v.id;
+
+              return `
+                <div class="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                      ${v.avatar || '👤'}
+                    </span>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-1.5">
+                        <strong class="text-xs font-black text-slate-900 truncate">${v.name}</strong>
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600">${v.rank || 'Secouriste'}</span>
+                      </div>
+                      <span class="text-[10px] text-slate-400 block truncate">
+                        ${assignedPole ? (isResp ? `👑 Responsable (${assignedPole.name})` : `Équipier (${assignedPole.name})`) : 'Secouriste opérationnel pur (hors pôle)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <select onchange="
+                      const val = this.value;
+                      if (!val) {
+                        window.ProtecPoles.removeVolunteerFromPole(window.game, '${v.id}');
+                      } else {
+                        const [pId, resp] = val.split(':');
+                        window.ProtecPoles.assignVolunteerToPole(window.game, '${v.id}', pId, resp === 'resp');
+                      }
+                    " class="p-1 px-2 rounded-xl bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-800 outline-none cursor-pointer">
+                      <option value="" ${!assignedPole ? 'selected' : ''}>Sans Pôle (Opérations)</option>
+                      ${poles.map(p => `
+                        <option value="${p.id}:member" ${assignedPole?.id === p.id && !isResp ? 'selected' : ''}>Équipier - ${p.name}</option>
+                        <option value="${p.id}:resp" ${assignedPole?.id === p.id && isResp ? 'selected' : ''}>👑 Responsable - ${p.name}</option>
+                      `).join('')}
+                    </select>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `}
+      </div>
+    `;
+  },
+
+  // 5.6 MODAL : CHOISIR UN MODÈLE DE PÔLE PRÉDÉFINI
+  renderPresetSelectionModal(game) {
+    return `
+      <div class="p-5 rounded-3xl bg-slate-900 text-white shadow-2xl border-2 border-indigo-400 space-y-4 animate-in fade-in">
+        <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">📋</span>
+            <h4 class="text-sm font-black text-amber-300">Choisir un Modèle Officiel de Pôle</h4>
+          </div>
+          <button onclick="window.ProtecPoles.isChoosingPreset = false; window.ProtecPoles.renderModal(window.game);" class="text-xs text-slate-400 hover:text-white transition">✕ Fermer</button>
+        </div>
+
+        <p class="text-xs text-slate-300">
+          Chaque modèle est pré-configuré avec ses missions opérationnelles réelles. Vous pourrez ajuster ses paramètres à tout moment.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          ${this.PRESET_TEMPLATES.map(preset => {
+            const alreadyExists = (game.poles || []).some(p => p.name === preset.name);
+
+            return `
+              <div class="p-3.5 rounded-2xl bg-slate-800 border border-slate-700 flex flex-col justify-between space-y-3">
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase ${preset.badgeClass}">
+                      Modèle Officiel
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-semibold">${preset.includedTaskIds.length} missions</span>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg">🏢</span>
+                    <h5 class="text-xs font-black text-white">${preset.name}</h5>
+                  </div>
+
+                  <p class="text-[11px] text-slate-300 leading-snug">${preset.desc}</p>
+
+                  <div class="pt-1 space-y-1">
+                    <span class="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Missions incluses :</span>
+                    <div class="flex flex-wrap gap-1">
+                      ${preset.includedTaskIds.map(tId => {
+                        const tDef = this.TASKS_CATALOG.find(t => t.id === tId);
+                        return `<span class="px-1.5 py-0.5 rounded text-[9px] bg-slate-700 text-slate-200 font-medium">${tDef?.name || tId}</span>`;
+                      }).join('')}
+                    </div>
+                  </div>
+                </div>
+
+                <button onclick="window.ProtecPoles.createPoleFromPreset(window.game, '${preset.id}')" ${alreadyExists ? 'disabled' : ''} class="w-full py-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${alreadyExists ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md cursor-pointer'}">
+                  <i data-lucide="${alreadyExists ? 'check' : 'plus'}" class="w-3.5 h-3.5"></i>
+                  <span>${alreadyExists ? 'Déjà créé dans votre antenne' : 'Constituer ce Pôle'}</span>
+                </button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+
+        <div class="pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+          <span class="text-slate-400">Vous souhaitez un pôle totalement sur-mesure ?</span>
+          <button onclick="window.ProtecPoles.isChoosingPreset = false; window.ProtecPoles.isCreatingCustom = true; window.ProtecPoles.renderModal(window.game);" class="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black transition flex items-center gap-1">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span>Créer un Pôle Sur-Mesure</span>
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
+  // 5.7 MODAL : CRÉER UN PÔLE SUR-MESURE
+  renderCustomCreationModal(game) {
+    return `
+      <div class="p-5 rounded-3xl bg-slate-900 text-white shadow-2xl border-2 border-amber-400 space-y-4 animate-in fade-in">
+        <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">✨</span>
+            <h4 class="text-sm font-black text-amber-300">Créer un Pôle d'Antenne Sur-Mesure</h4>
+          </div>
+          <button onclick="window.ProtecPoles.isCreatingCustom = false; window.ProtecPoles.renderModal(window.game);" class="text-xs text-slate-400 hover:text-white transition">✕ Annuler</button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div class="space-y-1 sm:col-span-2">
+            <label class="font-bold text-slate-300">Nom du Pôle :</label>
+            <input id="custom-pole-name" type="text" placeholder="Ex: Pôle Partenariats & Événements" class="w-full p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold text-xs focus:border-amber-400 outline-none" />
+          </div>
+
+          <div class="space-y-1">
+            <label class="font-bold text-slate-300">Icône :</label>
+            <select id="custom-pole-icon" class="w-full p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs outline-none">
+              <option value="shield">Bouclier Secours</option>
+              <option value="truck">Véhicules & Flotte</option>
+              <option value="users">Équipe & Personnel</option>
+              <option value="graduation-cap">Pédagogie & Formation</option>
+              <option value="heart-handshake">Solidarité & Social</option>
+              <option value="megaphone">Communication & Médias</option>
+              <option value="radio">Radio & Opérations</option>
+              <option value="sparkles">Étoiles / Prestige</option>
+            </select>
+          </div>
+
+          <div class="space-y-1">
+            <label class="font-bold text-slate-300">Couleur d'Identification :</label>
+            <select id="custom-pole-color" class="w-full p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs outline-none">
+              <option value="blue">Bleu Protection Civile</option>
+              <option value="teal">Sarcelle Logistique</option>
+              <option value="emerald">Émeraude Formation</option>
+              <option value="indigo">Indigo RH & Recrutement</option>
+              <option value="purple">Violet Communication</option>
+              <option value="amber">Ambre Partenariats</option>
+            </select>
+          </div>
+
+          <div class="space-y-1 sm:col-span-2">
+            <label class="font-bold text-slate-300">Description du Rôle :</label>
+            <textarea id="custom-pole-desc" rows="2" placeholder="Décrivez la vocation opérationnelle de ce pôle..." class="w-full p-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:border-amber-400 outline-none"></textarea>
+          </div>
+        </div>
+
+        <div class="space-y-2 pt-2 border-t border-slate-800">
+          <span class="text-xs font-bold text-slate-300 block">Sélectionnez les missions à confier à ce pôle :</span>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+            ${this.TASKS_CATALOG.map(task => `
+              <label class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 flex items-start gap-2 cursor-pointer transition text-xs">
+                <input type="checkbox" name="custom-task" value="${task.id}" class="mt-0.5 rounded text-amber-500" />
+                <div>
+                  <strong class="text-white block text-[11px]">${task.name}</strong>
+                  <span class="text-[9.5px] text-slate-400 block">${task.desc}</span>
+                </div>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <button onclick="window.ProtecPoles.isCreatingCustom = false; window.ProtecPoles.renderModal(window.game);" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition">Annuler</button>
+          <button onclick="
+            const name = document.getElementById('custom-pole-name').value;
+            const icon = document.getElementById('custom-pole-icon').value;
+            const color = document.getElementById('custom-pole-color').value;
+            const desc = document.getElementById('custom-pole-desc').value;
+            const checks = Array.from(document.querySelectorAll('input[name=\'custom-task\']:checked')).map(c => c.value);
+            window.ProtecPoles.createCustomPole(window.game, name, icon, color, desc, checks);
+          " class="px-5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:brightness-110 transition flex items-center gap-1.5">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Créer le Pôle</span>
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
+  // 5.8 MODAL : AJOUTER DES MISSIONS À UN PÔLE EXISTANT
+  renderAddTasksToPoleModal(game, poleId) {
+    const pole = (game.poles || []).find(p => p.id === poleId);
+    if (!pole) return '';
+    const available = this.TASKS_CATALOG.filter(t => !(pole.assignedTaskIds || []).includes(t.id));
+
+    return `
+      <div class="p-5 rounded-3xl bg-slate-900 text-white shadow-2xl border-2 border-indigo-400 space-y-4 animate-in fade-in">
+        <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">➕</span>
+            <h4 class="text-sm font-black text-amber-300">Ajouter une Mission au « ${pole.name} »</h4>
+          </div>
+          <button onclick="window.ProtecPoles.expandedPoleTasksModal = null; window.ProtecPoles.renderModal(window.game);" class="text-xs text-slate-400 hover:text-white transition">✕ Fermer</button>
+        </div>
+
+        ${available.length === 0 ? `
+          <p class="text-xs text-slate-400 italic">Toutes les missions du catalogue sont déjà confiées à ce pôle !</p>
+        ` : `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
+            ${available.map(task => `
+              <div class="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-between gap-3 text-xs">
+                <div class="space-y-0.5 min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <span class="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase ${task.badgeColor}">${task.categoryLabel}</span>
+                  </div>
+                  <strong class="text-white block text-[11px] truncate">${task.name}</strong>
+                  <span class="text-[9.5px] text-slate-400 block line-clamp-2">${task.desc}</span>
+                </div>
+                <button onclick="window.ProtecPoles.toggleTaskInPole(window.game, '${pole.id}', '${task.id}'); window.ProtecPoles.expandedPoleTasksModal = null;" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition flex-shrink-0">
+                  + Confier
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+    `;
   }
 };
