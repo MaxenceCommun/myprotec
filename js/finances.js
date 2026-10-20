@@ -795,30 +795,30 @@ window.ProtecFinances = {
         
         <!-- Onglets principaux de flux (Tous / Entrées / Sorties) -->
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="inline-flex p-1 rounded-xl bg-slate-200/80 text-xs font-bold">
+          <div class="inline-flex p-1 rounded-xl bg-slate-200/80 dark:bg-slate-800 border border-slate-300/60 dark:border-slate-700 text-xs font-bold shadow-2xs">
             <button
               onclick="window.ProtecFinances.setFlowFilter('all')"
-              class="px-3 py-1.5 rounded-lg transition-all ${this.filters.flow === 'all' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
+              class="px-3 py-1.5 rounded-lg transition-all ${this.filters.flow === 'all' ? 'bg-white dark:bg-slate-700 text-pc-blue dark:text-blue-300 shadow-sm font-black' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}">
               Tous les mouvements (${history.length})
             </button>
             <button
               onclick="window.ProtecFinances.setFlowFilter('recette')"
-              class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${this.filters.flow === 'recette' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-emerald-700'}">
+              class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${this.filters.flow === 'recette' ? 'bg-emerald-600 text-white shadow-sm font-black' : 'text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400'}">
               <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i> Entrées (+${globalRecettes.toLocaleString('fr-FR')} €)
             </button>
             <button
               onclick="window.ProtecFinances.setFlowFilter('depense')"
-              class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${this.filters.flow === 'depense' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-600 hover:text-rose-700'}">
+              class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${this.filters.flow === 'depense' ? 'bg-rose-600 text-white shadow-sm font-black' : 'text-slate-600 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400'}">
               <i data-lucide="arrow-down-right" class="w-3.5 h-3.5"></i> Sorties (-${globalDepenses.toLocaleString('fr-FR')} €)
             </button>
           </div>
 
           <!-- Sélecteur de Tri -->
           <div class="flex items-center gap-2">
-            <label class="text-[11px] font-bold text-slate-500">Trier par :</label>
+            <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Trier par :</label>
             <select
               onchange="window.ProtecFinances.setSortFilter(this.value)"
-              class="text-xs bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 font-bold text-slate-700 focus:outline-none focus:border-pc-blue">
+              class="text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-2.5 py-1.5 font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-pc-blue">
               <option value="date_desc" ${this.filters.sortBy === 'date_desc' ? 'selected' : ''}>Plus récent en premier</option>
               <option value="date_asc" ${this.filters.sortBy === 'date_asc' ? 'selected' : ''}>Plus ancien en premier</option>
               <option value="amount_desc" ${this.filters.sortBy === 'amount_desc' ? 'selected' : ''}>Montant le plus élevé</option>
@@ -835,7 +835,7 @@ window.ProtecFinances = {
             value="${this.filters.search}"
             oninput="window.ProtecFinances.setSearchFilter(this.value)"
             placeholder="Rechercher par libellé, référence (ex: DPS, VPSP, PSC1, SAMU, matériel...)"
-            class="w-full text-xs bg-white border border-slate-300 rounded-xl pl-9 pr-8 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-pc-blue focus:ring-1 focus:ring-pc-blue font-medium"
+            class="w-full text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-8 py-2.5 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-pc-blue focus:ring-1 focus:ring-pc-blue font-medium"
           />
           <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400 pointer-events-none"></i>
           ${this.filters.search ? `
@@ -985,17 +985,17 @@ window.ProtecFinances = {
               const isPositive = item.amount >= 0;
 
               return `
-                <div class="p-3.5 rounded-2xl glass-card border border-slate-100 hover:border-pc-blue/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs group">
+                <div class="p-3.5 rounded-2xl glass-card border border-slate-100 dark:border-slate-750 hover:border-pc-blue/40 dark:hover:border-blue-400/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs group bg-white dark:bg-slate-800">
                   
                   <!-- Gauche : Icône, Libellé, Date & Badges -->
                   <div class="flex items-start sm:items-center gap-3 min-w-0">
-                    <div class="w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center font-bold text-base shadow-sm ${isPositive ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'}">
+                    <div class="w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center font-bold text-base shadow-sm ${isPositive ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60'}">
                       <i data-lucide="${catObj.icon || (isPositive ? 'arrow-up-right' : 'arrow-down-right')}" class="w-5 h-5"></i>
                     </div>
 
                     <div class="min-w-0 space-y-1">
                       <div class="flex flex-wrap items-center gap-2">
-                        <strong class="text-slate-900 font-bold truncate">${item.label}</strong>
+                        <strong class="text-slate-900 dark:text-white font-bold truncate">${item.label}</strong>
                         <span class="px-2 py-0.5 rounded-full text-[9px] font-bold border ${catObj.badgeClass}">
                           ${catObj.label}
                         </span>
@@ -1003,15 +1003,15 @@ window.ProtecFinances = {
                       
                       <div class="flex flex-wrap items-center gap-3 text-[10px] text-slate-400 font-medium">
                         <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3 text-slate-400"></i> ${item.dateStr || 'Date N/A'}</span>
-                        ${item.ref ? `<span class="flex items-center gap-1"><i data-lucide="tag" class="w-3 h-3 text-slate-400"></i> Réf: <span class="font-mono text-slate-600">${item.ref}</span></span>` : ''}
+                        ${item.ref ? `<span class="flex items-center gap-1"><i data-lucide="tag" class="w-3 h-3 text-slate-400"></i> Réf: <span class="font-mono text-slate-600 dark:text-slate-300">${item.ref}</span></span>` : ''}
                         ${item.tier ? `<span class="flex items-center gap-1"><i data-lucide="building" class="w-3 h-3 text-slate-400"></i> Tiers: ${item.tier}</span>` : ''}
                       </div>
                     </div>
                   </div>
 
                   <!-- Droite : Montant & Solde bancaire après opération -->
-                  <div class="text-right shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 flex sm:flex-col justify-between sm:justify-center items-end">
-                    <span class="text-sm font-black mono-num ${isPositive ? 'text-emerald-700' : 'text-rose-600'} block">
+                  <div class="text-right shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-700/60 flex sm:flex-col justify-between sm:justify-center items-end">
+                    <span class="text-sm font-black mono-num ${isPositive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'} block">
                       ${isPositive ? '+' : ''}${item.amount.toLocaleString('fr-FR')} €
                     </span>
                     <span class="text-[10px] text-slate-400 font-mono block">
@@ -1050,14 +1050,14 @@ window.ProtecFinances = {
       return `
         <button
           onclick="window.ProtecFinances.setCategoryFilter('${isSelected ? 'all' : item.key}')"
-          class="p-2.5 rounded-xl border text-left transition-all ${isSelected ? 'ring-2 ring-pc-blue bg-white shadow-sm' : 'bg-white/80 hover:bg-white border-slate-200'}">
+          class="p-2.5 rounded-xl border text-left transition-all ${isSelected ? 'ring-2 ring-pc-blue bg-white dark:bg-slate-800 shadow-sm border-pc-blue dark:border-blue-400' : 'bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700'}">
           <div class="flex items-center justify-between text-[11px] mb-1">
-            <span class="font-bold text-slate-700 truncate flex items-center gap-1.5">
-              <i data-lucide="${item.cat.icon}" class="w-3.5 h-3.5 text-slate-500"></i> ${item.name}
+            <span class="font-bold text-slate-700 dark:text-slate-200 truncate flex items-center gap-1.5">
+              <i data-lucide="${item.cat.icon}" class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400"></i> ${item.name}
             </span>
             <span class="text-[9px] text-slate-400 font-mono font-bold">${data.count} ops</span>
           </div>
-          <div class="text-xs font-black mono-num ${isExpense ? 'text-rose-600' : 'text-emerald-700'}">
+          <div class="text-xs font-black mono-num ${isExpense ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'}">
             ${isExpense ? '-' : '+'}${amount.toLocaleString('fr-FR')} €
           </div>
         </button>

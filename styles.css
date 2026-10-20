@@ -1490,6 +1490,13 @@ html.dark .bg-slate-100 {
   background-color: #1e293b !important;
 }
 
+html.dark .bg-slate-200,
+html.dark .bg-slate-200\/80,
+html.dark .bg-slate-200\/60 {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
 html.dark .border-slate-100,
 html.dark .border-slate-200,
 html.dark .border-slate-200\/80,
