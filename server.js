@@ -909,6 +909,19 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Wipe Total du Jeu (Panel Admin - Admin uniquement)
+  if (url === '/api/admin/master-reset' && req.method === 'POST') {
+    const access = getAdminAccess(req);
+    if (!access.isAdmin) {
+      sendJson(res, 403, { success: false, error: 'Wipe total réservé exclusivement à l\'administrateur.' });
+      return;
+    }
+    const result = db.masterReset();
+    broadcastSSE('game_master_reset', { timestamp: Date.now() });
+    sendJson(res, 200, result);
+    return;
+  }
+
   // Restaurer une archive de remise à zéro vers un joueur (Panel Admin - Admin uniquement)
   if (url === '/api/admin/restore-archive' && req.method === 'POST') {
     const access = getAdminAccess(req);

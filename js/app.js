@@ -2605,22 +2605,29 @@ class ProtecGame {
       console.warn('Erreur purge Cloud Supabase:', e);
     }
 
-    // 4. Purge TOTALE des clés du localStorage (Sauvegardes, Nom d'antenne, Département, Position, Onboarding)
+    // 4. Purge TOTALE et absolue du stockage local et session (évite toute réapparition de missions ou logs)
     try {
-      localStorage.removeItem('protec_live_save_v4');
-      localStorage.removeItem('protec_save');
-      localStorage.removeItem('myprotec_save');
-      localStorage.removeItem('protec_save_game');
-      localStorage.removeItem('protec_department_code');
-      localStorage.removeItem('protec_station_name');
-      localStorage.removeItem('protec_onboarding_step');
-      localStorage.removeItem('protec_onboarding_volunteers');
-      localStorage.removeItem('protec_onboarding_placement');
-      localStorage.removeItem('protec_first_antenna_setup');
-      localStorage.removeItem('protec_notif_history');
-      localStorage.removeItem('protec_user_profile');
+      this._resetInProgress = true;
+      this.saveGame = () => {}; // Verrouille tout enregistrement résiduel
 
-      // Nettoyer l'objet utilisateur protec_user en conservant le compte et rôle
+      // Purge du sessionStorage (notamment le cache instantané myprotec_instant_cache)
+      sessionStorage.clear();
+
+      // Purge des clés de jeu localStorage
+      const keysToRemove = [
+        'protec_live_save_v4', 'protec_save', 'myprotec_save', 'protec_save_game',
+        'protec_department_code', 'protec_station_name', 'protec_onboarding_step',
+        'protec_onboarding_volunteers', 'protec_onboarding_placement',
+        'protec_first_antenna_setup', 'protec_notif_history', 'protec_user_profile',
+        'protec_pinned_missions', 'protec_rewards_save', 'protec_daily_challenges',
+        'protec_time_tracking', 'protec_antenne_messages', 'protec_market_local_listings',
+        'protec_last_saved_at', 'protec_offline_queue'
+      ];
+      keysToRemove.forEach(k => {
+        try { localStorage.removeItem(k); } catch (e) {}
+      });
+
+      // Nettoyer l'objet utilisateur protec_user en conservant les identifiants
       const userRaw = localStorage.getItem('protec_user');
       if (userRaw) {
         const u = JSON.parse(userRaw);
@@ -2634,15 +2641,20 @@ class ProtecGame {
         }
       }
     } catch (e) {
-      console.warn('Erreur purge localStorage:', e);
+      console.warn('Erreur purge storage:', e);
     }
 
-    // 5. Purge TOTALE de l'état en mémoire
+    // 5. Purge TOTALE de l'état en mémoire (Zéro résidu)
     this.stations = [];
     this.vehicles = [];
     this.volunteers = [];
     this.missions = [];
     this.devis = [];
+    this.alertTriggerLogs = [];
+    this.antenneMessagesData = null;
+    this.radioLogs = [];
+    this.financesHistory = [];
+    this.rewards = null;
     this.candidatures = [];
     this.formations = [];
     this.annualContracts = [];

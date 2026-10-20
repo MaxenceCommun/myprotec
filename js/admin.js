@@ -1581,20 +1581,54 @@ window.ProtecAdmin = {
       window.game.showToast('Réinitialisation en cours...', 'Purge de la base locale et du cloud Supabase...', 'blue');
     }
 
-    // 1. Purge des tables Supabase Cloud
+    // 0. Bloquer toute sauvegarde automatique parasite en cours
+    if (window.game) {
+      window.game._resetInProgress = true;
+      window.game.saveGame = () => {};
+      window.game.stations = [];
+      window.game.vehicles = [];
+      window.game.volunteers = [];
+      window.game.missions = [];
+      window.game.devis = [];
+      window.game.alertTriggerLogs = [];
+      window.game.radioLogs = [];
+      window.game.financesHistory = [];
+      window.game.rewards = null;
+      window.game.antenneMessagesData = null;
+      window.game.annualContracts = [];
+      window.game.candidatures = [];
+      window.game.formations = [];
+    }
+
+    // 1. Purge intégrale et robuste des tables Supabase Cloud
     if (window.ProtecSupabase && window.ProtecSupabase.client) {
       const sb = window.ProtecSupabase.client;
       const tables = [
         'operational_log', 'server_events_log', 'fraud_logs', 'referral_logs',
         'chat_messages', 'market_listings', 'active_formations', 'active_missions',
-        'antenne_ecussons', 'alliance_stations', 'game_saves', 'push_subscriptions', 'players'
+        'antenne_ecussons', 'alliance_stations', 'game_saves', 'push_subscriptions'
       ];
       for (const t of tables) {
         try {
-          await sb.from(t).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+          await sb.from(t).delete().neq('id', 'none');
         } catch (errTable) {
-          console.warn(`Purge Supabase table ${t}:`, errTable);
+          try {
+            await sb.from(t).delete().gte('created_at', '1970-01-01');
+          } catch (e2) {
+            console.warn(`Purge Supabase table ${t}:`, errTable);
+          }
         }
+      }
+      // Purge des comptes joueurs (on préserve le compte Admin mais réinitialisé à blanc)
+      try {
+        await sb.from('players').delete().neq('username', 'Admin');
+        await sb.from('players').update({
+          station_name: null,
+          department_code: null,
+          city: null
+        }).eq('username', 'Admin');
+      } catch (errPl) {
+        console.warn('Purge players Supabase:', errPl);
       }
     }
 
@@ -1613,23 +1647,41 @@ window.ProtecAdmin = {
       console.warn('Erreur /api/admin/master-reset:', e);
     }
 
-    // 3. Purge totale du stockage navigateur
+    // 3. Purge totale et absolue du stockage navigateur (LocalStorage, SessionStorage, Caches, IndexedDB)
     try {
       localStorage.clear();
       sessionStorage.clear();
     } catch (e) {}
 
+    try {
+      if (window.caches && typeof window.caches.keys === 'function') {
+        const cacheKeys = await window.caches.keys();
+        for (const k of cacheKeys) {
+          await window.caches.delete(k);
+        }
+      }
+    } catch (e) {}
+
+    try {
+      if (window.indexedDB && typeof window.indexedDB.databases === 'function') {
+        const dbs = await window.indexedDB.databases();
+        for (const dbInfo of dbs) {
+          if (dbInfo.name) window.indexedDB.deleteDatabase(dbInfo.name);
+        }
+      }
+    } catch (e) {}
+
     // 4. Message de confirmation
     if (window.ProtecDialog && typeof window.ProtecDialog.alert === 'function') {
       await window.ProtecDialog.alert(
-        "Le jeu entier a été réinitialisé à zéro avec succès !\nTous les comptes, stations, véhicules et données ont été purgés.\nLe compte Admin par défaut a été réinitialisé.",
-        "Wipe Réussi"
+        "Le jeu entier a été réinitialisé à zéro avec succès !\nToutes les missions, logs, devis, véhicules, bénévoles et données cloud ont été définitivement purgés.\nVous allez être redirigé vers l'accueil.",
+        "Wipe Total Réussi"
       );
     } else {
-      alert("Le jeu entier a été réinitialisé à zéro avec succès !\nTous les comptes et données ont été purgés.");
+      alert("Le jeu entier a été réinitialisé à zéro avec succès !\nToutes les données ont été purgées.");
     }
 
-    window.location.href = 'jeu.html';
+    window.location.replace('jeu.html');
   },
 
   // =========================================================================
