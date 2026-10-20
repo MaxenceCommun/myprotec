@@ -989,6 +989,10 @@ window.ProtecAdvanced = {
     { id: 'infirmier', name: 'Infirmier DE (Infirmier Diplômé d’État)', icon: '💉', xpRequired: 40, desc: 'Diplôme d’État d’Infirmier : autorise les soins d’urgence protocolisés, analgésie et surveillance avancée au sein de l’équipe médicale.' },
     { id: 'medecin', name: 'Médecin Urgentiste (Docteur en Médecine)', icon: '🩺', xpRequired: 55, desc: 'Docteur en Médecine : régulation terrain, médicalisation d’urgence, réanimation avancée et commandement médical du PMA.' },
 
+    // Filière Technique & Prompt Secours
+    { id: 'tronc', name: 'Opérateur Tronçonneuse (Tronc.)', icon: '🪓', xpRequired: 30, desc: 'Habilitation officielle au maniement des tronçonneuses thermiques et matériels de coupe pour le dégagement d’urgence et déblaiement de voies (1 opérateur par équipe suffit).' },
+    { id: 'ceps', name: 'Chef d’Équipe Prompt Secours (CEPS)', icon: '🚨', xpRequired: 45, reqSkill: 'ce', desc: 'Commandement opérationnel des interventions réflexes, départs urgents et gardes SDIS / prompt secours.' },
+
     // Filière Pédagogique & Formateurs (PIC F préalable distinct de Formateur PSC)
     { id: 'picf', name: 'PIC F (Pédagogie Initiale de Formateur)', icon: '📘', xpRequired: 30, desc: 'Tronc commun pédagogique obligatoire préalable aux brevets de formateur de sécurité civile.' },
     { id: 'formateur_psc', name: 'Formateur PSC (Secourisme Citoyen)', icon: '🎓', xpRequired: 35, reqSkill: 'picf', desc: 'Habilité à animer et certifier le grand public aux Gestes Qui Sauvent (GQS) et au PSC.' },

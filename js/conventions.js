@@ -1460,6 +1460,23 @@ window.ProtecRNMSC = {
           warnings.push("Équipe Médicale Requise : Cet événement à risque élevé (course sportive / grand rassemblement / crise) impose la présence d’au moins 1 Médecin ou Infirmier DE. Dispositif en vigilance médicale.");
         }
       }
+
+      // 2.6 RÈGLE MÉTIER TRONÇONNEUSE & DÉBLAIEMENT : 1 seul opérateur Tronc. par équipe est suffisant !
+      const usesTronc = Boolean(
+        (mission.configuredLots || []).includes('lot_tronconnage') ||
+        (mission.assignedEquipment && mission.assignedEquipment.lot_tronconnage > 0) ||
+        /tronçonn|déblaiement|tempête|chute.*arbre|dégagement.*voie/i.test(mission.title || mission.name || '')
+      );
+      if (usesTronc && totalCrew > 0) {
+        const troncOperators = volunteers.filter(v => (
+          roles[v.id] === 'operateur_tronc' ||
+          (game && typeof game.hasVolunteerSkill === 'function' && game.hasVolunteerSkill(v, 'tronc')) ||
+          (v.skills || []).some(s => String(s).toLowerCase().includes('tronc'))
+        ));
+        if (troncOperators.length === 0) {
+          warnings.push("Opérateur Tronçonneuse : Pour utiliser les tronçonneuses (Lot Tronçonnage / Déblaiement), au moins 1 intervenant formé « Tronc. » par équipe est nécessaire (un seul par équipe suffit, le reste assurant le déblaiement).");
+        }
+      }
     }
 
     // -------------------------------------------------------------------------

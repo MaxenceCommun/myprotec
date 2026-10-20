@@ -12359,7 +12359,9 @@ class ProtecGame {
       'radio': { id: 'radio', label: 'Opérateur Radio / Transmissions PC', cat: 'Transmission', badge: '📻 Radio/PC', color: 'bg-slate-100 text-slate-800 border-slate-300 font-bold', order: 53 },
       'communication': { id: 'communication', label: 'Communication & Médias', cat: 'Presse', badge: '📸 Com', color: 'bg-pink-100 text-pink-900 border-pink-300 font-semibold', order: 54 },
       'medecin': { id: 'medecin', label: 'Docteur en Médecine / Urgentiste', cat: 'Santé', badge: '🩺 DOC', color: 'bg-rose-100 text-rose-900 border-rose-300 font-extrabold', order: 5 },
-      'infirmier': { id: 'infirmier', label: 'Infirmier Diplômé d’État (IDE)', cat: 'Santé', badge: '💉 IDE', color: 'bg-cyan-100 text-cyan-900 border-cyan-300 font-extrabold', order: 6 }
+      'infirmier': { id: 'infirmier', label: 'Infirmier Diplômé d’État (IDE)', cat: 'Santé', badge: '💉 IDE', color: 'bg-cyan-100 text-cyan-900 border-cyan-300 font-extrabold', order: 6 },
+      'ceps': { id: 'ceps', label: 'Chef d’Équipe Prompt Secours (CEPS)', cat: 'Secours', badge: '🚨 CEPS', color: 'bg-rose-100 text-rose-900 border-rose-300 font-extrabold', order: 7 },
+      'tronc': { id: 'tronc', label: 'Opérateur Tronçonneuse (Tronc.)', cat: 'Technique', badge: '🪓 Tronc.', color: 'bg-amber-100 text-amber-900 border-amber-300 font-extrabold', order: 35 }
     };
 
     const detected = new Set();
@@ -12391,6 +12393,8 @@ class ProtecGame {
       else if (clean.includes('com')) detected.add('communication');
       else if (clean.includes('medecin') || clean === 'doc' || clean.includes('docteur')) detected.add('medecin');
       else if (clean.includes('infirmier') || clean.includes('infirmiere') || clean === 'ide') detected.add('infirmier');
+      else if (clean.includes('tronc')) detected.add('tronc');
+      else if (clean.includes('ceps') || clean.includes('prompt_secours')) detected.add('ceps');
       else if (skillsMap[clean]) detected.add(clean);
     });
 
@@ -12445,6 +12449,8 @@ class ProtecGame {
     }
     if (v.isDoctor || v.professionCivil === 'medecin') detected.add('medecin');
     if (v.isNurse || v.professionCivil === 'infirmier') detected.add('infirmier');
+    if (v.hasTronc || (v.skills || []).includes('tronc')) detected.add('tronc');
+    if (v.hasCeps || (v.skills || []).includes('ceps')) detected.add('ceps');
 
     const items = Array.from(detected).map(id => {
       return skillsMap[id] || {
@@ -12819,6 +12825,8 @@ class ProtecGame {
     if (skillId === 'permis_vpsp' && (vol.hasPermisVpsp || vol.permis_vpsp)) return true;
     if (skillId === 'medecin' && (vol.isDoctor || (vol.skills || []).some(s => String(s).toLowerCase().includes('medecin') || s === 'doc'))) return true;
     if (skillId === 'infirmier' && (vol.isNurse || vol.isDoctor || (vol.skills || []).some(s => String(s).toLowerCase().includes('infirmier') || s === 'ide' || s === 'doc' || s === 'medecin'))) return true;
+    if (skillId === 'tronc' && (vol.hasTronc || (vol.skills || []).some(s => String(s).toLowerCase().includes('tronc')))) return true;
+    if (skillId === 'ceps' && (vol.hasCeps || (vol.skills || []).some(s => String(s).toLowerCase().includes('ceps')))) return true;
 
     // Inspection du tableau de compétences existant
     if (Array.isArray(vol.skills)) {
@@ -12867,6 +12875,8 @@ class ProtecGame {
       'communication': 'Communication & Médias',
       'medecin': 'Docteur en Médecine (Médecin)',
       'infirmier': 'Infirmier Diplômé d’État (IDE)',
+      'ceps': 'Chef d’Équipe Prompt Secours (CEPS)',
+      'tronc': 'Tronçonneuse & Déblaiement (Tronc.)',
       'pilotage': 'Conduite d’Urgence VPSP',
       'ci': 'Chef d’Intervention',
       'ca': 'Chef d’Agrès',
@@ -12887,6 +12897,8 @@ class ProtecGame {
       { id: 'chef_binome', label: 'Chef Binôme', icon: 'users', desc: 'Responsable du binôme de secours' },
       { id: 'infirmier', label: 'Infirmier DE (Équipe Médicale)', icon: 'syringe', reqSkill: 'infirmier', desc: 'Infirmier Diplômé d’État : soins d’urgence, protocoles et analgésie' },
       { id: 'medecin', label: 'Médecin (Équipe Médicale)', icon: 'stethoscope', reqSkill: 'medecin', desc: 'Docteur en Médecine : régulation terrain et médicalisation d’urgence' },
+      { id: 'ceps', label: 'Chef d’Équipe Prompt Secours', icon: 'shield-alert', reqSkill: 'ceps', desc: 'Commandement prompt secours en intervention d’urgence réflexe / garde SDIS' },
+      { id: 'operateur_tronc', label: 'Opérateur Tronçonneuse', icon: 'axe', reqSkill: 'tronc', desc: 'Débitage et coupe sécurisée sur déblaiement et intempéries (1 par équipe suffit)' },
       { id: 'chef_equipe', label: 'Chef d’équipe', icon: 'shield', desc: 'Commandement opérationnel de l’équipe' },
       { id: 'chef_poste', label: 'Chef de Poste', icon: 'home', desc: 'Responsable de la structure de soins fixe' },
       { id: 'chef_secteur', label: 'Chef de Secteur', icon: 'compass', desc: 'Coordination tactique sur un secteur géographique' },
@@ -12929,6 +12941,24 @@ class ProtecGame {
     const isNurse = isDoctor || skills.some(s => ['infirmier', 'infirmiere', 'ide'].includes(s)) || Boolean(volunteer.isNurse);
 
     switch (roleId) {
+      case 'ceps':
+        if (!skills.includes('ceps') && !isCe) {
+          return {
+            qualified: false,
+            reason: `Qualification manquante : la fonction « Chef d'équipe Prompt Secours (CEPS) » requiert la qualification CEPS ou le brevet CE (${volunteer.name} est titulaire de ${volunteer.rank || 'Secouriste'}).`
+          };
+        }
+        break;
+
+      case 'operateur_tronc':
+        if (!skills.includes('tronc') && !skills.some(s => s.includes('tronc'))) {
+          return {
+            qualified: false,
+            reason: `Habilitation manquante : l'utilisation de la tronçonneuse requiert l'habilitation officielle « Tronc. » (${volunteer.name} n'est pas habilité au tronçonnage).`
+          };
+        }
+        break;
+
       case 'medecin':
         if (!isDoctor) {
           return {

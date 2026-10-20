@@ -3204,7 +3204,7 @@ window.ProtecPersonnel = {
         rank: 'PSE2',
         baseExp: 18 + Math.floor(Math.random() * 10),
         mandatorySkills: ['pse2', 'pse1'],
-        bonusSkillPool: ['permis_b', 'permis_vpsp', 'logistique', 'qcpr'],
+        bonusSkillPool: ['permis_b', 'permis_vpsp', 'logistique', 'qcpr', 'tronc', 'ceps'],
         socialTypes: ['salarie', 'parent', 'actif'],
         preferredTrait: ['calme', 'ponctuel', 'equilibre']
       },
