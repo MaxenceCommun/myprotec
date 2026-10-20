@@ -17304,17 +17304,37 @@ class ProtecGame {
                     </span>
                   </div>
 
-                  <!-- Lot A : Prompt Secours -->
+                  <!-- Dotation Sanitaire VPSP (Jauge de Consommables, Sans Lot A) -->
+                  ${(mission.assignedVehicleIds || []).some(id => (this.vehicles || []).find(v => v.id === id && v.type === 'VPSP')) ? `
+                    <div class="p-3 rounded-xl bg-gradient-to-r from-blue-50/80 via-white to-sky-50/40 border border-blue-200 space-y-2">
+                      <div class="flex items-center justify-between">
+                        <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
+                          <i data-lucide="ambulance" class="w-4 h-4 text-pc-blue"></i>
+                          <span>Armement VPSP — Ambulance de Secours (Jauge de Consommables)</span>
+                        </span>
+                        <span class="text-[9px] font-black px-2 py-0.5 rounded bg-blue-100 text-pc-blue border border-blue-200">
+                          Sans Lot A (Dotation Ambulance Propre)
+                        </span>
+                      </div>
+                      <p class="text-[11px] text-slate-600 leading-relaxed">
+                        Le VPSP ne contient pas de Lot A : il dispose de son armement sanitaire d'ambulance complet (brancard coquille MID, bouteilles O2 fixe/portable, DAE, aspirateur de mucosités, attelles, matériel de soins). Son armement est suivi via sa <strong>jauge de consommables</strong> qui se réarme avec les <strong>kits de réarmement</strong>.
+                      </p>
+                    </div>
+                  ` : ''}
+
+                  <!-- Lot A : Prompt Secours (Réservé Postes Fixes & PAP Pédestres) -->
                   <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
                     <div class="flex items-center justify-between">
                       <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                        <span>Lot A — Prompt Secours & Réanimation</span>
+                        <span class="w-2 h-2 rounded-full ${(mission.configuredLots || []).includes('lot_a') ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
+                        <span>Lot A — Prompt Secours (Poste Fixe / PAP / Équipe Pédestre)</span>
                       </span>
-                      <span class="text-[9px] font-black px-2 py-0.5 rounded bg-blue-100 text-blue-800">Embarqué VPSP</span>
+                      <span class="text-[9px] font-black px-2 py-0.5 rounded ${(mission.configuredLots || []).includes('lot_a') ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}">
+                        ${(mission.configuredLots || []).includes('lot_a') ? 'Dotation Poste Fixe' : 'Non requis'}
+                      </span>
                     </div>
                     <p class="text-[11px] text-slate-600 leading-relaxed">
-                      Sac d'intervention d'urgence complet : Défibrillateur DAE automatisé, aspirateur de mucosités, colliers cervicaux (pédiatrique & adulte), oxygénothérapie 5L/min, tensiomètre, saturomètre SpO2, pansements compressifs & garrot tourniquet tactique.
+                      Sac de prompt secours pour secouristes à pied ou poste fixe : DAE automatisé, aspirateur de mucosités, colliers cervicaux, pansements & garrot.
                     </p>
                   </div>
 
@@ -17335,12 +17355,12 @@ class ProtecGame {
                   </div>
                 </div>
 
-                <!-- Dotation Sanitaire Intégrée au Lot A (Norme RNMSC) -->
+                <!-- Dotation Sanitaire & Réanimation (Norme RNMSC) -->
                 <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-2">
                   <div class="flex items-center justify-between">
                     <span class="text-xs font-black text-slate-800 dark:text-slate-200 uppercase flex items-center gap-1.5">
                       <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
-                      <span>Dotation Sanitaire Intégrée au Lot A</span>
+                      <span>Dotation Sanitaire & Réanimation</span>
                     </span>
                     <span class="text-[9px] font-black px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700">✓ Conforme RNMSC</span>
                   </div>
@@ -17350,14 +17370,14 @@ class ProtecGame {
                         <i data-lucide="heart-pulse" class="w-4 h-4 text-rose-500"></i>
                         <span>Défibrillateur (DAE)</span>
                       </div>
-                      <p class="text-[10px] text-slate-500 dark:text-slate-400">Intégré dans le sac d'urgence Lot A. Électrodes adultes & pédiatriques prêtes.</p>
+                      <p class="text-[10px] text-slate-500 dark:text-slate-400">Embarqué dans le VPSP et/ou le sac d'urgence. Électrodes adultes & pédiatriques prêtes.</p>
                     </div>
                     <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 space-y-1">
                       <div class="flex items-center gap-1.5 font-extrabold text-slate-800 dark:text-slate-200">
                         <i data-lucide="wind" class="w-4 h-4 text-sky-500"></i>
                         <span>Inhalothérapie (O2 B5)</span>
                       </div>
-                      <p class="text-[10px] text-slate-500 dark:text-slate-400">Bouteilles O2 médical 200 bars intégrées à la jauge consommable du Lot A.</p>
+                      <p class="text-[10px] text-slate-500 dark:text-slate-400">Bouteilles O2 médical 200 bars intégrées à la jauge de consommables du VPSP.</p>
                     </div>
                   </div>
                 </div>

@@ -1529,19 +1529,33 @@ window.ProtecSystems = {
     if (!v) return;
 
     if (actionType === 'rearm') {
-      const cost = 30;
-      if (game.resources.money < cost) {
-        game.showToast('Fonds insuffisants', `Le réarmement du matériel requiert ${cost} €.`, 'orange');
+      if (window.ProtecLogistique && typeof window.ProtecLogistique.rearmVehicleSingle === 'function') {
+        window.ProtecLogistique.rearmVehicleSingle(game, vehicleId);
         return;
       }
-      game.resources.money -= cost;
-      v.needsRearming = false;
-      v.isRearmed = true;
-      v.armementLevel = 100;
+      const station = (game.stations || []).find(s => s.id === v.stationId) || game.stations?.[0];
+      const stockCaisse = station?.stock?.caisse_rearmement || 0;
+      if (stockCaisse >= 1) {
+        station.stock.caisse_rearmement -= 1;
+        v.consumables = 100;
+        v.armementLevel = 100;
+        v.needsRearming = false;
+        v.isRearmed = true;
+        game.showToast('Véhicule Réarmé ✓', `${v.name} a été réarmé à 100% avec 1 kit de réarmement du stock.`, 'green');
+      } else if (game.resources.money >= 60) {
+        game.resources.money -= 60;
+        v.consumables = 100;
+        v.armementLevel = 100;
+        v.needsRearming = false;
+        v.isRearmed = true;
+        game.showToast('Véhicule Réarmé ✓', `1 Kit de réarmement acheté (60 €) : ${v.name} est réarmé à 100%.`, 'green');
+      } else {
+        game.showToast('Stock Épuisé', 'Aucun kit de réarmement en stock à l\'antenne et trésorerie insuffisante (60 €).', 'orange');
+        return;
+      }
       if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordVehicleRearmed === 'function') {
         window.ProtecAdvanced.recordVehicleRearmed(game, v);
       }
-      game.showToast('Matériel Réarmé', `${v.name} a reçu ses sacs de secours reconditionnés et son matériel médical complet.`, 'green');
     } else if (actionType === 'fuel') {
       const cost = 75;
       if (game.resources.money < cost) {

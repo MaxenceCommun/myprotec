@@ -217,33 +217,53 @@ window.ProtecModals = {
                     </div>
                   </div>
 
-                  <!-- Jauges -->
-                  <div class="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <div class="flex justify-between text-[11px] mb-1">
-                        <span class="text-slate-500">Carburant</span>
-                        <strong class="font-mono text-slate-700">${fuel}%</strong>
+                  <!-- Jauges (Carburant, Consommables pour VPSP, et Santé mécanique) -->
+                  ${(() => {
+                    const isVpsp = (v.type === 'VPSP' || v.model?.includes('VPSP') || (v.types && v.types.includes('VPSP')));
+                    const cons = Math.round(v.consumables !== undefined ? v.consumables : (v.armementLevel || 100));
+                    const consColor = cons > 40 ? 'bg-emerald-500' : (cons > 15 ? 'bg-amber-500' : 'bg-rose-500');
+                    const consTextColor = cons > 40 ? 'text-emerald-700' : (cons > 15 ? 'text-amber-700' : 'text-rose-700');
+
+                    return `
+                      <div class="grid ${isVpsp ? 'grid-cols-3' : 'grid-cols-2'} gap-2.5 text-xs">
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-1">
+                            <span class="text-slate-500">Carburant</span>
+                            <strong class="font-mono text-slate-700">${fuel}%</strong>
+                          </div>
+                          <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden">
+                            <div class="bg-emerald-500 h-full rounded-full" style="width: ${fuel}%"></div>
+                          </div>
+                        </div>
+                        ${isVpsp ? `
+                          <div>
+                            <div class="flex justify-between text-[11px] mb-1">
+                              <span class="text-slate-500">Consommables</span>
+                              <strong class="font-mono ${consTextColor}">${cons}%</strong>
+                            </div>
+                            <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden" title="Jauge de consommables VPSP : se réarme avec 1 Kit de réarmement">
+                              <div class="${consColor} h-full rounded-full transition-all duration-300" style="width: ${cons}%"></div>
+                            </div>
+                          </div>
+                        ` : ''}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-1">
+                            <span class="text-slate-500">Santé mécanique</span>
+                            <strong class="font-mono ${mech < 50 ? 'text-red-600' : 'text-slate-700'}">${mech}%</strong>
+                          </div>
+                          <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden">
+                            <div class="${mech < 50 ? 'bg-red-500' : 'bg-pc-blue'} h-full rounded-full" style="width: ${mech}%"></div>
+                          </div>
+                        </div>
                       </div>
-                      <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden">
-                        <div class="bg-emerald-500 h-full rounded-full" style="width: ${fuel}%"></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div class="flex justify-between text-[11px] mb-1">
-                        <span class="text-slate-500">Santé mécanique</span>
-                        <strong class="font-mono ${mech < 50 ? 'text-red-600' : 'text-slate-700'}">${mech}%</strong>
-                      </div>
-                      <div class="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden">
-                        <div class="${mech < 50 ? 'bg-red-500' : 'bg-pc-blue'} h-full rounded-full" style="width: ${mech}%"></div>
-                      </div>
-                    </div>
-                  </div>
+                    `;
+                  })()}
 
                   <!-- Actions garage complètes -->
                   <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100/80">
-                    <!-- Réarmement matériel post-mission -->
-                    <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'rearm')" class="py-1.5 rounded-xl text-[11px] font-bold ${v.needsRearming ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm' : 'glass-button text-slate-700'} transition">
-                      ${v.needsRearming ? 'Réarmer Sacs (30 €)' : 'Réarmer (30 €)'}
+                    <!-- Réarmement consommables avec Kit de réarmement -->
+                    <button onclick="if (window.ProtecLogistique?.rearmVehicleSingle) { window.ProtecLogistique.rearmVehicleSingle(window.game, '${v.id}'); window.game.openModal('vehicles'); } else { window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'rearm'); window.game.openModal('vehicles'); }" class="py-1.5 rounded-xl text-[11px] font-bold ${(v.consumables !== undefined ? v.consumables < 100 : v.needsRearming) ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs' : 'glass-button text-slate-700'} transition" title="Réarmer la jauge de consommables à 100% avec 1 Kit de réarmement du stock">
+                      ${(v.consumables !== undefined ? v.consumables < 100 : v.needsRearming) ? 'Réarmer avec 1 Kit' : 'Consommables (100%)'}
                     </button>
                     <!-- Carburant -->
                     <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'fuel')" class="py-1.5 rounded-xl text-[11px] font-bold glass-button text-slate-700 transition">
