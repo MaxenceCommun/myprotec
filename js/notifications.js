@@ -430,6 +430,8 @@ window.ProtecNotifications = {
       const seenBilanDays = new Set();
       this.history = this.history.filter(item => {
         if (!item || !item.title) return false;
+        const bodyContent = (item.message || item.body || '').trim();
+        if (!bodyContent) return false;
         const t = (item.title || '').toLowerCase();
         const m = (item.message || '').toLowerCase();
         // Purger les notifications système de filtres, thèmes, apparence, préférences
@@ -483,14 +485,29 @@ window.ProtecNotifications = {
         this.swRegistration = reg;
 
         navigator.serviceWorker.addEventListener('message', (event) => {
-          if (event.data?.type === 'PUSH_NOTIFICATION_RECEIVED' || event.data?.type === 'NOTIFICATION_ACTION_CLICKED') {
+          if (event.data?.type === 'PUSH_NOTIFICATION_RECEIVED') {
             const d = event.data.data || {};
             this.syncCloudMissions();
-            if (window.game && typeof window.game.showToast === 'function') {
-              window.game.showToast(d.title || '🚨 Alerte Reçue', d.body || d.message || '', d.type || 'orange');
+            const bodyMsg = d.body || d.message || '';
+            if (bodyMsg.trim()) {
+              if (window.game && typeof window.game.showToast === 'function') {
+                window.game.showToast(d.title || '🚨 Alerte Protection Civile', bodyMsg, d.type || 'orange');
+              }
+              this.playAlertSound(d.title, bodyMsg);
+              this.triggerVibration();
             }
-            this.playAlertSound(d.title, d.body);
-            this.triggerVibration();
+          } else if (event.data?.type === 'NOTIFICATION_ACTION_CLICKED') {
+            const d = event.data.data || {};
+            this.syncCloudMissions();
+            // Clic sur notification : naviguer directement sans générer de faux toast vide
+            if (d.targetId && window.game) {
+              const mission = (window.game.missions || []).find(m => m.id === d.targetId);
+              if (mission && typeof window.game.showMissionDetailsModal === 'function') {
+                window.game.showMissionDetailsModal(mission);
+              }
+            } else if (d.module && window.game && typeof window.game.openModule === 'function') {
+              window.game.openModule(d.module);
+            }
           }
         });
 
@@ -996,6 +1013,10 @@ window.ProtecNotifications = {
 
   recordNotification(data) {
     if (!data) return;
+    const rawContent = (data.message || data.body || '').trim();
+    // Bloquer impérativement toute notification dont le message est vide
+    if (!rawContent) return;
+
     const t = (data.title || '').toLowerCase();
     const m = (data.message || data.body || '').toLowerCase();
 

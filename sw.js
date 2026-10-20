@@ -10,7 +10,7 @@
  * - En cas de coupure réseau, le client bloque immédiatement l'accès au jeu.
  */
 
-const CACHE_VERSION = 'myprotec-online-v2.5.7';
+const CACHE_VERSION = 'myprotec-online-v2.5.8';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 
 // Tableau de suivi des minuteurs d'alerte en arrière-plan
@@ -233,7 +233,7 @@ self.addEventListener('push', (event) => {
     vibrate: payload.vibrate || [200, 100, 200],
     tag: payload.tag || `protec-alert-${Date.now()}`,
     renotify: true,
-    data: Object.assign({ url: targetUrl }, payload.data || {}),
+    data: Object.assign({ url: targetUrl, title: title, body: body }, payload.data || {}),
     actions: payload.actions || [
       { action: 'action_open', title: '📍 Voir l’Intervention' }
     ]
@@ -246,7 +246,7 @@ self.addEventListener('push', (event) => {
         return self.registration.showNotification(title, {
           body: body,
           icon: icon,
-          data: { url: targetUrl }
+          data: { url: targetUrl, title: title, body: body }
         });
       })
       .then(() => {
@@ -278,7 +278,11 @@ self.addEventListener('notificationclick', (event) => {
             client.postMessage({
               type: 'NOTIFICATION_ACTION_CLICKED',
               action: event.action || 'click',
-              data: event.notification.data
+              data: {
+                title: event.notification.title,
+                body: event.notification.body,
+                ...(event.notification.data || {})
+              }
             });
             return client.focus();
           }
