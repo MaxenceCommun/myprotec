@@ -1502,7 +1502,7 @@ window.ProtecLocaux = {
 
   // Calcul des statistiques cumulées des locaux
   calculatePremisesStats(premises) {
-    if (!premises || !premises.grid) {
+    if (!premises) {
       return {
         surfaceM2: 0,
         storageCapacity: 0,
@@ -1513,6 +1513,7 @@ window.ProtecLocaux = {
         energyRegen: 0,
         moralBonus: 0,
         nightBeds: 0,
+        trainingQuality: 100,
         counts: {}
       };
     }
@@ -1522,28 +1523,115 @@ window.ProtecLocaux = {
       counts[key] = 0;
     }
 
-    premises.grid.forEach(tileKey => {
-      if (counts[tileKey] !== undefined) {
-        counts[tileKey]++;
-      }
-    });
+    if (premises.grid && Array.isArray(premises.grid)) {
+      premises.grid.forEach(tileKey => {
+        if (counts[tileKey] !== undefined) {
+          counts[tileKey]++;
+        }
+      });
+    }
 
-    const storageTiles = counts.stockage || 0;
-    const formationTiles = counts.formation || 0;
-    const garageTiles = counts.garage || 0;
-    const detenteTiles = counts.detente || 0;
-    const dortoirTiles = counts.dortoir || 0;
+    // Statistiques de base issues des tuiles
+    let storageCapacity = (counts.stockage || 0) * 50;
+    let studentCapacity = (counts.formation || 0) * 6;
+    let vehicleCapacity = ((counts.garage || 0) * 1) + ((counts.parking || 0) * 1);
+    let energyRegen = (counts.detente || 0) * 15;
+    let moralBonus = (counts.detente || 0) * 5;
+    let nightBeds = (counts.dortoir || 0) * 2;
+    let trainingQuality = 100; // Base 100%
+
+    // Intégration du plan d'architecte réel (architecture CAD / Les Sims)
+    const arch = premises.architecture;
+    if (arch) {
+      // 1. Pièces et vocations
+      if (arch.rooms && Array.isArray(arch.rooms)) {
+        arch.rooms.forEach(r => {
+          if (r.type === 'formation' || r.name?.toLowerCase().includes('formation')) {
+            studentCapacity += 8;
+          } else if (r.type === 'stockage' || r.type === 'reserve' || r.name?.toLowerCase().includes('réserve')) {
+            storageCapacity += 40;
+          } else if (r.type === 'detente' || r.name?.toLowerCase().includes('foyer')) {
+            energyRegen += 10;
+            moralBonus += 5;
+          } else if (r.type === 'dortoir' || r.name?.toLowerCase().includes('dortoir') || r.name?.toLowerCase().includes('garde')) {
+            nightBeds += 2;
+          }
+        });
+      }
+
+      // 2. Parking opérationnel extérieur (spots)
+      if (arch.parkingSpots && Array.isArray(arch.parkingSpots)) {
+        vehicleCapacity += arch.parkingSpots.length;
+      } else {
+        vehicleCapacity = Math.max(vehicleCapacity, 2); // Minimum 2 places par défaut (parking cour)
+      }
+
+      // 3. Mobilier réel placé dans les pièces
+      if (arch.furniture && Array.isArray(arch.furniture)) {
+        arch.furniture.forEach(item => {
+          switch (item.type) {
+            case 'etagere_lots':
+              storageCapacity += 35; // +35 capacité lots A/B
+              break;
+            case 'armoire_pharmacie':
+              storageCapacity += 20; // +20 capacité consommables
+              break;
+            case 'casiers_vestiaire':
+              storageCapacity += 25; // +25 capacité vestiaire / tenues
+              moralBonus += 2;
+              break;
+            case 'table_formation':
+              studentCapacity += 4; // +4 élèves par table
+              break;
+            case 'tableau_blanc':
+              trainingQuality += 10; // +10% qualité pédagogique
+              break;
+            case 'mannequin_rcp':
+              trainingQuality += 15; // +15% qualité formation
+              break;
+            case 'dae_mural':
+              trainingQuality += 5;
+              break;
+            case 'lit_garde':
+              nightBeds += 1; // +1 lit d'astreinte
+              energyRegen += 10;
+              break;
+            case 'canape_detente':
+              energyRegen += 10; // +10% régénération énergie
+              moralBonus += 5;
+              break;
+            case 'machine_cafe':
+              energyRegen += 5;
+              moralBonus += 3;
+              break;
+            case 'bureau':
+            case 'chaise':
+              moralBonus += 1;
+              break;
+          }
+        });
+      }
+    } else {
+      // Valeurs de base par défaut
+      if (vehicleCapacity === 0) vehicleCapacity = 2;
+      if (studentCapacity === 0) studentCapacity = 10;
+      if (storageCapacity === 0) storageCapacity = 100;
+    }
+
+    const hasFormation = studentCapacity > 0;
+    const hasStorage = storageCapacity > 0;
 
     return {
-      surfaceM2: premises.surfaceM2 || (premises.width * premises.height * 25),
-      storageCapacity: storageTiles * 50, // 50 unités de capacité par case de 25m²
-      studentCapacity: formationTiles * 6, // 6 élèves par case
-      vehicleCapacity: garageTiles * 1, // 1 place de véhicule par case
-      hasFormation: formationTiles > 0,
-      hasStorage: storageTiles > 0,
-      energyRegen: detenteTiles * 15,
-      moralBonus: detenteTiles * 5,
-      nightBeds: dortoirTiles * 2,
+      surfaceM2: premises.surfaceM2 || 84.6,
+      storageCapacity,
+      studentCapacity,
+      vehicleCapacity,
+      hasFormation,
+      hasStorage,
+      energyRegen,
+      moralBonus,
+      nightBeds,
+      trainingQuality,
       counts
     };
   },
@@ -1587,7 +1675,7 @@ window.ProtecLocaux = {
         cap = room.level === 1 ? 2 : (room.level === 2 ? 4 : 8);
       }
     }
-    if (prem?.grid && typeof this.calculatePremisesStats === 'function') {
+    if ((prem?.grid || prem?.architecture) && typeof this.calculatePremisesStats === 'function') {
       const stats = this.calculatePremisesStats(prem);
       if (stats && stats.vehicleCapacity > cap) cap = stats.vehicleCapacity;
     }
@@ -3170,6 +3258,7 @@ window.ProtecLocaux = {
     room.color = colors[newRole] || '#131824';
 
     this.selectRoom(roomId);
+    this.saveCurrentArchitecture(window.game);
     this.renderArchitectScene();
   },
 
@@ -3323,6 +3412,7 @@ window.ProtecLocaux = {
 
     model.furniture.push(newItem);
     this.selectedFurnitureId = newItem.id;
+    this.saveCurrentArchitecture(game);
     this.renderArchitectScene();
 
     // Mettre à jour la barre contextuelle
@@ -3390,6 +3480,7 @@ window.ProtecLocaux = {
     item.w = item.d;
     item.d = tmp;
     this.updateContextBar(item);
+    this.saveCurrentArchitecture(window.game);
     this.renderArchitectScene();
   },
 
@@ -3413,6 +3504,7 @@ window.ProtecLocaux = {
     model.furniture = (model.furniture || []).filter(f => f.id !== this.selectedFurnitureId);
     this.selectedFurnitureId = null;
     this.updateContextBar(null);
+    this.saveCurrentArchitecture(game);
     this.renderArchitectScene();
 
     const subpanel = document.getElementById('editor-subpanel');
@@ -3448,6 +3540,9 @@ window.ProtecLocaux = {
 
   renderPlanTab(game, premises, stats) {
     const isOwner = premises.tenure === 'owned';
+    const model = this.getArchitectModel(premises.stationId);
+    this.selectedRoomId = this.selectedRoomId || 'room_1';
+    const selectedRoom = (model.rooms || []).find(r => r.id === this.selectedRoomId) || (model.rooms && model.rooms[0]);
 
     // Déclenchement réactif de l'initialisation du Canvas après le rendu dans le DOM
     requestAnimationFrame(() => {
@@ -3462,17 +3557,10 @@ window.ProtecLocaux = {
         <!-- Barre supérieure : Alertes & Statut de Propriété -->
         <div class="p-3.5 rounded-2xl glass-panel-heavy border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div class="flex items-center gap-2 flex-wrap">
-            ${isOwner ? `
-              <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="px-4 py-2 rounded-xl text-xs font-black shadow-md transition flex items-center gap-2 ${this.isEditing ? 'bg-amber-500 text-white animate-pulse' : 'bg-pc-blue text-white hover:bg-pc-blue-light'}">
-                <i data-lucide="${this.isEditing ? 'check-circle' : 'hammer'}" class="w-4 h-4"></i>
-                <span>${this.isEditing ? 'Valider le Plan d’Aménagement' : 'Réaménager les Cloisons (Travaux)'}</span>
-              </button>
-            ` : `
-              <button onclick="window.ProtecLocaux.showRentalRestrictedModal(window.game)" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-500 cursor-not-allowed flex items-center gap-2" title="Travaux interdits en location">
-                <i data-lucide="lock" class="w-4 h-4 text-slate-400"></i>
-                <span>Aménagements Verrouillés (Bail Locatif)</span>
-              </button>
-            `}
+            <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="px-4 py-2 rounded-xl text-xs font-black shadow-md transition flex items-center gap-2 cursor-pointer ${this.isEditing ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400' : 'bg-pc-blue hover:bg-blue-600 text-white'}">
+              <i data-lucide="${this.isEditing ? 'check-circle' : 'layout-grid'}" class="w-4 h-4"></i>
+              <span>${this.isEditing ? 'Valider l’Aménagement' : 'Mode Aménagement & Mobilier'}</span>
+            </button>
 
             <!-- Indicateur de surface totale et hauteur sous plafond -->
             <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
@@ -3486,10 +3574,10 @@ window.ProtecLocaux = {
 
           <!-- Actions rapides -->
           <div class="flex items-center gap-2 text-xs font-bold">
-            <button onclick="window.ProtecLocaux.resetCamera()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5">
+            <button onclick="window.ProtecLocaux.resetCamera()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 cursor-pointer">
               <span>🎯</span> Recentrer la Vue
             </button>
-            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition flex items-center gap-1.5">
+            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition flex items-center gap-1.5 cursor-pointer">
               <span class="font-mono text-cyan-400">{ }</span> Fiche Technique
             </button>
           </div>
@@ -3497,17 +3585,17 @@ window.ProtecLocaux = {
 
         <!-- Avertissement pédagogique si Locataire -->
         ${!isOwner ? `
-          <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-950 text-xs flex items-start justify-between gap-3">
+          <div class="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-slate-800 text-xs flex items-start justify-between gap-3">
             <div class="flex items-start gap-2.5">
-              <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5"></i>
+              <i data-lucide="info" class="w-4 h-4 text-pc-blue flex-shrink-0 mt-0.5"></i>
               <div class="space-y-0.5">
-                <strong class="font-black text-amber-900 block">Locataire sous Convention Municipale</strong>
-                <p class="text-[11px] text-amber-800 leading-relaxed">
-                  En location, le bailleur vous interdit de casser les cloisons ou de modifier la structure. Pour aménager librement la caserne, rachetez les murs.
+                <strong class="font-black text-slate-900 block">Convention Municipale d'Occupation (Bailleur Public)</strong>
+                <p class="text-[11px] text-slate-600 leading-relaxed">
+                  Vous pouvez agencer librement l'intérieur de la caserne, installer du mobilier et réaffecter les salles de secours. Seule la démolition de cloisons porteuses nécessite le rachat des murs.
                 </p>
               </div>
             </div>
-            <button onclick="window.ProtecLocaux.buyoutPremisesWalls(window.game)" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-sm transition flex-shrink-0">
+            <button onclick="window.ProtecLocaux.buyoutPremisesWalls(window.game)" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-sm transition flex-shrink-0 cursor-pointer">
               Racheter les Murs (${(premises.buyoutPrice || 45000).toLocaleString('fr-FR')} €)
             </button>
           </div>
@@ -3595,6 +3683,40 @@ window.ProtecLocaux = {
             </div>
           </div>
 
+        </div>
+
+        <!-- BARRE D'OUTILS D'AMÉNAGEMENT & MOBILIER "LES SIMS" -->
+        <div class="p-4 rounded-3xl bg-white border border-slate-200/90 shadow-sm space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-2.5 flex-wrap gap-2">
+            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('furniture')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.editorTab === 'furniture' || !this.editorTab ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>🛋️</span> Mobilier & Matériel
+              </button>
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('doors')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.editorTab === 'doors' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>🚪</span> Portes & Ouvertures
+              </button>
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('rooms')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.editorTab === 'rooms' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>🏛️</span> Vocation des Salles
+              </button>
+              ${isOwner ? `
+                <button type="button" onclick="window.ProtecLocaux.setEditorTab('expand')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.editorTab === 'expand' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                  <span>➕</span> Agrandir (Extension)
+                </button>
+              ` : ''}
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('metrics')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.editorTab === 'metrics' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>📊</span> Métriques & Bonus
+              </button>
+            </div>
+
+            <div class="hidden sm:flex items-center gap-2 text-xs text-slate-500 font-semibold">
+              <span>Pièce sélectionnée : <strong class="text-slate-800">${selectedRoom?.name?.split('\n')[0] || 'Salle 1'}</strong></span>
+            </div>
+          </div>
+
+          <!-- Contenu interactif de l'onglet actif -->
+          <div id="editor-subpanel">
+            ${this.renderEditorToolsHTML(model)}
+          </div>
         </div>
 
         <!-- Récapitulatif des Espaces Aménagés de la Caserne -->
@@ -3877,6 +3999,9 @@ window.ProtecLocaux = {
     };
 
     const onPointerUp = () => {
+      if (this.draggingFurniture && window.game) {
+        this.saveCurrentArchitecture(window.game);
+      }
       this.draggingFurniture = null;
       this.isDraggingCanvas = false;
     };
@@ -4004,7 +4129,13 @@ window.ProtecLocaux = {
     const st = (window.game && window.game.stations)
       ? (window.game.stations.find(s => s.id === stationId) || window.game.stations[0])
       : null;
-    if (st && st.premises && st.premises.architecture) {
+    if (st) {
+      if (!st.premises) {
+        st.premises = { tenure: 'rented', level: 1, monthlyRent: 350, securityEquipments: [] };
+      }
+      if (!st.premises.architecture) {
+        st.premises.architecture = JSON.parse(JSON.stringify(this.getDefaultModel()));
+      }
       const arch = st.premises.architecture;
       // Migration douce : si l'antenne a encore les anciens noms par défaut de démonstration, les passer en "Libre"
       if (arch.rooms) {
@@ -4774,35 +4905,36 @@ window.ProtecLocaux = {
   showAddElementModal(game) {
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4';
+    const money = game?.resources?.money || 0;
     modal.innerHTML = `
-      <div class="glass-panel-heavy rounded-3xl p-6 max-w-lg w-full space-y-4 border border-slate-700 shadow-2xl bg-slate-900 text-white">
+      <div class="glass-panel-heavy rounded-3xl p-5 max-w-2xl w-full space-y-4 border border-slate-700 shadow-2xl bg-slate-900 text-white max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between pb-3 border-b border-slate-800">
           <div class="flex items-center gap-2">
             <span class="text-xl">🧰</span>
             <h3 class="font-black text-base">Ajouter un Mobilier ou Équipement de Secours</h3>
           </div>
-          <button onclick="this.closest('.fixed').remove()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 font-bold">✕</button>
+          <button onclick="this.closest('.fixed').remove()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 font-bold cursor-pointer">✕</button>
         </div>
-        <p class="text-xs text-slate-300 leading-relaxed">
-          Sélectionnez un agencement à installer dans vos locaux :
-        </p>
-        <div class="grid grid-cols-2 gap-2 text-xs">
-          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Baie Radio & PC Fixe opérationnelle dans le Poste de Commandement.', 'blue')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
-            <strong class="block font-black text-white">📡 Baie Radio Fixe</strong>
-            <span class="text-[10px] text-slate-400">Communication Antac & PC</span>
-          </button>
-          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Armoire DAE & Pharmacie installée.', 'green')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
-            <strong class="block font-black text-white">💚 Armoire DAE Murale</strong>
-            <span class="text-[10px] text-slate-400">Accès d'urgence 24/7</span>
-          </button>
-          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Tableau blanc interactif installé dans la salle PSC.', 'amber')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
-            <strong class="block font-black text-white">🎓 Écran Vidéoprojection</strong>
-            <span class="text-[10px] text-slate-400">Pour formations PSC/SST</span>
-          </button>
-          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Rack Bouteilles B5 Oxygène sécurisé.', 'emerald')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
-            <strong class="block font-black text-white">🫁 Rack Bouteilles Oxygène</strong>
-            <span class="text-[10px] text-slate-400">Capacité réserve accrue</span>
-          </button>
+        <div class="flex items-center justify-between text-xs text-slate-300">
+          <span>Sélectionnez un équipement à placer sur votre plan 2D :</span>
+          <span>Trésorerie : <strong class="text-emerald-400 font-mono">${money.toLocaleString('fr-FR')} €</strong></span>
+        </div>
+        <div class="overflow-y-auto max-h-[60vh] grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs pr-1">
+          ${this.FURNITURE_CATALOG.map(item => `
+            <button onclick="this.closest('.fixed').remove(); window.ProtecLocaux.addFurnitureItem('${item.type}')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition flex flex-col justify-between gap-2 group cursor-pointer active:scale-95">
+              <div class="flex items-start gap-2.5">
+                <span class="text-2xl group-hover:scale-110 transition flex-shrink-0">${item.icon}</span>
+                <div>
+                  <strong class="block font-black text-white leading-tight">${item.name}</strong>
+                  <span class="text-[10px] text-slate-400 font-mono">${item.w}m × ${item.d}m</span>
+                </div>
+              </div>
+              <div class="flex items-center justify-between w-full pt-1 border-t border-slate-700/60">
+                <span class="text-[10px] text-slate-400 capitalize">${item.cat}</span>
+                <span class="font-black text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded text-[11px]">${item.cost} €</span>
+              </div>
+            </button>
+          `).join('')}
         </div>
       </div>
     `;
@@ -4849,17 +4981,24 @@ window.ProtecLocaux = {
     document.body.appendChild(modal);
   },
 
-  toggleEditMode(game) {
-    const prem = game.stations[0]?.premises;
-    if (prem && prem.tenure !== 'owned') {
-      this.showRentalRestrictedModal(game);
-      return;
+  saveCurrentArchitecture(game) {
+    if (!game) game = window.game;
+    if (!game) return;
+    const station = (game.stations && game.stations[0]) ? game.stations[0] : null;
+    if (station && station.premises && station.premises.architecture) {
+      if (typeof game.saveGame === 'function') {
+        game.saveGame();
+      }
     }
+  },
+
+  toggleEditMode(game) {
     this.isEditing = !this.isEditing;
     if (this.isEditing) {
-      game.showToast('Mode Aménagement Actif', 'Sélectionnez un type de pièce dans la palette pour réaménager vos cloisons.', 'purple');
+      game.showToast('Mode Aménagement Actif', 'Déplacez, pivotez ou ajoutez du mobilier pour équiper vos locaux.', 'purple');
     } else {
-      game.showToast('Plan Validé', 'Le plan d’aménagement de vos locaux est enregistré.', 'green');
+      this.saveCurrentArchitecture(game);
+      game.showToast('Plan Validé', 'L’aménagement et le mobilier de vos locaux sont enregistrés.', 'green');
     }
     this.renderModal(game);
   },

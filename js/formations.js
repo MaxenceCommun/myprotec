@@ -2352,6 +2352,18 @@ window.ProtecFormations = {
       repGain += 8;
       tierNotice += ' [DSA Connecté HF : Optimisé]';
     }
+
+    // Bonus Qualité Pédagogique des Locaux (mannequins RCP, vidéoprojecteur, tableau blanc posés dans la salle)
+    if (window.ProtecLocaux && typeof window.ProtecLocaux.calculatePremisesStats === 'function') {
+      const premises = session.stationId ? window.ProtecLocaux.getStationPremises(game, session.stationId) : game.stations[0]?.premises;
+      const premStats = window.ProtecLocaux.calculatePremisesStats(premises);
+      if (premStats && premStats.trainingQuality && premStats.trainingQuality > 100) {
+        const qualityMultiplier = premStats.trainingQuality / 100;
+        repGain = Math.round(repGain * qualityMultiplier);
+        tierNotice += ` [Salle Équipée : Qualité +${premStats.trainingQuality - 100}%]`;
+      }
+    }
+
     game.resources.reputationScore = (game.resources.reputationScore || 0) + repGain;
 
     // Attribution des compétences et qualifications aux bénévoles internes certifiés
