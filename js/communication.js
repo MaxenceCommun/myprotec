@@ -206,7 +206,7 @@ window.ProtecCommunication = {
     if (!game.socialMedia) {
       const now = Date.now();
       game.socialMedia = {
-        visibilityScore: 80,        // Score de visibilité (0 à 100%)
+        visibilityScore: 15,        // Score de visibilité initial (nécessite des actions de com pour décoller)
         lastPostTimestamp: now - 3600000 * 4,
         totalPosts: 2,
         totalLikes: 248,

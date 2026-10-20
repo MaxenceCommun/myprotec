@@ -22099,7 +22099,8 @@ class ProtecGame {
       const hasCandidatureNotification = (window.ProtecNotifications?.history || []).some(n => 
         (n.title && n.title.includes('Candidature')) || (n.message && n.message.includes('candidature'))
       );
-      if (hasCandidatureNotification && (!this.candidatures || this.candidatures.filter(c => c.type !== 'salarie').length === 0)) {
+      const hasVisForCatchup = Boolean(this.resources.campaigns?.social || this.resources.campaigns?.posters || (this.socialMedia?.visibilityScore || 0) >= 30);
+      if (hasCandidatureNotification && hasVisForCatchup && (!this.candidatures || this.candidatures.filter(c => c.type !== 'salarie').length === 0)) {
         if (typeof this.generateRandomCandidature === 'function') {
           this.generateRandomCandidature();
           this.showCandidaturesView = true;
@@ -22167,6 +22168,40 @@ class ProtecGame {
                     Candidatures Bénévoles (${this.candidatures.filter(c => c.type !== 'salarie').length})
                   </h4>
                   <span class="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Citoyens souhaitant rejoindre l'association</span>
+                </div>
+              </div>
+
+              <!-- Jauge et indicateur de Visibilité Recrutement -->
+              ${(() => {
+                const sVis = this.socialMedia?.visibilityScore || 0;
+                const sFresh = this.antenneWebsite?.freshness || 0;
+                const hasCamp = Boolean(this.resources.campaigns?.social || this.resources.campaigns?.posters || this.commData?.activeCampaign?.subjectId === 'recrutement');
+                const compDps = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
+                const isVisible = hasCamp || sVis >= 30 || sFresh >= 40 || compDps >= 2;
+
+                if (!isVisible) {
+                  return `
+                    <div class="p-3 rounded-xl border border-amber-300/80 bg-amber-50/60 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2.5">
+                      <i data-lucide="eye-off" class="w-4 h-4 text-amber-600 shrink-0"></i>
+                      <div class="flex-1">
+                        <strong>Visibilité insuffisante (Réseaux : ${sVis}%) :</strong>
+                        Votre antenne n'est pas encore assez connue du public pour attirer des candidatures spontanées. 
+                        Publiez sur les réseaux sociaux, actualisez votre site ou lancez une campagne dans le module <em>Communication</em>.
+                      </div>
+                    </div>
+                  `;
+                } else {
+                  return `
+                    <div class="p-2.5 rounded-xl border border-emerald-300/80 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 text-xs flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-2">
+                        <i data-lucide="sparkles" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+                        <span><strong>Notoriété active (${sVis}%) :</strong> Votre antenne est visible des citoyens locaux, des candidatures peuvent arriver régulièrement.</span>
+                      </div>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white shrink-0">Visible</span>
+                    </div>
+                  `;
+                }
+              })()}
                 </div>
                 <button onclick="window.game.toggleShowCandidatures()" class="px-3 py-1.5 rounded-xl text-xs font-black ${this.showCandidaturesView ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white' : 'bg-pc-blue text-white shadow-sm hover:bg-pc-blue-light'} transition flex items-center gap-1.5 cursor-pointer">
                   <i data-lucide="${this.showCandidaturesView ? 'chevron-up' : 'eye'}" class="w-3.5 h-3.5"></i>
@@ -26546,21 +26581,50 @@ class ProtecGame {
         }
 
         if (this.stations.length > 0) {
-          const hasActiveCampaign = !!(this.resources.campaigns?.social || this.resources.campaigns?.posters);
+          const hasActiveCampaign = !!(
+            this.resources.campaigns?.social ||
+            this.resources.campaigns?.posters ||
+            this.commData?.activeCampaign?.subjectId === 'recrutement'
+          );
           const repScore = this.resources.reputationScore || 0;
           const pendingCount = (this.candidatures || []).filter(c => c.status !== 'rejected').length;
 
           const maxPendingCand = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('candidaturesMaxPending', 3) : 3;
           if (pendingCount < maxPendingCand) {
             let candChance = 0;
-            if (this.resources.campaigns?.social) candChance += 0.20;
-            if (this.resources.campaigns?.posters) candChance += 0.12;
-            if (!hasActiveCampaign && repScore >= 80) candChance = 0.03; // Très rare sans pub
 
-            // Bonus apporté par la visibilité des réseaux sociaux
-            const socialVis = this.socialMedia?.visibilityScore ?? 75;
-            if (socialVis >= 80) candChance += 0.15;
-            else if (socialVis >= 50) candChance += 0.06;
+            const socialVis = this.socialMedia?.visibilityScore || 0;
+            const siteFreshness = this.antenneWebsite?.freshness || 0;
+            const completedDps = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
+
+            // RÈGLE MÉTIER STRICTE : ALIGNEMENT SUR LE SYSTÈME DE DPS !
+            // Tant que l'antenne n'a pas de visibilité démontrée, AUCUNE candidature spontanée n'arrive !
+            // Nécessite soit une campagne de recrutement active, soit une visibilité réseaux >= 30%,
+            // soit un site internet officiel à jour >= 40%, soit au moins 2 DPS réalisés avec réputation >= 40.
+            const hasVisibility = hasActiveCampaign || socialVis >= 30 || siteFreshness >= 40 || (completedDps >= 2 && repScore >= 40);
+
+            if (!hasVisibility) {
+              // Antenne sans visibilité publique : zéro candidature citoyenne
+              candChance = 0;
+            } else {
+              // 1. Campagnes ciblées de recrutement (impact maximal direct)
+              if (this.commData?.activeCampaign?.subjectId === 'recrutement') candChance += 0.35;
+              if (this.resources.campaigns?.social) candChance += 0.22;
+              if (this.resources.campaigns?.posters) candChance += 0.15;
+
+              // 2. Visibilité numérique (Réseaux Sociaux)
+              if (socialVis >= 80) candChance += 0.16;
+              else if (socialVis >= 50) candChance += 0.08;
+              else if (socialVis >= 30) candChance += 0.04;
+
+              // 3. Fraîcheur du Site Internet Officiel
+              if (siteFreshness >= 75) candChance += 0.10;
+              else if (siteFreshness >= 40) candChance += 0.05;
+
+              // 4. Notoriété terrain (bouche-à-oreille suite aux dispositifs assurés)
+              if (completedDps >= 10 && repScore >= 70) candChance += 0.07;
+              else if (completedDps >= 3 && repScore >= 45) candChance += 0.03;
+            }
 
             const candMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('candidatureChanceMultiplier', 1.0) : 1.0;
             candChance *= candMult;

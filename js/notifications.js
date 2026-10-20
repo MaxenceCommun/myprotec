@@ -397,7 +397,14 @@ window.ProtecNotifications = {
       title: 'Recrutement : Nouvelle Candidature Reçue',
       body: 'Un bénévole qualifié vient de déposer sa candidature à l’antenne. Faites-lui passer son entretien pour renforcer vos équipes !',
       tag: 'reengage-rh-new',
-      condition: (game) => Boolean(game && (!game.candidatures || game.candidatures.filter(c => c.type !== 'salarie').length < 4)),
+      condition: (game) => {
+        if (!game) return false;
+        const socialVis = game.socialMedia?.visibilityScore || 0;
+        const hasCampaign = !!(game.resources?.campaigns?.social || game.resources?.campaigns?.posters || game.commData?.activeCampaign?.subjectId === 'recrutement');
+        const hasVisibility = hasCampaign || socialVis >= 30 || ((game.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length >= 2);
+        const candCount = (game.candidatures || []).filter(c => c.type !== 'salarie').length;
+        return hasVisibility && candCount < 4;
+      },
       action: (game) => {
         if (game && typeof game.generateRandomCandidature === 'function') {
           game.generateRandomCandidature();
