@@ -304,7 +304,7 @@ window.ProtecAntenneMessages = {
         this.addLogistiqueMessage(
           game,
           'Superviseur Flotte',
-          `⚠️ Alerte Réserve Carburant : Le véhicule « ${v.name || v.immat || v.type} » n'a plus que ${v.fuel}% de carburant. Ravitaillement nécessaire avant réengagement.`,
+          `⚠️ Alerte Réserve Carburant : Le véhicule « ${v.name || v.type} » n'a plus que ${v.fuel}% de carburant. Ravitaillement nécessaire avant réengagement.`,
           'Gestion Flotte',
           'fuel',
           { badgeColor: 'orange' }
@@ -317,7 +317,7 @@ window.ProtecAntenneMessages = {
         this.addLogistiqueMessage(
           game,
           'Atelier Mécanique',
-          `🔧 Révision Garage Dépassée : « ${v.name || v.immat || v.type} » (${v.km} km) doit être orienté au garage pour son entretien périodique.`,
+          `🔧 Révision Garage Dépassée : « ${v.name || v.type} » (${v.km} km) doit être orienté au garage pour son entretien périodique.`,
           'Entretien Flotte',
           'wrench',
           { badgeColor: 'rose' }

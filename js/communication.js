@@ -450,7 +450,7 @@ window.ProtecCommunication = {
         };
       }
 
-      const vehName = anyVeh ? (anyVeh.name || anyVeh.immat || anyVeh.type) : 'VPSP';
+      const vehName = anyVeh ? (anyVeh.name || anyVeh.type) : 'VPSP';
       return {
         eligible: true,
         reason: null,

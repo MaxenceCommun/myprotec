@@ -15361,17 +15361,7 @@ class ProtecGame {
     };
 
     const getVehicleImmat = (veh) => {
-      if (veh.immat) return veh.immat;
-      let hash = 0;
-      const str = String(veh.id || veh.name || '0');
-      for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
-      const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
-      const l1 = letters[Math.abs(hash) % letters.length];
-      const l2 = letters[Math.abs(hash >> 2) % letters.length];
-      const l3 = letters[Math.abs(hash >> 4) % letters.length];
-      const l4 = letters[Math.abs(hash >> 6) % letters.length];
-      const digits = String(Math.abs(hash >> 8) % 900 + 100);
-      return `${l1}${l2}-${digits}-${l3}${l4}`;
+      return '';
     };
 
     // isCrisisMission et isDPS sont déclarés et évalués en amont de la modale
@@ -16268,7 +16258,7 @@ class ProtecGame {
                                     })()}
                                   </div>
                                   <div class="text-[9px] font-mono text-slate-500 dark:text-slate-400">
-                                    ${getVehicleImmat(assignedVeh)} • ${assignedVeh.type || 'Véhicule'} • ${assignedVeh.seatsCount || assignedVeh.capacity || 3} places
+                                    ${assignedVeh.type || 'Véhicule'} • ${assignedVeh.seatsCount || assignedVeh.capacity || 3} places
                                   </div>
                                 </div>
                               </div>
@@ -16296,7 +16286,7 @@ class ProtecGame {
                                   const armText = armSummary ? ` - ${armSummary}` : '';
                                   return `
                                     <option value="${veh.id}">
-                                      ${veh.name} (${veh.type || 'Véhicule'}) - ${getVehicleImmat(veh)}${armText} ${veh.isAlreadyEngaged ? '✓' : '(Dispo)'}
+                                      ${veh.name} (${veh.type || 'Véhicule'})${armText} ${veh.isAlreadyEngaged ? '✓' : '(Dispo)'}
                                     </option>
                                   `;
                                 }).join('')}
@@ -17010,7 +17000,7 @@ class ProtecGame {
                             ${availableGarageVehicles.map(v => {
                               const armSummary = this.getVehicleArmamentSummary(v);
                               const armText = armSummary ? ` - ${armSummary}` : '';
-                              return `<option value="${v.id}">${v.name} (${v.type || 'Véhicule'}) - ${getVehicleImmat(v)}${armText}</option>`;
+                              return `<option value="${v.id}">${v.name} (${v.type || 'Véhicule'})${armText}</option>`;
                             }).join('')}
                           </select>
                         ` : `
@@ -17036,7 +17026,7 @@ class ProtecGame {
                             ${availableGarageVehicles.map(v => {
                               const armSummary = this.getVehicleArmamentSummary(v);
                               const armText = armSummary ? ` - ${armSummary}` : '';
-                              return `<option value="${v.id}">${v.name} (${v.type || 'Véhicule'}) - ${getVehicleImmat(v)}${armText}</option>`;
+                              return `<option value="${v.id}">${v.name} (${v.type || 'Véhicule'})${armText}</option>`;
                             }).join('')}
                           </select>
                         ` : ''}
@@ -17084,8 +17074,6 @@ class ProtecGame {
                                     <strong class="text-slate-900 block leading-tight text-xs">${veh.name}</strong>
                                     <div class="flex items-center gap-1 text-[9px] text-slate-500 font-bold mt-0.5">
                                       <span class="px-1 py-0.2 rounded bg-slate-100 text-slate-700 font-black border border-slate-200">${veh.type}</span>
-                                      <span>•</span>
-                                      <span class="font-mono">${getVehicleImmat(veh)}</span>
                                     </div>
                                   </td>
                                   <td class="py-2.5 px-3 font-bold text-slate-800 text-[11px]">
@@ -19108,9 +19096,8 @@ class ProtecGame {
               ${dispoVehicles.map(v => {
                 const armSummary = this.getVehicleArmamentSummary(v);
                 const armText = armSummary ? ` - ${armSummary}` : '';
-                const immat = v.plate || v.immat || (typeof getVehicleImmat === 'function' ? getVehicleImmat(v) : 'Dispo');
                 return `
-                  <option value="${v.id}">${v.name} (${v.type}) - ${immat}${armText}</option>
+                  <option value="${v.id}">${v.name} (${v.type})${armText}</option>
                 `;
               }).join('')}
             </select>

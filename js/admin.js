@@ -2234,7 +2234,7 @@ window.ProtecAdmin = {
             <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
               <div class="pr-2 truncate">
                 <strong class="text-slate-900 block truncate">${v.name || v.type}</strong>
-                <span class="text-[10px] text-slate-400 block">${v.immat || 'Sans plaque'} • État: <b class="text-emerald-700">${v.condition || 100}%</b></span>
+                <span class="text-[10px] text-slate-400 block">${v.type || 'Véhicule'} • État: <b class="text-emerald-700">${v.condition || 100}%</b></span>
               </div>
               ${!this.isCurrentUserGestionnaireOnly() ? `
                 <button onclick="window.ProtecAdmin.supportRemoveVehicle('${user.id}', '${v.id}')" title="Retirer ce véhicule" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[10px] border border-rose-200 cursor-pointer flex-shrink-0">
@@ -2474,7 +2474,7 @@ window.ProtecAdmin = {
       }
     }
 
-    await this.updateUser(userId, { saveData: sData }, `Véhicule ${newVeh.name} (${newVeh.immat}) attribué à ${user.username}`);
+    await this.updateUser(userId, { saveData: sData }, `Véhicule ${newVeh.name} attribué à ${user.username}`);
     this.refreshSupportPlayerView();
   },
 
@@ -2747,7 +2747,7 @@ window.ProtecAdmin = {
               ${vehicles.length === 0 ? '<div class="text-[11px] text-slate-400 italic py-2 text-center col-span-3">Aucun véhicule.</div>' : vehicles.map(v => `
                 <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs">
                   <div class="font-bold text-slate-800 dark:text-white truncate">${v.name || v.type}</div>
-                  <div class="text-[10px] text-slate-500">${v.immat || 'Sans immat'} • Statut: <b class="${v.status === 'dispo' ? 'text-emerald-600' : 'text-amber-600'}">${v.status || 'dispo'}</b></div>
+                  <div class="text-[10px] text-slate-500">${v.type || 'Véhicule'} • Statut: <b class="${v.status === 'dispo' ? 'text-emerald-600' : 'text-amber-600'}">${v.status || 'dispo'}</b></div>
                   <div class="text-[9px] text-slate-400">Capacité: ${v.capacity || v.seatsCount || 4} places • Méca: ${v.mechanical || 100}%</div>
                 </div>
               `).join('')}
