@@ -26,11 +26,12 @@ window.ProtecFormations = {
       title: 'GQS - Gestes Qui Sauvent (Sensibilisation)',
       desc: 'Sensibilisation de 2 heures aux arrêts cardiaques (massage cardiaque + DAE) et hémorragies.',
       durationHours: 2,
+      durationDays: 0.25,
       basePricePublic: 20,
       costOrganization: 10,
       capacity: 10,
-      kitRequired: 'kit_pedago_psc',
-      kitName: 'Kit Pédagogique PSC',
+      kitRequired: 'kit_pedago_gqs',
+      kitName: 'Kit Pédagogique GQS',
       unlocks: null
     },
     {
@@ -86,8 +87,8 @@ window.ProtecFormations = {
       basePricePublic: 250,
       costOrganization: 110,
       capacity: 6,
-      kitRequired: 'kit_pedago_pse1',
-      kitName: 'Kit Pédagogique PSE1',
+      kitRequired: 'kit_pedago_pse',
+      kitName: 'Kit Pédagogique PSE',
       unlocksSkill: 'pse1',
       unlocks: 'Secouriste'
     },
@@ -101,8 +102,8 @@ window.ProtecFormations = {
       basePricePublic: 280,
       costOrganization: 130,
       capacity: 6,
-      kitRequired: 'kit_pedago_pse2',
-      kitName: 'Kit Pédagogique PSE2',
+      kitRequired: 'kit_pedago_pse',
+      kitName: 'Kit Pédagogique PSE',
       prereqSkill: 'pse1',
       unlocksSkill: 'pse2',
       unlocks: 'Équipier Secouriste'
@@ -117,8 +118,8 @@ window.ProtecFormations = {
       basePricePublic: 60,
       costOrganization: 20,
       capacity: 8,
-      kitRequired: 'kit_pedago_pse1',
-      kitName: 'Kit Pédagogique PSE1',
+      kitRequired: 'kit_pedago_pse',
+      kitName: 'Kit Pédagogique PSE',
       isRecycling: true,
       unlocks: null
     },
@@ -147,8 +148,8 @@ window.ProtecFormations = {
       basePricePublic: 350,
       costOrganization: 160,
       capacity: 4,
-      kitRequired: 'kit_pedago_pse2',
-      kitName: 'Kit Pédagogique PSE2',
+      kitRequired: 'kit_pedago_pse',
+      kitName: 'Kit Pédagogique PSE',
       prereqSkill: 'pse2',
       unlocksSkill: 'ce',
       unlocks: 'Chef d’équipe'
@@ -253,8 +254,8 @@ window.ProtecFormations = {
       basePricePublic: 340,
       costOrganization: 140,
       capacity: 6,
-      kitRequired: 'kit_pedago_pse2',
-      kitName: 'Kit Pédagogique PSE2',
+      kitRequired: 'kit_pedago_pse',
+      kitName: 'Kit Pédagogique PSE',
       prereqSkill: 'formateur_psc',
       unlocksSkill: 'formateur_ps',
       unlocks: 'Formateur Premiers Secours'
@@ -388,8 +389,8 @@ window.ProtecFormations = {
       budgetMin: 220,
       budgetMax: 480,
       consumableCost: 25,
-      kitRequired: 'kit_pedago_psc',
-      kitName: 'Kit Pédagogique PSC',
+      kitRequired: 'kit_pedago_gqs',
+      kitName: 'Kit Pédagogique GQS',
       trainerSkillReq: 'formateur_psc',
       trainerSkillLabel: 'Formateur PSC / PS',
       repGain: 6
@@ -1425,9 +1426,23 @@ window.ProtecFormations = {
   hasTrainingKit(game, kitId) {
     if (!kitId) return true;
     const stations = game.stations || [];
-    const inStationStock = stations.some(st => st.stock && (Number(st.stock[kitId]) || 0) > 0);
-    if (inStationStock) return true;
-    if (game.logistics && (Number(game.logistics[kitId]) || 0) > 0) return true;
+    const checkStock = (id) => {
+      if (stations.some(st => st.stock && (Number(st.stock[id]) || 0) > 0)) return true;
+      if (game.logistics && (Number(game.logistics[id]) || 0) > 0) return true;
+      return false;
+    };
+
+    if (checkStock(kitId)) return true;
+
+    // Équivalences et rétrocompatibilité des kits :
+    // 1. Kit GQS (compatible si possession du kit GQS ou du kit PSC complet)
+    if (kitId === 'kit_pedago_gqs' && (checkStock('kit_gqs') || checkStock('kit_pedago_psc') || checkStock('kit_psc'))) return true;
+    // 2. Kit PSC (compatible si kit_psc en stock)
+    if (kitId === 'kit_pedago_psc' && checkStock('kit_psc')) return true;
+    // 3. Kit PSE Unique (compatible si possession du kit PSE unique, ou des anciens kits PSE1/PSE2)
+    if (kitId === 'kit_pedago_pse' && (checkStock('kit_pse') || checkStock('kit_pedago_pse1') || checkStock('kit_pedago_pse2'))) return true;
+    if ((kitId === 'kit_pedago_pse1' || kitId === 'kit_pedago_pse2') && (checkStock('kit_pedago_pse') || checkStock('kit_pse'))) return true;
+
     return false;
   },
 

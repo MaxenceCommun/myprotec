@@ -666,17 +666,43 @@ window.ProtecLogistique = {
 
     // --- 7. KITS PÉDAGOGIQUES (FORMATIONS) ---
     {
+      id: 'kit_pedago_gqs',
+      category: 'kits_formation',
+      name: 'Kit Pédagogique GQS',
+      lucideIcon: 'heart-pulse',
+      image: 'images/equipements/kit_gqs.png',
+      price: 650,
+      unit: 'kit complet',
+      badge: 'Gestes Qui Sauvent',
+      badgeColor: 'bg-amber-50 text-amber-900 border-amber-300',
+      desc: 'Mannequins de massage cardiaque adulte/enfant, défibrillateur DAE de formation et garrots d\'exercice pour sensibiliser les citoyens.',
+      usage: 'Ateliers de sensibilisation courte aux Gestes Qui Sauvent (2h).'
+    },
+    {
       id: 'kit_pedago_psc',
       category: 'kits_formation',
       name: 'Kit Pédagogique PSC',
       lucideIcon: 'graduation-cap',
-      image: 'images/equipements/kit_pedago_psc.png',
+      image: 'images/equipements/kit_psc.png',
       price: 1200,
       unit: 'kit complet',
       badge: 'Grand Public',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300',
-      desc: 'Mannequins et défibrillateur de formation pour le grand public.',
-      usage: 'Formations grand public GQS et PSC.'
+      desc: 'Mannequins adultes, enfants, nourrissons, DAE de formation et matériel de simulation pour les formations certifiantes grand public PSC.',
+      usage: 'Formations initiales et continues aux Premiers Secours Citoyens (PSC 7h).'
+    },
+    {
+      id: 'kit_pedago_pse',
+      category: 'kits_formation',
+      name: 'Kit Pédagogique PSE (PSE1 & PSE2)',
+      lucideIcon: 'shield-alert',
+      image: 'images/equipements/kit_pse.png',
+      price: 2400,
+      unit: 'kit complet',
+      badge: 'Secourisme Opérationnel',
+      badgeColor: 'bg-indigo-50 text-indigo-900 border-indigo-300',
+      desc: 'Lot pédagogique complet unifié pour former et recycler secouristes (PSE1) et équipiers secouristes (PSE2) : plan dur, colliers cervicaux, oxygénothérapie, brancardage et bilans.',
+      usage: 'Formations initiales PSE1, PSE2, Chef d\'Équipe et recyclages annuels FC PSE.'
     },
     {
       id: 'kit_pedago_sst',
@@ -688,34 +714,8 @@ window.ProtecLogistique = {
       unit: 'kit complet',
       badge: 'Santé Travail',
       badgeColor: 'bg-blue-50 text-blue-800 border-blue-300',
-      desc: 'Matériel officiel pour former les sauveteurs secouristes du travail.',
-      usage: 'Formations SST en entreprise.'
-    },
-    {
-      id: 'kit_pedago_pse1',
-      category: 'kits_formation',
-      name: 'Kit Pédagogique PSE1',
-      lucideIcon: 'backpack',
-      image: 'images/equipements/kit_pedago_pse1.png',
-      price: 1600,
-      unit: 'kit complet',
-      badge: 'Secouriste',
-      badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-      desc: 'Matériel pour former les secouristes opérationnels (PSE1).',
-      usage: 'Certifications et recyclages PSE1.'
-    },
-    {
-      id: 'kit_pedago_pse2',
-      category: 'kits_formation',
-      name: 'Kit Pédagogique PSE2',
-      lucideIcon: 'stretch-horizontal',
-      image: 'images/equipements/kit_pedago_pse2.png',
-      price: 2200,
-      unit: 'kit complet',
-      badge: 'Équipier VPSP',
-      badgeColor: 'bg-purple-50 text-purple-800 border-purple-300',
-      desc: 'Matériel d\'immobilisation pour équiper les équipiers en ambulance.',
-      usage: 'Formation des Équipiers Secouristes PSE2.'
+      desc: 'Matériel officiel pour former les sauveteurs secouristes du travail en entreprise (INRS).',
+      usage: 'Formations initiales SST et recyclages MAC SST.'
     },
     {
       id: 'kit_pedago_extincteur',
@@ -755,8 +755,7 @@ window.ProtecLogistique = {
       badgeColor: 'bg-cyan-50 text-cyan-800 border-cyan-300',
       desc: 'Mannequins et bouées pour les entraînements aquatiques.',
       usage: 'Formations et entraînements aquatiques SSA.'
-    }
-  ],
+    }],
 
   // =========================================================================
   // 2. GESTION DES STOCKS & INITIALISATION
