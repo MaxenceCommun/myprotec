@@ -473,6 +473,14 @@ window.ProtecAdvancedModals = {
     return 4;
   },
 
+  getVehicleThumb(imagePath) {
+    if (!imagePath) return '';
+    if (imagePath.startsWith('images/vehicles/') && !imagePath.includes('/thumbs/')) {
+      return imagePath.replace('images/vehicles/', 'images/vehicles/thumbs/');
+    }
+    return imagePath;
+  },
+
   renderVehicleShop(game, stationId) {
     const st = game.stations.find(s => s.id === stationId) || game.stations[0];
     
@@ -673,10 +681,11 @@ window.ProtecAdvancedModals = {
                   <!-- Image dynamique en temps réel selon la variante -->
                   <div class="h-44 w-full flex items-center justify-center p-3 bg-gradient-to-b from-slate-50 to-slate-100/70 rounded-2xl border border-slate-100 overflow-hidden shadow-inner group relative">
                     <img 
-                      src="${currentVariant.image || `images/vehicles/${currentVariant.type}.png`}" 
+                      src="${this.getVehicleThumb(currentVariant.image || `images/vehicles/${currentVariant.type}.png`)}" 
                       alt="${currentVariant.name}" 
+                      loading="lazy"
                       class="max-h-full max-w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-200" 
-                      onerror="this.outerHTML='<span class=\\'text-5xl\\'>${model.icon || '🚐'}</span>'" 
+                      onerror="if (!this.dataset.fallback) { this.dataset.fallback='1'; this.src='${currentVariant.image || `images/vehicles/${currentVariant.type}.png`}'; } else { this.outerHTML='<span class=\\'text-5xl\\'>${model.icon || '🚐'}</span>'; }" 
                     />
 
                     <!-- Badge Type Opérationnel en haut à gauche -->
@@ -1416,10 +1425,11 @@ window.ProtecAdvancedModals = {
                   <!-- Image du véhicule -->
                   <div class="h-28 w-full flex items-center justify-center p-2 bg-gradient-to-b from-slate-50 to-slate-100/60 rounded-2xl border border-slate-100 overflow-hidden shadow-inner group relative">
                     <img 
-                      src="${activeImage || `images/vehicles/${card.type}.png`}" 
+                      src="${this.getVehicleThumb(activeImage || `images/vehicles/${card.type}.png`)}" 
                       alt="${activeTitle}" 
+                      loading="lazy"
                       class="max-h-full max-w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-200" 
-                      onerror="this.outerHTML='<span class=\\'text-4xl\\'>${card.icon || '🚐'}</span>'" 
+                      onerror="if (!this.dataset.fallback) { this.dataset.fallback='1'; this.src='${activeImage || `images/vehicles/${card.type}.png`}'; } else { this.outerHTML='<span class=\\'text-4xl\\'>${card.icon || '🚐'}</span>'; }" 
                     />
 
                     <!-- Badge Permis Requis bien visible -->

@@ -44,6 +44,17 @@ window.ProtecLogistique = {
     return Boolean(path && this.EXISTING_IMAGES.has(path));
   },
 
+  getThumb(imagePath) {
+    if (!imagePath) return '';
+    if (imagePath.startsWith('images/equipements/') && !imagePath.includes('/thumbs/')) {
+      return imagePath.replace('images/equipements/', 'images/equipements/thumbs/');
+    }
+    if (imagePath.startsWith('images/vehicles/') && !imagePath.includes('/thumbs/')) {
+      return imagePath.replace('images/vehicles/', 'images/vehicles/thumbs/');
+    }
+    return imagePath;
+  },
+
   // =========================================================================
   // 1. CATALOGUE OFFICIEL CENTRAL D'ACHATS PROTECTION CIVILE
   // =========================================================================
@@ -1021,8 +1032,10 @@ window.ProtecLogistique = {
                     <!-- Zone image PNG ou Icône Lucide vectorielle élégante -->
                     <div class="relative w-full h-32 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden mb-2.5 group-hover:border-pc-blue/30 transition">
                       ${this.hasRealImage(item.image) ? `
-                        <img src="${item.image}" 
+                        <img src="${this.getThumb(item.image)}" 
                              alt="${item.name}" 
+                             loading="lazy"
+                             onerror="if (!this.dataset.fallback) { this.dataset.fallback='1'; this.src='${item.image}'; }"
                              class="w-full h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105" />
                       ` : `
                         <div class="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1 bg-slate-50">
@@ -1497,8 +1510,10 @@ window.ProtecLogistique = {
                   <div class="flex items-start gap-3">
                     <div class="relative w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 shadow-2xs overflow-hidden">
                       ${this.hasRealImage(item.image) ? `
-                        <img src="${item.image}" 
+                        <img src="${this.getThumb(item.image)}" 
                              alt="${item.name}" 
+                             loading="lazy"
+                             onerror="if (!this.dataset.fallback) { this.dataset.fallback='1'; this.src='${item.image}'; }"
                              class="w-full h-full object-contain p-1" />
                       ` : `
                         <div class="w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
@@ -1707,7 +1722,11 @@ window.ProtecLogistique = {
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-3">
                     <div class="w-14 h-10 ${isVLC ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-100 border-slate-200'} rounded-xl p-1 flex items-center justify-center flex-shrink-0 border shadow-inner">
-                      <img src="${v.image || (game.getVehicleImage ? game.getVehicleImage(v.type) : `images/vehicles/${v.type}.png`)}" alt="${v.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='<i data-lucide=\\'truck\\' class=\\'w-6 h-6 text-slate-500\\'></i>'" />
+                      <img src="${this.getThumb(v.image || (game.getVehicleImage ? game.getVehicleImage(v.type) : `images/vehicles/${v.type}.png`))}" 
+                           alt="${v.name}" 
+                           loading="lazy" 
+                           class="max-h-full max-w-full object-contain" 
+                           onerror="if (!this.dataset.fallback) { this.dataset.fallback='1'; this.src='${v.image || (game.getVehicleImage ? game.getVehicleImage(v.type) : `images/vehicles/${v.type}.png`)}'; } else { this.outerHTML='<i data-lucide=\\'truck\\' class=\\'w-6 h-6 text-slate-500\\'></i>'; }" />
                     </div>
                     <div>
                       <div class="flex items-center gap-1.5">

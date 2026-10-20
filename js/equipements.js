@@ -48,6 +48,17 @@ window.ProtecEquipements = {
     return Boolean(path && this.EXISTING_IMAGES.has(path));
   },
 
+  getThumb(imagePath) {
+    if (!imagePath) return '';
+    if (imagePath.startsWith('images/equipements/') && !imagePath.includes('/thumbs/')) {
+      return imagePath.replace('images/equipements/', 'images/equipements/thumbs/');
+    }
+    if (imagePath.startsWith('images/vehicles/') && !imagePath.includes('/thumbs/')) {
+      return imagePath.replace('images/vehicles/', 'images/vehicles/thumbs/');
+    }
+    return imagePath;
+  },
+
   // =========================================================================
   // 1. CATALOGUE DES GAMMES D'ÉQUIPEMENT ÉCHELONNÉES EN NIVEAUX (TIERS)
   // =========================================================================
@@ -1507,8 +1518,10 @@ window.ProtecEquipements = {
                       <div class="flex items-center gap-3">
                         <div class="relative w-14 h-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-2xs">
                           ${this.hasRealImage(item.image) ? `
-                            <img src="${item.image}" 
+                            <img src="${this.getThumb(item.image)}" 
                                  alt="${item.name}" 
+                                 loading="lazy"
+                                 onerror="if (!this.dataset.fallback) { this.dataset.fallback='1'; this.src='${item.image}'; }"
                                  class="w-full h-full object-contain p-1" />
                           ` : `
                             <div class="w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
@@ -1631,8 +1644,10 @@ window.ProtecEquipements = {
                           <div class="flex items-center gap-3">
                             <div class="relative w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-2xs">
                               ${this.hasRealImage(lot.image) ? `
-                                <img src="${lot.image}" 
+                                <img src="${this.getThumb(lot.image)}" 
                                      alt="${lot.name}" 
+                                     loading="lazy"
+                                     onerror="if (!this.dataset.fallback) { this.dataset.fallback='1'; this.src='${lot.image}'; }"
                                      class="w-full h-full object-contain p-1" />
                               ` : `
                                 <div class="w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
@@ -1704,8 +1719,10 @@ window.ProtecEquipements = {
                           <div class="flex items-center gap-3">
                             <div class="relative w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-2xs">
                               ${this.hasRealImage(item.image) ? `
-                                <img src="${item.image}" 
+                                <img src="${this.getThumb(item.image)}" 
                                      alt="${item.name}" 
+                                     loading="lazy"
+                                     onerror="if (!this.dataset.fallback) { this.dataset.fallback='1'; this.src='${item.image}'; }"
                                      class="w-full h-full object-contain p-1" />
                               ` : `
                                 <div class="w-full h-full flex items-center justify-center text-slate-400 bg-slate-50">
