@@ -12515,12 +12515,35 @@ class ProtecGame {
   }
 
   // Génère les pastilles/badges HTML de toutes les compétences d'un bénévole pour affichage direct
-  getVolunteerAllSkillsBadgesHTML(v) {
+  getVolunteerAllSkillsBadgesHTML(v, compact = true) {
     if (!v) return '';
-    const skills = this.getVolunteerAllSkills(v);
+    let skills = this.getVolunteerAllSkills(v);
     if (!skills || skills.length === 0) {
       return `<span class="text-[8.5px] text-slate-400 italic">Aucune qualification</span>`;
     }
+
+    // Filtrage hiérarchique intelligent pour l'affichage en ligne (gain de place sans redondance)
+    if (compact) {
+      const ids = new Set(skills.map(s => (s.id || '').toLowerCase()));
+
+      // 1. Inutile d'afficher PSE1 si le secouriste a le PSE2 (ou grade supérieur CE, CP, CD)
+      const hasPse2OrHigher = ids.has('pse2') || ids.has('ce') || ids.has('cp') || ids.has('cd');
+
+      // 2. Inutile d'afficher CE si le secouriste a le CP (Chef de Poste ou CD Chef de Dispositif)
+      const hasCpOrHigher = ids.has('cp') || ids.has('cd');
+
+      // 3. Inutile d'afficher Permis B si le secouriste a le Permis VPSP (conduite ambulance)
+      const hasPermisVpsp = ids.has('permis_vpsp');
+
+      skills = skills.filter(s => {
+        const id = (s.id || '').toLowerCase();
+        if (id === 'pse1' && hasPse2OrHigher) return false;
+        if (id === 'ce' && hasCpOrHigher) return false;
+        if (id === 'permis_b' && hasPermisVpsp) return false;
+        return true;
+      });
+    }
+
     return skills.map(s => `
       <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] border shadow-2xs cursor-help ${s.color || 'bg-slate-100 text-slate-700 border-slate-200'}"
             title="${s.label} (${s.cat || 'Qualification'})">
@@ -12624,13 +12647,10 @@ class ProtecGame {
         }
         return `
           <div class="mt-2 pt-2 border-t border-slate-200">
-            <div class="text-[10px] font-black uppercase text-slate-500 mb-1 flex items-center justify-between">
-              <span>Rôle de Pôle :</span>
-              <span class="text-[9px] text-slate-400">Aucun</span>
-            </div>
-            <button type="button" onclick="window.game.openModule('poles'); window.game.hideFloatingSkillsTooltip();" class="w-full py-1 px-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 text-center transition">
-              + Attribuer ou demander un rôle
-            </button>
+            <div class="text-[10px] font-black uppercase text-slate-500 flex items-center justify-between">
+            <span>Rôle de Pôle :</span>
+            <span class="text-[9.5px] text-slate-400 font-bold">Aucun</span>
+          </div>
           </div>
         `;
       })()}
@@ -17374,11 +17394,7 @@ class ProtecGame {
             <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1.5" title="Choisir et affecter un ou plusieurs salariés permanents">
               <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> <span>+ Salarié</span>
             </button>
-            ${canEchelon ? `
-              <button onclick="window.game.launchEchelonMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow transition flex items-center justify-center gap-1.5" title="Faire partir un 1er engin avec 3 secouristes">
-                <i data-lucide="truck" class="w-3.5 h-3.5"></i> <span>1er Engin</span>
-              </button>
-            ` : ''}
+            /* 1er Engin retiré */
           </div>
           <div class="flex items-center gap-1.5 flex-wrap ml-auto">
             ${isCrisisMission ? `
@@ -17419,11 +17435,7 @@ class ProtecGame {
             <span>Effectif complet</span>
           </div>
         `}
-        ${(mission.type === 'crise' || mission.isCrisis) && canEchelon ? `
-          <button onclick="window.game.launchEchelonMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Faire partir un 1er engin avec 3 secouristes">
-            <i data-lucide="truck" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>1er Engin</span>
-          </button>
-        ` : ''}
+        /* 1er Engin retiré */
         <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Choisir et affecter un ou plusieurs salariés permanents">
           <i data-lucide="briefcase" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>+ Salarié</span>
         </button>
