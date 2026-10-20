@@ -284,7 +284,7 @@
 
       // Si aucun compte joueur lié n'existe : REFUS DE CONNEXION !
       if (!matchedPlayer) {
-        const msgHtml = `Le compte Discord <strong>@${discordUser.username}</strong> n'est associé à aucun compte joueur Protec Live.<br><br>Veuillez d'abord <strong>créer votre compte Directeur</strong> ou <strong>vous connecter avec vos identifiants classiques</strong> pour lier votre Discord.`;
+        const msgHtml = `Le compte Discord <strong>@${discordUser.username}</strong> n'est associé à aucun compte joueur Protec Live.<br><br>Veuillez d'abord <strong>créer votre compte Directeur</strong> ou <strong>vous connecter avec vos identifiants MyProtec</strong> pour lier votre Discord.`;
         const rawMsg = `Le compte Discord @${discordUser.username} n'est associé à aucun compte joueur. Veuillez vous inscrire ou vous connecter avec vos identifiants.`;
         showError('Compte Discord non lié', msgHtml, rawMsg);
         return;

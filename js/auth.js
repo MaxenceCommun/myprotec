@@ -1288,14 +1288,14 @@ window.ProtecAuth = {
     }
 
     // Écran de Connexion Obligatoire
-    if (titleEl) titleEl.textContent = 'Connexion Multijoueur Requise';
+    if (titleEl) titleEl.textContent = 'Connexion';
     if (subTitleEl) subTitleEl.textContent = 'Accès au Réseau Opérationnel';
 
     container.innerHTML = `
       <div class="space-y-4">
         <!-- Message informatif multijoueur -->
-        <div class="p-3 rounded-2xl bg-pc-blue/5 border border-pc-blue/15 text-xs text-slate-600 leading-relaxed">
-          🚨 <strong>Le jeu fonctionne exclusivement en multijoueur connecté.</strong> Connectez-vous ou créez votre compte directeur pour implanter votre antenne et interagir en temps réel avec les autres joueurs.
+        <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed text-center font-medium">
+          Veuillez vous connecter ou créer un compte pour continuer.
         </div>
 
         <!-- Onglets -->
@@ -1320,7 +1320,7 @@ window.ProtecAuth = {
 
         <div class="relative flex items-center justify-center my-1.5">
           <div class="border-t border-slate-200/80 w-full"></div>
-          <span class="bg-white px-2.5 text-[9px] font-black text-slate-400 uppercase tracking-widest absolute">ou identifiants classiques</span>
+          <span class="bg-white px-2.5 text-[9px] font-black text-slate-400 uppercase tracking-widest absolute">Identifiants MyProtec</span>
         </div>
 
         <!-- Formulaire de Connexion -->
@@ -1346,7 +1346,7 @@ window.ProtecAuth = {
 
             <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl text-xs font-extrabold bg-pc-blue text-white hover:bg-pc-blue-light transition shadow-lg shadow-pc-blue/20 flex items-center justify-center gap-2">
               <i data-lucide="log-in" class="w-4 h-4"></i>
-              Entrer dans la Partie Multijoueur
+              Se connecter
             </button>
           </form>
         ` : `
@@ -1529,7 +1529,7 @@ window.ProtecAuth = {
         errorEl.textContent = (data && data.error) || 'Erreur lors de la connexion BDD.';
         errorEl.classList.remove('hidden');
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i> Entrer dans la Partie Multijoueur';
+        submitBtn.innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i> Se connecter';
         if (window.lucide) window.lucide.createIcons();
         return;
       }
