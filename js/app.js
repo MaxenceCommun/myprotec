@@ -17743,7 +17743,6 @@ class ProtecGame {
             <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1.5" title="Choisir et affecter un ou plusieurs salariés permanents">
               <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> <span>+ Salarié</span>
             </button>
-            /* 1er Engin retiré */
           </div>
           <div class="flex items-center gap-1.5 flex-wrap ml-auto">
             ${isCrisisMission ? `
@@ -17784,7 +17783,6 @@ class ProtecGame {
             <span>Effectif complet</span>
           </div>
         `}
-        /* 1er Engin retiré */
         <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Choisir et affecter un ou plusieurs salariés permanents">
           <i data-lucide="briefcase" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>+ Salarié</span>
         </button>
