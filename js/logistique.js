@@ -494,17 +494,65 @@ window.ProtecLogistique = {
       usage: 'Dotation des spécialistes déployés sur les effondrements et tremblements de terre.'
     },
     {
+      id: 'rangers1',
+      category: 'tenues_epi',
+      name: 'Rangers Standard',
+      lucideIcon: 'footprints',
+      image: 'images/equipements/rangers1.png',
+      price: 65,
+      unit: 'paire',
+      badge: 'Base',
+      badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
+      desc: 'Chaussures montantes réglementaires. Protection de base.',
+      usage: 'Dotation standard de base (+5 Moral & Motivation).',
+      quality: 'base',
+      rangersLevel: 1,
+      moralBonus: 5
+    },
+    {
+      id: 'rangers2',
+      category: 'tenues_epi',
+      name: 'Rangers Confort',
+      lucideIcon: 'footprints',
+      image: 'images/equipements/rangers2.png',
+      price: 120,
+      unit: 'paire',
+      badge: 'Bien',
+      badgeColor: 'bg-blue-100 text-pc-blue border-blue-300',
+      desc: 'Semelle amortissante et cuir souple pour la marche prolongée.',
+      usage: 'Confort renforcé sur les postes (+12 Moral & Motivation).',
+      quality: 'bien',
+      rangersLevel: 2,
+      moralBonus: 12
+    },
+    {
+      id: 'rangers3',
+      category: 'tenues_epi',
+      name: 'Rangers Pro',
+      lucideIcon: 'footprints',
+      image: 'images/equipements/rangers3.png',
+      price: 190,
+      unit: 'paire',
+      badge: 'Super',
+      badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
+      desc: 'Membrane respirante imperméable et maintien ergonomique optimal.',
+      usage: 'Confort haut de gamme et endurance maximale (+20 Moral & Motivation).',
+      quality: 'super',
+      rangersLevel: 3,
+      moralBonus: 20
+    },
+    {
       id: 'rangers_secours',
       category: 'tenues_epi',
       name: 'Rangers de sécurité',
       lucideIcon: 'footprints',
-      image: 'images/equipements/rangers_secours.png',
-      price: 110,
+      image: 'images/equipements/rangers1.png',
+      price: 65,
       unit: 'paire',
       badge: 'Sécurité Pieds',
       badgeColor: 'bg-slate-100 text-slate-900 border-slate-300',
       desc: 'Chaussures montantes de sécurité protégeant les pieds des secouristes.',
-      usage: 'Protection sur les terrains boueux, décombres et intempéries.'
+      usage: 'Protection sur les terrains boueux et intempéries.'
     },
 
     // --- 5. RAVITAILLEMENT & ACTION SOCIALE ---

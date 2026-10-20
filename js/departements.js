@@ -159,6 +159,86 @@ window.ProtecDepartements = {
     return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
   },
 
+  // Référentiel des 4 politiques départementales de dotation des tenues
+  UNIFORM_POLICIES: {
+    achat_benevole: {
+      key: 'achat_benevole',
+      name: 'Achat par le bénévole',
+      badge: 'Achat personnel',
+      badgeClass: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800',
+      description: 'L\'association départementale ne dote pas de tenue à l\'entrée. Le bénévole doit financer son équipement ou compter sur les dotations d\'antenne.',
+      initialUniforms: 0,
+      initialRangers: null,
+      moralBonus: 0
+    },
+    tenue_base: {
+      key: 'tenue_base',
+      name: 'Tenue de base (sans rangers)',
+      badge: 'Tenue de base',
+      badgeClass: 'bg-blue-100 text-pc-blue border-blue-300 dark:bg-blue-950/60 dark:text-sky-300 dark:border-blue-800',
+      description: 'Le département dote 1 tenue de base à l\'intégration. Les rangers restent à la charge du secouriste.',
+      initialUniforms: 1,
+      initialRangers: null,
+      moralBonus: 10
+    },
+    tenue_complete: {
+      key: 'tenue_complete',
+      name: 'Tenue complète (avec rangers)',
+      badge: 'Pack complet',
+      badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800',
+      description: 'Dotation complète dès l\'arrivée : 1 tenue officielle et 1 paire de rangers standard (Base).',
+      initialUniforms: 1,
+      initialRangers: 'rangers1',
+      moralBonus: 20
+    },
+    multi_tenues: {
+      key: 'multi_tenues',
+      name: 'Dotation Renforcée (2 Tenues + Rangers Confort)',
+      badge: 'Dotation renforcée',
+      badgeClass: 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800',
+      description: 'Politique généreuse : 2 tenues officielles et 1 paire de rangers confort (Bien) offertes à l\'arrivée.',
+      initialUniforms: 2,
+      initialRangers: 'rangers2',
+      moralBonus: 30
+    }
+  },
+
+  // Récupère la politique de dotation des tenues votée par le département
+  getUniformPolicy(deptCode) {
+    const d = this.getByCode(deptCode);
+    if (!d) return this.UNIFORM_POLICIES.tenue_complete;
+    const code = String(d.code).toUpperCase();
+
+    // 1. Grands départements à fort budget / dotation renforcée (multi-tenues)
+    const generousDepts = ['75', '92', '93', '94', '13', '69', '31', '06', '59', '33', '44', '34', '67'];
+    if (generousDepts.includes(code)) {
+      return this.UNIFORM_POLICIES.multi_tenues;
+    }
+
+    // 2. Départements assurant une tenue complète (rangers comprises)
+    const standardDepts = [
+      '29', '35', '56', '22', '14', '76', '27', '50', '60', '80', '62', '51', '54', '57', '68',
+      '25', '21', '71', '38', '73', '74', '42', '01', '26', '84', '83', '30', '11', '66', '81',
+      '12', '46', '82', '64', '65', '40', '47', '24', '17', '16', '86', '79', '85', '49', '53',
+      '72', '37', '41', '45', '28', '18', '77', '78', '91', '95'
+    ];
+    if (standardDepts.includes(code)) {
+      return this.UNIFORM_POLICIES.tenue_complete;
+    }
+
+    // 3. Départements fournissant une tenue de base sans rangers
+    const baseDepts = [
+      '02', '03', '04', '05', '07', '08', '09', '10', '15', '19', '23', '32', '36', '39', '43',
+      '48', '52', '55', '58', '70', '87', '88', '89', '90', '971', '972', '973', '974', '976'
+    ];
+    if (baseDepts.includes(code)) {
+      return this.UNIFORM_POLICIES.tenue_base;
+    }
+
+    // 4. Départements laissant l'achat à la charge du bénévole
+    return this.UNIFORM_POLICIES.achat_benevole;
+  },
+
   // Détermine le département correspondant à des coordonnées [lat, lng]
   getDepartmentByCoordinates(lat, lng) {
     if (lat === undefined || lng === undefined) return null;

@@ -2534,6 +2534,7 @@ window.ProtecPersonnel = {
         isBurnout: false
       };
 
+      this.normalizeVolunteerUniform(newVol, game.currentDepartmentCode || game.player?.departmentCode);
       this.ensureVolunteerResidence(newVol, game);
       game.volunteers.push(newVol);
       game.candidatures = game.candidatures.filter(c => c.id !== candId);
@@ -2614,6 +2615,7 @@ window.ProtecPersonnel = {
         vacationHistory: []
       };
 
+      this.normalizeVolunteerUniform(newSalarie, game.currentDepartmentCode || game.player?.departmentCode);
       this.ensureVolunteerResidence(newSalarie, game);
       game.volunteers.push(newSalarie);
       game.candidatures = game.candidatures.filter(c => c.id !== candId);
@@ -2988,6 +2990,8 @@ window.ProtecPersonnel = {
         deptCode = String(station.departmentCode || game.currentDepartmentCode || (game.player && game.player.departmentCode) || '54').trim().toUpperCase();
       }
 
+      this.normalizeVolunteerUniform(v, deptCode);
+
       let needsReseed = false;
 
       // Doit avoir une commune, un code postal, des coordonnées et une adresse
@@ -3274,15 +3278,100 @@ window.ProtecPersonnel = {
     return volunteers;
   },
 
-  // Dotation individuelle d'une Tenue officielle Protection Civile
+  // =========================================================================
+  // GESTION DES DOTATIONS DE TENUES (MAX 3) ET DES 3 PAIRES DE RANGERS
+  // =========================================================================
+
+  RANGERS_TIERS: {
+    rangers1: {
+      id: 'rangers1',
+      name: 'Rangers Standard',
+      quality: 'Base',
+      badge: 'Base',
+      badgeClass: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200',
+      price: 65,
+      moralBonus: 5,
+      icon: '🥾',
+      image: 'images/equipements/rangers1.png',
+      desc: 'Rangers réglementaires. Protection de base (+5 Moral).'
+    },
+    rangers2: {
+      id: 'rangers2',
+      name: 'Rangers Confort',
+      quality: 'Bien',
+      badge: 'Bien',
+      badgeClass: 'bg-blue-100 text-pc-blue border-blue-300 dark:bg-blue-950/60 dark:text-sky-300',
+      price: 120,
+      moralBonus: 12,
+      icon: '🥾',
+      image: 'images/equipements/rangers2.png',
+      desc: 'Semelle amortissante et cuir souple (+12 Moral).'
+    },
+    rangers3: {
+      id: 'rangers3',
+      name: 'Rangers Pro',
+      quality: 'Super',
+      badge: 'Super',
+      badgeClass: 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950/60 dark:text-purple-200',
+      price: 190,
+      moralBonus: 20,
+      icon: '🥾',
+      image: 'images/equipements/rangers3.png',
+      desc: 'Membrane respirante haut de gamme et confort optimal (+20 Moral).'
+    }
+  },
+
+  getRangersInfo(rangersType) {
+    if (!rangersType) {
+      return {
+        id: null,
+        name: 'Sans rangers',
+        quality: 'Aucune',
+        badge: 'Sans rangers',
+        badgeClass: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300',
+        price: 0,
+        moralBonus: 0,
+        icon: '👟',
+        image: null,
+        desc: 'Chaussures personnelles civiles. Aucun bonus.'
+      };
+    }
+    const key = (rangersType === 'rangers_secours') ? 'rangers1' : rangersType;
+    return this.RANGERS_TIERS[key] || this.RANGERS_TIERS.rangers1;
+  },
+
+  normalizeVolunteerUniform(vol, deptCode = null) {
+    if (!vol) return;
+    if (vol.uniformCount === undefined) {
+      vol.uniformCount = (vol.hasUniform !== false) ? 1 : 0;
+    }
+    vol.uniformCount = Math.max(0, Math.min(3, parseInt(vol.uniformCount) || 0));
+    vol.hasUniform = vol.uniformCount > 0;
+    if (vol.rangersType === undefined) {
+      if (deptCode && window.ProtecDepartements?.getUniformPolicy) {
+        const policy = window.ProtecDepartements.getUniformPolicy(deptCode);
+        vol.rangersType = (vol.hasUniform && policy.initialRangers) ? policy.initialRangers : null;
+      } else {
+        vol.rangersType = vol.hasUniform ? 'rangers1' : null;
+      }
+    }
+  },
+
+  // Dotation individuelle d'une Tenue officielle Protection Civile (jusqu'à 3 par bénévole)
   equipVolunteer(game, volunteerId) {
+    return this.equipVolunteerTenue(game, volunteerId);
+  },
+
+  equipVolunteerTenue(game, volunteerId) {
     if (!game || !game.volunteers) return;
     const vol = game.volunteers.find(v => v.id === volunteerId);
     if (!vol) return;
 
-    if (vol.hasUniform !== false) {
+    this.normalizeVolunteerUniform(vol);
+
+    if (vol.uniformCount >= 3) {
       if (typeof game.showToast === 'function') {
-        game.showToast('Déjà Équipé(e)', `${vol.name} possède déjà sa tenue officielle Protection Civile.`, 'blue');
+        game.showToast('Dotation Maximale Atteinte', `${vol.name} possède déjà 3 tenues officielles (maximum autorisé).`, 'blue');
       }
       return;
     }
@@ -3294,19 +3383,19 @@ window.ProtecPersonnel = {
     const stockTenues = (station.stock.tenue_pc || 0) + (station.stock.tenue_moto || 0) + (station.stock.tenue_usar || 0) + (station.stock.tenue_f1 || 0);
 
     if (stockTenues > 0) {
-      let chosenType = 'pc';
+      let chosenType = vol.uniformType || 'pc';
       let chosenLabel = 'Pack Tenue Protection Civile';
       let icon = '👕';
 
       if (vol.skills?.includes('moto') && station.stock.tenue_moto > 0) {
         station.stock.tenue_moto--;
         chosenType = 'moto';
-        chosenLabel = 'Tenue Pilote Moto de Secours';
+        chosenLabel = 'Tenue Moto de Secours';
         icon = '🏍️';
       } else if (vol.skills?.includes('usar') && station.stock.tenue_usar > 0) {
         station.stock.tenue_usar--;
         chosenType = 'usar';
-        chosenLabel = 'Tenue Tactique USAR / INSARAG';
+        chosenLabel = 'Tenue Tactique USAR';
         icon = '🦺';
       } else if (station.stock.tenue_pc && station.stock.tenue_pc > 0) {
         station.stock.tenue_pc--;
@@ -3314,50 +3403,127 @@ window.ProtecPersonnel = {
       } else if (station.stock.tenue_moto && station.stock.tenue_moto > 0) {
         station.stock.tenue_moto--;
         chosenType = 'moto';
-        chosenLabel = 'Tenue Pilote Moto de Secours';
+        chosenLabel = 'Tenue Moto de Secours';
         icon = '🏍️';
       } else if (station.stock.tenue_usar && station.stock.tenue_usar > 0) {
         station.stock.tenue_usar--;
         chosenType = 'usar';
-        chosenLabel = 'Tenue Tactique USAR / INSARAG';
+        chosenLabel = 'Tenue Tactique USAR';
         icon = '🦺';
       } else if (station.stock.tenue_f1 && station.stock.tenue_f1 > 0) {
         station.stock.tenue_f1--;
         chosenType = 'f1';
       }
 
+      vol.uniformCount = (vol.uniformCount || 0) + 1;
       vol.hasUniform = true;
       vol.uniformType = chosenType;
       vol.uniformEquippedAt = Date.now();
-      vol.moral = Math.min(100, (vol.moral || 50) + 15);
-      vol.motivation = vol.moral;
+
+      const bonusMoral = vol.uniformCount === 1 ? 15 : 10;
+      vol.moral = Math.min(100, (vol.moral || 50) + bonusMoral);
+      vol.motivation = Math.min(100, (vol.motivation || 50) + bonusMoral);
+      vol.humeur = vol.moral;
+
+      if (typeof game.showToast === 'function') {
+        const title = vol.uniformCount === 1 ? `${icon} 1ère Tenue Dotée !` : (vol.uniformCount === 2 ? `${icon} 2ème Tenue Dotée !` : `${icon} 3ème Tenue Dotée (Max) !`);
+        const desc = vol.uniformCount === 1 
+          ? `${vol.name} a reçu son équipement officiel (+15 Moral) ! Opérationnel(le) pour le terrain.`
+          : `${vol.name} a maintenant ${vol.uniformCount}/3 tenues (+10 Moral). Confort et rotation assurés !`;
+        game.showToast(title, desc, 'green');
+      }
+      game.updateStatsUI();
+      game.saveGame();
+    } else {
+      const cost = 160;
+      if (game.resources.money >= cost) {
+        if (confirm(`Aucune tenue en réserve à l'antenne. Acheter immédiatement 1 Pack Tenue pour ${cost} € et équiper ${vol.name} (actuellement ${vol.uniformCount}/3) ?`)) {
+          game.resources.money -= cost;
+          vol.uniformCount = (vol.uniformCount || 0) + 1;
+          vol.hasUniform = true;
+          vol.uniformEquippedAt = Date.now();
+
+          const bonusMoral = vol.uniformCount === 1 ? 15 : 10;
+          vol.moral = Math.min(100, (vol.moral || 50) + bonusMoral);
+          vol.motivation = Math.min(100, (vol.motivation || 50) + bonusMoral);
+          vol.humeur = vol.moral;
+
+          if (typeof game.showToast === 'function') {
+            game.showToast('👕 Tenue Achetée & Dotée !', `${vol.name} a maintenant ${vol.uniformCount}/3 tenue(s) (+${bonusMoral} Moral).`, 'green');
+          }
+          game.updateStatsUI();
+          game.saveGame();
+        }
+      } else {
+        if (typeof game.showToast === 'function') {
+          game.showToast('Trésorerie Insuffisante', `Aucune tenue en stock et solde insuffisant (160 € requis).`, 'orange');
+        }
+      }
+    }
+  },
+
+  // Dotation ou mise à niveau des Rangers d'un bénévole
+  equipVolunteerRangers(game, volunteerId, targetRangersId) {
+    if (!game || !game.volunteers) return;
+    const vol = game.volunteers.find(v => v.id === volunteerId);
+    if (!vol) return;
+
+    this.normalizeVolunteerUniform(vol);
+    const targetInfo = this.getRangersInfo(targetRangersId);
+    if (!targetInfo || !targetInfo.id) return;
+
+    if (vol.rangersType === targetInfo.id) {
+      if (typeof game.showToast === 'function') {
+        game.showToast('Déjà Équipé(e)', `${vol.name} porte déjà ces ${targetInfo.name}.`, 'blue');
+      }
+      return;
+    }
+
+    const station = (game.stations || []).find(s => s.id === vol.stationId) || game.stations?.[0];
+    if (!station) return;
+    if (!station.stock) station.stock = {};
+
+    const stockQty = station.stock[targetInfo.id] || 0;
+
+    if (stockQty > 0) {
+      station.stock[targetInfo.id]--;
+      // Récupération de l'ancienne paire au stock si applicable
+      if (vol.rangersType && station.stock[vol.rangersType] !== undefined) {
+        station.stock[vol.rangersType]++;
+      }
+      vol.rangersType = targetInfo.id;
+      const boost = targetInfo.moralBonus || 10;
+      vol.moral = Math.min(100, (vol.moral || 50) + boost);
+      vol.motivation = Math.min(100, (vol.motivation || 50) + boost);
       vol.humeur = vol.moral;
 
       if (typeof game.showToast === 'function') {
         game.showToast(
-          `${icon} ${chosenLabel} Dotée !`,
-          `${vol.name} a reçu son équipement officiel (+15 Moral) ! Il/Elle est désormais opérationnel(le) pour partir sur le terrain.`,
+          `🥾 ${targetInfo.name} Dotées (${targetInfo.quality}) !`,
+          `${vol.name} a reçu ses ${targetInfo.name} (+${boost} Moral & Motivation) ! Confort optimal sur le terrain.`,
           'green'
         );
       }
       game.updateStatsUI();
       game.saveGame();
     } else {
-      // Proposer d'acheter une tenue immédiatement pour 160 €
-      const cost = 160;
+      const cost = targetInfo.price || 65;
       if (game.resources.money >= cost) {
-        if (confirm(`Aucune tenue en stock à l'antenne. Acheter immédiatement 1 Pack Tenue Protection Civile pour ${cost} € et équiper ${vol.name} ?`)) {
+        if (confirm(`Aucune paire de ${targetInfo.name} en réserve. Acheter immédiatement pour ${cost} € et doter ${vol.name} ?`)) {
           game.resources.money -= cost;
-          vol.hasUniform = true;
-          vol.uniformEquippedAt = Date.now();
-          vol.moral = Math.min(100, (vol.moral || 50) + 15);
-          vol.motivation = vol.moral;
+          if (vol.rangersType && station.stock[vol.rangersType] !== undefined) {
+            station.stock[vol.rangersType]++;
+          }
+          vol.rangersType = targetInfo.id;
+          const boost = targetInfo.moralBonus || 10;
+          vol.moral = Math.min(100, (vol.moral || 50) + boost);
+          vol.motivation = Math.min(100, (vol.motivation || 50) + boost);
           vol.humeur = vol.moral;
 
           if (typeof game.showToast === 'function') {
             game.showToast(
-              '👕 Tenue Achetée & Dotée !',
-              `${vol.name} a été équipé(e) pour 160 € (+15 Moral). Prêt(e) pour le terrain !`,
+              `🥾 ${targetInfo.name} Achetées (${targetInfo.quality}) !`,
+              `${vol.name} est doté(e) de ses ${targetInfo.name} pour ${cost} € (+${boost} Moral) !`,
               'green'
             );
           }
@@ -3366,17 +3532,99 @@ window.ProtecPersonnel = {
         }
       } else {
         if (typeof game.showToast === 'function') {
-          game.showToast(
-            'Stock Épuisé & Trésorerie Insuffisante',
-            `Aucune tenue en réserve et fonds insuffisants (160 € requis). Commandez des tenues dans la Centrale d'Achats.`,
-            'orange'
-          );
+          game.showToast('Fonds Insuffisants', `Aucune paire de ${targetInfo.name} en réserve et solde insuffisant (${cost} €).`, 'orange');
         }
       }
     }
   },
 
-  // Dotation groupée de tous les bénévoles en attente de tenue
+  // Modale de sélection interactive pour doter / upgrader les Rangers d'un bénévole
+  openEquipRangersModal(game, volunteerId) {
+    if (!game || !game.volunteers) return;
+    const vol = game.volunteers.find(v => v.id === volunteerId);
+    if (!vol) return;
+
+    this.normalizeVolunteerUniform(vol);
+    const station = (game.stations || []).find(s => s.id === vol.stationId) || game.stations?.[0];
+    const currentRangers = this.getRangersInfo(vol.rangersType);
+
+    const modalId = 'equip-rangers-modal';
+    let modalEl = document.getElementById(modalId);
+    if (!modalEl) {
+      modalEl = document.createElement('div');
+      modalEl.id = modalId;
+      document.body.appendChild(modalEl);
+    }
+
+    const tiers = ['rangers1', 'rangers2', 'rangers3'];
+
+    modalEl.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4';
+    modalEl.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-white/80 space-y-5 animate-in fade-in">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-xl font-black">
+              🥾
+            </div>
+            <div>
+              <h4 class="text-sm font-black text-slate-900">Dotation Rangers de Sécurité</h4>
+              <p class="text-xs text-slate-500 font-semibold">${vol.name} • Actuel : <strong>${currentRangers.name}</strong> (${currentRangers.quality})</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('${modalId}').remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        <div class="space-y-3">
+          ${tiers.map(k => {
+            const r = this.RANGERS_TIERS[k];
+            const stockQty = (station?.stock?.[k]) || 0;
+            const isEquipped = vol.rangersType === k;
+
+            return `
+              <div class="p-3.5 rounded-2xl border ${isEquipped ? 'border-pc-blue bg-blue-50/70 ring-2 ring-blue-200' : 'border-slate-200 bg-white hover:border-slate-300'} flex items-center justify-between gap-3 transition">
+                <div class="flex items-center gap-3">
+                  <div class="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200 p-1 flex items-center justify-center flex-shrink-0">
+                    <img src="${r.image}" alt="${r.name}" class="max-h-full max-w-full object-contain" onerror="this.outerHTML='🥾'" />
+                  </div>
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <h5 class="text-xs font-black text-slate-900">${r.name}</h5>
+                      <span class="px-2 py-0.2 rounded text-[9px] font-black border ${r.badgeClass}">${r.quality}</span>
+                      <span class="text-[10px] font-extrabold text-emerald-600">+${r.moralBonus} Moral</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-0.5">${r.desc}</p>
+                    <div class="text-[10px] text-slate-400 mt-0.5">
+                      En réserve antenne : <strong class="text-slate-700">${stockQty} paire(s)</strong> • Achat neuf : <strong>${r.price} €</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  ${isEquipped ? `
+                    <span class="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-800 font-black text-xs border border-emerald-300">
+                      ✓ Portée
+                    </span>
+                  ` : `
+                    <button type="button" onclick="window.ProtecPersonnel.equipVolunteerRangers(window.game, '${vol.id}', '${k}'); document.getElementById('${modalId}').remove(); window.game.openModule('recrutement');" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer shadow-xs ${stockQty > 0 ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-pc-blue hover:bg-pc-blue-light text-white'}">
+                      ${stockQty > 0 ? 'Doter (Stock)' : `Acheter (${r.price} €)`}
+                    </button>
+                  `}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600">
+          💡 <em>Plus la qualité des rangers est haute (Base ➔ Bien ➔ Super), plus vos secouristes bénéficient de confort et restent motivés lors des longues interventions.</em>
+        </div>
+      </div>
+    `;
+  },
+
+  // Dotation groupée de tous les bénévoles en attente de tenue (priorité à ceux avec 0 tenue)
   equipAllWaitingVolunteers(game, stationId = null) {
     if (!game || !game.volunteers) return;
     const station = stationId ? ((game.stations || []).find(s => s.id === stationId) || game.stations?.[0]) : game.stations?.[0];
@@ -3391,58 +3639,35 @@ window.ProtecPersonnel = {
       return;
     }
 
-    const waitingVols = game.volunteers.filter(v => 
-      (v.stationId === station.id || !v.stationId) && v.hasUniform === false
+    // Priorité 1 : Ceux avec 0 tenue (pour être opérationnels)
+    game.volunteers.forEach(v => this.normalizeVolunteerUniform(v));
+    const zeroUniformVols = game.volunteers.filter(v => 
+      (v.stationId === station.id || !v.stationId) && v.uniformCount === 0
     );
 
-    if (waitingVols.length === 0) {
-      if (typeof game.showToast === 'function') {
-        game.showToast('Tous Équipés ✓', 'Tous vos bénévoles possèdent déjà leur tenue officielle !', 'green');
-      }
-      return;
-    }
-
     let count = 0;
-    while (stockTenues > 0 && waitingVols.length > 0) {
-      const vol = waitingVols.shift();
-      let chosenType = 'pc';
-
-      if (vol.skills?.includes('moto') && station.stock.tenue_moto > 0) {
-        station.stock.tenue_moto--;
-        chosenType = 'moto';
-      } else if (vol.skills?.includes('usar') && station.stock.tenue_usar > 0) {
-        station.stock.tenue_usar--;
-        chosenType = 'usar';
-      } else if (station.stock.tenue_pc && station.stock.tenue_pc > 0) {
-        station.stock.tenue_pc--;
-        chosenType = 'pc';
-      } else if (station.stock.tenue_moto && station.stock.tenue_moto > 0) {
-        station.stock.tenue_moto--;
-        chosenType = 'moto';
-      } else if (station.stock.tenue_usar && station.stock.tenue_usar > 0) {
-        station.stock.tenue_usar--;
-        chosenType = 'usar';
-      } else if (station.stock.tenue_f1 && station.stock.tenue_f1 > 0) {
-        station.stock.tenue_f1--;
-        chosenType = 'f1';
-      }
-
-      stockTenues--;
-      vol.hasUniform = true;
-      vol.uniformType = chosenType;
-      vol.uniformEquippedAt = Date.now();
-      vol.moral = Math.min(100, (vol.moral || 50) + 15);
-      vol.motivation = vol.moral;
-      vol.humeur = vol.moral;
+    while (stockTenues > 0 && zeroUniformVols.length > 0) {
+      const vol = zeroUniformVols.shift();
+      this.equipVolunteerTenue(game, vol.id);
+      stockTenues = (station.stock.tenue_pc || 0) + (station.stock.tenue_moto || 0) + (station.stock.tenue_usar || 0) + (station.stock.tenue_f1 || 0);
       count++;
     }
 
-    if (typeof game.showToast === 'function') {
-      game.showToast(
-        '👕 Dotation Groupée Terminée !',
-        `${count} bénévole(s) ont reçu leur Tenue Protection Civile et sont désormais opérationnels (+15 Moral) !`,
-        'green'
+    // Priorité 2 : Si du stock reste, compléter ceux qui ont moins de 3 tenues
+    if (stockTenues > 0) {
+      const partialVols = game.volunteers.filter(v => 
+        (v.stationId === station.id || !v.stationId) && v.uniformCount < 3
       );
+      while (stockTenues > 0 && partialVols.length > 0) {
+        const vol = partialVols.shift();
+        this.equipVolunteerTenue(game, vol.id);
+        stockTenues = (station.stock.tenue_pc || 0) + (station.stock.tenue_moto || 0) + (station.stock.tenue_usar || 0) + (station.stock.tenue_f1 || 0);
+        count++;
+      }
+    }
+
+    if (count > 0 && typeof game.showToast === 'function') {
+      game.showToast('👕 Dotation Terminée !', `${count} tenue(s) officielle(s) distribuée(s) aux secouristes !`, 'green');
     }
     game.updateStatsUI();
     game.saveGame();

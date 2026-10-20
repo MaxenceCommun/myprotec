@@ -10849,14 +10849,20 @@ class ProtecGame {
     const waitDays = Math.max(0, currentDay - (cand.createdDay || currentDay));
     const waitPenalty = waitDays >= 2 ? Math.min(40, waitDays * 15) : 0;
 
-    // Dotation Tenue officielle Protection Civile (Standard PC, Moto ou USAR)
+    // Dotation Tenues & Rangers selon la politique départementale
     const targetStation = (this.stations || []).find(s => s.id === (stationId || this.stations[0]?.id)) || this.stations[0];
     if (targetStation && !targetStation.stock) targetStation.stock = {};
     const stockTenues = (targetStation?.stock?.tenue_pc || 0) + (targetStation?.stock?.tenue_moto || 0) + (targetStation?.stock?.tenue_usar || 0) + (targetStation?.stock?.tenue_f1 || 0);
 
-    let hasUniform = false;
+    const deptCode = targetStation?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '75';
+    const uniformPolicy = window.ProtecDepartements?.getUniformPolicy ? window.ProtecDepartements.getUniformPolicy(deptCode) : { key: 'tenue_complete', name: 'Tenue complète', badge: 'Pack complet', initialUniforms: 1, initialRangers: 'rangers1', moralBonus: 20 };
+
+    let uniformCount = uniformPolicy.initialUniforms !== undefined ? uniformPolicy.initialUniforms : 1;
+    let rangersType = uniformPolicy.initialRangers !== undefined ? uniformPolicy.initialRangers : 'rangers1';
     let uniformType = 'pc';
-    if (stockTenues > 0) {
+
+    // Si politique 'achat_benevole' (0 tenue), vérifier si du stock local existe à l'antenne
+    if (uniformCount === 0 && stockTenues > 0) {
       if (cand.specialite === 'moto' && targetStation.stock.tenue_moto > 0) {
         targetStation.stock.tenue_moto--;
         uniformType = 'moto';
@@ -10876,8 +10882,10 @@ class ProtecGame {
         targetStation.stock.tenue_f1--;
         uniformType = 'f1';
       }
-      hasUniform = true;
+      uniformCount = 1;
     }
+
+    const hasUniform = uniformCount > 0;
 
     const newVol = {
       id: `vol-${Date.now()}`,
@@ -10888,17 +10896,19 @@ class ProtecGame {
       contractType: 'benevole',
       status: 'dispo',
       stationId: stationId || this.stations[0]?.id,
+      uniformCount: uniformCount,
       hasUniform: hasUniform,
       uniformType: hasUniform ? uniformType : null,
+      rangersType: rangersType,
       uniformEquippedAt: hasUniform ? Date.now() : null,
       isTrainer: !!cand.isTrainer,
       avatar: cand.avatar || '🙋',
       dispoType: cand.dispoType || 'bénévole',
       dispoJours: cand.dispoJours || ['Samedi', 'Dimanche'],
-      motivation: Math.max(30, (cand.motivationGrade ? Math.min(100, parseInt(cand.motivationGrade) * 5) : (cand.motivationScore || 85)) - waitPenalty - (hasUniform ? 0 : 10)),
+      motivation: Math.max(30, (cand.motivationGrade ? Math.min(100, parseInt(cand.motivationGrade) * 5) : (cand.motivationScore || 85)) - waitPenalty + (uniformPolicy.moralBonus || 0)),
       skills: cand.skills || [initialRank],
       energy: Math.max(50, 90 - waitPenalty),
-      humeur: Math.max(30, 85 - waitPenalty - (hasUniform ? 0 : 10)),
+      humeur: Math.max(30, 85 - waitPenalty + (uniformPolicy.moralBonus || 0)),
       commune: cand.commune,
       code_postal: cand.code_postal,
       adresse: cand.adresse,
@@ -10920,9 +10930,11 @@ class ProtecGame {
     this.updateStatsUI();
     this.saveGame();
     if (hasUniform) {
-      this.showToast('👕 Bénévole Équipé & Intégré !', `${cand.name} (${initialRank}) a reçu sa Tenue officielle Protection Civile et est immédiatement opérationnel(le) !`, 'green');
+      const rInfo = window.ProtecPersonnel ? window.ProtecPersonnel.getRangersInfo(rangersType) : null;
+      const rangersLabel = rInfo?.name || 'Sans rangers';
+      this.showToast('👕 Bénévole Équipé & Intégré !', `${cand.name} (${initialRank}) a reçu sa dotation (${uniformCount} tenue(s), ${rangersLabel} - Politique Dép. ${deptCode} : ${uniformPolicy.badge}) !`, 'green');
     } else {
-      this.showToast('⚠️ Tenue Manquante !', `${cand.name} a signé sa charte mais n'a PAS de tenue officielle en stock ! Commandez-en une en Boutique pour l'équiper et éviter sa démotivation.`, 'orange');
+      this.showToast('⚠️ Tenue Manquante !', `${cand.name} a signé sa charte mais n'a pas de tenue officielle (Politique Dép. ${deptCode} : ${uniformPolicy.name}). Équipez-le via son profil !`, 'orange');
     }
   }
 
@@ -22230,45 +22242,64 @@ class ProtecGame {
 
             <!-- Liste détaillée des secouristes en activité -->
             <div class="space-y-2 pt-2 border-t border-indigo-100/70">
-              <!-- Bandeau de Gestion & Dotation des Tenues Protection Civile -->
+              <!-- Bandeau de Gestion & Dotation des Tenues & Rangers selon le Département -->
               ${(() => {
                 const totalVols = (this.volunteers || []).length;
-                const waitingVols = (this.volunteers || []).filter(v => v.hasUniform === false).length;
-                const equippedVols = totalVols - waitingVols;
+                this.volunteers.forEach(v => window.ProtecPersonnel?.normalizeVolunteerUniform(v));
+                const zeroUniformVols = (this.volunteers || []).filter(v => v.uniformCount === 0).length;
+                const equippedVols = totalVols - zeroUniformVols;
                 const primarySt = (this.stations || [])[0];
+                const deptCode = primarySt?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '75';
+                const policy = window.ProtecDepartements?.getUniformPolicy ? window.ProtecDepartements.getUniformPolicy(deptCode) : { name: 'Dotation Standard', badge: 'Standard', badgeClass: 'bg-blue-100 text-blue-900', description: 'Dotation complète' };
+
                 const stockTenues = (primarySt?.stock?.tenue_pc || 0) + (primarySt?.stock?.tenue_moto || 0) + (primarySt?.stock?.tenue_usar || 0) + (primarySt?.stock?.tenue_f1 || 0);
+                const stockR1 = primarySt?.stock?.rangers1 || 0;
+                const stockR2 = primarySt?.stock?.rangers2 || 0;
+                const stockR3 = primarySt?.stock?.rangers3 || 0;
+                const totalRangers = stockR1 + stockR2 + stockR3;
 
                 return `
-                  <div class="p-3 rounded-2xl glass-card border border-blue-200 dark:border-blue-900/50 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-slate-50 dark:from-slate-900 dark:to-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs mb-3 shadow-xs">
-                    <div class="flex items-center gap-2.5">
-                      <div class="w-10 h-10 rounded-xl bg-pc-blue/10 dark:bg-pc-blue/20 text-pc-blue flex items-center justify-center text-xl flex-shrink-0">
+                  <div class="p-3.5 rounded-2xl glass-card border border-blue-200 dark:border-blue-900/50 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-slate-50 dark:from-slate-900 dark:to-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs mb-3 shadow-xs">
+                    <div class="flex items-start sm:items-center gap-3">
+                      <div class="w-11 h-11 rounded-2xl bg-pc-blue/10 dark:bg-pc-blue/20 text-pc-blue flex items-center justify-center text-2xl flex-shrink-0">
                         👕
                       </div>
-                      <div>
-                        <div class="flex items-center gap-2">
-                          <h5 class="font-black text-slate-900 dark:text-white">Dotation des Tenues Protection Civile</h5>
-                          <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${waitingVols === 0 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'}">
-                            ${waitingVols === 0 ? '100% Équipés ✓' : `${waitingVols} en attente ⚠️`}
+                      <div class="space-y-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <h5 class="font-black text-slate-900 dark:text-white">Dotation & Équipements Secouristes</h5>
+                          <span class="px-2 py-0.5 rounded-full text-[10px] font-black border ${policy.badgeClass}">
+                            Dép. ${deptCode} : ${policy.name}
+                          </span>
+                          <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${zeroUniformVols === 0 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'}">
+                            ${zeroUniformVols === 0 ? '100% Opérationnels ✓' : `${zeroUniformVols} sans tenue ⚠️`}
                           </span>
                         </div>
-                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                          Équipés : <strong class="text-slate-800 dark:text-slate-200">${equippedVols}/${totalVols}</strong> • En stock réserve : <strong class="text-pc-blue dark:text-sky-400 font-mono">${stockTenues} tenue(s)</strong>
+                        <p class="text-[11px] text-slate-600 dark:text-slate-300">
+                          ${policy.description}
                         </p>
+                        <div class="text-[10.5px] text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap pt-0.5">
+                          <span>Opérationnels : <strong class="text-slate-800 dark:text-slate-200">${equippedVols}/${totalVols}</strong></span>
+                          <span>•</span>
+                          <span>Stock Tenues : <strong class="text-pc-blue dark:text-sky-400 font-mono">${stockTenues}</strong></span>
+                          <span>•</span>
+                          <span>Rangers : <strong class="text-slate-800 dark:text-slate-200 font-mono">${totalRangers} paires</strong> (${stockR1} Base, ${stockR2} Bien, ${stockR3} Super)</span>
+                        </div>
                       </div>
                     </div>
-                    <div class="flex items-center gap-2 flex-wrap">
-                      ${waitingVols > 0 && stockTenues > 0 ? `
-                        <button type="button" onclick="window.ProtecPersonnel?.equipAllWaitingVolunteers(window.game); window.game.openModule('recrutement');" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
-                          <span>✨ Doter tous (${Math.min(waitingVols, stockTenues)})</span>
+                    <div class="flex items-center gap-2 flex-wrap sm:flex-col sm:items-end">
+                      ${zeroUniformVols > 0 && stockTenues > 0 ? `
+                        <button type="button" onclick="window.ProtecPersonnel?.equipAllWaitingVolunteers(window.game); window.game.openModule('recrutement');" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                          <span>✨ Doter tous (${Math.min(zeroUniformVols, stockTenues)})</span>
                         </button>
                       ` : ''}
-                      <button type="button" onclick="window.ProtecLogistique.selectedStationId='${primarySt?.id}'; window.game.openModule('logistique');" class="px-3 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
-                        <span>🛒 Commander Tenues (160 €)</span>
+                      <button type="button" onclick="window.ProtecLogistique.selectedStationId='${primarySt?.id}'; window.ProtecLogistique.activeTab='boutique'; window.game.openModule('logistique');" class="px-3.5 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                        <span>🛒 Boutique Tenues & Rangers</span>
                       </button>
                     </div>
                   </div>
                 `;
               })()}
+
 
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <span class="text-[10px] font-black uppercase text-indigo-900 tracking-wider">Effectif Détaillé de l'Antenne (${this.volunteers.length})</span>
@@ -22336,20 +22367,47 @@ class ProtecGame {
                         </span>
                       </div>
 
-                      <!-- Statut de la Tenue Protection Civile & Action Dotation -->
-                      <div class="p-1.5 rounded-xl border flex items-center justify-between gap-2 text-[10px] ${isEquipped ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-200/80 text-blue-950 dark:text-blue-200' : 'bg-amber-100/80 dark:bg-amber-950/70 border-amber-300 text-amber-900 dark:text-amber-200 font-extrabold'}">
-                        <div class="flex items-center gap-1.5 truncate">
-                          <span>${isEquipped ? uniformIcon : '⚠️'}</span>
-                          <span class="truncate">${isEquipped ? uniformBadgeLabel : 'Sans Tenue : Bloqué en mission'}</span>
-                        </div>
-                        ${!isEquipped ? `
-                          <button type="button" onclick="window.ProtecPersonnel?.equipVolunteer(window.game, '${v.id}'); window.game.openModule('recrutement');" class="px-2 py-1 rounded-lg bg-pc-blue hover:bg-pc-blue-light text-white font-black text-[9px] shadow-xs transition flex items-center gap-1 cursor-pointer flex-shrink-0">
-                            <span>👕 Doter (${stTenues} dispo)</span>
-                          </button>
-                        ` : `
-                          <span class="text-[9px] font-black text-emerald-700 dark:text-emerald-400 flex items-center gap-0.5">✓ Prêt</span>
-                        `}
-                      </div>
+                      <!-- Statut Dotation : Tenues (max 3) & Rangers (Base/Bien/Super) -->
+                      ${(() => {
+                        window.ProtecPersonnel?.normalizeVolunteerUniform(v);
+                        const uCount = v.uniformCount || 0;
+                        const rInfo = window.ProtecPersonnel ? window.ProtecPersonnel.getRangersInfo(v.rangersType) : { name: 'Standard', quality: 'Base', badgeClass: 'bg-slate-100 text-slate-800 border-slate-300' };
+
+                        return `
+                          <div class="p-2 rounded-xl border bg-slate-50/90 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 space-y-1.5 text-[10px]">
+                            <!-- Ligne Tenues (0 à 3) -->
+                            <div class="flex items-center justify-between gap-1.5">
+                              <div class="flex items-center gap-1.5">
+                                <span>${uCount > 0 ? uniformIcon : '⚠️'}</span>
+                                <span class="font-extrabold text-slate-800 dark:text-slate-200">${uCount}/3 Tenues</span>
+                                <span class="text-[9px] ${uCount === 0 ? 'text-red-600 font-bold' : (uCount === 3 ? 'text-purple-600 font-extrabold' : 'text-emerald-600 font-semibold')}">
+                                  ${uCount === 0 ? '(Non opérationnel)' : (uCount === 3 ? '(Dotation Max ⭐)' : `(${uniformBadgeLabel})`)}
+                                </span>
+                              </div>
+                              ${uCount < 3 ? `
+                                <button type="button" onclick="window.ProtecPersonnel?.equipVolunteerTenue(window.game, '${v.id}'); window.game.openModule('recrutement');" class="px-2 py-0.5 rounded-lg bg-pc-blue hover:bg-pc-blue-light text-white font-black text-[9px] transition cursor-pointer flex items-center gap-0.5" title="Doter une tenue supplémentaire (+10 Moral, max 3)">
+                                  + Tenue (${stTenues})
+                                </button>
+                              ` : `
+                                <span class="text-[9px] font-black text-purple-600 dark:text-purple-400">Max ✓</span>
+                              `}
+                            </div>
+
+                            <!-- Ligne Rangers (Qualité Base / Bien / Super) -->
+                            <div class="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-200/60 dark:border-slate-800">
+                              <div class="flex items-center gap-1.5">
+                                <span>🥾</span>
+                                <span class="font-extrabold text-slate-800 dark:text-slate-200">${rInfo.name}</span>
+                                <span class="px-1.5 py-0.2 rounded text-[8.5px] font-black border ${rInfo.badgeClass}">${rInfo.quality}</span>
+                                <span class="text-[9px] text-emerald-600 font-semibold">${rInfo.moralBonus > 0 ? `+${rInfo.moralBonus} Moral` : 'Sans bonus'}</span>
+                              </div>
+                              <button type="button" onclick="window.ProtecPersonnel?.openEquipRangersModal(window.game, '${v.id}');" class="px-2 py-0.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-extrabold text-[9px] transition cursor-pointer" title="Changer ou upgrader les Rangers">
+                                Doter Rangers ⚙️
+                              </button>
+                            </div>
+                          </div>
+                        `;
+                      })()}
 
                       <div class="text-[10px] text-slate-500 flex items-center justify-between">
                         <span>Profil : <strong>${v.dispoType || 'Disponible'}</strong></span>

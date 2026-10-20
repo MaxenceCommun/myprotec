@@ -487,12 +487,12 @@ window.ProtecBoutiques = {
       // 1. Coopérative Fédérale : Tenues, Consommables réassort, Lots A/B/C, Formations
       const cat = window.ProtecLogistique?.CATALOG || [];
       list = cat.filter(it => {
-        if (['caisse_rearmement', 'lot_secours_a', 'lot_secours_b', 'lot_secours_c', 'tenue_pc', 'tenue_moto', 'tenue_usar', 'rangers_secours'].includes(it.id)) return true;
+        if (['caisse_rearmement', 'lot_secours_a', 'lot_secours_b', 'lot_secours_c', 'tenue_pc', 'tenue_moto', 'tenue_usar', 'rangers1', 'rangers2', 'rangers3', 'rangers_secours'].includes(it.id)) return true;
         if (it.category === 'kits_formation') return true;
         return false;
       }).map(it => ({ ...it, shopId: shop.id }));
 
-      if (rayon === 'tenues') list = list.filter(it => ['tenue_pc', 'tenue_moto', 'tenue_usar', 'rangers_secours'].includes(it.id));
+      if (rayon === 'tenues') list = list.filter(it => ['tenue_pc', 'tenue_moto', 'tenue_usar', 'rangers1', 'rangers2', 'rangers3', 'rangers_secours'].includes(it.id));
       else if (rayon === 'pharmacie') list = list.filter(it => it.id === 'caisse_rearmement');
       else if (rayon === 'lots_secours') list = list.filter(it => ['lot_secours_a', 'lot_secours_b', 'lot_secours_c'].includes(it.id));
       else if (rayon === 'formations') list = list.filter(it => it.category === 'kits_formation');
