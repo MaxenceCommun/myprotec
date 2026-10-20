@@ -32,20 +32,23 @@ window.ProtecPWA = {
     return false;
   },
 
-  init() {
+  async init() {
     this.checkPlatform();
     this.setupNetworkListeners();
     this.setupInstallPrompt();
     this.registerServiceWorker();
+    await this.checkStandalone();
     this.updateUI();
-    this.checkStandalone();
   },
 
   // 1. Détecte si l'application est déjà exécutée en tant qu'application installée (PWA Standalone)
   async checkStandalone() {
     if (this.isAppAlreadyInstalled()) {
       this.isStandalone = true;
-      try { localStorage.setItem('protec_pwa_installed', 'true'); } catch (e) {}
+      try { 
+        localStorage.setItem('protec_pwa_installed', 'true');
+        localStorage.setItem('myprotec_app_installed', 'true');
+      } catch (e) {}
       this.updateUI();
       return true;
     }
@@ -56,7 +59,10 @@ window.ProtecPWA = {
         if (related && related.length > 0) {
           console.log('📱 [PWA] Application déjà installée détectée via getInstalledRelatedApps :', related);
           this.isStandalone = true;
-          try { localStorage.setItem('protec_pwa_installed', 'true'); } catch (e) {}
+          try { 
+            localStorage.setItem('protec_pwa_installed', 'true');
+            localStorage.setItem('myprotec_app_installed', 'true');
+          } catch (e) {}
           this.updateUI();
           return true;
         }
@@ -272,17 +278,18 @@ window.ProtecPWA = {
 
   // 6. Action d'installation
   async promptInstall() {
-    const isInstalled = this.isStandalone || 
-      window.matchMedia('(display-mode: standalone)').matches ||
-      navigator.standalone === true ||
-      localStorage.getItem('protec_pwa_installed') === 'true';
+    const isInstalled = this.isAppAlreadyInstalled();
 
     // Si déjà installé
     if (isInstalled) {
       this.isStandalone = true;
+      try {
+        localStorage.setItem('protec_pwa_installed', 'true');
+        localStorage.setItem('myprotec_app_installed', 'true');
+      } catch (e) {}
       this.updateUI();
       if (window.game && typeof window.game.showToast === 'function') {
-        window.game.showToast('✅ MyProtec est déjà installé sur cet appareil.', 'info');
+        window.game.showToast('Application Déjà Installée', 'MyProtec est déjà installée sur cet appareil.', 'green');
       } else if (window.ProtecDialog) {
         window.ProtecDialog.alert('MyProtec est déjà installé sur votre appareil.', 'Application Déjà Installée');
       } else {
@@ -299,7 +306,10 @@ window.ProtecPWA = {
         if (choice && choice.outcome === 'accepted') {
           console.log('Utilisateur a accepté l\'installation PWA');
           this.isStandalone = true;
-          try { localStorage.setItem('protec_pwa_installed', 'true'); } catch (e) {}
+          try { 
+            localStorage.setItem('protec_pwa_installed', 'true');
+            localStorage.setItem('myprotec_app_installed', 'true');
+          } catch (e) {}
           this.updateUI();
         } else {
           console.log('Installation refusée par l\'utilisateur');
@@ -312,8 +322,24 @@ window.ProtecPWA = {
       return;
     }
 
-    // Cas 2 : iOS Safari ou navigateur sans prompt natif direct -> Ouvrir le guide d'installation
-    this.openInstallModal();
+    // Cas 2 : iOS Safari
+    if (this.isIOS) {
+      this.openInstallModal();
+      return;
+    }
+
+    // Cas 3 : Navigateur desktop sans deferredPrompt (l'application est déjà installée sur l'ordinateur)
+    try {
+      localStorage.setItem('protec_pwa_installed', 'true');
+      localStorage.setItem('myprotec_app_installed', 'true');
+    } catch (e) {}
+    this.isStandalone = true;
+    this.updateUI();
+    if (window.game && typeof window.game.showToast === 'function') {
+      window.game.showToast('Application Déjà Installée', 'MyProtec est déjà installée sur cet appareil.', 'green');
+    } else {
+      this.openInstallModal();
+    }
   },
 
   // 7. Modale explicative d'installation (iOS & Desktop)
@@ -427,7 +453,10 @@ window.ProtecPWA = {
 
     if (isInstalled) {
       this.isStandalone = true;
-      try { localStorage.setItem('protec_pwa_installed', 'true'); } catch (e) {}
+      try { 
+        localStorage.setItem('protec_pwa_installed', 'true');
+        localStorage.setItem('myprotec_app_installed', 'true');
+      } catch (e) {}
       if (document.documentElement) {
         document.documentElement.classList.add('pwa-installed');
       }
@@ -435,7 +464,7 @@ window.ProtecPWA = {
 
     const buttons = document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-mobile, .pwa-install-trigger');
 
-    // Si déjà installé en standalone ou enregistré, masquer complètement les boutons
+    // 1. Si déjà installé, masquer impérativement tous les boutons
     if (isInstalled) {
       buttons.forEach(btn => {
         btn.style.setProperty('display', 'none', 'important');
@@ -445,12 +474,26 @@ window.ProtecPWA = {
       return;
     }
 
-    // Sinon, afficher les boutons
-    buttons.forEach(btn => {
-      btn.style.display = '';
-      btn.classList.remove('hidden');
-      btn.removeAttribute('aria-hidden');
-    });
+    // 2. Condition d'éligibilité stricte :
+    // N'afficher QUE si le navigateur permet nativement l'installation (beforeinstallprompt reçu)
+    // ou sur iOS Safari non standalone.
+    // Si l'application est déjà installée sur l'ordinateur, Chrome ne déclenche PAS beforeinstallprompt :
+    // dans ce cas, le bouton reste masqué !
+    const canPromptInstall = (this.deferredPrompt !== null) || (this.isIOS && !this.isStandalone);
+
+    if (canPromptInstall) {
+      buttons.forEach(btn => {
+        btn.style.removeProperty('display');
+        btn.classList.remove('hidden');
+        btn.removeAttribute('aria-hidden');
+      });
+    } else {
+      buttons.forEach(btn => {
+        btn.style.setProperty('display', 'none', 'important');
+        btn.classList.add('hidden');
+        btn.setAttribute('aria-hidden', 'true');
+      });
+    }
 
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
       try { window.lucide.createIcons(); } catch (e) {}
