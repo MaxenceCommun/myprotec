@@ -2498,3 +2498,16 @@ html.pwa-installed .pwa-install-trigger {
   display: none !important;
 }
 
+/* Thème sombre spécifique : Showroom Concessionnaire Véhicules */
+html.dark .vehicle-showroom-card {
+  background-color: #0f172a !important;
+  border-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+html.dark .vehicle-image-box {
+  background: linear-gradient(to bottom, #1e293b, #0f172a) !important;
+  border-color: #334155 !important;
+}
+
+

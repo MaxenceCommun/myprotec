@@ -499,23 +499,23 @@ window.ProtecAdvancedModals = {
     return `
       <div class="space-y-4">
         <!-- Bandeau d'en-tête et capacité du hangar -->
-        <div class="p-4 rounded-2xl glass-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div class="p-4 rounded-2xl bg-white/80 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs backdrop-blur-md">
           <div>
-            <h4 class="font-black text-slate-900 text-sm">Centrale d'Acquisition des Véhicules de Secours</h4>
-            <p class="text-slate-500 mt-0.5">Capacité du Hangar : <strong>${usedSlots} / ${maxSlots} véhicules</strong> • Antenne : <strong>${st?.name || 'Principale'}</strong></p>
+            <h4 class="font-black text-slate-900 dark:text-white text-sm">Centrale d'Acquisition des Véhicules de Secours</h4>
+            <p class="text-slate-500 dark:text-slate-400 mt-0.5">Capacité du Hangar : <strong class="text-slate-800 dark:text-slate-200">${usedSlots} / ${maxSlots} véhicules</strong> • Antenne : <strong class="text-slate-800 dark:text-slate-200">${st?.name || 'Principale'}</strong></p>
           </div>
           <div class="flex items-center gap-3">
-            <span class="font-bold text-slate-600">Trésorerie disponible : <strong class="text-pc-blue font-mono text-sm">${game.resources.money.toLocaleString('fr-FR')} €</strong></span>
+            <span class="font-bold text-slate-600 dark:text-slate-300">Trésorerie disponible : <strong class="text-pc-blue dark:text-blue-400 font-mono text-sm">${game.resources.money.toLocaleString('fr-FR')} €</strong></span>
           </div>
         </div>
 
         <!-- Raccourci vers le Marché de l'Occasion -->
-        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200/80 flex items-center justify-between gap-3 text-xs">
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-amber-950/40 border border-amber-300/80 dark:border-amber-700/60 flex items-center justify-between gap-3 text-xs shadow-xs">
           <div class="flex items-center gap-2.5">
             <span class="text-xl">🏷️</span>
             <div>
-              <strong class="text-slate-800 text-xs block">Envie d'économiser sur votre parc roulant ?</strong>
-              <span class="text-[11px] text-slate-500">Découvrez les véhicules révisés cédés par les autres directeurs (jusqu'à -50% vs neuf).</span>
+              <strong class="text-amber-950 dark:text-amber-200 text-xs block font-black">Envie d'économiser sur votre parc roulant ?</strong>
+              <span class="text-[11px] text-amber-800 dark:text-amber-300/80">Découvrez les véhicules révisés cédés par les autres directeurs (jusqu'à -50% vs neuf).</span>
             </div>
           </div>
           <button onclick="window.game.openModule('marche_occasion')" class="px-3.5 py-1.5 rounded-xl bg-pc-orange hover:bg-orange-600 active:scale-95 text-white font-extrabold text-xs shadow-xs transition cursor-pointer flex-shrink-0">
@@ -526,20 +526,20 @@ window.ProtecAdvancedModals = {
         <!-- ══════════════════════════════════════════════════════════ -->
         <!-- SÉLECTEUR DES DEUX MODES DE RECHERCHE / CONFIGURATION    -->
         <!-- ══════════════════════════════════════════════════════════ -->
-        <div class="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-slate-100 border border-slate-200 shadow-inner">
+        <div class="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-inner">
           <button 
             type="button" 
             onclick="window.ProtecAdvancedModals.setVehicleShopMode('models', '${st?.id}')" 
             class="py-2.5 px-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
               currentShopMode === 'models' 
-                ? 'bg-white text-pc-blue shadow-md ring-2 ring-pc-blue/30 scale-[1.01]' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                ? 'bg-white dark:bg-pc-blue text-pc-blue dark:text-white shadow-md ring-2 ring-pc-blue/30 scale-[1.01]' 
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800'
             }"
           >
             <span class="text-base">🚗</span>
             <div class="text-left">
               <span class="block leading-none">Par Modèle & Configuration</span>
-              <span class="text-[10px] font-semibold text-slate-500 block mt-0.5">Master 3, Trafic, Ducato • Choix aménagement & cube</span>
+              <span class="text-[10px] font-semibold ${currentShopMode === 'models' ? 'text-pc-blue/80 dark:text-white/80' : 'text-slate-500 dark:text-slate-400'} block mt-0.5">Master 3, Trafic, Ducato • Choix aménagement & cube</span>
             </div>
           </button>
 
@@ -548,14 +548,14 @@ window.ProtecAdvancedModals = {
             onclick="window.ProtecAdvancedModals.setVehicleShopMode('types', '${st?.id}')" 
             class="py-2.5 px-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
               currentShopMode === 'types' 
-                ? 'bg-white text-pc-blue shadow-md ring-2 ring-pc-blue/30 scale-[1.01]' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                ? 'bg-white dark:bg-pc-blue text-pc-blue dark:text-white shadow-md ring-2 ring-pc-blue/30 scale-[1.01]' 
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800'
             }"
           >
             <span class="text-base">🚑</span>
             <div class="text-left">
               <span class="block leading-none">Par Type Opérationnel</span>
-              <span class="text-[10px] font-semibold text-slate-500 block mt-0.5">VPSP, VTU, VTP, VL, Poids Lourds • Sérigraphies regroupées</span>
+              <span class="text-[10px] font-semibold ${currentShopMode === 'types' ? 'text-pc-blue/80 dark:text-white/80' : 'text-slate-500 dark:text-slate-400'} block mt-0.5">VPSP, VTU, VTP, VL, Poids Lourds • Sérigraphies regroupées</span>
             </div>
           </button>
         </div>
@@ -568,10 +568,10 @@ window.ProtecAdvancedModals = {
             value="${this.vehicleSearch || ''}" 
             oninput="window.ProtecAdvancedModals.setVehicleSearch(this.value, '${st?.id}')" 
             placeholder="🔍 Rechercher un véhicule (ex: Master 3, Cube, VPSP, VTU, Trafic, Poids Lourd, Permis C...)" 
-            class="w-full pl-4 pr-10 py-2.5 rounded-2xl bg-white border border-slate-300 shadow-sm font-bold text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
+            class="w-full pl-4 pr-10 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 shadow-sm font-bold text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-pc-blue transition"
           />
           ${this.vehicleSearch ? `
-            <button onclick="window.ProtecAdvancedModals.setVehicleSearch('', '${st?.id}')" class="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
+            <button onclick="window.ProtecAdvancedModals.setVehicleSearch('', '${st?.id}')" class="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold cursor-pointer">✕</button>
           ` : ''}
         </div>
 
@@ -650,27 +650,27 @@ window.ProtecAdvancedModals = {
             const totalConfigCost = currentVariant.cost + optionsExtraCost;
 
             return `
-              <div class="p-4 rounded-2xl glass-card space-y-3.5 flex flex-col justify-between hover:shadow-xl transition border border-slate-200/80 bg-white/95">
+              <div class="p-4 rounded-2xl space-y-3.5 flex flex-col justify-between hover:shadow-xl transition border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 shadow-xs vehicle-showroom-card">
                 <div class="space-y-3">
                   <!-- En-tête modèle & marque -->
                   <div class="flex items-start justify-between gap-2">
                     <div>
                       <div class="flex items-center gap-1.5">
                         <span class="text-lg">${model.icon || '🚐'}</span>
-                        <h4 class="font-black text-slate-900 text-sm">${model.name}</h4>
+                        <h4 class="font-black text-slate-900 dark:text-white text-sm">${model.name}</h4>
                       </div>
-                      <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">${model.brand}</span>
+                      <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">${model.brand}</span>
                     </div>
 
                     <!-- Prix dynamique selon la configuration active -->
                     <div class="text-right">
-                      <span class="font-mono font-black text-base text-slate-900 block">${totalConfigCost.toLocaleString('fr-FR')} €</span>
-                      <span class="text-[9.5px] font-bold text-slate-400">${optionsExtraCost > 0 ? `(dont +${optionsExtraCost} € d'options)` : 'TTC • Neuf d\'usine'}</span>
+                      <span class="font-mono font-black text-base text-slate-900 dark:text-white block">${totalConfigCost.toLocaleString('fr-FR')} €</span>
+                      <span class="text-[9.5px] font-bold text-slate-400 dark:text-slate-400">${optionsExtraCost > 0 ? `(dont +${optionsExtraCost} € d'options)` : 'TTC • Neuf d\'usine'}</span>
                     </div>
                   </div>
 
                   <!-- Image dynamique en temps réel selon la variante -->
-                  <div class="h-44 w-full flex items-center justify-center p-3 bg-gradient-to-b from-slate-50 to-slate-100/70 rounded-2xl border border-slate-100 overflow-hidden shadow-inner group relative">
+                  <div class="h-44 w-full flex items-center justify-center p-3 bg-gradient-to-b from-slate-100/80 to-slate-200/50 dark:from-slate-800/80 dark:to-slate-850/80 rounded-2xl border border-slate-200/70 dark:border-slate-700/80 overflow-hidden shadow-inner group relative vehicle-image-box">
                     <img 
                       src="${this.getVehicleThumb(currentVariant.image || `images/vehicles/${currentVariant.type}.png`)}" 
                       alt="${currentVariant.name}" 
@@ -686,7 +686,7 @@ window.ProtecAdvancedModals = {
                       </span>
                       ${(currentVariant.functions || []).map(fCode => {
                         const f = window.ProtecAdvanced?.vehicleFunctions?.[fCode];
-                        return `<span class="px-1.5 py-0.5 rounded-md text-[9px] font-black border shadow-2xs ${f?.badgeClass || 'bg-slate-100 text-slate-800'}" title="${f?.code} : ${f?.label}">🏷️ ${fCode}</span>`;
+                        return `<span class="px-1.5 py-0.5 rounded-md text-[9px] font-black border shadow-2xs ${f?.badgeClass || 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700'}" title="${f?.code} : ${f?.label}">🏷️ ${fCode}</span>`;
                       }).join('')}
                       ${(() => {
                         const logCap = this.getVehicleLogCapacity(currentVariant);
@@ -697,7 +697,7 @@ window.ProtecAdvancedModals = {
                           </span>
                         ` : '';
                       })()}
-                      <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white/90 text-slate-700 backdrop-blur-xs border border-slate-200/70">
+                      <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white/90 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 backdrop-blur-xs border border-slate-200/70 dark:border-slate-700">
                         ${currentVariant.category}
                       </span>
                     </div>
@@ -710,7 +710,7 @@ window.ProtecAdvancedModals = {
                           : (isMotoLicense 
                               ? 'bg-sky-500 text-white border-sky-600' 
                               : (isNoLicense 
-                                  ? 'bg-slate-200 text-slate-700 border-slate-300' 
+                                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600' 
                                   : 'bg-emerald-600 text-white border-emerald-700'))
                       }">
                         ${currentVariant.licenseLabel || `Permis ${currentVariant.licenseRequired}`}
@@ -720,7 +720,7 @@ window.ProtecAdvancedModals = {
 
                   <!-- Sélecteur d'Aménagement / Configuration spécifique à ce châssis -->
                   <div>
-                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1.5">
+                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1.5">
                       ⚙️ Choisissez la configuration / aménagement (${variants.length} au choix) :
                     </span>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -733,17 +733,17 @@ window.ProtecAdvancedModals = {
                             onclick="window.ProtecAdvancedModals.selectModelVariant('${model.id}', '${v.id}', '${st?.id}')" 
                             class="px-2.5 py-2 rounded-xl text-left transition border cursor-pointer ${
                               isSelected 
-                                ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black ring-1 ring-pc-blue/40 shadow-xs' 
-                                : 'bg-slate-50 hover:bg-slate-100 border-slate-200/90 text-slate-700 font-bold'
+                                ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black ring-1 ring-pc-blue/40 shadow-xs' 
+                                : 'bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-750 border-slate-200/90 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold'
                             }"
                           >
                             <div class="flex items-center justify-between text-xs leading-tight">
                               <span class="truncate">${v.shortName || v.name}</span>
-                              <span class="font-mono text-[11px] shrink-0 font-black ${isSelected ? 'text-pc-blue' : 'text-slate-500'} ml-1">
+                              <span class="font-mono text-[11px] shrink-0 font-black ${isSelected ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'} ml-1">
                                 ${(v.cost / 1000).toFixed(1)} k€
                               </span>
                             </div>
-                            <span class="text-[9.5px] block font-semibold ${isSelected ? 'text-pc-blue/80' : 'text-slate-400'} mt-0.5">
+                            <span class="text-[9.5px] block font-semibold ${isSelected ? 'text-pc-blue/80 dark:text-blue-200' : 'text-slate-500 dark:text-slate-400'} mt-0.5">
                               ${v.type} ${(v.functions || []).map(f => `[${f}]`).join(' ')} • ${v.capacity} pl.${vLogCap > 0 ? ` • 📦 ${vLogCap} slots LOG` : ''}
                             </span>
                           </button>
@@ -754,77 +754,77 @@ window.ProtecAdvancedModals = {
 
                   <!-- Description & Spécificités de la variante configurée -->
                   <div class="space-y-1">
-                    <h5 class="text-xs font-black text-slate-900">${currentVariant.name}</h5>
-                    <p class="text-[11px] text-slate-600 leading-relaxed">${currentVariant.desc}</p>
+                    <h5 class="text-xs font-black text-slate-900 dark:text-white">${currentVariant.name}</h5>
+                    <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">${currentVariant.desc}</p>
                   </div>
 
                   <!-- Fiche Technique Rapide (Sans vitesse max) -->
-                  <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[10.5px] font-bold text-slate-700 grid grid-cols-2 gap-2">
+                  <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-[10.5px] font-bold text-slate-700 dark:text-slate-300 grid grid-cols-2 gap-2">
                     <div>
-                      Capacité : <strong class="text-slate-900">${currentVariant.capacity} place${currentVariant.capacity > 1 ? 's' : ''}</strong>
+                      Capacité : <strong class="text-slate-900 dark:text-white">${currentVariant.capacity} place${currentVariant.capacity > 1 ? 's' : ''}</strong>
                     </div>
                     <div>
-                      Attelage : <strong class="${hasNativeTowHitch || selOpts.towHitch ? 'text-emerald-700' : 'text-slate-400'}">${hasNativeTowHitch ? '✓ De série' : (selOpts.towHitch ? '✓ Option ajoutée' : 'Non équipé')}</strong>
+                      Attelage : <strong class="${hasNativeTowHitch || selOpts.towHitch ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}">${hasNativeTowHitch ? '✓ De série' : (selOpts.towHitch ? '✓ Option ajoutée' : 'Non équipé')}</strong>
                     </div>
                     ${(() => {
                       const logCap = this.getVehicleLogCapacity(currentVariant);
                       if (logCap > 0) {
                         return `
-                          <div class="col-span-2 flex items-center justify-between p-1.5 px-2.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-950">
-                            <span class="flex items-center gap-1.5 font-bold text-amber-900">
-                              <i data-lucide="package" class="w-3.5 h-3.5 text-amber-600"></i>
+                          <div class="col-span-2 flex items-center justify-between p-1.5 px-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/80 text-amber-950 dark:text-amber-200">
+                            <span class="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-300">
+                              <i data-lucide="package" class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400"></i>
                               <span>Capacité Logistique (tag LOG) :</span>
                             </span>
-                            <strong class="font-black font-mono text-amber-800 text-xs">${logCap} slot${logCap > 1 ? 's' : ''} de fret</strong>
+                            <strong class="font-black font-mono text-amber-800 dark:text-amber-300 text-xs">${logCap} slot${logCap > 1 ? 's' : ''} de fret</strong>
                           </div>
                         `;
                       }
                       return '';
                     })()}
                     <div class="col-span-2">
-                      Spécialité : <strong class="text-pc-blue">${currentVariant.specialty || 'Polyvalent'}</strong>
+                      Spécialité : <strong class="text-pc-blue dark:text-blue-400">${currentVariant.specialty || 'Polyvalent'}</strong>
                     </div>
                   </div>
 
                   <!-- Options & Équipements Configurables -->
-                  <div class="space-y-1.5 pt-1.5 border-t border-slate-200/80">
-                    <div class="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500">
+                  <div class="space-y-1.5 pt-1.5 border-t border-slate-200/80 dark:border-slate-800">
+                    <div class="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
                       <span>🛠️ Options & Équipements Configurables :</span>
-                      ${optionsExtraCost > 0 ? `<span class="text-pc-blue font-black font-mono">+${optionsExtraCost.toLocaleString('fr-FR')} €</span>` : ''}
+                      ${optionsExtraCost > 0 ? `<span class="text-pc-blue dark:text-blue-400 font-black font-mono">+${optionsExtraCost.toLocaleString('fr-FR')} €</span>` : ''}
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10.5px]">
                       <!-- Option Boule d'attelage -->
                       ${hasNativeTowHitch ? `
-                        <div class="p-2 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-800 font-bold flex items-center justify-between">
+                        <div class="p-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold flex items-center justify-between">
                           <span class="flex items-center gap-1.5"><span>🔗</span> Boule d’attelage</span>
-                          <span class="text-[9px] font-black uppercase bg-emerald-200/70 px-1.5 py-0.5 rounded text-emerald-900">De Série</span>
+                          <span class="text-[9px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-100">De Série</span>
                         </div>
                       ` : `
                         <button 
                           type="button" 
                           onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'towHitch', '${st?.id}')"
-                          class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.towHitch ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                          class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.towHitch ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                         >
                           <span class="flex items-center gap-1.5"><span>🔗</span> Boule d’attelage</span>
-                          <span class="font-mono font-black text-[10px] ${selOpts.towHitch ? 'text-pc-blue' : 'text-slate-500'}">+950 €</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.towHitch ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+950 €</span>
                         </button>
                       `}
 
                       <!-- Option Rampe LED : Obligatoire et de série sur VPSP, optionnelle sur les autres -->
                       ${isVPSP ? `
-                        <div class="p-2 rounded-xl bg-blue-50/80 border border-blue-200 text-blue-900 font-bold flex items-center justify-between text-xs">
+                        <div class="p-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 font-bold flex items-center justify-between text-xs">
                           <span class="flex items-center gap-1.5"><span>🚨</span> Rampe Gyrophares LED</span>
-                          <span class="text-[9px] font-black uppercase bg-blue-200/80 px-1.5 py-0.5 rounded text-blue-950">De Série (Obligatoire)</span>
+                          <span class="text-[9px] font-black uppercase bg-blue-200/80 dark:bg-blue-800/60 px-1.5 py-0.5 rounded text-blue-950 dark:text-blue-100">De Série (Obligatoire)</span>
                         </div>
                       ` : `
                         <button 
                           type="button" 
                           onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'ledBar', '${st?.id}')"
-                          class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                          class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                         >
                           <span class="flex items-center gap-1.5"><span>🚨</span> Rampe LED & Calandre</span>
-                          <span class="font-mono font-black text-[10px] ${selOpts.ledBar ? 'text-pc-blue' : 'text-slate-500'}">+1 250 €</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 250 €</span>
                         </button>
                       `}
 
@@ -832,16 +832,16 @@ window.ProtecAdvancedModals = {
                       <button 
                         type="button" 
                         onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'climatisation', '${st?.id}')"
-                        class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.climatisation ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                        class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.climatisation ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                       >
                         <span class="flex items-center gap-1.5"><span>❄️</span> Pack Climatisation / Webasto</span>
-                        <span class="font-mono font-black text-[10px] ${selOpts.climatisation ? 'text-pc-blue' : 'text-slate-500'}">+1 850 €</span>
+                        <span class="font-mono font-black text-[10px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 850 €</span>
                       </button>
 
                       <!-- Équipement de Série : Convertisseur 230V Sinus (Systématique) -->
-                      <div class="p-2 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-800 font-bold flex items-center justify-between text-xs">
+                      <div class="p-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold flex items-center justify-between text-xs">
                         <span class="flex items-center gap-1.5"><span>⚡</span> Convertisseur 230V Sinus</span>
-                        <span class="text-[9px] font-black uppercase bg-emerald-200/70 px-1.5 py-0.5 rounded text-emerald-900">De Série</span>
+                        <span class="text-[9px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-100">De Série</span>
                       </div>
                     </div>
                   </div>
@@ -1337,14 +1337,14 @@ window.ProtecAdvancedModals = {
     return `
       <div class="space-y-4">
         <!-- Barre de Filtres par Type Opérationnel & Tri -->
-        <div class="p-3 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
+        <div class="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
           <!-- Filtres boutons -->
           <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
             ${filterOptions.map(f => {
               const isActive = activeFilter === f.id;
               return `
                 <button type="button" onclick="window.ProtecAdvancedModals.setVehicleFilter('${f.id}', '${st?.id}')" class="px-2.5 py-1.5 rounded-xl text-[11px] font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                  isActive ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  isActive ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200'
                 }">
                   <span>${f.icon}</span>
                   <span>${f.label}</span>
@@ -1355,8 +1355,8 @@ window.ProtecAdvancedModals = {
 
           <!-- Sélecteur de Tri -->
           <div class="flex items-center gap-2 self-end md:self-auto shrink-0">
-            <span class="text-[11px] font-bold text-slate-500 whitespace-nowrap">Trier par :</span>
-            <select onchange="window.ProtecAdvancedModals.setVehicleSort(this.value, '${st?.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-300 font-bold text-xs text-slate-800 cursor-pointer focus:ring-2 focus:ring-pc-blue">
+            <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">Trier par :</span>
+            <select onchange="window.ProtecAdvancedModals.setVehicleSort(this.value, '${st?.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-xs text-slate-800 dark:text-white cursor-pointer focus:ring-2 focus:ring-pc-blue">
               <option value="price_asc" ${activeSort === 'price_asc' ? 'selected' : ''}>Prix croissant (Moins cher ➜ Plus cher)</option>
               <option value="price_desc" ${activeSort === 'price_desc' ? 'selected' : ''}>Prix décroissant (Plus cher ➜ Moins cher)</option>
               <option value="name_asc" ${activeSort === 'name_asc' ? 'selected' : ''}>Nom alphabétique (A ➜ Z)</option>
@@ -1367,7 +1367,7 @@ window.ProtecAdvancedModals = {
         <!-- Grille des Cartes Opérationnelles -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           ${filteredCards.length === 0 ? `
-            <div class="col-span-full p-8 text-center glass-card rounded-2xl text-slate-500">
+            <div class="col-span-full p-8 text-center bg-white/80 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-500 dark:text-slate-400">
               <p class="font-bold text-sm">Aucun véhicule opérationnel trouvé pour cette sélection.</p>
             </div>
           ` : filteredCards.map(card => {
@@ -1411,10 +1411,10 @@ window.ProtecAdvancedModals = {
             const totalCardCost = card.cost + optionsExtraCost;
 
             return `
-              <div class="p-4 rounded-2xl glass-card space-y-3 flex flex-col justify-between hover:shadow-lg transition border border-slate-200/80 bg-white/95">
+              <div class="p-4 rounded-2xl space-y-3 flex flex-col justify-between hover:shadow-lg transition border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 shadow-xs vehicle-showroom-card">
                 <div class="space-y-2.5">
                   <!-- Image du véhicule -->
-                  <div class="h-28 w-full flex items-center justify-center p-2 bg-gradient-to-b from-slate-50 to-slate-100/60 rounded-2xl border border-slate-100 overflow-hidden shadow-inner group relative">
+                  <div class="h-28 w-full flex items-center justify-center p-2 bg-gradient-to-b from-slate-100/80 to-slate-200/50 dark:from-slate-800/80 dark:to-slate-850/80 rounded-2xl border border-slate-200/70 dark:border-slate-700/80 overflow-hidden shadow-inner group relative vehicle-image-box">
                     <img 
                       src="${this.getVehicleThumb(activeImage || `images/vehicles/${card.type}.png`)}" 
                       alt="${activeTitle}" 
@@ -1431,7 +1431,7 @@ window.ProtecAdvancedModals = {
                           : (isMotoLicense 
                               ? 'bg-sky-500 text-white border-sky-600' 
                               : (isNoLicense 
-                                  ? 'bg-slate-200 text-slate-700 border-slate-300' 
+                                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600' 
                                   : 'bg-emerald-600 text-white border-emerald-700'))
                       }">
                         ${card.licenseLabel || `Permis ${card.licenseRequired}`}
@@ -1442,42 +1442,42 @@ window.ProtecAdvancedModals = {
                   <!-- Badge catégorie et prix -->
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-1.5 flex-wrap">
-                      <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-pc-blue/10 text-pc-blue">
+                      <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-pc-blue/15 text-pc-blue dark:bg-pc-blue/30 dark:text-blue-300">
                         ${card.type}
                       </span>
                       ${(() => {
                         const funcs = game.getVehicleFunctions ? game.getVehicleFunctions(card) : [];
-                        return funcs.map(f => `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-black border shadow-2xs ${f.badgeClass}" title="${f.code} : ${f.label}">🏷️ ${f.code}</span>`).join('');
+                        return funcs.map(f => `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-black border shadow-2xs ${f.badgeClass || 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700'}" title="${f.code} : ${f.label}">🏷️ ${f.code}</span>`).join('');
                       })()}
                       ${(() => {
                         const logCap = this.getVehicleLogCapacity(card);
                         return logCap > 0 ? `
-                          <span class="px-1.5 py-0.5 rounded text-[8.5px] font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
-                            <i data-lucide="package" class="w-2.5 h-2.5 text-amber-700"></i>
+                          <span class="px-1.5 py-0.5 rounded text-[8.5px] font-black bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700/80 flex items-center gap-1 shadow-2xs">
+                            <i data-lucide="package" class="w-2.5 h-2.5 text-amber-700 dark:text-amber-400"></i>
                             <span>LOG : ${logCap} slots</span>
                           </span>
                         ` : '';
                       })()}
-                      <span class="text-[10px] font-bold text-slate-500">
+                      <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400">
                         ${card.category}
                       </span>
                     </div>
                     <div class="text-right">
-                      <span class="font-mono font-black text-sm text-slate-900 block">${totalCardCost.toLocaleString('fr-FR')} €</span>
-                      ${optionsExtraCost > 0 ? `<span class="text-[9px] font-black text-pc-blue font-mono">+${optionsExtraCost} € options</span>` : ''}
+                      <span class="font-mono font-black text-sm text-slate-900 dark:text-white block">${totalCardCost.toLocaleString('fr-FR')} €</span>
+                      ${optionsExtraCost > 0 ? `<span class="text-[9px] font-black text-pc-blue dark:text-blue-400 font-mono">+${optionsExtraCost} € options</span>` : ''}
                     </div>
                   </div>
 
                   <!-- Titre et Spécialité -->
                   <div>
-                    <h5 class="text-xs font-black text-slate-900 leading-tight">${activeTitle}</h5>
-                    <p class="text-[10px] text-slate-500 font-semibold mt-0.5">${activeSpecialty}</p>
+                    <h5 class="text-xs font-black text-slate-900 dark:text-white leading-tight">${activeTitle}</h5>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">${activeSpecialty}</p>
                   </div>
 
                   <!-- SÉLECTEUR DE SÉRIGRAPHIE INTÉGRÉ POUR VTU (CONFORME DEMANDE) -->
                   ${card.hasSerigraphieSelector ? `
-                    <div class="p-2 rounded-xl bg-orange-50/70 border border-orange-200/70 space-y-1.5">
-                      <span class="text-[9.5px] font-black text-slate-700 block uppercase tracking-wider">
+                    <div class="p-2 rounded-xl bg-orange-50/70 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/70 space-y-1.5">
+                      <span class="text-[9.5px] font-black text-slate-700 dark:text-orange-200 block uppercase tracking-wider">
                         🎨 Sérigraphie / Livrée au choix :
                       </span>
                       <div class="grid grid-cols-1 gap-1">
@@ -1489,8 +1489,8 @@ window.ProtecAdvancedModals = {
                               onclick="window.ProtecAdvancedModals.selectTypeSerigraphie('${card.groupKey}', '${s.key}', '${st?.id}')" 
                               class="px-2 py-1.5 rounded-lg text-left text-[10.5px] font-bold transition border cursor-pointer ${
                                 isCur 
-                                  ? 'bg-white border-pc-orange text-pc-orange font-black shadow-xs ring-1 ring-pc-orange/40' 
-                                  : 'bg-white/60 hover:bg-white text-slate-600 border-slate-200'
+                                  ? 'bg-white dark:bg-slate-800 border-pc-orange text-pc-orange font-black shadow-xs ring-1 ring-pc-orange/40' 
+                                  : 'bg-white/60 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                               }"
                             >
                               <span>${s.label}</span>
@@ -1501,25 +1501,25 @@ window.ProtecAdvancedModals = {
                     </div>
                   ` : ''}
 
-                  <p class="text-[11px] text-slate-600 leading-relaxed">${activeDesc}</p>
+                  <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">${activeDesc}</p>
 
                   <!-- Spécifications techniques (Sans vitesse max) -->
-                  <div class="p-2.5 rounded-xl glass-card-blue text-[10px] text-pc-blue font-bold flex flex-col gap-1.5">
+                  <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-[10px] font-bold text-slate-700 dark:text-slate-300 flex flex-col gap-1.5">
                     <div class="flex justify-between items-center">
-                      <span>Capacité : <strong class="text-slate-900">${card.capacity} place${card.capacity > 1 ? 's' : ''}</strong></span>
-                      <span>Attelage : <strong class="${hasNativeTowHitch || selOpts.towHitch ? 'text-emerald-700' : 'text-slate-500'}">${hasNativeTowHitch ? '✓ De série' : (selOpts.towHitch ? '✓ Option ajoutée' : 'Non')}</strong></span>
+                      <span>Capacité : <strong class="text-slate-900 dark:text-white">${card.capacity} place${card.capacity > 1 ? 's' : ''}</strong></span>
+                      <span>Attelage : <strong class="${hasNativeTowHitch || selOpts.towHitch ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}">${hasNativeTowHitch ? '✓ De série' : (selOpts.towHitch ? '✓ Option ajoutée' : 'Non')}</strong></span>
                     </div>
 
                     ${(() => {
                       const logCap = this.getVehicleLogCapacity(card);
                       if (logCap > 0) {
                         return `
-                          <div class="flex justify-between items-center pt-1 border-t border-pc-blue/20 text-amber-900">
+                          <div class="flex justify-between items-center pt-1 border-t border-slate-200/60 dark:border-slate-700 text-amber-900 dark:text-amber-300">
                             <span class="flex items-center gap-1 font-bold">
-                              <i data-lucide="package" class="w-3 h-3 text-amber-600"></i>
+                              <i data-lucide="package" class="w-3 h-3 text-amber-600 dark:text-amber-400"></i>
                               <span>Capacité Logistique (tag LOG) :</span>
                             </span>
-                            <strong class="font-black font-mono text-amber-900 text-xs">${logCap} slot${logCap > 1 ? 's' : ''}</strong>
+                            <strong class="font-black font-mono text-amber-900 dark:text-amber-300 text-xs">${logCap} slot${logCap > 1 ? 's' : ''}</strong>
                           </div>
                         `;
                       }
@@ -1527,66 +1527,66 @@ window.ProtecAdvancedModals = {
                     })()}
 
                     ${card.requiresTrailer ? `
-                      <div class="text-[9.5px] text-amber-800 font-semibold bg-amber-50 rounded p-1 border border-amber-200/80">
+                      <div class="text-[9.5px] text-amber-800 dark:text-amber-200 font-semibold bg-amber-50 dark:bg-amber-950/40 rounded p-1 border border-amber-200/80 dark:border-amber-800/60">
                         📦 Remorque routière fournie à l'achat
                       </div>
                     ` : ''}
                   </div>
 
                   <!-- Options & Équipements Configurables -->
-                  <div class="space-y-1.5 pt-1.5 border-t border-slate-200/80">
-                    <div class="flex items-center justify-between text-[9.5px] font-black uppercase tracking-wider text-slate-500">
+                  <div class="space-y-1.5 pt-1.5 border-t border-slate-200/80 dark:border-slate-800">
+                    <div class="flex items-center justify-between text-[9.5px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
                       <span>🛠️ Options au choix :</span>
-                      ${optionsExtraCost > 0 ? `<span class="text-pc-blue font-black font-mono">+${optionsExtraCost.toLocaleString('fr-FR')} €</span>` : ''}
+                      ${optionsExtraCost > 0 ? `<span class="text-pc-blue dark:text-blue-400 font-mono">+${optionsExtraCost.toLocaleString('fr-FR')} €</span>` : ''}
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px]">
                       ${hasNativeTowHitch ? `
-                        <div class="p-1.5 rounded-lg bg-emerald-50/70 border border-emerald-200 text-emerald-800 font-bold flex items-center justify-between">
+                        <div class="p-1.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold flex items-center justify-between">
                           <span class="flex items-center gap-1"><span>🔗</span> Attelage</span>
-                          <span class="text-[8.5px] font-black uppercase bg-emerald-200/70 px-1 rounded text-emerald-900">De Série</span>
+                          <span class="text-[8.5px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1 rounded text-emerald-900 dark:text-emerald-100">De Série</span>
                         </div>
                       ` : `
                         <button 
                           type="button" 
                           onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'towHitch', '${st?.id}')"
-                          class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.towHitch ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                          class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.towHitch ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                         >
                           <span class="flex items-center gap-1"><span>🔗</span> Attelage</span>
-                          <span class="font-mono font-black text-[9.5px] ${selOpts.towHitch ? 'text-pc-blue' : 'text-slate-500'}">+950 €</span>
+                          <span class="font-mono font-black text-[9.5px] ${selOpts.towHitch ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+950 €</span>
                         </button>
                       `}
 
                       <!-- Option Rampe LED : Obligatoire et de série sur VPSP, optionnelle sur les autres -->
                       ${isVPSP ? `
-                        <div class="p-1.5 rounded-lg bg-blue-50/80 border border-blue-200 text-blue-900 font-bold flex items-center justify-between text-[10px]">
+                        <div class="p-1.5 rounded-lg bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 font-bold flex items-center justify-between text-[10px]">
                           <span class="flex items-center gap-1"><span>🚨</span> Rampe LED</span>
-                          <span class="text-[8.5px] font-black uppercase bg-blue-200/80 px-1.5 py-0.5 rounded text-blue-950">De Série (Obligatoire)</span>
+                          <span class="text-[8.5px] font-black uppercase bg-blue-200/80 dark:bg-blue-800/60 px-1.5 py-0.5 rounded text-blue-950 dark:text-blue-100">De Série (Obligatoire)</span>
                         </div>
                       ` : `
                         <button 
                           type="button" 
                           onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'ledBar', '${st?.id}')"
-                          class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                          class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                         >
                           <span class="flex items-center gap-1"><span>🚨</span> Rampe LED</span>
-                          <span class="font-mono font-black text-[9.5px] ${selOpts.ledBar ? 'text-pc-blue' : 'text-slate-500'}">+1 250 €</span>
+                          <span class="font-mono font-black text-[9.5px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 250 €</span>
                         </button>
                       `}
 
                       <button 
                         type="button" 
                         onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'climatisation', '${st?.id}')"
-                        class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.climatisation ? 'bg-pc-blue/10 border-pc-blue text-pc-blue font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 text-slate-700 font-bold hover:bg-slate-100'}"
+                        class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.climatisation ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                       >
                         <span class="flex items-center gap-1"><span>❄️</span> Climatisation/Chauffage</span>
-                        <span class="font-mono font-black text-[9.5px] ${selOpts.climatisation ? 'text-pc-blue' : 'text-slate-500'}">+1 850 €</span>
+                        <span class="font-mono font-black text-[9.5px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 850 €</span>
                       </button>
 
                       <!-- Équipement de Série : Convertisseur 230V Sinus (Systématique) -->
-                      <div class="p-1.5 rounded-lg bg-emerald-50/70 border border-emerald-200 text-emerald-800 font-bold flex items-center justify-between text-[10px]">
+                      <div class="p-1.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold flex items-center justify-between text-[10px]">
                         <span class="flex items-center gap-1"><span>⚡</span> 230V Pur Sinus</span>
-                        <span class="text-[8.5px] font-black uppercase bg-emerald-200/70 px-1.5 py-0.5 rounded text-emerald-900">De Série</span>
+                        <span class="text-[8.5px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-100">De Série</span>
                       </div>
                     </div>
                   </div>
