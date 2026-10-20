@@ -15,6 +15,201 @@ window.ProtecLogistique = {
   selectedStationId: null,
   searchQuery: '',
   cart: {}, // { [itemId]: quantity }
+  selectedSupplierId: 'fede_log',
+  selectedRadioTech: 'analogique',
+  selectedRadioPack: 'binome',
+  selectedRadioSupplierId: 'ondepro',
+
+  // =========================================================================
+  // FOURNISSEURS OFFICIELS FICTIFS (DÉLAIS & FRAIS RÉALISTES)
+  // =========================================================================
+  SUPPLIERS: [
+    {
+      id: 'fede_log',
+      name: 'Centrale Fédérale FNPC (Groupage Réseau)',
+      shortName: 'Centrale Fédérale',
+      badge: 'Livraison Gratuite',
+      badgeClass: 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950 dark:text-blue-300',
+      icon: 'landmark',
+      desc: 'Tournée logistique nationale mutualisée entre les antennes. Tarifs conventionnés.',
+      deliveryDelaySec: 300,
+      delayLabel: '5 min (Tournée groupée)',
+      shippingCost: 0,
+      freeThreshold: 0,
+      priceMultiplier: 1.0,
+      freeShippingAlways: true,
+      specialty: 'Livraison 100% OFFERTE garantie sur tout le matériel associatif'
+    },
+    {
+      id: 'securicom',
+      name: 'Securicom Express France',
+      shortName: 'Securicom Express',
+      badge: 'Livraison Rapide',
+      badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300',
+      icon: 'zap',
+      desc: 'Grossiste national leader en matériel de secours et télécommunications d\'urgence.',
+      deliveryDelaySec: 80,
+      delayLabel: '1 min 20 (Express 24h)',
+      shippingCost: 28,
+      freeThreshold: 600,
+      priceMultiplier: 0.98,
+      freeShippingAlways: false,
+      specialty: 'Expédition prioritaire quotidienne et remises sur volume (-2%)'
+    },
+    {
+      id: 'hexacom',
+      name: 'HexaCom Tactique & Réseaux',
+      shortName: 'HexaCom Tactique',
+      badge: 'Spécialiste Télécoms',
+      badgeClass: 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300',
+      icon: 'radio',
+      desc: 'Fabricant de réseaux tactiques de sécurité civile, terminaux LTE et ANTARES.',
+      deliveryDelaySec: 120,
+      delayLabel: '2 min (Messagerie Sécurisée)',
+      shippingCost: 19,
+      freeThreshold: 900,
+      priceMultiplier: 1.05,
+      freeShippingAlways: false,
+      specialty: 'Terminaux certifiés IP68, cryptage militaire et stations de charge intelligentes'
+    },
+    {
+      id: 'ondepro',
+      name: 'OndePro Télécom & Fréquences',
+      shortName: 'OndePro Télécom',
+      badge: 'Discount & Packs Éco',
+      badgeClass: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-300',
+      icon: 'tag',
+      desc: 'Distributeur direct d\'usines spécialisé dans les packs analogiques et chargeurs multiples.',
+      deliveryDelaySec: 180,
+      delayLabel: '3 min (Acheminement Éco)',
+      shippingCost: 14,
+      freeThreshold: 450,
+      priceMultiplier: 0.92,
+      freeShippingAlways: false,
+      specialty: 'Les prix les plus bas (-8%) sur les packs radios et baies de charge'
+    },
+    {
+      id: 'disposecours',
+      name: 'DispoSecours Coursier Éclair',
+      shortName: 'DispoSecours Éclair',
+      badge: 'Ultra-Urgence',
+      badgeClass: 'bg-rose-100 text-rose-900 border-rose-300 dark:bg-rose-950 dark:text-rose-300',
+      icon: 'clock',
+      desc: 'Transporteur d\'urgence par coursier dédié. Réception express avant mission critique.',
+      deliveryDelaySec: 35,
+      delayLabel: '35 sec (Coursier Dédié)',
+      shippingCost: 45,
+      freeThreshold: 999999,
+      priceMultiplier: 1.10,
+      freeShippingAlways: false,
+      specialty: 'Arrivée éclair à l\'antenne en 35 secondes'
+    }
+  ],
+
+  // =========================================================================
+  // TECHNOLOGIES RADIOS & PACKS DÉGRESSIFS
+  // =========================================================================
+  RADIO_TECH: {
+    analogique: {
+      id: 'radio_analogique',
+      name: 'Radio Analogique VHF/UHF (PMR446)',
+      shortName: 'Analogique VHF/UHF',
+      unitPrice: 90,
+      badge: 'Portée Locale (1-3 km)',
+      badgeColor: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200',
+      icon: 'radio',
+      image: 'images/equipements/thumbs/radio_antares.png',
+      desc: 'Liaison directe entre binômes secouristes et chef de poste. Autonomie totale sans abonnement ni réseau.',
+      advantages: [
+        'Économique et robuste',
+        'Zéro dépendance réseau 4G/5G',
+        'Batterie longue durée (24h+)',
+        'Idéal pour DPS de proximité & petits évènements'
+      ]
+    },
+    lte: {
+      id: 'radio_lte',
+      name: 'Radio Numérique LTE (4G / 5G Push-To-Talk)',
+      shortName: 'Numérique LTE 4G/5G',
+      unitPrice: 260,
+      badge: 'Portée Illimitée 4G/5G',
+      badgeColor: 'bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-950 dark:text-sky-300',
+      icon: 'smartphone',
+      image: 'images/equipements/thumbs/radio_antares.png',
+      desc: 'Terminaux connectés sur réseau cellulaire national. Audio HD filtré, bouton détresse avec géolocalisation GPS en temps réel.',
+      advantages: [
+        'Portée nationale illimitée via 4G/5G',
+        'Bouton SOS avec géolocalisation GPS directe',
+        'Audio HD sans souffle ni parasite',
+        '+15% efficacité de coordination sur grands DPS et convois'
+      ]
+    },
+    hybride: {
+      id: 'radio_hybride',
+      name: 'Radio Hybride Tactique Bi-Mode (Analogique + LTE 4G/5G)',
+      shortName: 'Hybride Bi-Mode Tactique',
+      unitPrice: 580,
+      badge: 'Bascule Auto & Homologuée Sécurité Civile',
+      badgeColor: 'bg-indigo-100 text-indigo-900 border-indigo-300 ring-1 ring-indigo-400 dark:bg-indigo-950 dark:text-indigo-300',
+      icon: 'shield-alert',
+      image: 'images/equipements/thumbs/radio_antares.png',
+      desc: 'Le summum de la résilience : bascule automatique en analogique en sous-sol ou coupure 4G, et en LTE quand le réseau cellulaire est présent. Homologuée ANTARES / CODIS.',
+      advantages: [
+        'Infaillible : fonctionne partout (sous-sols, zones blanches, saturation)',
+        'Cryptage militaire AES-256 Sécurité Civile',
+        'Inter-opérabilité SAMU 15 & SDIS 18',
+        '+25% réactivité sur plans NOVI et ORSEC'
+      ]
+    }
+  },
+
+  RADIO_PACKS: [
+    {
+      id: 'unit',
+      name: 'Portatif Individuel',
+      count: 1,
+      discountPct: 0,
+      label: '1 Radio (Tarif unitaire)',
+      packaging: 'Boîte unitaire',
+      contents: '1 portatif + 1 chargeur secteur individuel + 1 clip ceinture'
+    },
+    {
+      id: 'binome',
+      name: 'Pack Binôme Opérationnel',
+      count: 2,
+      discountPct: 5,
+      label: '2 Radios (-5%)',
+      packaging: 'Pack duo',
+      contents: '2 portatifs + 2 chargeurs individuels + 2 oreillettes micro discrètes'
+    },
+    {
+      id: 'escouade',
+      name: 'Pack Escouade / Équipe DPS',
+      count: 4,
+      discountPct: 10,
+      label: '4 Radios (-10%)',
+      packaging: 'Pack équipe',
+      contents: '4 portatifs + 1 station de charge 4 postes + 4 micros déportés poire'
+    },
+    {
+      id: 'valise',
+      name: 'Valise Tactique Section',
+      count: 10,
+      discountPct: 15,
+      label: '10 Radios (-15%)',
+      packaging: 'Valise Peli-Case',
+      contents: '10 portatifs + Valise étanche antichoc avec baie de charge rapide intégrée + 10 oreillettes'
+    },
+    {
+      id: 'malle',
+      name: 'Malle Régimentaire Dispositif Majeur',
+      count: 20,
+      discountPct: 22,
+      label: '20 Radios (-22%)',
+      packaging: 'Malle grand volume',
+      contents: '20 portatifs + 2 stations de charge 10 postes + 20 micros poire étanches IP68 + mallettes renforcées'
+    }
+  ],
 
   // Visuels réels disponibles sur le disque (élimine toute erreur 404 dans la console du navigateur)
   EXISTING_IMAGES: new Set([
@@ -280,19 +475,6 @@ window.ProtecLogistique = {
       badgeColor: 'bg-slate-100 text-slate-900 border-slate-300',
       desc: 'Chaussures montantes en cuir avec embout composite et semelle anti-perforation.',
       usage: 'Sécurité maximale sur les terrains boueux, décombres et intempéries.'
-    },
-    {
-      id: 'gants_intervention',
-      category: 'tenues_epi',
-      name: 'Lot de 10 Paires de Gants Anti-Coupure Secours',
-      lucideIcon: 'hand',
-      image: 'images/equipements/gants_intervention.png',
-      price: 95,
-      unit: 'lot de 10',
-      badge: 'Protection Mains',
-      badgeColor: 'bg-emerald-50 text-emerald-900 border-emerald-300',
-      desc: 'Gants ergonomiques haute dextérité certifiés EN 388 contre les risques mécaniques.',
-      usage: 'Protection lors du brancardage, relevage et manipulation de matériels.'
     },
 
     // --- 5. RAVITAILLEMENT & ACTION SOCIALE ---
@@ -597,21 +779,181 @@ window.ProtecLogistique = {
     return { total, itemsCount };
   },
 
-  getShippingFee(subtotal) {
-    if (subtotal <= 0) return 0;
-    const baseFee = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('shippingBaseFee', 35) : 35;
-    const threshold = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('shippingFreeThreshold', 350) : 350;
-    if (subtotal >= threshold) return 0;
-    return baseFee;
+  getSupplier(supplierId = null) {
+    const id = supplierId || this.selectedSupplierId || 'fede_log';
+    return (this.SUPPLIERS || []).find(s => s.id === id) || (this.SUPPLIERS ? this.SUPPLIERS[0] : { name: 'Centrale Fédérale', deliveryDelaySec: 120, shippingCost: 0 });
   },
 
-  getDeliveryDurationSeconds() {
-    return window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('deliveryDurationSeconds', 120) : 120;
+  setSupplier(supplierId) {
+    this.selectedSupplierId = supplierId;
+    this.renderModal(window.game);
+  },
+
+  setRadioTech(techKey) {
+    this.selectedRadioTech = techKey;
+    this.renderModal(window.game);
+  },
+
+  setRadioPack(packId) {
+    this.selectedRadioPack = packId;
+    this.renderModal(window.game);
+  },
+
+  setRadioSupplier(supplierId) {
+    this.selectedRadioSupplierId = supplierId;
+    this.renderModal(window.game);
+  },
+
+  getShippingFee(subtotal, supplierId = null) {
+    if (subtotal <= 0) return 0;
+    const sup = this.getSupplier(supplierId);
+    if (sup.freeShippingAlways) return 0;
+    if (subtotal >= sup.freeThreshold) return 0;
+    return sup.shippingCost;
+  },
+
+  getDeliveryDurationSeconds(supplierId = null) {
+    const sup = this.getSupplier(supplierId);
+    return sup.deliveryDelaySec || 120;
   },
 
   getActiveDeliveries(game) {
     if (!game || !Array.isArray(game.deliveries)) return [];
     return game.deliveries.filter(d => d && d.status === 'in_transit');
+  },
+
+  getRadioPackDetails(techKey, packId, supplierId = null) {
+    const tech = (this.RADIO_TECH && this.RADIO_TECH[techKey]) || this.RADIO_TECH?.analogique || { unitPrice: 90, name: 'Radio Analogique' };
+    const pack = (this.RADIO_PACKS || []).find(p => p.id === packId) || (this.RADIO_PACKS ? this.RADIO_PACKS[0] : { count: 1, discountPct: 0 });
+    const sup = this.getSupplier(supplierId || this.selectedRadioSupplierId);
+
+    const baseUnit = tech.unitPrice;
+    const rawTotal = Math.round(baseUnit * pack.count * (1 - pack.discountPct / 100));
+    const finalPrice = Math.round(rawTotal * (sup.priceMultiplier || 1.0));
+    const shippingFee = (sup.freeShippingAlways || finalPrice >= sup.freeThreshold) ? 0 : sup.shippingCost;
+    const grandTotal = finalPrice + shippingFee;
+    const savingsAmount = Math.max(0, (baseUnit * pack.count) - finalPrice);
+
+    return {
+      tech,
+      pack,
+      sup,
+      baseUnit,
+      rawTotal,
+      finalPrice,
+      shippingFee,
+      grandTotal,
+      savingsAmount,
+      deliveryDelaySec: sup.deliveryDelaySec,
+      delayLabel: sup.delayLabel
+    };
+  },
+
+  addRadioPackToCart(techKey, packId) {
+    const tech = (this.RADIO_TECH && this.RADIO_TECH[techKey]) || this.RADIO_TECH?.analogique;
+    const pack = (this.RADIO_PACKS || []).find(p => p.id === packId) || this.RADIO_PACKS[0];
+    const cartItemId = `pack_radio_${techKey}_${pack.id}`;
+    
+    let catItem = this.CATALOG.find(i => i.id === cartItemId);
+    if (!catItem) {
+      catItem = {
+        id: cartItemId,
+        category: 'transmissions',
+        name: `${pack.name} - ${tech.name}`,
+        lucideIcon: 'radio',
+        image: tech.image,
+        price: Math.round(tech.unitPrice * pack.count * (1 - pack.discountPct / 100)),
+        unit: pack.packaging,
+        badge: pack.label,
+        badgeColor: tech.badgeColor,
+        desc: `${pack.contents}. ${tech.desc}`,
+        usage: `Ajoute +${pack.count} radios ${tech.shortName} au stock d'antenne.`,
+        radioTech: techKey,
+        radioCount: pack.count
+      };
+      this.CATALOG.push(catItem);
+    }
+
+    this.addToCart(cartItemId, 1);
+  },
+
+  buyRadioPackDirect(game, techKey, packId, supplierId) {
+    const details = this.getRadioPackDetails(techKey, packId, supplierId);
+    if (!game) game = window.game;
+    if (!game) return;
+
+    if (game.resources.money < details.grandTotal) {
+      game.showToast('Trésorerie insuffisante', `Il vous manque ${(details.grandTotal - game.resources.money).toLocaleString('fr-FR')} € pour commander ce pack radio.`, 'red');
+      return;
+    }
+
+    const station = this.getActiveStation(game);
+    if (!station) {
+      game.showToast('Aucune antenne', 'Veuillez sélectionner une antenne de destination.', 'orange');
+      return;
+    }
+
+    this.ensureStationStock(station, game);
+
+    // Débit trésorerie
+    game.resources.money -= details.grandTotal;
+
+    if (window.ProtecFinances) {
+      window.ProtecFinances.recordTransaction(
+        game,
+        -details.grandTotal,
+        `Achat Radios : ${details.pack.name} (${details.tech.shortName}) - Fournisseur ${details.sup.shortName}`,
+        'logistique',
+        `RADIO-${Date.now()}`,
+        details.sup.name
+      );
+    }
+
+    if (!Array.isArray(game.deliveries)) game.deliveries = [];
+    const durationSec = details.deliveryDelaySec;
+
+    const delivery = {
+      id: `deliv-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      orderNumber: `RAD-${Date.now().toString(36).toUpperCase()}`,
+      createdAt: Date.now(),
+      durationSeconds: durationSec,
+      etaTimestamp: Date.now() + (durationSec * 1000),
+      stationId: station.id,
+      stationName: station.name,
+      stationCity: station.city,
+      items: { [`pack_radio_${techKey}_${details.pack.id}`]: 1 },
+      itemsSummary: [{
+        id: `pack_radio_${techKey}_${details.pack.id}`,
+        name: `${details.pack.name} • ${details.tech.shortName} (${details.pack.count} postes)`,
+        qty: 1,
+        price: details.finalPrice,
+        total: details.finalPrice,
+        image: details.tech.image,
+        lucideIcon: 'radio',
+        radioTech: techKey,
+        radioCount: details.pack.count
+      }],
+      subtotal: details.finalPrice,
+      shippingFee: details.shippingFee,
+      totalCost: details.grandTotal,
+      supplierId: details.sup.id,
+      supplierName: details.sup.name,
+      carrier: `${details.sup.name} (${details.sup.badge})`,
+      status: 'in_transit'
+    };
+
+    game.deliveries.unshift(delivery);
+    game.updateStatsUI();
+    game.saveGame();
+
+    game.showToast(
+      '📻 Commande Radio Expédiée !',
+      `Votre ${details.pack.name} (${details.tech.shortName}) a été confié à ${details.sup.shortName}. Livraison estimée dans ${details.delayLabel}.`,
+      'blue'
+    );
+
+    this.activeTab = 'livraisons';
+    this.renderModal(game);
   },
 
   checkout(game) {
@@ -621,7 +963,8 @@ window.ProtecLogistique = {
       return;
     }
 
-    const shippingFee = this.getShippingFee(subtotal);
+    const sup = this.getSupplier(this.selectedSupplierId);
+    const shippingFee = this.getShippingFee(subtotal, sup.id);
     const totalToPay = subtotal + shippingFee;
 
     if (game.resources.money < totalToPay) {
@@ -644,10 +987,10 @@ window.ProtecLogistique = {
       window.ProtecFinances.recordTransaction(
         game,
         -totalToPay,
-        `Commande Centrale d'Achats (${itemsCount} articles${shippingFee > 0 ? ` + frais d'envoi ${shippingFee} €` : ' - Port offert'})`,
+        `Commande Centrale d'Achats (${itemsCount} articles${shippingFee > 0 ? ` + frais d'envoi ${shippingFee} € (${sup.shortName})` : ' - Port offert'})`,
         'logistique',
         `ACHAT-${Date.now()}`,
-        'Centrale Logistique Protection Civile'
+        sup.name
       );
     }
 
@@ -663,13 +1006,15 @@ window.ProtecLogistique = {
           price: catItem.price,
           total: catItem.price * qty,
           image: catItem.image,
-          lucideIcon: catItem.lucideIcon || 'package'
+          lucideIcon: catItem.lucideIcon || 'package',
+          radioTech: catItem.radioTech,
+          radioCount: catItem.radioCount
         });
       }
     });
 
     if (!Array.isArray(game.deliveries)) game.deliveries = [];
-    const durationSec = this.getDeliveryDurationSeconds();
+    const durationSec = this.getDeliveryDurationSeconds(sup.id);
 
     const delivery = {
       id: `deliv-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -685,7 +1030,9 @@ window.ProtecLogistique = {
       subtotal,
       shippingFee,
       totalCost: totalToPay,
-      carrier: 'Messagerie Logistique Protection Civile (Centrale FNPC)',
+      supplierId: sup.id,
+      supplierName: sup.name,
+      carrier: `${sup.name} (${sup.delayLabel})`,
       status: 'in_transit'
     };
 
@@ -726,9 +1073,21 @@ window.ProtecLogistique = {
         if (station) {
           this.ensureStationStock(station, game);
           Object.entries(d.items || {}).forEach(([itemId, qty]) => {
-            // Conversion transparente de l'ancien ID vers caisse_rearmement
             const targetId = (itemId === 'stock_materiels_ps') ? 'caisse_rearmement' : itemId;
-            station.stock[targetId] = (station.stock[targetId] || 0) + qty;
+            
+            // Déballage spécial des packs radios
+            if (itemId.startsWith('pack_radio_')) {
+              const parts = itemId.split('_');
+              const techKey = parts[2]; // analogique, lte, hybride
+              const packItem = (d.itemsSummary || []).find(it => it.id === itemId);
+              const countPerPack = packItem?.radioCount || (itemId.includes('_unit') ? 1 : (itemId.includes('_binome') ? 2 : (itemId.includes('_escouade') ? 4 : (itemId.includes('_valise') ? 10 : 20))));
+              const totalRadios = countPerPack * qty;
+              const stockKey = `radio_${techKey}`;
+              station.stock[stockKey] = (station.stock[stockKey] || 0) + totalRadios;
+            } else {
+              station.stock[targetId] = (station.stock[targetId] || 0) + qty;
+            }
+
             if (targetId === 'caisse_rearmement') {
               station.stockMaterielsPS = (station.stockMaterielsPS || 0) + (100 * qty);
               game.stockMaterielsPS = station.stockMaterielsPS;
@@ -876,6 +1235,10 @@ window.ProtecLogistique = {
               <span>Boutique en Ligne</span>
               ${cartCount > 0 ? `<span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400 text-slate-900 font-black">${cartCount}</span>` : ''}
             </button>
+            <button onclick="window.ProtecLogistique.setTab('radios')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'radios' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
+              <i data-lucide="radio" class="w-4 h-4"></i>
+              <span>Radios & Télécoms</span>
+            </button>
             <button onclick="window.ProtecLogistique.setTab('livraisons')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'livraisons' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
               <i data-lucide="truck" class="w-4 h-4"></i>
               <span>Suivi Livraisons</span>
@@ -941,6 +1304,7 @@ window.ProtecLogistique = {
 
         <!-- CONTENU DYNAMIQUE SELON L'ONGLET ACTIF -->
         ${this.activeTab === 'boutique' ? this.renderBoutiqueHTML(game, station, cartTotal, cartCount) : ''}
+        ${this.activeTab === 'radios' ? this.renderRadiosHTML(game, station) : ''}
         ${this.activeTab === 'livraisons' ? this.renderLivraisonsHTML(game, station) : ''}
         ${this.activeTab === 'stock' ? this.renderStockHTML(game, station) : ''}
         ${this.activeTab === 'flotte' ? this.renderFlotteHTML(game, station) : ''}
@@ -1149,6 +1513,27 @@ window.ProtecLogistique = {
               <span class="font-mono font-bold text-slate-800 dark:text-slate-200">${cartTotal.toLocaleString('fr-FR')} €</span>
             </div>
             
+            <!-- Choix Fournisseur & Expéditeur -->
+            <div class="p-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-1.5">
+              <div class="flex items-center justify-between text-[11px] font-bold">
+                <span class="flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                  <i data-lucide="truck" class="w-3.5 h-3.5 text-pc-blue"></i>
+                  <span>Transporteur :</span>
+                </span>
+                <span class="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 font-extrabold">${this.getSupplier(this.selectedSupplierId).delayLabel}</span>
+              </div>
+              <select onchange="window.ProtecLogistique.setSupplier(this.value)" class="w-full px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-[11px] font-bold text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-pc-blue">
+                ${(this.SUPPLIERS || []).map(s => `
+                  <option value="${s.id}" ${s.id === this.selectedSupplierId ? 'selected' : ''}>
+                    ${s.shortName} • ${s.freeShippingAlways ? 'Port OFFERT (0 €)' : (cartTotal >= s.freeThreshold ? 'Port OFFERT' : `+${s.shippingCost} €`)} • ⏱️ ${s.delayLabel}
+                  </option>
+                `).join('')}
+              </select>
+              <div class="text-[9.5px] text-slate-500 dark:text-slate-400 italic leading-snug">
+                ${this.getSupplier(this.selectedSupplierId).specialty}
+              </div>
+            </div>
+
             <div class="flex justify-between text-slate-500 dark:text-slate-400 text-[11px]">
               <span>Frais de livraison :</span>
               ${cartTotal === 0 ? `
@@ -1219,6 +1604,229 @@ window.ProtecLogistique = {
   // =========================================================================
   // 6.bis ONGLET SUIVI DES LIVRAISONS EN DIRECT
   // =========================================================================
+
+
+  // =========================================================================
+  // 6.ter ONGLET DÉDIÉ TRANSMISSIONS & RADIOS (ANALOGIQUE, LTE, HYBRIDE)
+  // =========================================================================
+  renderRadiosHTML(game, station) {
+    const techKey = this.selectedRadioTech || 'analogique';
+    const tech = (this.RADIO_TECH && this.RADIO_TECH[techKey]) || this.RADIO_TECH.analogique;
+    const selectedPackId = this.selectedRadioPack || 'binome';
+    const selectedSupplierId = this.selectedRadioSupplierId || 'ondepro';
+    const details = this.getRadioPackDetails(techKey, selectedPackId, selectedSupplierId);
+
+    const stockAnalog = station?.stock?.radio_analogique || 0;
+    const stockLte = station?.stock?.radio_lte || 0;
+    const stockHybride = station?.stock?.radio_hybride || 0;
+    const totalRadios = stockAnalog + stockLte + stockHybride;
+
+    return `
+      <div class="space-y-4">
+        
+        <!-- BANDEAU SUPÉRIEUR TRANSMISSIONS -->
+        <div class="p-4 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="flex items-center gap-3.5">
+            <div class="w-12 h-12 rounded-2xl bg-indigo-600/30 border border-indigo-400/40 text-indigo-400 flex items-center justify-center font-black shadow-inner">
+              <i data-lucide="radio" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs font-black uppercase tracking-wider text-indigo-300">Pôle Télécoms & Fréquences</span>
+                <span class="px-2 py-0.5 rounded-full text-[9.5px] font-black bg-indigo-500/20 text-indigo-200 border border-indigo-400/30">Normes Sécurité Civile</span>
+              </div>
+              <h3 class="text-base sm:text-lg font-black tracking-tight text-white mt-0.5">Équipements Radio, Liaisons Tactiques & Réseaux LTE</h3>
+              <p class="text-[11px] text-slate-300">Approvisionnez vos équipes en terminaux radio adaptés à vos missions. Packs à tarifs dégressifs et comparateur fournisseurs multi-délais.</p>
+            </div>
+          </div>
+
+          <!-- Compteurs de radios en dotation à l'antenne -->
+          <div class="flex items-center gap-2 self-start md:self-auto flex-wrap bg-white/5 backdrop-blur-md p-2 rounded-2xl border border-white/10">
+            <div class="px-2.5 py-1 text-center">
+              <span class="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Analogique</span>
+              <span class="text-sm font-black font-mono text-white">${stockAnalog}</span>
+            </div>
+            <div class="w-px h-6 bg-white/10"></div>
+            <div class="px-2.5 py-1 text-center">
+              <span class="text-[9px] uppercase tracking-wider text-sky-400 font-bold block">LTE 4G/5G</span>
+              <span class="text-sm font-black font-mono text-sky-300">${stockLte}</span>
+            </div>
+            <div class="w-px h-6 bg-white/10"></div>
+            <div class="px-2.5 py-1 text-center">
+              <span class="text-[9px] uppercase tracking-wider text-indigo-400 font-bold block">Hybride</span>
+              <span class="text-sm font-black font-mono text-indigo-300">${stockHybride}</span>
+            </div>
+            <div class="w-px h-6 bg-white/10"></div>
+            <div class="px-2.5 py-1 text-center">
+              <span class="text-[9px] uppercase tracking-wider text-emerald-400 font-bold block">Total Parc</span>
+              <span class="text-sm font-black font-mono text-emerald-400">${totalRadios} postes</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1. SÉLECTEUR DES 3 TECHNOLOGIES RADIO -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs font-black text-slate-700 dark:text-slate-300 px-1">
+            <span>1. Choisissez la Technologie Radio :</span>
+            <span class="text-[11px] text-slate-400 font-normal">Du talkie économique local à l'hybride ANTARES crypté</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            ${Object.entries(this.RADIO_TECH || {}).map(([key, item]) => {
+              const isSelected = (techKey === key);
+              return `
+                <div onclick="window.ProtecLogistique.setRadioTech('${key}')" class="p-4 rounded-2xl border-2 transition cursor-pointer flex flex-col justify-between gap-3 ${isSelected ? 'bg-indigo-50/70 border-indigo-600 shadow-md ring-2 ring-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-400 dark:ring-indigo-900/50' : 'bg-white hover:bg-slate-50 border-slate-200 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-850 shadow-xs'}">
+                  <div class="space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="px-2 py-0.5 rounded-lg text-[9.5px] font-black uppercase tracking-wider ${item.badgeColor}">
+                        ${item.badge}
+                      </span>
+                      <span class="text-xs font-black font-mono text-slate-900 dark:text-white">${item.unitPrice} € <span class="text-[10px] text-slate-400 font-normal">/ unité</span></span>
+                    </div>
+
+                    <div class="flex items-center gap-2.5 pt-1">
+                      <div class="w-10 h-10 rounded-xl ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'} flex items-center justify-center font-black flex-shrink-0">
+                        <i data-lucide="${item.icon}" class="w-5 h-5"></i>
+                      </div>
+                      <div>
+                        <h4 class="text-xs font-black text-slate-900 dark:text-white leading-tight">${item.shortName}</h4>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">${item.name}</p>
+                      </div>
+                    </div>
+
+                    <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug pt-1">${item.desc}</p>
+                  </div>
+
+                  <div class="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1 text-[10px]">
+                    ${(item.advantages || []).map(adv => `
+                      <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                        <span class="text-emerald-500 font-black">✓</span>
+                        <span>${adv}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- 2. SÉLECTION DES PACKS & QUANTITÉS (TARIFS DÉGRESSIFS) -->
+        <div class="space-y-2 pt-1">
+          <div class="flex items-center justify-between text-xs font-black text-slate-700 dark:text-slate-300 px-1">
+            <span>2. Choisissez le Conditionnement / Pack :</span>
+            <span class="text-[11px] text-emerald-600 font-bold">Tarifs dégressifs jusqu'à -22% de remise</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+            ${(this.RADIO_PACKS || []).map(p => {
+              const isSelected = (selectedPackId === p.id);
+              const packRaw = Math.round(tech.unitPrice * p.count * (1 - p.discountPct / 100));
+              const unitEffective = Math.round(packRaw / p.count);
+
+              return `
+                <div onclick="window.ProtecLogistique.setRadioPack('${p.id}')" class="p-3 rounded-2xl border-2 transition cursor-pointer flex flex-col justify-between gap-2 ${isSelected ? 'bg-indigo-600 text-white border-indigo-700 shadow-md ring-2 ring-indigo-300 dark:ring-indigo-800' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-white'}">
+                  <div>
+                    <div class="flex items-center justify-between gap-1 mb-1">
+                      <span class="text-[10px] font-black uppercase ${isSelected ? 'text-indigo-200' : 'text-slate-400'}">${p.count} Poste${p.count > 1 ? 's' : ''}</span>
+                      ${p.discountPct > 0 ? `
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-black ${isSelected ? 'bg-amber-400 text-slate-900' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'}">
+                          -${p.discountPct}%
+                        </span>
+                      ` : ''}
+                    </div>
+                    <h5 class="text-xs font-black leading-tight">${p.name}</h5>
+                    <p class="text-[10px] mt-1 ${isSelected ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400'} line-clamp-2">${p.contents}</p>
+                  </div>
+
+                  <div class="pt-2 border-t ${isSelected ? 'border-indigo-500/60' : 'border-slate-100 dark:border-slate-800'}">
+                    <div class="font-mono font-black text-sm">${packRaw.toLocaleString('fr-FR')} €</div>
+                    <div class="text-[9px] ${isSelected ? 'text-indigo-200' : 'text-slate-400'}">soit ${unitEffective} € / radio</div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- 3. COMPARATEUR DE FOURNISSEURS FICTIFS & DÉLAIS DE LIVRAISON -->
+        <div class="p-4 rounded-3xl bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-800 shadow-md space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+            <div>
+              <div class="flex items-center gap-2">
+                <i data-lucide="building-2" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+                <h4 class="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">3. Fournisseurs Agréés & Délais de Livraison</h4>
+              </div>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">Chaque fournisseur applique ses propres tarifs, délais d'expédition et conditions de frais de port.</p>
+            </div>
+            <div class="text-right">
+              <span class="text-xs font-black text-indigo-600 dark:text-indigo-400">Pack sélectionné : <strong>${details.pack.name} (${details.tech.shortName})</strong></span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+            ${(this.SUPPLIERS || []).map(sup => {
+              const packDetails = this.getRadioPackDetails(techKey, selectedPackId, sup.id);
+              const isSelected = (selectedSupplierId === sup.id);
+
+              return `
+                <div onclick="window.ProtecLogistique.setRadioSupplier('${sup.id}')" class="p-3.5 rounded-2xl border-2 transition cursor-pointer flex flex-col justify-between gap-3 ${isSelected ? 'bg-indigo-50/80 border-indigo-600 shadow-md ring-2 ring-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-400 dark:ring-indigo-900/50' : 'bg-slate-50 hover:bg-white border-slate-200 dark:bg-slate-850 dark:border-slate-800 shadow-xs'}">
+                  <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="px-2 py-0.5 rounded text-[9px] font-black ${sup.badgeClass}">
+                        ${sup.badge}
+                      </span>
+                      ${isSelected ? '<span class="text-indigo-600 dark:text-indigo-400 font-black text-xs">✓ Sélectionné</span>' : ''}
+                    </div>
+
+                    <div>
+                      <h5 class="text-xs font-black text-slate-900 dark:text-white leading-tight">${sup.name}</h5>
+                      <span class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">${sup.specialty}</span>
+                    </div>
+
+                    <div class="space-y-1 text-[10.5px] pt-1">
+                      <div class="flex justify-between">
+                        <span class="text-slate-500 dark:text-slate-400">Prix Matériel :</span>
+                        <strong class="font-mono text-slate-800 dark:text-slate-200">${packDetails.finalPrice.toLocaleString('fr-FR')} €</strong>
+                      </div>
+                      <div class="flex justify-between">
+                        <span class="text-slate-500 dark:text-slate-400">Livraison :</span>
+                        ${packDetails.shippingFee === 0 ? `
+                          <strong class="font-bold text-emerald-600">OFFERTE (0 €)</strong>
+                        ` : `
+                          <strong class="font-mono text-amber-600">+${packDetails.shippingFee} €</strong>
+                        `}
+                      </div>
+                      <div class="flex justify-between pt-1 border-t border-slate-200 dark:border-slate-700 font-black text-xs">
+                        <span>Total TTC :</span>
+                        <span class="text-indigo-700 dark:text-indigo-300 font-mono">${packDetails.grandTotal.toLocaleString('fr-FR')} €</span>
+                      </div>
+                      <div class="text-[9.5px] text-slate-400 dark:text-slate-500 flex items-center gap-1 pt-0.5">
+                        <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
+                        <span>Délai : <strong>${sup.delayLabel}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
+                    <button onclick="event.stopPropagation(); window.ProtecLogistique.buyRadioPackDirect(window.game, '${techKey}', '${selectedPackId}', '${sup.id}')" class="w-full py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition flex items-center justify-center gap-1 cursor-pointer active:scale-95">
+                      <i data-lucide="truck" class="w-3.5 h-3.5"></i>
+                      <span>Commander Direct</span>
+                    </button>
+                    <button onclick="event.stopPropagation(); window.ProtecLogistique.addRadioPackToCart('${techKey}', '${selectedPackId}')" class="w-full py-1.5 rounded-xl text-[10.5px] font-bold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-indigo-400 transition flex items-center justify-center gap-1 cursor-pointer">
+                      <i data-lucide="plus" class="w-3 h-3"></i>
+                      <span>Ajouter au Panier</span>
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+      </div>
+    `;
+  },
 
   renderLivraisonsHTML(game, station) {
     const deliveries = Array.isArray(game.deliveries) ? [...game.deliveries] : [];
@@ -1429,6 +2037,43 @@ window.ProtecLogistique = {
   // 7. ONGLET STOCK DE L'ANTENNE (INVENTAIRE RÉEL)
   // =========================================================================
 
+  getStockItemInfo(id) {
+    let item = this.CATALOG.find(i => i.id === id);
+    if (item) return item;
+    
+    if (id === 'radio_analogique') {
+      return {
+        id: 'radio_analogique',
+        name: 'Radios Analogiques VHF/UHF (PMR446)',
+        price: 90,
+        badge: 'Transmissions Locales (1-3 km)',
+        image: 'images/equipements/thumbs/radio_antares.png',
+        lucideIcon: 'radio'
+      };
+    }
+    if (id === 'radio_lte') {
+      return {
+        id: 'radio_lte',
+        name: 'Radios Numériques LTE (4G / 5G Push-To-Talk)',
+        price: 260,
+        badge: 'Réseau Cellulaire National',
+        image: 'images/equipements/thumbs/radio_antares.png',
+        lucideIcon: 'smartphone'
+      };
+    }
+    if (id === 'radio_hybride') {
+      return {
+        id: 'radio_hybride',
+        name: 'Radios Hybrides Tactiques Bi-Mode (ANTARES + LTE)',
+        price: 580,
+        badge: 'Sécurité Civile / Inter-opérable',
+        image: 'images/equipements/thumbs/radio_antares.png',
+        lucideIcon: 'shield-alert'
+      };
+    }
+    return null;
+  },
+
   renderStockHTML(game, station) {
     if (!station) {
       return `<p class="p-6 text-center text-xs text-slate-500">Aucune antenne disponible.</p>`;
@@ -1441,7 +2086,7 @@ window.ProtecLogistique = {
     let totalItemsCount = 0;
 
     stockEntries.forEach(([id, qty]) => {
-      const item = this.CATALOG.find(i => i.id === id);
+      const item = this.getStockItemInfo(id);
       if (item) {
         totalStockValue += item.price * qty;
         totalItemsCount += qty;
@@ -1502,7 +2147,7 @@ window.ProtecLogistique = {
         ` : `
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             ${stockEntries.map(([id, qty]) => {
-              const item = this.CATALOG.find(i => i.id === id);
+              const item = this.getStockItemInfo(id);
               if (!item) return '';
 
               return `
