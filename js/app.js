@@ -2472,6 +2472,11 @@ class ProtecGame {
       window.ProtecFormations.processVolunteerSpontaneousFormationRegistrations(this);
     }
 
+    // 7. Assainissement automatique du stockage de l'antenne (respect strict de la capacité)
+    if (window.ProtecSocial && typeof window.ProtecSocial.clampStorageToCapacity === 'function') {
+      window.ProtecSocial.clampStorageToCapacity(this);
+    }
+
     // 6. Rapport immersif d'activité 24/24 présenté au joueur
     if (missionsCompletedCount > 0 || devisReceivedCount > 0 || volunteersRegisteredCount > 0) {
       setTimeout(() => {

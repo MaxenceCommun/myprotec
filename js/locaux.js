@@ -3103,10 +3103,17 @@ window.ProtecLocaux = {
       return;
     }
 
+    // Assainissement préalable : régule strictement tout dépassement de stock
+    if (window.ProtecSocial && typeof window.ProtecSocial.clampStorageToCapacity === 'function') {
+      window.ProtecSocial.clampStorageToCapacity(game);
+    }
+
     // CAS 2 : Le joueur a déjà des locaux
     const stats = this.calculatePremisesStats(premises);
-    const storageUsed = this.getCurrentStorageUsed(game);
+    const rawStorageUsed = this.getCurrentStorageUsed(game);
+    const storageUsed = Math.min(stats.storageCapacity, rawStorageUsed);
     const storagePercent = stats.storageCapacity > 0 ? Math.min(100, Math.round((storageUsed / stats.storageCapacity) * 100)) : 100;
+    const isStorageSaturated = stats.hasStorage && storageUsed >= stats.storageCapacity;
     const securityScore = this.getSecurityScore(premises);
     const ongoingWorksCount = (premises.ongoingWorks || []).length;
     const isOwner = premises.tenure === 'owned';
@@ -3150,16 +3157,16 @@ window.ProtecLocaux = {
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           
           <!-- Capacité Stockage -->
-          <div class="p-3 rounded-2xl ${stats.hasStorage ? 'glass-card border-amber-200/80 bg-amber-50/30 dark:bg-amber-950/20 dark:border-amber-900/40' : 'bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60'} space-y-1">
+          <div class="p-3 rounded-2xl ${stats.hasStorage ? (isStorageSaturated ? 'bg-red-50/80 border border-red-300 dark:bg-red-950/30 dark:border-red-800' : 'glass-card border-amber-200/80 bg-amber-50/30 dark:bg-amber-950/20 dark:border-amber-900/40') : 'bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60'} space-y-1">
             <div class="flex items-center justify-between text-xs font-extrabold text-slate-700">
               <span class="flex items-center gap-1">📦 Stockage</span>
-              <span class="${stats.hasStorage ? 'text-amber-600' : 'text-red-600'} font-black">${storageUsed} / ${stats.storageCapacity}</span>
+              <span class="${!stats.hasStorage || isStorageSaturated ? 'text-red-600' : 'text-amber-600'} font-black">${storageUsed} / ${stats.storageCapacity}</span>
             </div>
             <div class="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
-              <div class="h-full ${storagePercent > 90 ? 'bg-red-500' : 'bg-amber-500'} transition-all" style="width: ${storagePercent}%"></div>
+              <div class="h-full ${isStorageSaturated ? 'bg-red-600' : (storagePercent > 80 ? 'bg-amber-500' : 'bg-emerald-500')} transition-all" style="width: ${storagePercent}%"></div>
             </div>
-            <p class="text-[10px] ${stats.hasStorage ? 'text-slate-500' : 'text-red-600 font-bold'}">
-              ${stats.hasStorage ? `Collectes & maraudes autorisées` : `⚠️ Pas de stockage`}
+            <p class="text-[10px] ${!stats.hasStorage || isStorageSaturated ? 'text-red-600 font-bold' : 'text-slate-500'}">
+              ${!stats.hasStorage ? `⚠️ Pas de stockage` : (isStorageSaturated ? `⛔ Réserve saturée - Collectes suspendues` : `Collectes & maraudes autorisées`)}
             </p>
           </div>
 
@@ -5801,20 +5808,28 @@ window.ProtecLocaux = {
   // =========================================================================
 
   renderStockTab(game, stats) {
-    const storageUsed = this.getCurrentStorageUsed(game);
+    if (window.ProtecSocial && typeof window.ProtecSocial.clampStorageToCapacity === 'function') {
+      window.ProtecSocial.clampStorageToCapacity(game);
+    }
+    const rawStorage = this.getCurrentStorageUsed(game);
+    const storageUsed = Math.min(stats.storageCapacity, rawStorage);
+    const isFull = stats.hasStorage && storageUsed >= stats.storageCapacity;
     const social = game.socialData || {};
     const log = game.logistics || {};
 
     return `
       <div class="space-y-4">
-        <div class="p-4 rounded-2xl ${stats.hasStorage ? 'bg-amber-50/80 border border-amber-200' : 'bg-red-50 border border-red-200'} flex items-center justify-between">
+        <div class="p-4 rounded-2xl ${!stats.hasStorage ? 'bg-red-50 border border-red-200' : (isFull ? 'bg-red-50/90 border border-red-300' : 'bg-amber-50/80 border border-amber-200')} flex items-center justify-between flex-wrap gap-3">
           <div class="space-y-1">
-            <h4 class="text-xs font-black ${stats.hasStorage ? 'text-amber-900' : 'text-red-900'}">Capacité de la Zone de Stockage de l’Antenne</h4>
+            <h4 class="text-xs font-black ${!stats.hasStorage || isFull ? 'text-red-900' : 'text-amber-900'} flex items-center gap-2">
+              <span>Capacité de la Zone de Stockage de l’Antenne</span>
+              ${isFull ? '<span class="px-2 py-0.5 rounded-full bg-red-200 text-red-900 text-[9px] font-black uppercase">Saturée (Limite Atteinte)</span>' : ''}
+            </h4>
             <p class="text-[11px] text-slate-600">
-              ${stats.hasStorage ? `Votre zone de stockage compte ${stats.counts.stockage || 0} case(s) de 25m², permettant d'entreposer jusqu'à <strong>${stats.storageCapacity} unités</strong>.` : `⚠️ Votre antenne n'a <strong>aucune zone de stockage</strong>. Vous ne pouvez pas réaliser de collectes alimentaires ni stocker de matériel d'urgence.`}
+              ${stats.hasStorage ? `Votre zone de stockage compte ${stats.counts.stockage || 0} case(s) de 25m², permettant d\'entreposer jusqu\'à <strong>${stats.storageCapacity} unités</strong> (actuellement occupé : <strong>${storageUsed} / ${stats.storageCapacity}</strong>). ${isFull ? '<span class="text-red-700 font-bold">Le stockage a atteint son plafond maximum : vous devez distribuer des denrées en maraude ou agrandir la réserve.</span>' : ''}` : `⚠️ Votre antenne n\'a <strong>aucune zone de stockage</strong>. Vous ne pouvez pas réaliser de collectes alimentaires ni stocker de matériel d\'urgence.`}
             </p>
           </div>
-          <button onclick="window.ProtecLocaux.setTab('plan', window.game); window.ProtecLocaux.isEditing = true; window.ProtecLocaux.selectedTool = 'stockage'; window.ProtecLocaux.renderModal(window.game);" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow transition flex-shrink-0">
+          <button onclick="window.ProtecLocaux.setTab(\'plan\', window.game); window.ProtecLocaux.isEditing = true; window.ProtecLocaux.selectedTool = \'stockage\'; window.ProtecLocaux.renderModal(window.game);" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow transition flex-shrink-0">
             + Agrandir la Réserve
           </button>
         </div>

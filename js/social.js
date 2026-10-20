@@ -74,12 +74,67 @@ window.ProtecSocial = {
     }
   ],
 
+  // Plafonnement strict du stockage : la réserve ne peut JAMAIS dépasser sa capacité maximale réelle
+  clampStorageToCapacity(game) {
+    if (!game || !game.socialData) return;
+    const maxStorage = window.ProtecLocaux ? window.ProtecLocaux.getStorageCapacity(game) : 40;
+    if (maxStorage <= 0) return;
+
+    // Calculer le stockage utilisé hors denrées sociales
+    let otherUsed = 0;
+    if (game.logistics) {
+      otherUsed += (game.logistics.oxygenB5 || 0) + (game.logistics.firstAidKits || 0) + (game.logistics.tents || 0) + (game.logistics.cots || 0);
+    }
+    if (window.ProtecEquipements && typeof window.ProtecEquipements.getLotsStorageUsed === 'function') {
+      otherUsed += window.ProtecEquipements.getLotsStorageUsed(game);
+    }
+    let vehicleStoredVolume = 0;
+    (game.vehicles || []).forEach(v => {
+      if (v.logKit && window.ProtecCriseLogistique?.LOG_KITS?.[v.logKit]) {
+        vehicleStoredVolume += window.ProtecCriseLogistique.LOG_KITS[v.logKit].buildingStorageSize || 10;
+      }
+    });
+    otherUsed = Math.max(0, otherUsed - vehicleStoredVolume);
+
+    const maxSocialSpace = Math.max(0, maxStorage - otherUsed);
+    const s = game.socialData;
+    let currentSocial = (s.foodPacks || 0) + (s.hygieneKits || 0) + (s.blankets || 0);
+
+    if (currentSocial > maxSocialSpace) {
+      // Dépassement détecté : réduction proportionnelle stricte pour assainir la sauvegarde
+      let excess = currentSocial - maxSocialSpace;
+      while (excess > 0 && (s.blankets > 0 || s.foodPacks > 0 || s.hygieneKits > 0)) {
+        if (s.blankets > 0 && excess > 0) {
+          const cut = Math.min(s.blankets, Math.max(1, Math.floor(excess / 3)));
+          s.blankets -= cut;
+          excess -= cut;
+        }
+        if (s.foodPacks > 0 && excess > 0) {
+          const cut = Math.min(s.foodPacks, Math.max(1, Math.floor(excess / 2)));
+          s.foodPacks -= cut;
+          excess -= cut;
+        }
+        if (s.hygieneKits > 0 && excess > 0) {
+          const cut = Math.min(s.hygieneKits, excess);
+          s.hygieneKits -= cut;
+          excess -= cut;
+        }
+      }
+    }
+  },
+
   injectState(game) {
     if (!game.socialData) {
+      const maxCap = window.ProtecLocaux ? window.ProtecLocaux.getStorageCapacity(game) : 40;
+      // Budget de départ réaliste respectant impérativement la capacité (max 50% du stockage disponible)
+      const budget = Math.min(20, Math.max(10, Math.floor(maxCap * 0.5)));
+      const food = Math.floor(budget * 0.4); // ex: 8
+      const kits = Math.floor(budget * 0.3); // ex: 6
+      const blankets = Math.max(0, budget - food - kits); // ex: 6
       game.socialData = {
-        foodPacks: 15,
-        hygieneKits: 10,
-        blankets: 20,
+        foodPacks: food,
+        hygieneKits: kits,
+        blankets: blankets,
         totalDistributed: 0,
         activeCollecte: null,
         contracts: [], // Contrats de subvention en cours ou terminés
@@ -93,6 +148,9 @@ window.ProtecSocial = {
     if (!game.socialData.funderPenalties) {
       game.socialData.funderPenalties = {};
     }
+
+    // Assainissement immédiat : régule toute sauvegarde ou valeur historique au-delà du plafond
+    this.clampStorageToCapacity(game);
 
     // Initialisation des offres de subventions disponibles
     this.FUNDER_TEMPLATES.forEach(tpl => {
@@ -344,6 +402,20 @@ window.ProtecSocial = {
       return;
     }
 
+    // VÉRIFICATION STRICTE DE LA CAPACITÉ DE STOCKAGE : DÉPASSEMENT INTERDIT
+    const maxStorage = window.ProtecLocaux ? window.ProtecLocaux.getStorageCapacity(game) : 40;
+    const currentStorage = window.ProtecLocaux ? window.ProtecLocaux.getCurrentStorageUsed(game) : 0;
+    const spaceLeft = maxStorage - currentStorage;
+
+    if (spaceLeft <= 0) {
+      game.showToast(
+        '⛔ Réserve Pleine !',
+        `Stockage saturé (${currentStorage} / ${maxStorage} unités). Impossible d'accueillir de nouvelles denrées ! Réalisez des maraudes pour distribuer vos stocks ou agrandissez la réserve dans l'onglet Locaux.`,
+        'red'
+      );
+      return;
+    }
+
     if (game.socialData.activeCollecte) {
       game.showToast('Collecte déjà en cours', 'Une opération caddie solidaire est déjà active sur le terrain.', 'orange');
       return;
@@ -388,20 +460,60 @@ window.ProtecSocial = {
       }
     });
 
-    const gainedFood = 12 + Math.floor(Math.random() * 8);
-    const gainedKits = 6 + Math.floor(Math.random() * 6);
-    const gainedBlankets = 4 + Math.floor(Math.random() * 4);
+    const rawFood = 12 + Math.floor(Math.random() * 8);
+    const rawKits = 6 + Math.floor(Math.random() * 6);
+    const rawBlankets = 4 + Math.floor(Math.random() * 4);
+    const totalRaw = rawFood + rawKits + rawBlankets;
+
+    // Calcul de l'espace physique disponible dans la réserve
+    const maxStorage = window.ProtecLocaux ? window.ProtecLocaux.getStorageCapacity(game) : 40;
+    const currentStorage = window.ProtecLocaux ? window.ProtecLocaux.getCurrentStorageUsed(game) : 0;
+    const spaceLeft = Math.max(0, maxStorage - currentStorage);
+
+    let gainedFood = 0;
+    let gainedKits = 0;
+    let gainedBlankets = 0;
+
+    if (totalRaw <= spaceLeft) {
+      // Tout rentre sans dépasser
+      gainedFood = rawFood;
+      gainedKits = rawKits;
+      gainedBlankets = rawBlankets;
+    } else if (spaceLeft > 0) {
+      // Plafonnement strict : ne stocker QUE ce qui rentre dans la réserve
+      let remaining = spaceLeft;
+      gainedFood = Math.min(remaining, Math.round((rawFood / totalRaw) * spaceLeft));
+      remaining -= gainedFood;
+      gainedKits = Math.min(remaining, Math.round((rawKits / totalRaw) * spaceLeft));
+      remaining -= gainedKits;
+      gainedBlankets = Math.min(remaining, remaining);
+    }
 
     game.socialData.foodPacks += gainedFood;
     game.socialData.hygieneKits += gainedKits;
     game.socialData.blankets += gainedBlankets;
     game.socialData.activeCollecte = null;
 
-    game.showToast(
-      'Collecte Réussie !',
-      `Générosité citoyenne : +${gainedFood} colis alimentaires, +${gainedKits} kits d'hygiène, +${gainedBlankets} couvertures !`,
-      'green'
-    );
+    // Garantie absolue : jamais aucun dépassement
+    this.clampStorageToCapacity(game);
+
+    const storedTotal = gainedFood + gainedKits + gainedBlankets;
+    const surplus = totalRaw - storedTotal;
+
+    if (surplus > 0) {
+      game.showToast(
+        '📦 Stockage Plein : Dons Plafonnés !',
+        `Réserve saturée (${maxStorage}/${maxStorage}) : +${gainedFood} repas, +${gainedKits} kits, +${gainedBlankets} couvertures stockés. Le surplus (+${surplus} dons) a été remis à la Banque Alimentaire partenaire.`,
+        'amber'
+      );
+    } else {
+      game.showToast(
+        'Collecte Réussie !',
+        `Générosité citoyenne : +${gainedFood} colis alimentaires, +${gainedKits} kits d'hygiène, +${gainedBlankets} couvertures !`,
+        'green'
+      );
+    }
+
     game.saveGame();
     game.updateStatsUI();
     this.renderModal(game);
@@ -409,12 +521,26 @@ window.ProtecSocial = {
 
   buyFoodWholesale(game, quantity = 10, cost = 45) {
     this.injectState(game);
+    const maxStorage = window.ProtecLocaux ? window.ProtecLocaux.getStorageCapacity(game) : 40;
+    const currentStorage = window.ProtecLocaux ? window.ProtecLocaux.getCurrentStorageUsed(game) : 0;
+    const spaceLeft = Math.max(0, maxStorage - currentStorage);
+
+    if (quantity > spaceLeft) {
+      game.showToast(
+        '⛔ Stockage Insuffisant !',
+        `Impossible d'entreposer ${quantity} colis. Votre réserve ne dispose que de ${spaceLeft} place(s) libre(s) sur ${maxStorage}. Agrandissez votre réserve ou réalisez des maraudes.`,
+        'red'
+      );
+      return;
+    }
+
     if (game.resources.money < cost) {
       game.showToast('Trésorerie insuffisante', `L'achat requiert ${cost} €.`, 'orange');
       return;
     }
     game.resources.money -= cost;
     game.socialData.foodPacks += quantity;
+    this.clampStorageToCapacity(game);
     game.showToast('Achat Solidaire', `+${quantity} colis alimentaires réceptionnés (-${cost} €).`, 'green');
     game.saveGame();
     game.updateStatsUI();
@@ -423,12 +549,26 @@ window.ProtecSocial = {
 
   buyHygieneKits(game, quantity = 10, cost = 35) {
     this.injectState(game);
+    const maxStorage = window.ProtecLocaux ? window.ProtecLocaux.getStorageCapacity(game) : 40;
+    const currentStorage = window.ProtecLocaux ? window.ProtecLocaux.getCurrentStorageUsed(game) : 0;
+    const spaceLeft = Math.max(0, maxStorage - currentStorage);
+
+    if (quantity > spaceLeft) {
+      game.showToast(
+        '⛔ Stockage Insuffisant !',
+        `Impossible d'entreposer ${quantity} trousses. Votre réserve ne dispose que de ${spaceLeft} place(s) libre(s) sur ${maxStorage}. Agrandissez votre réserve ou réalisez des maraudes.`,
+        'red'
+      );
+      return;
+    }
+
     if (game.resources.money < cost) {
       game.showToast('Trésorerie insuffisante', `L'achat requiert ${cost} €.`, 'orange');
       return;
     }
     game.resources.money -= cost;
     game.socialData.hygieneKits += quantity;
+    this.clampStorageToCapacity(game);
     game.showToast('Achat Solidaire', `+${quantity} kits d'hygiène réceptionnés (-${cost} €).`, 'green');
     game.saveGame();
     game.updateStatsUI();
@@ -451,6 +591,12 @@ window.ProtecSocial = {
 
     const data = game.socialData;
     const currentDay = game.currentDayIndex || 0;
+
+    const maxStorage = window.ProtecLocaux ? window.ProtecLocaux.getStorageCapacity(game) : 40;
+    const currentStorage = window.ProtecLocaux ? window.ProtecLocaux.getCurrentStorageUsed(game) : 0;
+    const spaceLeft = Math.max(0, maxStorage - currentStorage);
+    const storagePercent = maxStorage > 0 ? Math.min(100, Math.round((currentStorage / maxStorage) * 100)) : 100;
+    const isStorageFull = spaceLeft <= 0;
 
     let collecteHtml = '';
     if (data.activeCollecte) {
@@ -510,6 +656,30 @@ window.ProtecSocial = {
           </span>
         </div>
 
+        <!-- Jauge d'occupation du Stockage Réel de l'Antenne -->
+        <div class="p-4 rounded-2xl ${isStorageFull ? 'bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-900/50' : 'bg-slate-50 border border-slate-200/80 dark:bg-slate-900/40 dark:border-slate-800'} space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-black flex items-center gap-1.5 ${isStorageFull ? 'text-red-700 dark:text-red-300' : 'text-slate-700 dark:text-slate-200'}">
+              <span>📦</span> Capacité de Réserve de l'Antenne :
+              <strong class="${isStorageFull ? 'text-red-600' : 'text-pc-blue'} mono-num">${currentStorage} / ${maxStorage} unités</strong>
+            </span>
+            <span class="text-[11px] font-bold ${isStorageFull ? 'text-red-600 animate-pulse' : 'text-slate-500'}">
+              ${isStorageFull ? '⛔ RÉSERVE SATURÉE (0 place libre)' : `✅ ${spaceLeft} place(s) disponible(s)`}
+            </span>
+          </div>
+          <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+            <div class="${isStorageFull ? 'bg-red-600' : (storagePercent > 80 ? 'bg-amber-500' : 'bg-pc-blue')} h-full rounded-full transition-all" style="width: ${storagePercent}%"></div>
+          </div>
+          ${isStorageFull ? `
+            <div class="flex items-center justify-between text-[11px] text-red-700 dark:text-red-300 font-semibold pt-0.5">
+              <span>Impossible d'ajouter du stock : effectuez des maraudes pour distribuer vos vivres ou agrandissez vos locaux.</span>
+              <button onclick="window.game.openModule('locaux')" class="text-red-700 hover:underline font-black flex items-center gap-1">
+                Agrandir Locaux ➜
+              </button>
+            </div>
+          ` : ''}
+        </div>
+
         <!-- Stocks solidaires -->
         <div class="grid grid-cols-3 gap-3 text-center">
           <div class="p-3.5 rounded-2xl glass-card-purple">
@@ -542,29 +712,29 @@ window.ProtecSocial = {
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
             ${!data.activeCollecte ? `
-              <button onclick="window.ProtecSocial.startCollecte(window.game)" class="p-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 dark:border-purple-800/50 text-left transition space-y-1">
+              <button onclick="${isStorageFull ? "window.game.showToast('Stockage Plein !', 'Votre réserve est saturée (" + currentStorage + "/" + maxStorage + "). Distribuez d\\'abord vos colis en maraude ou agrandissez votre réserve.', 'red');" : "window.ProtecSocial.startCollecte(window.game);"}" class="p-3 rounded-xl ${isStorageFull ? 'bg-slate-100 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 opacity-60 cursor-not-allowed' : 'bg-purple-50 hover:bg-purple-100 border border-purple-200 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 dark:border-purple-800/50 cursor-pointer'} text-left transition space-y-1">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-black text-purple-900 dark:text-purple-200">🛒 Collecte Supermarché</span>
-                  <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-200 text-purple-950 dark:bg-purple-900/70 dark:text-purple-100 dark:border dark:border-purple-600/50">Gratuit</span>
+                  <span class="text-xs font-black ${isStorageFull ? 'text-slate-500' : 'text-purple-900 dark:text-purple-200'}">🛒 Collecte Supermarché</span>
+                  <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${isStorageFull ? 'bg-red-100 text-red-800' : 'bg-purple-200 text-purple-950 dark:bg-purple-900/70 dark:text-purple-100 dark:border dark:border-purple-600/50'}">${isStorageFull ? 'Réserve Pleine' : 'Gratuit'}</span>
                 </div>
-                <p class="text-[10px] text-purple-700 dark:text-purple-300">Mobilise 2 bénévoles. Récolte ~20 denrées alimentaires et kits.</p>
+                <p class="text-[10px] ${isStorageFull ? 'text-slate-400' : 'text-purple-700 dark:text-purple-300'}">${isStorageFull ? 'Suspendue car le stockage a atteint sa limite maximale autorisée.' : 'Mobilise 2 bénévoles. Récolte ~20 denrées alimentaires et kits.'}</p>
               </button>
             ` : ''}
 
-            <button onclick="window.ProtecSocial.buyFoodWholesale(window.game, 10, 45)" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition space-y-1">
+            <button onclick="${spaceLeft < 10 ? "window.game.showToast('Stockage Insuffisant !', 'Il ne reste que " + spaceLeft + " place(s) libre(s) dans votre réserve (besoin de 10).', 'red');" : "window.ProtecSocial.buyFoodWholesale(window.game, 10, 45);"}" class="p-3 rounded-xl ${spaceLeft < 10 ? 'bg-slate-100 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 opacity-60 cursor-not-allowed' : 'bg-slate-50 hover:bg-slate-100 border border-slate-200 cursor-pointer'} text-left transition space-y-1">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-black text-slate-900">📦 Achat 10 Colis Repas</span>
-                <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">45 €</span>
+                <span class="text-xs font-black ${spaceLeft < 10 ? 'text-slate-500' : 'text-slate-900'}">📦 Achat 10 Colis Repas</span>
+                <span class="px-2 py-0.5 rounded text-[9px] font-black ${spaceLeft < 10 ? 'bg-slate-200 text-slate-500' : 'bg-amber-100 text-amber-800'}">45 €</span>
               </div>
-              <p class="text-[10px] text-slate-500">Conserves, soupes chaudes, barres céréales et eau minérale.</p>
+              <p class="text-[10px] text-slate-500">${spaceLeft < 10 ? 'Espace de stockage insuffisant (+10 requis).' : 'Conserves, soupes chaudes, barres céréales et eau minérale.'}</p>
             </button>
 
-            <button onclick="window.ProtecSocial.buyHygieneKits(window.game, 10, 35)" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition space-y-1">
+            <button onclick="${spaceLeft < 10 ? "window.game.showToast('Stockage Insuffisant !', 'Il ne reste que " + spaceLeft + " place(s) libre(s) dans votre réserve (besoin de 10).', 'red');" : "window.ProtecSocial.buyHygieneKits(window.game, 10, 35);"}" class="p-3 rounded-xl ${spaceLeft < 10 ? 'bg-slate-100 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 opacity-60 cursor-not-allowed' : 'bg-slate-50 hover:bg-slate-100 border border-slate-200 cursor-pointer'} text-left transition space-y-1">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-black text-slate-900">🧼 Achat 10 Kits Hygiène</span>
-                <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">35 €</span>
+                <span class="text-xs font-black ${spaceLeft < 10 ? 'text-slate-500' : 'text-slate-900'}">🧼 Achat 10 Kits Hygiène</span>
+                <span class="px-2 py-0.5 rounded text-[9px] font-black ${spaceLeft < 10 ? 'bg-slate-200 text-slate-500' : 'bg-amber-100 text-amber-800'}">35 €</span>
               </div>
-              <p class="text-[10px] text-slate-500">Dentifrice, savon, lingettes et produits de première nécessité.</p>
+              <p class="text-[10px] text-slate-500">${spaceLeft < 10 ? 'Espace de stockage insuffisant (+10 requis).' : 'Dentifrice, savon, lingettes et produits de première nécessité.'}</p>
             </button>
           </div>
         </div>
