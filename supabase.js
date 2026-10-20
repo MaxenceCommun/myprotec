@@ -1216,7 +1216,7 @@ window.ProtecSupabase = {
         .maybeSingle();
 
       if (error || !player) {
-        return { error: 'Directeur introuvable. Veuillez vérifier vos identifiants.' };
+        return { error: 'Compte introuvable. Veuillez vérifier vos identifiants.' };
       }
 
       if (player.is_banned) {
