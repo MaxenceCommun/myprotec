@@ -186,6 +186,23 @@ window.ProtecBoutiques = {
     this.renderModal(window.game);
   },
 
+  openShop(shopId, stationId = null) {
+    if (stationId) {
+      this.selectedStationId = stationId;
+      if (window.game) window.game.selectedStationId = stationId;
+    }
+    if (shopId) {
+      this.activeShopId = shopId;
+    }
+    this.activeRayonId = 'all';
+    this.searchQuery = '';
+    if (window.game) {
+      window.game.openModule('boutiques');
+    } else {
+      this.renderModal(window.game);
+    }
+  },
+
   nextShop() {
     const curIdx = this.SHOPS.findIndex(s => s.id === this.activeShopId);
     const nextIdx = (curIdx + 1) % this.SHOPS.length;

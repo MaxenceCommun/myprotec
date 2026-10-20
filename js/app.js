@@ -17799,7 +17799,7 @@ class ProtecGame {
             <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider">Flotte (${stationVehicles.length})</h4>
             <div class="flex items-center gap-2.5">
               <button onclick="window.game.openModule('marche_occasion')" class="text-xs font-extrabold text-slate-500 hover:text-pc-orange hover:underline">Marché Occasion 🏷️</button>
-              <button onclick="window.game.openBuyVehicleModal('${station.id}')" class="text-xs font-extrabold text-pc-orange hover:underline">+ Acheter Neuf</button>
+              <button onclick="window.game.openBuyVehicleModal('${station.id}')" class="text-xs font-extrabold text-pc-orange hover:underline">+ Concessionnaire Neuf</button>
             </div>
           </div>
           <div class="space-y-1.5">
@@ -23028,9 +23028,9 @@ class ProtecGame {
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <button onclick="window.game.openBuyVehicleModal('${primaryStation.id}')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-pc-orange to-amber-500 hover:brightness-110 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
-                <i data-lucide="plus" class="w-4 h-4"></i>
-                <span>Commander un Véhicule</span>
+              <button onclick="window.game.openBuyVehicleModal('${primaryStation.id}')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-pc-orange to-amber-500 hover:brightness-110 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer" title="Visiter la boutique Concessionnaire Véhicules">
+                <i data-lucide="truck" class="w-4 h-4"></i>
+                <span>Boutique Véhicules</span>
               </button>
               <button onclick="window.ProtecLogistique.rearmAtBaseOneClick(window.game, '${primaryStation.id}')" class="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer" title="Réarmer tous les véhicules et lots entamés en 1 clic">
                 <i data-lucide="package-check" class="w-4 h-4"></i>
@@ -23068,8 +23068,9 @@ class ProtecGame {
                 <p class="text-xs text-slate-500 max-w-md mx-auto">
                   Votre antenne a été inaugurée ! Commandez votre premier véhicule opérationnel pour pouvoir partir en mission ou assurer des gardes.
                 </p>
-                <button onclick="window.game.openBuyVehicleModal('${primaryStation.id}')" class="px-5 py-2.5 rounded-xl bg-pc-blue text-white font-black text-xs hover:brightness-110 shadow-md transition cursor-pointer">
-                  🛒 Consulter le catalogue des véhicules
+                <button onclick="window.game.openBuyVehicleModal('${primaryStation.id}')" class="px-5 py-2.5 rounded-xl bg-pc-blue text-white font-black text-xs hover:brightness-110 shadow-md transition cursor-pointer inline-flex items-center gap-2">
+                  <i data-lucide="truck" class="w-4 h-4"></i>
+                  <span>Visiter la Boutique Concessionnaire Véhicules</span>
                 </button>
               </div>
             ` : (this.vehicles || []).map(v => {
@@ -23278,10 +23279,14 @@ class ProtecGame {
         </div>
       `;
     } else if (moduleKey === 'boutique_vehicules') {
+      const stationId = this.selectedStationId || (this.stations && this.stations[0]?.id);
+      if (window.ProtecBoutiques) {
+        window.ProtecBoutiques.openShop('concessionnaire_flotte', stationId);
+        return;
+      }
       title.textContent = 'Commander un Véhicule Opérationnel';
       subtitle.textContent = 'Flotte de premiers secours, logistique, tout usage et commandement';
       icon.setAttribute('data-lucide', 'truck');
-      const stationId = this.selectedStationId || (this.stations && this.stations[0]?.id);
       if (window.ProtecAdvancedModals) {
         try {
           body.innerHTML = window.ProtecAdvancedModals.renderVehicleShop(this, stationId);
@@ -23673,6 +23678,10 @@ class ProtecGame {
   openBuyVehicleModal(stationId) {
     if (stationId) {
       this.selectedStationId = stationId;
+    }
+    if (window.ProtecBoutiques) {
+      window.ProtecBoutiques.openShop('concessionnaire_flotte', stationId || this.selectedStationId);
+      return;
     }
     this.openModule('boutique_vehicules');
   }
